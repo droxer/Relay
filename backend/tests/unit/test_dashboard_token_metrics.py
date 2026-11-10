@@ -178,3 +178,30 @@ def test_explicit_range_uses_local_day_and_excludes_adjacent_days(tmp_path, zone
     assert [row["date"] for row in result["daily"]] == [local_day]
     assert result["daily"][0]["fresh"] == 110
     assert result["unreportedRuns"] == [{"agent": "kimi", "runs": 1}]
+
+
+def test_all_time_uses_year_buckets_without_dropping_old_or_unreported_runs(tmp_path):
+    store = make_session_store(tmp_path)
+    now = datetime(2026, 11, 10, 12, tzinfo=UTC)
+    seed(store, datetime(1980, 1, 1, tzinfo=UTC), tokens=(10, 0, 0, 0))
+    seed(store, now, tokens=(5, 0, 0, 0))
+    seed(store, datetime(1980, 1, 1, tzinfo=UTC), agent="kimi", reported=False)
+    result = store.dashboard_token_metrics(zone=UTC, now=now, all_time=True)
+    assert result["bucketSize"] == "year"
+    assert len(result["daily"]) == 47
+    assert result["daily"][0]["date"] == "1980-01-01"
+    assert result["fresh"] == sum(row["fresh"] for row in result["daily"]) == 15
+    assert result["unreportedRuns"] == [{"agent": "kimi", "runs": 1}]
+
+
+def test_all_time_with_no_usage_returns_an_empty_current_day(tmp_path):
+    store = make_session_store(tmp_path)
+    now = datetime(2026, 11, 10, 12, tzinfo=UTC)
+    result = store.dashboard_token_metrics(zone=UTC, now=now, all_time=True)
+    assert result["available"] is False
+    assert result["bucketSize"] == "day"
+    assert result["fresh"] == 0
+    assert [row["date"] for row in result["daily"]] == ["2026-11-10"]
+    sessions = store.dashboard_session_metrics(zone=UTC, now=now, all_time=True)
+    assert sessions["total"] == 0
+    assert sessions["dailyCounts"] == [{"date": "2026-11-10", "count": 0, "completed": 0, "failed": 0}]

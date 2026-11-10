@@ -48,7 +48,7 @@ export function StackedBarChart({
   const activeColumn = active === null ? null : columns[active];
 
   return (
-    <div className={`adm-chart${className ? ` ${className}` : ""}`}>
+    <div className={`adm-chart${className ? ` ${className}` : ""}`} data-label-every={labelEvery}>
       <div className="adm-chart-y" aria-hidden="true">
         {ticks.map((tick) => (
           <span key={tick} style={{ bottom: `${(tick / max) * 100}%` }}>{format(tick)}</span>

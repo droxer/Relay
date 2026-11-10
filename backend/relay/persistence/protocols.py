@@ -106,11 +106,11 @@ class SessionStore(Protocol):
     def list_token_usage(self) -> list[dict[str, Any]]: ...
     def dashboard_session_metrics(
         self, *, day_window: int = 14, now: datetime | None = None,
-        date_range: tuple[date, date] | None = None, zone: tzinfo = UTC,
+        date_range: tuple[date, date] | None = None, zone: tzinfo = UTC, all_time: bool = False,
     ) -> dict[str, Any]: ...
     def dashboard_token_metrics(
         self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None,
-        date_range: tuple[date, date] | None = None,
+        date_range: tuple[date, date] | None = None, all_time: bool = False,
     ) -> dict[str, Any]: ...
 
 

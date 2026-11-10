@@ -1,4 +1,4 @@
-import type { DashboardDateRange } from "../lib/dashboardRange.js";
+import type { DashboardRange, DashboardBucketSize } from "../lib/dashboardRange.js";
 import type {
   AgentName,
   AssignControlPanelDaemonNodeResponse,
@@ -210,6 +210,7 @@ export function deleteControlPanelUser(
 }
 
 export interface DashboardSessionsResponse {
+  bucketSize?: DashboardBucketSize;
   total: number;
   last24h: number;
   last7d: number;
@@ -232,6 +233,7 @@ export interface TokenCounts {
 }
 
 export interface TokenUsageSnapshot {
+  bucketSize?: DashboardBucketSize;
   available: boolean;
   /** The IANA zone the server bucketed days in (falls back to UTC). */
   timeZone: string;
@@ -247,11 +249,11 @@ export interface TokenUsageSnapshot {
   unreportedRuns: Array<{ agent: string; runs: number }>;
 }
 
-export function getDashboardSessions(signal?: AbortSignal, range?: DashboardDateRange): Promise<DashboardSessionsResponse> {
+export function getDashboardSessions(signal?: AbortSignal, range?: DashboardRange): Promise<DashboardSessionsResponse> {
   return apiJson<DashboardSessionsResponse>(`/admin/dashboard/sessions?${dashboardQuery(range)}`, { signal });
 }
 
-export function getDashboardTokens(signal?: AbortSignal, timeZone = viewerTimeZone(), range?: DashboardDateRange): Promise<TokenUsageSnapshot> {
+export function getDashboardTokens(signal?: AbortSignal, timeZone = viewerTimeZone(), range?: DashboardRange): Promise<TokenUsageSnapshot> {
   // Days are bucketed in the viewer's zone so a late-evening run lands on the
   // day the chart labels it with.
   const query = `?${dashboardQuery(range, timeZone)}`;
@@ -266,10 +268,12 @@ function viewerTimeZone(): string | undefined {
   }
 }
 
-function dashboardQuery(range?: DashboardDateRange, timeZone = viewerTimeZone()): string {
+function dashboardQuery(range?: DashboardRange, timeZone = viewerTimeZone()): string {
   const query = new URLSearchParams();
   if (timeZone) query.set("tz", timeZone);
-  if (range) {
+  if (range === "all") {
+    query.set("all_time", "true");
+  } else if (range) {
     query.set("start", range.start);
     query.set("end", range.end);
   }

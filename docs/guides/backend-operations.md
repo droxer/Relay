@@ -150,6 +150,12 @@ series, totals, rankings, and runtime coverage notices share the selected range
 (default seven days); fresh/cache arithmetic is unchanged. Ties among equal missing-run counts use latest
 observation first, then runtime name for deterministic equal timestamps.
 
+All-time reports discover retained timestamp bounds with a SQL min/max query,
+then aggregate the complete history into daily, monthly (over 90 days), or
+yearly (ten years or more) calendar buckets. No run histories are hydrated;
+missing-usage coverage and totals include older retained runs. `bucketSize`
+lets clients label monthly and yearly buckets accurately.
+
 The full `list_token_usage` reader still returns every retained run with its
 metadata. No migration is required; the existing completion-time index supports
 the window predicate.

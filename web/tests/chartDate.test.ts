@@ -17,6 +17,11 @@ describe("chart calendar dates", () => {
     }
   });
 
+  it("labels all-time month and year buckets without implying a single day", () => {
+    assert.equal(formatChartDate("2020-01-01", "en-US", "month"), "Jan 2020");
+    assert.equal(formatChartDate("1980-01-01", "en-US", "year"), "1980");
+  });
+
   it("retains local-time formatting for timestamps and preserves invalid input", () => {
     const previous = process.env.TZ;
     try {

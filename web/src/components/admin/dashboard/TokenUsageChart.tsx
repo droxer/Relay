@@ -145,7 +145,7 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
   ];
   const columns: ChartColumn[] = points.map((point) => ({
     key: point.date,
-    label: formatChartDate(point.date, i18n.language),
+    label: formatChartDate(point.date, i18n.language, snapshot.bucketSize),
     values: { cache: point.cacheWrite, input: point.input, output: point.output },
   }));
 
@@ -168,14 +168,14 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
         series={series}
         format={format}
         barRatio={compact ? 0.42 : 0.6}
-        labelEvery={Math.max(1, Math.ceil(columns.length / 7))}
+        labelEvery={Math.max(1, Math.ceil(columns.length / (snapshot.bucketSize && snapshot.bucketSize !== "day" ? 4 : 7)))}
         ariaLabel={t("admin.v2.dash_tokens_title")}
         totalLabel={(column, total) => t("admin.v2.dash_chart_tip_total", { date: column.label, total: format(total) })}
       />
       <ul className="sr-only">
         {points.map((point) => (
           <li key={point.date}>
-            {`${point.date}: ${t("admin.v2.dash_tokens_input")} ${numberFormat.format(point.input)}, ${t("admin.v2.dash_tokens_output")} ${numberFormat.format(point.output)}, ${t("admin.v2.dash_tokens_cache_write")} ${numberFormat.format(point.cacheWrite)}, ${t("admin.v2.dash_tokens_cache_read")} ${numberFormat.format(point.cacheRead)}`}
+            {`${snapshot.bucketSize && snapshot.bucketSize !== "day" ? formatChartDate(point.date, i18n.language, snapshot.bucketSize) : point.date}: ${t("admin.v2.dash_tokens_input")} ${numberFormat.format(point.input)}, ${t("admin.v2.dash_tokens_output")} ${numberFormat.format(point.output)}, ${t("admin.v2.dash_tokens_cache_write")} ${numberFormat.format(point.cacheWrite)}, ${t("admin.v2.dash_tokens_cache_read")} ${numberFormat.format(point.cacheRead)}`}
           </li>
         ))}
       </ul>

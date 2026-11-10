@@ -3,6 +3,10 @@ export interface DashboardDateRange {
   end: string;
 }
 
+export type DashboardRange = DashboardDateRange | "all";
+export type DashboardRangeSelection = DashboardPreset | "all" | "custom";
+export type DashboardBucketSize = "day" | "month" | "year";
+
 export type DashboardPreset = "7d" | "30d" | "month";
 
 function localDate(date: Date): string {
