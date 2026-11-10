@@ -12,6 +12,7 @@
    --out <dir>    write somewhere other than docs/images
    --only <name>  capture one surface (repeatable)
    --draft        1x pixels, for a quick look while editing fixtures
+   --mobile       phone viewport; defaults to Home, Threads, and Tasks
    --theme <t>    dark (default, the README set) or light; light shots are
                   written as relay-<name>-light[-zh-CN].png */
 
@@ -26,6 +27,8 @@ import { FALLBACK, HERO_ID, routeBody } from "./fixtures.mjs";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const WEB_OUT = join(REPO_ROOT, "web/out");
 const VIEWPORT = { width: 1440, height: 900 };
+const PHONE_VIEWPORT = { width: 390, height: 844 };
+const PHONE_SHOTS = ["home", "threads", "issues"];
 const THEMES = ["dark", "light"];
 const LANGUAGES = [{ code: "en", suffix: "" }, { code: "zh-CN", suffix: "-zh-CN" }];
 const READY_TIMEOUT_MS = 20_000;
@@ -67,6 +70,7 @@ function parseOptions() {
       out: { type: "string", default: join(REPO_ROOT, "docs/images") },
       only: { type: "string", multiple: true, default: [] },
       draft: { type: "boolean", default: false },
+      mobile: { type: "boolean", default: false },
       theme: { type: "string", default: "dark" },
     },
   });
@@ -75,7 +79,7 @@ function parseOptions() {
   if (unknown.length > 0) {
     throw new Error(`Unknown surface: ${unknown.join(", ")}. Known: ${SHOTS.map((shot) => shot.name).join(", ")}`);
   }
-  return { outDir: resolve(values.out), only: values.only, draft: values.draft, theme: values.theme };
+  return { outDir: resolve(values.out), only: values.only, draft: values.draft, mobile: values.mobile, theme: values.theme };
 }
 
 /** Serves web/out on a free port. The app owns its routing, so any path
@@ -124,7 +128,9 @@ async function captureShot(browser, origin, shot, language, options) {
   const problems = [];
   const unmatched = new Set();
   const context = await browser.newContext({
-    viewport: VIEWPORT,
+    viewport: options.mobile ? PHONE_VIEWPORT : VIEWPORT,
+    isMobile: options.mobile,
+    hasTouch: options.mobile,
     deviceScaleFactor: options.draft ? 1 : 2,
     locale: language.code,
     colorScheme: options.theme,
@@ -135,7 +141,7 @@ async function captureShot(browser, origin, shot, language, options) {
   const page = await context.newPage();
   page.on("pageerror", (error) => problems.push(`page error: ${error.message}`));
   await mockApi(page, language.code, options.theme, unmatched);
-  const stem = `relay-${shot.name}${options.theme === "light" ? "-light" : ""}${language.suffix}`;
+  const stem = `relay-${shot.name}${options.mobile ? "-mobile" : ""}${options.theme === "light" ? "-light" : ""}${language.suffix}`;
 
   try {
     await page.goto(`${origin}${shot.path}`);
@@ -164,7 +170,8 @@ async function main() {
   let failed = false;
   try {
     browser = await chromium.launch();
-    const shots = options.only.length > 0 ? SHOTS.filter((shot) => options.only.includes(shot.name)) : SHOTS;
+    const selected = options.only.length > 0 ? options.only : options.mobile ? PHONE_SHOTS : SHOTS.map((shot) => shot.name);
+    const shots = SHOTS.filter((shot) => selected.includes(shot.name));
     for (const shot of shots) {
       for (const language of LANGUAGES) {
         const result = await captureShot(browser, origin, shot, language, options);

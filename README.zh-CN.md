@@ -4,85 +4,44 @@
   <img src="assets/brand/relay-logo.svg" alt="Relay 标志" width="380">
 </p>
 
-<p align="center"><strong>Relay——企业 AI 团队的控制平面</strong></p>
+<p align="center"><strong>Relay——AI 团队的控制平面</strong></p>
 
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-Relay 帮助用户通过对话、议题、例行任务和项目与 AI 智能体协作。你可以为智能体命名、配置角色和技能，选择运行位置，并与团队共享需求、运行过程和结果。
+在自己的计算机上运行 AI 智能体，将它们组织为团队，并随时通过桌面或手机跟进工作。Relay 支持 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi、OpenCode 和 Kimi。
 
-Relay 采用本地优先架构：后端协调工作，守护进程在用户计算机或托管计算机上执行。每个守护进程在主机工作区或 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中运行 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi、OpenCode 或 Kimi。
+后端负责协调工作，守护进程在个人或托管计算机上执行，可直接使用主机环境，也可运行在 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中。
 
 <p align="center">
-  <img src="docs/images/relay-threads-zh-CN.png" alt="Relay 对话：一个智能体修复缺陷后交接给另一个智能体，后者的评审正在实时输出" width="960">
+  <img src="docs/images/relay-threads-zh-CN.png" alt="Relay 桌面对话：实时查看智能体工作与团队交接" width="960">
 </p>
 
 ## 功能特性
 
-- **首页** — 以按优先顺序排列的审批、问题、待审阅结果和阻塞项开始一天。启动已就绪的任务，关注正在运行的工作，查看即将到期的任务和自动化安排，并通过设置指引让第一个智能体开始工作。
-- **对话** — 在你选择的计算机上与智能体、团队或项目协作。实时查看推理、命令和工具调用，按需停止、重试或交接工作。
-- **议题** — 将工作分配给智能体或团队，设置优先级和截止日期，从待办跟踪到完成。每个议题保留运行历史和产出文件。
-- **例行任务** — 按每日、每周或每月安排周期性工作；Relay 会将每次运行派发给负责人。
-- **项目** — 在同一台计算机上组织共享工作区和参与项目的智能体。
-- **智能体与团队** — 为每个智能体配置运行时、角色、个性和技能。将智能体组成团队，协作方式可选单人、构建 → 评审、流水线或负责人主导。
-- **技能** — 发布带版本的技能包，并通过共享技能库授予智能体。
-- **计算机** — 注册用户计算机或托管计算机，查看其健康状态、运行时和正在运行的工作。
-- **管理** — 在同一个管理控制台中管理用户、计算机、活动和令牌用量。
+- **首页与对话** — 查看待处理事项，跟进实时输出，回答问题并审阅结果。
+- **任务与项目** — 分配工作、设置优先级和截止日期，集中管理共享上下文、文件和运行历史。
+- **智能体与团队** — 配置运行时、模型、角色和带版本的技能；支持单人、构建 → 评审、流水线和负责人主导协作。
+- **自动化** — 按计划、任务或运行事件、Webhook 触发工作，也可手动立即运行。
+- **连接与 MCP** — 为工作授予限定范围的 GitHub 议题读取权限。智能体可通过 Relay MCP 管理独立任务和自动化，项目负责人可管理项目工作。
+- **计算机与管理** — 管理执行主机、运行时就绪状态、用户、活动和令牌用量。
+- **桌面与移动端** — 使用适配手机的浏览器界面，或[将 Relay 安装为应用](docs/guides/pwa.md)。
 
-## 产品导览
+## 界面预览
 
 <p align="center">
-  <img src="docs/images/relay-home-zh-CN.png" alt="Relay 首页：待处理队列、任务统计、正在运行的工作和即将到来的安排" width="960">
+  <img src="docs/images/relay-home-zh-CN.png" alt="Relay 桌面首页：待处理队列与正在运行的工作" width="960">
 </p>
 
-**首页**将需要你处理的事项和工作进展汇总为每日工作的起点。打开对话或任务、回答问题、审阅结果，或将事项稍后提醒。
+<p align="center">
+  <img src="docs/images/relay-home-mobile-zh-CN.png" alt="手机上的 Relay 首页" width="250">
+  <img src="docs/images/relay-threads-mobile-zh-CN.png" alt="手机上的 Relay 智能体对话" width="250">
+  <img src="docs/images/relay-issues-mobile-zh-CN.png" alt="手机上的 Relay 任务列表" width="250">
+</p>
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-projects-zh-CN.png" alt="Relay 项目看板">
-      <br><strong>项目</strong><br>从待办到完成的项目看板，附流动指标。
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-issues-zh-CN.png" alt="Relay 议题表，按项目分组">
-      <br><strong>议题</strong><br>汇总所有项目中未完成的议题，并按待处理队列分类。
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-routines-zh-CN.png" alt="Relay 例行任务列表">
-      <br><strong>例行任务</strong><br>周期性工作及其执行频率、下次运行时间和负责人。
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-teams-zh-CN.png" alt="Relay 团队档案">
-      <br><strong>团队</strong><br>成员、职责，以及工作如何在成员之间流转。
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-agents-zh-CN.png" alt="Relay 智能体档案">
-      <br><strong>智能体</strong><br>运行时、所在计算机、角色、个性和技能。
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-skills-zh-CN.png" alt="Relay 技能库">
-      <br><strong>技能</strong><br>带版本的技能包及其文件和修订历史。
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-computers-zh-CN.png" alt="Relay 计算机页面">
-      <br><strong>计算机</strong><br>每台计算机正在运行的工作和已就绪的运行时。
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/relay-admin-zh-CN.png" alt="Relay 管理仪表板">
-      <br><strong>管理控制台</strong><br>对话数量、集群健康和令牌用量。
-    </td>
-  </tr>
-</table>
-
-截图使用深色主题和演示数据，由 [`script/readme-snapshots`](script/readme-snapshots/capture.mjs) 生成。
+截图展示当前界面，使用深色主题和演示数据。通过 [`capture.mjs`](script/readme-snapshots/capture.mjs) 重新生成，添加 `--mobile` 可生成手机截图。
 
 ## 快速开始
 
@@ -133,39 +92,10 @@ make web                         # Web 界面，监听 127.0.0.1:5000
 
 测试、数据库迁移、协调器、pre-commit 钩子和停止命令请参阅[本地开发指南](docs/local-development.md)。
 
-## 项目结构
+## 了解更多
 
-```
-backend/     Python / FastAPI 控制平面：API 路由、事件溯源存储、调度器、数据库迁移
-packages/    TypeScript 工作区
-  relay-core/        共享协议、智能体注册表、CLI 命令、提示词
-  relay-daemon/      执行平面：注册计算机并运行智能体 CLI
-  relay-supervisor/  确保用户守护进程已部署并保持运行
-web/         Next.js Web 界面，静态导出后由后端提供服务
-docs/        架构、API、部署、设计系统文档及 ADR
-script/      用户初始化、演示数据、README 截图生成脚本
-devbox/      沙箱内智能体所运行的 BoxLite 客户机镜像
-```
-
-## 参与贡献
-
-1. 按照[快速开始](#快速开始)在本地运行整套服务。
-2. 阅读 [`AGENTS.md`](AGENTS.md) 了解仓库指南和不变式，并在 [`docs/adr/`](docs/adr/README.md) 中查阅过往的设计决策。
-3. 提交 Pull Request 前运行 `npm test`（TypeScript 与 Python 测试）和 `make pre-commit-run`。
-4. 行为发生变化时，同步更新 [`docs/`](docs/README.zh-CN.md) 下对应的页面。
-
-详细的目录结构以及各类改动的入手位置，见 [`CONTRIBUTING.md`](CONTRIBUTING.md)（英文）。
-
-## 部署
-
-[部署脚本](deploy/README.md)介绍 Cloudflare + Railway 托管方案；
-[部署指南](docs/README.zh-CN.md#使用与运维指南)还提供 Vercel 替代方案。将守护进程部署在执行智能体的计算机上，通过出站 HTTP(S) 连接后端。
-
-## 文档
-
-从 [`docs/` 中文索引](docs/README.zh-CN.md)开始，查找环境搭建、API、架构、设计和决策的权威文档。
+[文档](docs/README.zh-CN.md) · [本地开发](docs/local-development.md) · [部署](deploy/README.md) · [参与贡献](CONTRIBUTING.md)
 
 ## 许可证
 
-[MIT](LICENSE)。你可以使用、修改、分发和销售 Relay，包括将其用于闭源产品，
-但须保留版权和许可证声明。第三方组件和素材仍遵循各自的许可证。
+[MIT](LICENSE)。第三方组件和素材仍遵循各自的许可证。
