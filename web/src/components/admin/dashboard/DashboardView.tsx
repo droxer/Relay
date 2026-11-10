@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { DashboardRangePicker } from "./DashboardRangePicker";
-import { dashboardPresetRange, type DashboardPreset, type DashboardDateRange } from "../../../lib/dashboardRange";
+import { dashboardPresetRange, type DashboardRangeSelection, type DashboardDateRange } from "../../../lib/dashboardRange";
 import { useQuery } from "@tanstack/react-query";
 import { listControlPanelAgents } from "../../../api";
 import { ADMIN_ROSTER_POLL_MS } from "../../../lib/controlPanelQueries";
@@ -32,9 +32,9 @@ export function DashboardView({
   nodes, users, metrics, onManageNodes,
 }: DashboardViewProps) {
   const { t, i18n } = useTranslation();
-  const [preset, setPreset] = useState<DashboardPreset | "custom">("7d");
+  const [preset, setPreset] = useState<DashboardRangeSelection>("7d");
   const [customRange, setCustomRange] = useState<DashboardDateRange>(() => dashboardPresetRange("7d"));
-  const range = preset === "custom" ? customRange : dashboardPresetRange(preset);
+  const range = preset === "custom" ? customRange : preset === "all" ? "all" : dashboardPresetRange(preset);
   const sessionsQuery = useDashboardSessions(true, range);
   const tokens = useTokenUsage(range);
   const agentsQuery = useQuery({
@@ -61,7 +61,7 @@ export function DashboardView({
     <div className="adm-dash">
       <DashboardRangePicker preset={preset} range={range}
         onPreset={(next) => {
-          if (next === "custom") setCustomRange(range);
+          if (next === "custom") setCustomRange(range === "all" ? dashboardPresetRange("7d") : range);
           setPreset(next);
         }}
         onApply={setCustomRange} />
@@ -142,6 +142,7 @@ export function DashboardView({
         <div className="adm-dash-col">
           <ActivityChart
             daily={sessions.dailyCounts}
+            bucketSize={sessions.bucketSize}
             ready={sessionsReady}
             error={sessionsQuery.error}
           />

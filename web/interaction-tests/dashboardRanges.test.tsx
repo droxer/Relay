@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
@@ -20,13 +21,19 @@ function show() {
   </QueryClientProvider>);
 }
 
+async function selectRange(value: string) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("combobox", { name: "admin.v2.dash_range" }));
+  await user.click(await screen.findByRole("option", { name: `admin.v2.dash_range_${value}` }));
+}
+
 it("defaults to seven days and changes both historical queries together", async () => {
   show();
-  expect((screen.getByLabelText("admin.v2.dash_range") as HTMLSelectElement).value).toBe("7d");
+  expect(screen.getByRole("combobox", { name: "admin.v2.dash_range" }).textContent).toContain("admin.v2.dash_range_7d");
   await waitFor(() => expect(getDashboardSessions).toHaveBeenCalledTimes(1));
   const initial = vi.mocked(getDashboardSessions).mock.calls[0][1]!;
   expect((Date.parse(initial.end) - Date.parse(initial.start)) / 86400000).toBe(6);
-  fireEvent.change(screen.getByLabelText("admin.v2.dash_range"), { target: { value: "30d" } });
+  await selectRange("30d");
   await waitFor(() => expect(getDashboardSessions).toHaveBeenCalledTimes(2));
   const range = vi.mocked(getDashboardSessions).mock.calls[1][1]!;
   expect((Date.parse(range.end) - Date.parse(range.start)) / 86400000).toBe(29);
@@ -35,12 +42,12 @@ it("defaults to seven days and changes both historical queries together", async 
 
 it("uses the previous calendar month and only applies a valid custom range on submit", async () => {
   show();
-  fireEvent.change(screen.getByLabelText("admin.v2.dash_range"), { target: { value: "month" } });
+  await selectRange("month");
   await waitFor(() => expect(getDashboardSessions).toHaveBeenCalledTimes(2));
   const month = vi.mocked(getDashboardSessions).mock.calls[1][1]!;
   expect(month.start.endsWith("-01")).toBe(true);
   expect(new Date(`${month.end}T12:00:00`).getMonth()).toBe((new Date().getMonth() + 11) % 12);
-  fireEvent.change(screen.getByLabelText("admin.v2.dash_range"), { target: { value: "custom" } });
+  await selectRange("custom");
   fireEvent.change(screen.getByLabelText("admin.v2.dash_range_start"), { target: { value: "2026-01-10" } });
   fireEvent.change(screen.getByLabelText("admin.v2.dash_range_end"), { target: { value: "2026-01-09" } });
   expect((screen.getByRole("button", { name: "admin.v2.dash_range_apply" }) as HTMLButtonElement).disabled).toBe(true);
@@ -80,4 +87,21 @@ it("describes chart results using the selected range in both languages", async (
   expect(en.dash_sessions_empty).toBe("No threads in the selected range.");
   expect(zh.dash_sessions_title).toBe("对话趋势");
   expect(zh.dash_sessions_empty).toBe("所选范围内暂无对话。");
+});
+
+it("offers all time and requests complete history for both historical queries", async () => {
+  show();
+  await selectRange("all");
+  await waitFor(() => expect(getDashboardSessions).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(getDashboardSessions).mock.calls.at(-1)?.[1]).toBe("all");
+  expect(vi.mocked(getDashboardTokens).mock.calls.at(-1)?.[2]).toBe("all");
+});
+
+
+it("returns from all time to editable custom dates without applying a stale preset", async () => {
+  show();
+  await selectRange("all");
+  await selectRange("custom");
+  expect((screen.getByLabelText("admin.v2.dash_range_start") as HTMLInputElement).value).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(screen.getByRole("button", { name: "admin.v2.dash_range_apply" })).toBeTruthy();
 });

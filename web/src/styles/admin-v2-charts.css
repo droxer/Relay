@@ -182,12 +182,15 @@
   border-radius: var(--r-1);
 }
 
-/* Phone: a 14-day axis has room for every fourth date, counted back from
-   today, and a 7-day axis for every other. Gridlines and hover still cover
-   every day. */
+/* Keep edge labels within the plot even when a bucket names a month/year. */
+.adm-chart-x span:first-child { text-align: start; }
+.adm-chart-x span:last-child { text-align: end; }
+
+/* Thin dense daily axes on phones. Already spaced monthly/yearly labels
+   keep their chosen interval instead of being filtered a second time. */
 @media (max-width: 640px) {
-  .adm-chart-x span:nth-last-child(2n),
-  .adm-chart-x span:nth-last-child(4n + 3) {
+  .adm-chart[data-label-every="1"] .adm-chart-x span:nth-last-child(2n),
+  .adm-chart[data-label-every="1"] .adm-chart-x span:nth-last-child(4n + 3) {
     visibility: hidden;
   }
 }

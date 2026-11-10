@@ -320,7 +320,10 @@ uses the viewer's local calendar dates (UTC for a missing/invalid timezone).
 Both `/admin/dashboard/sessions` and `/admin/dashboard/tokens` accept inclusive
 `start=YYYY-MM-DD` and `end=YYYY-MM-DD` dates plus `tz`. They default to the
 last seven calendar days including today. Explicit ranges require both dates
-in order and may span at most 366 days. Totals, daily buckets, and top users
+in order and may span at most 366 days. Alternatively, `all_time=true` returns
+all retained history and cannot be combined with explicit dates. All-time
+charts group histories over 90 days by month, or by year for ten years or
+more; `bucketSize` identifies `day`, `month`, or `year`. Totals, chart buckets, and top users
 are scoped to the same range; sessions use creation time and tokens use run
 completion time. Computer and agent inventory remains current. `fresh` excludes cache
 reads, and `unreportedRuns` identifies runtimes that completed without reporting

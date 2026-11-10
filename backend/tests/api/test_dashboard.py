@@ -355,3 +355,38 @@ def test_dashboard_rejects_invalid_ranges(monkeypatch) -> None:
                 {"start": "invalid", "end": "2026-01-01"},
             ):
                 assert client.get(f"/api/v1/admin/dashboard/{route}", params=params).status_code == 422
+
+
+def test_dashboard_all_time_includes_history_beyond_custom_range_limit(monkeypatch) -> None:
+    from sqlalchemy import update
+    from relay.persistence.engine import store_transaction
+
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        _record_run(app, session_id, "old", {"input": 25, "output": 0, "cache": 0, "total": 25},
+                    timestamp="2020-01-15T12:00:00Z")
+        _record_run(app, session_id, "new", {"input": 5, "output": 0, "cache": 0, "total": 5})
+        store = app.state.session_store
+        with store_transaction(store.engine) as conn:
+            conn.execute(update(store.sessions).where(store.sessions.c.id == session_id).values(
+                created_at=datetime(2020, 1, 15, tzinfo=UTC),
+            ))
+        params = {"all_time": "true", "tz": "UTC"}
+        sessions = client.get("/api/v1/admin/dashboard/sessions", params=params).json()
+        tokens = client.get("/api/v1/admin/dashboard/tokens", params=params).json()
+        assert sessions["total"] == 1
+        assert sum(day["count"] for day in sessions["dailyCounts"]) == 1
+        assert sessions["dailyCounts"][0]["date"] == "2020-01-01"
+        assert sessions["bucketSize"] == "month"
+        assert tokens["fresh"] == 30
+        assert sum(day["fresh"] for day in tokens["daily"]) == 30
+        assert tokens["bucketSize"] == "month"
+        assert len(tokens["daily"]) < 120
+        # Changing back must restore the default window and its own cached answer.
+        assert client.get("/api/v1/admin/dashboard/sessions").json()["total"] == 0
+        assert client.get("/api/v1/admin/dashboard/tokens").json()["fresh"] == 5
+        for route in ("sessions", "tokens"):
+            assert client.get(f"/api/v1/admin/dashboard/{route}", params={
+                **params, "start": "2026-01-01", "end": "2026-01-02",
+            }).status_code == 422

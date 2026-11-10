@@ -1,4 +1,4 @@
-import type { DashboardDateRange } from "../lib/dashboardRange";
+import type { DashboardRange } from "../lib/dashboardRange";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardSessions, type DashboardSessionsResponse } from "../api";
 
@@ -14,14 +14,14 @@ const EMPTY: DashboardSessionsResponse = {
   topUsers: [],
 };
 
-export function useDashboardSessions(enabled: boolean, range?: DashboardDateRange): {
+export function useDashboardSessions(enabled: boolean, range?: DashboardRange): {
   data: DashboardSessionsResponse;
   isLoading: boolean;
   isError: boolean;
   error: string | null;
 } {
   const query = useQuery<DashboardSessionsResponse>({
-    queryKey: [...KEY, range?.start, range?.end],
+    queryKey: [...KEY, range ?? null],
     queryFn: ({ signal }) => getDashboardSessions(signal, range),
     enabled,
     refetchInterval: POLL_INTERVAL_MS,

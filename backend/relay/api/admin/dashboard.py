@@ -23,22 +23,22 @@ DASHBOARD_CACHE = DashboardCache()
 @router.get("/admin/dashboard/sessions")
 def dashboard_sessions(
     request: Request, ctx: AppContextDep, start: date | None = None,
-    end: date | None = None, tz: str | None = None,
+    end: date | None = None, tz: str | None = None, all_time: bool = False,
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
     zone = _dashboard_zone(tz)
-    period = _dashboard_period(start, end, zone)
+    period = _dashboard_period(start, end, zone, all_time=all_time)
     return DASHBOARD_CACHE.get_or_build(
         ctx.session_store,
-        ("sessions", str(zone), *period),
-        lambda: ctx.session_store.dashboard_session_metrics(date_range=period, zone=zone),
+        ("sessions", str(zone), period),
+        lambda: ctx.session_store.dashboard_session_metrics(date_range=period, zone=zone, all_time=all_time),
     )
 
 
 @router.get("/admin/dashboard/tokens")
 def dashboard_tokens(
     request: Request, ctx: AppContextDep, tz: str | None = None,
-    start: date | None = None, end: date | None = None
+    start: date | None = None, end: date | None = None, all_time: bool = False,
 ) -> dict[str, Any]:
     """Token usage per calendar day in the viewer's time zone (``tz``).
 
@@ -48,12 +48,12 @@ def dashboard_tokens(
     """
     require_admin_session(request, ctx.auth_store)
     zone = _dashboard_zone(tz)
-    period = _dashboard_period(start, end, zone)
+    period = _dashboard_period(start, end, zone, all_time=all_time)
     return DASHBOARD_CACHE.get_or_build(
         ctx.session_store,
-        ("tokens", str(zone), *period),
+        ("tokens", str(zone), period),
         lambda: ctx.session_store.dashboard_token_metrics(
-            zone=zone, date_range=period
+            zone=zone, date_range=period, all_time=all_time
         ),
     )
 
@@ -67,7 +67,13 @@ def _dashboard_zone(name: str | None) -> tzinfo:
         return UTC
 
 
-def _dashboard_period(start: date | None, end: date | None, zone: tzinfo) -> tuple[date, date]:
+def _dashboard_period(
+    start: date | None, end: date | None, zone: tzinfo, *, all_time: bool = False,
+) -> tuple[date, date] | None:
+    if all_time:
+        if start is not None or end is not None:
+            raise HTTPException(422, "All time cannot be combined with explicit dates.")
+        return None
     if start is None and end is None:
         end = datetime.now(zone).date()
         return end - timedelta(days=6), end

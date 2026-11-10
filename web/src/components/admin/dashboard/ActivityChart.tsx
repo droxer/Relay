@@ -19,7 +19,10 @@ import { formatChartDate } from "@/lib/chartDate";
 import { formatCompact } from "@/lib/compactNumber";
 import { ChartLegend, StackedBarChart, type ChartColumn } from "./StackedBarChart";
 
+import type { DashboardBucketSize } from "@/lib/dashboardRange";
+
 interface ActivityChartProps {
+  bucketSize?: DashboardBucketSize;
   daily: ActivityChartPoint[];
   ready: boolean;
   error?: string | null;
@@ -28,7 +31,7 @@ interface ActivityChartProps {
 
 const PLACEHOLDER_DAYS = 14;
 
-export function ActivityChart({ daily, ready, error, className }: ActivityChartProps) {
+export function ActivityChart({ daily, ready, error, className, bucketSize }: ActivityChartProps) {
   const { t, i18n } = useTranslation();
   const points = daily ?? [];
   const hasData = points.length > 0;
@@ -52,7 +55,7 @@ export function ActivityChart({ daily, ready, error, className }: ActivityChartP
   const columns: ChartColumn[] = hasData
     ? outcomes.map((day) => ({
         key: day.date,
-        label: formatChartDate(day.date, i18n.language),
+        label: formatChartDate(day.date, i18n.language, bucketSize),
         values: { completed: day.completed, failed: day.failed, other: day.other },
       }))
     : Array.from({ length: PLACEHOLDER_DAYS }, (_, index) => ({ key: `d${index}`, label: "", values: {} }));
@@ -78,7 +81,7 @@ export function ActivityChart({ daily, ready, error, className }: ActivityChartP
         format={format}
         floor={4}
         barRatio={0.58}
-        labelEvery={Math.max(1, Math.ceil(columns.length / 7))}
+        labelEvery={Math.max(1, Math.ceil(columns.length / (bucketSize && bucketSize !== "day" ? 4 : 7)))}
         ariaLabel={t("admin.v2.dash_sessions_title")}
         totalLabel={(column, total) => t("admin.v2.dash_chart_tip_total", { date: column.label, total: format(total) })}
       />
@@ -86,7 +89,7 @@ export function ActivityChart({ daily, ready, error, className }: ActivityChartP
         <ul className="sr-only">
           {outcomes.map((day) => (
             <li key={day.date}>
-              {`${formatChartDate(day.date, i18n.language)}: ${day.total} · ${labels.completed} ${day.completed}, ${labels.failed} ${day.failed}, ${labels.other} ${day.other}`}
+              {`${formatChartDate(day.date, i18n.language, bucketSize)}: ${day.total} · ${labels.completed} ${day.completed}, ${labels.failed} ${day.failed}, ${labels.other} ${day.other}`}
             </li>
           ))}
         </ul>
@@ -97,7 +100,7 @@ export function ActivityChart({ daily, ready, error, className }: ActivityChartP
             ? error
             : ready
             ? dataPeak > 0
-              ? t("admin.v2.dash_sessions_hint", { count: dataPeak })
+              ? t(`admin.v2.dash_sessions_hint_${bucketSize ?? "day"}`, { count: dataPeak })
               : t("admin.v2.dash_sessions_empty")
             : t("admin.v2.dash_loading")}
         </CardDescription>

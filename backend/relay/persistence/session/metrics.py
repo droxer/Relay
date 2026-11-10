@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import case, func, select, text
 from sqlalchemy.sql.elements import ColumnElement
 
+from ...core.reporting_period import BucketSize, reporting_dates
 from ..engine import store_transaction
 from .state import SessionStoreState
 
@@ -30,7 +31,7 @@ def _counts(values: Any = None) -> dict[str, int]:
 class SessionMetricRows(SessionStoreState):
     def dashboard_token_metrics(
         self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None,
-        date_range: tuple[date, date] | None = None
+        date_range: tuple[date, date] | None = None, all_time: bool = False,
     ) -> dict[str, Any]:
         """Transfer one row per day/runtime group, rather than one per run.
 
@@ -44,7 +45,10 @@ class SessionMetricRows(SessionStoreState):
             raise ValueError("Dashboard windows require 1 <= summary_days <= day_window.")
         today = date_range[1] if date_range else (now or datetime.now(zone)).astimezone(zone).date()
         start = today - timedelta(days=day_window - 1)
-        dates = [start + timedelta(days=index) for index in range(day_window + 1)]
+        dates, bucket_size = reporting_dates(start, today)
+        if all_time:
+            dates, bucket_size = self._all_time_buckets(self.run_token_usage.c.completed_at, zone, now)
+            day_window = len(dates) - 1
         boundaries = [datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC) for day in dates]
         ledger = self.run_token_usage.c
         day = case(
@@ -65,14 +69,14 @@ class SessionMetricRows(SessionStoreState):
             .where(ledger.completed_at >= boundaries[0])
             .group_by(day, agent)
         )
-        if date_range:
+        if date_range or all_time:
             statement = statement.where(ledger.completed_at < boundaries[-1])
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         buckets = {day.isoformat(): _counts() for day in dates[:-1]}
         totals = _counts()
         unreported: dict[str, tuple[int, datetime]] = {}
-        summary_start = (today - timedelta(days=summary_days - 1)).isoformat()
+        summary_start = dates[0].isoformat() if all_time else (today - timedelta(days=summary_days - 1)).isoformat()
         for row in rows:
             counts = _counts(row)
             if row["day"] in buckets:
@@ -97,6 +101,7 @@ class SessionMetricRows(SessionStoreState):
             ),
         )
         return {
+            "bucketSize": bucket_size,
             "available": any(counts["total"] > 0 for counts in buckets.values()),
             "timeZone": str(zone),
             "totalInput": totals["input"],
@@ -112,7 +117,7 @@ class SessionMetricRows(SessionStoreState):
 
     def dashboard_session_metrics(
         self, *, day_window: int = 14, now: datetime | None = None,
-        date_range: tuple[date, date] | None = None, zone: tzinfo = UTC,
+        date_range: tuple[date, date] | None = None, zone: tzinfo = UTC, all_time: bool = False,
     ) -> dict[str, Any]:
         """Aggregate dashboard counters in SQL without hydrating session events."""
         now = now or datetime.now(UTC)
@@ -123,10 +128,14 @@ class SessionMetricRows(SessionStoreState):
         created = self.sessions.c.created_at
         filters = []
         day: ColumnElement[Any]
-        if date_range:
-            window_start = date_range[0]
-            day_window = (date_range[1] - window_start).days + 1
-            dates = [window_start + timedelta(days=index) for index in range(day_window + 1)]
+        dates, bucket_size = reporting_dates(window_start, now.date())
+        if date_range or all_time:
+            if all_time:
+                dates, bucket_size = self._all_time_buckets(created, zone, now)
+            else:
+                assert date_range is not None
+                dates, bucket_size = reporting_dates(*date_range)
+            day_window = len(dates) - 1
             boundaries = [datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC) for day in dates]
             window_start_at = boundaries[0]
             filters = [created >= boundaries[0], created < boundaries[-1]]
@@ -179,15 +188,16 @@ class SessionMetricRows(SessionStoreState):
             for row in daily_rows
         }
         return {
+            "bucketSize": bucket_size,
             "total": total,
             "last24h": last_24h,
             "last7d": last_7d,
             "statusCounts": {str(row[0]): int(row[1]) for row in status_rows},
             "dailyCounts": [
                 {
-                    "date": (window_start + timedelta(days=offset)).isoformat(),
+                    "date": dates[offset].isoformat(),
                     **daily_by_day.get(
-                        (window_start + timedelta(days=offset)).isoformat(),
+                        dates[offset].isoformat(),
                         {"count": 0, "completed": 0, "failed": 0},
                     ),
                 }
@@ -195,3 +205,17 @@ class SessionMetricRows(SessionStoreState):
             ],
             "topUsers": [{"userId": str(user_id), "sessionCount": int(count)} for user_id, count in user_rows],
         }
+
+    def _all_time_buckets(
+        self, timestamp: ColumnElement[Any], zone: tzinfo, now: datetime | None,
+    ) -> tuple[list[date], BucketSize]:
+        with store_transaction(self.engine) as conn:
+            earliest, latest = conn.execute(select(func.min(timestamp), func.max(timestamp))).one()
+        today = (now or datetime.now(zone)).astimezone(zone).date()
+        start = (earliest.replace(tzinfo=UTC) if earliest and earliest.tzinfo is None else earliest)
+        finish = (latest.replace(tzinfo=UTC) if latest and latest.tzinfo is None else latest)
+        return reporting_dates(
+            min(start.astimezone(zone).date(), today) if start else today,
+            max(finish.astimezone(zone).date(), today) if finish else today,
+            compact=True,
+        )

@@ -717,40 +717,40 @@
   }
 }
 
-/* The date range governs historical metrics; fleet inventory stays current. */
+/* Quiet reporting toolbar. Shared controls retain their focus/touch behavior. */
 .adm-dash-range {
   display: flex;
-  align-items: end;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: var(--sp-3);
 }
 
-.adm-dash-range-field {
+.adm-dash-range-controls,
+.adm-dash-range-custom {
   display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  min-width: 0;
-  font-size: var(--text-sm);
-  color: var(--ink-2);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
 }
 
-.adm-dash-range-select {
-  height: var(--control-h);
-  padding-inline: var(--sp-3);
-  border: 1px solid var(--line-1);
-  border-radius: var(--r-2);
-  background: var(--surface-1);
-  color: var(--ink-1);
-  font: inherit;
+.adm-dash-range-custom {
+  align-items: end;
 }
 
-.adm-dash-range-note {
-  align-self: center;
-  font-size: var(--text-sm);
+.adm-dash-range-field {
+  flex: 0 1 11rem;
+}
+
+.adm-dash-range-summary {
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  font-weight: 400;
   color: var(--ink-3);
 }
 
 @media (max-width: 640px) {
-  .adm-dash-range-field { flex: 1 1 9rem; }
-  .adm-dash-range-note { flex-basis: 100%; }
+  .adm-dash-range-custom {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .adm-dash-range-apply { grid-column: 2; justify-self: end; }
 }
