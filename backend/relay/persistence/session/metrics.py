@@ -54,17 +54,18 @@ class SessionMetricRows(SessionStoreState):
         day = case(
             *[(ledger.completed_at < boundaries[index + 1], dates[index].isoformat()) for index in range(day_window)]
         ).label("day")
-        agent = case((ledger.reported.is_(False), ledger.agent), else_=None).label("agent")
+        agent = ledger.agent.label("agent")
         statement = (
             select(
                 day,
                 agent,
+                func.count().label("runs"),
                 *[
                     func.sum(case((ledger.reported.is_(True), ledger[column]), else_=0)).label(key)
                     for key, column in _TOKEN_COLUMNS.items()
                 ],
                 func.sum(case((ledger.reported.is_(False), 1), else_=0)).label("unreported"),
-                func.max(ledger.completed_at).label("latest"),
+                func.max(case((ledger.reported.is_(False), ledger.completed_at), else_=None)).label("latest"),
             )
             .where(ledger.completed_at >= boundaries[0])
             .group_by(day, agent)
@@ -75,6 +76,7 @@ class SessionMetricRows(SessionStoreState):
             rows = conn.execute(statement).mappings().all()
         buckets = {day.isoformat(): _counts() for day in dates[:-1]}
         totals = _counts()
+        runtimes: dict[str | None, dict[str, Any]] = {}
         unreported: dict[str, tuple[int, datetime]] = {}
         summary_start = dates[0].isoformat() if all_time else (today - timedelta(days=summary_days - 1)).isoformat()
         for row in rows:
@@ -84,6 +86,13 @@ class SessionMetricRows(SessionStoreState):
                 for key in bucket:
                     bucket[key] += counts[key]
             if row["day"] is None or row["day"] >= summary_start:
+                runtime = runtimes.setdefault(row["agent"], {
+                    "agent": row["agent"], "runs": 0, "reportedRuns": 0, "fresh": 0, "cacheRead": 0,
+                })
+                runtime["runs"] += int(row["runs"])
+                runtime["reportedRuns"] += int(row["runs"]) - int(row["unreported"])
+                runtime["fresh"] += counts["fresh"]
+                runtime["cacheRead"] += counts["cacheRead"]
                 for key in totals:
                     totals[key] += counts[key]
                 if row["agent"] and row["unreported"]:
@@ -113,6 +122,7 @@ class SessionMetricRows(SessionStoreState):
             "fresh": totals["fresh"],
             "daily": [{"date": day, **counts} for day, counts in buckets.items()],
             "unreportedRuns": [{"agent": agent, "runs": unreported[agent][0]} for agent in missing],
+            "runtimes": sorted(runtimes.values(), key=lambda row: (-row["runs"], row["agent"] or "~")),
         }
 
     def dashboard_session_metrics(

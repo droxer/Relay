@@ -11,6 +11,7 @@ import { useDashboardSessions } from "../../../hooks/useDashboardSessions";
 import { useTokenUsage } from "../../../hooks/useTokenUsage";
 import type { NodeMetrics } from "../../../hooks/useNodeMetrics";
 import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../../types";
+import { RuntimeUsage, RuntimeInventory } from "./RuntimeStats";
 import { ActivityChart } from "./ActivityChart";
 import { NodeStatusCard } from "./NodeStatusCard";
 import { KpiTile } from "./KpiTile";
@@ -26,10 +27,12 @@ interface DashboardViewProps {
   users: UserRecord[];
   metrics: NodeMetrics;
   onManageNodes: () => void;
+  inventoryLoading?: boolean;
+  inventoryError?: string | null;
 }
 
 export function DashboardView({
-  nodes, users, metrics, onManageNodes,
+  nodes, users, metrics, onManageNodes, inventoryLoading, inventoryError,
 }: DashboardViewProps) {
   const { t, i18n } = useTranslation();
   const [preset, setPreset] = useState<DashboardRangeSelection>("7d");
@@ -146,6 +149,7 @@ export function DashboardView({
             ready={sessionsReady}
             error={sessionsQuery.error}
           />
+          <RuntimeUsage snapshot={tokens} />
           {showTokens ? (
             <TokenUsageChart snapshot={tokens} />
           ) : null}
@@ -160,6 +164,7 @@ export function DashboardView({
             onManageNodes={onManageNodes}
             className="adm-dash-panel"
           />
+          <RuntimeInventory nodes={nodes} loading={inventoryLoading} error={inventoryError} />
           <TopUsers
             className="adm-dash-panel"
             users={users}

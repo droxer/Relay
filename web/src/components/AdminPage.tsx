@@ -120,7 +120,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
      card/list switch is hidden there (admin-v2-users.css). */
   const phone = useMediaQuery(PHONE_QUERY);
   const shownLayout: AdminLayout = phone ? "card" : layout;
-  const { nodes, users, pollError, mergeNodes, refetch } = useAdminNodes(
+  const { nodes, users, pollError, mergeNodes, refetch, inventoryLoading, inventoryError } = useAdminNodes(
     Boolean(admin),
     view === "dashboard" || layout === "list",
   );
@@ -490,6 +490,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
               {view === "dashboard" ? (
                 <DashboardView
                   nodes={nodes} users={users} metrics={metrics}
+                  inventoryLoading={inventoryLoading} inventoryError={inventoryError}
                   onManageNodes={() => setView("computers")}
                 />
               ) : view === "users" ? (

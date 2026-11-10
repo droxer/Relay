@@ -327,7 +327,11 @@ more; `bucketSize` identifies `day`, `month`, or `year`. Totals, chart buckets, 
 are scoped to the same range; sessions use creation time and tokens use run
 completion time. Computer and agent inventory remains current. `fresh` excludes cache
 reads, and `unreportedRuns` identifies runtimes that completed without reporting
-usage. Totals include retained usage after thread deletion. The backend groups
+usage. The `runtimes` array groups the same retained ledger by runtime (`agent`,
+including `null` for legacy unknown runtimes), with `runs`, `reportedRuns`,
+`fresh`, and `cacheRead`. Runs without reported counts contribute to `runs`
+but not token sums; these are retained ledger runs, not live executions.
+Totals include retained usage after thread deletion. The backend groups
 the ledger in storage and caches each reporting window briefly. See
 [dashboard reporting storage and timezone behavior](guides/backend-operations.md#grouped-dashboard-token-metrics).
 

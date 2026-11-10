@@ -205,3 +205,26 @@ def test_all_time_with_no_usage_returns_an_empty_current_day(tmp_path):
     sessions = store.dashboard_session_metrics(zone=UTC, now=now, all_time=True)
     assert sessions["total"] == 0
     assert sessions["dailyCounts"] == [{"date": "2026-11-10", "count": 0, "completed": 0, "failed": 0}]
+
+
+def test_runtime_breakdown_counts_reported_and_missing_usage_in_period(tmp_path):
+    store = make_session_store(tmp_path)
+    now = datetime(2026, 11, 6, 12, tzinfo=UTC)
+    seed(store, now, count=2)
+    seed(store, now, agent="codex", reported=False)
+    seed(store, now, agent="kimi", reported=False)
+    seed(store, now, agent=None, tokens=(1, 2, 0, 0))
+    seed(store, now - timedelta(days=8), agent="claude")
+    result = store.dashboard_token_metrics(zone=UTC, now=now)
+    assert result["runtimes"] == [
+        {"agent": "codex", "runs": 3, "reportedRuns": 2, "fresh": 34, "cacheRead": 6},
+        {"agent": "kimi", "runs": 1, "reportedRuns": 0, "fresh": 0, "cacheRead": 0},
+        {"agent": None, "runs": 1, "reportedRuns": 1, "fresh": 3, "cacheRead": 0},
+    ]
+    ranged = store.dashboard_token_metrics(zone=UTC, date_range=(now.date(), now.date()))
+    assert ranged["runtimes"] == result["runtimes"]
+    empty = store.dashboard_token_metrics(zone=UTC, date_range=((now + timedelta(days=1)).date(), (now + timedelta(days=1)).date()))
+    assert empty["runtimes"] == []
+    history = store.dashboard_token_metrics(zone=UTC, now=now, all_time=True)
+    assert sum(row["runs"] for row in history["runtimes"]) == 6
+    assert sum(row["fresh"] for row in history["runtimes"]) == history["fresh"]

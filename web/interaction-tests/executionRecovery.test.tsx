@@ -149,12 +149,12 @@ it("keeps the panel navigable when the surface has no in-app thread handler", ()
   expect(prevented).toBe(false);
   view.unmount();
 });
-it("warns only about faults — work waiting on a person reads as information", () => {
+it("uses attention for review and human input while keeping blockers distinct", () => {
   const view = render(<TaskRecoveryPanel task={task(undefined, "review")} />);
   const tone = () => view.container.querySelector(".recovery-panel")?.getAttribute("data-tone");
-  expect(tone()).toBe("info");
+  expect(tone()).toBe("warn");
   view.rerender(<TaskRecoveryPanel task={task(undefined, "waiting_for_human")} />);
-  expect(tone()).toBe("info");
+  expect(tone()).toBe("warn");
   // A blocked task is a fault to clear: its rail is the error tone.
   view.rerender(<TaskRecoveryPanel task={task("agent_offline")} />);
   expect(tone()).toBe("blocked");
