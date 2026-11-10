@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from typing import Any
 from sqlalchemy import (
+    bindparam,
     delete,
     func,
     insert,
     select,
+    true,
     update,
 )
 from ...core.ids import new_relay_id
@@ -529,53 +531,50 @@ class CommandQueueRows(DaemonStoreState):
             return
         now = now_iso()
         requested = dict(command_leases)
+        # Renew after a third of the requested lease has elapsed. The predicate
+        # lives in SQL so independent registry replicas share the throttle and
+        # frequent health probes do not take command-row locks unnecessarily.
+        due_at = require_db_time(lease_expires_at(now, lease_seconds * 2 / 3))
+        explicit = [key for key, lease in requested.items() if lease is not None]
+        due = self.commands.c.lease_expires_at <= due_at
+        if explicit:
+            due = due | (
+                self.commands.c.id.in_(explicit)
+                & self.commands.c.command["_deliveryAcknowledged"].as_boolean().is_not(True)
+            )
         with store_transaction(self.engine) as conn:
             node_pk = self._node_pk(conn, node_id)
-            rows = (
-                conn.execute(
-                    select(self.commands)
-                    .where(self.commands.c.node_id == node_pk)
-                    .where(self.commands.c.id.in_(requested.keys()))
-                    .where(self.commands.c.status == "dispatched").with_for_update()
-                )
-                .mappings()
-                .all()
-            )
+            rows = conn.execute(
+                select(self.commands)
+                .where(self.commands.c.node_id == node_pk)
+                .where(self.commands.c.id.in_(requested))
+                .where(self.commands.c.status == "dispatched")
+                .where(due if lease_seconds > 0 else true())
+                .with_for_update()
+            ).mappings().all()
+            renewals = []
+            acknowledgements = []
             for row in rows:
-                record = row_to_command(row)
-                expected_lease_id = requested[record["id"]]
-                if (
-                    expected_lease_id is not None
-                    and record.get("leaseId") != expected_lease_id
-                ):
+                expected = requested[str(row["id"])]
+                if expected is not None and row["lease_id"] != expected:
                     continue
-                updated = {
-                    **record,
-                    "command": {**record["command"], **({"_deliveryAcknowledged": True} if expected_lease_id is not None else {})},
-                    "updatedAt": now,
-                    "leaseExpiresAt": lease_expires_at(now, lease_seconds),
-                }
-                conn.execute(
-                    update(self.commands)
-                    .where(self.commands.c.id == record["id"])
-                    .values(
-                        **command_to_row(
-                            updated, database_id=record["id"], node_pk=node_pk
-                        )
-                    )
-                )
-                self._append_daemon_event(
-                    conn,
-                    daemon_event(
-                        "daemon.command.lease_renewed",
-                        {
-                            "nodeId": node_id,
-                            "commandId": record["id"],
-                            "leaseId": record.get("leaseId"),
-                            "leaseExpiresAt": updated["leaseExpiresAt"],
-                        },
-                    ),
-                )
+                values = {"renew_id": row["id"], "renewed_at": require_db_time(now),
+                          "expires_at": require_db_time(lease_expires_at(now, lease_seconds))}
+                if expected is not None and not row["command"].get("_deliveryAcknowledged"):
+                    acknowledgements.append({**values, "ack_command": {
+                        **row["command"], "_deliveryAcknowledged": True,
+                    }})
+                else:
+                    renewals.append(values)
+            statement = update(self.commands).where(self.commands.c.id == bindparam("renew_id")).values(
+                updated_at=bindparam("renewed_at"), lease_expires_at=bindparam("expires_at"),
+            )
+            if renewals:
+                conn.execute(statement, renewals)
+            if acknowledgements:
+                conn.execute(statement.values(command=bindparam("ack_command")), acknowledgements)
+            # Routine lease extensions are a projection update, not an audit
+            # event. Delivery and terminal transitions retain their own events.
 
     def list_active_runs(
         self, node_id: str | None = None, *, session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None

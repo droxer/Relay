@@ -361,11 +361,11 @@ def test_session_events_accept_chat_service_actor(monkeypatch) -> None:
 def test_notification_recovery_bounds_dispatch_and_stream_latency() -> None:
     # A missed publish (SQLite across processes, a dropped notification) is
     # recovered by the fallback read; it bounds dispatch and stream latency
-    # for that case, and one indexed read per waiter per second is cheap.
+    # for that case without continuously querying every idle computer.
     from relay.api.computers.daemon_wire import COMMAND_NOTIFICATION_RECOVERY_SECONDS
     from relay.core.settings import StreamSettings
 
-    assert COMMAND_NOTIFICATION_RECOVERY_SECONDS == 0.5
+    assert COMMAND_NOTIFICATION_RECOVERY_SECONDS == 2.0
     assert StreamSettings.from_env({}).fallback_seconds == 1.0
     assert StreamSettings.from_env({"RELAY_STREAM_FALLBACK_SECONDS": "3"}).fallback_seconds == 3.0
 

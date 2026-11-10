@@ -56,11 +56,11 @@ MAX_ACTIVE_COMMAND_IDS = 50
 # How long a command poll waits before re-reading the queue on its own when no
 # wake arrives. A publish can be missed (several SQLite processes, a dropped
 # notification), so this bounds the recovery wait for that case; the
-# recovery read is one indexed query per waiting daemon per interval.
-COMMAND_NOTIFICATION_RECOVERY_SECONDS = 0.5
-# A connected bridge can still lose a notification. Retain the same bounded
-# recovery interval so a missed wake does not consume the latency budget.
-COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS = 0.5
+# recovery read revalidates liveness and checks the durable queue.
+COMMAND_NOTIFICATION_RECOVERY_SECONDS = 2.0
+# Notifications deliver commands immediately. With a healthy bridge, reserve
+# periodic reads for missed wakes; liveness and lease bounds still cap the wait.
+COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS = 6.0
 
 
 def bounded_float(
@@ -333,13 +333,14 @@ async def daemon_commands(
         token = bearer_token(request)
         active_leases = active_command_leases(request, lease_mode)
         deadline = time.monotonic() + wait_seconds
-        await run_in_threadpool(
-            ctx.registry.renew_active_command_leases,
-            sandbox_id,
-            token,
-            active_leases,
-            lease_seconds=lease_seconds,
-        )
+        if active_leases:
+            await run_in_threadpool(
+                ctx.registry.renew_active_command_leases,
+                sandbox_id,
+                token,
+                active_leases,
+                lease_seconds=lease_seconds,
+            )
         notification_key = daemon_command_key(sandbox_id)
         while True:
             with ctx.control_plane_notifier.observe(
@@ -377,13 +378,14 @@ async def daemon_commands(
             if await request.is_disconnected():
                 logger.debug("Daemon node command poll abandoned", sandbox_id=sandbox_id)
                 break
-            await run_in_threadpool(
-                ctx.registry.renew_active_command_leases,
-                sandbox_id,
-                token,
-                active_leases,
-                lease_seconds=lease_seconds,
-            )
+            if active_leases:
+                await run_in_threadpool(
+                    ctx.registry.renew_active_command_leases,
+                    sandbox_id,
+                    token,
+                    active_leases,
+                    lease_seconds=lease_seconds,
+                )
         logger.debug(
             "Daemon node commands polled",
             sandbox_id=sandbox_id,

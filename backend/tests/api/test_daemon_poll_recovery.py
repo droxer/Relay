@@ -15,15 +15,16 @@ from relay.realtime.event_notifier import PostgresNotificationBridge, KeyedEvent
 
 @pytest.mark.parametrize(
     ("bridge_states", "lease", "liveness", "expected"),
-    [([True], 60, 30_000, [.5] * 24),
-     ([True, False], 60, 30_000, [.5] * 24),
-     ([False], 60, 30_000, [.5] * 24),
-     (None, 60, 30_000, [.5] * 24),
-     ([True], 3, 30_000, [.5] * 24),
+    [([True], 60, 30_000, [6, 6]),
+     ([True, False], 60, 30_000, [6, 2, 2, 2]),
+     ([False], 60, 30_000, [2] * 6),
+     (None, 60, 30_000, [2] * 6),
+     ([True], 3, 30_000, [1] * 12),
      ([True], 1, 30_000, [1 / 3] * 36),
-     ([True], 60, 5_000, [.5] * 24)],
+     ([True], 60, 5_000, [1] * 12)],
 )
-def test_command_recovery_interval(monkeypatch, bridge_states, lease, liveness, expected):
+@pytest.mark.parametrize("active", [False, True])
+def test_command_recovery_interval(monkeypatch, bridge_states, lease, liveness, expected, active):
     clock = [0.0]
     waits = []
     reads = []
@@ -51,7 +52,8 @@ def test_command_recovery_interval(monkeypatch, bridge_states, lease, liveness, 
         ),
     )
     request = SimpleNamespace(
-        query_params=QueryParams({"waitSeconds": "12", "leaseSeconds": str(lease)}),
+        query_params=QueryParams({"waitSeconds": "12", "leaseSeconds": str(lease),
+                                  **({"activeCommandId": "command"} if active else {})}),
         headers={"authorization": "Bearer token"},
         is_disconnected=AsyncMock(return_value=False),
     )
@@ -59,7 +61,7 @@ def test_command_recovery_interval(monkeypatch, bridge_states, lease, liveness, 
     assert result["commands"] == []
     assert waits == pytest.approx(expected)
     assert len(reads) == len(expected) + 1
-    assert len(renewals) == len(reads)
+    assert len(renewals) == (len(reads) if active else 0)
 
 
 def test_bridge_connected_means_listen_ready_and_resets_on_stop(monkeypatch):
