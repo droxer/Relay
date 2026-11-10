@@ -55,9 +55,13 @@ for (const recover of [false, true]) {
       process.kill = realKill; cp.spawn = originalSpawn; syncBuiltinESMExports();
       if (handle && originalHandleKill) handle.kill = originalHandleKill;
       release.abort();
+      // Operator release deliberately unrefs the child. The test still owns
+      // cleanup, so keep its handle alive until the exit event is observed.
+      spawned.ref();
+      const closed = spawned.exitCode === null && spawned.signalCode === null ? once(spawned, "close") : undefined;
       try { realKill(-spawned.pid!, "SIGKILL"); } catch { /* already gone */ }
       await running;
-      if (spawned.exitCode === null && spawned.signalCode === null) await once(spawned, "close");
+      await closed;
     }
   });
 }

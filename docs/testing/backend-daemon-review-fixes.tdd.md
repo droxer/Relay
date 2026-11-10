@@ -227,3 +227,20 @@ After removing the arguments, TypeScript compilation and all 13 focused
 exit-proof/process-tree tests passed. Exit-proof line coverage was 96.23%.
 The production npm dependency audit against the official registry reported
 zero vulnerabilities; the configured mirror does not implement its audit API.
+
+## CI Node 22 recovery-test cleanup
+
+The PR's TypeScript job cancelled all five supervisor-recovery tests after the
+first test's cleanup left a pending `close` promise with no referenced handles.
+Operator reconciliation intentionally unrefs the child in production; the test
+still owns termination and must keep that handle referenced while awaiting it.
+
+Reproduction command: `npm exec --yes --registry=https://registry.npmjs.org
+--package=node@22 -- node --test
+dist/packages/relay-daemon/tests/process-supervisor-recovery.test.js`.
+Before the test-only fix: zero passed, five cancelled, exit code 1, with
+`Promise resolution is still pending but the event loop has already resolved`.
+After re-referencing the child and subscribing to `close` before sending the
+cleanup signal: five passed, zero cancelled, exit code 0. The same file had
+passed on the developer's Node 26 runtime, which masked the CI-version failure.
+TypeScript compilation and the production npm audit also passed.
