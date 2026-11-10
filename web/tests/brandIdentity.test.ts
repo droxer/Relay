@@ -67,11 +67,12 @@ const channelSpread = (hex: string) => {
 };
 
 describe("ink controls, one brand orange in the mark", () => {
-  it("draws --action, its hover, and the link inks in achromatic ink", () => {
+  it("keeps action and link inks restrained and distinct from signal blue", () => {
     for (const [label, register] of Object.entries(registers)) {
       for (const name of ["--action", "--action-hover", "--on-action", "--link-ink", "--link-ink-strong"]) {
         const hex = tokenIn(register, name);
-        assert.ok(channelSpread(hex) <= 2, `${label} ${name} ${hex} carries a hue; controls and links are ink`);
+        assert.ok(channelSpread(hex) <= 50, `${label} ${name} ${hex} must remain restrained blue-grey ink`);
+        assert.ok(channelSpread(hex) < channelSpread(tokenIn(register, "--live")), `${label} ${name} must be less chromatic than signal blue`);
       }
     }
   });

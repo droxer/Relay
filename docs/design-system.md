@@ -6,107 +6,43 @@
 
 ## Overview
 
-The executable source of truth is `web/src/styles/tokens/`. This document
-specifies Relay's current dense workspace UI. The [source-system appendix](#appendix--the-source-system)
-is historical design reference, not a component specification: Relay adapts its
-colors and typography but uses compact corners and flat elevation.
+Relay uses **Cool Mist**, selected on 2026-11-10: low-saturation mist-grey-blue
+light surfaces, blue-charcoal dark surfaces, rounded controls and soft floating
+elevation. The executable source of truth is `web/src/styles/tokens/`; this
+is the canonical specification. [DESIGN.md](../DESIGN.md) is an entry point to
+this document. Cool Mist supersedes the previous black/white, 4/6/8px, flat-only
+visual direction. The [source-system appendix](#appendix--the-source-system)
+records historical inspiration, not an alternative component specification.
 
-> **A neutral canvas carries the content; ink carries the controls; hue
-> carries meaning only.** The one baton orange left is the brand mark's lead
-> chevron (`--brand-lead`, what a person hands on); its blue trailing chevron
-> is an agent carrying it on.
+- **Materials stay quiet; status stays distinct.** Blue-grey surfaces, text and
+  controls have restrained chroma. Signal blue means live execution; green,
+  gold and crimson retain success, attention and failure meanings. Baton orange
+  remains exclusive to the brand mark's lead chevron. The brand geometry is
+  unchanged; static assets follow the current palette.
+- **One primary action per view.** `--primary` reads `--action`: a pale-mist
+  plate with dark ink in dark mode, a blue-charcoal plate with white ink in
+  light mode. Secondary actions use outline or ghost treatments. Direct-fill
+  controls such as composer send use the paired `--cta-*` tokens.
+- **Selection stays calm.** `--action-soft` is an 8% action wash in dark and
+  6% in light, accompanied by the selection marker. Links and focus use the
+  text ramp; underlines distinguish links from ordinary text.
+- **Contrast includes the painted state.** Text clears 4.5:1 on all content
+  and navigation planes. Status badges also clear 4.5:1 after their 8% tint
+  and the row's selection wash are composited. Field boundaries clear 3:1
+  after mixing with their background, at rest and on hover. Disabled controls
+  retain their separate opacity contract.
+- **Rounded, with familiar density.** Micro details use 8px (`--r-1`),
+  controls and rows 12px (`--r-2`), containers 16px (`--r-3`). Ordinary content
+  stays flat. Floating chrome uses the shared hairline plus soft shadow.
+  Full radii remain reserved for circles and capsules.
+- **Keep the existing type and interaction system.** The platform UI sans
+  serves English and Chinese; JetBrains Mono is technical text only. Weight
+  tiers remain 400/500/700. Spacing, control heights, touch targets, motion,
+  workflows and layout are unchanged by this palette refinement.
 
-**Ink controls, hue for meaning.** `--action`, `--link`, the focus ring, and
-selection are all **ink** — near-white on black, near-black on white — as
-eveland.ai and Linear's chrome draw them. Hue is left to say something:
-`--live` signal blue (an agent is working), `--warn` gold (a person is
-needed), `--err` crimson (it failed), `--ok` green. Baton orange survives
-**only** as `--brand-lead` (`#ff8a3d` dark / `#b84400` light): the logo, the
-favicon, `RelayMark`'s `brand` tone, the login and landing watermarks, and the
-email's handoff bar. It is never a control, link, or status colour. **No
-purple anywhere**: it reads as generic AI styling. `brandIdentity.test.ts`
-asserts that `--action`, its hover, and the link inks are achromatic, that the
-mark's orange keeps clear of `--live`, `--warn`, and `--err`, that no token is
-purple, and that every icon matches its register's tokens.
-
-A pure-black and a white canvas (`#000000` / `#ffffff`), achromatic grey
-elevation and hairlines, a neutral ink ramp, and the source system's semantic
-status hues. The surfaces follow eveland.ai's docs ramp (2026-10-23), which
-replaced the Geist neutrals of PR #324; light's recessed fill and rail take
-eveland's warm paper `#f7f7f5`, the one permitted warm cast. It supersedes the
-baton-orange accent register, the cloud-canvas commerce register, Fieldnotes,
-and Phosphor.
-
-- **The primary action is the ink plate — one per view.** shadcn's
-  `--primary` points at `--action` (`shadcn-bridge.css`), so every default
-  `Button` and the page's create action fill with a near-white plate and black
-  ink in dark, a near-black plate and white ink in light. It is a scarce mark:
-  one filled primary per view, and anything beside it steps down to `outline`
-  or `ghost` (the page-header "+" is neutral `--surface-2`). There is no
-  disabled hex — disabled is opacity, or the Button's explicit disabled
-  surface for filled variants. The sign-in submit (`.login-submit`) and the
-  landing page's `.landing-button` wear the same `--action` plate, unrepainted.
-  The neutral inverted `--cta-fill` survives only for the two fills that read
-  it directly — the composer's circular send button and the profile-image
-  picker's hover disc.
-- **The same ink marks selection.** `--action` is `#fafafa` with `--on-action`
-  `#000000` on the dark canvas and `#080808` with white on the light one;
-  `--action-hover` lifts in both registers (`#ffffff` / `#2a2a2a`). Beyond the
-  primary fill it says *this one*: the selected-row accent bar, the active nav
-  marker, checked checkboxes, radios and switches, the current pager page,
-  `::selection`, and the skip link. Selection stays calm — an `--action-soft`
-  wash (white 8% / ink 6%) plus the bar, never a solid fill — so a selected
-  row never reads as a button. The token keeps its historical name.
-  Links take `--link` (`--link-ink`, `#ededed` / `#080808`; hover
-  `--link-ink-strong`, `#ffffff` / `#000000`), reserved for wayfinding —
-  anchors in prose and the focus ring. A link is told apart by its underline,
-  never by a hue.
-- **Status is chromatic: dots, text, and quiet badge tints.**
-  `--ok` `--warn` `--err` carry the source system's success / warning / critical
-  hues. The published values are *badge fill* colours (white text on a
-  saturated pill); Relay renders status as ink far more often than as a fill,
-  so each tone is deepened or lifted until it **clears AA as small text**
-  against the worst plane it can land on. Semantic badges use an 8% tint
-  with a transparent border; standalone status marks and text stay unfilled.
-  The hue family is the source system's; the lightness is ours. `--info` is not a separate value: it aliases `--ink-3`.
-- **Every ink tier that can carry text clears 4.5:1.** The bar is the worst
-  plane a tier can land on — `--surface-3` in dark, `--surface-2` in light —
-  because meta text sits on drawers and inset wells too. This is why the light
-  ramp's calm end (`--ink-4` `#666666`) stops where it does: one step lighter
-  and meta text on the recessed fill drops under AA. Disabled is opacity, so
-  no lighter "disabled label" tier exists.
-- **Dual-first registers.** Dark is the default register (`:root`);
-  `html[data-theme="light"]` overrides it. Both are neutral: the dark
-  canvas `#000000` lifts through `#0f0f0f` cards to `#262626` drawers, and the
-  white light canvas carries white cards and white floating chrome,
-  separated by hairlines rather than a grey wash.
-- **Ink chooses, hue reports.** Controls and selection are ink; the only
-  chromatic marks are meanings — `--live` for work an agent is doing *right
-  now*, and the status tones. Because "chosen" never takes a hue, a pulsing
-  blue dot beside a selected row can only mean "working".
-- **One sans, every job.** Relay sets everything in the **platform UI face**
-  (San Francisco, Segoe UI, Roboto, Noto Sans) — no sans web font is loaded,
-  and English and Chinese share one stack.
-  Hierarchy is built from **size and
-  weight** (400/500/700), never from a second face. The weight ramp is
-  inverted against the usual expectation: the display tiers are 500 and the
-  heaviest weight belongs to the *small* emphasis roles (`--type-heading`,
-  `--type-label-strong`); 700 stays scarce, so names, button and badge
-  labels sit at 500. JetBrains Mono survives for technical text only — IDs, logs,
-  code — the code role is 400 and the `.code` utility is 500, both untracked.
-- **Compact geometry, flat surfaces.** Micro details use `--r-1` (4px),
-  controls/tabs/badges use `--r-2` (6px), and containers use `--r-3` (8px).
-  `--r-full` is reserved for true circles and capsules, including status dots
-  and switch tracks; `--r-pill` is the marketing CTA capsule only. Floating
-  surfaces use a hairline ring, without blur.
-- **One ease, two speeds.** `--ease` `cubic-bezier(0, 0, 0.2, 1)` (ease-out),
-  `--t-fast` 150ms, `--t-slow` 250ms — the source system's recommended band.
-  Nothing
-  overshoots.
-
-The executable source is `web/src/styles/tokens/`. Review the application in
-both registers when changing tokens; do not maintain a second hard-coded token
-demo.
+Review both themes when changing tokens. The concept preview's C variant
+reads the production palette and role files; it is not a substitute for
+verification of the full application.
 
 ## Token architecture
 
@@ -192,84 +128,71 @@ tokens exist. `login.css` aliases the live register as local `--lg-*` names.
 
 ## Colors
 
-Dark register / light register:
+Dark register / light register, matching `palette.css`:
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--surface-0` | `#000000` | `#ffffff` | canvas |
-| `--surface-1` | `#0f0f0f` | `#ffffff` | cards, panels |
-| `--surface-2` | `#1a1a1a` | `#f7f7f5` | fills, search, hover — light is eveland's warm paper |
-| `--surface-3` | `#262626` | `#ffffff` | drawers, modals, popovers |
-| `--surface-rail` / `--surface-list` | `#1a1a1a` / `#0f0f0f` | `#f7f7f5` / `#ffffff` | shell zones |
-| `--ink-1` | `#ededed` | `#080808` | headings, emphasis |
-| `--ink-2` | `#d4d4d4` | `#262626` | body |
-| `--ink-3` | `#a0a0a0` | `#525252` | secondary labels |
-| `--ink-4` | `#8f8f8f` | `#666666` | timestamps, meta |
-| `--line-1` | `#242424` | `#d9d9d9` | structural hairline — dark is eveland's white 14% composited on black; light deepens eveland's 12% ink so it clears 1.4:1 on white |
-| `--line-2` | `#171717` | `#eeeeee` | soft hairline — dark is white 9% on black |
-| `--cta-fill` / `--cta-hover` | `#fafafa` / `#d4d4d4` | `#080808` / `#2a2a2a` | neutral inverted fill (composer send, profile-image hover disc) — not the default Button |
-| `--cta-ink` | `#000000` | `#ffffff` | text on the neutral inverted fill |
-| `--action` | `#fafafa` | `#080808` | primary action + selection — the ink plate |
-| `--action-hover` | `#ffffff` | `#2a2a2a` | pressed fill — lifts in both registers |
-| `--on-action` | `#000000` | `#ffffff` | ink on the action fill |
-| `--action-soft` | white 8% wash | `#080808` 6% wash | selection wash, active nav |
-| `--link-ink` / `--link-ink-strong` | `#ededed` / `#ffffff` | `#080808` / `#000000` | `--link` / `--link-hover`: anchors in prose, focus ring — set apart by underline, never hue |
-| `--brand-lead` | `#ff8a3d` | `#b84400` | the brand mark's lead chevron only — never a control, link, or status |
-| `--ok` | `#4ac16a` | `#12752f` | ready, passed, done |
-| `--warn` | `#e8b923` | `#7a5c00` | a person is needed, degraded — muted gold, clear of the mark's orange and the highlighter yellow |
-| `--err` | `#ff5c84` | `#c40f4a` | failed, destructive — crimson, clear of the mark's orange |
-| `--on-err` | `#0a0a0a` | `#ffffff` | text on the critical fill |
-| `--info` | = `--ink-3` | = `--ink-3` | neutral notice |
-| `--live` | `#6aa6ff` | `#2457c5` | an agent is working *right now* |
-| `--scrim` | `rgba(0,0,0,.6)` | `rgba(23,23,23,.24)` | overlay scrim (one layer, achromatic) |
+| `--surface-0` | `#171d22` | `#eef2f5` | canvas |
+| `--surface-1` | `#1f282f` | `#fbfcfd` | cards and panels |
+| `--surface-2` | `#28323a` | `#e8eef2` | inset fills and hover wells |
+| `--surface-3` | `#2b3842` | `#ffffff` | floating surfaces |
+| `--surface-rail` | `#28323a` | `#e5ebef` | navigation rail |
+| `--surface-list` | `#1f282f` | `#f4f7f9` | list pane |
+| `--surface-band` | `#1f282f` | `#e8eef2` | group bands |
+| `--ink-1` | `#e3ebf1` | `#27333b` | headings and emphasis |
+| `--ink-2` | `#ccd8e1` | `#3d4c56` | body |
+| `--ink-3` | `#b2c3d0` | `#4b5c66` | secondary labels and neutral notices |
+| `--ink-4` | `#a0b2c0` | `#5c6b75` | timestamps and metadata |
+| `--line-1` | `#384957` | `#c1ccd4` | structural hairline |
+| `--line-2` | `#2d3b46` | `#dce4e9` | soft hairline |
+| `--cta-fill` | `#d3e0e9` | `#364b59` | direct-fill controls |
+| `--cta-hover` | `#e3ebf1` | `#475e6d` | direct-fill hover |
+| `--cta-ink` | `#23313b` | `#ffffff` | direct-fill label |
+| `--action` | `#d3e0e9` | `#364b59` | primary action and selection marker |
+| `--action-hover` | `#e3ebf1` | `#475e6d` | primary action hover |
+| `--on-action` | `#23313b` | `#ffffff` | primary action label |
+| `--link-ink` | `#e3ebf1` | `#27333b` | links and focus |
+| `--link-ink-strong` | `#ffffff` | `#17232c` | link hover |
+| `--brand-lead` | `#ff8a3d` | `#b84400` | brand mark lead only |
+| `--ok` | `#6dd28a` | `#0b6424` | success |
+| `--warn` | `#dec371` | `#705400` | attention |
+| `--err` | `#f7adbe` | `#ab0d40` | failure and destructive intent |
+| `--on-err` | `#23313b` | `#ffffff` | critical fill label |
+| `--live` | `#91b9f2` | `#2457c5` | live execution |
+| `--elevation-shadow` | `rgba(8, 16, 23, 0.32)` | `rgba(37, 60, 80, 0.10)` | floating shadow color |
+| `--scrim` | `rgba(8, 16, 23, 0.6)` | `rgba(23, 35, 44, 0.24)` | overlay scrim |
 
 ### The surface ladder runs both ways
 
-In **dark** the ladder is elevation: 0 < 1 < 3 in perceived lift, with 2 as
-the fill tier between card and drawer. **Light cannot reproduce that**,
-because white is a ceiling you cannot build above — so cards and floating
-chrome are both white (`--surface-1` = `--surface-3` = `#ffffff`) and separate
-by hairline and the `--shadow-2` ring, with `--surface-2` deliberately
-**recessed** below the canvas.
+In **dark**, the canvas lifts through cards and inset fills to floating
+surfaces. In **light**, the mist canvas carries near-white cards and white
+floating surfaces. The inset fill remains below the card plane. Floating
+chrome adds the shared shadow; cards use their existing surface and edge.
 
-The **zone** surfaces run the other way from dark. Dark builds the shell up
-from the canvas (lift means lighter there); in light the shell recedes —
-`--surface-rail` `#f7f7f5` sits below the white list, canvas, and cards, so
-everything the eye reads sits on one white sheet. A search field or hover
-well recedes from white and emerges from black; that inversion is correct, and only `--surface-2` does it. Do not
-paint shaded section bands over the canvas.
+Shell roles are explicit: the rail is blue-grey, the list pane lies between
+the rail and the canvas in each register, and group bands use their own role.
+Do not infer shell ordering from the generic surface indices.
 
 ### Contrast floors
 
-Every tier that can carry text clears WCAG 1.4.3 against **the worst plane it
-can land on**, not against the canvas. Ratios against that plane:
+`paletteTokens.test.ts` checks every text and status tier against content and
+navigation planes in both themes. It also composites the colors a person
+actually sees:
 
-| | ink-1 | ink-2 | ink-3 | ink-4 | ok | warn | err |
-|---|---|---|---|---|---|---|---|
-| dark (vs `--surface-3`) | 12.93 | 10.21 | 5.79 | 4.68 | 6.58 | 8.21 | 5.13 |
-| light (vs `--surface-2`) | 18.67 | 14.11 | 7.28 | 5.35 | 5.42 | 5.83 | 5.57 |
+- Field borders mix `--ink-1` into transparency using
+  `--field-border-strength` (42% dark, 56% light), with 16 percentage points
+  added on hover. Each resulting boundary clears 3:1 against its background.
+- Semantic badges tint their background by 8%. Their foreground clears 4.5:1
+  both on plain rows and over the selection wash (`--action-soft`: 8% dark,
+  6% light). `--info` remains an alias of `--ink-3`.
+- Status hues retain their meanings after contrast tuning: green leads in
+  `--ok`, red in `--err`, and gold descends r > g > b.
 
-`paletteTokens.test.ts` computes these from the declared hexes rather than
-pinning the hexes themselves, so a future palette move is checked for
-*legibility* rather than for matching a list. The same test asserts each
-status tone still reads as **its hue** (green leads in `--ok`, red in `--err`,
-gold's channels descend r > g > b) — the deepening AA forced on the light
-register must not turn a green into a grey.
-
-`--action-soft` is not a hex: it is a `color-mix` into transparency — white
-8% in dark, `#080808` 6% in light — so the selection wash is the same ink as
-the action, only quieter.
-
-A **pinned group** (`--dark-canvas` `#000000`, `--dark-surface` `#0f0f0f`,
-`--dark-ink`, `--dark-line`, `--dark-action` `#fafafa`, plus `--light-canvas`
-`#ffffff`, `--light-action` `#080808`, and `--paper` `#ffffff` for document
-previews) mirrors the registers for chrome that must *not* follow the active
-theme: the theme-picker swatches that show both registers at once
-(`preferences.css`), the diff viewer (`workspace-files.css`), ink-fill chrome
-(`a11y.css`), and artifact paper (`artifact.css`). The set is
-consumer-driven — add a pin only with a caller. `paletteTokens.test.ts`
-asserts each pinned token equals its live counterpart — the pins silently
-drifted once already, which is the failure they exist to prevent.
+The **pinned group** (`--dark-canvas`, `--dark-surface`, `--dark-ink`,
+`--dark-line`, `--dark-action`, `--light-canvas`, `--light-action`) mirrors the
+live registers for theme-independent chrome. `--paper` stays white for
+print-like document previews. Add a pin only with a caller. Tests check each
+pinned token against its live counterpart.
 
 Artifact chips are **monochrome** — kind is carried by the icon and the mono
 kind label, not by hue.
@@ -473,8 +396,8 @@ stacks.
 
 ## Geometry, elevation, motion
 
-- **Radii:** `--r-1` 4px for micro details; `--r-2` 6px for controls,
-  tabs, and badges; `--r-3` 8px for cards, drawers, dialogs, and panels.
+- **Radii:** `--r-1` 8px for micro details; `--r-2` 12px for controls,
+  tabs, and badges; `--r-3` 16px for cards, drawers, dialogs, and panels.
   `--r-full` is 9999px for actual circles/capsules. `--r-pill` (also
   9999px) is the marketing CTA capsule — the landing page's
   `.landing-button`, as eveland.ai draws it — and never an app control; a
@@ -522,13 +445,12 @@ stacks.
   `--opacity-underlay` 0.92. Opacity never dims text: a quieter label is an
   `--ink-*` tier (`paletteTokens.test.ts` fails a rule that sets `color` and
   opacity < 1).
-- **Elevation:** flat. `--shadow-2` is a 0.5px
-  `--line-1` ring without blur. Cards separate by surface and border;
-  floating dialogs, drawers, menus, tooltips, and toasts share the ring.
-  Blurless `inset` box-shadows are rings, not elevation, and are allowed for
-  hairlines and selection marks (`--accent-bar` is one); an offset or blurred
-  shadow is not. The landing page's sticky nav is the one `backdrop-filter`
-  — a marketing surface, like the login cover.
+- **Elevation:** ordinary cards stay flat, separated by surface and edge.
+  Floating dialogs, drawers, menus, tooltips and toasts share `--shadow-2`:
+  a 0.5px `--line-1` ring plus a 12px-offset, 32px-blur shadow colored by
+  `--elevation-shadow` in each theme. Do not introduce component-specific
+  shadow recipes. Inset rings remain appropriate for hairlines and selection
+  marks. The landing page's sticky nav keeps its existing `backdrop-filter`.
 - **Focus:** `--focus-outline` — a 2px solid **link-ink** ring at a 2px
   offset (WCAG 1.4.11), drawn with `outline`, **not** `box-shadow`, so no
   ancestor's `overflow: hidden` can clip it and forced-colors mode preserves
@@ -667,7 +589,7 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
   wayfinding; blue is liveness, gold a person needed, crimson a failure, green
   done; the orange is the mark.
 - Don't give app controls pill corners (`--r-full` / `--r-pill` /
-  `rounded-full`) or introduce radii beyond the 4/6/8px ladder.
+  `rounded-full`) or introduce radii beyond the 8/12/16px ladder.
 - Don't set text or dots in a status tone taken straight from the source
   system's badge palette — those are *fill* values (success `#31a24c` measures 3.1:1
   on white, warning `#f7b928` 1.8:1). The tokens here are already the
@@ -903,8 +825,9 @@ explains it is in parentheses.
    Tailwind `ring-*`, and only through the base or primitive contract — or a
    composite's `:focus-within` wrapper, with the inner field's ring
    suppressed. One ring per control. (Geometry)
-10. **Elevation.** No offset or blurred shadows. Floating shells use the
-    `--shadow-2` hairline ring; blurless inset rings are allowed. (Geometry)
+10. **Elevation.** Floating shells use the shared `--shadow-2` hairline and
+    soft shadow. Ordinary cards stay flat; inset selection rings remain
+    allowed. No component-specific shadow recipes. (Geometry)
 11. **Motion.** Durations, loops, and delays from `--t-*` and `--ease`;
     entrances use `rise`; liveness changes are checked under
     `prefers-reduced-motion`. (Geometry)
@@ -993,21 +916,21 @@ Key characteristics:
 
 ### How Relay maps them
 
-| Source token | Relay token | What changed and why |
+The source values above are historical reference. Current mappings follow the
+[Colors](#colors) table and the Cool Mist geometry defined above:
+
+| Source role | Relay role | Adaptation |
 |---|---|---|
-| `primary` / `primary-deep` / `on-primary` | `--action` / `--action-hover` / `--on-action` | Replaced by ink, per register: `#fafafa` / `#ffffff` with black ink on the dark canvas, `#080808` / `#2a2a2a` with white on the light one, as eveland.ai and Linear draw controls. The published `#0064e0` no longer appears anywhere. |
-| `ink-button` / `on-ink-button` | `--cta-fill` / `--cta-ink` | Kept as a neutral inverted fill (`#fafafa` on dark, `#080808` on light) for the composer send and profile-image hover disc — not the default Button. |
-| `primary-soft` | `--action-soft` | Carried as a `color-mix` ink wash (white 8% dark, ink 6% light) rather than a flat hex. |
-| `meta-link` | `--link-ink` | Replaced by ink (`#ededed` / `#080808`); a link is told apart by its underline, not a hue. |
-| `oculus-purple` | `--live` | Not used. Relay retired purple (it reads as generic AI styling); liveness is signal blue. |
-| `success` / `warning` / `critical` | `--ok` / `--warn` / `--err` | Hue family kept; lightness retuned per register so each clears 4.5:1 as *small text* — the published values are badge-fill colours. The warning moves to a muted gold (hue ~89, lower lightness than the published highlighter #f7b928), so it stays clear of the mark's orange and stops out-shouting the critical red. |
-| `canvas` / `surface-soft` | `--surface-0`, `--surface-1`, `--surface-3` / `--surface-2` | White carries the page, cards, and floating chrome in light; the recessed fill and rail are eveland's warm paper `#f7f7f5`. The cool `#f1f4f7` grey is not used. |
-| `ink-deep` / `ink` / `charcoal` | `--ink-1` / `--ink-2` / `--ink-3` | Replaced by an achromatic ramp led by eveland's ink (`#080808` / `#262626` / `#525252` in light). |
-| `steel` | `--ink-4` | Replaced by `#666666` in light, the lightest grey that still clears AA on the recessed fill. |
-| `stone` / `disabled-text` | — | Not adopted. Disabled is opacity in Relay, so a dedicated disabled ink has no consumer. |
-| `hairline` / `hairline-soft` | `--line-1` / `--line-2` | Achromatic in both registers (`#d9d9d9` / `#eeeeee` light, `#242424` / `#171717` dark — eveland's white 14% / 9% composited on black). |
-| `fb-blue` | — | Not adopted; the focus ring and form activation both run on `--link`, which clears AA as text as well as being an indicator. |
-| `success-bg` / `warning-bg` / `attention` / `critical-strong` | — | Not adopted. Relay renders status as ink, not as saturated fills, so the fill-only tiers have no job. |
+| Primary and on-primary | `--action`, `--action-hover`, `--on-action` | Blue-grey fills, inverted by theme |
+| Ink-button | `--cta-fill`, `--cta-ink` | Paired direct-fill control colors |
+| Primary-soft | `--action-soft` | 8% dark / 6% light selection wash |
+| Meta-link | `--link-ink` | Text ramp with underline |
+| Success, warning, critical | `--ok`, `--warn`, `--err` | Semantic hues tuned for plain and tinted selected states |
+| Canvas and surface-soft | `--surface-*` | Mist-grey-blue light and blue-charcoal dark materials |
+| Ink-deep, ink, charcoal, steel | `--ink-1` through `--ink-4` | Restrained blue-grey ramp with text contrast checks |
+| Hairlines | `--line-1`, `--line-2` | Cool-grey edges |
+| Source purple | — | Not adopted; Relay uses signal blue for live work |
+| Disabled-text | — | Existing opacity contract, no separate disabled ink |
 
 ## Source typography
 
@@ -1089,7 +1012,7 @@ the pill is not a control shape here.
 | 2 (sticky panel) | `rgba(20,22,26,0.3) 0 1px 4px 0` | PDP purchase summary, sticky mobile checkout bar |
 
 Relay leaves level 0 without a shadow and adapts level 2 to `--shadow-2`, a
-0.5px `--line-1` ring with no blur. Level 1 has no Relay consumer — its job
+0.5px `--line-1` ring plus the shared soft floating shadow. Level 1 has no Relay consumer — its job
 is a pill-tab active state, which Relay signals with an underline or the
 selection wash instead.
 
@@ -1246,8 +1169,8 @@ to look before "fixing" something that looks unspecified:
    cadences (`--t-pulse`, `--t-pulse-calm`, `--t-tick`, `--t-draw`,
    `--t-stagger`) which the source has no equivalent for.
 3. **No dark-mode tokens** are published. Relay's dark register is derived —
-   a pure-black `#000000` canvas, an achromatic grey elevation ladder above
-   it, and a near-white ink plate (`#fafafa`) carrying black ink. Every
+   a blue-charcoal `#171d22` canvas, restrained blue-grey elevation above
+   it, and a pale-mist action plate (`#d3e0e9`) carrying dark ink. Every
    derived value is documented at its token in `palette.css`.
 4. **Pastel decorative tints** behind accessory cutouts are photographic
    content, not system colours. Relay has no equivalent surface and does not
