@@ -319,7 +319,13 @@ async function install(): Promise<void> {
   } finally {
     process.env = installerEnvironment;
   }
-  const failures = report.checks.filter(check => !check.ok && !check.name.startsWith('agent:'));
+  // Transport diagnostics belong to the running (or stopped) client. Retained
+  // reports must survive an upgrade, but must not prevent installing its repair.
+  // Doctor still reports the incident as a failure for explicit health checks.
+  for (const check of report.checks) {
+    if (!check.ok && check.name === 'transport') console.log(out.notice(`${check.name}: ${check.detail}`));
+  }
+  const failures = report.checks.filter(check => !check.ok && !check.name.startsWith('agent:') && check.name !== 'transport');
   if (failures.length) throw new Error(failures.map(check => `${check.name}: ${check.detail}`).join('\n'));
   // Persist the already-issued token only after read-only authentication succeeds.
   // The running daemon owns registration; reinstalling never marks a live node stopped.

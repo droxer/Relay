@@ -201,9 +201,21 @@ test('installer verifies authentication and writes a service using the real pack
     const stale = service.replace('node-install-test', 'node-stale');
     writeFileSync(stale, content.replaceAll('node-install-test', 'node-stale'));
     const savedProfile = readFileSync(profile, 'utf8');
+    // Retained reports describe the old daemon, not whether a new client can install.
+    const stateDir = join(home, '.relay/daemon-nodes/node-install-test');
+    const diagnostics = join(stateDir, 'transport-diagnostics.json');
+    const quarantined = JSON.stringify({ state: 'healthy', causes: ['quarantine'],
+      observedAt: Date.now(), pending: 2, quarantined: 2 });
+    writeFileSync(diagnostics, quarantined);
+    const reports = join(stateDir, 'terminal-events');
+    mkdirSync(reports, { recursive: true });
+    writeFileSync(join(reports, 'retained.rejected'), '409');
     const upgrade = await exec(process.execPath, [...setupCommand, '--runtime-profile', profile], {
       env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
     });
+    assert.match(upgrade.stdout, /transport:.*quarantined: 2/);
+    assert.equal(readFileSync(diagnostics, 'utf8'), quarantined);
+    assert.equal(readFileSync(join(reports, 'retained.rejected'), 'utf8'), '409');
     assert.equal(readFileSync(profile, 'utf8'), savedProfile);
     assert.equal(JSON.parse(readFileSync(profile, 'utf8')).environment.CODEX_HOME, customHome);
     assert.match(upgrade.stdout, /already installed for this workspace; upgrading it/);
@@ -211,6 +223,36 @@ test('installer verifies authentication and writes a service using the real pack
     assert.match(upgrade.stdout, /Removed an older Relay Dev install for this workspace \(node-stale\)/);
     assert.doesNotMatch(upgrade.stdout + upgrade.stderr, /fixture-token/);
     assert.equal(existsSync(stale), false);
+    for (const snapshot of [
+      JSON.stringify({ state: 'healthy', causes: [], observedAt: 0, pending: 0, quarantined: 0 }),
+      '{unreadable',
+    ]) {
+      writeFileSync(diagnostics, snapshot);
+      const retried = await exec(process.execPath, [...setupCommand, '--runtime-profile', profile], {
+        env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
+      });
+      assert.match(retried.stdout, /transport:/);
+      assert.match(retried.stdout, /Connected to Relay Dev/);
+      assert.equal(readFileSync(diagnostics, 'utf8'), snapshot);
+      assert.equal(readFileSync(join(reports, 'retained.rejected'), 'utf8'), '409');
+    }
+    // Doctor continues to fail on the incident, independently of installation.
+    writeFileSync(diagnostics, quarantined);
+    const healthCheck = await exec(process.execPath, [resolve('packages/relay-daemon/dist/cli.js'),
+      ...command.slice(1), '--sandbox', 'none', '--allow-host-agent-execution', '--runtime-profile', profile, '--doctor'], {
+      env: { HOME: home, PATH: '/usr/bin:/bin' }, timeout: 30_000,
+    }).catch((error: { stdout: string; stderr: string; code: number }) => error);
+    assert.match(healthCheck.stdout, /FAIL transport/);
+    // A healthy transport snapshot does not override rejected credentials.
+    writeFileSync(diagnostics, JSON.stringify({ state: 'healthy', causes: [], observedAt: Date.now(), pending: 0, quarantined: 0 }));
+    const beforeRejectedInstall = readFileSync(service, 'utf8');
+    deleted = true;
+    await assert.rejects(exec(process.execPath, command, {
+      env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls, RELAY_DAEMON_NODE_TOKEN: 'fixture-token' }, timeout: 30_000,
+    }), /authentication: Node authentication failed/);
+    deleted = false;
+    assert.equal(readFileSync(service, 'utf8'), beforeRejectedInstall);
+    rmSync(diagnostics);
     // Device setup names the workspace by its canonical path (macOS /var is /private/var),
     // and still recognized the services that spelled it differently as this computer.
     const canonicalContent = content.replace(`<string>${workspace}</string>`, `<string>${realpathSync.native(workspace)}</string>`);
