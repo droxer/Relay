@@ -154,3 +154,27 @@ def test_future_only_usage_retains_summary_without_marking_daily_data_available(
     assert result["total"] == 20
     assert result["available"] is False
     assert all(day["total"] == 0 for day in result["daily"])
+
+
+@pytest.mark.parametrize("zone_name,local_day", [
+    ("America/New_York", "2026-03-08"),
+    ("America/New_York", "2026-11-01"),
+    ("Pacific/Kiritimati", "2026-11-06"),
+])
+def test_explicit_range_uses_local_day_and_excludes_adjacent_days(tmp_path, zone_name, local_day):
+    store = make_session_store(tmp_path)
+    zone = ZoneInfo(zone_name)
+    start = datetime.fromisoformat(local_day).replace(tzinfo=zone).astimezone(UTC)
+    end = (datetime.fromisoformat(local_day) + timedelta(days=1)).replace(tzinfo=zone).astimezone(UTC)
+    seed(store, start - timedelta(microseconds=1), tokens=(1, 0, 0, 0))
+    seed(store, start, tokens=(10, 0, 0, 0))
+    seed(store, end - timedelta(microseconds=1), tokens=(100, 0, 0, 0))
+    seed(store, end, tokens=(1000, 0, 0, 0))
+    seed(store, start, reported=False, agent="kimi")
+    seed(store, end, reported=False, agent="pi")
+    day = datetime.fromisoformat(local_day).date()
+    result = store.dashboard_token_metrics(zone=zone, date_range=(day, day))
+    assert result["fresh"] == 110
+    assert [row["date"] for row in result["daily"]] == [local_day]
+    assert result["daily"][0]["fresh"] == 110
+    assert result["unreportedRuns"] == [{"agent": "kimi", "runs": 1}]
