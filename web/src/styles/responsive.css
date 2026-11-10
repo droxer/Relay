@@ -126,6 +126,10 @@
     border-bottom: 0.5px solid var(--line-1);
     background: var(--surface-0);
     z-index: var(--z-drawer);
+    /* Keep the persistent header on its own compositing layer: mobile Safari
+       can soften its text and glyphs while the adjacent pane scrolls. */
+    transform: translateZ(0);
+    backface-visibility: hidden;
   }
 
   /* The leading slot holds a back control on a nested screen and nothing
