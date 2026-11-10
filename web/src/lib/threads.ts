@@ -1,4 +1,4 @@
-import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary } from "../types.js";
+import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary, TaskStatus } from "../types.js";
 import type { ThreadGroups } from "./threadGroups.js";
 
 // A thread is one owner-scoped session. The row binds to the session
@@ -33,13 +33,15 @@ export type ThreadParticipant = {
 export type ThreadOrigin = {
   kind: "backlog" | "routine";
   taskId: string;
+  /** Current lifecycle of the linked task or automation occurrence. */
+  status?: TaskStatus;
   /** The backlog task's title, or the parent routine's for an occurrence. */
   title: string;
 };
 
 type OriginTask = Pick<
   RelayTaskSummary,
-  "id" | "title" | "isRoutine" | "sourceRoutineId" | "linkedSessionIds" | "deletedAt"
+  "id" | "title" | "isRoutine" | "sourceRoutineId" | "linkedSessionIds" | "deletedAt" | "status"
 >;
 
 /**
@@ -56,6 +58,7 @@ export function threadOriginIndex(tasks: readonly OriginTask[]): Map<string, Thr
     const origin: ThreadOrigin = {
       kind: isRoutine ? "routine" : "backlog",
       taskId: task.id,
+      status: task.status,
       title: (task.sourceRoutineId && titles.get(task.sourceRoutineId)) || task.title,
     };
     for (const sessionId of task.linkedSessionIds) {
@@ -247,7 +250,7 @@ export function threadRowMeta(
 
 function sameOrigin(a: ThreadOrigin | undefined, b: ThreadOrigin | undefined): boolean {
   if (a === b) return true;
-  return Boolean(a && b && a.kind === b.kind && a.taskId === b.taskId && a.title === b.title);
+  return Boolean(a && b && a.kind === b.kind && a.taskId === b.taskId && a.title === b.title && a.status === b.status);
 }
 
 function sameParticipants(a: readonly ThreadParticipant[] | undefined, b: readonly ThreadParticipant[] | undefined): boolean {

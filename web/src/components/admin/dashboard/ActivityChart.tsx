@@ -78,7 +78,7 @@ export function ActivityChart({ daily, ready, error, className }: ActivityChartP
         format={format}
         floor={4}
         barRatio={0.58}
-        labelEvery={2}
+        labelEvery={Math.max(1, Math.ceil(columns.length / 7))}
         ariaLabel={t("admin.v2.dash_sessions_title")}
         totalLabel={(column, total) => t("admin.v2.dash_chart_tip_total", { date: column.label, total: format(total) })}
       />

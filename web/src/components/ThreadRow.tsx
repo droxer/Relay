@@ -7,9 +7,9 @@ import {
 } from "./icons";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
-import { StateMark, type StateShape, type StateTone } from "./StateMark";
+import { TaskStatusIcon } from "./TaskStatusIcon";
 import { OfflineBadge } from "./OfflineBadge";
-import type { RelaySession } from "../types";
+import type { RelaySession, TaskStatus } from "../types";
 import { canDeleteThread, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
 import { formatThreadStamp } from "../lib/threadStamp";
 import { queuedRun, queueWaitLabel } from "../lib/queuedRun";
@@ -38,29 +38,12 @@ type ThreadRowProps = {
   tone: ThreadTone;
   /** "full" — the threads rail's row: title + stamp, over one plain meta
       line when the row has status or context to add. "nested" — a project
-      folder's single-line sub-row: pip + title + stamp. */
+      folder's single-line sub-row: status icon + title + stamp. */
   layout?: "full" | "nested";
   /** The rail's minute clock. The stamp reads it instead of Date.now() so the
       memoized row re-renders once a minute to keep "3m ago" honest, and never
       merely because its parent did. */
   now: number;
-};
-
-/**
- * The rail's tone words in the app-wide vocabulary, so the pip obeys the one
- * shape grammar. `err` used to paint a solid --err here while every other
- * surface spent the hollow ring on failure and this one spent it on
- * `idle` — the ring meant "failed" one panel over and "settled" in the rail.
- * Failure takes the ring; a settled thread is out of play, which is `muted`.
- * A queued run has not started, so it is drawn as nothing-set-yet — the
- * dashed outline — never the live pulse or a warning dot.
- */
-const PIP: Record<ThreadTone | "err", { tone: StateTone; shape?: StateShape }> = {
-  attn: { tone: "warn" },
-  run: { tone: "live" },
-  queued: { tone: "neutral", shape: "dashed" },
-  err: { tone: "bad" },
-  idle: { tone: "neutral", shape: "muted" },
 };
 
 /* Memoized: the rail mounts dozens of rows and its parents re-render for
@@ -86,7 +69,16 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const label = threadLabel(session);
   const stamp = formatThreadStamp(session.updatedAt, i18n.language, now);
   const offlineLabel = item.nodeOffline ? t("thread.node_offline") : "";
-  const stateLabel =
+  // Linked work uses the task lifecycle, which can remain in Review after
+  // its execution has finished. Chats use the same glyphs for live activity.
+  const iconStatus: TaskStatus = item.origin?.status ?? (
+    tone === "err" || session.status === "failed" ? "blocked"
+      : queued ? "queued"
+      : tone === "attn" ? "waiting_for_human"
+      : tone === "run" ? "running"
+      : session.status === "cancelled" ? "cancelled" : "done"
+  );
+  const stateLabel = item.origin?.status ? t(`backlog.statuses.${item.origin.status}`) :
     executionPhase && executionPhase !== "terminal" ? t(`thread.execution_${executionPhase}`) : tone === "attn"
       ? t("thread.group_needs_you")
       : tone === "run"
@@ -137,14 +129,6 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             ? { tone: "idle", text: t("thread.statuses.cancelled") }
             : null;
 
-  // The pip follows the row's own status, not only the group it sorts into.
-  // A failed thread files under "Idle" — it is not running and needs no
-  // decision — so the group tone alone drew it with the same grey muted pip
-  // as a thread that finished cleanly, and only the word "Failed" set them
-  // apart. Failure takes the ring (see PIP); everything else keeps the group
-  // tone, including an unresponsive run, which `tone` already marks as err.
-  const pipTone = tone === "err" || status?.tone === "err" ? "err" : tone;
-
   // Where the work lives, in words: its project, else the task or automation
   // that started it. One fact, never both — a project task's thread already
   // reads as the project's. A source named like the thread itself (every
@@ -182,7 +166,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       >
         <span className="conversation-copy">
           <span className="conversation-topline">
-            {showState ? <StateMark {...PIP[pipTone]} /> : null}
+            {showState ? <TaskStatusIcon status={iconStatus} /> : null}
             <span className="conversation-name">
               <strong title={label}>{label}</strong>
               {/* A property of the thread itself, so it rides the title and
@@ -197,7 +181,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
           </span>
           {subline ? (
             /* One muted line of words: status first, then where the work
-               lives. The tone is drawn once, by the title's pip. */
+               lives. The tone is drawn once, by the title's status icon. */
             <span className="conversation-subline">
               {status ? (
                 <span className="conversation-status" data-tone={status.tone}>{status.text}</span>

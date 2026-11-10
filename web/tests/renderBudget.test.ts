@@ -29,6 +29,14 @@ describe("reuseThreadItems", () => {
     assert.equal(reused[1], previous[1]);
   });
 
+  it("refreshes a row when only its linked task status changes", () => {
+    const a = session("a");
+    const origin = { kind: "backlog" as const, taskId: "t", title: "T", status: "review" as const };
+    const previous: ThreadItem[] = [{ session: a, origin }];
+    const next: ThreadItem[] = [{ session: a, origin: { ...origin, status: "done" } }];
+    assert.equal(reuseThreadItems(previous, next)[0], next[0]);
+  });
+
   it("returns the previous array when every item is reused in the same order", () => {
     const a = session("a");
     const previous: ThreadItem[] = [{ session: a }];

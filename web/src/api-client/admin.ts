@@ -1,3 +1,4 @@
+import type { DashboardDateRange } from "../lib/dashboardRange.js";
 import type {
   AgentName,
   AssignControlPanelDaemonNodeResponse,
@@ -246,14 +247,14 @@ export interface TokenUsageSnapshot {
   unreportedRuns: Array<{ agent: string; runs: number }>;
 }
 
-export function getDashboardSessions(signal?: AbortSignal): Promise<DashboardSessionsResponse> {
-  return apiJson<DashboardSessionsResponse>("/admin/dashboard/sessions", { signal });
+export function getDashboardSessions(signal?: AbortSignal, range?: DashboardDateRange): Promise<DashboardSessionsResponse> {
+  return apiJson<DashboardSessionsResponse>(`/admin/dashboard/sessions?${dashboardQuery(range)}`, { signal });
 }
 
-export function getDashboardTokens(signal?: AbortSignal, timeZone = viewerTimeZone()): Promise<TokenUsageSnapshot> {
+export function getDashboardTokens(signal?: AbortSignal, timeZone = viewerTimeZone(), range?: DashboardDateRange): Promise<TokenUsageSnapshot> {
   // Days are bucketed in the viewer's zone so a late-evening run lands on the
   // day the chart labels it with.
-  const query = timeZone ? `?tz=${encodeURIComponent(timeZone)}` : "";
+  const query = `?${dashboardQuery(range, timeZone)}`;
   return apiJson<TokenUsageSnapshot>(`/admin/dashboard/tokens${query}`, { signal });
 }
 
@@ -263,4 +264,14 @@ function viewerTimeZone(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function dashboardQuery(range?: DashboardDateRange, timeZone = viewerTimeZone()): string {
+  const query = new URLSearchParams();
+  if (timeZone) query.set("tz", timeZone);
+  if (range) {
+    query.set("start", range.start);
+    query.set("end", range.end);
+  }
+  return query.toString();
 }

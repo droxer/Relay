@@ -141,14 +141,14 @@ with no session join or task-goal/record metadata transfer. The query returns at
 most `(day_window + 1) * (1 + distinct unreported runtimes)` groups; reporting
 work in the database still scales with the matching ledger rows. Reported runs
 share a single group per day, while unreported runs retain their runtime counts.
-The extra day group preserves the existing summary-only treatment of future
-observations. Retained ledger usage survives thread deletion.
+Explicit dashboard ranges use an inclusive start midnight and exclusive midnight
+after the end date. Retained ledger usage survives thread deletion.
 
 Local calendar midnights are converted to UTC query boundaries in Python,
 including 23-hour and 25-hour daylight-saving days, so SQLite and PostgreSQL
 follow the same reporting contract without timezone database extensions. The
-fourteen-day series, seven-day totals, fresh/cache arithmetic, and runtime
-coverage notices are unchanged. Ties among equal missing-run counts use latest
+series, totals, rankings, and runtime coverage notices share the selected range
+(default seven days); fresh/cache arithmetic is unchanged. Ties among equal missing-run counts use latest
 observation first, then runtime name for deterministic equal timestamps.
 
 The full `list_token_usage` reader still returns every retained run with its
