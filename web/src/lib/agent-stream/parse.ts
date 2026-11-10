@@ -3,7 +3,7 @@ import { claudeAssistantFrameId, parseClaude } from "./claude.ts";
 import { parseCodex } from "./codex.ts";
 import { parseKimi } from "./kimi.ts";
 import { parseOpenCode } from "./opencode.ts";
-import { parsePi } from "./pi.ts";
+import { parsePi, piStreamRecords } from "./pi.ts";
 import {
   isClaudeConnectorNotice,
   isCodexModelsCacheWarning,
@@ -65,7 +65,8 @@ type AgentCheckpoint = { end: number; value: Record<string, unknown> };
 export function agentCheckpoints(agent: AgentName, raw: string, offset: number): AgentCheckpoint[] {
   const checkpoints: AgentCheckpoint[] = [];
   const policy = AGENT_CHECKPOINT_TYPES[agent];
-  for (const record of streamRecords(raw.slice(offset))) {
+  const records = agent === "pi" ? piStreamRecords(raw.slice(offset)) : streamRecords(raw.slice(offset));
+  for (const record of records) {
     if (record.kind !== "json") continue;
     if (policy === "each" || policy.has(record.value.type)) {
       checkpoints.push({ end: offset + record.end, value: record.value });

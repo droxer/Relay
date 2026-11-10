@@ -6,8 +6,22 @@ import {
   toolTarget,
   upsertSegmentById,
 } from "./builders.ts";
-import { streamRecords, stripAnsi } from "./records.ts";
+import { parsePiOutputLine, type PiOutputRecord } from "relay-core/pi-output";
+import { stripAnsi } from "./records.ts";
 import type { AgentSegment } from "./segments.ts";
+
+export function piStreamRecords(raw: string): (PiOutputRecord & { end: number })[] {
+  const records: (PiOutputRecord & { end: number })[] = [];
+  const lines = raw.split("\n");
+  let end = 0;
+  for (let index = 0; index < lines.length; index++) {
+    const complete = index < lines.length - 1;
+    end += lines[index].length + (complete ? 1 : 0);
+    const record = parsePiOutputLine(stripAnsi(lines[index]), complete);
+    if (record) records.push({ ...record, end });
+  }
+  return records;
+}
 
 export function parsePi(raw: string): AgentSegment[] {
   const out: AgentSegment[] = [];
@@ -16,7 +30,7 @@ export function parsePi(raw: string): AgentSegment[] {
   let sawAssistantTextInTurn = false;
   let sawAssistantThinkingInTurn = false;
   const toolSegmentById = new Map<string, number>();
-  for (const record of streamRecords(raw)) {
+  for (const record of piStreamRecords(raw)) {
     if (record.kind === "text") {
       const text = stripAnsi(record.text).trim();
       if (text) out.push({ kind: "text", text });

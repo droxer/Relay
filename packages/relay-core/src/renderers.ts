@@ -1,6 +1,7 @@
 import { ansi, color, status } from "./format.js";
 import { asRecord, parseJsonObject } from "./shell.js";
 import { formatOpenCodeToolError } from "./opencode-errors.js";
+import { parsePiOutputLine } from "./pi-output.js";
 
 const TEXT_MARK = "●";
 const THINK_MARK = "○";
@@ -94,8 +95,10 @@ export class PiStreamRenderer {
   }
 
   private formatLine(line: string): string {
-    const event = parseJsonObject(line);
-    if (!event) return this.plain.feed(`${sanitizeUntrustedText(line)}\n`);
+    const record = parsePiOutputLine(sanitizeUntrustedText(line));
+    if (!record) return "";
+    if (record.kind === "text") return this.plain.feed(`${record.text}\n`);
+    const event = record.value;
 
     if (event.type === "turn_start") {
       this.sawAssistantTextInTurn = false;
