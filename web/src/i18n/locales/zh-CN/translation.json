@@ -571,6 +571,7 @@
     },
     "placeholder_queue": "排队一条消息，下一轮发送…",
     "queue": "排队",
+    "queue_full": "队列已满。请移除一条排队消息后重试。",
     "queue_shortcut": "{{shortcut}} 加入队列，下一轮发送"
   },
   "queue": {

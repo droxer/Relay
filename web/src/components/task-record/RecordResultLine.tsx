@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useTaskQueryRevision } from "../../hooks/useTaskQueryRevision";
 import { listTaskRuns } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { pathForAppState } from "../../lib/appRoute";
@@ -21,10 +22,12 @@ import type { TaskRun } from "../../types";
  */
 export function RecordResultLine({
   taskId,
+  revision,
   hideReason = false,
   onOpenThread,
 }: {
   taskId: string;
+  revision?: string;
   /** The recovery panel above already quotes this failure — say it once. */
   hideReason?: boolean;
   onOpenThread?: (sessionId: string) => void;
@@ -34,12 +37,13 @@ export function RecordResultLine({
      an error banner — the artifact list and the timeline below it answer the
      same question, just less directly — so this one stays silent on failure
      rather than joining `RecordFailure`. */
-  const { data } = useQuery({
+  const query = useQuery({
     queryKey: ["task-runs", taskId, 1],
     queryFn: ({ signal }) => listTaskRuns(taskId, { limit: 1 }, signal),
     staleTime: RELAY_POLL_INTERVALS_MS.tasks,
   });
-  const run: TaskRun | undefined = data?.runs[0];
+  useTaskQueryRevision("task-runs", taskId, revision, query.isFetching);
+  const run: TaskRun | undefined = query.data?.runs[0];
 
   if (!run) return null;
 

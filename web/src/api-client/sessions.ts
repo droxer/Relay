@@ -6,7 +6,7 @@ import type {
   ThreadMessageInput,
   ThreadRecoveryInput,
 } from "../types.ts";
-import { apiJson, RelayApiError, readApiResponse } from "./client.ts";
+import { apiJson, fetchWithSession, RelayApiError, readApiResponse } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
@@ -31,7 +31,7 @@ export async function readArtifactText(
   artifactId: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const response = await fetch(
+  const response = await fetchWithSession(
     relayApiEndpoint(`/threads/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`),
     { credentials: "include", signal },
   );
@@ -51,7 +51,7 @@ export async function readArtifactBlob(
   artifactId: string,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  const response = await fetch(
+  const response = await fetchWithSession(
     relayApiEndpoint(`/threads/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`),
     { credentials: "include", signal },
   );
@@ -203,7 +203,7 @@ export async function uploadThreadImage(file: File, signal?: AbortSignal): Promi
   signal?.throwIfAborted();
   const body = await file.arrayBuffer();
   signal?.throwIfAborted();
-  const response = await fetch(relayApiEndpoint("/thread-attachments"), {
+  const response = await fetchWithSession(relayApiEndpoint("/thread-attachments"), {
     method: "POST", credentials: "include", signal,
     headers: { "Content-Type": file.type }, body,
   });

@@ -171,7 +171,15 @@ export function useNotifications({ enabled, onOpen }: {
   const notices = useMemo(() => notificationViews(query.data?.notifications), [query.data]);
   const unreadCount = query.data?.unreadCount ?? 0;
 
+  const changeKey = ["notification-change", accountId];
+  const reconcileChanges = () => {
+    if (queryClient.isMutating({ mutationKey: changeKey }) === 1) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  };
   const markRead = useMutation({
+    mutationKey: changeKey,
+    onSettled: reconcileChanges,
     mutationFn: (ids: readonly string[] | "all") => markNotificationsRead(ids),
     onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey });
@@ -180,20 +188,21 @@ export function useNotifications({ enabled, onOpen }: {
         const target = ids === "all" ? "all" : new Set(ids);
         queryClient.setQueryData(queryKey, withRead(previous, target, new Date().toISOString()));
       }
-      return { previous, queryKey };
-    },
-    onSuccess: ({ unreadCount: count }, _ids, context) => {
-      queryClient.setQueryData<NotificationsResponse>(context.queryKey, (current) =>
-        current && typeof count === "number" ? { ...current, unreadCount: count } : current);
+      return { previous, queryKey, optimistic: queryClient.getQueryData<NotificationsResponse>(queryKey) };
     },
     onError: (error, _ids, context) => {
-      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous);
+      if (context?.previous) {
+        queryClient.setQueryData<NotificationsResponse>(context.queryKey, current =>
+          current === context.optimistic ? context.previous : current);
+      }
       reportMutationError("Failed to mark notifications read", error, t("notifications.mark_failed"));
     },
   });
   const { mutate } = markRead;
 
   const clear = useMutation({
+    mutationKey: changeKey,
+    onSettled: reconcileChanges,
     mutationFn: (ids: readonly string[] | "all") => clearNotifications(ids),
     onMutate: async (ids) => {
       await queryClient.cancelQueries({ queryKey });
@@ -201,16 +210,13 @@ export function useNotifications({ enabled, onOpen }: {
       if (previous) {
         queryClient.setQueryData(queryKey, withoutCleared(previous, ids === "all" ? "all" : new Set(ids)));
       }
-      return { previous, queryKey };
-    },
-    onSuccess: ({ unreadCount: count }, _ids, context) => {
-      queryClient.setQueryData<NotificationsResponse>(context.queryKey, (current) =>
-        current && typeof count === "number" ? { ...current, unreadCount: count } : current);
-      // The inbox shows a page of notices; refill it from behind the cleared ones.
-      void queryClient.invalidateQueries({ queryKey: context.queryKey });
+      return { previous, queryKey, optimistic: queryClient.getQueryData<NotificationsResponse>(queryKey) };
     },
     onError: (error, _ids, context) => {
-      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous);
+      if (context?.previous) {
+        queryClient.setQueryData<NotificationsResponse>(context.queryKey, current =>
+          current === context.optimistic ? context.previous : current);
+      }
       reportMutationError("Failed to clear notifications", error, t("notifications.clear_failed"));
     },
   });

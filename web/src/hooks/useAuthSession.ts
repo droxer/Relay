@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 import { getMe, RelayApiError } from "../api";
 import type { CurrentUser } from "../types";
 import { clearTokens, writeSignedInHint } from "../lib/appStorage";
+import { subscribeSessionRevalidation } from "../lib/sessionRevalidation";
 import { useRelayStore } from "../lib/store";
 
 const AUTH_SESSION_QUERY_KEY = ["auth", "me"] as const;
@@ -73,6 +74,15 @@ export function useAuthSession(): {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   }, queryClient);
+
+  useEffect(() => subscribeSessionRevalidation(() => {
+    if (!queryClient.getQueryData<CurrentUser | null>(AUTH_SESSION_QUERY_KEY)) return;
+    // Multiple rejected requests and mounted auth consumers share one probe.
+    void queryClient.invalidateQueries(
+      { queryKey: AUTH_SESSION_QUERY_KEY, exact: true },
+      { cancelRefetch: false },
+    );
+  }), [queryClient]);
 
   const setUser = useCallback((user: CurrentUser | null) => {
     void queryClient.cancelQueries({ queryKey: AUTH_SESSION_QUERY_KEY });

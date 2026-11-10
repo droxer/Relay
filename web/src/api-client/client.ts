@@ -1,3 +1,4 @@
+import { requestSessionRevalidation } from "../lib/sessionRevalidation.ts";
 import { relayApiEndpoint, relayBackendPath } from "../lib/apiOrigin.ts";
 import { type ResponseGuard, ResponseShapeIssue } from "./responseShape.ts";
 
@@ -49,6 +50,19 @@ function apiErrorCode(value: unknown): string | undefined {
   return undefined;
 }
 
+/** Fetch from Relay and notify the auth owner of rejected cookie sessions.
+ * A probe confirms expiry, so a resource rejection never signs out directly. */
+export async function fetchWithSession(input: string, init: RequestInit = {}): Promise<Response> {
+  const response = await fetch(input, init);
+  const path = new URL(input, "http://relay.local").pathname;
+  const isAuthEntry = ["/auth/me", "/auth/login", "/auth/bootstrap"].some(suffix => path.endsWith(suffix));
+  if (response.status === 401 && !isAuthEntry && init.credentials !== "omit"
+    && !new Headers(init.headers).has("Authorization") && !init.signal?.aborted) {
+    requestSessionRevalidation();
+  }
+  return response;
+}
+
 export async function apiJson<T>(
   path: string,
   options: {
@@ -62,7 +76,7 @@ export async function apiJson<T>(
     guard?: ResponseGuard<T>;
   } = {},
 ): Promise<T> {
-  const response = await fetch(options.versioned === false ? relayBackendPath(path) : relayApiEndpoint(path), {
+  const response = await fetchWithSession(options.versioned === false ? relayBackendPath(path) : relayApiEndpoint(path), {
     method: options.method ?? "GET",
     signal: options.signal,
     credentials: options.credentials ?? "include",

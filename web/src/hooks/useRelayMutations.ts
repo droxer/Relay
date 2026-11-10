@@ -39,7 +39,7 @@ import { useDialogs } from "../components/ui/DialogProvider";
 import { TEAMS_QUERY_KEY } from "./useTeams";
 import { TASK_RECORD_QUERY_KEY } from "./useTaskRecord";
 import { mergeSessionSnapshotIntoSessions } from "../lib/sessionPollMerge";
-import { applySessionEventUnchecked } from "../lib/sessionEvents";
+import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
 import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects } from "../lib/projectDirectory";
@@ -67,6 +67,7 @@ export function useRelayMutations() {
         current ?? [],
         session,
         applySessionEventUnchecked,
+        applySessionEventsUnchecked,
       ));
   };
   const cacheTask = (task: RelayTask) => {
@@ -209,7 +210,7 @@ export function useRelayMutations() {
       const assignmentChanged = assignedAgentId !== undefined || assignedTeamId !== undefined;
       if (!status && !priority && dueDate === undefined && !assignmentChanged) return { previous: undefined };
       await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY });
-      const previous = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY);
+      const previous = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY)?.find(task => task.id === taskId);
       queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
         (current ?? []).map((task) => {
           if (task.id !== taskId) return task;
@@ -230,10 +231,17 @@ export function useRelayMutations() {
           };
         }),
       );
-      return { previous };
+      const optimistic = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY)?.find(task => task.id === taskId);
+      return { previous, optimistic };
     },
-    onError: (error, _input, context) => {
-      if (context?.previous) queryClient.setQueryData(TASKS_QUERY_KEY, context.previous);
+    onError: (error, { taskId }, context) => {
+      if (context?.previous) {
+        const previous = context.previous;
+        // Only undo this write while it still owns the row. Another edit or
+        // server response supersedes it; reconciliation settles that race.
+        queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, current =>
+          current?.map(task => task.id === taskId && task === context.optimistic ? previous : task));
+      }
       const key = error instanceof RelayApiError ? taskFlowErrorKey(error.code) : undefined;
       onRelayError("Failed to update task", key ?? "errors.save_task")(error);
     },

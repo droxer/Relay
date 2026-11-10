@@ -280,3 +280,73 @@ test("a Chinese-language user still gets the lazily loaded catalogue", async ({ 
   await page.goto("/tasks");
   await expect(page.getByRole("heading", { name: "没有未完成的任务" })).toBeVisible();
 });
+
+test("a deep link outside the first page loads only its requested transcript", async ({ page }) => {
+  const older = session("outside-head", 99, 2);
+  const details: string[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: THREADS.slice(0, 20), nextCursor: "older-page", agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    else if (/\/threads\/[^/]+$/.test(path)) {
+      details.push(path);
+      await gate;
+      body = older;
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  try {
+    await page.goto("/threads/outside-head");
+    await expect.poll(() => details.length).toBe(1);
+    await expect(page.locator(".transcript .msg")).toHaveCount(0);
+    release();
+    await expect(page.locator(".agent-code").last()).toContainText("turn1");
+    await page.waitForLoadState("networkidle");
+    expect(details).toEqual(["/api/v1/threads/outside-head"]);
+    await expect(page).toHaveURL(/\/threads\/outside-head$/);
+  } finally { release(); }
+});
+
+test("settings does not preload the first page's transcripts", async ({ page }) => {
+  const details: string[] = [];
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (/\/threads\/[^/]+$/.test(path)) details.push(path);
+    const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
+      : { sessions: THREADS.slice(0, 20), agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/settings");
+  await expect(page.locator(".sidenav-panel")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  // Past the old preloader's idle timeout, even on a busy startup.
+  await page.waitForTimeout(1600);
+  expect(details).toEqual([]);
+});
+
+test("a missing deep link shows a retry without another conversation or an enabled composer", async ({ page }) => {
+  let missing = true;
+  const thread = session("missing-link", 99, 1);
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/threads/missing-link") && missing) {
+      await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ detail: "Thread not found" }) });
+      return;
+    }
+    const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
+      : path.endsWith("/threads/missing-link") ? thread
+        : { sessions: THREADS.slice(0, 20), nextCursor: "older", agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/threads/missing-link");
+  const error = page.locator('.transcript [role="alert"]');
+  await expect(error).toContainText("Thread not found");
+  await expect(page.locator(".transcript .msg")).toHaveCount(0);
+  await expect(page.locator(".composer textarea")).toBeDisabled();
+  missing = false;
+  await error.getByRole("button", { name: "Retry" }).click();
+  await expect(error).toHaveCount(0);
+  await expect(page.locator(".agent-code").last()).toContainText("turn0");
+});

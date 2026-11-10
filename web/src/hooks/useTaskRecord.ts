@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getTask, RelayApiError } from "../api";
+import { useTaskQueryRevision } from "./useTaskQueryRevision";
 import { taskRecordPollIntervalMs } from "../lib/relayPolling";
 import type { RelayTask, RelayTaskListItem } from "../types";
 
@@ -34,7 +34,6 @@ export function useTaskRecord(
   notFound: boolean;
   error: string | null;
 } {
-  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: [TASK_RECORD_QUERY_KEY, taskId],
     queryFn: ({ signal }) => getTask(taskId as string, signal),
@@ -44,19 +43,7 @@ export function useTaskRecord(
   });
 
   const listStamp = placeholder ? `${placeholder.status}|${placeholder.updatedAt}` : undefined;
-  const seenStamp = useRef({ taskId, listStamp });
-  useEffect(() => {
-    const previous = seenStamp.current;
-    seenStamp.current = { taskId, listStamp };
-    // Mounting (or switching records) already fetches, and a list row that
-    // only just arrived says nothing new; only a change to it is news.
-    if (!taskId || previous.taskId !== taskId || !previous.listStamp || !listStamp) return;
-    if (previous.listStamp === listStamp) return;
-    void queryClient.invalidateQueries(
-      { queryKey: [TASK_RECORD_QUERY_KEY, taskId], exact: true },
-      { cancelRefetch: false },
-    );
-  }, [listStamp, queryClient, taskId]);
+  useTaskQueryRevision(TASK_RECORD_QUERY_KEY, taskId, listStamp, query.isFetching);
 
   return {
     task: query.data as RelayTaskListItem | undefined,

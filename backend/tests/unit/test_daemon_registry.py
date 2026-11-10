@@ -1068,6 +1068,9 @@ def test_command_poll_cannot_observe_run_before_request_links_command() -> None:
 
 
 def test_dispatch_claim_prevents_reaper_from_creating_second_command() -> None:
+    # Synchronize the race with events; allow slow CI workers to finish DB writes.
+    wait_timeout = 10
+
     class PausingClaimStore(DatabaseDaemonStore):
         def __init__(self, database_url: str):
             super().__init__(database_url, create_schema=True)
@@ -1082,7 +1085,7 @@ def test_dispatch_claim_prevents_reaper_from_creating_second_command() -> None:
             )
             if request:
                 self.claimed.set()
-                assert self.release_claim.wait(timeout=1)
+                assert self.release_claim.wait(timeout=wait_timeout)
             return request
 
     with TemporaryDirectory() as root:
@@ -1118,13 +1121,15 @@ def test_dispatch_claim_prevents_reaper_from_creating_second_command() -> None:
                     )
                 )
             )
-            assert daemon_store.claimed.wait(timeout=1)
-            active_request = daemon_store.list_active_run_requests()[0]
-            assert active_request["status"] == "dispatching"
-            second.reap_stale_runs()
-            assert second.take_commands("sbx_alice", "node_token") == []
-            daemon_store.release_claim.set()
-            run_future.result(timeout=1)
+            try:
+                assert daemon_store.claimed.wait(timeout=wait_timeout)
+                active_request = daemon_store.list_active_run_requests()[0]
+                assert active_request["status"] == "dispatching"
+                second.reap_stale_runs()
+                assert second.take_commands("sbx_alice", "node_token") == []
+            finally:
+                daemon_store.release_claim.set()
+            run_future.result(timeout=wait_timeout)
 
         [command] = second.take_commands("sbx_alice", "node_token")
         assert command["taskGoal"] == "dispatch once"

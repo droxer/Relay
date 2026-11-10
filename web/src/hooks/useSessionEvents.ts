@@ -139,7 +139,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       void getSession(sessionId, controller.signal).then(snapshot => {
         if (controller.signal.aborted) return;
         queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, current =>
-          mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked));
+          mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
       }).catch(error => {
         if (error instanceof RelayApiError && [401, 403, 404].includes(error.status)) {
           clearTimeout(reconnectTimer);

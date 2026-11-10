@@ -113,19 +113,20 @@ export function appendOlderSessionPage(
 export function mergeSessionSnapshotIntoSessions(
   current: RelaySession[],
   snapshot: RelaySession,
-  applyEvent: (session: RelaySession, event: RelayEvent) => RelaySession = (session, event) => ({
-    ...session,
-    updatedAt: event.timestamp,
-    events: [...session.events, event],
-  }),
+  applyEvent?: (session: RelaySession, event: RelayEvent) => RelaySession,
+  applyEvents?: (session: RelaySession, events: RelayEvent[]) => RelaySession,
 ): RelaySession[] {
   const index = current.findIndex((session) => session.id === snapshot.id);
   if (index < 0) return [snapshot, ...current];
 
   const snapshotIds = new Set(snapshot.events.map((event) => event.id));
-  const merged = current[index].events
-    .filter((event) => !snapshotIds.has(event.id))
-    .reduce(applyEvent, snapshot);
+  const missing = current[index].events.filter((event) => !snapshotIds.has(event.id));
+  // Replay the entire suffix together: per-event replay copies the growing
+  // event array once per delta when a slow snapshot trails the live stream.
+  const merged = missing.length === 0 ? snapshot : applyEvents
+    ? applyEvents(snapshot, missing)
+    : applyEvent ? missing.reduce(applyEvent, snapshot)
+    : { ...snapshot, updatedAt: missing.at(-1)!.timestamp, events: [...snapshot.events, ...missing] };
   if (merged === current[index]) return current;
   const next = [...current];
   next[index] = merged;
