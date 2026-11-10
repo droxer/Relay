@@ -57,7 +57,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Chat provider coordination | `backend/relay/persistence/chat/coordination.py`, `persistence/chat/store.py` | `api/chat/integrations.py`, chat concurrency/coordination/query-bound tests; `docs/guides/chat-integrations.md` |
 | Chat configuration and credentials | `backend/relay/persistence/chat/store.py`, `integrations.py`, `secrets.py`; pure `chat/rules.py` | migration `20261106_0117`, configuration concurrency/legacy/migration tests; `docs/guides/backend-operations.md` |
 | Chat audit and conversation records | `backend/relay/persistence/chat/audit.py`, `conversations.py` | `persistence/chat/store.py`, `api/chat/gateway.py`, migration `20261106_0116`, chat record tests |
-| Backend workload characterization | `backend/tests/benchmarks/control_plane.py` | `docs/guides/backend-benchmark.md`; use disposable local PostgreSQL and save generated measurements outside the repository |
+| Backend workload characterization | `backend/tests/benchmarks/control_plane.py` | Use disposable local PostgreSQL and save generated measurements outside the repository |
 | Admin dashboard reads | `backend/relay/api/admin/dashboard.py`, `dashboard_cache.py`; `persistence/session/metrics.py` | dashboard/cache/token-metrics/request-latency tests; `docs/guides/backend-operations.md` |
 | Session transitions | `backend/relay/sessions/controller.py` | `persistence/session/store.py`, session routes, linked task effects |
 | Session continuity and handoff | `backend/relay/sessions/bridge.py`, `conversation.py`, `handoff.py` | core prompt tests and handoff tests |

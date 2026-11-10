@@ -5,7 +5,6 @@ connection budgeting, bounded background work, and upgrade/rollback cautions.
 Historical migration numbers below identify the changes that introduced each
 contract; use [the migration guide](../../backend/migrations/README.md) to apply
 all current migrations before starting the matching backend and worker release.
-For workload measurements, use the [local benchmark](backend-benchmark.md).
 
 ## Implementation
 

@@ -24,7 +24,6 @@
 | 外部服务 | [连接](guides/connections.md)、[公开 GitHub Issue 导入](guides/github-connection.md)、[聊天集成后端](guides/chat-integrations.md) |
 | 技能 | [已发布技能](guides/skills.md) |
 | 界面 | [字体](guides/typography.md)、[产品文案](guides/product-copy.md)、[安装应用](guides/pwa.md)、[品牌资源](../assets/brand/README.md) |
-| 性能调查 | [本地后端基准测试](guides/backend-benchmark.md) |
 
 详细指南以英文为准。
 

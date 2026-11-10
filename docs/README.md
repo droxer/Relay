@@ -24,7 +24,6 @@
 | External services | [Connections](guides/connections.md), [public GitHub issue import](guides/github-connection.md), [chat integration backend](guides/chat-integrations.md) |
 | Skills | [Published skills](guides/skills.md) |
 | Interface | [Typography](guides/typography.md), [product copy](guides/product-copy.md), [installable app](guides/pwa.md), [brand assets](../assets/brand/README.md) |
-| Performance investigation | [Local backend benchmark](guides/backend-benchmark.md) |
 
 ## Decisions and proposals
 
