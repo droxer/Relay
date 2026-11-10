@@ -185,8 +185,9 @@ def configure_cors(app: FastAPI) -> None:
         allow_methods=["*"],
         allow_headers=["*"],
         # The web client reads Last-Event-ID off SSE frames, not headers, but
-        # Server-Timing is read by the browser devtools panel on every request.
-        expose_headers=["Server-Timing"],
+        # Server-Timing is read by devtools; ETag lets task reconciliation
+        # retain parsed rows on an unchanged conditional response.
+        expose_headers=["Server-Timing", "ETag"],
         # Credentialed JSON calls each need a preflight; cache it for Chrome's
         # two-hour ceiling (Starlette's default is ten minutes) so the browser
         # skips that extra round trip to the origin.

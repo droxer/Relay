@@ -209,24 +209,17 @@ export function highlightToHtml(
 const LIVE_HEAD_CACHE_MAX = 8;
 const liveHeadCache = new Map<string, string>();
 
-/**
- * The HTML of a fence that is still streaming, in two parts: every complete
- * line highlighted, and the unfinished last line as plain text.
- *
- * A token arrives every frame, and highlighting the whole fence each time
- * made the work per reply quadratic in its length. The complete lines only
- * change when a newline lands, so their highlight is remembered by prefix
- * and a frame that extends the last line costs nothing but a slice. The
- * fence is highlighted whole once it settles (`highlightToHtml`), which also
- * repairs any construct — a block comment, a template string — that the
- * line-wise highlight could not see across the cut.
- *
- * `tail` is unescaped: it is meant for a text node, which escapes itself.
- */
+// Highlighting a growing prefix on every newline is quadratic even with the
+// prefix cache. Keep that work bounded for short fences; long live fences
+// render as text nodes and receive a full highlight when they settle.
+const LIVE_HIGHLIGHT_MAX_CHARS = 1_024;
+
+/** Complete highlighted lines plus an unfinished plain-text tail. */
 export function highlightLiveToHtml(
   code: string,
   language?: string | null,
 ): { settled: string; tail: string } {
+  if (code.length > LIVE_HIGHLIGHT_MAX_CHARS) return { settled: "", tail: code };
   ensureRegistered();
   const cut = code.lastIndexOf("\n") + 1;
   const head = code.slice(0, cut);

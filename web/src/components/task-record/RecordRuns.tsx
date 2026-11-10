@@ -86,10 +86,10 @@ export function RecordRuns({
     // request per keystroke. One poll interval is how fresh the rest of the
     // record is anyway.
     staleTime: RELAY_POLL_INTERVALS_MS.tasks,
-    // A routine whose last run finished in March has nothing to poll for; one
-    // with a run in flight is watched until it lands.
+    // Settled ledgers still discover newly scheduled occurrences.
     refetchInterval: (query) =>
-      query.state.data?.runs.some((run) => !isTerminal(run)) ? RELAY_POLL_INTERVALS_MS.tasks : false,
+      query.state.data?.runs.some((run) => !isTerminal(run))
+        ? RELAY_POLL_INTERVALS_MS.tasks : RELAY_POLL_INTERVALS_MS.runDiscovery,
   });
   const runs = runsQuery.data?.runs;
 

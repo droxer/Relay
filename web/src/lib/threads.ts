@@ -161,8 +161,13 @@ export function pickActiveThreadSession(input: {
   selectedSessionId?: string;
   activeSessionId: string | null;
   composingNew: boolean;
+  /** An explicit URL must never resolve to a different conversation. */
+  requestedSessionId?: string;
 }): RelaySession | undefined {
   if (input.composingNew) return undefined;
+  if (input.requestedSessionId) {
+    return input.threads.find((session) => session.id === input.requestedSessionId);
+  }
   if (input.selectedSessionId) {
     const selected = input.threads.find((session) => session.id === input.selectedSessionId);
     if (selected) return selected;

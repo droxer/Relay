@@ -107,7 +107,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   async function sendMessage(
     requestedStyle?: import("../types").CollaborationStyle,
     intent: import("../types").ThreadMessageInput["intent"] = "accomplish",
-    { literal = false, questionId, approve = false, attachmentIds = [], connectionGrants }: import("../components/composer/Composer").ComposerDispatchOptions = {},
+    { literal = false, questionId, approve = false, attachmentIds = [], connectionGrants, userMessageId: queuedMessageId }: import("../components/composer/Composer").ComposerDispatchOptions = {},
   ) {
     const raw = composerRef.current?.getText().trim() ?? "";
     if ((!raw && !attachmentIds.length) || !selectedUser || threadRunning || projectDispatchDisabled) return false;
@@ -194,23 +194,21 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     }
     // Echo the turn immediately. For a continued session we mint the message id
     // here and hand it to the backend so the persisted event reconciles by id.
-    const messageOperationKey = (sessionId || attachmentIds.length)
-      ? threadMessageOperationKey({
-          sessionId: sessionId ?? sendKey,
-          attachmentIds,
-          text: goal,
-          intent,
-          addressAgentIds: messageAddress.addressAgentIds,
-          addressTeamId: addressedTeamId,
-          style: roundTeam.teamId ? requestedStyle : undefined,
-          questionId,
-          approve,
-        })
-      : null;
+    const messageOperationKey = threadMessageOperationKey({
+      sessionId: sessionId ?? JSON.stringify([sendKey, pendingTeam?.id, requestedStyle, activeProject?.id, selectedThreadNodeId]),
+      attachmentIds,
+      text: goal,
+      intent,
+      addressAgentIds: messageAddress.addressAgentIds,
+      addressTeamId: addressedTeamId,
+      style: roundTeam.teamId ? requestedStyle : undefined,
+      questionId,
+      approve,
+    });
     const retainedMessageId = messageOperationKey
       ? messageOperationIdsRef.current.get(messageOperationKey)
       : null;
-    const userMessageId = retainedMessageId ?? `evt_${crypto.randomUUID()}`;
+    const userMessageId = queuedMessageId ?? retainedMessageId ?? `evt_${crypto.randomUUID()}`;
     if (messageOperationKey && !retainedMessageId) {
       messageOperationIdsRef.current.set(messageOperationKey, userMessageId);
     }
@@ -248,7 +246,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
             ...(connectionGrants !== undefined ? { connectionGrants } : {}),
             attachmentIds,
             userMessageId,
-            ...(attachmentIds.length ? { idempotencyKey: userMessageId } : {}),
+            idempotencyKey: userMessageId,
             ...(activeProject ? { projectId: activeProject.id } : {}),
             ...(!activeProject && selectedThreadNodeId ? { daemonNodeId: selectedThreadNodeId } : {}),
             ...(activeProject

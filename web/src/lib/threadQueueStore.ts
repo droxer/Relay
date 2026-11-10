@@ -14,7 +14,7 @@ interface ThreadQueueStore {
   queues: Record<string, QueuedMessage[]>;
   /** Reads a thread's stored queue the first time it is opened. */
   hydrate: (key: string) => void;
-  enqueue: (key: string, text: string) => void;
+  enqueue: (key: string, text: string) => boolean;
   remove: (key: string, id: string) => void;
   promote: (key: string, id: string) => void;
   /** Puts a message back at the head — a queued send that failed. */
@@ -60,7 +60,15 @@ export const useThreadQueueStore = create<ThreadQueueStore>((set, get) => {
       if (get().queues[key]) return;
       set({ queues: { ...get().queues, [key]: readStored(key) } });
     },
-    enqueue: (key, text) => update(key, (queue) => enqueueMessage(queue, text, `q_${crypto.randomUUID()}`)),
+    enqueue: (key, text) => {
+      let accepted = false;
+      update(key, queue => {
+        const next = enqueueMessage(queue, text, `q_${crypto.randomUUID()}`);
+        accepted = next.length > queue.length;
+        return next;
+      });
+      return accepted;
+    },
     remove: (key, id) => update(key, (queue) => removeQueuedMessage(queue, id)),
     promote: (key, id) => update(key, (queue) => promoteQueuedMessage(queue, id)),
     restore: (key, message) => update(key, (queue) => [message, ...removeQueuedMessage(queue, message.id)]),

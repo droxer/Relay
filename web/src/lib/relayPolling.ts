@@ -25,6 +25,8 @@ export const RELAY_POLL_INTERVALS_MS = {
   notifications: 30_000,
   /** A settled task record with no list row to signal a retry or reopen. */
   settledTaskRecord: 30_000,
+  /** Discover new automation occurrences even when all known runs settled. */
+  runDiscovery: 30_000,
 } as const;
 
 /** How long a mounted roster read is reused before a new mount refetches it. */

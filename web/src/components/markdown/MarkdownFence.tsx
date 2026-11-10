@@ -74,10 +74,9 @@ function LiveFenceBody({ code, language }: { code: string; language: string | nu
 export function MarkdownFence({ code, language }: { code: string; language: string | null }) {
   const { live } = useMarkdownMode();
 
-  // A live fence grows by a token per frame. Its complete lines are
-  // highlighted once each and sit in a span whose markup does not change
-  // between frames, so React leaves it alone; only the text node holding the
-  // unfinished last line is rewritten. Settled, the fence is one highlight.
+  // Short live fences cache their complete lines while the tail grows. Long
+  // fences stay plain while streaming to bound parser work; settled fences
+  // receive one full highlight.
   const fence = live ? (
     <pre className="agent-code code">
       <code className="hljs">

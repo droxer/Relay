@@ -577,6 +577,7 @@
     },
     "placeholder_queue": "Queue a follow-up for the next turn…",
     "queue": "Queue",
+    "queue_full": "The queue is full. Remove a queued message, then try again.",
     "queue_shortcut": "{{shortcut}} to queue for the next turn"
   },
   "queue": {

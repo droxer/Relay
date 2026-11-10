@@ -35,7 +35,7 @@ it("queues mid-run and sends the head as typed once the run ends", async () => {
   expect(c.handle.send).not.toHaveBeenCalled();
 
   rerender({ running: false, awaitsPerson: false, queueKey: "thread-1" });
-  await waitFor(() => expect(c.handle.send).toHaveBeenCalledWith("@Ada also fix the tests", { asTyped: true }));
+  await waitFor(() => expect(c.handle.send).toHaveBeenCalledWith("@Ada also fix the tests", expect.objectContaining({ asTyped: true })));
   await waitFor(() => expect(result.current.messages.map((m) => m.text)).toEqual(["then update docs"]));
   expect(JSON.parse(sessionStorage.getItem("relay-web.queue:thread-1")!)).toHaveLength(1);
 });
@@ -53,7 +53,7 @@ it("steer moves the pick to the head, stops the run, and sends it when the run s
 
   // A question would hold an ordinary drain; a steer is the person's choice.
   rerender({ running: false, awaitsPerson: true, queueKey: "thread-1" });
-  await waitFor(() => expect(c.handle.send).toHaveBeenCalledWith("change of plan", { asTyped: true }));
+  await waitFor(() => expect(c.handle.send).toHaveBeenCalledWith("change of plan", expect.objectContaining({ asTyped: true })));
 });
 
 it("holds the queue after a plain Stop or while the person is asked", async () => {
@@ -108,7 +108,7 @@ it("drains B independently while A's queued send is pending", async () => {
   rerender({ queueKey: "B", running: false, awaitsPerson: false });
   await act(async () => { finishA(true); });
   expect(c.handle.send).toHaveBeenCalledTimes(2);
-  expect(c.handle.send).toHaveBeenLastCalledWith("B message", { asTyped: true });
+  expect(c.handle.send).toHaveBeenLastCalledWith("B message", expect.objectContaining({ asTyped: true }));
 });
 
 it("A's late completion cannot undo B's Stop", async () => {
