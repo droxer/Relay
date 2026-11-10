@@ -15,8 +15,7 @@ import { SortColumnButton } from "@/components/ui/SortableColumnHeader";
 import { ActionStart, ICON, NavAgents } from "../icons";
 import { PriorityBadge } from "../PriorityBadge";
 import { TaskTagList } from "../TaskTags";
-import { StateMark } from "../StateMark";
-import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
+import { RoutineStateIcon } from "../RoutineStateIcon";
 import { TaskAssignee } from "../TaskAssignee";
 import { TaskSelectCheckbox } from "./TaskSelection";
 import { formatNextRunAt } from "./RoutineChrome";
@@ -234,10 +233,10 @@ export function RoutineTable({
           const state = s.stateFor(row.original);
           const label = s.t(`routine.states.${state}`);
           /* The title gives a pointer the word the sr-only span gives a
-             screen reader — the dot alone is shape and colour, not a name. */
+             screen reader — the icon alone is shape and colour, not a name. */
           return (
             <span title={label}>
-              <StateMark shape={ROUTINE_STATE_SHAPE[state]} />
+              <RoutineStateIcon state={state} />
               <span className="sr-only">{label}</span>
             </span>
           );

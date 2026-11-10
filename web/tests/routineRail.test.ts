@@ -74,10 +74,10 @@ describe("routine section rail", () => {
 
     // Same rule the rows follow under a band: the thing above has said it, so
     // the record does not say it again. A row states schedule health as the
-    // dot in its state cell — a mark, not a second copy of the section word.
+    // icon in its state cell, not a second copy of the section word.
     assert.doesNotMatch(page, /showState/);
     assert.doesNotMatch(records, /<RoutineStateBadge state=\{state\} \/>/);
-    assert.match(records, /<StateMark shape=\{ROUTINE_STATE_SHAPE\[state\]\} \/>/);
+    assert.match(records, /<RoutineStateIcon state=\{state\} \/>/);
   });
 
   it("keeps the rail out of the shell's own grid", async () => {

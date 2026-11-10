@@ -71,7 +71,7 @@ function taskCompleted(data: Data): Body | null {
   const ref = taskRef({ id: taskId, number });
   const title = text(data.title);
   return {
-    tone: status === "review" ? "info" : "good",
+    tone: status === "review" ? "warn" : "good",
     title: { key: status === "review" ? "notifications.task_review" : "notifications.task_done", params: {} },
     detail: title
       ? { key: "notifications.task_detail", params: { ref, title } }

@@ -45,8 +45,8 @@ const DAY_PICKER_LOCALES = { en: enUS, "zh-CN": zhCN } as const;
 /**
  * A task's status, read and changed the same way on every surface: the list
  * row, the cross-project table, and the record band. It speaks the board's
- * five stages — a blocked or waiting task shows the stage it is held in, with
- * the hold named after it — and its menu offers exactly the moves a board
+ * stages — a blocked or waiting task keeps its stage in the label, with
+ * the current hold's icon — and its menu offers exactly the moves a board
  * drop would accept, plus Block / Unblock.
  */
 export function InlineStatus({
@@ -68,7 +68,7 @@ export function InlineStatus({
   const stage = taskWorkflowStage(task);
   const held = task.status !== stage ? t(`backlog.statuses.${task.status}`) : null;
   const label = held ? `${t(`backlog.statuses.${stage}`)} · ${held}` : t(`backlog.statuses.${stage}`);
-  const mark = <TaskStatusIcon status={stage} />;
+  const mark = <TaskStatusIcon status={task.status} />;
   const holdAction = onToggleHold ? taskHoldAction(task) : null;
 
   if (readOnly) {

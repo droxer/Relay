@@ -206,23 +206,32 @@
 
 /* ── Routine state — schedule health, in the shared status-pill grammar ──
    A routine never moves through the board, so it gets its own vocabulary:
-   running · overdue · due today · scheduled · unscheduled · paused. The two
-   "not really scheduled" states are separated by *which* thing is dashed —
-   unscheduled dashes the mark (the schedule is on, the date is missing),
-   paused dashes the pill border (the whole schedule is off). */
+   running · due · scheduled · listening · on demand · paused.
+   Filters, rows and badges share the same distinct symbols; paused badges
+   also use a dashed border to mark the schedule as off. */
 /* Accent only. The chip itself is a Badge (variant="state"), which owns the
    padding, hairline, radius, and label type this rule used to restate. What
    is genuinely local is the six-step schedule-health accent below and the
    dashed border a paused routine takes — neither is expressible as one of
    Badge's five semantic tones. */
+.routine-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: inherit;
+}
+
+.routine-state-icon[data-state="running"]:not([data-empty="true"]) { color: var(--live); }
+.routine-state-icon[data-state="due"]:not([data-empty="true"]) { color: var(--warn); }
+.routine-state-icon[data-state="paused"] { color: var(--ink-3); }
+
 .routine-state {
   --state-accent: var(--ink-3);
   --tone: var(--state-accent);
   gap: var(--sp-2);
   color: var(--ink-2);
 }
-
-.routine-state .state-mark { --mark-accent: var(--state-accent); }
 
 .routine-state[data-state="running"] { --state-accent: var(--live); color: var(--ink-1); }
 .routine-state[data-state="due"] { --state-accent: var(--warn); }
@@ -426,30 +435,35 @@
 /* ── Task status icon — progress in the fill, tone in the hue ───────────
    See TaskStatusIcon.tsx. The shape already separates every status, so the hue
    only has to say where on the road the work is: grey before it starts, --live
-   while an agent has it, --warn when it waits on a person, --ok once it is
-   reviewable or done, --err when it is stuck. */
+   while an agent has it, --warn when it needs review or waits on a person,
+   --ok once it is done, --err when it is stuck. */
+.task-status-nav-icon { display: inline-flex; flex: none; }
+
 .task-status-icon {
   flex: none;
   display: block;
   width: 14px;
   height: 14px;
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 .task-status-icon[data-status="queued"],
 .task-status-icon[data-status="cancelled"],
 .task-status-icon[data-status="assigned"] { color: var(--ink-3); }
 .task-status-icon[data-status="running"] { color: var(--live); }
-.task-status-icon[data-status="waiting_for_human"] { color: var(--warn); }
-.task-status-icon[data-status="review"],
+.task-status-icon[data-status="waiting_for_human"],
+.task-status-icon[data-status="review"] { color: var(--warn); }
 .task-status-icon[data-status="done"] { color: var(--ok); }
 .task-status-icon[data-status="blocked"] { color: var(--err); }
+
+/* An empty filter describes a category; it must not imply live work. */
+.task-status-icon[data-empty="true"] { color: var(--ink-3); }
 
 /* The running fill breathes in place, like the rail's live pip: the ring
    holds still and the progress inside draws in and fills back out. Waiting
    on a person stays still on purpose; it is a wait, not work. Reduced motion
    is settled by a11y.css. */
-.task-status-icon[data-status="running"] .task-status-fill {
+.task-status-icon[data-status="running"]:not([data-empty="true"]) .task-status-fill {
   transform-box: fill-box;
   transform-origin: center;
   animation: breathe var(--t-pulse) var(--ease-breathe) infinite;

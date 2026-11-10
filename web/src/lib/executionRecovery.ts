@@ -1,12 +1,11 @@
 import type { RelaySession, RelayTaskListItem } from "../types.js";
 
-/** `tone` drives the panel rail: attention is the default, `info` is for the
- *  states that are the normal course of work (a result awaiting review, a
- *  question waiting on a human) — those need next steps, not a warning. */
+/** `tone` drives the panel rail. Review and human input use the same
+ *  attention tone as their task icons; information stays neutral. */
 export type RecoveryGuide = {
   key: string;
   destination?: "computer" | "agents" | "teams" | "projects" | "backlog";
-  tone?: "info";
+  tone?: "info" | "warn";
   /** Whether a person may assert the agent is gone. True only where the exit
    *  evidence Relay is waiting for can no longer arrive on its own: a retry
    *  repairs a failed save, but nothing repairs a computer that is never
@@ -83,8 +82,8 @@ export function taskRecoveryReason(task: RelayTaskListItem): string | undefined 
 }
 
 export function taskRecoveryGuide(task: RelayTaskListItem): RecoveryGuide | null {
-  if (task.status === "waiting_for_human") return { key: "human", tone: "info" };
-  if (task.status === "review") return { key: "review", tone: "info" };
+  if (task.status === "waiting_for_human") return { key: "human", tone: "warn" };
+  if (task.status === "review") return { key: "review", tone: "warn" };
   if (task.status === "done" || task.status === "cancelled") return null;
   if (task.workspaceWaiting) return { key: "ownership" };
   if (task.status === "running") return null;

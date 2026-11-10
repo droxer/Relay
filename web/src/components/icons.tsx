@@ -3,6 +3,7 @@
 // semantics later.
 
 import {
+  Activity,
   ArrowLeft,
   ArrowRightLeft,
   ArrowUp,
@@ -41,6 +42,8 @@ import {
   Inbox,
   ImagePlus,
   Play,
+  Pause,
+  Radio,
   Info,
   KeyRound,
   Languages,
@@ -254,6 +257,14 @@ export const NavBack = withStandardStroke(ArrowLeft, "NavBack");
 export const ActionSearch = withStandardStroke(Search, "ActionSearch");
 export const ActionCalendar = withStandardStroke(CalendarDays, "ActionCalendar");
 export const ActionSnooze = withStandardStroke(Clock3, "ActionSnooze");
+// Automation filters use distinct silhouettes so status is legible without colour.
+export const AutomationAll = withStandardStroke(Layers, "AutomationAll");
+export const AutomationRunning = withStandardStroke(Activity, "AutomationRunning");
+export const AutomationDue = withStandardStroke(CircleAlert, "AutomationDue");
+export const AutomationScheduled = withStandardStroke(Clock3, "AutomationScheduled");
+export const AutomationListening = withStandardStroke(Radio, "AutomationListening");
+export const AutomationOnDemand = withStandardStroke(Play, "AutomationOnDemand");
+export const AutomationPaused = withStandardStroke(Pause, "AutomationPaused");
 // A file is a blank sheet wherever it appears — the workspace tree and the
 // artifact strip must not picture the same object two ways. `FileText`
 // (ruled lines) is reserved for written prose, i.e. the summary artifact.

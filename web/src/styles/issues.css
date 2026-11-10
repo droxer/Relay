@@ -24,9 +24,8 @@
   padding-top: var(--sp-5);
 }
 
-.issues-band { --row-accent: var(--ink-4); }
-.issues-band[data-status="assigned"] { --row-accent: var(--info); }
-.issues-band[data-status="review"] { --row-accent: var(--ok); }
+.issues-band { --row-accent: var(--ink-3); }
+.issues-band[data-status="review"] { --row-accent: var(--warn); }
 .issues-band[data-status="running"] { --row-accent: var(--live); }
 .issues-band[data-status="waiting_for_human"],
 .issues-band[data-intake="true"] { --row-accent: var(--warn); }

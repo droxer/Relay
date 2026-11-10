@@ -72,12 +72,12 @@ it("offers Block after the stages, and only when a hold handler is given", () =>
   expect(onToggleHold).toHaveBeenCalledOnce();
 });
 
-it("shows a blocked task in the stage it is held in, and offers Unblock", () => {
+it("keeps a blocked task's stage label while showing its blocked icon and Unblock", () => {
   const blocked = { ...base, status: "blocked", workflowStage: "running" } as RelayTaskListItem;
   render(<InlineStatus task={blocked} onChange={vi.fn()} onToggleHold={vi.fn()} labeled />);
   const trigger = screen.getByRole("button", { name: "backlog.inline.status_label" });
   expect(trigger.textContent).toBe("backlog.statuses.running · backlog.statuses.blocked");
-  expect(trigger.querySelector("[data-status]")?.getAttribute("data-status")).toBe("running");
+  expect(trigger.querySelector("[data-status]")?.getAttribute("data-status")).toBe("blocked");
   expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "backlog.unblock" })).toBeTruthy();
 });
 

@@ -30,10 +30,10 @@ export function statusTone(value: StatusValue): Tone {
     case "stale":
       return "warn";
     case "offline":
+    case "cancelled":
       return "neutral";
     case "failed":
     case "blocked":
-    case "cancelled":
       return "bad";
     default:
       return "neutral";

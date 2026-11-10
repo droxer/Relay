@@ -1,26 +1,14 @@
 import { useTranslation } from "react-i18next";
 import type { RoutineListState } from "../lib/routine";
-import { StateMark, type StateShape } from "./StateMark";
+import { RoutineStateIcon } from "./RoutineStateIcon";
 import { Badge } from "@/components/ui/badge";
 
 /**
  * Schedule health for a routine, in the shared status-pill grammar so
  * "where does this stand?" reads identically on both boards.
  *
- * Shape does the separating work (see StateMark): a paused automation is
- * muted, one whose next run has come is a hollow ring, and a live occurrence
- * is the one place an automation surface earns `--live`.
- */
-export const ROUTINE_STATE_SHAPE: Record<RoutineListState, StateShape> = {
-  running: "live",
-  due: "ring",
-  scheduled: "solid",
-  listening: "solid",
-  on_demand: "solid",
-  paused: "muted",
-};
-
-/**
+ * The same symbols and semantic colours appear in filters, rows and details.
+ *
  * `scheduled` renders NOTHING on a scanning surface. It is the resting state
  * of a healthy routine — the next-run date beside it already says when, and
  * in its neutral tone — so a pill repeating it turned every quiet row into
@@ -37,7 +25,7 @@ export function RoutineStateBadge({ state, always = false }: { state: RoutineLis
      is the chrome without an opinion about colour. */
   return (
     <Badge variant="state" className="routine-state" data-state={state}>
-      <StateMark shape={ROUTINE_STATE_SHAPE[state]} />
+      <RoutineStateIcon state={state} />
       {t(`routine.states.${state}`)}
     </Badge>
   );

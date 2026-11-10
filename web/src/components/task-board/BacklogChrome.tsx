@@ -196,7 +196,7 @@ export function TaskStatusNav({ value, counts, onChange }: {
     ...TASK_FLOW_STAGES.map((status) => ({
       id: status,
       label: t(`backlog.statuses.${status}`),
-      mark: <TaskStatusIcon status={status} />,
+      mark: <span className="task-status-nav-icon"><TaskStatusIcon status={status} empty={counts[status] === 0} /></span>,
       count: counts[status],
     })),
   ];

@@ -26,7 +26,7 @@ const PROGRESS: Partial<Record<TaskStatus, number>> = {
 const PIE_RADIUS = 2.5;
 const PIE_CIRCUMFERENCE = 2 * Math.PI * PIE_RADIUS;
 
-export function TaskStatusIcon({ status, className }: { status: TaskStatus; className?: string }) {
+export function TaskStatusIcon({ status, className, empty = false }: { status: TaskStatus; className?: string; empty?: boolean }) {
   const progress = PROGRESS[status];
   return (
     <svg
@@ -37,6 +37,7 @@ export function TaskStatusIcon({ status, className }: { status: TaskStatus; clas
       focusable="false"
       className={cn("task-status-icon", className)}
       data-status={status}
+      data-empty={empty || undefined}
     >
       {status === "done" ? (
         <>

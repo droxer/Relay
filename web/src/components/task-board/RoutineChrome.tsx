@@ -2,8 +2,7 @@
 
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { StateMark, shapeForCount } from "../StateMark";
-import { ROUTINE_STATE_SHAPE } from "../RoutineStateBadge";
+import { RoutineStateIcon } from "../RoutineStateIcon";
 import { SectionNav, type SectionNavItem } from "../SectionNav";
 import { FiltersBar, type FilterBarField } from "../FiltersBar";
 import { RosterAgentMark } from "../roster/RosterOption";
@@ -94,7 +93,7 @@ export function RoutineFiltersBar({ filters, agents, tags = [], onChange, sortMe
   const keys: readonly (keyof RoutineFilters)[] = includeState ? ["state", ...ROUTINE_BAR_KEYS] : ROUTINE_BAR_KEYS;
   const fields = useMemo<FilterBarField[]>(() => [
     ...(includeState ? [{ id: "state", label: t("routine.state"), kind: "select" as const,
-      options: ROUTINE_STATE_ORDER.map((state) => ({ value: state, label: t(`routine.states.${state}`) })) }] : []),
+      options: ROUTINE_STATE_ORDER.map((state) => ({ value: state, label: t(`routine.states.${state}`), icon: <RoutineStateIcon state={state} /> })) }] : []),
     { id: "trigger", label: t("automation.trigger"), kind: "select",
       options: TRIGGER_FILTER_VALUES.map((kind) => ({ value: kind, label: t(`automation.kinds.${kind}`) })) },
     ...[tagFilterField(tags, filters.tag, t("tags.label"))].filter((field) => field !== null),
@@ -147,11 +146,11 @@ export function RoutineStateNav({
 }) {
   const { t } = useTranslation();
   const items: SectionNavItem<RoutineSection>[] = [
-    { id: "all", label: t("routine.all_states"), count: total },
+    { id: "all", label: t("routine.all_states"), mark: <RoutineStateIcon state="all" />, count: total },
     ...ROUTINE_STATE_ORDER.map((state) => ({
       id: state,
       label: t(`routine.states.${state}`),
-      mark: <StateMark shape={shapeForCount(ROUTINE_STATE_SHAPE[state], counts[state] ?? 0)} />,
+      mark: <RoutineStateIcon state={state} empty={(counts[state] ?? 0) === 0} />,
       count: counts[state] ?? 0,
     })),
   ];

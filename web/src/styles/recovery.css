@@ -7,7 +7,7 @@
   min-width: 0;
   padding: var(--sp-4);
   /* The hairline carries the tone: a blocked or failed execution warns, work
-     that is simply waiting on a person reads as information, not a fault. One
+     that is waiting on a person uses the task's attention tone. One
      even border, not a thick coloured stripe down the leading edge. */
   border: 0.5px solid color-mix(in srgb, var(--recovery-rail, var(--warn)) 55%, var(--line-2));
   border-radius: var(--r-3);
@@ -36,6 +36,7 @@
 }
 
 .recovery-panel[data-tone="info"] { --recovery-rail: var(--info); }
+.recovery-panel[data-tone="warn"] { --recovery-rail: var(--warn); }
 .recovery-panel strong { color: var(--ink-1); }
 .recovery-panel p { margin: 0; }
 .recovery-context { font: var(--type-body);

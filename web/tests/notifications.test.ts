@@ -38,10 +38,10 @@ describe("notificationView", () => {
     assert.equal(notificationView(notice("approval_requested", { taskId: "t1" })), null);
   });
 
-  it("reads a task waiting for review as an info notice that opens the task", () => {
+  it("reads a task waiting for review as an attention notice that opens the task", () => {
     const view = notificationView(notice("task_completed", { taskId: "t1", title: "Fix login", status: "review", number: 12 }));
     assert.ok(view);
-    assert.equal(view.tone, "info");
+    assert.equal(view.tone, "warn");
     assert.equal(view.unread, true);
     assert.deepEqual(view.title, { key: "notifications.task_review", params: {} });
     assert.deepEqual(view.detail, { key: "notifications.task_detail", params: { ref: "#12", title: "Fix login" } });

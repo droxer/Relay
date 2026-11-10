@@ -215,6 +215,20 @@ a check, a stopped gate), `--err` crimson a failure, `--ok` green done. The
 task status icon keeps those states apart by shape as well as hue: running is
 a half fill that breathes, waiting on a person is a still centre dot.
 
+Task status uses the same `TaskStatusIcon` in thread lists and headers,
+task lists and boards, status menus, records and lifecycle history. Running
+is blue (`--live`); Review and Awaiting input are amber (`--warn`); Blocked
+is crimson (`--err`); Completed is green (`--ok`). Backlog, Ready, Queued
+and Cancelled use neutral ink. A held task keeps its workflow stage in the
+label and board lane, while its icon shows its current Blocked or Awaiting
+input status. Empty status filters are neutral and do not animate.
+
+Automation filters, list rows and detail badges share `RoutineStateIcon`:
+Running is blue, Due is amber, and Scheduled, Listening and On demand use
+neutral ink; Paused is muted. Automation occurrences shown in thread lists
+use their task lifecycle status. Review notifications and next-step panels
+use the same amber attention tone as the task's status icon.
+
 **`--live` means "an agent is working on this right now", and nothing else.**
 It is an ink, a mark, a hairline, or a ring — never a fill or a wash. It may
 be static where it labels a running thing (the running status icon, a

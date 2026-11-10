@@ -238,9 +238,9 @@ describe("one meaning per colour", () => {
   });
 
   it("colours review the same in the icon, the row accent, and the group band", () => {
-    assert.match(readStyle("task-status.css"), /\.task-status-icon\[data-status="review"\][^{]*\{ color: var\(--ok\); \}/);
-    assert.match(readStyle("backlog-list.css"), /\.backlog-row\[data-status="review"\] \{ --row-accent: var\(--ok\); \}/);
-    assert.match(readStyle("issues.css"), /\.issues-band\[data-status="review"\] \{ --row-accent: var\(--ok\); \}/);
+    assert.match(readStyle("task-status.css"), /\.task-status-icon\[data-status="review"\][^{]*\{ color: var\(--warn\); \}/);
+    assert.match(readStyle("backlog-list.css"), /\.backlog-row\[data-status="review"\] \{ --row-accent: var\(--warn\); \}/);
+    assert.match(readStyle("issues.css"), /\.issues-band\[data-status="review"\] \{ --row-accent: var\(--warn\); \}/);
   });
 
   it("keeps the waiting gold off priority", () => {
