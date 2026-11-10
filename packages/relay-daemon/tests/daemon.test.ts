@@ -4953,15 +4953,20 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
 
 
 async function runThroughOutage(options: {
-  graceMs: number; runMs: number; outageMs: number; outageStatus: number;
+  graceMs?: number; runMs: number; outageMs: number; outageStatus: number;
   /** Heartbeat answers during the outage, in order; the last one repeats. */
   heartbeatStatuses?: number[];
   /** Polls hang until the outage ends instead of answering. */
   pollHangs?: boolean;
   /** Registration is healthy even while the execution endpoints return 5xx. */
   registrationDuringOutage?: boolean;
-}): Promise<{ events: DaemonNodeEvent[]; aborted: boolean }> {
+  /** Delay acknowledgement to exercise concurrent live/replay copies. */
+  terminalResponseDelayMs?: number;
+}): Promise<{ events: DaemonNodeEvent[]; aborted: boolean; terminalUploads: number }> {
   let heartbeats = 0;
+  let terminalUploads = 0;
+  // Live delivery can race durable replay; mirror the backend receipt deduplication.
+  const acceptedReports = new Map<string, string>();
   const root = mkdtempSync(join(tmpdir(), "relay-outage-grace-"));
   const stop = new AbortController();
   const command = { ...runCommand("outage_lease"), workspacePath: root, leaseId: "lease",
@@ -5011,14 +5016,27 @@ async function runThroughOutage(options: {
           return jsonResponse({ commands, heartbeat: heartbeat() });
         }
         if (path.endsWith("/events")) {
-          const event = await jsonBody<DaemonNodeEvent>(init); events.push(event);
-          if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) setTimeout(() => stop.abort(), 10);
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          const terminal = ["run.completed", "run.failed", "run.cancelled"].includes(event.type);
+          if (terminal) terminalUploads++;
+          const headers = new Headers(init?.headers);
+          const id = headers.get("X-Relay-Report-Id");
+          const digest = headers.get("X-Relay-Report-Digest");
+          if (id && acceptedReports.has(id)) assert.equal(acceptedReports.get(id), digest);
+          else {
+            if (id) acceptedReports.set(id, digest!);
+            events.push(event);
+          }
+          if (terminal) {
+            await new Promise(resolve => setTimeout(resolve, options.terminalResponseDelayMs ?? 0));
+            setTimeout(() => stop.abort(), 10);
+          }
           return jsonResponse({ ok: true });
         }
         throw new Error(`unexpected URL ${url}`);
       },
     });
-    return { events, aborted };
+    return { events, aborted, terminalUploads };
   } finally { clearTimeout(timeout); stop.abort(); rmSync(root, { recursive: true, force: true }); }
 }
 
@@ -5913,4 +5931,26 @@ test('a healthy recovery heartbeat completes a fresh poll without waiting for ne
     assert.equal(probes, 1);
     assert.equal(heldPollAborted, true);
   } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("an environment-configured zero outage grace stops execution", async () => {
+  const prior = process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS;
+  process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS = "0";
+  try {
+    const { aborted, events } = await runThroughOutage({ runMs: 3000, outageMs: 3200, outageStatus: 503 });
+    assert.equal(aborted, true, JSON.stringify(events));
+    assert.ok(events.some(event => event.type === "run.cancelled"));
+  } finally {
+    if (prior === undefined) delete process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS;
+    else process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS = prior;
+  }
+});
+
+test("outage recovery applies one completion when live delivery races durable replay", async () => {
+  const { events, aborted, terminalUploads } = await runThroughOutage({
+    graceMs: 5000, runMs: 50, outageMs: 100, outageStatus: 503, terminalResponseDelayMs: 250,
+  });
+  assert.equal(aborted, false);
+  assert.ok(terminalUploads >= 2, "the delayed acknowledgement must exercise duplicate uploads");
+  assert.equal(events.filter(event => event.type === "run.completed").length, 1);
 });

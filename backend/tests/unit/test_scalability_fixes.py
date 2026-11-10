@@ -250,8 +250,11 @@ def test_retention_limits_deletes_and_does_not_load_command_payloads(tmp_path):
         lambda c, cur, s, p, ctx, many: statements.append(s),
     )
     assert store.prune_terminal_records(0, 0)["commands"] == 1000
+    # JSON predicates may inspect replay metadata inside the database, but
+    # SELECT must still transfer IDs only, never the command payload.
     assert all(
-        "daemon_commands.command" not in s for s in statements if s.startswith("SELECT")
+        "daemon_commands.command" not in s.partition("FROM")[0]
+        for s in statements if s.startswith("SELECT")
     )
     assert store.prune_terminal_records(0, 0)["commands"] == 10
 

@@ -10,12 +10,12 @@ import { execFile, execFileSync } from "node:child_process";
 
 export interface WindowsProcess { pid: number; parentPid: number; createdAt: number }
 
-/** How far a root's recorded spawn time may differ from the creation time Windows reports. */
+/** Creation can precede the post-spawn observation, but can never follow it. */
 const ROOT_CLOCK_SKEW_MS = 10_000;
 const LIST_TIMEOUT_MS = 15_000;
 const LIST_MAX_BUFFER = 16 * 1024 * 1024;
 const POWERSHELL = "powershell.exe";
-const LIST_SCRIPT = "Get-CimInstance Win32_Process | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() }";
+const LIST_SCRIPT = "Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { '{0} {1} {2}' -f $_.ProcessId, $_.ParentProcessId, ([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds() }";
 const LIST_ARGS = ["-NoProfile", "-NonInteractive", "-Command", LIST_SCRIPT];
 
 export function parseWindowsProcesses(output: string): WindowsProcess[] {
@@ -52,7 +52,12 @@ export function windowsProcessTree(processes: WindowsProcess[], rootPid: number,
   const created = new Map<number, number>([[rootPid, rootStartedAt - ROOT_CLOCK_SKEW_MS]]);
   const members: number[] = [];
   const root = processes.find((entry) => entry.pid === rootPid);
-  if (root && Math.abs(root.createdAt - rootStartedAt) <= ROOT_CLOCK_SKEW_MS) {
+  const sameRoot = root && root.createdAt <= rootStartedAt
+    && rootStartedAt - root.createdAt <= ROOT_CLOCK_SKEW_MS;
+  // An old orphan can still name this PID, but a child born after its new
+  // incarnation belongs to the replacement process, never to this run.
+  const replacedAt = root && !sameRoot ? root.createdAt : Infinity;
+  if (root && sameRoot) {
     created.set(rootPid, root.createdAt);
     members.push(rootPid);
   }
@@ -60,6 +65,7 @@ export function windowsProcessTree(processes: WindowsProcess[], rootPid: number,
     grew = false;
     for (const entry of processes) {
       if (created.has(entry.pid) || entry.pid === entry.parentPid) continue;
+      if (entry.parentPid === rootPid && entry.createdAt >= replacedAt) continue;
       const parentCreated = created.get(entry.parentPid);
       if (parentCreated === undefined || entry.createdAt < parentCreated) continue;
       created.set(entry.pid, entry.createdAt);

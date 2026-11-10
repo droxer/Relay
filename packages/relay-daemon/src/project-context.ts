@@ -1,5 +1,6 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { lstatSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 /** Workspace-relative mirror of the project brief. `.relay/` is excluded from
  * the artifact scan, so the mirror never shows up as a deliverable. */
@@ -15,16 +16,31 @@ export const PROJECT_CONTEXT_RELATIVE_PATH = join(".relay", "PROJECT.md");
  * no brief so a stale copy cannot speak for a project that changed.
  */
 export function syncProjectContext(workspacePath: string, layout: string | undefined, brief: string | undefined): void {
-  const path = join(workspacePath, PROJECT_CONTEXT_RELATIVE_PATH);
   if (layout !== "project") return;
+  const directory = join(realpathSync(workspacePath), ".relay");
+  try {
+    if (lstatSync(directory).isSymbolicLink()) {
+      throw new Error("Project control directory must not be a symbolic link.");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if (!brief?.trim()) return;
+    mkdirSync(directory);
+  }
+  const path = join(directory, "PROJECT.md");
   if (!brief?.trim()) {
     rmSync(path, { force: true });
     return;
   }
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(
-    path,
-    `<!-- Written by Relay from the project's settings for this run. Edit the project, not this file. -->\n\n${brief.trim()}\n`,
-    "utf8",
-  );
+  // Replace the directory entry, never truncate an agent-controlled symlink
+  // or hardlink. Exclusive creation also protects the temporary destination.
+  const temporary = join(directory, `.PROJECT-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(temporary,
+      `<!-- Written by Relay from the project's settings for this run. Edit the project, not this file. -->\n\n${brief.trim()}\n`,
+      { encoding: "utf8", flag: "wx", mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }

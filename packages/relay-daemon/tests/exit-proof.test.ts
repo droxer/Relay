@@ -7,14 +7,12 @@ const gone = () => { throw Object.assign(new Error("ESRCH"), { code: "ESRCH" });
 const denied = () => { throw Object.assign(new Error("EPERM"), { code: "EPERM" }); };
 const alive = () => true;
 
-test("a local run's exit is proven only by a vanished group or a reboot", () => {
-  assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, gone, BOOT), true);
-  assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, alive, BOOT + 1000), false);
-  // A reboot ends every process, and the recorded id may since belong to another.
-  assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, alive, BOOT + 10 * 60_000), true);
-  assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, denied, BOOT), false);
+test("a local run's exit requires a vanished process group", () => {
+  assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, gone), true);
+  assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, alive), false);
+  assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, denied), false);
   // Admitted but never recorded as spawned: nothing to prove it by.
-  assert.equal(localExitProven({}, gone, BOOT), false);
+  assert.equal(localExitProven({}, gone), false);
 });
 
 test("retiring stale guests removes only this computer's boxes and confirms they are gone", async () => {
@@ -33,4 +31,15 @@ test("a guest that will not go away proves nothing", async () => {
     remove: async () => { throw new Error("busy"); },
   };
   assert.equal(await retireStaleGuests(runtime, "relay-node"), false);
+});
+
+test("wall-clock jumps never bypass process-group evidence", (t) => {
+  let now = BOOT;
+  t.mock.method(Date, "now", () => now);
+  for (const change of [-3_600_000, 180_000, 86_400_000]) {
+    now = BOOT + change;
+    let probes = 0;
+    assert.equal(localExitProven({ processGroup: 42, bootAt: BOOT }, () => { probes++; }), false);
+    assert.equal(probes, 1);
+  }
 });

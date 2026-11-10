@@ -818,3 +818,24 @@ def test_daemon_node_event_matches_characterization(name: str, payload: dict[str
     assert result == expected
     # Key order is part of the pinned output.
     assert text == json.dumps(expected)
+
+
+@pytest.mark.parametrize("event_type", ["run.completed", "run.failed", "run.cancelled"])
+@pytest.mark.parametrize("sequence", [-1, 0, 50, 2**53 - 1])
+def test_terminal_replay_watermark_survives_parsing(event_type, sequence):
+    parsed = daemon_node_event(run(event_type, exitCode=0, lastOutputSequence=sequence))
+    assert parsed["lastOutputSequence"] == sequence
+
+
+@pytest.mark.parametrize("sequence", [True, -2, 1.5, "1", 2**53, None])
+def test_invalid_replay_watermarks_do_not_reject_exit_evidence(sequence):
+    parsed = daemon_node_event(run("run.completed", exitCode=0, lastOutputSequence=sequence))
+    assert parsed["exitCode"] == 0
+    assert "lastOutputSequence" not in parsed
+
+
+@pytest.mark.parametrize("rejected", [{"reason": "unknown"}, {"reason": []}, None, "malformed"])
+def test_invalid_rejected_verdict_metadata_does_not_reject_exit_evidence(rejected):
+    parsed = daemon_node_event(run("run.completed", exitCode=0, roundResultRejected=rejected))
+    assert parsed["exitCode"] == 0
+    assert "roundResultRejected" not in parsed

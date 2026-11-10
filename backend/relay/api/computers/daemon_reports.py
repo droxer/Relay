@@ -11,6 +11,7 @@ from loguru import logger
 
 from ...daemon_registry.records import CommandEventMismatchError, DeletedDaemonNodeError, UnknownDaemonNodeError
 from ...daemon_registry.runs.reports import ReportPredecessorMissing
+from ...persistence.daemon.reports import ReportReceiptConflict
 from ..actors import bearer_token
 from ..bodies import json_body
 from ..deps import AppContextDep
@@ -20,6 +21,7 @@ router = APIRouter()
 
 
 def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: list[dict[str, str]]) -> list[dict[str, Any]]:
+    registry.assert_node_event_authorized(sandbox_id, token)
     receipts: list[dict[str, Any]] = []
     groups: dict[tuple[str, str], list[tuple[dict[str, str], dict[str, Any]]]] = {}
     for report in reports:
@@ -27,6 +29,16 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
             event = daemon_node_event(json.loads(report['body']))
         except (ValueError, TypeError, KeyError):
             receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 400})
+            continue
+        # Retries may outlive command and thread history; acknowledge from
+        # their bound receipts before acquiring a live thread mutation scope.
+        try:
+            accepted = registry.daemon_store.report_was_accepted(sandbox_id, event['commandId'], report['id'], report['digest'])
+        except ReportReceiptConflict:
+            receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 409})
+            continue
+        if accepted:
+            receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 200})
             continue
         streamed = event['type'] in {'run.output', 'run.output.batch', 'run.collaboration'}
         key = (event['sessionId'], event['commandId'] if streamed else report['id'])

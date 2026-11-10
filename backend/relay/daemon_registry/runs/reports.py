@@ -26,7 +26,11 @@ class DurableReportMixin(RegistryState):
                 # command row, as our liveness update waits for the local lock.
                 stack.enter_context(self.dispatch_scope([sandbox_id]))
                 self._assert_authorized(sandbox_id, token)
-                # Authorize metadata before returning even a previously stored receipt.
+                # The wire digest binds the original envelope. A previously
+                # accepted identity needs no command or session history, but
+                # must still match this authenticated node and exact payload.
+                if self.daemon_store.report_was_accepted(sandbox_id, event['commandId'], report_id, digest):
+                    return
                 record = self.daemon_store.get_command(event['commandId'])
                 if not record:
                     raise CommandEventMismatchError('Report names an unknown command.')

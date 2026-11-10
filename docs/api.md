@@ -842,6 +842,25 @@ receipt commit together. Reusing an identity with a different digest returns
 For terminal reports, acceptance commits command exit evidence; workflow
 finalization runs after that commit and retries separately if needed.
 
+Apply migration `20261110_0123` before deploying acknowledgement recovery.
+Payload-bound receipts are retained independently of command/run/thread history.
+An authenticated node can therefore retry an identical accepted report after
+history pruning or thread deletion and receive its original acknowledgement
+without reapplying effects. Receipt lookup still requires the issuing node,
+command/report identity, and exact digest. Only small identity/digest records
+persist; retired command payloads continue to follow retention. Downgrading
+0123 deletes orphan receipts before restoring the former cascading foreign key.
+
+Terminal reports (`run.completed`, `run.failed`, `run.cancelled`) may include
+`lastOutputSequence`, the last captured output sequence still awaiting replay
+(`-1` when none remains). With durable receipts, command ownership and run
+history are exempt from age/count pruning until the accepted contiguous output
+cursor reaches that sequence. Older durable reports without this field remain
+protected conservatively, since terminal acceptance alone cannot prove that all
+output arrived. Other terminal history continues to follow normal retention.
+`run.completed` also preserves a validated `roundResultRejected.reason` when
+the daemon found a verdict file but refused it, so the task can explain why.
+
 `POST /api/v1/daemon-nodes/{id}/reports` accepts 1–50 replay records as
 `{reports: [{id, digest, body}]}`, where `body` is the exact JSON string whose
 bytes were hashed. The response is `{receipts: [{id, digest, status}]}`;
@@ -1567,7 +1586,11 @@ metadata only; `DELETE /mcp/tokens/{id}` revokes the owner's token.
 `POST /api/v1/daemon-nodes/{id}/mcp-token` uses the enrolled Computer credential
 and returns a separate MCP token scoped to its owner and Computer. Optional
 `{commandId, leaseId}` binds it to an active command, including standalone runs;
-authentication stops when that run ends (maximum 24 hours). Every run may manage
+authentication stops when that run ends. Each issued run token lasts at most
+24 hours; the daemon refreshes near expiry using the same active command/lease
+scope. Concurrent requests share one refresh. HTTP 401 clears the refused token
+for the next explicit call, but the refused request is never replayed automatically.
+Every run may manage
 the owner's standalone Tasks and Automations. Project reads require the admitted
 Project's enabled roster identity; writes require its current Project Lead.
 `tools/list` omits `relay_propose_task_changes` for readers, while still exposing

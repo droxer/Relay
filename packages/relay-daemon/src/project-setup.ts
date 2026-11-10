@@ -1,5 +1,5 @@
-import { readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { consumeControlFile } from "./control-file.js";
 
 /** Legacy path, still accepted for commands from an older backend.
  * Current commands specify `.relay/project-setup-<runId>.json` in their state.
@@ -21,17 +21,10 @@ export function consumeProjectSetup(workspacePath: string, file: string | undefi
   // Only a setup command supplies a file. Keep legacy backend commands readable,
   // while confining newer attempt-specific paths to the same control directory.
   if (!file || !/^\.relay\/project-setup(?:-[a-zA-Z0-9_-]+)?\.json$/.test(file)) return undefined;
-  const path = join(workspacePath, file);
-  let raw: string;
+  const content = consumeControlFile(workspacePath, file, PROJECT_SETUP_MAX_BYTES);
+  if (content.kind !== "read") return undefined;
   try {
-    const oversized = statSync(path).size > PROJECT_SETUP_MAX_BYTES;
-    raw = oversized ? "" : readFileSync(path, "utf8");
-  } catch {
-    return undefined;
-  }
-  rmSync(path, { force: true });
-  try {
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(content.text);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : undefined;

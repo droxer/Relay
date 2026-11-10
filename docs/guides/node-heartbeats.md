@@ -120,7 +120,7 @@ retained output can be replayed after completion.
 
 ## Durable report transport
 
-Apply migration `20261109_0122` before deploying this backend. Updated daemons
+Apply migrations through `20261110_0123` before deploying this backend. Updated daemons
 advertise `durable-reports`; the backend advertises the matching feature plus
 `report-batches` and `transport-status`. Existing HTTP routes and long polling
 remain the transport. Legacy peers continue working, but diagnostics mark their
@@ -133,8 +133,11 @@ flush has not completed are explicitly outside the crash-survival boundary.
 Successful uploads remove records only after the backend returns a receipt
 binding the report identity and payload digest. The receipt and effects commit
 in one database transaction. Lost replies can therefore be retried safely on
-another backend replica. Sequenced output cannot skip a missing predecessor;
-terminal evidence and unrelated runs can still progress.
+another backend replica, including after command history is pruned or a thread
+is deleted. These small node/identity/digest receipts are retained independently
+of that history; a retry acknowledges the original acceptance without applying
+the report again. Sequenced output cannot skip a missing predecessor; terminal
+evidence and unrelated runs can still progress.
 Terminal acceptance commits the command's exit evidence and receipt together;
 workflow finalization then uses its own transactions. A finalization failure
 leaves the committed evidence available for the existing recovery loop, rather
@@ -189,3 +192,20 @@ and uses real daemons with synthetic agent output. `--fault blackhole`,
 20 recovery episodes; platform reboot, storage-device faults, reference CPU
 allocation, and sustained load require separate acceptance evidence. A short
 smoke result does not establish the reference SLO.
+
+### Restart exit evidence
+
+A wall-clock boot-time estimate is historical metadata, not proof of reboot or
+process exit. A restarted local daemon confirms that the recorded process group
+is absent; a Windows daemon requires a process list showing no remaining tree
+members. Missing or inconclusive evidence continues to require reconciliation.
+Windows tree cleanup distinguishes a reused root PID from its older orphans:
+children created after the replacement root are excluded, while older orphans
+and their descendants remain part of the recorded run.
+
+Process-operation errors after spawn (including a denied termination signal)
+are not exit evidence. The local supervisor reports unconfirmed exit, retries
+termination, and holds execution until cleanup is verified or a person reports
+it gone. On Windows, unavailable process enumeration likewise keeps the run
+reserved even after the root's pipes close; enumeration errors are terminating
+PowerShell failures rather than an apparently empty successful process list.

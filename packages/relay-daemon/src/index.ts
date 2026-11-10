@@ -302,12 +302,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let pollInFlightSince: number | undefined;
   let sendDrainingHeartbeat: (() => Promise<void>) | undefined;
   let sendStoppedHeartbeat: (() => Promise<void>) | undefined;
-  const unreachableGraceMs = options.unreachableGraceMs
-    ?? nonNegativeSecondsEnv("RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS")
-    ?? DEFAULT_UNREACHABLE_GRACE_MS;
+  const configuredUnreachableGraceMs = options.unreachableGraceMs
+    ?? nonNegativeSecondsEnv("RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS");
+  const unreachableGraceMs = configuredUnreachableGraceMs ?? DEFAULT_UNREACHABLE_GRACE_MS;
   const executionWatchdog = new ExecutionWatchdog(undefined, {
     graceMs: unreachableGraceMs,
-    continueDuringOutage: options.unreachableGraceMs === undefined,
+    continueDuringOutage: configuredUnreachableGraceMs === undefined,
     shouldGrace: () => backendUnreachable,
     onGrace: (commandId) => logger.warn("Execution lease expired while the backend is unreachable; continuing for one grace period", {
       sandboxId, commandId, graceMs: unreachableGraceMs,

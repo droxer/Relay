@@ -40,13 +40,20 @@ export function createRunMcpProxy(options: {
     fetchFn: typeof fetch;
     signal: AbortSignal;
 }) {
-    let credential: Promise<string> | undefined;
+    type Credential = { token: string; expiresAt: number };
+    let credential: Credential | undefined;
+    let issuing: Promise<Credential> | undefined;
     const request = async (path: string, token: string, body?: unknown, protocolVersion?: string): Promise<Record<string, unknown> | null> => {
         const response = await options.fetchFn(relayApiUrl(options.backendUrl, path), {
             method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...(protocolVersion ? { 'MCP-Protocol-Version': protocolVersion } : {}) },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error',
             signal: AbortSignal.any([options.signal, AbortSignal.timeout(60000)]),
         });
+        // Invalidate only the credential used by this request: an older
+        // in-flight response must not erase a newly refreshed token. Never
+        // replay the request, since a tool write can have an uncertain outcome.
+        if (response.status === 401 && credential?.token === token)
+            credential = undefined;
         if (response.status === 202 || response.status === 204)
             return null;
         const reply = await boundedJsonResponse(response) as Record<string, unknown>;
@@ -54,15 +61,25 @@ export function createRunMcpProxy(options: {
             throw new Error(`Run-scoped Relay MCP request refused (${response.status}).`);
         return reply;
     };
+    const currentCredential = async (): Promise<Credential> => {
+        // Leave a request deadline's worth of room before server expiry.
+        if (credential && credential.expiresAt > Date.now() + 60000) return credential;
+        return issuing ??= request(`/daemon-nodes/${encodeURIComponent(options.sandboxId)}/mcp-token`, options.nodeToken,
+            { commandId: options.commandId, leaseId: options.leaseId }).then(grant => {
+            if (!grant || typeof grant.token !== 'string' || !/^relay_mcp_[A-Za-z0-9_-]+$/.test(grant.token))
+                throw new Error('Invalid run credential.');
+            // Older backends may omit expiry; a refusal still clears that cache.
+            const expiresAt = grant.expiresAt === undefined ? Infinity
+                : typeof grant.expiresAt === 'string' ? Date.parse(grant.expiresAt) : NaN;
+            if (Number.isNaN(expiresAt) || expiresAt <= Date.now())
+                throw new Error('Invalid or expired run credential.');
+            return credential = { token: grant.token, expiresAt };
+        }).finally(() => { issuing = undefined; });
+    };
     return async (tool: string, args: Record<string, unknown>): Promise<Record<string, unknown> | null> => {
         if (args.projectId !== undefined && args.projectId !== options.projectId)
             throw new Error('Project scope mismatch.');
-        credential ??= request(`/daemon-nodes/${encodeURIComponent(options.sandboxId)}/mcp-token`, options.nodeToken, { commandId: options.commandId, leaseId: options.leaseId }).then(grant => {
-            if (!grant || typeof grant.token !== 'string' || !/^relay_mcp_[A-Za-z0-9_-]+$/.test(grant.token))
-                throw new Error('Invalid run credential.');
-            return grant.token;
-        }).catch(error => { credential = undefined; throw error; });
-        const token = await credential;
+        const { token } = await currentCredential();
         if (tool === 'mcp')
             return await request('/mcp', token, args.message, typeof args.protocolVersion === 'string' ? args.protocolVersion : undefined);
         // The fallback helper forwards backend-owned tool names just like a

@@ -165,7 +165,11 @@ The daemon proxy lazily obtains a command-bound MCP token and calls the same
 MCP API using that token. Isolated runtimes use their host/guest transport to the
 same proxy. The run token stays in daemon memory, outside the workspace and
 Agent environment. Its Project access is limited to the admitted Project and it stops authenticating
-when the run ends, with a maximum lifetime of 24 hours. Proposals retain the
+when the run ends. Each issued token lasts at most 24 hours; the daemon refreshes
+it near expiry while the same command/lease remains authorized. Concurrent calls
+share the refresh, and a late refusal for an older token cannot discard a newer
+one. A refused request is not replayed automatically; a 401 clears its credential
+for the next explicit call. Proposals retain the
 actual Logical Agent, run and producing Thread. Each call rechecks enabled
 roster membership; writes also require the current Project Lead, so transferring
 leadership removes the former lead's write authority immediately. Subsequent

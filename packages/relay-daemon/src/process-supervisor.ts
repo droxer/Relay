@@ -54,6 +54,8 @@ export async function superviseLocalProcess(
     let killTimer: NodeJS.Timeout | undefined;
     let reportTimer: NodeJS.Timeout | undefined;
     let cleanupTimer: NodeJS.Timeout | undefined;
+    let terminationRetryTimer: NodeJS.Timeout | undefined;
+    let processErrorReported = false;
     let reported = false;
     let exitCode: number | null | undefined;
     let closed = false;
@@ -75,6 +77,7 @@ export async function superviseLocalProcess(
       if (killTimer) clearTimeout(killTimer);
       if (reportTimer) clearTimeout(reportTimer);
       if (cleanupTimer) clearTimeout(cleanupTimer);
+      if (terminationRetryTimer) clearInterval(terminationRetryTimer);
       options.signal?.removeEventListener("abort", abort);
       hooks?.release?.removeEventListener("abort", release);
       if (released) {
@@ -115,10 +118,9 @@ export async function superviseLocalProcess(
     const killWindowsTree = async (): Promise<boolean | undefined> => {
       const processes = child.pid ? await listWindowsProcesses() : undefined;
       if (!processes || !child.pid) {
-        // Best effort: taskkill /T still reaches descendants whose parents live.
-        if (child.pid && child.exitCode === null) {
-          spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-        }
+        // The ChildProcess handle identifies the original root even if its
+        // PID is later reused. Without enumeration, descendant exit is unknown.
+        if (child.exitCode === null) child.kill("SIGKILL");
         return undefined;
       }
       const members = windowsProcessTree(processes, child.pid, spawnedAt);
@@ -140,11 +142,12 @@ export async function superviseLocalProcess(
           const cleared = await killWindowsTree();
           if (finished) return;
           if (cleared === true) { windowsTreeCleared = true; break; }
-          // Without a process list this is the old behaviour: report on close.
-          if (cleared === undefined && closed) { settle(exitCode ?? -1); return; }
-          if (cleared === false) {
-            scheduleExitReport();
-            if (!warned) { process.stderr.write("[relay] Run's descendants are still running; ending them before reporting exit.\n"); warned = true; }
+          scheduleExitReport();
+          if (!warned) {
+            process.stderr.write(cleared === undefined
+              ? "[relay] Cannot enumerate the run's descendants; retaining execution until cleanup can be verified.\n"
+              : "[relay] Run's descendants are still running; ending them before reporting exit.\n");
+            warned = true;
           }
           await new Promise((resolve) => { cleanupTimer = setTimeout(resolve, WINDOWS_SWEEP_MS); });
         }
@@ -168,8 +171,6 @@ export async function superviseLocalProcess(
     };
     options.signal?.addEventListener("abort", abort, { once: true });
     hooks?.release?.addEventListener("abort", release, { once: true });
-    if (options.signal?.aborted) abort();
-    if (hooks?.release?.aborted) release();
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (text: string) => {
@@ -238,7 +239,24 @@ export async function superviseLocalProcess(
       settle(code ?? -1);
     });
     child.on("error", (error) => {
-      settle(-1, error.message);
+      // Spawn failure means there was no execution. A later error (including
+      // EPERM from kill) says nothing about whether the process is still alive.
+      if (!child.pid) { settle(-1, error.message); return; }
+      if (finished) return;
+      scheduleExitReport();
+      if (!processErrorReported) {
+        processErrorReported = true;
+        process.stderr.write(`[relay] Process operation failed; retaining execution: ${error.message}\n`);
+      }
+      if (windows) finishWindowsRun();
+      else if (!terminationRetryTimer) {
+        terminationRetryTimer = setInterval(() => terminate("SIGKILL"), 1000);
+        terminationRetryTimer.unref();
+      }
     });
+    // Register error/exit handlers before an already-aborted signal can try
+    // to kill a process and synchronously emit a ChildProcess error.
+    if (options.signal?.aborted) abort();
+    if (hooks?.release?.aborted) release();
   });
 }

@@ -127,6 +127,19 @@ export class TerminalOutbox {
     const output = outputTypes.has(String(event.type));
     const key = digest(JSON.stringify([event.commandId, event.leaseId ?? null, ...(output ? [event.type, sequence(event)] : [])]));
     if (!this.index.has(key)) {
+      if (!output && this.strictAcknowledgements) {
+        // Include all captured output in the terminal receipt, including
+        // cancellation/failure paths that bypass executeCommand's result.
+        let last: [string, RecordIndex] | undefined;
+        for (const entry of this.index) {
+          if (!entry[1].terminal && entry[1].owner === owner(event) && (!last || entry[1].sequence > last[1].sequence)) last = entry;
+        }
+        const tail = last ? this.read(last[0]).event : undefined;
+        const lastOutputSequence = tail?.type === 'run.output.batch'
+          ? Math.max(...(tail.entries as Array<{ sequence: number }>).map(entry => entry.sequence))
+          : tail ? Number(tail.sequence) : -1;
+        event = { ...event, lastOutputSequence };
+      }
       const data = JSON.stringify(event);
       const bytes = Buffer.byteLength(data);
       // Stop producers at 90%, while allowing their bounded shutdown output
@@ -235,19 +248,24 @@ export class TerminalOutbox {
     if (this.rejected.has(record.key)) return new Response('Report quarantined; intervention required.', { status: 409 });
     if (this.blocked(record)) return new Response('Earlier output is awaiting delivery.', { status: 503 });
     const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
+    const originalBody = JSON.stringify(event);
     let sentDigest = '';
+    let sentReportId = record.key;
     const verifiedSend: typeof fetch = async (url, request) => {
       sentDigest = digest(String(request?.body));
+      // A compact representation must not reuse an identity already bound
+      // to the full payload. Derive it deterministically for crash/retry safety.
+      sentReportId = request?.body === originalBody ? record.key : digest(JSON.stringify([record.key, sentDigest]));
       const headers = new Headers(request?.headers);
-      headers.set('X-Relay-Report-Id', record.key);
+      headers.set('X-Relay-Report-Id', sentReportId);
       headers.set('X-Relay-Report-Digest', sentDigest);
       return send(url, { ...request, headers });
     };
-    const request = { ...init, body: JSON.stringify(event) };
-    const response = terminalTypes.has(String(event.type)) && !this.strictAcknowledgements
+    const request = { ...init, body: originalBody };
+    const response = terminalTypes.has(String(event.type))
       ? await sendTerminalEvent(verifiedSend, input, request, event) : await verifiedSend(input, request);
     if (response.ok) {
-      if (this.strictAcknowledgements && (response.headers.get('X-Relay-Report-Id') !== record.key
+      if (this.strictAcknowledgements && (response.headers.get('X-Relay-Report-Id') !== sentReportId
         || response.headers.get('X-Relay-Report-Digest') !== sentDigest)) {
         await response.body?.cancel();
         return new Response('Missing durable acceptance proof.', { status: 503 });
@@ -298,6 +316,21 @@ export class TerminalOutbox {
       'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ reports }),
       signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
     });
+    if (response.status === 413) {
+      await response.body?.cancel();
+      // A proxy may cap batches below our bound. Individual delivery lets
+      // terminal reports negotiate their compact form with verified receipts.
+      for (const key of selected) {
+        if (signal?.aborted) break;
+        if (!this.index.has(key)) continue;
+        const single = await this.deliver(send, eventUrl, { method: 'POST', headers: {
+          'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+        }, this.read(key));
+        await single.body?.cancel();
+      }
+      return;
+    }
     if (!response.ok) { this.replayAfter = Date.now() + retryAfterMs(response.headers.get("Retry-After")); await response.body?.cancel(); return; }
     const result = await response.json() as { receipts?: Array<{ id: string; digest: string; status: number }> };
     const expected = new Map(reports.map(report => [report.id, report.digest]));

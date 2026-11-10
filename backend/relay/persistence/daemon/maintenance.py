@@ -9,8 +9,10 @@ from __future__ import annotations
 from datetime import timedelta
 from sqlalchemy import (
     Text,
+    BigInteger,
     cast,
     delete,
+    func,
     or_,
     select,
 )
@@ -51,6 +53,17 @@ class DaemonRecordMaintenance(DaemonStoreState):
         with store_transaction(self.engine) as conn:
             cursors = getattr(self, "_prune_cursors", {})
             self._prune_cursors = cursors
+            terminal = self.commands.c.command["_terminalEvent"]
+            final_sequence = cast(terminal["lastOutputSequence"].as_string(), BigInteger)
+            accepted_sequence = func.coalesce(
+                cast(self.commands.c.command["_outputSequences"]["_durable"].as_string(), BigInteger), -1
+            )
+            replay_pending = terminal["_durableReport"].as_boolean().is_(True) & or_(
+                final_sequence.is_(None), accepted_sequence < final_sequence
+            )
+            # A terminal receipt proves exit, not completion of output replay.
+            # Older durable clients have no watermark: preserve their authority
+            # rather than turn a later replay into an unrecoverable rejection.
             for name, table in (("commands", self.commands), ("runs", self.runs)):
                 nodes = select(self.nodes.c.id).order_by(self.nodes.c.id).limit(100)
                 if cursors.get(name):
@@ -64,6 +77,10 @@ class DaemonRecordMaintenance(DaemonStoreState):
                     cursors[name] = node_id
                     terminal_time = terminal_time_expression(table)
                     base = select(table.c.id).where(table.c.node_id == node_id, table.c.status.in_(TERMINAL_DAEMON_STATUSES))
+                    protected = replay_pending if name == "commands" else select(self.commands.c.id).where(
+                        self.commands.c.id == self.runs.c.command_id, replay_pending
+                    ).exists()
+                    base = base.where(~protected)
                     expired = list(conn.scalars(base.where(terminal_time <= cutoff).order_by(terminal_time, table.c.id).limit(budget)))
                     if expired:
                         counts[name] += conn.execute(delete(table).where(table.c.id.in_(expired))).rowcount or 0

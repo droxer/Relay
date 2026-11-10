@@ -24,7 +24,7 @@ test("a run's tree keeps the orphans a finished bash left behind", () => {
 });
 
 test("a live root is part of its own tree", () => {
-  const processes = [{ pid: 100, parentPid: 8, createdAt: T + 50 }, { pid: 200, parentPid: 100, createdAt: T + 60 }];
+  const processes = [{ pid: 100, parentPid: 8, createdAt: T - 50 }, { pid: 200, parentPid: 100, createdAt: T + 60 }];
   assert.deepEqual(windowsProcessTree(processes, 100, T), [100, 200]);
 });
 
@@ -36,7 +36,7 @@ test("a recycled pid is not mistaken for the run or its children", () => {
     // created before the run's root: it cannot descend from it.
     { pid: 600, parentPid: 100, createdAt: T - 60_000 },
   ];
-  assert.deepEqual(windowsProcessTree(processes, 100, T), [500]);
+  assert.deepEqual(windowsProcessTree(processes, 100, T), []);
   assert.deepEqual(windowsProcessTree([{ pid: 600, parentPid: 100, createdAt: T - 60_000 }], 100, T), []);
 });
 
@@ -44,19 +44,39 @@ test("taskkill ends every member in one call", () => {
   assert.deepEqual(taskkillArguments([1, 2]), ["/F", "/PID", "1", "/PID", "2"]);
 });
 
-test("a Windows run is proven over only when its whole tree is gone", () => {
+test("a Windows run is proven over only when its whole tree is gone", (t) => {
   const evidence = { processGroup: 100, spawnedAt: T, bootAt: 5_000 };
-  assert.equal(windowsExitProven(evidence, [], 5_000), true);
-  assert.equal(windowsExitProven(evidence, [{ pid: 200, parentPid: 100, createdAt: T + 1 }], 5_000), false);
+  assert.equal(windowsExitProven(evidence, []), true);
+  assert.equal(windowsExitProven(evidence, [{ pid: 200, parentPid: 100, createdAt: T + 1 }]), false);
   // No process list, or no spawn time to tell pid reuse apart, proves nothing.
-  assert.equal(windowsExitProven(evidence, undefined, 5_000), false);
-  assert.equal(windowsExitProven({ processGroup: 100, bootAt: 5_000 }, [], 5_000), false);
-  // A reboot ends everything.
-  assert.equal(windowsExitProven(evidence, undefined, 5_000 + 10 * 60_000), true);
+  assert.equal(windowsExitProven(evidence, undefined), false);
+  assert.equal(windowsExitProven({ processGroup: 100, bootAt: 5_000 }, []), false);
+  // A changed wall-clock estimate cannot substitute for a process list.
+  t.mock.method(Date, "now", () => 5_000 + 10 * 60_000);
+  assert.equal(windowsExitProven(evidence, undefined), false);
 });
 
 test("the service host pid file carries the creation time, and older ones still parse", () => {
   assert.deepEqual(parsePidFile(`4242 ${T}\n`), { pid: 4242, createdAt: T });
   assert.deepEqual(parsePidFile("4242"), { pid: 4242 });
   assert.equal(parsePidFile(""), undefined);
+});
+
+test("PID reuse preserves older orphans without adopting the replacement root's children", () => {
+  const processes = [
+    { pid: 100, parentPid: 8, createdAt: T + 60_000 },
+    { pid: 200, parentPid: 100, createdAt: T + 1_000 },
+    { pid: 300, parentPid: 200, createdAt: T + 70_000 },
+    { pid: 400, parentPid: 100, createdAt: T + 61_000 },
+    { pid: 500, parentPid: 400, createdAt: T + 62_000 },
+  ];
+  assert.deepEqual(windowsProcessTree(processes, 100, T), [200, 300]);
+});
+
+test("a PID reused within the clock tolerance is still not the original root", () => {
+  const processes = [
+    { pid: 100, parentPid: 8, createdAt: T + 1 },
+    { pid: 200, parentPid: 100, createdAt: T + 2 },
+  ];
+  assert.deepEqual(windowsProcessTree(processes, 100, T), []);
 });
