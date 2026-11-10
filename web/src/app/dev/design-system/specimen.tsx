@@ -7,7 +7,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { SectionNav } from "@/components/SectionNav";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -55,8 +55,9 @@ import { ActionRemove, ICON, NavPreferences } from "@/components/icons";
  * button"), so renaming one here breaks a test that is not in this file.
  */
 
-function ExampleSelect({ label, size = "default" }: { label: string; size?: "default" | "sm" }) {
-  return <Select defaultValue="one" items={[{ value: "one", label: "First option" }, { value: "two", label: "Second option" }]}><SelectTrigger aria-label={label} size={size}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="one">First option</SelectItem><SelectItem value="two">Second option</SelectItem></SelectContent></Select>;
+function ExampleSelect({ label, size = "default", grouped = false }: { label: string; size?: "default" | "sm"; grouped?: boolean }) {
+  const options = <><SelectItem value="one">First option</SelectItem><SelectItem value="two">Second option</SelectItem></>;
+  return <Select defaultValue="one" items={[{ value: "one", label: "First option" }, { value: "two", label: "Second option" }]}><SelectTrigger aria-label={label} size={size}><SelectValue /></SelectTrigger><SelectContent>{grouped ? <SelectGroup>{options}</SelectGroup> : options}</SelectContent></Select>;
 }
 
 function OverlayFields() {
@@ -112,7 +113,7 @@ export function DesignSystemSpecimen() {
       <Button variant="outline" disabled>Disabled action</Button>
       <Button loading>Loading action</Button>
       <Input aria-label="Page input" /><Input aria-label="Disabled input" disabled />
-      <ExampleSelect label="Page select" />
+      <ExampleSelect label="Page select" /><ExampleSelect label="Grouped select" grouped />
       <Switch aria-label="Example switch" />
       <Checkbox aria-label="Example checkbox" />
     </div></Card>
@@ -171,6 +172,7 @@ export function DesignSystemSpecimen() {
 
     {/* ---- Badge tones ---- */}
     <Section title="Badge tones">
+      <Badge size="compact" data-testid="compact-badge">Compact</Badge>
       <Badge variant="neutral">Neutral</Badge>
       <Badge variant="success">Success</Badge>
       <Badge variant="info">Info</Badge>

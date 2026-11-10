@@ -180,6 +180,8 @@
   [data-slot="dropdown-menu-item"],
   [data-slot="dropdown-menu-link-item"],
   [data-slot="select-item"] {
+    /* 16px sheet corner minus its 8px inset. */
+    border-radius: var(--r-1);
     min-height: var(--touch-target);
     align-items: center;
     padding-inline: var(--sp-3);

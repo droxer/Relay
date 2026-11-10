@@ -7,7 +7,7 @@ import { ICON, NodeOffline } from "./icons";
 export function OfflineBadge({ className, title }: { className?: string; title?: string }) {
   const { t } = useTranslation();
   return (
-    <Badge className={cn("offline-badge", className)} title={title}>
+    <Badge size="compact" className={cn("offline-badge", className)} title={title}>
       <NodeOffline size={ICON.xs} aria-hidden="true" />
       <span>{t("status.offline")}</span>
     </Badge>

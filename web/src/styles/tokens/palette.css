@@ -356,6 +356,7 @@
   --control-h-sm: 32px;
   --control-h-xs: 28px;
   --control-h-2xs: 24px;
+  --chip-h-compact: 20px; /* dense, noninteractive status labels */
 
   /* Card heights — a record card is a frame of a known size.
 

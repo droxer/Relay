@@ -35,7 +35,7 @@ function PopoverContent({
       >
         {/* Same chrome as the select and menu popups: the float tier, so a
             popover opened inside a dialog is not painted behind it, and the
-            --shadow-2 hairline ring instead of a Tailwind drop shadow. */}
+            shared --shadow-2 edge and soft shadow instead of a separate recipe. */}
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(

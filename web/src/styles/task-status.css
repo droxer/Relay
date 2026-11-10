@@ -54,11 +54,8 @@
    Compact enough for a title line; the icon and label carry the state
    together, without borrowing the red reserved for failed work. */
 .offline-badge {
-  min-height: 20px;
-  gap: var(--sp-1);
-  padding-inline: var(--sp-1-5);
+  /* Size and shape come from Badge size="compact". */
   color: var(--ink-3);
-  line-height: 1;
 }
 
 .offline-badge > svg {

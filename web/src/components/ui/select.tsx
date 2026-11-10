@@ -12,7 +12,7 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
     <SelectPrimitive.Group
       data-slot="select-group"
-      className={cn("scroll-my-1 p-1", className)}
+      className={cn("scroll-my-1", className)}
       {...props}
     />
   )
@@ -89,11 +89,9 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
-          /* Flat elevation: --shadow-2 is the role for borderless floating
-             chrome (a single hairline ring). The former `shadow-md` was a Tailwind
-             drop shadow — the only faux depth in the app — and
-             `ring-foreground/10` hardcoded what that token already owns. */
-          className={cn("relative isolate z-(--z-float) max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-(--shadow-2) transition-[opacity,transform] duration-(--t-fast) ease-(--ease) data-[open]:opacity-100 data-[closed]:opacity-0 data-[closed]:scale-95", className )}
+          /* Match menu geometry: one 4px inset around 12px option corners
+             inside the 16px shell, with the shared soft floating shadow. */
+          className={cn("relative isolate z-(--z-float) max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-(--shadow-2) transition-[opacity,transform] duration-(--t-fast) ease-(--ease) data-[open]:opacity-100 data-[closed]:opacity-0 data-[closed]:scale-95", className )}
           {...props}
         >
           {header ? (
@@ -132,7 +130,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full cursor-default items-start gap-1.5 rounded-sm py-1.5 pr-8 pl-2 text-dense outline-hidden select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground not-data-[variant=destructive]:data-[highlighted]:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) [&_svg]:pointer-events-none [&_svg]:mt-0.5 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-start *:[span]:last:gap-2",
+        "relative flex w-full cursor-default items-start gap-1.5 rounded-md py-1.5 pr-8 pl-2 text-dense outline-hidden select-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground not-data-[variant=destructive]:data-[highlighted]:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-(--opacity-disabled) [&_svg]:pointer-events-none [&_svg]:mt-0.5 [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-start *:[span]:last:gap-2",
         className
       )}
       {...props}
