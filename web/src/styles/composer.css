@@ -8,12 +8,10 @@
 
 .composer {
   --composer-inline: var(--sp-4);
-  /* The card is the one container allowed past --r-3: it is the app's
-     largest single control, and at 8px a 100px-tall field reads as a form
-     box rather than a place to talk. 20px is the docked-composer radius
-     those apps share, and it stays concentric with the 32px send disc
-     inset --sp-2 + its border from the corner. */
-  --composer-radius: calc(var(--r-3) * 2.5);
+  /* Match the container corner. Scaling this role multiplied the Cool Mist
+     radius to 40px and made short drafts look like capsules. The awaiting
+     input dock reuses the same corner for its content inset. */
+  --composer-radius: var(--r-3);
   /* Side padding, named so the new-thread landing can hang the meta row
      under the card at the same inset (chat.css). */
   --composer-pad-x: var(--sp-6);

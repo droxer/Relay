@@ -403,9 +403,9 @@ stacks.
   `.landing-button`, as eveland.ai draws it — and never an app control; a
   `Button` keeps `--r-2`. Tailwind's larger radius
   names clamp to `--r-3`, and the bare `rounded` is pinned to `--r-1`; they
-  do not introduce additional geometry. One documented exception: the
-  composer's input well (`--composer-radius`, 2.5 × `--r-3`, reused as the
-  awaiting-input dock's inset) — the one soft surface the eye returns to.
+  do not introduce additional geometry. The composer's input well uses the
+  same container corner (`--composer-radius` = `--r-3`, 16px), reused as the
+  awaiting-input dock's inset; do not multiply the radius scale.
 - **Spacing:** 4px base — `--sp-1` 4 · `--sp-2` 8 · `--sp-3` 12 · `--sp-4`
   16 · `--sp-5` 20 · `--sp-6` 24 · `--sp-7` 32 · `--sp-8` 48. The scale stops
   there: the source system's 64/80px section rungs shipped with no call site
