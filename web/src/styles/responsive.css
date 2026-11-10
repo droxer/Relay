@@ -430,7 +430,7 @@
   }
 
   .project-folder-select > .project-folder-name {
-    grid-column: 1 / -1;
+    grid-column: 2 / -1;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -707,15 +707,14 @@
     background: var(--control-fill);
   }
 
-  /* The project filter beside it is the same filled, thumb-height control —
-     a framed 28px select next to a 44px field read as two kinds of thing. */
+  /* Keep the project picker quiet beside the filled search, with the same
+     thumb-height target even though its resting chrome is transparent. */
   #thread-panel .list-filter-select {
     /* A long project name truncates before the search loses its placeholder. */
     max-width: 40%;
     height: var(--touch-target);
     border-color: transparent;
     border-radius: var(--r-2);
-    background: var(--control-fill);
   }
 
   /* Rail groups sit one step apart on a phone rather than a full section

@@ -6,6 +6,7 @@ import {
   ICON,
 } from "./icons";
 import { PageHeader } from "./PageHeader";
+import { ProjectMark } from "./ProjectMark";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { ThreadRow, type ThreadItem } from "./ThreadRow";
@@ -263,7 +264,7 @@ export function ThreadListPanel({
             onValueChange={onProjectFilterChange}
             options={projectFilterChoices}
             size="sm"
-            className="list-filter-select"
+            className={`list-filter-select${projectFiltered ? " list-filter-select--active" : ""}`}
           />
         ) : null}
       </div>
@@ -301,6 +302,7 @@ export function ThreadListPanel({
                 aria-label={`${project.name} · ${t("project.member_count", { count: project.members.length })}`}
                 onClick={() => onSelectProject(project.id)}
               >
+                <span className="project-folder-icon" aria-hidden="true"><ProjectMark size={ICON.md} /></span>
                 <span className="project-folder-name">{project.name}</span>
                 {/* Keep the roster count visible on touch and pointer layouts. */}
                 <span className="project-folder-meta" aria-hidden="true">

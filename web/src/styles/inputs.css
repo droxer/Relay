@@ -142,6 +142,26 @@
   flex: 0 1 auto;
   min-width: 0;
   max-width: min(100%, 14rem);
+  gap: var(--sp-1);
+  padding-inline: var(--sp-2);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-3);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+/* A toolbar choice, not a framed field. The chevron carries the affordance;
+   an applied project uses stronger ink without adding another filled chip. */
+.list-filter-select--active {
+  color: var(--ink-1);
+}
+
+.list-filter-select:not(:disabled):hover,
+.list-filter-select[data-popup-open] {
+  border-color: transparent;
+  background: var(--control-fill);
+  color: var(--ink-1);
 }
 
 /* The primitive lays its value out as flex, which defeats line-clamp: a long

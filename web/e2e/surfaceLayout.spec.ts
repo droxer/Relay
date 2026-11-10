@@ -85,7 +85,9 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   return page;
 }
 
-test("project directory shows aligned names and Agent counts without Computer identifiers", async ({ browser }, testInfo) => {
+for (const touch of [false, true]) {
+for (const theme of ["light", "dark"] as const) {
+test(`project directory shows aligned names and Agent counts without Computer identifiers (${touch ? "touch" : "pointer"}, ${theme})`, async ({ browser }, testInfo) => {
   const project = {
     id: "fc617e44-b179-4f0a-acf2-1d42a1c49cf7", name: "Relay product development with a very long project name",
     ownerUserId: USER.id, computerId: "device:review-user:mch_mHuvNEUqc-HTHW-GcgxJoA",
@@ -97,9 +99,12 @@ test("project directory shows aligned names and Agent counts without Computer id
     { ...project, id: "disabled-project", name: "移动端项目列表与协作体验优化长名称验证", enabled: false },
     { ...project, id: "archived-project", name: "UnbrokenProjectNameThatMustWrapWithoutOverflowingThePhoneDirectory", archivedAt: stamp },
   ];
-  const page = await openPage(browser, "/projects", true, undefined, undefined, { projects: [project, ...variants], sessions: [], tasks: [] });
+  const page = await openPage(browser, "/projects", touch, { "relay-web.threadListWidth": "240" }, undefined, { projects: [project, ...variants], sessions: [], tasks: [] });
+  await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ authenticated: true, user: { ...USER, theme } }) }));
+  await page.reload();
   const row = page.getByRole("button", { name: `${project.name} · 0 agents`, exact: true });
   await expect(row).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   await expect(row).not.toContainText("mch_");
   await expect(row).not.toContainText(project.id);
   await expect(row.locator(".project-folder-meta")).toHaveText("0 agents");
@@ -112,6 +117,18 @@ test("project directory shows aligned names and Agent counts without Computer id
     expect(meta).not.toBeNull();
     expect(Math.abs(name!.x - meta!.x)).toBeLessThan(1);
     expect(meta!.y).toBeGreaterThan(name!.y);
+    const rowBox = (await row.boundingBox())!;
+    const icon = (await row.locator(".project-folder-icon").boundingBox())!;
+    expect(icon.x + icon.width).toBeLessThan(name!.x);
+    expect(meta!.y + meta!.height).toBeLessThanOrEqual(rowBox.y + rowBox.height);
+    // Every row's contents must fit, including the desktop rail's 240px floor.
+    for (const item of await page.locator(".project-folder-select").all()) {
+      expect(await item.evaluate((button) => [...button.children].every((child) => {
+        const row = button.getBoundingClientRect();
+        const box = child.getBoundingClientRect();
+        return box.left >= row.left && box.right <= row.right && box.top >= row.top && box.bottom <= row.bottom;
+      }))).toBe(true);
+    }
     if (width <= 820) {
       await expect(row.locator(".project-folder-name")).toHaveCSS("font-size", "17px");
       await expect(row.locator(".project-folder-meta")).toHaveCSS("font-size", "14px");
@@ -122,7 +139,9 @@ test("project directory shows aligned names and Agent counts without Computer id
       expect(meta!.y + meta!.height).toBeLessThanOrEqual(box.y + box.height);
       for (const variant of variants) {
         const variantRow = page.getByRole("button", { name: `${variant.name} · 0 agents`, exact: true });
-        await variantRow.scrollIntoViewIfNeeded();
+        // These four rows fit in the viewport. Avoid an unnecessary scroll
+        // while lazy tooltip wrappers replace their initial bare buttons.
+        await expect(variantRow).toBeVisible();
         await expect(variantRow.locator(".project-folder-name")).toBeVisible();
         const bounds = (await variantRow.boundingBox())!;
         expect(bounds.height).toBeGreaterThanOrEqual(76);
@@ -141,18 +160,22 @@ test("project directory shows aligned names and Agent counts without Computer id
       await expect(row.locator(".project-folder-name")).toHaveCSS("white-space", "nowrap");
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    if ([320, 768, 1440].includes(width)) {
+      await page.screenshot({ path: testInfo.outputPath(`project-directory-${width}.png`) });
+    }
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath("project-directory.png") });
-  await page.emulateMedia({ colorScheme: "dark" });
-  await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; });
-  await page.screenshot({ path: testInfo.outputPath("project-directory-dark.png") });
+  await page.keyboard.press("Tab");
   await row.focus();
   await expect(row).toBeFocused();
+  await expect(row).toHaveCSS("outline-style", "solid");
   await row.click();
   await expect(page).toHaveURL(new RegExp(`/projects/${project.id}`));
   await page.context().close();
 });
+}
+}
 
 /* The thread rail's project quick filter shares the filter band with the
    search. At the rail's 240px floor the two cannot sit side by side, so the

@@ -109,11 +109,9 @@
   list-style: none;
 }
 
-/* Applied only in projects directory mode (ThreadListPanel gates the class
-   on directoryMode): folder blocks are multi-part sections, so they take the
-   wider --sp-2 section gap instead of the list's --sp-1 row gap. */
+/* The project directory shares the other collection rails' row rhythm. */
 .project-directory {
-  gap: var(--sp-2);
+  gap: var(--sp-1);
 }
 
 /* No border: a rail row is borderless (.conversation-row, .agents-roster-row,
@@ -166,7 +164,6 @@
   /* The form-control rung, not a hand-picked 34px: the header's own select
      button and its disclosure sit on a control-height row. */
   min-height: var(--control-h);
-  padding-left: var(--sp-1);
   border-radius: var(--r-2);
   transition: background var(--t-fast) var(--ease);
 }
@@ -180,21 +177,35 @@
 
 .project-folder-select {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: var(--sp-2);
   row-gap: var(--sp-1);
   min-width: 0;
   flex: 1;
-  /* Keep the rail's horizontal inset, with room for the two-line label. */
-  padding: var(--sp-3);
+  /* Like the agent roster, the row grows around its two lines of content
+     instead of squeezing them into the Button primitive's fixed height. */
+  height: auto;
+  padding: var(--sp-row) var(--sp-3);
   border-radius: var(--r-2);
   text-align: left;
 }
 
+.project-folder-icon {
+  display: grid;
+  place-items: center;
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: var(--avatar-md);
+  height: var(--avatar-md);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+
 .project-folder-select > .project-folder-name {
   min-width: 0;
-  grid-column: 1;
+  grid-column: 2 / -1;
   grid-row: 1;
   overflow: hidden;
   color: var(--ink-1);
@@ -206,9 +217,11 @@
 }
 
 .project-folder-meta {
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 2;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -216,10 +229,10 @@
 }
 
 .project-folder-count {
-  grid-column: 2;
-  grid-row: 1 / 3;
+  grid-column: 3;
+  grid-row: 2;
   margin-left: auto;
-  color: var(--ink-4);
+  color: var(--ink-3);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
 }
