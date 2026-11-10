@@ -7,6 +7,23 @@ compatibility shim must remain in TypeScript during migration.
 
 This file is the single source of agent instructions.
 
+## Agent skills
+
+### Issue tracker
+
+Track issues and specs in GitHub Issues for `droxer/Relay`.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five canonical triage labels.
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context layout: root `CONTEXT.md` and `docs/adr/`.
+See `docs/agents/domain.md`.
+
 ## Domain Language
 
 [`CONTEXT.md`](CONTEXT.md) is the canonical product glossary (Computer, Daemon
