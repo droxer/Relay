@@ -15,7 +15,7 @@ export function DashboardRangePicker({ preset, range, onPreset, onApply }: {
   onApply: (range: DashboardDateRange) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const selectId = useId();
+  const helpId = useId();
   const errorId = useId();
   const [draft, setDraft] = useState(() => range === "all" ? dashboardPresetRange("7d") : range);
   const valid = validDashboardRange(draft);
@@ -27,7 +27,9 @@ export function DashboardRangePicker({ preset, range, onPreset, onApply }: {
     { value: "custom", label: t("admin.v2.dash_range_custom") },
   ];
   const dateFormat = new Intl.DateTimeFormat(i18n.language || undefined, { month: "short", day: "numeric", year: "numeric" });
-  const format = (date: string) => dateFormat.format(new Date(`${date}T12:00:00`));
+  const summary = range === "all" ? t("admin.v2.dash_range_all") : dateFormat.formatRange(
+    new Date(`${range.start}T12:00:00`), new Date(`${range.end}T12:00:00`),
+  );
 
   return (
     <form className="adm-dash-range" onSubmit={(event) => {
@@ -35,37 +37,38 @@ export function DashboardRangePicker({ preset, range, onPreset, onApply }: {
       if (preset === "custom" && valid) onApply(draft);
     }}>
       <div className="adm-dash-range-controls">
-        <Field className="adm-dash-range-field adm-dash-range-preset" label={t("admin.v2.dash_range")} wrapper="div" htmlFor={selectId}>
-          <Select items={items} value={preset} onValueChange={(next) => {
-            if (!next) return;
-            setDraft(range === "all" ? dashboardPresetRange("7d") : range);
-            onPreset(next as DashboardRangeSelection);
-          }}>
-            <SelectTrigger id={selectId} className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent align="start" alignItemWithTrigger={false}>
-              {items.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </Field>
-        {preset === "custom" ? <>
-          <Field className="adm-dash-range-field" label={t("admin.v2.dash_range_start")}>
-            <Input type="date" required value={draft.start} max={draft.end || undefined}
-              aria-invalid={!valid || undefined} aria-describedby={!valid ? errorId : undefined}
-              onChange={(event) => setDraft({ ...draft, start: event.target.value })} />
-          </Field>
-          <Field className="adm-dash-range-field" label={t("admin.v2.dash_range_end")}>
-            <Input type="date" required value={draft.end} min={draft.start || undefined}
-              aria-invalid={!valid || undefined} aria-describedby={!valid ? errorId : undefined}
-              onChange={(event) => setDraft({ ...draft, end: event.target.value })} />
-          </Field>
-          <Button className="adm-dash-range-apply" type="submit" variant="outline" disabled={!valid}>{t("admin.v2.dash_range_apply")}</Button>
-        </> : null}
-        <output className="adm-dash-range-summary tnum" aria-live="polite">
-          {range === "all" ? t("admin.v2.dash_range_all") : `${format(range.start)} – ${format(range.end)}`}
+        <Select items={items} value={preset} onValueChange={(next) => {
+          if (!next) return;
+          setDraft(range === "all" ? dashboardPresetRange("7d") : range);
+          onPreset(next as DashboardRangeSelection);
+        }}>
+          <SelectTrigger size="sm" aria-label={t("admin.v2.dash_range")} aria-describedby={helpId}
+            className="w-auto border-transparent bg-transparent px-2 font-normal text-body hover:border-transparent hover:bg-(--control-fill-hover) aria-expanded:bg-(--control-fill-hover)">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="start" alignItemWithTrigger={false} className="min-w-44">
+            {items.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <output className={range === "all" ? "sr-only" : "adm-dash-range-summary tnum"} aria-live="polite">
+          {summary}
         </output>
       </div>
+      {preset === "custom" ? <div className="adm-dash-range-custom">
+        <Field className="adm-dash-range-field" label={t("admin.v2.dash_range_start")}>
+          <Input type="date" required value={draft.start} max={draft.end || undefined}
+            aria-invalid={!valid || undefined} aria-describedby={!valid ? errorId : undefined}
+            onChange={(event) => setDraft({ ...draft, start: event.target.value })} />
+        </Field>
+        <Field className="adm-dash-range-field" label={t("admin.v2.dash_range_end")}>
+          <Input type="date" required value={draft.end} min={draft.start || undefined}
+            aria-invalid={!valid || undefined} aria-describedby={!valid ? errorId : undefined}
+            onChange={(event) => setDraft({ ...draft, end: event.target.value })} />
+        </Field>
+        <Button className="adm-dash-range-apply" type="submit" variant="ghost" size="sm" disabled={!valid}>{t("admin.v2.dash_range_apply")}</Button>
+      </div> : null}
       {preset === "custom" && !valid ? <FieldError id={errorId}>{t("admin.v2.dash_range_invalid")}</FieldError> : null}
-      <p className="adm-dash-range-note">{t("admin.v2.dash_range_inventory_note")}</p>
+      <p id={helpId} className="sr-only">{t("admin.v2.dash_range_inventory_note")}</p>
     </form>
   );
 }
