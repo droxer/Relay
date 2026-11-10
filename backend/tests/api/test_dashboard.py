@@ -43,7 +43,7 @@ def test_dashboard_sessions_returns_shape(monkeypatch) -> None:
         body = response.json()
         assert body["total"] >= 1
         assert isinstance(body["dailyCounts"], list)
-        assert len(body["dailyCounts"]) == 14
+        assert len(body["dailyCounts"]) == 7
         assert all({"date", "count", "completed", "failed"} <= set(row) for row in body["dailyCounts"])
         assert isinstance(body["topUsers"], list)
         assert isinstance(body["statusCounts"], dict)
@@ -156,7 +156,7 @@ def test_dashboard_tokens_returns_reported_usage(monkeypatch) -> None:
         assert body["total"] == 17
         assert body["fresh"] == 15
         assert body["unreportedRuns"] == []
-        assert len(body["daily"]) == 14
+        assert len(body["daily"]) == 7
         assert "recentSessions" not in body
         assert "byUser" not in body
 
@@ -206,8 +206,8 @@ def test_dashboard_tokens_available_when_usage_is_older_than_the_summary_week(mo
         body = client.get("/api/v1/admin/dashboard/tokens").json()
 
         assert body["total"] == 0
-        assert body["available"] is True
-        assert sum(day["total"] for day in body["daily"]) == 15
+        assert body["available"] is False
+        assert sum(day["total"] for day in body["daily"]) == 0
 
 
 def test_dashboard_tokens_name_runtimes_that_completed_without_usage(monkeypatch) -> None:
@@ -309,3 +309,49 @@ def test_token_dashboard_does_not_transfer_unused_run_metadata(monkeypatch) -> N
         assert response.json()["total"] == 15
         assert ledger_reads
         assert all("task_goal" not in statement and "group by" in statement for statement in ledger_reads)
+
+
+def test_dashboard_custom_range_filters_totals_rankings_and_tokens(monkeypatch) -> None:
+    from sqlalchemy import update
+    from relay.persistence.engine import store_transaction
+
+    with TemporaryDirectory() as root:
+        app, client = _dashboard_client(monkeypatch, root)
+        session_id = _create_session(client)
+        store = app.state.session_store
+        for run, stamp, value in [
+            ("before", "2026-01-09T23:59:59Z", 100),
+            ("first", "2026-01-10T00:00:00Z", 10),
+            ("last", "2026-01-11T23:59:59Z", 20),
+            ("after", "2026-01-12T00:00:00Z", 1000),
+        ]:
+            _record_run(app, session_id, run, {"input": value, "output": 0, "cache": 0, "total": value, "source": "codex"}, timestamp=stamp)
+        with store_transaction(store.engine) as conn:
+            conn.execute(update(store.sessions).where(store.sessions.c.id == session_id).values(
+                created_at=datetime(2026, 1, 10, tzinfo=UTC),
+            ))
+        params = {"start": "2026-01-10", "end": "2026-01-11", "tz": "UTC"}
+        sessions = client.get("/api/v1/admin/dashboard/sessions", params=params).json()
+        tokens = client.get("/api/v1/admin/dashboard/tokens", params=params).json()
+        assert sessions["total"] == 1
+        assert sum(row["sessionCount"] for row in sessions["topUsers"]) == 1
+        assert [row["date"] for row in sessions["dailyCounts"]] == ["2026-01-10", "2026-01-11"]
+        assert tokens["fresh"] == 30
+        assert sum(row["fresh"] for row in tokens["daily"]) == 30
+        # A second range must not reuse the first range's cached totals.
+        params.update(start="2026-01-12", end="2026-01-12")
+        assert client.get("/api/v1/admin/dashboard/sessions", params=params).json()["total"] == 0
+        assert client.get("/api/v1/admin/dashboard/tokens", params=params).json()["fresh"] == 1000
+
+
+def test_dashboard_rejects_invalid_ranges(monkeypatch) -> None:
+    with TemporaryDirectory() as root:
+        _, client = _dashboard_client(monkeypatch, root)
+        for route in ("sessions", "tokens"):
+            for params in (
+                {"start": "2026-01-02", "end": "2026-01-01"},
+                {"start": "2024-01-01", "end": "2026-01-01"},
+                {"start": "2026-01-01"},
+                {"start": "invalid", "end": "2026-01-01"},
+            ):
+                assert client.get(f"/api/v1/admin/dashboard/{route}", params=params).status_code == 422
