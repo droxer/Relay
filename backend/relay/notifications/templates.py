@@ -65,12 +65,12 @@ _COPY = {
 # The light register of web/src/styles/tokens/palette.css (--action,
 # --on-action, --brand-lead, --live, --ink-1, --ink-3): mail is read on white.
 # The button is the ink plate; the orange is only the mark's lead chevron.
-BRAND_ACTION = "#080808"
+BRAND_ACTION = "#364b59"
 BRAND_ON_ACTION = "#ffffff"
 BRAND_LEAD = "#b84400"
 BRAND_LIVE = "#2457c5"
-BRAND_INK = "#080808"
-BRAND_MUTED = "#525252"
+BRAND_INK = "#27333b"
+BRAND_MUTED = "#4b5c66"
 
 _FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 

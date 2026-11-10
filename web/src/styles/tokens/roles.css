@@ -6,21 +6,14 @@
   /* Info is not a color — neutral notice text. */
   --info: var(--ink-3);
 
-  /* Links take a softer shade of the action's orange — wayfinding only, never a fill
-     and never an action. The role names stay separate from --action, and
-     here that separation is load-bearing rather than decorative: the action
-     is accent and an anchor is a quieter orange, so "the colour of the primary
-     button" and "the colour of a link" must never be spelled the same way. */
+  /* Links use the text ramp and underline; actions keep a distinct fill. */
   --link: var(--link-ink);
   --link-hover: var(--link-ink-strong);
 
-  /* Elevation — flat. Every plane separates by a surface step plus a hairline;
-     floating chrome (drawers, dialogs, menus, sticky summaries) adds only the
-     hairline ring so its edge stays crisp over the content below it. No drop
-     shadows anywhere: in a flat system a blur is faux depth, and it was the
-     only one in the app. The ring is therefore the only elevation role; a
-     surface that wants no edge simply declares none. */
-  --shadow-2: 0 0 0 var(--sp-hairline) var(--line-1);
+  /* Shared floating elevation: retain a crisp edge over busy content and
+     soften the separation with a restrained, theme-aware shadow. */
+  --shadow-2: 0 0 0 var(--sp-hairline) var(--line-1),
+    0 var(--sp-3) var(--sp-7) var(--elevation-shadow);
 
   /* Row wash under the pointer. Translucent INK, not a surface step — the
      same fix --control-fill below documents. Mixed from --surface-1 (60%),
@@ -74,8 +67,8 @@
      outline button, has no label INSIDE it to identify it, so its edge is the
      visual information WCAG 1.4.11 asks to hold 3:1 against the plane. The 16%
      control border measured 1.39–1.60:1. --field-border-strength (palette.css)
-     is set per register: 42% clears 3.3:1 on every dark plane and 50% clears
-     3.27:1 on every light one. Hover firms it toward the ink. */
+     is set per register (42% dark, 56% light) so the composited boundary
+     clears 3:1 on content and navigation planes. Hover firms it toward ink. */
   --field-border: color-mix(in srgb, var(--ink-1) var(--field-border-strength), transparent);
   --field-border-hover: color-mix(in srgb, var(--ink-1) calc(var(--field-border-strength) + 16%), transparent);
 

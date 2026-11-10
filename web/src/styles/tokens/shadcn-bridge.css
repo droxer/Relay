@@ -69,7 +69,7 @@
   /* ---- Scale guards ----
      Everything below OVERRIDES a stock Tailwind scale. Deleting an unused step
      does not remove the utility, it hands it back to Tailwind's default — so
-     `rounded-xl` would silently become 0.75rem (12px), off the 4/6/8 ramp,
+     `rounded-xl` would silently become 0.75rem (12px), off the 8/12/16 ramp,
      and `text-2xl` would become 1.5rem, off the type scale. These blocks are
      therefore kept COMPLETE on purpose; an unused row here is a guard, not
      dead weight, and the usage argument that removed the two colour aliases
@@ -189,11 +189,10 @@
   --card-foreground: var(--ink-1);
   /* Popover = floating chrome (menus, select popups) and sits on the elevated
      plane so it reads as above the canvas without a drop shadow. Flat
-     elevation: separation comes from --shadow-2's hairline ring, never a blur. */
+     elevation: --shadow-2 combines a hairline edge with a soft floating shadow. */
   --popover: var(--surface-3);
   --popover-foreground: var(--ink-1);
-  /* The primary action is the ink plate (--action), as eveland.ai and a
-     Linear-style console lead. Fill-only: see the --action proof in palette.css. */
+  /* The primary action follows the Cool Mist fill in each register. */
   --primary: var(--action);
   --primary-foreground: var(--on-action);
   /* Secondary and muted fills are the plane-independent control wash, not
