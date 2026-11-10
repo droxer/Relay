@@ -41,58 +41,49 @@ function renderRow(item: ThreadItem, tone: "attn" | "run" | "idle", layout: "ful
 }
 
 it("marks a task thread's state, including when it is settled", () => {
-  for (const [status, shape, tone] of [
-    ["waiting_for_human", "solid", "warn"],
-    ["running", "live", "live"],
-    ["completed", "muted", "neutral"],
+  for (const [status, iconStatus] of [
+    ["waiting_for_human", "waiting_for_human"],
+    ["running", "running"],
+    ["completed", "done"],
   ] as const) {
     const container = renderRow(
       { session: session(status, status), origin: { kind: "backlog", taskId: "task", title: "Task" } },
       status === "waiting_for_human" ? "attn" : status === "running" ? "run" : "idle",
     );
-    const marks = container.querySelectorAll(".state-mark");
+    const marks = container.querySelectorAll(".task-status-icon");
     expect(marks.length).toBe(1);
-    expect(marks[0].getAttribute("data-shape")).toBe(shape);
-    expect(marks[0].getAttribute("data-tone")).toBe(tone);
-    // It leads the title, the same place a nested row has always carried it,
-    // so the marks line up in one scannable column down the rail.
+    expect(marks[0].getAttribute("data-status")).toBe(iconStatus);
+    // Both row layouts keep status icons aligned before the title.
     expect(container.querySelector(".conversation-topline")?.firstElementChild).toBe(marks[0]);
     screen.getByText(`Thread ${status}`);
   }
 });
 
-it("spends the ring on a thread whose computer gave out, not on a settled one", () => {
+it("shows a blocked icon when the thread computer is unresponsive", () => {
   const container = renderRow(
     { session: session("x", "running", { execution: { phase: "unresponsive" } as never }) },
     "run",
   );
-  const mark = container.querySelector(".state-mark");
-  expect(mark?.getAttribute("data-shape")).toBe("ring");
-  expect(mark?.getAttribute("data-tone")).toBe("bad");
+  const mark = container.querySelector(".task-status-icon");
+  expect(mark?.getAttribute("data-status")).toBe("blocked");
 });
 
 it("keeps failure and cancellation status for task threads", () => {
-  // A failed thread is not running and needs no decision, so the rail groups
-  // it with the settled ones. The group tone drew it with the same grey muted
-  // pip as a clean finish, leaving the word "Failed" as the only difference.
-  const failed = renderRow({ session: session("f", "failed"), origin: { kind: "backlog", taskId: "task", title: "Task" } }, "idle").querySelector(".state-mark");
-  expect(failed?.getAttribute("data-shape")).toBe("ring");
-  expect(failed?.getAttribute("data-tone")).toBe("bad");
+  const failed = renderRow({ session: session("f", "failed"), origin: { kind: "backlog", taskId: "task", title: "Task" } }, "idle").querySelector(".task-status-icon");
+  expect(failed?.getAttribute("data-status")).toBe("blocked");
 
-  // A cancel was the user's own call, not a fault: it keeps the settled pip.
-  const cancelled = renderRow({ session: session("c", "cancelled"), origin: { kind: "routine", taskId: "auto", title: "Automation" } }, "idle").querySelector(".state-mark");
-  expect(cancelled?.getAttribute("data-shape")).toBe("muted");
-  expect(cancelled?.getAttribute("data-tone")).toBe("neutral");
+  // Cancellation uses the same slashed ring as the task board.
+  const cancelled = renderRow({ session: session("c", "cancelled"), origin: { kind: "routine", taskId: "auto", title: "Automation" } }, "idle").querySelector(".task-status-icon");
+  expect(cancelled?.getAttribute("data-status")).toBe("cancelled");
 });
 
 it("never draws the state twice on one row", () => {
-  // A running row still names its agent in words; the pip above is the only
-  // place the tone is drawn.
+  // A running row names its agent alongside a single status icon.
   const container = renderRow(
     { session: session("r", "running"), runningAgent: "claude" } as ThreadItem,
     "run",
   );
-  expect(container.querySelectorAll(".state-mark").length).toBe(1);
+  expect(container.querySelectorAll(".task-status-icon").length).toBe(1);
   expect(container.querySelector(".conversation-subline")).toBeTruthy();
 });
 
@@ -111,7 +102,7 @@ it("names the running agent, never its executor kind", () => {
 
 it.each(["completed", "cancelled", "failed"])("shows a settled standalone %s thread as a chat without lifecycle status", (status) => {
   const container = renderRow({ session: session("chat", status, { execution: { phase: "terminal" } as never }) }, "idle");
-  expect(container.querySelector(".state-mark")).toBeNull();
+  expect(container.querySelector(".task-status-icon")).toBeNull();
   expect(container.querySelector(".conversation-status")).toBeNull();
   expect(container.querySelector(".conversation-subline")).toBeNull();
   expect(screen.getByRole("button", { name: /Thread chat/ }).getAttribute("aria-label")).not.toContain("thread.group_idle");
@@ -119,6 +110,21 @@ it.each(["completed", "cancelled", "failed"])("shows a settled standalone %s thr
 
 it("keeps project context without giving a standalone project chat a status", () => {
   const container = renderRow({ session: session("project-chat", "cancelled", { projectId: "project" }), projectName: "Website" }, "idle", "nested");
-  expect(container.querySelector(".state-mark")).toBeNull();
+  expect(container.querySelector(".task-status-icon")).toBeNull();
   expect(screen.getByRole("button", { name: /Thread project-chat/ }).getAttribute("aria-label")).not.toContain("thread.group_idle");
 });
+
+it.each(["backlog", "assigned", "queued", "running", "waiting_for_human", "review", "done", "blocked", "cancelled"] as const)(
+  "uses the linked task's %s status even after the thread completes",
+  (status) => {
+    for (const layout of ["full", "nested"] as const) {
+      const container = renderRow({
+        session: session(`task-${status}-${layout}`, "completed"),
+        origin: { kind: "backlog", taskId: "task", title: "Task", status },
+      }, "idle", layout);
+      expect(container.querySelector(".task-status-icon")?.getAttribute("data-status")).toBe(status);
+      expect(container.querySelector(".state-mark")).toBeNull();
+      expect(container.querySelector(".conversation-row-inner")?.getAttribute("aria-label")).toContain(`backlog.statuses.${status}`);
+    }
+  },
+);
