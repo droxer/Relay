@@ -46,6 +46,8 @@ installation from this worktree is restricted by network access.
 - `node node_modules/typescript/bin/tsc -p packages/tsconfig.json`: passed.
 - `<dev-mypy> --config-file backend/pyproject.toml backend/relay`: zero errors in
   460 source files.
+- Full backend suite, `PYTHONPATH=backend:backend/tests <dev-python> -m pytest backend/tests -q`: 4,062 passed, 32 skipped in 757.47 seconds.
+- Registry and architecture checks: 293 passed.
 - `<dev-ruff> check backend`: passed.
 - `npm audit --offline`: no vulnerabilities reported from cached advisory data.
 - `git diff --check`: passed.
@@ -60,7 +62,9 @@ those local capabilities enabled.
 The first GREEN checkpoint attempt was rejected by the local mypy hook's
 incomplete worktree environment (missing stubs and five errors in untouched
 files). The existing development environment type-checks the complete backend
-successfully. No hooks or application configuration were changed.
+successfully. The final implementation checkpoint `a6d63e25` passed every
+applicable commit hook using that environment. No hooks or application
+configuration were changed.
 
 ## Scope and residual risk
 
