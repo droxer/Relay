@@ -50,6 +50,12 @@ that a different Project's directory is rejected.
   coverage in `run-workspace.js`.
 - Complete daemon integration target: 183 passed.
 - Complete React interaction suite: 1,123 passed across 171 files.
+- Complete compiled TypeScript suite: 3,199 passed using the documented
+  `--test-force-exit --test-timeout=120000` runner options.
+- Backend verification covered the initial 28 completed API files plus all
+  254 remaining files in six isolated batches. All six batches passed
+  (3,521 passed, 25 environment-gated skips). The initial run's three
+  installer permission failures passed in the installer rerun below.
 - Computer installer API suite with local subprocess access: 24 passed.
 - TypeScript compilation, production web export with `--webpack`, backend
   Ruff, and mypy (459 source files) passed. The default Turbopack web build
