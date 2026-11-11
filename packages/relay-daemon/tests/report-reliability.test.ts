@@ -195,3 +195,18 @@ test('quarantine interventions are explicit, audited, and never count discard as
   assert.equal(outbox.status().accepted, 0);
   assert.equal(readdirSync(root).filter(name => name.endsWith('.audit')).length, 2);
 });
+
+test('failed streams cannot monopolize the next bounded replay window', async t => {
+  const outbox = new TerminalOutbox(fixture(t));
+  outbox.negotiate(true, true);
+  for (let i = 0; i < 100; i++) await outbox.retain(output(0, `owner-${i}`)).durable;
+  const owners = new Set<string>();
+  const unavailable: typeof fetch = async (_url, init) => {
+    const { reports } = JSON.parse(String(init?.body));
+    for (const report of reports) owners.add(JSON.parse(report.body).commandId);
+    return new Response('temporarily unavailable', { status: 503 });
+  };
+  await outbox.replay(unavailable, 'http://backend/events', 'token');
+  await outbox.replay(unavailable, 'http://backend/events', 'token');
+  assert.equal(owners.size, 100, 'each owner needs a chance before failed heads repeat');
+});

@@ -198,3 +198,39 @@ test('closing a pool has a deadline and cleans up a boot that finishes later', a
   await tick();
   assert.equal(boots[0]!.closed, true);
 });
+
+test('failed guest teardown never frees its slot for another workspace', async () => {
+  let starts = 0;
+  const pool = new GuestPool({
+    capacity: 1, boxName: () => 'owned', createManager: () => ({}) as ExecutionManager,
+    start: async () => { starts++; return { session: {} as ActiveOrchestratorSession['session'], close: async () => { throw new Error('stop failed'); } }; },
+  });
+  (await pool.acquire('/w/a')).release();
+  await assert.rejects(pool.acquire('/w/b'), /stop failed/);
+  const abort = new AbortController();
+  const waiting = pool.acquire('/w/c', abort.signal);
+  await tick();
+  abort.abort();
+  await assert.rejects(waiting, /cancelled/);
+  assert.equal(starts, 1);
+  await pool.close();
+});
+
+test('uncertain startup cleanup keeps the slot fenced and surfaces its failure', async () => {
+  const { ExecutionCleanupError } = await import('../src/execution-deadline.js');
+  let starts = 0;
+  const failures: unknown[] = [];
+  const pool = new GuestPool({
+    capacity: 1, boxName: () => 'uncertain', createManager: () => ({}) as ExecutionManager,
+    onUnconfirmed: error => failures.push(error),
+    start: async () => { starts++; throw new ExecutionCleanupError('cleanup unconfirmed'); },
+  });
+  await assert.rejects(pool.acquire('/w/a'), /cleanup unconfirmed/);
+  const abort = new AbortController();
+  const waiting = pool.acquire('/w/b', abort.signal);
+  await tick(); abort.abort();
+  await assert.rejects(waiting, /cancelled/);
+  assert.equal(starts, 1);
+  assert.equal(failures.length, 1);
+  await pool.close();
+});

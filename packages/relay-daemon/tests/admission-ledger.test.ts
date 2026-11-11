@@ -20,3 +20,14 @@ test('bounded admission cache preserves exact fences across eviction and restart
   restarted.add('command-0');
   assert.equal(size(), 20 * 32, 'duplicate admission must not grow the ledger');
 });
+
+test('torn admission evidence fails closed instead of admitting a new command', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-admissions-torn-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const { createHash } = await import('node:crypto');
+  const { writeFileSync } = await import('node:fs');
+  const id = 'unconfirmed';
+  const shard = createHash('sha256').update(id).digest('hex').slice(0, 3);
+  writeFileSync(join(root, `${shard}.fences`), 'partial');
+  assert.throws(() => new AdmissionLedger(root).has(id), /incomplete/);
+});

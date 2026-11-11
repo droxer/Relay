@@ -6155,7 +6155,7 @@ test('text log retention bounds aggregate and completed-run files', async t => {
   for (const name of readdirSync(root)) assert.ok(statSync(join(root, name)).size <= 2048, name);
 });
 
-test('production output capture coalesces behind unacknowledged durable reports', async t => {
+for (const batching of [false, true]) test(`production output capture coalesces behind unacknowledged durable reports (batching=${batching})`, async t => {
   const root = mkdtempSync(join(tmpdir(), 'relay-capture-pressure-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const stop = new AbortController();
@@ -6180,8 +6180,13 @@ test('production output capture coalesces behind unacknowledged durable reports'
     fetchFn: async (url, init) => {
       const path = new URL(String(url)).pathname;
       if (path === '/api') return jsonResponse({});
-      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({});
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse(batching ? { heartbeat: { intervalMs: 6000, timeoutMs: 30000, features: ['durable-reports', 'report-batches'] } } : {});
       if (path.endsWith('/commands')) { const commands = served ? [] : [command]; served = true; return jsonResponse({ commands }); }
+      if (path.endsWith('/reports')) {
+        const { reports } = await jsonBody<{ reports: Array<{ body: string }> }>(init);
+        for (const report of reports) { const event = JSON.parse(report.body); if (event.type === 'run.output.batch') outputs.add(JSON.stringify(event.entries)); }
+        return jsonResponse({}, 503);
+      }
       if (path.endsWith('/events')) {
         const event = await jsonBody<DaemonNodeEvent>(init);
         if (event.type === 'run.output.batch') { outputs.add(JSON.stringify(event.entries)); return jsonResponse({}, 503); }
@@ -6198,4 +6203,38 @@ test('production output capture coalesces behind unacknowledged durable reports'
     .map(name => JSON.parse(readFileSync(join(root, 'state', 'terminal-events', name), 'utf8')))
     .filter(event => event.type === 'run.output.batch');
   assert.ok(retained.length <= 2, `captured ${retained.length} tiny batches behind failed delivery`);
+});
+
+test('failed production diagnostics back off without suppressing heartbeat probes', { timeout: 10_000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-diagnostics-backoff-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  let diagnostics = 0;
+  let heartbeats = 0;
+  const warnings: string[] = [];
+  const heartbeat = { intervalMs: 100, timeoutMs: 1000, features: ['durable-reports', 'transport-status'] };
+  const timeout = setTimeout(() => stop.abort(), 2200);
+  t.after(() => clearTimeout(timeout));
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'diagnostics-backoff', userId: 'alice', token: 'fixture',
+    workspacePath: root, stateDir: join(root, 'state'), preflight: false,
+    logger: { ...testLogger(), warn: (message, fields) => { warnings.push(`${message} ${fields?.error ?? ''}`); } },
+    environment: fakeEnvironment(), signal: stop.signal, pollIntervalMs: 20,
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({ heartbeat });
+      if (path.endsWith('/commands')) return jsonResponse({ commands: [], heartbeat });
+      if (path.endsWith('/heartbeat')) { heartbeats++; return jsonResponse({ heartbeat }); }
+      if (path.endsWith('/transport')) {
+        diagnostics++;
+        throw new TypeError('fetch failed', { cause: Object.assign(new Error('lookup failed'), { code: 'ENOTFOUND' }) });
+      }
+      throw new Error(`Unexpected URL ${path}`);
+    },
+  });
+  assert.equal(diagnostics, 1, 'a failed diagnostics upload must not retry every sample');
+  assert.ok(heartbeats > 1, 'liveness probing must continue independently');
+  assert.equal(warnings.filter(message => message.startsWith('Transport diagnostics')).length, 1);
+  assert.ok(warnings.some(message => /ENOTFOUND/.test(message)));
 });
