@@ -56,5 +56,50 @@ and 87.27% functions. Aggregate coverage of all imported files was 63.35% lines;
 this run does not establish 80% coverage of the entire repository. Python and
 web suites were not run because their code and contracts are unchanged.
 
-The GREEN checkpoint includes the implementation and this report. If commits
+The initial GREEN checkpoint is `e64683e0`. If commits
 are squashed, retain the RED failure and GREEN guarantees above in the PR body.
+
+## Expanded command handling
+
+The follow-up request extends this behavior to every command category. Run
+starts retain their capacity limit, active-run cancellation stays immediate,
+and workspace replies, rejected-run reports, and explicit runtime refreshes no
+longer wait in the polling loop. Workspace commands use ordered lanes in a
+bounded queue (32 admitted tasks, four concurrent tasks). Their leases and
+runtime-refresh leases renew through polling and heartbeats. Terminal reports
+are durable even if the queue is full; workspace replies retain their existing
+lease-redelivery recovery. Filesystem helpers remain synchronous.
+
+RED checkpoint: `4f38d368`. This command executed seven new regressions; all
+seven failed because acknowledgement delivery or runtime probing stopped polls:
+
+```sh
+node --test --test-name-pattern='acknowledgement stalls|explicit runtime refresh keeps polling' dist/packages/relay-daemon/tests/daemon.test.js
+```
+
+After the fix, all seven cases and the two earlier cancellation cases passed.
+The existing explicit-refresh acknowledgement case also passed. Queue tests
+exercise bounded admission, deduplication, same-workspace ordering, independent
+lanes, lease tracking, shutdown, and failure cleanup. An existing path-isolation
+test now associates replies with command IDs because different workspaces may
+answer independently; it retains every original path-isolation assertion.
+
+Final validation for the expanded implementation:
+
+- `node --test --experimental-test-coverage dist/packages/relay-daemon/tests/*.test.js`:
+  **759 passed, 0 failed, 0 skipped**. Includes a delivered run waiting for an
+  idle BoxLite refresh rather than being lost when a backend ignores admission.
+- `node --test dist/packages/relay-core/tests/*.test.js`: **254 passed**.
+- `tsc -p packages/tsconfig.json`, daemon build, installer-bundle generation,
+  and `git diff --check`: passed.
+- Tested-module line coverage: command task queue **100%** (also 100% branches
+  and functions), main daemon **90.55%**, extracted workspace replies **95.45%**.
+  Main daemon branch coverage is **81.74%**; workspace reply branch coverage is
+  **60%**, leaving some defensive/error representations unexercised. Aggregate
+  imported-file line coverage is **63.52%**, not repository-wide 80% coverage.
+- Scoped dependency audit against the official npm registry: zero vulnerabilities.
+
+The full suite caught an intermediate regression where a run delivered during
+guest boot was skipped. The final code keeps its reservation, waits beside
+polling, and lets cancellation interrupt that wait. No live Computer was
+updated or restarted during this implementation.

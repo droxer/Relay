@@ -70,6 +70,23 @@ observations. Failed deliveries remain due for retry on the next sample.
 
 ## Alive is not listening
 
+Command handling runs beside polling. Run starts retain their execution capacity
+limit, and cancellations signal active runs immediately. Workspace commands and
+cancellation/rejected-run reports use a background queue with at most 32 admitted
+tasks and four active senders. Requests for the same workspace remain ordered;
+other workspaces can progress independently. Duplicate pending command/lease
+pairs share their task. Polls and heartbeats renew queued workspace and runtime
+refresh leases alongside active run leases, within the wire's 50-lease bound.
+
+Runtime refreshes, including explicit refresh requests, probe in the background.
+An idle BoxLite Computer can boot a guest for the refresh while continuing to
+poll; new runs are deferred while the guest is unavailable. Shutdown aborts
+network work, drops queued workspace requests for lease redelivery, and settles
+active background tasks. Run outcomes enter the durable outbox before queue
+admission; workspace replies continue to rely on command redelivery after a
+restart. Filesystem helpers retain their existing synchronous validation and I/O;
+this scheduling change removes network retry and probe waits from polling.
+
 `online` says the daemon is alive. `dispatchable` says it will take work:
 online, and its last command poll (`lastPollAt`, advanced only by
 `take_commands`) is younger than one maximal poll hold plus the liveness

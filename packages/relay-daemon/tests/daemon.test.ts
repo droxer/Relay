@@ -3060,6 +3060,10 @@ for (const kind of ["workspace.list", "workspace.read", "workspace.link", "works
           const path = new URL(String(url)).pathname;
           if (path.endsWith("/commands")) {
             polls += 1;
+            if (polls > 1 && kind !== "rejected-start") {
+              assert.ok(new URL(String(url)).searchParams.getAll("activeCommandLease").includes("cmd:lease"),
+                "queued workspace work must renew its command lease");
+            }
             if (polls === 3) stop.abort();
             return jsonResponse({ commands: polls < 3 ? [command] : [] });
           }
@@ -3110,7 +3114,12 @@ for (const sandbox of ["none", "boxlite"] as const) {
               requested = true;
               return jsonResponse({ commands: [{ id: "refresh", type: "runtime.refresh", leaseId: "lease" }] });
             }
-            if (probing && ++pollsDuringProbe >= 2) { release(); stop.abort(); }
+            if (probing) {
+              const request = new URL(String(url));
+              assert.ok(request.searchParams.getAll("activeCommandLease").includes("refresh:lease"));
+              if (sandbox === "boxlite") assert.equal(request.searchParams.get("admitRuns"), "false");
+              if (++pollsDuringProbe >= 2) { release(); stop.abort(); }
+            }
             return jsonResponse({ commands: [] });
           }
           return jsonResponse({});
@@ -4444,7 +4453,10 @@ test("relay daemon confines thread workspace reads to the thread directory", asy
     assert.ok(file && file.type === "workspace.file");
     assert.equal(Buffer.from(file.contentBase64 ?? "", "base64").toString(), "thread content");
     const errors = events.filter((event) => event.type === "workspace.error");
-    assert.deepEqual(errors.map((event) => event.code), ["not-found", "invalid-path", "invalid-path", "invalid-path"]);
+    assert.deepEqual(Object.fromEntries(errors.map(event => [event.commandId, event.code])), {
+      cmd_thread_missing: "not-found", cmd_thread_escape: "invalid-path",
+      cmd_thread_bad_id: "invalid-path", cmd_thread_no_id: "invalid-path",
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
