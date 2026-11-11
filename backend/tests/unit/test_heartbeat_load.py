@@ -1,15 +1,18 @@
 """Heartbeat cost bounds and authoritative control-state checks."""
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from threading import Barrier
 
 import pytest
-from sqlalchemy import event, update
+from sqlalchemy import DateTime, create_engine, event, literal, update
 
 from relay.core.daemon_records import NODE_POLL_DRAINED_AT
 from relay.core.ids import new_database_id
 from relay.daemon_registry.credentials import hash_daemon_node_token
 from relay.daemon_registry.records import DeletedDaemonNodeError, UnknownDaemonNodeError
 from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry import config
+from relay.daemon_registry.nodes import liveness
 from relay.persistence.db_time import require_db_time
 from store_fixtures import make_daemon_store, make_session_store
 
@@ -173,6 +176,7 @@ def test_store_observation_compare_and_set_fences_control_changes(tmp_path):
 def test_simultaneous_observations_share_durable_due_predicate(tmp_path):
     _registry, store = setup_registry(tmp_path)
     other = make_daemon_store(tmp_path)
+    other.engine = create_engine(store.engine.url)
     with store.engine.begin() as conn:
         conn.execute(update(store.nodes).values(last_seen_at=None))
     observations = [item.get_node_observation('heartbeat-load') for item in [store, other]]
@@ -183,6 +187,59 @@ def test_simultaneous_observations_share_durable_due_predicate(tmp_path):
         barrier.wait(timeout=10)
         return backend.touch_node_observation(observation, interval_seconds=5)
 
-    with ThreadPoolExecutor(2) as pool:
-        results = list(pool.map(touch, zip([store, other], observations, strict=True)))
-    assert results[0]['lastSeenAt'] == results[1]['lastSeenAt']
+    updated_rows = []
+
+    def after_update(_conn, cursor, sql, *_args):
+        if sql.lower().startswith('update daemon_nodes'):
+            updated_rows.append(cursor.rowcount)
+
+    event.listen(store.engine, 'after_cursor_execute', after_update)
+    event.listen(other.engine, 'after_cursor_execute', after_update)
+    try:
+        with ThreadPoolExecutor(2) as pool:
+            results = list(pool.map(touch, zip([store, other], observations, strict=True)))
+        assert results[0]['lastSeenAt'] == results[1]['lastSeenAt']
+        if store.engine.dialect.name == 'postgresql':
+            assert sorted(updated_rows) == [0, 1]
+    finally:
+        other.engine.dispose()
+
+
+def test_seen_and_poll_due_conditions_are_independent(tmp_path):
+    _registry, store = setup_registry(tmp_path)
+    with store.engine.begin() as conn:
+        conn.execute(update(store.nodes).values(last_seen_at=None, last_poll_at=None))
+    seen = store.touch_node_observation(store.get_node_observation('heartbeat-load'), interval_seconds=5)
+    polled = store.touch_node_observation(seen, interval_seconds=5, polled=True)
+    assert polled['lastSeenAt'] == seen['lastSeenAt']
+    assert polled['lastPollAt']
+
+
+def test_poll_only_write_does_not_delay_due_seen_write(tmp_path, monkeypatch):
+    registry, store = setup_registry(tmp_path)
+    start = datetime.now(UTC).replace(microsecond=0)
+    with store.engine.begin() as conn:
+        conn.execute(update(store.nodes).values(last_seen_at=start, last_poll_at=None))
+    registry._hydrate_node('heartbeat-load')
+    clock = [start + timedelta(seconds=6)]
+    monotonic = [100.0]
+    monkeypatch.setattr(config, 'DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS', 20)
+    monkeypatch.setattr(liveness.time, 'monotonic', lambda: monotonic[0])
+    monkeypatch.setattr(store, '_observation_clock', lambda seconds_ago=0:
+                        literal(clock[0] - timedelta(seconds=seconds_ago), type_=DateTime(timezone=True)))
+    registry._mark_seen('heartbeat-load', polled=True)
+    assert require_db_time(store.get_node('heartbeat-load')['lastSeenAt']) == start
+    # A poll-only write at t=6 must not postpone the seen deadline from t=20
+    # to t=26. At larger supported intervals that can create false offline.
+    clock[0] = start + timedelta(seconds=21)
+    monotonic[0] += 15
+    registry._mark_seen('heartbeat-load')
+    assert require_db_time(store.get_node('heartbeat-load')['lastSeenAt']) == clock[0]
+
+
+def test_invalid_ordinary_observation_options_are_rejected(tmp_path):
+    _registry, store = setup_registry(tmp_path)
+    observed = store.get_node_observation('heartbeat-load')
+    for options in [{'interval_seconds': -1}, {'interval_seconds': 5, 'polled': False}]:
+        with pytest.raises(ValueError):
+            store.touch_node_observation(observed, **options)
