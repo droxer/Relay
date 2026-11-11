@@ -1,18 +1,7 @@
-"""An issue outside a project is intake, not work.
+"""Work needs a Project or an explicitly selected Computer.
 
-A backlog task that belongs to no project has nowhere to run: a project is what
-names the computer, the workspace, and the crew. Such an issue may be written,
-prioritised, and handed to a person, but no agent or team may take it and it
-can never be dispatched until triage moves it into a project.
-
-Routines and the occurrences they promote are exempt — a routine names its own
-agent or team and is scheduled, never triaged.
-
-This module is the one seam for that rule. Admission (create, update,
-assignment, pickup, start) refuses with ``ISSUE_NEEDS_PROJECT``; dispatch and
-pickup candidates are filtered with ``issue_needs_project`` so legacy
-projectless work that is already Ready is held rather than run. It stays free
-of HTTP types because the task stores filter with it too.
+Legacy issues with neither scope remain intake until placed. Automations and
+occurrences keep their legacy agent-based routing when no Computer was saved.
 """
 
 from __future__ import annotations
@@ -24,7 +13,7 @@ ISSUE_NEEDS_PROJECT = "issue_needs_project"
 
 def issue_needs_project(task: dict[str, Any]) -> bool:
     return not (
-        task.get("projectId") or task.get("isRoutine") or task.get("sourceRoutineId")
+        task.get("projectId") or task.get("computerId") or task.get("isRoutine") or task.get("sourceRoutineId")
     )
 
 
@@ -36,6 +25,8 @@ def project_move_error(task: dict[str, Any]) -> str | None:
     thread in the old workspace. Legacy projectless work that was already
     Ready is held by dispatch, so it must stay movable too.
     """
+    if task.get("computerId"):
+        return "task_workspace_immutable"
     if task.get("projectId"):
         return "task_already_in_project"
     if task.get("isRoutine") or task.get("sourceRoutineId"):

@@ -46,8 +46,8 @@ export interface IssueGroupLabels {
 
 const HUMAN_GATED: ReadonlySet<TaskStatus> = new Set(["waiting_for_human", "review"]);
 
-export function issueNeedsProject(task: Pick<RelayTaskListItem, "projectId" | "isRoutine" | "sourceRoutineId">): boolean {
-  return !(task.projectId || task.isRoutine || task.sourceRoutineId);
+export function issueNeedsProject(task: Pick<RelayTaskListItem, "projectId" | "computerId" | "isRoutine" | "sourceRoutineId">): boolean {
+  return !(task.projectId || task.computerId || task.isRoutine || task.sourceRoutineId);
 }
 
 function responsibleUser(task: RelayTaskListItem): string | undefined {

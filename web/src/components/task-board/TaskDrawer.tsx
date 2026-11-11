@@ -280,6 +280,7 @@ export function TaskDrawer({
 
   const { agents: agentOptions, teams: teamOptions } = taskAssignmentOptions({
     project,
+    computerId: form.computerId,
     agents: logicalAgents,
     teams,
     assigneeUserId: form.assigneeUserId,
@@ -289,7 +290,7 @@ export function TaskDrawer({
   const selectedAgent = agentOptions.find((agent) => agent.id === form.assignedAgentId);
   /* Intake: an issue outside a project has nowhere to run, so it offers no
      agent or team — the server refuses one — only the way into a project. */
-  const intake = form.variant === "backlog" && projectChoice !== "required" && !form.projectId && !form.sourceRoutineId;
+  const intake = form.variant === "backlog" && projectChoice !== "required" && !form.projectId && !form.computerId && !form.sourceRoutineId;
   const selectedTeam = teamOptions.find((team) => team.id === form.assignedTeamId);
 
   // A saved task can reference an agent/team that has since been deleted or is

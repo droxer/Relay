@@ -4,7 +4,7 @@ test.beforeEach(async ({ page }) => {
   const now = new Date().toISOString();
   const session = {
     id: "review-thread", title: "Review thread", taskGoal: "Test frontend recovery",
-    workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
+    computerId: "node:review-node", projectId: null, workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
     status: "completed", phase: "created", createdAt: now, updatedAt: now,
     agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [],
     eventCount: 0, artifactCount: 0, runCount: 0,
@@ -16,12 +16,12 @@ test.beforeEach(async ({ page }) => {
   };
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [session], agents: [agent], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+    let body: unknown = { sessions: [session], agents: [agent], teams: [], tasks: [], nodes: [{ id: "review-node", userId: "review-user", online: true, stale: false, status: "ready", agents: { claude: "ready" }, activeRuns: [] }], projects: [], sandboxes: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/review-thread")) body = session;
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/threads");
+  await page.goto("/computers/node%3Areview-node/threads");
 });
 
 test("rename prompt accepts a full replacement with the real input primitive", async ({ page }) => {
@@ -38,7 +38,7 @@ test("dirty agent profile survives cancelled sidebar and Back navigation", async
   await page.getByRole("button", { name: /Edit profile/ }).click();
   const name = page.locator('input[name="agent-profile-name"]');
   await name.fill("Unsaved profile");
-  await page.getByRole("link", { name: "Tasks", exact: true }).click();
+  await page.locator('[data-nav="backlog"]').click();
   const confirmation = page.getByRole("alertdialog");
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: /Cancel/ }).click();
@@ -49,10 +49,10 @@ test("dirty agent profile survives cancelled sidebar and Back navigation", async
   await confirmation.getByRole("button", { name: /Cancel/ }).click();
   await expect(name).toHaveValue("Unsaved profile");
   await expect(page).toHaveURL(/\/agents\/review-agent$/);
-  await page.getByRole("link", { name: "Tasks", exact: true }).click();
+  await page.locator('[data-nav="backlog"]').click();
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: /Discard/ }).click();
-  await expect(page).toHaveURL(/\/tasks$/);
+  await expect(page).toHaveURL(/\/computers$/);
 });
 
 test("mobile Back asks once before discarding an agent draft", async ({ page }) => {
@@ -78,9 +78,9 @@ test("an expired session returns to sign-in with the current destination", async
   await page.route("**/api/v1/tasks?*", route => route.fulfill({
     status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Authentication required" }),
   }));
-  await page.getByRole("link", { name: "Tasks", exact: true }).click();
+  await page.locator('[data-nav="backlog"]').click();
   // Threads and Tasks share the cached task list; explicitly request a read.
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(page).toHaveURL(/\/login\?returnTo=%2Ftasks$/);
+  await page.reload();
+  await expect(page).toHaveURL(url => url.pathname === "/login" && url.searchParams.get("returnTo") === "/computers/node%3Areview-node/tasks");
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });

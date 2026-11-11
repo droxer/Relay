@@ -24,7 +24,7 @@ export function recordActions(
   // A read-only room offers no actions at all — see `projectReadOnly`. The
   // record is still fully readable; it just cannot be acted on.
   if (options?.readOnly) return [];
-  const assigned = Boolean(task.assignedAgentId || task.assignedTeamId);
+  const assigned = Boolean(task.assignedAgentId || task.assignedTeamId || task.projectId);
   if (task.status === "running") return ["cancel"];
   // Run now works on a paused automation too; only a rate-limit pause refuses it.
   if (task.isRoutine) return assigned && !runNowRefused(task) ? ["run"] : [];

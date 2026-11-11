@@ -19,7 +19,7 @@ def runtime(tmp_path, monkeypatch):
     daemon = DatabaseDaemonStore(url, create_schema=True)
     registry = DaemonNodeRegistry(sessions, daemon, task_store=tasks)
     payload = dict(sandboxId="node", userId="alice", token="token", workspacePath="/workspace",
-                   protocolVersion=1, supportedAgents=["codex"], capabilities=["thread-workspaces", "task-workspaces"],
+                   protocolVersion=1, supportedAgents=["codex"], capabilities=["workspace-scope", "thread-workspaces", "task-workspaces"],
                    status="ready", maxConcurrentRuns=10)
     registry.register(payload, "ui")
     # Test recovery transitions without the independent batch-claim cooldown.

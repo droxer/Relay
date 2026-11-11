@@ -195,49 +195,33 @@ for (const [mobile, theme] of [[false, "light"], [true, "dark"]] as const) {
   });
 }
 
-test("creating the first project preserves a global task draft", async ({ page }) => {
-  const stamp = "2026-09-01T00:00:00Z";
-  const projects: any[] = [];
-  const tasks: any[] = [];
-  const node = { activeRuns: [], agents: [], queuedCommandCount: 0, stale: false, id: "node", computerId: "computer", userId: "u", displayName: "Work computer", capabilities: ["project-workspaces"], online: true, status: "ready", workspacePath: "/workspace" };
-  await page.route("**/api/**", async (route) => {
+test("a Computer Task draft does not require a Project", async ({ page }) => {
+  const tasks: Record<string, unknown>[] = [];
+  const node = { id: "draft-computer", userId: "u", online: true, stale: false, status: "ready", agents: {}, activeRuns: [] };
+  await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [node], projects, tasks, sandboxes: [], skills: [] };
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [node], projects: [], tasks, sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
-    if (path.endsWith("/projects") && route.request().method() === "POST") {
-      const project = { ...route.request().postDataJSON(), id: "first", ownerUserId: "u", computerId: "computer", enabled: true, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/first", createdAt: stamp, updatedAt: stamp };
-      projects.push(project); body = { project };
-    }
     if (path.endsWith("/tasks") && route.request().method() === "POST") {
       const input = route.request().postDataJSON();
-      expect(input).toMatchObject({ title: "Keep this draft", projectId: "first" });
-      const task = { events: [], activity: [], ...input, id: "task", createdAt: stamp, updatedAt: stamp, linkedSessionIds: [], isRoutine: false, status: "backlog" };
-      tasks.push(task); body = task;
+      tasks.push({ ...input, id: "draft", ownerUserId: "u", description: "", priority: "normal", events: [], activity: [], isRoutine: false, status: "backlog", linkedSessionIds: [], createdAt: "2026-09-01", updatedAt: "2026-09-01" });
+      body = tasks[0];
     }
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/tasks");
-  await page.locator("#backlog-panel .page-header").getByRole("button", { name: "New task", exact: true }).click();
-  const taskForm = page.getByRole("dialog", { name: "New task", exact: true });
-  await taskForm.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
-  await taskForm.getByRole("button", { name: "New project", exact: true }).click();
-  const projectForm = page.getByRole("dialog", { name: "Create project", exact: true });
-  // The drawer opens on the agent-drafted setup (ADR-022); this test names
-  // the project itself, so it takes the manual path.
-  await projectForm.getByRole("button", { name: "Set up manually", exact: true }).click();
-  await projectForm.getByRole("textbox", { name: "Project name", exact: true }).fill("First project");
-  await projectForm.getByRole("combobox", { name: "Computer", exact: true }).click();
-  await page.getByRole("option", { name: "Work computer", exact: true }).click();
-  await projectForm.getByRole("button", { name: "Create project", exact: true }).click();
-  await expect(projectForm).toHaveCount(0);
-  await expect(taskForm.getByRole("textbox", { name: "Title", exact: true })).toHaveValue("Keep this draft");
-  await expect(taskForm.getByRole("combobox", { name: "Project", exact: true })).toContainText("First project");
-  await taskForm.getByRole("button", { name: "Create task", exact: true }).click();
-  await expect(page.locator("#backlog-panel").getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
+  await page.goto("/computers/node%3Adraft-computer/tasks");
+  await page.getByRole("button", { name: "New task", exact: true }).first().click();
+  const form = page.getByRole("dialog", { name: "New task", exact: true });
+  await form.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
+  await expect(form.getByRole("combobox", { name: "Project", exact: true })).toHaveCount(0);
+  await form.getByRole("button", { name: "Create task", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();
+  expect(tasks[0].computerId).toBe("node:draft-computer");
+  expect(tasks[0].projectId).toBeUndefined();
 });
 
 for (const mobile of [false, true]) {
-  test(`issue thread stays in Issues (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+  test(`Task conversation stays in its Project (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const stamp = "2026-09-01T00:00:00Z";
     const project = { id: "p", name: "Launch", ownerUserId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
@@ -254,49 +238,20 @@ for (const mobile of [false, true]) {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
     await page.goto("/projects/p/threads/s");
-    await expect(page).toHaveURL(/\/tasks\/t\/threads\/s\?project=p$/);
-    await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("aria-current", "page");
+    await expect(page).toHaveURL(/\/projects\/p\/threads\/s$/);
     await expect(page.locator("#chat-panel")).toBeVisible();
-    await expect(mobile ? page.locator(".mobile-topbar-title") : page.getByRole("heading", { name: "Release discussion" })).toHaveText("Release discussion");
-    await expect(page.locator("#thread-panel")).toHaveCount(0);
-    /* The desktop header states the project as a mark and offers no back link
-       — the issue is one browser-back away and named in the thread's origin
-       line. The phone's top bar keeps one, because the rail is off screen. */
-    const back = page.getByRole("button", { name: "Back to task", exact: true });
-    const projectMark = page.getByRole("link", { name: "Project: Launch", exact: true });
     await page.reload();
-    if (mobile) await expect(back).toBeVisible();
-    else {
-      await expect(projectMark).toHaveAttribute("href", "/projects/p");
-      await expect(page.getByRole("link", { name: "Back to task", exact: true })).toHaveCount(0);
-    }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: `test-results/task-thread-${mobile ? "mobile" : "desktop"}.png` });
-    if (mobile) await back.click();
-    else await page.goto("/tasks/t?project=p");
-    await expect(page).toHaveURL(/\/tasks\/t\?project=p$/);
-    await expect(page.getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
-    // Opened from the record, the conversation lands in Threads; only an
-    // existing nested deep link keeps the issue route.
-    await page.getByRole("link", { name: "Open thread", exact: true }).click();
-    await expect(page).toHaveURL(/\/threads\/s$/);
-    await expect(mobile ? page.locator(".mobile-topbar-title") : page.getByRole("heading", { name: "Release discussion" })).toHaveText("Release discussion");
-    await page.goto("/threads");
-    const row = page.locator(".conversation-row").filter({ hasText: "Release discussion" });
-    await expect(row.locator(".conversation-project")).toHaveText("Launch");
-    await expect(row.getByRole("button", { name: /Project: Launch/ })).toBeVisible();
-    await page.screenshot({ path: `test-results/task-thread-list-${mobile ? "mobile" : "desktop"}.png` });
-    await row.getByRole("button", { name: /Project: Launch/ }).click();
-    await expect(page).toHaveURL(/\/threads\/s$/);
-    await expect(page.locator('[data-nav="threads"]')).toHaveAttribute("aria-current", "page");
-    await page.reload();
-    await expect(page).toHaveURL(/\/threads\/s$/);
     await expect(page.locator("#chat-panel")).toBeVisible();
-    if (!mobile) await expect(page.locator("#thread-panel")).toBeVisible();
-    if (mobile) await page.getByRole("button", { name: "Threads", exact: true }).click();
-    await expect(row.locator(".conversation-project")).toBeVisible();
+    // Both legacy task-thread and task record links retain the Project.
+    await page.goto("/tasks/t/threads/s?project=p");
+    await expect(page).toHaveURL(/\/projects\/p\/threads\/s$/);
+    await page.goto("/tasks/t?project=p");
+    await expect(page).toHaveURL(url => url.pathname === "/projects/p" && url.searchParams.get("task") === "t");
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
     await page.goto("/projects/p/new");
-    await expect(page).toHaveURL(/\/tasks\?project=p$/);
+    await expect(page).toHaveURL(/\/projects\/p\/new$/);
+    await expect(page.locator("form.composer")).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
 
@@ -304,7 +259,7 @@ for (const mobile of [false, true]) {
    project, but it still counts as the most recent thread: with it active, the
    sidenav's Threads destination must still open the thread list rather than
    bounce the reader back to the project. */
-test("sidenav Threads opens the thread list while a project room is active", async ({ page }) => {
+test("sidenav work links keep the active Project", async ({ page }) => {
   const stamp = "2026-09-01T00:00:00Z";
   const project = { id: "p", name: "Launch", ownerUserId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
   const room = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerUserId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
@@ -316,11 +271,12 @@ test("sidenav Threads opens the thread list while a project room is active", asy
     if (path.endsWith("/events")) body = { events: [] };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/tasks");
-  await expect(page.locator("#backlog-panel")).toBeVisible();
+  await page.goto("/projects/p?tab=tasks");
+  await expect(page.getByRole("tabpanel", { name: "Tasks", exact: true })).toBeVisible();
   await page.locator('[data-nav="threads"]').click();
-  await expect(page).toHaveURL(/\/threads$/);
-  await expect(page.locator('[data-nav="threads"]')).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(/\/projects\/p$/);
+  await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("href", "/projects/p?tab=tasks");
+  await expect(page.locator('[data-nav="routine"]')).toHaveAttribute("href", "/projects/p?tab=automations");
 });
 
 test("renaming without a runtime node recovers from a concurrent project edit", async ({ page }) => {

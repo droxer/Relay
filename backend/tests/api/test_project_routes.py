@@ -52,7 +52,7 @@ def _register_computer(
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": [
-                "thread-workspaces",
+                "workspace-scope", "thread-workspaces",
                 *(["project-workspaces"] if project_workspaces else []),
                 *(["workspace-read-shared"] if workspace_read_shared else []),
             ],
@@ -1056,7 +1056,7 @@ def test_project_dispatch_fails_closed_after_incompatible_daemon_replacement(
                 "token": f"token_{computer['id']}",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
                 "workspacePath": "/workspace/relay",
                 "workspaceId": "machine-a",

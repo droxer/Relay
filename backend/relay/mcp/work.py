@@ -3,6 +3,7 @@
 from contextlib import nullcontext
 from datetime import date
 from typing import Any
+from urllib.parse import quote, urlencode
 
 from jsonschema import ValidationError, validate
 
@@ -53,6 +54,10 @@ def _record(ctx: Any, grant: dict[str, Any], record_id: str, project_id: str | N
     if project_id is not None and project_id != actual_project_id:
         raise McpError(403, "Project scope mismatch.")
     _scope(ctx, grant, actual_project_id, write=write)
+    if actual_project_id is None and grant.get("computerId"):
+        identity = task.get("computerId") or (task.get("workspaceBinding") or {}).get("computerId")
+        if identity != grant["computerId"]:
+            raise McpError(404, "work_not_found")
     return task
 
 
@@ -72,10 +77,20 @@ def _scope(ctx: Any, grant: dict[str, Any], project_id: str | None,
 def _public(task: dict[str, Any]) -> dict[str, Any]:
     public = without_legacy_fields(task)
     events = public.get("events", [])
+    automation_id = task.get("sourceRoutineId") or (task["id"] if task.get("isRoutine") else None)
+    if task.get("projectId"):
+        params = {"tab": "automations", "automation": automation_id} if automation_id else {"task": task["id"]}
+        if task.get("sourceRoutineId"):
+            params["run"] = task["id"]
+        url = f"/projects/{quote(task['projectId'], safe='')}?{urlencode(params)}"
+    else:
+        identity = task.get("computerId") or (task.get("workspaceBinding") or {}).get("computerId")
+        base = f"/computers/{quote(identity, safe='')}" if identity else ""
+        url = f"{base}/automations/{automation_id}" if automation_id else f"{base}/tasks/{task['id']}"
+        if task.get("sourceRoutineId"):
+            url += f"/runs/{task['id']}"
     return {**public, "events": events[-50:],
-            "revision": task_revision(task),
-            "url": (f"/projects/{task['projectId']}?{'automation' if task.get('isRoutine') else 'task'}={task['id']}"
-                    if task.get("projectId") else f"/{'automations' if task.get('isRoutine') else 'tasks'}/{task['id']}"),
+            "revision": task_revision(task), "url": url,
             "coverage": {"totalEvents": len(events), "shownEvents": min(len(events), 50)}}
 
 
@@ -88,13 +103,14 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
         raise McpError(400, "Invalid work tool arguments.") from error
     automation = "automation" in operation
     kind = "automation" if automation else "task"
-    project_id = arguments.get("projectId")
+    project_id = arguments.get("projectId", grant.get("workspaceProjectId"))
     if operation in ("tasks", "automations"):
         if not isinstance(arguments.get("cursor", ""), str):
             raise McpError(400, "Invalid work cursor.")
         _scope(ctx, grant, project_id, write=False)
         page = ctx.task_store.work_page(
             grant["ownerUserId"], project_id=project_id, automation=automation,
+            computer_id=grant.get("computerId") if project_id is None else None,
             **{key: arguments[key] for key in ("status", "query", "cursor", "limit") if key in arguments},
         )
         return {kind + "s": [without_legacy_fields(task) for task in page["tasks"]],
@@ -133,6 +149,8 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
             if "title" in body and not body["title"].strip():
                 raise McpError(400, "title is required.")
             if operation.startswith("create_"):
+                if project is None and grant.get("computerId"):
+                    body["computerId"] = grant["computerId"]
                 if automation:
                     body["isRoutine"] = True
                 task = create_task(ctx, actor, TaskCreateRequest(

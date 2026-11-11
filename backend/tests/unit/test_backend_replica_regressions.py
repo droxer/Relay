@@ -19,7 +19,7 @@ def replicas(tmp_path):
     sessions, daemon = make_session_store(tmp_path), make_daemon_store(tmp_path)
     first = DaemonNodeRegistry(sessions, daemon)
     payload = dict(sandboxId="node", userId=ALICE, token="token", workspacePath="/workspace",
-                   protocolVersion=2, supportedAgents=["codex"], capabilities=["thread-workspaces"],
+                   protocolVersion=2, supportedAgents=["codex"], capabilities=["workspace-scope", "thread-workspaces"],
                    status="ready", maxConcurrentRuns=3)
     first.register(payload, "ui")
     second = DaemonNodeRegistry(make_session_store(tmp_path), make_daemon_store(tmp_path))

@@ -178,7 +178,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "stopped",
             }
         )

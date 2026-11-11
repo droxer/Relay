@@ -153,6 +153,7 @@ export {
   type DaemonNodeHeartbeatSettings,
   type DaemonNodeRegistration,
   type DaemonNodeRegistrationResponse,
+  DAEMON_CAPABILITY_WORKSPACE_SCOPE,
   type DaemonNodeRunCommand,
   type ThreadImageAttachment,
   type DaemonNodeSandboxMode,

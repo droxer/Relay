@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 import asyncio
 from datetime import date
 from tempfile import TemporaryDirectory
@@ -107,7 +109,7 @@ def test_lead_plan_is_authorized_persisted_and_replay_safe(monkeypatch, outside_
             "sandboxId": "test_node_alice", "userId": ALICE, "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
+            "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         response = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
@@ -178,7 +180,7 @@ def test_addressed_lead_plan_runs_selected_work_then_synthesizes(monkeypatch, em
             "sandboxId": node_id, "userId": ALICE, "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
+            "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
@@ -272,7 +274,7 @@ def _agent(
             "workspacePath": f"/workspace/{handle}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor}),
-            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "handoff-validation", "relay-thread-records", "agent-resume"],
+            "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "handoff-validation", "relay-thread-records", "agent-resume"],
             "status": (existing_node or {}).get("status", "stopped"),
         }
     )
@@ -857,7 +859,7 @@ def test_agent_pickup_thread_is_owned_by_the_task_owner(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1062,7 +1064,7 @@ def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1155,7 +1157,7 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1299,7 +1301,7 @@ def test_unroutable_team_start_requests_capacity_and_queues_scheduler_retry(
                 "sandboxMode": "boxlite",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             },
         )
@@ -1338,7 +1340,7 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1452,7 +1454,7 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex", "claude"],
-                    "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                    "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                     "status": "ready",
                 }
             )
@@ -1520,7 +1522,7 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1691,7 +1693,7 @@ def test_manual_team_routine_start_creates_retryable_team_occurrence(
         _login(client, "alice")
         routine = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=lead),
                 "title": "Run the Team routine",
                 "assigneeUserId": ALICE,
                 "assignedTeamId": team["id"],
@@ -1742,7 +1744,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -1766,7 +1768,7 @@ def test_manual_team_routine_start_reuses_occurrence_promoted_today(
         _login(client, "alice")
         routine = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=lead),
                 "title": "Run today's Team routine",
                 "assigneeUserId": ALICE,
                 "assignedTeamId": team["id"],
@@ -1914,7 +1916,7 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2093,7 +2095,7 @@ def test_message_to_a_team_thread_reports_a_disabled_team(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2169,7 +2171,7 @@ def test_explicit_assignment_to_a_disabled_team_requires_a_recovery_decision(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2288,7 +2290,7 @@ def test_agent_runs_creates_a_team_thread_from_a_team_id(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2360,7 +2362,7 @@ def test_agent_runs_rejects_a_team_id_that_does_not_match_the_thread(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2418,7 +2420,7 @@ def test_a_team_thread_refuses_an_assignment_outside_the_room(monkeypatch) -> No
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2497,7 +2499,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2608,7 +2610,7 @@ def test_message_to_a_team_thread_runs_every_member_as_the_owning_user(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2718,7 +2720,7 @@ def test_a_team_thread_narrows_to_one_member_for_the_owning_user(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result"],
+                "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result"],
                 "status": "ready",
             }
         )
@@ -2924,7 +2926,7 @@ def test_task_recovery_preserves_round_verdict(
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "relay-thread-records"],
+            "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "relay-thread-records"],
             "status": "ready",
         }
     )
@@ -3023,7 +3025,7 @@ def _waiting_task_thread(recovery_team_thread):
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "relay-thread-records", "work-results"],
+            "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "task-workspaces", "round-result", "handoff-validation", "relay-thread-records", "work-results"],
             "status": "ready",
         }
     )
@@ -3634,7 +3636,7 @@ def test_receipt_dispatch_version_compatibility(recovery_team_thread, monkeypatc
 
     monkeypatch.setattr(round_request, "capture_handoff_context", versioned)
     if variant in ("legacy", "v2"):
-        client.app.state.registry.update_status("test_node_alice", {"capabilities": [PROJECT_CAPABILITY, "thread-workspaces"]})
+        client.app.state.registry.update_status("test_node_alice", {"capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces"]})
     response = client.post(
         f"/api/v1/threads/{session['id']}/recoveries",
         json={
@@ -3756,7 +3758,7 @@ def test_handoff_requires_runtime_validation(recovery_team_thread, capable, requ
     client, _controller, session, _team, reviewer = recovery_team_thread
     registry = client.app.state.registry
     registry.update_status("test_node_alice", {"capabilities": [
-        PROJECT_CAPABILITY, "thread-workspaces",
+        PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces",
         *(capability for capability in ("handoff-validation", "relay-thread-records")
           if capable or capability != required_capability),
     ]})
@@ -3854,7 +3856,7 @@ def test_default_team_delegates_all_members_then_lead_reviews(monkeypatch, sourc
         members = [_agent(client, "alice", name, "claude") for name in ("API", "UI")]
         node_id = "test_node_alice"
         app.state.registry.update_status(node_id, {
-            "status": "ready", "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "task-workspaces", "round-result", "work-results"],
+            "status": "ready", "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "task-workspaces", "round-result", "work-results"],
         })
         team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
@@ -3950,7 +3952,7 @@ def test_team_message_defaults_to_build_review(monkeypatch, new_thread, disabled
             "sandboxId": node_id, "userId": ALICE, "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
+            "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
@@ -4053,7 +4055,7 @@ def test_pipeline_continues_to_final_specialist_after_missing_member_report(monk
             "sandboxId": node_id, "userId": ALICE, "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"],
+            "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "round-result", "work-results"],
             "status": "ready",
         })
         team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
@@ -4113,7 +4115,7 @@ def test_message_style_is_validated(monkeypatch) -> None:
             "sandboxId": node_id, "userId": ALICE, "workspaceId": "machine-alice",
             "token": "node_token", "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
-            "capabilities": [PROJECT_CAPABILITY, "thread-workspaces", "round-result", "work-results"], "status": "ready",
+            "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "round-result", "work-results"], "status": "ready",
         })
         team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
             "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],

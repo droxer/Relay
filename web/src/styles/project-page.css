@@ -359,7 +359,7 @@ button.project-member-row:hover .project-member-row-open {
   margin: 0;
 }
 
-.project-dashboard-capacity a {
+.project-dashboard-capacity button {
   color: var(--ink-1);
   text-decoration: underline;
   text-underline-offset: 4px;

@@ -36,7 +36,7 @@ def execution(tmp_path):
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+            "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
             "status": "ready",
         },
         "ui_token",

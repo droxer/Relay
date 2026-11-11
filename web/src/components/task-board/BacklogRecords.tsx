@@ -15,14 +15,14 @@ import {
 import { dueTone, type BacklogSortKey } from "../../lib/backlog";
 import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
 import { TaskHoldupLine } from "./TaskHoldupLine";
-import { pathForAppState } from "../../lib/appRoute";
+import { recordHrefForLocation } from "../../lib/workspaceScope";
 import { TaskRefLink } from "./TaskRefLink";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "./InlineTaskFields";
 import type { AgentTeam, UserAgent, ProjectRecord } from "../../types";
 import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
 
 export function hrefForTaskRecord(taskId: string): string {
-  return pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
+  return recordHrefForLocation("backlog", taskId);
 }
 import { TaskAssignee } from "../TaskAssignee";
 import { SortColumnButton } from "@/components/ui/SortableColumnHeader";

@@ -75,7 +75,7 @@ test("Connect redirects to provider authentication", async ({ page }) => {
 
 for (const automation of [false, true]) test(`explicit access is submitted with a new ${automation ? "automation" : "task"}`, async ({ page }) => {
   const saved = await serve(page);
-  await page.goto(automation ? "/automations" : "/tasks");
+  await page.goto(`/computers/device%3Au1%3Ahost/${automation ? "automations" : "tasks"}`);
   await page.getByRole("button", { name: automation ? "New automation" : "New task", exact: true }).first().click();
   const form = page.getByRole("dialog", { name: automation ? "New automation" : "New task", exact: true });
   await form.getByRole("textbox", { name: "Title", exact: true }).fill("Read connected issues");
@@ -90,7 +90,7 @@ for (const automation of [false, true]) test(`explicit access is submitted with 
 test("new Thread sends selected connection access with its first message", async ({ page }) => {
   const runs: Record<string, unknown>[] = [];
   await serve(page, "light", "en", runs);
-  await page.goto("/threads");
+  await page.goto("/computers/device%3Au1%3Ahost/threads");
   const composer = page.locator(".composer").last();
   await composer.locator("summary").filter({ hasText: "Connections" }).click();
   await composer.getByRole("checkbox", { name: /Personal GitHub/ }).check();
@@ -105,7 +105,7 @@ test("the composer offers no connections until a service is connected", async ({
   await serve(page);
   await page.route("**/api/v1/connections", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ connections: [] }) }));
   const listed = page.waitForResponse(response => response.url().endsWith("/api/v1/connections"));
-  await page.goto("/threads");
+  await page.goto("/computers/device%3Au1%3Ahost/threads");
   await listed;
   const composer = page.locator(".composer").last();
   await expect(composer.getByRole("textbox")).toBeVisible();

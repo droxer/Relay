@@ -76,6 +76,7 @@ try {
 const { mkdirSync, writeFileSync } = require('node:fs');
 mkdirSync('.relay', { recursive: true });
 writeFileSync('.relay/e2e-agent-started', String(process.pid));
+writeFileSync('.relay/e2e-workspace-scope.json', JSON.stringify({cwd:process.cwd(),scope:JSON.parse(process.env.RELAY_WORKSPACE_SCOPE || '{}')}));
 console.log(JSON.stringify({type:'thread.started',thread_id:'e2e-'+process.pid}));
 setInterval(() => {}, 1000);
 `);

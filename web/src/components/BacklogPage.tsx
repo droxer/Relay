@@ -39,7 +39,8 @@ import { taskRef } from "../lib/taskRef";
 interface BacklogPageProps {
   /** A closed project shows its work but offers nothing to create or move. */
   readOnly?: boolean;
-  projectId: string;
+  projectId?: string;
+  computerId?: string;
   projects?: ProjectRecord[];
   onCreateProject?: (onCreated: (id: string) => void) => void;
   /** The task whose record is open, from the project route. */
@@ -86,7 +87,7 @@ import { TagFilterContext, useTagFilters } from "./tagFilter";
 
 
 
-export function BacklogPage({ readOnly = false, projectId, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, nodes, currentUser, isRefreshing = false, onRefresh, onOpenThread }: BacklogPageProps) {
+export function BacklogPage({ readOnly = false, projectId, computerId, projects = [], onCreateProject, recordTaskId, onOpenRecord, tasks, nodes, currentUser, isRefreshing = false, onRefresh, onOpenThread }: BacklogPageProps) {
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const { teams } = useTeams(currentUser.userId);
   const { t } = useTranslation();
@@ -122,13 +123,13 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
     requestClose: closeTaskForm,
     submit: submitTask,
     remove: deleteBacklog,
-  } = useBacklogTaskForm({ currentUser, seed: { projectId } });
+  } = useBacklogTaskForm({ currentUser, seed: { projectId, computerId } });
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
   const [deletingSelection, setDeletingSelection] = useState(false);
   // Retain the execution record until the drawer has finished closing.
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
   const drawerRecordId = recordMirror.record;
-  const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine), [tasks]);
+  const backlogTasks = useMemo(() => tasks.filter((task) => !task.isRoutine && !task.sourceRoutineId), [tasks]);
   const tagOptions = useMemo(() => collectTags(backlogTasks), [backlogTasks]);
   const currentProject = projects.find((project) => project.id === projectId) ?? null;
 
@@ -285,7 +286,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
       onRefresh={onRefresh ? () => void onRefresh() : undefined}
       onCreate={openCreate}
       importLabel={t("github_import.action")}
-      onImport={readOnly ? undefined : () => setImportOpen(true)}
+      onImport={readOnly || !projectId ? undefined : () => setImportOpen(true)}
     />
   );
 
@@ -427,7 +428,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
             <TaskRecordView
               taskId={drawerRecordId}
               /* Inside a project `?tab=` is the project's own tab strip. */
-              tabSearchKey="recordTab"
+              tabSearchKey={projectId ? "recordTab" : "tab"}
               currentUser={currentUser}
               tasks={tasks}
               drawer={{
@@ -458,6 +459,7 @@ export function BacklogPage({ readOnly = false, projectId, projects = [], onCrea
             form={form}
             logicalAgents={logicalAgents}
             projects={projects}
+            projectChoice="locked"
             tagSuggestions={tagOptions}
             onCreateProject={onCreateProject ? () => onCreateProject((id) => setForm((current) => current ? { ...current, projectId: id } : current)) : undefined}
             teams={teams}

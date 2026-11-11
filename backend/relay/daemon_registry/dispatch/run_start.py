@@ -8,6 +8,7 @@ from ...collaboration.models import (
     COLLABORATION_MANIFEST_STATE_KEY,
 )
 from ...core.ids import new_database_id
+from ...core.computer_identity import computer_id
 from ...core.daemon_capabilities import (
     has_capability,
     DAEMON_CAPABILITY_AGENT_SKILLS,
@@ -39,6 +40,7 @@ def _run_start_command(
     artifacts_dir: str | None,
     context: dict[str, Any] | None,
     handoff_validation: dict[str, Any] | None,
+    task_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The ``run.start`` command before skills and delivery bookkeeping."""
     images = (run_request.get("state") or {}).get("input_attachments")
@@ -47,6 +49,11 @@ def _run_start_command(
             raise _DeliveryRefused("image_client_update_required")
         if assignment["executorKind"] not in ("codex", "claude"):
             raise _DeliveryRefused("image_runtime_unsupported")
+    # Preserve the session's recorded directory, never an agent-supplied hint.
+    legacy_layout = workspace_layout if not session_snapshot.get("projectId") and (
+        workspace_layout == "node-root"
+        or (workspace_layout == "thread" and run_request.get("taskId"))
+    ) else None
     return {
         "id": new_database_id(),
         "type": "run.start",
@@ -57,6 +64,13 @@ def _run_start_command(
         "phase": state["team_phase"],
         "assignmentId": assignment["assignmentId"],
         "workspaceLayout": workspace_layout,
+        "workspaceScope": {
+            "computerId": computer_id(sandbox),
+            **({"legacyLayout": legacy_layout} if legacy_layout else {}),
+            **({"projectId": session_snapshot["projectId"]} if session_snapshot.get("projectId") else {}),
+            **({"taskId": run_request["taskId"]} if run_request.get("taskId") else {}),
+            **({"automationId": task_snapshot["sourceRoutineId"]} if task_snapshot and task_snapshot.get("sourceRoutineId") else {}),
+        },
         **(
             {"workspaceSubpath": session_snapshot["workspaceSubpath"]}
             if workspace_layout in ("project", "task")

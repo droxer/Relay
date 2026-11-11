@@ -18,7 +18,7 @@ def registration():
         "token": "test-token",
         "protocolVersion": 1,
         "supportedAgents": ["codex"],
-        "capabilities": ["thread-workspaces"],
+        "capabilities": ["workspace-scope", "thread-workspaces"],
         "status": "ready",
     }
 

@@ -173,7 +173,7 @@ def create_agent(client, owner="alice", executor="claude", name="Reviewer", supp
     node = client.app.state.registry.register({
         "sandboxId": f"skill-node-{owner}", "userId": user_id(owner), "token": f"skill-token-{owner}",
         "protocolVersion": 1, "supportedAgents": ["claude", "codex"],
-        "capabilities": ["thread-workspaces", *(["agent-skills"] if supports_skills else [])], "status": "ready",
+        "capabilities": ["workspace-scope", "thread-workspaces", *(["agent-skills"] if supports_skills else [])], "status": "ready",
         "workspacePath": "/workspace/skills", "workspaceId": f"skill-machine-{owner}",
         "agentInventory": {executor: {"skills": [{"name": "local", "description": "Installed locally"}], "mcpServers": []}},
     })

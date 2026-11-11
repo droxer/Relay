@@ -113,6 +113,7 @@ export function teamSharesOneComputer(
  */
 export function taskAssignmentOptions({
   project,
+  computerId,
   agents,
   teams,
   assigneeUserId,
@@ -120,18 +121,20 @@ export function taskAssignmentOptions({
   assignedTeamId,
 }: {
   project?: Pick<ProjectRecord, "computerId" | "members"> | null;
+  computerId?: string;
   agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
   assigneeUserId: string;
   assignedAgentId?: string;
   assignedTeamId?: string;
 }): { agents: UserAgent[]; teams: AgentTeam[] } {
-  const agentOnTaskComputer = (agent: UserAgent) => !project
-    || project.members.some((member) => member.agentId === agent.id && member.enabled)
-    || agentOnComputer(agent, project.computerId);
-  const teamOnTaskComputer = (team: AgentTeam) => project
-    ? teamOnComputer(team, agents, project.computerId)
-    : teamSharesOneComputer(team, agents);
+  const identity = project?.computerId ?? computerId;
+  const agentOnTaskComputer = (agent: UserAgent) => (!project && !identity)
+    || Boolean(project?.members.some((member) => member.agentId === agent.id && member.enabled))
+    || Boolean(identity && agentOnComputer(agent, identity));
+  const teamOnTaskComputer = (team: AgentTeam) => identity
+    ? teamOnComputer(team, agents, identity)
+    : !project && teamSharesOneComputer(team, agents);
   return {
     agents: agents.filter((agent) => (agent.id === assignedAgentId || agentOnTaskComputer(agent))
       && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, agent.id === assignedAgentId)),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from datetime import datetime, UTC
 from tempfile import TemporaryDirectory
 
@@ -31,7 +33,7 @@ def _client(monkeypatch, root: str) -> tuple[TestClient, dict]:
 
 
 def _routine(client: TestClient, agent: dict, **extra) -> dict:
-    response = client.post("/api/v1/tasks", json={
+    response = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client, agent=agent),
         "title": "Triage failures", "description": "Look into it.",
         "ownerUserId": ALICE, "assigneeUserId": ALICE,
         "assignedAgentId": agent["id"], "isRoutine": True, "routineState": "active",
@@ -73,13 +75,13 @@ def test_switching_trigger_kind_moves_next_run(monkeypatch) -> None:
 def test_invalid_trigger_is_a_400(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        response = client.post("/api/v1/tasks", json={
+        response = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client, agent=agent),
             "title": "Bad", "isRoutine": True, "assignedAgentId": agent["id"],
             "ownerUserId": ALICE, "assigneeUserId": ALICE,
             "routineTriggers": [{"kind": "task_event", "on": "completed"}],
         })
         assert response.status_code == 400
-        missing = client.post("/api/v1/tasks", json={
+        missing = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client, agent=agent),
             "title": "Bad", "isRoutine": True, "assignedAgentId": agent["id"],
             "ownerUserId": ALICE, "assigneeUserId": ALICE,
             "routineTriggers": [DAILY_9[0], {"kind": "task_event", "on": "created", "filters": {"projectId": "nope"}}],
@@ -100,7 +102,7 @@ def test_scope_filters_require_owner_access_on_create_and_patch(monkeypatch) -> 
         _login(client, "alice")
         trigger = {"kind": "task_event", "on": "created", "filters": {"projectId": project["id"]}}
         assert client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTriggers": [trigger]}).status_code == 403
-        response = client.post("/api/v1/tasks", json={"title": "Watch Bob", "isRoutine": True,
+        response = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client, agent=alice_agent), "title": "Watch Bob", "isRoutine": True,
             "routineTriggers": [trigger], "assignedAgentId": alice_agent["id"]})
         assert response.status_code == 403
 
@@ -161,10 +163,11 @@ def test_project_and_team_filters_require_same_computer(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
         project = project_for_agents(client.app.state.project_store, ALICE, [agent])
-        # The agent has no placement on the project's computer. Project/task
+        # An unplaced team member is not on the project's computer. Project/task
         # admission must also be applied to scoped trigger teams.
+        unplaced = _create_agent(client, ALICE, executor_kind="claude")
         team = client.app.state.team_store.create_team(ALICE, {
-            "name": "Unplaced team", "leadAgentId": agent["id"], "memberAgentIds": [agent["id"]],
+            "name": "Unplaced team", "leadAgentId": unplaced["id"], "memberAgentIds": [unplaced["id"]],
         })
         routine = _routine(client, agent, routineTriggers=[ON_BLOCKED])
         response = client.patch(f"/api/v1/tasks/{routine['id']}", json={"routineTriggers": [{
@@ -217,7 +220,7 @@ def test_run_now_while_a_run_is_queued_does_not_start_another_later(monkeypatch)
 
 def _post(client: TestClient, **body):
     return client.post("/api/v1/tasks", json={
-        "ownerUserId": ALICE, "assigneeUserId": ALICE, **body,
+        "ownerUserId": ALICE, "assigneeUserId": ALICE, "computerId": computer_for_automation(client, agent=client.app.state.agent_store.get_agent(body["assignedAgentId"])) if body.get("assignedAgentId") else computer_for_automation(client, ALICE), **body,
     })
 
 
@@ -610,7 +613,7 @@ PAST_ONCE = [{"kind": "schedule", "schedule": {"timezone": "UTC", "repeat": {"on
 def test_active_create_rejects_past_once(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         client, agent = _client(monkeypatch, root)
-        response = client.post("/api/v1/tasks", json={
+        response = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client, agent=agent),
             "title": "Missed", "isRoutine": True, "routineState": "active",
             "assignedAgentId": agent["id"], "ownerUserId": ALICE,
             "assigneeUserId": ALICE, "routineTriggers": PAST_ONCE,

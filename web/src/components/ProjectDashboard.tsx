@@ -63,9 +63,9 @@ export function ProjectDashboard({ steward, review, proposals, tasks, onOpenReco
   const capacity = policy && usage ? (
     <div className="project-dashboard-capacity">
       <p>{t("project.dashboard_user_wip", { count: usage.occupied, limit: policy.wipLimit })}</p>
-      <a href={`/backlog?assignee=${encodeURIComponent(usage.userId)}`}>
-        {t("project.dashboard_view_user_tasks")}
-      </a>
+      <Button type="button" variant="ghost" size="dense" onClick={onOpenBoard}>
+        {t("project.dashboard_view_project_tasks")}
+      </Button>
     </div>
   ) : null;
 

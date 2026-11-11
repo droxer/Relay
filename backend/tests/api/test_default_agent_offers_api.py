@@ -46,7 +46,7 @@ def alice(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[TestClient, str]]:
                 "nodeLocation": "user-device",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -195,7 +195,7 @@ def test_default_agent_saves_the_reported_runtime_default_model(alice) -> None:
     registry.register({
         "sandboxId": "node_alice", "userId": ALICE, "workspaceId": "machine-alice",
         "token": "node_token", "protocolVersion": 1, "supportedAgents": ["claude", "codex"],
-        "capabilities": ["thread-workspaces", "agent-model"], "status": "ready",
+        "capabilities": ["workspace-scope", "thread-workspaces", "agent-model"], "status": "ready",
         "agentDefaultModels": {"codex": "configured-model", "claude": "bad model", "unknown": "other"},
         "agentModels": {"codex": ["first-catalog-model", "configured-model"]},
     })

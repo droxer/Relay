@@ -30,10 +30,16 @@ class TaskReadRows(TaskStoreState):
     def work_page(
         self, owner: str, *, project_id: str | None, automation: bool,
         limit: int = 50, cursor: str = "", status: str = "", query: str = "",
+        computer_id: str | None = None,
     ) -> dict[str, Any]:
         """Bounded, owner-scoped Task/Automation snapshots without event hydration."""
         filters = [self.tasks.c.owner_user_id == owner, self.tasks.c.deleted_at.is_(None),
                    self.tasks.c.is_routine.is_(automation), self.tasks.c.project_id == project_id]
+        if computer_id is not None:
+            filters.append(func.coalesce(
+                self.tasks.c.snapshot["computerId"].as_string(),
+                self.tasks.c.snapshot["workspaceBinding"]["computerId"].as_string(),
+            ) == computer_id)
         if status:
             filters.append(self.tasks.c.routine_state == status if automation else self.tasks.c.status == status)
         if query:

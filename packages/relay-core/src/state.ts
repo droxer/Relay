@@ -55,6 +55,7 @@ export interface AgentState {
   project_brief?: string;
   /** Tokenless MCP fallback available to every managed run. */
   relay_mcp?: { toolCommand: string };
+  workspace_scope?: { computerId: string; projectId?: string; taskId?: string; automationId?: string; legacyLayout?: "thread" | "node-root" };
   project_manager?: { projectId: string; agentId: string; bindingRevision: number; toolCommand?: string };
   /** Read-only Relay MCP access for a roster member other than the Project Lead. */
   project_reader?: { projectId: string; agentId: string; bindingRevision: number; toolCommand?: string };

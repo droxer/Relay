@@ -37,7 +37,7 @@ def _registry(root: str) -> tuple[Any, Any, Any]:
             "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
             "workspacePath": "/workspace/alice", "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["task-workspaces", "thread-workspaces", "round-result"],
+            "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", "round-result"],
             "status": "ready",
         },
         "ui_token",

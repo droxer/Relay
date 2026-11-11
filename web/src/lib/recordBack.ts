@@ -1,4 +1,4 @@
-import { navigateToAppPath } from "./appRoute";
+import { navigateToAppPath, parseAppPath } from "./appRoute";
 
 /**
  * Where a record's back affordance goes, and how.
@@ -21,17 +21,21 @@ export function rememberListUrl(): void {
   const { pathname, search } = window.location;
   // Only a list is worth returning to; a record opened from another record
   // (a run from its routine) keeps the list the routine came from.
-  if (/^\/(backlog|routines)\/?$/.test(pathname)) lastListUrl = `${pathname}${search}`;
+  if (/^\/(?:computers\/[^/]+\/)?(tasks|automations|backlog|routines)\/?$/.test(pathname)) lastListUrl = `${pathname}${search}`;
 }
 
 export function recordBackHref(fallbackPath: string): string {
-  return lastListUrl ?? fallbackPath;
+  if (!lastListUrl) return fallbackPath;
+  const remembered = parseAppPath(lastListUrl.split("?")[0]);
+  const target = parseAppPath(fallbackPath.split("?")[0]);
+  return remembered.route === target.route && remembered.computerId === target.computerId
+    && remembered.projectId === target.projectId ? lastListUrl : fallbackPath;
 }
 
 /** Navigates back, returning true when it consumed the click. */
 export function navigateRecordBack(fallbackPath: string): void {
   if (typeof window === "undefined") return;
-  if (lastListUrl) {
+  if (lastListUrl && recordBackHref(fallbackPath) === lastListUrl) {
     window.history.back();
     return;
   }

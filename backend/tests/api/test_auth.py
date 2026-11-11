@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from automation_helpers import WEEKLY_TRIGGERS
 
 import uuid
@@ -461,7 +463,7 @@ def test_user_routes_are_scoped_to_authenticated_user(monkeypatch) -> None:
         _login(alice_client, "alice", "userpass")
         _login(bob_client, "bob", "userpass")
 
-        task_response = alice_client.post("/api/v1/tasks", json={
+        task_response = alice_client.post("/api/v1/tasks", json={"computerId": computer_for_automation(alice_client, 'bob'),
             "title": "Alice task",
             "ownerUserId": "bob",
             "isRoutine": True, "routineState": "paused", "createSession": True,
@@ -593,7 +595,7 @@ def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
         })
         assert session.status_code == 201
         _add_workspace_file_artifact(app, session.json()["id"], "auth-flow.pptx", "/workspace/alice/auth-flow.pptx")
-        task = alice_client.post("/api/v1/tasks", json={
+        task = alice_client.post("/api/v1/tasks", json={"computerId": computer_for_automation(alice_client, agent=agent),
             "title": "Patch auth",
             "status": "assigned",
             "assignedAgentId": agent["id"],
@@ -727,7 +729,7 @@ def test_admin_cannot_link_a_thread_to_another_users_task(monkeypatch) -> None:
         _bootstrap_admin(client)
         _login(client, "admin", "kestrel-vault-7719")
 
-        response = client.post("/api/v1/tasks", json={
+        response = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client, 'bob'),
             "title": "Bob task",
             "ownerUserId": "bob", "assigneeUserId": "bob",
             "isRoutine": True, "routineState": "paused", "createSession": True,
@@ -1168,7 +1170,7 @@ def test_backend_stores_share_the_configured_database(monkeypatch) -> None:
 
         client = TestClient(app)
         _bootstrap_admin(client)
-        response = client.post("/api/v1/tasks", json={
+        response = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client),
             "title": "Persist task in DB",
             "description": "Create a DB-backed session too.",
             "isRoutine": True, "routineState": "paused", "createSession": True,

@@ -53,7 +53,16 @@ test('every runtime gets standalone Task and Automation tools independently of P
     assert.match(command, /relay_create_task/);
     assert.match(command, /relay_create_automation/);
     assert.match(command, /only its Project Lead/);
-    assert.match(command, /Omit projectId for standalone work/);
+    assert.match(command, /Omit projectId to use the current scope/);
     assert.match(command, /manager-test\/tool.cjs/);
+  }
+});
+
+test('every agent runtime receives the admitted workspace boundary', () => {
+  for (const agent of AGENT_NAMES) {
+    const state = withPermissionAdapter(agent, {...initialAgentState('Work'), workspace_scope:{computerId:'computer',projectId:'project'}});
+    const command = getAgent(agent).buildCommand(state);
+    assert.match(command, /This run belongs only to Project project on Computer computer/);
+    assert.match(command, /Do not switch to another Thread, Task, Automation or Project directory/);
   }
 });

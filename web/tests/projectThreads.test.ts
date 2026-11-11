@@ -70,14 +70,15 @@ describe("project thread buckets", () => {
     );
     assert.deepEqual(
       threadsForDirectory(threads, projects, "threads").map((item) => item.session.id),
-      ["independent", "orphan"],
+      ["independent"],
     );
   });
 
-  it("lists the Project Manager conversation as an ordinary Thread", () => {
+  it("lists the Project Manager conversation only in its Project", () => {
     const managerProject = {...project("alpha", "Alpha"), managerThreadId:"manager"};
     const items = [thread("manager", "alpha"), thread("room", "alpha")];
-    assert.deepEqual(threadsForDirectory(items, [managerProject], "threads").map(item=>item.session.id), ["manager"]);
+    assert.deepEqual(threadsForDirectory(items, [managerProject], "threads").map(item=>item.session.id), []);
+    assert.deepEqual(threadsForDirectory(items, [managerProject], "projects").map(item=>item.session.id), ["manager", "room"]);
   });
 
   it("exposes separate Threads, Projects, and Tasks destinations", async () => {

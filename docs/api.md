@@ -11,24 +11,49 @@ documentation locations, and UI metadata from the backend's shared constants.
 /login
 /waitlist
 /join#token={inviteToken}
-/threads
-/threads/new
-/threads/{threadId}
+/home
+/computers
+/computers/{computerId}/threads
+/computers/{computerId}/threads/new
+/computers/{computerId}/threads/{threadId}
+/computers/{computerId}/tasks
+/computers/{computerId}/tasks/{taskId}
+/computers/{computerId}/automations
+/computers/{computerId}/automations/{automationId}
+/computers/{computerId}/automations/{automationId}/runs/{runId}
 /projects
 /projects/{projectId}
-/tasks/{taskId}
-/tasks/{taskId}/threads/{threadId}
-/tasks
-/automations
+/projects/{projectId}/new
+/projects/{projectId}/threads/{threadId}
 /agents
 /agents/{agentId}
 /teams
 /teams/{teamId}
 /skills
 /channels
-/computer
 /admin
 ```
+
+Standalone work lives under its Computer's stable identity. Project Tasks
+open at `/projects/{projectId}?task={taskId}`; Automations and their runs open
+at `/projects/{projectId}?tab=automations&automation={automationId}&run={runId}`.
+Legacy `/threads`, `/tasks`, and `/automations` record links resolve to the
+record's owning workspace. Their unscoped lists open the Computer picker;
+legacy `?project=` lists open the corresponding Project tab.
+
+A standalone Task or Automation supplies `computerId` when created, mutually
+exclusive with `projectId`. The backend checks Computer ownership and constrains
+its assignments and dispatch to that Computer. A legacy record may acquire this
+scope via PATCH; an existing Computer or recorded workspace cannot be changed.
+Creating an Automation, or converting a Task into one, requires `computerId` or
+`projectId` (409 `task_workspace_required` otherwise), including paused Automations.
+Legacy Automations already stored without scope retain their compatibility routing.
+Every agent run requires the daemon's `workspace-scope` capability; an older
+client is refused before a run command is published. Backend-issued scope may
+include `legacyLayout` (`thread` or `node-root`) only to preserve an existing
+standalone workspace binding. It never authorizes a Project workspace.
+Missing unscoped Task or Automation links return to the Computer picker; a
+Thread deep link waits for the addressed Thread before canonicalizing its scope.
 
 Agent lists use `q` and `availability`. Agent and team details use
 `tab`; project details use `tab` plus `path` and `item` on the Workspace tab;
@@ -40,7 +65,7 @@ Unauthenticated deep links are replaced with `/login?returnTo=...`, except
 `/waitlist` and `/join`, which are the signed-out pages of the waitlist, and
 `/forgot-password` and `/reset-password`, which are the password reset pages. Relay
 accepts a return path only when it is same-origin and matches a recognized web
-route. `/` is replaced with `/threads`.
+route. `/` is replaced with `/home`.
 
 ## API Namespaces
 

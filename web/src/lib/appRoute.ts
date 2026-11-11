@@ -67,6 +67,8 @@ export type AppLocationState = {
   mobileView: MobileView;
   sessionId: string | null;
   projectId?: string | null;
+  /** Stable Computer identity for standalone work. */
+  computerId?: string | null;
   agentId?: string | null;
   /** The task or routine whose record is open — `/backlog/<id>`, `/automations/<id>`. */
   taskId?: string | null;
@@ -124,6 +126,12 @@ export function parseAppPath(pathname: string): AppLocationState {
   const normalized = pathname === "/" ? APP_HOME_PATH : `/${pathSegments(pathname).join("/")}`;
   const [head, second, ...rest] = pathSegments(normalized);
   const base = { mobileView: "chat" as const, sessionId: null };
+  if (head === "computers" && second) {
+    const [section, ...tail] = rest;
+    if (!["threads", "tasks", "automations"].includes(section ?? "threads")) return { route: "main", ...base, notFound: true };
+    const nested = parseAppPath(`/${section ?? "threads"}${tail.length ? "/" + tail.join("/") : ""}`);
+    return { ...nested, computerId: decodeSegment(second) };
+  }
 
   if (normalized === "/login") return { route: "main", ...base, login: true };
   const publicPage = PUBLIC_PAGE_PATHS[normalized];
@@ -194,6 +202,7 @@ export function pathForAppState({
   mobileView,
   sessionId,
   projectId,
+  computerId,
   agentId,
   taskId,
   runId,
@@ -209,6 +218,10 @@ export function pathForAppState({
   if (notFound && typeof window !== "undefined") return window.location.pathname;
   if (login) return "/login";
   if (publicPage) return `/${publicPage}`;
+  if (computerId && ["main", "backlog", "routine"].includes(route)) {
+    const nested = pathForAppState({ route, mobileView, sessionId, taskId, runId, composingNew });
+    return `/computers/${encodeURIComponent(computerId)}${nested}`;
+  }
   if (route === "agents" && agentId) return `/agents/${encodeURIComponent(agentId)}`;
   if (route === "backlog" && taskId) {
     const taskPath = `${WORK_PATHS.backlog}/${encodeURIComponent(taskId)}`;
@@ -449,6 +462,10 @@ function withLegacyAdminParams(source: URLSearchParams): URLSearchParams {
 }
 
 function canonicalSearchForPath(pathname: string, search = ""): string {
+  const segments = pathSegments(pathname);
+  if (segments[0] === "computers" && segments[1] && segments[2]) {
+    return canonicalSearchForPath("/" + segments.slice(2).join("/"), search);
+  }
   const [pathHead] = pathSegments(pathname);
   const raw = new URLSearchParams(search);
   const source = pathHead === "admin" ? withLegacyAdminParams(raw) : raw;
@@ -683,8 +700,13 @@ export function browserUrlForAppState(
   const nextPath = pathForAppState(state);
   const legacyRedirect = LEGACY_INFRA_PATHS[currentPathname] !== undefined && canonicalPathname(currentPathname) === nextPath;
   if (nextPath === currentPathname || legacyRedirect) return canonicalBrowserUrl(nextPath, currentSearch);
-  const [nextHead] = pathSegments(nextPath);
-  const [currentHead] = pathSegments(currentPathname);
+  const nextSegments = pathSegments(nextPath);
+  const currentSegments = pathSegments(currentPathname);
+  if (nextSegments[0] === "computers" && currentSegments[0] === "computers"
+    && nextSegments[1] === currentSegments[1] && nextSegments[2] === currentSegments[2]
+    && ["tasks", "automations"].includes(nextSegments[2])) return canonicalBrowserUrl(nextPath, currentSearch);
+  const [nextHead] = nextSegments;
+  const [currentHead] = currentSegments;
   if ((nextHead === "routines" || nextHead === "backlog") && nextHead === currentHead) {
     return canonicalBrowserUrl(nextPath, currentSearch);
   }

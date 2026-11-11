@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -81,7 +83,7 @@ def test_task_tags_refuse_an_invalid_list(client) -> None:
 def test_automation_tags_round_trip_through_the_api(client) -> None:
     created = client.post(
         "/api/v1/tasks",
-        json={
+        json={"computerId": computer_for_automation(client),
             "title": "Nightly report",
             "isRoutine": True,
             "routineTriggers": WEEKLY_TRIGGERS,

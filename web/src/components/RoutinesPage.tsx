@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { computerWorkHref } from "../lib/workspaceScope";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -52,6 +53,7 @@ import { TagFilterContext, useTagFilters } from "./tagFilter";
 
 interface RoutinesPageProps {
   projectId?: string;
+  computerId?: string;
   readOnly?: boolean;
   projects?: ProjectRecord[];
   /** The routine whose record is open, from `/automations/<id>`. */
@@ -68,10 +70,10 @@ interface RoutinesPageProps {
   onOpenThread: (sessionId: string) => void;
 }
 
-export function RoutinesPage({ projectId, readOnly = false, projects = [], recordTaskId, recordRunId, onOpenRecord, tasks: allTasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+export function RoutinesPage({ projectId, computerId, readOnly = false, projects = [], recordTaskId, recordRunId, onOpenRecord, tasks: allTasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
   const hrefForRecord = useMemo(() => projectId
     ? (taskId: string, runId?: string | null) => projectAutomationHref(projectId, taskId, runId)
-    : undefined, [projectId]);
+    : computerId ? (taskId: string, runId?: string | null) => computerWorkHref(computerId, "routine", taskId, runId) : undefined, [projectId, computerId]);
   const tasks = useMemo(() => allTasks.filter((task) => !task.deletedAt && (!projectId || task.projectId === projectId)), [allTasks, projectId]);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const { teams } = useTeams(currentUser.userId);
@@ -161,6 +163,7 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
   function openRoutineForm(next: RoutineTaskFormState) {
     if (readOnly) return;
     if (projectId) next = { ...next, projectId };
+    if (computerId) next = { ...next, projectId: undefined, computerId };
     setForm(next);
     setFormBaseline(next);
     setDrawerOpen(true);
@@ -222,7 +225,7 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
         ...taskAssignmentMutationFields(form),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else await createTaskMutation.mutateAsync({ ...payload, ...(form.projectId ? { projectId: form.projectId } : {}) });
+      else await createTaskMutation.mutateAsync({ ...payload, ...(form.projectId ? { projectId: form.projectId } : {}), ...(computerId ? { computerId } : {}) });
       dismissRoutineForm();
     } catch {
       // mutation onError surfaces a toast; keep the drawer open for retry.
@@ -461,9 +464,9 @@ export function RoutinesPage({ projectId, readOnly = false, projects = [], recor
             form={form}
             logicalAgents={logicalAgents}
             projects={projects}
-            projectChoice={projectId ? "locked" : undefined}
+            projectChoice={projectId || computerId ? "locked" : undefined}
             tagSuggestions={tagOptions}
-            onCreateProject={projectId ? undefined : () => setCreatingProject(true)}
+            onCreateProject={projectId || computerId ? undefined : () => setCreatingProject(true)}
             teams={teams}
             saving={saving}
             deleting={deleting}

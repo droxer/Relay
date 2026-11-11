@@ -27,6 +27,7 @@ export type TaskBoardFormBase = {
   id?: string;
   number?: number;
   projectId?: string;
+  computerId?: string;
   sourceRoutineId?: string;
   title: string;
   description: string;
@@ -122,6 +123,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
   if (
     a.id !== b.id
     || a.projectId !== b.projectId
+    || a.computerId !== b.computerId
     || a.title !== b.title
     || a.description !== b.description
     || a.priority !== b.priority

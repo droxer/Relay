@@ -33,7 +33,7 @@ export function useBacklogTaskForm({
   allowIntake = false,
 }: {
   currentUser: CurrentUser;
-  seed?: { projectId?: string };
+  seed?: { projectId?: string; computerId?: string };
   /** The Issues page may file an issue with no project (intake) and triage
       one into a project later. A project's own board never does either. */
   allowIntake?: boolean;
@@ -52,7 +52,7 @@ export function useBacklogTaskForm({
   const confirmDiscardChanges = useUnsavedChangesGuard(dirty && !saving && !deleting);
 
   function openForm(next: BacklogTaskFormState): void {
-    const seeded = { ...next, projectId: next.projectId || seed?.projectId };
+    const seeded = { ...next, projectId: seed?.projectId ?? next.projectId, computerId: seed?.computerId ?? next.computerId };
     setForm(seeded);
     setFormBaseline(seeded);
     setOpen(true);
@@ -64,6 +64,7 @@ export function useBacklogTaskForm({
       id: task.id,
       number: task.number,
       projectId: task.projectId,
+      computerId: task.computerId,
       sourceRoutineId: task.sourceRoutineId,
       title: task.title,
       description: task.description,
@@ -108,11 +109,11 @@ export function useBacklogTaskForm({
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!form || !form.title.trim() || (!form.id && !form.projectId && !allowIntake)) return;
+    if (!form || !form.title.trim() || (!form.id && !form.projectId && !form.computerId && !allowIntake)) return;
     /* A project chosen for an intake issue is a move: it rides the same PATCH
        as the assignment, and the server applies the move first. */
     const movesIntoProject = Boolean(form.id && form.projectId && !formBaseline?.projectId);
-    const intake = !form.projectId && !form.sourceRoutineId;
+    const intake = !form.projectId && !form.computerId && !form.sourceRoutineId;
     setSaving(true);
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
@@ -131,7 +132,7 @@ export function useBacklogTaskForm({
         ...(movesIntoProject ? { projectId: form.projectId } : {}),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
-      else await createTaskMutation.mutateAsync({ ...payload, ...(form.projectId ? { projectId: form.projectId } : {}) });
+      else await createTaskMutation.mutateAsync({ ...payload, ...(form.projectId ? { projectId: form.projectId } : {}), ...(form.computerId ? { computerId: form.computerId } : {}) });
       dismiss();
     } catch {
       // mutation onError surfaces a toast; keep the drawer open for retry.

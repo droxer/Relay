@@ -230,6 +230,7 @@ def register_daemon_node(
         )
         return {
             **sandbox,
+            "computerId": computer_id(sandbox),
             "heartbeat": ctx.registry.heartbeat_settings(),
             **({"acknowledgedJournalIds": acknowledged} if journaled else {}),
             **registration_project_links(

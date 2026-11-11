@@ -34,7 +34,7 @@ def _register_node(app) -> None:
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["thread-workspaces"],
+            "capabilities": ["workspace-scope", "thread-workspaces"],
             "status": "ready",
         }
     )

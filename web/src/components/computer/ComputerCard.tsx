@@ -3,6 +3,9 @@
 import type { TFunction } from "i18next";
 import { Trans } from "react-i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
+import { computerId } from "../../lib/createAgent";
+import { computerWorkHref } from "../../lib/workspaceScope";
+import { navigateToAppPath } from "../../lib/appRoute";
 import { RuntimeRefreshButton } from "./RuntimeRefreshButton";
 import { RuntimeMark } from "../RuntimeMark";
 import { StateMark } from "../StateMark";
@@ -102,7 +105,7 @@ export function ComputerCard({
               on the admin fleet card. Sharing one wrapping row, a long name
               pushed the OS onto a line of its own while a short one kept it
               inline, so no two cards had the same header shape. */}
-          <h2 className="computer-card-name" translate="no" title={title}>{title}</h2>
+          <h2 className="computer-card-name" translate="no" title={title}><a href={computerWorkHref(computerId(node))} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); void navigateToAppPath(computerWorkHref(computerId(node))); } }}>{title}</a></h2>
           <div className="computer-card-state">
             <NodePresence node={node} t={t} withLabel />
             <HostOsBadge node={node} />

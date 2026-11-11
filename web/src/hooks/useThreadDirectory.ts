@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { sessionComputer } from "../lib/workspaceScope";
 import type { ProjectRecord } from "../types";
 import { matchesThreadQuery, reuseThreadItems, runningAgentName, threadOriginIndex, threadsForDirectory, type ThreadItem, type ThreadParticipant } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
@@ -50,6 +51,7 @@ interface ThreadDirectory {
 
 interface ThreadDirectoryInput {
   route: string;
+  computerId?: string | null;
   myThreads: ThreadItem["session"][];
   projects: readonly ProjectRecord[];
   routedProjectId: string | null;
@@ -65,6 +67,7 @@ interface ThreadDirectoryInput {
 
 export function useThreadDirectory({
   route,
+  computerId,
   myThreads,
   projects,
   routedProjectId,
@@ -102,7 +105,7 @@ export function useThreadDirectory({
   // Items are rebuilt whenever any input moves — a node or task poll — but a
   // row is memoized on its item, so each unchanged item keeps its previous
   // object. Without this every row re-rendered on every poll.
-  const candidates = useMemo<ThreadItem[]>(() => myThreads.map((session) => {
+  const candidates = useMemo<ThreadItem[]>(() => myThreads.filter(session => !computerId || (!session.projectId && sessionComputer(session, runtimeNodes ?? []) === computerId)).map((session) => {
     const cached = world.items.get(session);
     if (cached) return cached;
     const activeRun = world.runningBy.get(session.id);
@@ -123,7 +126,7 @@ export function useThreadDirectory({
     };
     world.items.set(session, item);
     return item;
-  }), [myThreads, world]);
+  }), [myThreads, world, computerId, runtimeNodes]);
 
   const [held, setHeld] = useState(() => ({ candidates, items: candidates }));
   const threadItems = held.candidates === candidates
@@ -158,8 +161,8 @@ export function useThreadDirectory({
   }, [projects, route, routedProjectId, threadItems, threadQuery]);
 
   const projectFilterOptions = useMemo(
-    () => threadProjectOptions(projects, threadItems),
-    [projects, threadItems],
+    () => computerId ? [] : threadProjectOptions(projects, threadItems),
+    [projects, threadItems, computerId],
   );
   const projectFilter = resolveThreadProjectFilter(threadProjectFilter, projectFilterOptions);
 
@@ -176,10 +179,10 @@ export function useThreadDirectory({
       projects.filter((project) => project.name.toLowerCase().includes(query)).map((project) => project.id),
     );
     return threadItems.filter((item) => {
-      if (!item.session.projectId || !projects.some((project) => project.id === item.session.projectId)) return false;
+      if (!item.session.projectId || (routedProjectId && item.session.projectId !== routedProjectId) || !projects.some((project) => project.id === item.session.projectId)) return false;
       return !query || matchingProjectIds.has(item.session.projectId) || matchesThreadQuery(item.session, threadQuery);
     });
-  }, [filteredThreads, projectFilter, projects, route, threadItems, threadQuery]);
+  }, [filteredThreads, projectFilter, projects, route, routedProjectId, threadItems, threadQuery]);
 
   return { threadItems, filteredThreads, directoryProjects, directoryThreads, projectFilterOptions, projectFilter };
 }

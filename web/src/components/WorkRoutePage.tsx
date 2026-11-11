@@ -3,6 +3,9 @@
 import { lazy, memo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { UnplacedComputerWork } from "./UnplacedComputerWork";
+import { ComputerWorkspaceNav } from "./ComputerWorkspaceNav";
+
 import { RelayEmptyState } from "./RelayEmptyState";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, UserAgent } from "../types";
 import type { HomeItem } from "../lib/homeQueue";
@@ -13,8 +16,8 @@ import type { AdminSection, AppRoute, MobileView, SettingsSection } from "../lib
 
 const HomePage = lazy(() => import("./home/HomePage").then((m) => ({ default: m.HomePage })));
 const AdminPage = lazy(() => import("./AdminPage").then((m) => ({ default: m.AdminPage })));
-const TasksWorkspace = lazy(() => import("./TasksWorkspace").then((m) => ({ default: m.TasksWorkspace })));
 const ChannelsPage = lazy(() => import("./ChannelsPage").then((m) => ({ default: m.ChannelsPage })));
+const BacklogPage = lazy(() => import("./BacklogPage").then((m) => ({ default: m.BacklogPage })));
 const RoutinesPage = lazy(() => import("./RoutinesPage").then((m) => ({ default: m.RoutinesPage })));
 const AgentsPage = lazy(() => import("./AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const TeamsPage = lazy(() => import("./TeamsPage").then((m) => ({ default: m.TeamsPage })));
@@ -62,11 +65,15 @@ export function skipLinkTarget({ route, mobileView, notFound, taskThread, projec
 
 interface WorkRoutePageProps {
   route: AppRoute;
+  computerId?: string | null;
+  computerLabel?: string;
+  computerReadOnly?: boolean;
   notFound: boolean;
   user: CurrentUser;
   projects: ProjectRecord[];
   projectsStatus: ProjectCollectionStatus;
   tasks: RelayTaskSummary[];
+  unplacedTasks?: RelayTaskSummary[];
   sessions: RelaySession[];
   homeItems: HomeItem[];
   homeStatus: ProjectCollectionStatus;
@@ -163,31 +170,24 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       onSelectSection={props.onSelectAdminSection}
     />
   ) : route === "channels" ? <ChannelsPage /> : route === "backlog" ? (
-    <TasksWorkspace
-      projects={props.projects}
-      projectsStatus={props.projectsStatus}
-      recordTaskId={props.recordTaskId}
-      onOpenRecord={props.onOpenTaskRecord}
-      tasks={props.tasks}
-      nodes={props.visibleNodes}
-      currentUser={user}
-      isRefreshing={props.isRefreshing}
-      onRefresh={props.onRefresh}
-      onOpenThread={openTaskThread}
-    />
+    props.computerId ? <div className="tasks-workspace computer-workspace">
+      <ComputerWorkspaceNav computerId={props.computerId} label={props.computerLabel ?? props.computerId} route={route} />
+      {!props.computerReadOnly ? <UnplacedComputerWork computerId={props.computerId} tasks={(props.unplacedTasks ?? []).filter(task => !task.isRoutine)} /> : null}
+      <div className="tasks-workspace-content"><BacklogPage
+        readOnly={props.computerReadOnly} computerId={props.computerId} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
+        recordTaskId={props.recordTaskId} onOpenRecord={props.onOpenTaskRecord} onOpenThread={openTaskThread}
+      /></div>
+    </div> : null
   ) : route === "routine" ? (
-    <RoutinesPage
-      projects={props.projects}
-      recordTaskId={props.recordTaskId}
-      recordRunId={props.recordRunId}
-      onOpenRecord={props.onOpenRoutineRecord}
-      tasks={props.tasks}
-      nodes={props.visibleNodes}
-      currentUser={user}
-      isRefreshing={props.isRefreshing}
-      onRefresh={props.onRefresh}
-      onOpenThread={onOpenThread}
-    />
+    props.computerId ? <div className="tasks-workspace computer-workspace">
+      <ComputerWorkspaceNav computerId={props.computerId} label={props.computerLabel ?? props.computerId} route={route} />
+      {!props.computerReadOnly ? <UnplacedComputerWork computerId={props.computerId} tasks={(props.unplacedTasks ?? []).filter(task => task.isRoutine)} /> : null}
+      <div className="tasks-workspace-content"><RoutinesPage
+        readOnly={props.computerReadOnly} computerId={props.computerId} recordTaskId={props.recordTaskId} recordRunId={props.recordRunId}
+        onOpenRecord={props.onOpenRoutineRecord} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
+        onOpenThread={onOpenThread}
+      /></div>
+    </div> : null
   ) : route === "teams" ? (
     <TeamsPage
       currentUser={user}

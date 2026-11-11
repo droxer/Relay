@@ -5,9 +5,9 @@ from relay.tasks.workspace import (
     workspace_artifacts_dir,
 )
 
-TASK_CAPABLE_NODE = {"capabilities": ["thread-workspaces", "task-workspaces", "project-workspaces"]}
+TASK_CAPABLE_NODE = {"capabilities": ["workspace-scope", "thread-workspaces", "task-workspaces", "project-workspaces"]}
 LAYOUT_NODE = {"capabilities": [*TASK_CAPABLE_NODE["capabilities"], "artifact-layout"]}
-OLD_NODE = {"capabilities": ["thread-workspaces"]}
+OLD_NODE = {"capabilities": ["workspace-scope", "thread-workspaces"]}
 OCCURRENCE = {"id": "tsk_run", "sourceRoutineId": "tsk_routine"}
 
 

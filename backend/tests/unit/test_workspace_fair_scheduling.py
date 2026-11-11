@@ -17,7 +17,7 @@ def runtime(tmp_path, monkeypatch):
     registry = DaemonNodeRegistry(sessions, daemon, task_store=tasks)
     payload = dict(sandboxId="node", userId="alice", token="token", workspacePath="/workspace",
                    protocolVersion=1, supportedAgents=["codex"],
-                   capabilities=["thread-workspaces", "task-workspaces", "project-workspaces"],
+                   capabilities=["workspace-scope", "thread-workspaces", "task-workspaces", "project-workspaces"],
                    status="ready", maxConcurrentRuns=3)
     registry.register(payload, "ui")
     monkeypatch.setattr(daemon, "claim_recovery_requests", lambda **kw: daemon.list_active_run_requests())

@@ -88,6 +88,8 @@ export type TaskRunAssignment = Omit<RunInput["assignments"][number], "agent"> &
 };
 
 export interface TaskMutationInput {
+  /** Associates legacy standalone work once; cannot move an existing workspace. */
+  computerId?: string;
   connectionGrants?: import("./connections.ts").ConnectionGrant[];
   /** Accept only the recorded work shown in this review revision. */
   reviewRevision?: string;
@@ -147,7 +149,7 @@ export interface TaskReview {
 
 export interface CreateTaskInput extends TaskMutationInput {
   title: string;
-  /** Omitted for an intake issue, which cannot take an agent or run. */
+  /** Omitted for Computer-scoped work or a legacy unplaced issue. */
   projectId?: string;
 }
 

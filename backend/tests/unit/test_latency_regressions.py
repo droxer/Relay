@@ -54,7 +54,7 @@ def _registry(root: str) -> DaemonNodeRegistry:
             "token": "node_token",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["thread-workspaces"],
+            "capabilities": ["workspace-scope", "thread-workspaces"],
             "status": "ready",
         },
         authorized_node_location="user-device",
