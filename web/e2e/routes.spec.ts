@@ -206,6 +206,14 @@ test("all thread routes share list controls, geometry, search and creation", asy
     if (baseline) expect(layout).toEqual(baseline);
     else baseline = layout;
     await rail.screenshot({ path: testInfo.outputPath(`${path.includes("projects") ? "project" : path.includes("computers") ? "task" : "global"}-thread-list.png`) });
+    const projectFilter = rail.locator('[name="thread-project-filter"]');
+    await projectFilter.click();
+    await expect(page.getByRole("option")).toHaveText(["All threads", "Other project", "Route launch"]);
+    await page.getByRole("option", { name: "Route launch", exact: true }).click();
+    await expect(rail.locator(".conversation-row")).toHaveCount(3);
+    await projectFilter.click();
+    await page.getByRole("option", { name: "All threads", exact: true }).click();
+    await expect(rail.locator(".conversation-row")).toHaveCount(7);
     const search = rail.locator('input[name="thread-search"]');
     await search.fill("Route automation");
     await expect(rail.locator(".conversation-name")).toHaveText(["Route automation"]);

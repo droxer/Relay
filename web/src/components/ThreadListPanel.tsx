@@ -35,7 +35,6 @@ import { ListSkeleton } from "./ListSkeleton";
 import { FilterSelect } from "./FiltersBar";
 import {
   THREAD_PROJECT_FILTER_ALL,
-  THREAD_PROJECT_FILTER_NONE,
   type ThreadProjectFilter,
   type ThreadProjectOption,
 } from "../lib/threadProjectFilter";
@@ -152,7 +151,6 @@ export function ThreadListPanel({
   const railWindow = useRailWindow(threads, tasks, selectedSessionId, `${projectFilter}\n${query}`);
   const projectFilterChoices = useMemo(() => [
     { value: THREAD_PROJECT_FILTER_ALL, label: t("thread.project_filter_all") },
-    { value: THREAD_PROJECT_FILTER_NONE, label: t("thread.project_filter_none") },
     ...projectFilterOptions.map((option) => ({
       value: option.value,
       label: option.archived ? t("thread.project_filter_archived", { name: option.name }) : option.name,

@@ -405,7 +405,7 @@
     "search_placeholder": "搜索对话…",
     "search_label": "搜索对话",
     "project_filter_label": "按项目筛选对话",
-    "project_filter_all": "全部项目",
+    "project_filter_all": "全部对话",
     "project_filter_none": "无项目",
     "project_filter_archived": "{{name}}（已归档）",
     "project_filter_empty": "该项目还没有对话。",
