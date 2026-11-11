@@ -2979,6 +2979,63 @@ test("relay daemon reports a cancel for a run it never received as cancelled", a
   }]);
 });
 
+for (const failure of ["stalled", "unavailable"] as const) {
+  test(`relay daemon keeps polling while a cancellation report is ${failure}`, async () => {
+    const stop = new AbortController();
+    const deadline = setTimeout(() => stop.abort(), 500);
+    let polls = 0;
+    let cancellationAttempts = 0;
+    const lost = runCommand("cmd_lost_start");
+    const cancelCommand: DaemonNodeCommand = {
+      id: "cmd_lost_cancel", type: "run.cancel", commandId: lost.id,
+      targetLeaseId: "lease_lost_start", sessionId: lost.sessionId,
+      runId: lost.runId, agent: lost.agent, reason: "Thread deletion requested.",
+    };
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+        workspacePath: process.cwd(), sandbox: "none", token: "node_token", pollIntervalMs: 5,
+        shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+        environment: fakeEnvironment(),
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api" || path.endsWith("/daemon-node-registrations")) return jsonResponse({});
+          if (path.endsWith("/commands")) {
+            polls += 1;
+            if (polls >= 3) stop.abort();
+            // Redelivery must not create another concurrent report sender.
+            return jsonResponse({ commands: polls < 3 ? [cancelCommand] : [] });
+          }
+          if (path.endsWith("/events")) {
+            const event = await jsonBody<DaemonNodeEvent>(init);
+            if (event.type === "run.cancelled") {
+              cancellationAttempts += 1;
+              if (failure === "unavailable") return jsonResponse({ error: "temporary" }, 503);
+              return new Promise<Response>((_resolve, reject) => {
+                const abort = () => reject(new Error("Request aborted"));
+                if (init?.signal?.aborted) abort();
+                else init?.signal?.addEventListener("abort", abort, { once: true });
+              });
+            }
+          }
+          return jsonResponse({});
+        },
+      });
+    } finally {
+      clearTimeout(deadline);
+      stop.abort();
+    }
+    assert.equal(polls, 3, "failed cancellation delivery must not block command polls");
+    assert.equal(cancellationAttempts, 1, "redelivery must share the pending report sender");
+    const reports = readdirSync(join(testDaemonStateDir, "terminal-events"))
+      .filter(name => name.endsWith(".json"))
+      .map(name => JSON.parse(readFileSync(join(testDaemonStateDir, "terminal-events", name), "utf8")));
+    assert.ok(reports.some(event => event.type === "run.cancelled"
+      && event.commandId === lost.id && event.leaseId === "lease_lost_start"),
+    "the cancellation must remain durable for replay after shutdown");
+  });
+}
+
 test("relay daemon advertises five concurrent runs by default", async () => {
   const previous = captureEnv(["RELAY_DAEMON_MAX_CONCURRENT_RUNS"]);
   delete process.env.RELAY_DAEMON_MAX_CONCURRENT_RUNS;
