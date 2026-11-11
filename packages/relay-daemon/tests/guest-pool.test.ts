@@ -118,7 +118,7 @@ test("closing during a boot stops that guest once it comes up", async () => {
   boots[0]!.resolve();
   await closing;
   assert.equal(boots[0]!.closed, true);
-  (await acquiring).release();
+  await assert.rejects(acquiring, /closed/);
   await assert.rejects(pool.acquire("/w/b"), /closed/);
 });
 

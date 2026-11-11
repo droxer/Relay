@@ -59,7 +59,7 @@ export class GuestPool {
     for (;;) {
       this.assertOpen(signal);
       const guest = this.guests.get(workspace) ?? this.claimSlot(workspace);
-      if (guest) return this.lease(guest);
+      if (guest) return this.lease(guest, signal);
       await this.nextRelease(signal);
     }
   }
@@ -73,7 +73,7 @@ export class GuestPool {
     this.assertOpen(signal);
     // Prefer a guest that is already up; one still booting may yet fail.
     const booted = [...this.guests.values()].find((guest) => guest.booted);
-    return booted ? this.lease(booted) : this.acquire(fallbackWorkspace, signal);
+    return booted ? this.lease(booted, signal) : this.acquire(fallbackWorkspace, signal);
   }
 
   /** Whether `acquireAny` would borrow a booted guest instead of booting one. */
@@ -93,7 +93,7 @@ export class GuestPool {
     const free = this.freeSlots.shift();
     if (free !== undefined) return this.boot(workspace, free);
     const idle = [...this.guests.values()]
-      .filter((guest) => guest.users === 0)
+      .filter((guest) => guest.users === 0 && guest.booted)
       .sort((left, right) => left.lastReleasedAt - right.lastReleasedAt)[0];
     if (!idle) return undefined;
     this.guests.delete(idle.workspace);
@@ -107,7 +107,7 @@ export class GuestPool {
     const starting = previous.then(() => this.options.start({ workspace, boxName, manager }));
     const guest: Guest = { workspace, slot, manager, starting, booted: false, users: 0, lastReleasedAt: 0 };
     this.guests.set(workspace, guest);
-    starting.then(() => { guest.booted = true; }, () => {
+    starting.then(() => { guest.booted = true; this.wake(); }, () => {
       if (this.guests.get(workspace) === guest) this.guests.delete(workspace);
       if (!this.closed) this.freeSlots.push(slot);
       this.wake();
@@ -115,12 +115,14 @@ export class GuestPool {
     return guest;
   }
 
-  private async lease(guest: Guest): Promise<GuestLease> {
+  private async lease(guest: Guest, signal?: AbortSignal): Promise<GuestLease> {
     guest.users++;
     try {
-      await guest.starting;
+      await waitForGuest(guest.starting, signal);
+      this.assertOpen(signal);
     } catch (error) {
       guest.users--;
+      this.wake();
       throw error;
     }
     let released = false;
@@ -167,4 +169,16 @@ async function stopGuest(guest: Guest): Promise<void> {
   } catch {
     // The guest never came up; nothing to tear down.
   }
+}
+
+async function waitForGuest<T>(starting: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return starting;
+  if (signal.aborted) throw new Error("Guest acquisition cancelled.");
+  let onAbort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new Error("Guest acquisition cancelled."));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try { return await Promise.race([starting, aborted]); }
+  finally { signal.removeEventListener("abort", onAbort); }
 }
