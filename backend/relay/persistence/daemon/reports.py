@@ -1,5 +1,6 @@
 """Receipt and report effects share the caller's thread transaction."""
 from collections.abc import Iterator
+from typing import Any, TYPE_CHECKING
 from contextlib import contextmanager
 from sqlalchemy import insert, select
 from ..engine import store_transaction
@@ -12,6 +13,39 @@ class ReportReceiptConflict(ValueError):
 
 
 class ReportReceiptRows(DaemonStoreState):
+    if TYPE_CHECKING:
+        def mark_cancel_commands_completed(self, node_id: str, target_command_id: str) -> None: ...
+
+    def accept_orphaned_cancel_report(
+        self, node_id: str, event: dict[str, Any], report_id: str, digest: str,
+    ) -> bool:
+        """Use a retained stop as authority when its target was already pruned.
+
+        No session or run is changed: only the stop and its payload-bound
+        receipt commit together. Unknown reports still require intervention.
+        """
+        if event['type'] != 'run.cancelled':
+            return False
+        with self.report_ingest_scope(node_id), store_transaction(self.engine) as conn:
+            if self.report_was_accepted(node_id, event['commandId'], report_id, digest):
+                return True
+            if conn.scalar(select(self.commands.c.id).where(self.commands.c.id == event['commandId'])):
+                return False
+            authority = conn.scalar(select(self.commands.c.id).where(
+                self.commands.c.node_id == node_id,
+                self.commands.c.type == 'run.cancel',
+                *(self.commands.c.command[key].as_string() == event[key]
+                  for key in ('commandId', 'sessionId', 'runId', 'agent')),
+                self.commands.c.command['targetLeaseId'].as_string() == event.get('leaseId'),
+            ).with_for_update().limit(1))
+            if authority is None:
+                return False
+            self.mark_cancel_commands_completed(node_id, event['commandId'])
+            conn.execute(insert(report_receipts).values(
+                command_id=event['commandId'], report_id=report_id, node_id=node_id, digest=digest,
+            ))
+            return True
+
     @contextmanager
     def report_ingest_scope(self, node_id: str) -> Iterator[None]:
         """Keep node observation ahead of thread/command locks across replicas."""

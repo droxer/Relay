@@ -214,6 +214,17 @@ class EventIngestMixin(RegistryState):
                 or record["leaseId"] == event["leaseId"]
             )
         )
+        if (
+            event["type"] == "run.cancelled"
+            and record.get("status") in {"completed", "failed"}
+            and replay_matches
+        ):
+            # Exit is already recorded. Settle the redundant stop without
+            # changing the run's outcome or advancing its request a second time.
+            self.daemon_store.mark_cancel_commands_completed(
+                sandbox_id, event["commandId"]
+            )
+            return
         if not (
             terminal_status
             and record.get("status") == terminal_status

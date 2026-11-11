@@ -61,6 +61,16 @@ class DaemonRecordMaintenance(DaemonStoreState):
             replay_pending = terminal["_durableReport"].as_boolean().is_(True) & or_(
                 final_sequence.is_(None), accepted_sequence < final_sequence
             )
+            stops = self.commands.alias("pending_stops")
+            stop_pending = select(stops.c.id).where(
+                stops.c.node_id == self.commands.c.node_id,
+                stops.c.type == "run.cancel",
+                ~stops.c.status.in_(TERMINAL_DAEMON_STATUSES),
+                stops.c.command["commandId"].as_string() == cast(self.commands.c.id, Text),
+            ).correlate(self.commands).exists()
+            # An unacknowledged stop still needs its target's exit/ownership
+            # record, even when that target finished before the stop arrived.
+            authority_pending = or_(replay_pending, stop_pending)
             # A terminal receipt proves exit, not completion of output replay.
             # Older durable clients have no watermark: preserve their authority
             # rather than turn a later replay into an unrecoverable rejection.
@@ -77,8 +87,8 @@ class DaemonRecordMaintenance(DaemonStoreState):
                     cursors[name] = node_id
                     terminal_time = terminal_time_expression(table)
                     base = select(table.c.id).where(table.c.node_id == node_id, table.c.status.in_(TERMINAL_DAEMON_STATUSES))
-                    protected = replay_pending if name == "commands" else select(self.commands.c.id).where(
-                        self.commands.c.id == self.runs.c.command_id, replay_pending
+                    protected = authority_pending if name == "commands" else select(self.commands.c.id).where(
+                        self.commands.c.id == self.runs.c.command_id, authority_pending
                     ).exists()
                     base = base.where(~protected)
                     expired = list(conn.scalars(base.where(terminal_time <= cutoff).order_by(terminal_time, table.c.id).limit(budget)))

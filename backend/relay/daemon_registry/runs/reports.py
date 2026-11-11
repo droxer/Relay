@@ -33,6 +33,8 @@ class DurableReportMixin(RegistryState):
                     return
                 record = self.daemon_store.get_command(event['commandId'])
                 if not record:
+                    if self.daemon_store.accept_orphaned_cancel_report(sandbox_id, event, report_id, digest):
+                        return
                     raise CommandEventMismatchError('Report names an unknown command.')
                 command = record['command']
                 if record['nodeId'] != sandbox_id or any(command.get(key) != event.get(key) for key in ('sessionId', 'runId', 'agent')) or record.get('leaseId') != event.get('leaseId'):

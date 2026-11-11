@@ -359,3 +359,157 @@ def test_lost_acknowledgement_survives_command_pruning(tmp_path, wire, kind, del
                                        "secret", report["id"], "f" * 64)
     with pytest.raises(PermissionError):
         registry.handle_durable_report("node", output, "wrong", report["id"], report["digest"])
+
+
+@pytest.mark.parametrize('terminal', ['completed', 'failed'])
+@pytest.mark.parametrize('durable', [False, True])
+def test_cancellation_ack_after_exit_settles_stop_without_rewriting_outcome(tmp_path, terminal, durable):
+    registry, sessions, output = fixture(tmp_path)
+    event = {key: value for key, value in output.items()
+             if key not in ('stream', 'sequence', 'text', 'replayed')}
+    store = registry.daemon_store
+    registry.handle_event('node', {**event, 'type': f'run.{terminal}', 'exitCode': 0, 'error': 'failed'}, 'secret')
+    before = sessions.get_session(event['sessionId'])
+    target_before = store.get_command(event['commandId'])
+    cancel = {'id': new_database_id(), 'type': 'run.cancel',
+              'commandId': event['commandId'], 'sessionId': event['sessionId'],
+              'runId': event['runId'], 'agent': event['agent'], 'reason': 'stop',
+              'targetLeaseId': event['leaseId']}
+    store.enqueue_command('node', cancel)
+    store.take_queued_commands('node')
+    ack = {**event, 'type': 'run.cancelled', 'reason': 'not executing'}
+    if durable:
+        registry.handle_durable_report('node', ack, 'secret', 'a' * 64, 'b' * 64)
+    else:
+        registry.handle_event('node', ack, 'secret')
+    assert store.get_command(cancel['id'])['status'] == 'completed'
+    assert store.get_command(event['commandId']) == target_before
+    assert sessions.get_session(event['sessionId']) == before
+    store.prune_terminal_records(retention_seconds=0, per_node_limit=0)
+    assert store.take_queued_commands('node') == []
+
+
+def test_retention_preserves_exit_authority_until_stop_is_acknowledged(tmp_path):
+    registry, _, output = fixture(tmp_path)
+    store = registry.daemon_store
+    event = {key: value for key, value in output.items()
+             if key not in ('stream', 'sequence', 'text', 'replayed')}
+    registry.handle_event('node', {**event, 'type': 'run.completed', 'exitCode': 0}, 'secret')
+    cancel = {'id': new_database_id(), 'type': 'run.cancel',
+              'commandId': event['commandId'], 'sessionId': event['sessionId'],
+              'runId': event['runId'], 'agent': event['agent'], 'reason': 'stop',
+              'targetLeaseId': event['leaseId']}
+    store.enqueue_command('node', cancel)
+    store.take_queued_commands('node')
+    store.prune_terminal_records(retention_seconds=0, per_node_limit=0)
+    assert store.get_command(event['commandId']) is not None
+    registry.handle_durable_report('node', {**event, 'type': 'run.cancelled'}, 'secret', 'a' * 64, 'b' * 64)
+    assert store.get_command(cancel['id'])['status'] == 'completed'
+    store.prune_terminal_records(retention_seconds=0, per_node_limit=0)
+    assert store.get_command(event['commandId']) is None
+
+
+def orphaned_stop(tmp_path, *, leased=True):
+    registry, sessions, output = fixture(tmp_path)
+    store = registry.daemon_store
+    event = {key: value for key, value in output.items()
+             if key not in ('stream', 'sequence', 'text', 'replayed')}
+    registry.handle_event('node', {**event, 'type': 'run.completed', 'exitCode': 0}, 'secret')
+    # Recreate historical data: retention already removed the target before
+    # the still-live cancellation was acknowledged.
+    store.prune_terminal_records(retention_seconds=0, per_node_limit=0)
+    assert store.get_command(event['commandId']) is None
+    if not leased:
+        event.pop('leaseId')
+    cancel = {'id': new_database_id(), 'type': 'run.cancel',
+              'commandId': event['commandId'], 'sessionId': event['sessionId'],
+              'runId': event['runId'], 'agent': event['agent'], 'reason': 'stop',
+              **({'targetLeaseId': event['leaseId']} if leased else {})}
+    store.enqueue_command('node', cancel)
+    store.take_queued_commands('node')
+    return registry, sessions, {**event, 'type': 'run.cancelled'}, cancel
+
+
+@pytest.mark.parametrize('leased', [False, True])
+def test_orphaned_stop_ack_is_accepted_from_cancellation_authority(tmp_path, leased):
+    registry, sessions, event, cancel = orphaned_stop(tmp_path, leased=leased)
+    before = sessions.get_session(event['sessionId'])
+    registry.handle_durable_report('node', event, 'secret', 'a' * 64, 'b' * 64)
+    store = registry.daemon_store
+    assert store.get_command(cancel['id'])['status'] == 'completed'
+    assert sessions.get_session(event['sessionId']) == before
+    assert store.report_was_accepted('node', event['commandId'], 'a' * 64, 'b' * 64)
+    store.prune_terminal_records(retention_seconds=0, per_node_limit=0)
+    registry.handle_durable_report('node', event, 'secret', 'a' * 64, 'b' * 64)
+    assert store.take_queued_commands('node') == []
+    with pytest.raises(CommandEventMismatchError, match='different owner or payload'):
+        registry.handle_durable_report('node', event, 'secret', 'a' * 64, 'c' * 64)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('commandId', '00000000-0000-4000-8000-000000000001'),
+    ('sessionId', '00000000-0000-4000-8000-000000000002'),
+    ('runId', '00000000-0000-4000-8000-000000000003'),
+    ('agent', 'claude'), ('leaseId', 'wrong-lease'), ('leaseId', None),
+    ('type', 'run.completed'),
+])
+def test_orphan_recovery_refuses_reports_without_matching_stop_authority(tmp_path, field, value):
+    registry, _, event, cancel = orphaned_stop(tmp_path)
+    with pytest.raises(CommandEventMismatchError, match='unknown command'):
+        registry.handle_durable_report('node', {**event, field: value}, 'secret', 'a' * 64, 'b' * 64)
+    assert registry.daemon_store.get_command(cancel['id'])['status'] == 'dispatched'
+    assert not registry.daemon_store.report_was_accepted('node', event['commandId'], 'a' * 64, 'b' * 64)
+
+
+def test_orphan_recovery_requires_the_owning_node_and_valid_credentials(tmp_path):
+    registry, _, event, cancel = orphaned_stop(tmp_path)
+    registry.register({'sandboxId': 'other', 'userId': registry.get('node')['userId'], 'token': 'other-secret',
+                       'workspacePath': '/other', 'protocolVersion': 2, 'supportedAgents': ['codex']})
+    with pytest.raises(CommandEventMismatchError, match='unknown command'):
+        registry.handle_durable_report('other', event, 'other-secret', 'a' * 64, 'b' * 64)
+    with pytest.raises(PermissionError):
+        registry.handle_durable_report('node', event, 'wrong', 'a' * 64, 'b' * 64)
+    assert registry.daemon_store.get_command(cancel['id'])['status'] == 'dispatched'
+
+
+def test_orphan_recovery_rolls_back_stop_and_receipt_together(tmp_path, monkeypatch):
+    registry, _, event, cancel = orphaned_stop(tmp_path)
+    store = registry.daemon_store
+    original = store.mark_cancel_commands_completed
+    def fail_after_settling(node_id, target_id):
+        original(node_id, target_id)
+        raise RuntimeError('interrupted before receipt')
+    monkeypatch.setattr(store, 'mark_cancel_commands_completed', fail_after_settling)
+    with pytest.raises(RuntimeError, match='interrupted'):
+        registry.handle_durable_report('node', event, 'secret', 'a' * 64, 'b' * 64)
+    assert store.get_command(cancel['id'])['status'] == 'dispatched'
+    assert not store.report_was_accepted('node', event['commandId'], 'a' * 64, 'b' * 64)
+    monkeypatch.setattr(store, 'mark_cancel_commands_completed', original)
+    registry.handle_durable_report('node', event, 'secret', 'a' * 64, 'b' * 64)
+    assert store.get_command(cancel['id'])['status'] == 'completed'
+
+
+@pytest.mark.parametrize('wire', ['events', 'reports'])
+def test_orphaned_stop_recovery_survives_thread_deletion_over_http(tmp_path, wire):
+    from dataclasses import replace
+    import json
+    from fastapi.testclient import TestClient
+    from relay.app import create_app
+    registry, sessions, event, cancel = orphaned_stop(tmp_path, leased=False)
+    sessions.delete_session(event['sessionId'])
+    app = create_app(str(tmp_path / 'app'))
+    app.state.context = replace(app.state.context, registry=registry)
+    client = TestClient(app)
+    raw = json.dumps(event)
+    digest = sha256(raw.encode()).hexdigest()
+    headers = {'Authorization': 'Bearer secret', 'Content-Type': 'application/json'}
+    if wire == 'events':
+        response = client.post('/api/v1/daemon-nodes/node/events', content=raw, headers={
+            **headers, 'X-Relay-Report-Id': 'a' * 64, 'X-Relay-Report-Digest': digest})
+        assert response.headers.get('X-Relay-Report-Digest') == digest, response.text
+    else:
+        response = client.post('/api/v1/daemon-nodes/node/reports', headers=headers,
+                               json={'reports': [{'id': 'a' * 64, 'digest': digest, 'body': raw}]})
+        assert response.json()['receipts'][0]['status'] == 200
+    assert response.status_code == 200, response.text
+    assert registry.daemon_store.get_command(cancel['id'])['status'] == 'completed'

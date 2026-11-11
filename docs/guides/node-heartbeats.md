@@ -194,6 +194,17 @@ local operator in a private audit record. Discard is deliberate loss and never
 counts as acceptance. Back up the private daemon state when moving a Computer;
 deleting its report directory destroys its only unaccepted evidence.
 
+A stop acknowledgement for an already completed or failed run settles the stop
+without changing the run's outcome. Retention keeps a target command while its
+stop is unacknowledged. For older orphaned stops whose targets were already
+pruned, a durable cancellation acknowledgement can instead use the retained
+stop's matching Computer, command, Thread, run, runtime, and lease as authority.
+The stop completion and payload-bound receipt commit together, even if the
+Thread was deleted. Other unknown reports still receive 409. After upgrading
+the backend, stop the daemon, retry the affected cancellation reports with
+`relay retry-report --report <id>`, and start it again; quarantined reports are
+never retried automatically.
+
 An outage lasting 60 seconds, or an immediate storage, credential, quarantine,
 or uncertain-exit fault, opens one incident per stable Computer. The owner (or
 shared-hardware admins) receives a concise notice with a protected diagnostics
