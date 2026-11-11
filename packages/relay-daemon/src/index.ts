@@ -3,6 +3,7 @@ import { retryAfterMs } from "./transport-retry.js";
 import { ReportStoragePolicy } from "./report-storage.js";
 import { TransportMonitor } from "./transport-monitor.js";
 import { DiagnosticsSchedule } from "./diagnostics-schedule.js";
+import { assertRunWorkspaceScope } from "./run-workspace.js";
 import { RELAY_CLIENT_VERSION } from "./client-version.js";
 import { createHash } from "node:crypto";
 import type { StreamRenderer } from "relay-core";
@@ -481,11 +482,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     if (status.status === "ready") logger.info("Relay MCP ready", {runtimes:status.runtimes});
     else logger.warn("Relay MCP setup needs attention; it will reconcile again", {status:status.status,code:status.code});
   };
+  let registeredComputerId: string | undefined;
   const register = async (): Promise<DaemonNodeHeartbeatSettings | undefined> => {
     const url = relayApiUrl(backendUrl, "/daemon-node-registrations");
     const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
       fetchFn, url, buildRegistration(), undefined, runtimeSignal,
     );
+    registeredComputerId = response.computerId;
     for (const id of response.acknowledgedJournalIds ?? []) {
       // Acknowledgement accounts for the interrupted run, but is not exit
       // evidence. Keep its journal so another restart can still prove exit;
@@ -1005,6 +1008,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           // and taking down every other run on this node.
           let sharedWorkspaceKey: string | undefined;
           try {
+            assertRunWorkspaceScope(command, registeredComputerId);
             sharedWorkspaceKey = durableWorkspaceLayout(command.workspaceLayout)
               ? threadWorkspaces.resolveSubpath(command.sessionId, requiredWorkspaceSubpath(command)).hostPath
               : command.workspaceLayout === "thread"
@@ -1517,7 +1521,7 @@ async function executeCommand(
   echoAgentOutput = true,
 ): Promise<DaemonNodeEvent> {
   const eventUrl = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`);
-  const state = { ...(command.state ?? initialAgentState(command.taskGoal)), round_result_run_id: command.runId };
+  const state = { ...(command.state ?? initialAgentState(command.taskGoal)), workspace_scope: command.workspaceScope, round_result_run_id: command.runId };
   logger.info("run starting", commandLogFields(sandboxId, command));
   if (command.workspacePath && !workspacePathsMatch(command.workspacePath, nodeWorkspacePath)) {
     throw new Error(
@@ -1578,7 +1582,7 @@ async function executeCommand(
   let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
   let nativeMcpBridge: Awaited<ReturnType<typeof startNativeMcpBridge>> | undefined;
   try {
-    // Every run gets standalone work tools. Project authority is checked by
+    // Work tools are restricted to this run's Computer or Project. Authority is checked by
     // the backend against the command identity and the requested resource.
     const projectScope = state.project_manager ?? state.project_reader;
     const invokeManager = createRunMcpProxy({backendUrl,sandboxId,nodeToken:token,
@@ -1859,9 +1863,9 @@ async function executeCommand(
     const scanOptions = { ownAgentHomeSubdir: agentHomeSubdir, ownThreadId: recordsId };
     const options = {
       execStream: execution.execStream,
-      runtimeEnv: environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge
+      runtimeEnv: { RELAY_WORKSPACE_SCOPE: JSON.stringify(command.workspaceScope ?? {}), ...(environment.sandboxMode === "none" ? {[MANAGED_MCP_CONTEXT_ENV]: JSON.stringify(managerBridge
         ? {backendUrl,projectId:(state.project_manager ?? state.project_reader)?.projectId,native:nativeMcpBridge?.address,bridgePath:join(threadWorkspace.hostPath,managerBridge.toolPath)}
-        : {disabled:true})} : undefined,
+        : {disabled:true})} : {}) },
       eventSink,
       runId: command.runId,
       agent: command.agent,

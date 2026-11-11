@@ -66,6 +66,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "ownerUserId",
         "assigneeUserId",
         "projectId",
+        "computerId",
         "dueDate",
         "routineType",
         "routineCadence",
@@ -185,6 +186,7 @@ def task_update_events(
     # Tags likewise: an empty list clears them, so absence must stay distinct.
     for field in (
         "tags",
+        "computerId",
         "routineTriggers",
         "routineState",
         "routinePauseReason",
@@ -272,6 +274,7 @@ def routine_occurrence_events(
                 "acceptancePolicy": routine.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY),
                 "dueDate": occurrence_date,
                 "sourceRoutineId": routine["id"],
+                **({"computerId": routine["computerId"]} if routine.get("computerId") else {}),
                 "scheduledFor": occurrence_date,
                 **(
                     {

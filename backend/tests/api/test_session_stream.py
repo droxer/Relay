@@ -120,7 +120,7 @@ def test_mark_done_persists_a_delivery_fence_for_an_active_request(monkeypatch) 
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )

@@ -84,8 +84,11 @@ def test_project_roster_reads_and_only_lead_manages_work(managed_env, lead, auto
         ]:
             mutation = _rpc(client, token, "tools/call", {"name": name, "arguments": args}).json()["result"]
             assert bool(mutation.get("isError")) is not lead, mutation
-        standalone = call(client, token, "relay_create_task", fields={"title": "Own standalone work"})
-        assert not standalone["task"].get("projectId")
+        default = _rpc(client, token, "tools/call", {"name": "relay_create_task", "arguments": {"fields": {"title": "Project default"}}}).json()["result"]
+        if lead:
+            assert default["structuredContent"]["task"]["projectId"] == project["id"]
+        else:
+            assert default["isError"]
         # A reader still discovers standalone mutation tools.
         names = {t["name"] for t in _rpc(client, token, "tools/list").json()["result"]["tools"]}
         assert {"relay_create_task", "relay_create_automation"} <= names
@@ -166,10 +169,10 @@ def test_work_lists_are_owner_scoped_paginated_and_do_not_load_histories(managed
     app, owner, node, project, *_ = managed_env
     token = credential(app, node)
     for index in range(5):
-        owner.post("/api/v1/tasks", json={"title": f"Straße {index}"})
+        owner.post("/api/v1/tasks", json={"title": f"Straße {index}", "computerId": project["computerId"]})
     owner.post("/api/v1/tasks", json={"title": "Straße in Project", "projectId": project["id"]})
     app.state.task_store.create_task({"title": "Straße foreign", "ownerUserId": user_id("bob")})
-    owner.post("/api/v1/tasks", json={"title": "Straße automation", **paused_routine()})
+    owner.post("/api/v1/tasks", json={"title": "Straße automation", "computerId": project["computerId"], **paused_routine()})
 
     def unbounded(*args, **kwargs):
         raise AssertionError("Work lists must query scoped snapshots without histories")
@@ -218,4 +221,33 @@ def test_lead_transfer_revokes_active_run_writes_and_disabled_members_lose_reads
         assert call(client, token, "relay_list_projects")["projects"] == []
         refused = _rpc(client, token, "tools/call", {"name": "relay_project_overview", "arguments": {"projectId": project["id"]}})
         assert refused.json()["result"]["isError"]
-        call(client, token, "relay_create_task", fields={"title": "Still standalone"})
+        assert _rpc(client, token, "tools/call", {"name": "relay_create_task", "arguments": {"fields": {"title": "No scope escape"}}}).json()["result"]["isError"]
+
+
+@pytest.mark.parametrize("automation", [False, True])
+def test_computer_runtime_cannot_access_work_on_another_computer(managed_env, automation):
+    from relay.core.computer_identity import computer_id
+    app, _, node, _, *_ = managed_env
+    token = credential(app, node)
+    kind = "automation" if automation else "task"
+    own = app.state.task_store.create_task({"title": "Here", "ownerUserId": node["userId"], "computerId": computer_id(node), "isRoutine": automation})
+    other = app.state.task_store.create_task({"title": "Elsewhere", "ownerUserId": node["userId"], "computerId": "device:other:host", "isRoutine": automation})
+    with TestClient(app) as client:
+        page = call(client, token, f"relay_list_{'automations' if automation else 'tasks'}")
+        assert [task["id"] for task in page[f"{'automations' if automation else 'tasks'}"]] == [own["id"]]
+        for name, args in [(f"relay_get_{kind}", {f"{kind}Id": other["id"]}), (f"relay_update_{kind}", {f"{kind}Id": other["id"], "fields": {"title": "No"}}), (f"relay_delete_{kind}", {f"{kind}Id": other["id"]})]:
+            assert _rpc(client, token, "tools/call", {"name": name, "arguments": args}).json()["result"]["isError"]
+        created = call(client, token, f"relay_create_{kind}", fields={"title": "Bound"})[kind]
+        assert created["computerId"] == computer_id(node)
+
+
+def test_project_runtime_defaults_to_its_project_and_refuses_standalone_work(managed_env):
+    app, _, node, project, *_ = managed_env
+    _, command = _start(managed_env)
+    token = credential(app, node, command)
+    with TestClient(app) as client:
+        created = call(client, token, "relay_create_task", fields={"title": "Project default"})["task"]
+        assert created["projectId"] == project["id"]
+        standalone = app.state.task_store.create_task({"title": "Standalone", "ownerUserId": node["userId"], "computerId": command.get("workspaceScope", {}).get("computerId")})
+        response = _rpc(client, token, "tools/call", {"name": "relay_get_task", "arguments": {"taskId": standalone["id"]}}).json()["result"]
+        assert response["isError"]

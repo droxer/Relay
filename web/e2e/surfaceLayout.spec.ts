@@ -5,6 +5,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
    phone width, on a touch pointer, or when two controls share a row. */
 
 const stamp = "2026-09-01T00:00:00.000Z";
+const computer = { id: "layout", userId: "review-user", online: true, stale: false, status: "ready", agents: {}, activeRuns: [] };
 const USER = { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" };
 
 const reply = [
@@ -13,7 +14,7 @@ const reply = [
 
 const session = {
   id: "review-thread", title: "Rotate the signing key", taskGoal: "Rotate the signing key",
-  workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
+  computerId: "node:layout", projectId: null, workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
   status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp,
   agentRuns: [{ id: "run-1", agent: "claude", status: "completed", mode: "action", startedAt: stamp, completedAt: stamp }],
   artifacts: [], decisions: [], collaborationRounds: [], eventCount: 3, artifactCount: 0, runCount: 1,
@@ -28,7 +29,7 @@ const session = {
    badge, and an origin name. That is the row the 240px floor has to survive. */
 const waiting = {
   id: "waiting-thread", title: "Approve the pricing copy", taskGoal: "Approve the pricing copy",
-  workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
+  computerId: "node:layout", projectId: null, workspacePath: "/workspace", ownerUserId: "review-user", participants: ["human"],
   status: "waiting_for_human", phase: "created", createdAt: stamp, updatedAt: stamp,
   agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [],
   eventCount: 1, artifactCount: 0, runCount: 0, events: [],
@@ -36,13 +37,13 @@ const waiting = {
 
 const task = {
   id: "task-1", title: "Reconcile September invoices against the ledger export", description: "",
-  priority: "high", status: "backlog", ownerUserId: "review-user", isRoutine: false,
+  computerId: "node:layout", priority: "high", status: "backlog", ownerUserId: "review-user", isRoutine: false,
   linkedSessionIds: ["review-thread", "waiting-thread"], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
 };
 
 const routine = {
   id: "routine-1", title: "Weekly ledger reconciliation", description: "", priority: "normal", status: "backlog",
-  ownerUserId: "review-user", isRoutine: true, routineState: "active",
+  computerId: "node:layout", ownerUserId: "review-user", isRoutine: true, routineState: "active",
   routineTriggers: [{ kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "week", at: "09:00", days: [1] } } }],
   linkedSessionIds: [], createdAt: stamp, updatedAt: stamp, eventCount: 1, activityCount: 0,
 };
@@ -76,7 +77,7 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   const page = await context.newPage();
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [], projects: [], sandboxes: [], skills: [], ...fixtures };
+    let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [computer], projects: [], sandboxes: [], skills: [], ...fixtures };
     if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     if (pathname.endsWith("/threads/review-thread")) body = { ...session, ...thread };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -181,47 +182,19 @@ test(`project directory shows aligned names and Agent counts without Computer id
    search. At the rail's 240px floor the two cannot sit side by side, so the
    select must wrap under the search rather than crush it or bleed past the
    rail; on a phone it is a thumb-height control like the search beside it. */
-test("thread rail project filter fits the band and narrows the rail", async ({ browser }, testInfo) => {
-  const project = {
-    id: "p-launch", name: "Autumn launch with a long enough name to truncate",
-    ownerUserId: USER.id, computerId: "device:review-user:main", enabled: true, members: [], leadAgentId: null,
-    version: 1, workspaceLayout: "project", workspaceSubpath: "projects/p-launch", createdAt: stamp, updatedAt: stamp,
-  };
-  // The project's room thread: the unfiltered Threads rail leaves it to the
-  // Projects directory; choosing the project must bring it in.
-  const room = { ...waiting, id: "room-thread", title: "Launch room", taskGoal: "Launch room", status: "completed", projectId: project.id };
-  const fixtures = { projects: [project], sessions: [session, waiting, room] };
+test("Computer thread rail excludes Project rooms and needs no Project filter", async ({ browser }, testInfo) => {
+  const project = { id: "p-launch", name: "Autumn launch", ownerUserId: USER.id, computerId: "node:layout", enabled: true, members: [], version: 1 };
+  const room = { ...waiting, id: "room-thread", title: "Launch room", projectId: project.id };
   for (const touch of [false, true]) {
-    const page = await openPage(browser, "/threads", touch, { "relay-web.threadListWidth": "240" }, undefined, fixtures);
+    const page = await openPage(browser, "/computers/node%3Alayout/threads", touch,
+      { "relay-web.threadListWidth": "240" }, undefined, { projects: [project], sessions: [session, waiting, room] });
     const rail = page.locator("#thread-panel");
-    const filter = rail.getByRole("combobox", { name: "Filter threads by project" });
-    await expect(filter).toBeVisible();
+    await expect(rail.getByRole("searchbox", { name: "Search threads" })).toBeVisible();
+    await expect(rail.getByRole("combobox", { name: "Filter threads by project" })).toHaveCount(0);
     await expect(rail.getByText("Launch room")).toHaveCount(0);
-    // In-flow children only: the select's hidden native input is fixed at x=0.
-    expect(await page.locator("#thread-panel .list-filter-bar").evaluate((bar) => {
-      const box = bar.getBoundingClientRect();
-      return Math.max(0, ...[...bar.querySelectorAll("*")]
-        .filter((child) => !["fixed", "absolute"].includes(getComputedStyle(child).position))
-        .map((child) => Math.max(child.getBoundingClientRect().right - box.right, box.left - child.getBoundingClientRect().left)));
-    })).toBeLessThanOrEqual(0);
-    const search = await rail.locator(".list-filter-search").boundingBox();
-    expect(search!.width).toBeGreaterThanOrEqual(120);
-    if (touch) expect((await filter.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    for (const theme of ["light", "dark"]) {
-      await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ authenticated: true, user: { ...USER, theme } }) }));
-      await page.reload();
-      await expect(filter).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath(`thread-project-filter-${touch ? "phone" : "desktop"}-${theme}.png`) });
-    }
-    await filter.click();
-    await page.getByRole("option", { name: project.name }).click();
-    await expect(filter).toContainText("Autumn launch");
-    await expect(page.getByRole("listbox")).toHaveCount(0);
-    expect((await rail.locator(".list-filter-search").boundingBox())!.width).toBeGreaterThanOrEqual(120);
-    await expect(rail.getByText("Launch room")).toBeVisible();
-    await expect(rail.getByText("Approve the pricing copy")).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`thread-project-filter-${touch ? "phone" : "desktop"}-chosen.png`) });
+    await expect(rail.getByText("Approve the pricing copy", { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`computer-thread-scope-${touch ? "phone" : "desktop"}.png`) });
     await page.context().close();
   }
 });
@@ -351,7 +324,7 @@ test("composer agent picker fits its content at phone width", async ({ browser }
 
 for (const touch of [false, true]) {
   test(`filter bar controls share one height${touch ? " on touch" : ""}`, async ({ browser }) => {
-    const page = await openPage(browser, "/automations", touch);
+    const page = await openPage(browser, "/computers/node%3Alayout/automations", touch);
     // The chip row's "Add filter" trigger sits on the same rung as the search
     // and the Display glyph, which holds the sort menu on a phone. Above 820px
     // the column headers sort and neither is drawn.
@@ -381,7 +354,7 @@ const phoneRoutines = [
 
 for (const width of [320, 375, 390, 820]) {
   test(`automation rows stay inside a ${width}px phone and keep Run now tappable`, async ({ browser }) => {
-    const page = await openPage(browser, "/automations", true, undefined, undefined, { tasks: phoneRoutines });
+    const page = await openPage(browser, "/computers/node%3Alayout/automations", true, undefined, undefined, { tasks: phoneRoutines });
     await page.setViewportSize({ width, height: 844 });
     const rows = page.locator(".routine-table > tbody > tr");
     await expect(rows).toHaveCount(phoneRoutines.length);
@@ -680,7 +653,7 @@ test("a task's file preview keeps its header actions inside it on a phone", asyn
   };
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [{ id: "launch", name: "Launch", enabled: true, members: [], ownerUserId: "review-user", computerId: "c", createdAt: stamp, updatedAt: stamp }], tasks: [shipped], sandboxes: [], skills: [], files: [], entries: [] };
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [computer], projects: [{ id: "launch", name: "Launch", enabled: true, members: [], ownerUserId: "review-user", computerId: "c", createdAt: stamp, updatedAt: stamp }], tasks: [shipped], sandboxes: [], skills: [], files: [], entries: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     if (path.endsWith("/tasks/ship")) body = shipped;
     if (path.endsWith("/tasks/ship/artifacts")) body = { artifacts: [{ id: "notes", sessionId: "run", kind: "workspace_file", title: "release-notes.md", path: "artifacts/release-notes.md", contentType: "text/markdown", bytes: 100, createdAt: stamp }] };
@@ -711,12 +684,12 @@ test("a task record on a phone docks its actions and opens More as a bottom shee
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await context.newPage();
   const intake = {
-    id: "intake", title: "Audit webhook retry backoff", status: "backlog", description: "", priority: "normal",
+    id: "intake", computerId: "node:layout", assignedAgentId: "layout-agent", title: "Audit webhook retry backoff", status: "blocked", description: "", priority: "normal",
     isRoutine: false, linkedSessionIds: [], ownerUserId: "review-user", createdAt: stamp, updatedAt: stamp, events: [], activity: [],
   };
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [], tasks: [intake], sandboxes: [], skills: [], files: [], entries: [] };
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [computer], projects: [], tasks: [intake], sandboxes: [], skills: [], files: [], entries: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     if (path.endsWith("/tasks/intake")) body = intake;
     if (path.endsWith("/artifacts")) body = { artifacts: [] };
@@ -728,7 +701,10 @@ test("a task record on a phone docks its actions and opens More as a bottom shee
   const drawer = page.getByRole("dialog");
   const more = drawer.getByRole("button", { name: "More actions" });
   await expect(more).toBeVisible();
-  await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
+  // Status indicators may pulse forever; wait only for the drawer's finite motion.
+  await drawer.evaluate(element => Promise.all(element.getAnimations({ subtree: true })
+    .filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity)
+    .map(animation => animation.finished.catch(() => undefined))));
 
   const actions = drawer.locator(".record-drawer-actions");
   const [actionsBox, tabsBox] = await Promise.all([actions.boundingBox(), drawer.locator(".workspace-page-tabs").boundingBox()]);
@@ -811,12 +787,12 @@ test("a drawer on a touch phone is dismissed by pulling its header down", async 
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await context.newPage();
   const intake = {
-    id: "intake", title: "Audit webhook retry backoff", status: "backlog", description: "", priority: "normal",
+    id: "intake", computerId: "node:layout", title: "Audit webhook retry backoff", status: "backlog", description: "", priority: "normal",
     isRoutine: false, linkedSessionIds: [], ownerUserId: "review-user", createdAt: stamp, updatedAt: stamp, events: [], activity: [],
   };
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [], tasks: [intake], sandboxes: [], skills: [], files: [], entries: [] };
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [computer], projects: [], tasks: [intake], sandboxes: [], skills: [], files: [], entries: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     if (path.endsWith("/tasks/intake")) body = intake;
     if (path.endsWith("/artifacts")) body = { artifacts: [] };

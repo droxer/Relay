@@ -16,7 +16,7 @@ def _ready(app, node, *, tools=True, setup=False, reader=True):
         "sandboxId": node["id"], "userId": node["userId"],
         "token": f"token_{node['id']}", "protocolVersion": 1,
         "supportedAgents": ["codex", "claude"],
-        "capabilities": ["thread-workspaces", "project-workspaces", "project-manager",
+        "capabilities": ["workspace-scope", "thread-workspaces", "project-workspaces", "project-manager",
                          *(["project-manager-mcp"] if tools else []), *(["project-reader-mcp"] if reader else []),
                          *(["project-setup"] if setup else [])],
         "status": "ready", "workspacePath": "/workspace/relay",

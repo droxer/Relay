@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -72,4 +72,47 @@ test("a run that never passed discovery probes once, and a failed run forgets th
     assert.equal(probes(), 2);
     run.release();
   });
+});
+
+test("a local workspace lease pins the native process cwd and refuses another directory", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-local-scope-"));
+  const other = mkdtempSync(join(tmpdir(), "relay-local-other-"));
+  const runtime = createLocalRuntime();
+  try {
+    const lease = await runtime.acquireWorkspace(root);
+    const result = await lease.execStream(process.execPath, ["-e", "process.stdout.write(process.cwd())"]);
+    assert.equal(result.exit_code, 0);
+    assert.equal(result.stdout, realpathSync.native(root));
+    await assert.rejects(lease.execStream(process.execPath, ["-e", "process.exit(99)"], { cwd: other }), /workspace scope/i);
+    lease.release();
+    await assert.rejects(lease.execStream(process.execPath, ["-e", "process.exit(99)"]), /released/i);
+  } finally { await runtime.close(); rmSync(root, { recursive: true, force: true }); rmSync(other, { recursive: true, force: true }); }
+});
+
+test("a cancelled local workspace lease cannot launch a native process", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-local-cancel-"));
+  const runtime = createLocalRuntime();
+  const controller = new AbortController();
+  try {
+    const lease = await runtime.acquireWorkspace(root, controller.signal);
+    controller.abort(new Error("Run cancelled"));
+    await assert.rejects(lease.execStream(process.execPath, ["-e", "process.exit(99)"]), /cancelled/i);
+    lease.release();
+  } finally { await runtime.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test("a local lease rejects a workspace replaced by a symlink", { skip: process.platform === "win32" }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-local-swap-"));
+  const workspace = join(root, "workspace");
+  const other = join(root, "other");
+  mkdirSync(workspace); mkdirSync(other);
+  const runtime = createLocalRuntime();
+  try {
+    const lease = await runtime.acquireWorkspace(workspace);
+    renameSync(workspace, join(root, "original"));
+    symlinkSync(other, workspace);
+    await assert.rejects(lease.execStream(process.execPath, ["-e", "process.exit(99)"]), /workspace scope/i);
+    lease.release();
+  } finally { await runtime.close(); rmSync(root, { recursive: true, force: true }); }
 });

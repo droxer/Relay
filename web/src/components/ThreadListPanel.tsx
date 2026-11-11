@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+import type { ReactNode, Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -43,9 +43,6 @@ import {
   type ThreadProjectOption,
 } from "../lib/threadProjectFilter";
 
-/** Stable empty list for the rail window when the projects rail is showing. */
-const NO_THREADS: ThreadItem[] = [];
-
 /** The thread list's older pages, held by the app's thread query. */
 export type ThreadListPaging = {
   hasMore: boolean;
@@ -58,6 +55,7 @@ export type ThreadListPaging = {
 // is owner-scoped by the backend, so it only ever shows the current user's
 // work. “New thread” starts a fresh thread without archiving the rest.
 export function ThreadListPanel({
+  workspaceNavigation,
   directoryMode,
   threads,
   tasks,
@@ -84,6 +82,7 @@ export function ThreadListPanel({
   onResizeActive,
   paging,
 }: {
+  workspaceNavigation?: ReactNode;
   directoryMode: "threads" | "projects";
   threads: ThreadItem[];
   /** Read with the threads to say which wait on a person — the same rule the
@@ -153,7 +152,7 @@ export function ThreadListPanel({
   });
 
   const projectFiltered = directoryMode === "threads" && projectFilter !== THREAD_PROJECT_FILTER_ALL;
-  const railWindow = useRailWindow(directoryMode === "threads" ? threads : NO_THREADS, tasks, selectedSessionId, `${projectFilter}\n${query}`);
+  const railWindow = useRailWindow(threads, tasks, selectedSessionId, `${projectFilter}\n${query}`);
   const projectFilterChoices = useMemo(() => [
     { value: THREAD_PROJECT_FILTER_ALL, label: t("thread.project_filter_all") },
     { value: THREAD_PROJECT_FILTER_NONE, label: t("thread.project_filter_none") },
@@ -191,6 +190,7 @@ export function ThreadListPanel({
               key={item.session.id}
               item={item}
               tone={section.tone}
+              layout={directoryMode === "projects" ? "nested" : "full"}
               selected={selectedSessionId === item.session.id}
               onSelect={selectThread}
               onRename={renameThread}
@@ -212,6 +212,7 @@ export function ThreadListPanel({
     // treatment the agent roster and teams table get.
     <aside id="thread-panel" className="thread-panel" aria-label={t(directoryMode === "projects" ? "project.projects" : "nav.threads")} tabIndex={-1} data-density="compact">
       <div className="thread-panel-inner">
+        {workspaceNavigation}
       {/* Same frame as every other list rail: PageHeader over a
           .list-filter-bar band, each carrying its own hairline. */}
       <PageHeader
@@ -320,6 +321,7 @@ export function ThreadListPanel({
                 ) : null}
               </Button>
             </div>
+            {selectedProjectId === project.id ? renderThreads() : null}
           </section>
         )}) : renderThreads()}
         {/* The rail is too narrow for a doodle, so the vignette is dropped;

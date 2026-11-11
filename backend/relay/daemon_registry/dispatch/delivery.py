@@ -322,6 +322,7 @@ class AssignmentDeliveryMixin(RegistryState):
             artifacts_dir=self._artifacts_dir(run_request, workspace_layout, session_snapshot),
             context=context,
             handoff_validation=handoff_validation,
+            task_snapshot=self.task_store.get_task(run_request["taskId"]) if run_request.get("taskId") and self.task_store else None,
         )
         command = self._with_skill_bundle(command, sandbox, session_snapshot.get("projectId"))
         if self.connection_grant_resolver:

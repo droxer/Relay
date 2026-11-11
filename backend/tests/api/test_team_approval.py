@@ -43,7 +43,7 @@ def _agent(client: TestClient, name: str, executor: str, role: str) -> dict[str,
         "workspacePath": "/workspace/alice",
         "protocolVersion": 1,
         "supportedAgents": ["claude", "codex"],
-        "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces"],
+        "capabilities": [PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces"],
         "status": "stopped",
     })
     response = client.post("/api/v1/admin/agents", json={
@@ -96,7 +96,7 @@ def _approval_team_task(client: TestClient) -> tuple[dict, dict, dict]:
         "protocolVersion": 1,
         "supportedAgents": ["codex", "claude"],
         "capabilities": [
-            PROJECT_CAPABILITY, "task-workspaces", "thread-workspaces", "work-results", "round-result",
+            PROJECT_CAPABILITY, "task-workspaces", "workspace-scope", "thread-workspaces", "work-results", "round-result",
         ],
         "status": "ready",
     })

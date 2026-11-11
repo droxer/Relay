@@ -40,6 +40,8 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         task["ownerUserId"] = created["ownerUserId"]
     if created.get("assigneeUserId"):
         task["assigneeUserId"] = created["assigneeUserId"]
+    if created.get("computerId"):
+        task["computerId"] = created["computerId"]
     if created.get("projectId"):
         task["projectId"] = created["projectId"]
     if created.get("dueDate"):
@@ -94,6 +96,7 @@ def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
         "description",
         "priority",
         "assigneeUserId",
+        "computerId",
         "dueDate",
         "acceptancePolicy",
         "collaborationStyle",

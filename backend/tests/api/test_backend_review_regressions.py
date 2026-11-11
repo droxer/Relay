@@ -289,7 +289,7 @@ def _undelivered_task_round(app, title: str) -> tuple[dict, dict]:
         "sandboxId": "node_admin", "userId": "admin", "workspaceId": "machine-admin",
         "token": "node_token", "workspacePath": "/workspace/admin",
         "protocolVersion": 1, "supportedAgents": ["codex"],
-        "capabilities": ["thread-workspaces"], "status": "ready",
+        "capabilities": ["workspace-scope", "thread-workspaces"], "status": "ready",
     })
     task = app.state.task_store.create_task({
         "title": title, "ownerUserId": _admin_id(app), "acceptancePolicy": "automatic",

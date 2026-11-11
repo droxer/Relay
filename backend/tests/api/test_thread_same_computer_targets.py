@@ -41,7 +41,7 @@ def _node(app, sandbox_id: str) -> dict[str, Any]:
             "workspacePath": f"/workspace/{sandbox_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
-            "capabilities": ["thread-workspaces", "work-results"],
+            "capabilities": ["workspace-scope", "thread-workspaces", "work-results"],
             "status": "ready",
         }
     )

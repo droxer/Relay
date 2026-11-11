@@ -68,6 +68,7 @@ export function ProjectWorkspacePage({
   currentUser,
   computers,
   onOpenThread,
+  onNewThread,
   onDeleted,
   onBack,
 }: {
@@ -189,6 +190,7 @@ export function ProjectWorkspacePage({
         layout="stacked"
         actions={(
           <>
+            {onNewThread && !membersReadOnly ? <Button type="button" size="dense" onClick={onNewThread}>{t("project.new_thread_short")}</Button> : null}
             <Button type="button" variant="ghost" size="dense" className="project-mobile-back" onClick={onBack}>
               <NavBack size={ICON.sm} aria-hidden="true" />
               {t("project.back")}

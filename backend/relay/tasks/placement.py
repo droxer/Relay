@@ -112,6 +112,8 @@ def ready_node_for_task(
     for run in registry.daemon_store.list_active_runs():
         active_runs_by_node.setdefault(run["nodeId"], []).append(run)
     for node in registry.list_ready():
+        if task.get("computerId") and computer_id(node) != task["computerId"]:
+            continue
         if user_id and node.get("userId") != user_id:
             continue
         if node.get("status") in (

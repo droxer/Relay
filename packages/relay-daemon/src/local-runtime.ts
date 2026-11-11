@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { realpathSync, statSync } from "node:fs";
 import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent, localRuntimeEnvironment, commandExecution, type AgentName } from "relay-core";
 import type { DaemonExecutionEnvironment } from "./index.js";
 import { assertKimiConfigured } from "./agent-auth.js";
@@ -32,20 +33,39 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
     ensureAgentReady: probe,
     execStream: localProcessExecStream,
     // Host processes share the machine; any number of runs can execute at once.
-    acquireWorkspace: async () => ({
-      ensureAgentReady: async (agent, signal) => {
-        if (readyAgents.has(agent)) {
-          // Kimi's config check is a file read, so a run keeps it even when
-          // the CLI probe is skipped: a config removed since still fails fast.
-          assertKimiReady(agent);
-          return;
-        }
-        await probe(agent, signal);
-      },
-      execStream: localProcessExecStream,
-      forgetAgentReady: (agent) => { readyAgents.delete(agent); },
-      release: () => undefined,
-    }),
+    acquireWorkspace: async (workspace, signal) => {
+      const root = realpathSync.native(workspace);
+      if (!statSync(root).isDirectory()) throw new Error("Local workspace scope must be a directory.");
+      let released = false;
+      const assertActive = (): void => {
+        if (released) throw new Error("Local workspace lease has been released.");
+        signal?.throwIfAborted();
+        if (realpathSync.native(workspace) !== root) throw new Error("Local workspace scope changed.");
+      };
+      const execStream: DaemonExecutionEnvironment["execStream"] = async (cmd, args = [], options = {}) => {
+        assertActive();
+        if (options.cwd && realpathSync.native(options.cwd) !== root) throw new Error("Local workspace scope mismatch.");
+        return localProcessExecStream(cmd, args, {
+          ...options, cwd: root,
+          signal: signal ? options.signal ? AbortSignal.any([signal, options.signal]) : signal : options.signal,
+        });
+      };
+      return {
+        ensureAgentReady: async (agent, signal) => {
+          assertActive();
+          if (readyAgents.has(agent)) {
+            // Kimi's config check is a file read, so a run keeps it even when
+            // the CLI probe is skipped: a config removed since still fails fast.
+            assertKimiReady(agent);
+            return;
+          }
+          await probe(agent, signal);
+        },
+        execStream,
+        forgetAgentReady: (agent) => { readyAgents.delete(agent); },
+        release: () => { released = true; },
+      };
+    },
     proveExited: async (records) => {
       if (process.platform !== "win32") return records.filter((record) => localExitProven(record)).map((record) => record.id);
       const processes = records.length ? await listWindowsProcesses() : undefined;

@@ -401,7 +401,7 @@
     "setup_task_after_existing_other": "After {{count}} existing tasks",
     "setup_tasks_failed": "Some tasks could not be added: {{message}} Apply again to add the rest; tasks already added are not duplicated.",
     "dashboard_user_wip": "Your WIP across projects: {{count}} / {{limit}}",
-    "dashboard_view_user_tasks": "View your tasks across projects",
+    "dashboard_view_project_tasks": "View Project tasks",
     "member_make_manager": "Project lead"
   },
   "thread": {
@@ -1154,7 +1154,9 @@
     "device_expired_title": "This request has expired",
     "device_expired_body": "Connection requests last 10 minutes, and each one can be used once. Run setup again in your terminal to get a new link.",
     "device_retry": "Try again",
-    "device_open_computers": "Open Computers"
+    "device_open_computers": "Open Computers",
+    "unplaced_work": "Work without a workspace ({{count}})",
+    "place_work_here": "Place on this Computer"
   },
   "routine": {
     "schedule": "Trigger",

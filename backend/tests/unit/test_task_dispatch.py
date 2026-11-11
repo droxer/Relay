@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
 from relay.api.deps import AppContext
 from relay.app import create_app
+from relay.core.computer_identity import computer_id
 from relay.tasks.dispatch import start_task_on_ready_node
 from relay.tasks.scheduler import TaskScheduler
 
@@ -101,7 +102,7 @@ def _agent(app, node: dict, *, user_id: str = ALICE) -> dict:
             "defaultRole": "implementer",
         },
     )
-    app.state.agent_placement_store.create_placement(agent, node["id"])
+    app.state.agent_placement_store.create_placement(agent, node["id"], {"computerId": computer_id(node)})
     return agent
 
 
@@ -132,7 +133,7 @@ def test_dispatch_sends_the_task_layout_to_a_capable_node(monkeypatch) -> None:
         _bootstrap_admin(client)
         _bootstrap_user(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces"]
         )
         agent = _agent(app, node)
 
@@ -165,7 +166,7 @@ def test_dispatch_refuses_silent_workspace_downgrade(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap_admin(client)
         _bootstrap_user(client)
-        node = _register_node(app, "sbx_alice", capabilities=["thread-workspaces"])
+        node = _register_node(app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces"])
         agent = _agent(app, node)
 
         # The per-task layout serves routine runs; other work runs in a project.
@@ -214,7 +215,7 @@ def test_dispatch_resolves_the_layout_on_the_legacy_no_agent_record_branch(
         client = TestClient(app)
         _bootstrap_admin(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces"]
         )
 
         task = app.state.task_store.create_task(
@@ -254,7 +255,7 @@ def test_project_task_keeps_the_project_workspace(monkeypatch) -> None:
             app,
             "sbx_alice",
             capabilities=[
-                "thread-workspaces",
+                "workspace-scope", "thread-workspaces",
                 "task-workspaces",
                 "project-workspaces",
             ],
@@ -310,7 +311,7 @@ def test_routine_occurrence_keeps_its_own_directory_on_an_older_daemon(monkeypat
         _bootstrap_admin(client)
         _bootstrap_user(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces"]
         )
         agent = _agent(app, node)
 
@@ -318,6 +319,7 @@ def test_routine_occurrence_keeps_its_own_directory_on_an_older_daemon(monkeypat
             "/api/v1/tasks",
             json={
                 "title": "Nightly",
+                "computerId": computer_id(node),
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
@@ -357,7 +359,7 @@ def test_routine_occurrences_share_the_automation_directory_with_per_run_artifac
         _bootstrap_admin(client)
         _bootstrap_user(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", "artifact-layout"]
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces", "artifact-layout"]
         )
         agent = _agent(app, node)
 
@@ -365,6 +367,7 @@ def test_routine_occurrences_share_the_automation_directory_with_per_run_artifac
             "/api/v1/tasks",
             json={
                 "title": "Nightly",
+                "computerId": computer_id(node),
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
@@ -400,7 +403,7 @@ def test_task_waits_when_another_run_takes_the_last_slot(monkeypatch, tmp_path, 
     _bootstrap_admin(client)
     _bootstrap_user(client)
     node = _register_node(
-        app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces"]
+        app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces"]
     )
     agent = _agent(app, node)
     ctx = app_context_for(app)
@@ -494,7 +497,7 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap_admin(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
         project = project_for(app.state.project_store, ALICE, node, [agent["id"]])
@@ -546,7 +549,7 @@ def test_unrecorded_dispatch_failure_reraises_the_original_error(monkeypatch) ->
         client = TestClient(app)
         _bootstrap_admin(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
         project = project_for(app.state.project_store, ALICE, node, [agent["id"]])
@@ -588,7 +591,7 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
         client = TestClient(app)
         _bootstrap_admin(client)
         node = _register_node(
-            app, "sbx_alice", capabilities=["thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces", PROJECT_CAPABILITY]
         )
         agent = _agent(app, node)
         project = project_for(app.state.project_store, ALICE, node, [agent["id"]])

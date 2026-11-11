@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from automation_helpers import WEEKLY_TRIGGERS
 
 from tempfile import TemporaryDirectory
@@ -270,7 +272,7 @@ def test_delete_thread_preserves_tasks_and_automation_runs(monkeypatch, deferred
 
         solo = client.post("/api/v1/tasks", json={"title": "Solo task"}).json()
         shared = client.post("/api/v1/tasks", json={"title": "Two rounds"}).json()
-        routine = client.post("/api/v1/tasks", json={
+        routine = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client),
             "title": "Nightly", "isRoutine": True,
             "routineState": "paused", "routineTriggers": WEEKLY_TRIGGERS,
         }).json()

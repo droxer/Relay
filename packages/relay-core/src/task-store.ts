@@ -162,6 +162,7 @@ export interface RelayTask {
   ownerUserId?: string;
   /** Project whose conversations and workspace contain this task. */
   projectId?: string;
+  computerId?: string;
   /** Human assignee responsible for the backlog item. */
   assigneeUserId?: string;
   /** Date-only due date in YYYY-MM-DD format. */
@@ -281,6 +282,7 @@ export type RelayTaskEvent =
       acceptancePolicy?: "human" | "automatic";
       ownerUserId?: string;
       projectId?: string;
+      computerId?: string;
       assigneeUserId?: string;
       dueDate?: string;
       isRoutine?: boolean;
@@ -296,6 +298,7 @@ export type RelayTaskEvent =
   | {
       id: string;
       type: "task.updated";
+      computerId?: string;
       /** The recorded review revision accepted by a person, when supplied. */
       reviewRevision?: string;
       collaborationStyle?: CollaborationStyle | "" | null;
@@ -453,6 +456,7 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     ...(created.tags?.length ? { tags: [...created.tags] } : {}),
     ...(created.ownerUserId ? { ownerUserId: created.ownerUserId } : {}),
     ...(created.projectId ? { projectId: created.projectId } : {}),
+    ...(created.computerId ? { computerId: created.computerId } : {}),
     ...(created.assigneeUserId ? { assigneeUserId: created.assigneeUserId } : {}),
     ...(created.dueDate ? { dueDate: created.dueDate } : {}),
     status: "backlog",
@@ -477,6 +481,7 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     task.events.push(event);
     task.updatedAt = event.timestamp;
     if (event.type === "task.updated") {
+      if (event.computerId) task.computerId = event.computerId;
       if (event.collaborationStyle != null) {
         if (event.collaborationStyle) task.collaborationStyle = event.collaborationStyle;
         else delete task.collaborationStyle;

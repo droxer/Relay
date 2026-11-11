@@ -67,3 +67,68 @@
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
 }
+
+.computer-workspace {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.computer-workspace-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--page-gutter);
+  border-bottom: 1px solid var(--line-2);
+  min-width: 0;
+}
+
+.computer-workspace-nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.computer-workspace-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.computer-workspace-tabs a {
+  padding-block: var(--sp-2);
+}
+
+.computer-workspace-tabs a[aria-current="page"] {
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+.computer-workspace .tasks-workspace-content > .routine-page {
+  flex: 1;
+  min-width: 0;
+}
+
+.computer-workspace:has(.computer-unplaced-work) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.computer-unplaced-work {
+  padding: var(--sp-3) var(--page-gutter);
+  max-height: 35vh;
+  overflow: auto;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.computer-unplaced-work ul {
+  list-style: none;
+  padding: 0;
+}
+
+.computer-unplaced-work li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-block: var(--sp-2);
+}

@@ -27,9 +27,11 @@ from .assignment import (
     team_for_assignment,
     validate_project_assignment,
     validate_project_task_assignment,
+    validate_task_computer,
     validate_trigger_scope,
 )
 from .deletion import task_has_active_linked_session
+from .workspace import recorded_task_workspace
 from .review import checked_review
 from .requests import (
     TaskRequestError,
@@ -107,8 +109,29 @@ def update_task(
     body, move_project = request.body, request.move_project
     # Everything below judges the task as it will be once the move lands.
     effective = {**current, "projectId": move_project["id"]} if move_project else current
+    if "computerId" in body:
+        identity = request.reader.string(body, "computerId")
+        nodes = ctx.registry.monitor_nodes()
+        bindings = [recorded_task_workspace(current, ctx.session_store, nodes) or {}]
+        for occurrence_id in current.get("occurrenceIds") or []:
+            occurrence = ctx.task_store.get_task(occurrence_id)
+            bindings.append(recorded_task_workspace(occurrence, ctx.session_store, nodes) or {})
+        if not identity or effective.get("projectId") or (
+            current.get("computerId") and current["computerId"] != identity
+        ) or any(
+            binding.get("computerId") and not binding.get("unbound") and binding["computerId"] != identity
+            for binding in bindings
+        ):
+            raise TaskRequestError(409, "task_workspace_immutable")
+        validate_task_computer(ctx, identity, current["ownerUserId"])
+        effective = {**effective, "computerId": identity}
     fields = _read_fields(current, request)
     routine = request.reader.routine(body, current=current)
+    if (
+        routine.get("isRoutine") and not current.get("isRoutine")
+        and not (effective.get("projectId") or effective.get("computerId"))
+    ):
+        raise TaskRequestError(409, "task_workspace_required")
     ensure_relay_pause_transition_allowed(current, routine, actor)
     if "routineTriggers" in body:
         validate_trigger_scope(
@@ -136,6 +159,7 @@ def update_task(
         "dueDate": fields.due_date,
         "assigneeUserId": assignment.assignee,
         **({"projectId": move_project["id"]} if move_project else {}),
+        **({"computerId": effective["computerId"]} if "computerId" in body else {}),
         **routine,
         **following.patch,
     }
@@ -145,6 +169,7 @@ def update_task(
         or assignment.assignee_changed
         or fields.acceptance_policy
         or move_project
+        or "computerId" in body
     )
     current, task = _write_update(
         ctx, actor, current, request, routine, payload,
@@ -239,7 +264,9 @@ def _resolve_assignment(
     if agent_id and team_id:
         raise TaskRequestError(400, "task_agent_and_team_conflict")
     validate_project_task_assignment(
-        ctx, effective, assigned_agent_id=agent_id, assigned_team_id=team_id
+        ctx, effective,
+        assigned_agent_id=agent_id or (current.get("assignedAgentId") if "computerId" in body and "assignedAgentId" not in body else None),
+        assigned_team_id=team_id or (current.get("assignedTeamId") if "computerId" in body and "assignedTeamId" not in body else None)
     )
     if "assignedAgent" in body:
         raise TaskRequestError(400, "assignedAgent is read-only; use assignedAgentId.")
@@ -322,6 +349,7 @@ def _ensure_patch_not_empty(
         and fields.collaboration_style is None
         and not move_project
         and "connectionGrants" not in body
+        and "computerId" not in body
     ):
         raise TaskRequestError(400, EMPTY_PATCH_DETAIL)
 

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+const project = { id: "import-project", name: "Imports", ownerUserId: "u1", computerId: "c", enabled: true, members: [], version: 1 };
+
 for (const layout of ["desktop", "narrow", "mobile"] as const) {
   test(`Public GitHub imports and Connections settings link (${layout})`, async ({ page }) => {
     const mobile = layout === "mobile";
@@ -14,7 +16,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     let connectionRequests = 0;
     await page.route("**/api/v1/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
-      let body: unknown = { tasks: [], sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], skills: [], notifications: [] };
+      let body: unknown = { tasks: [], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], skills: [], notifications: [] };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user };
       if (path.includes("/account/github")) connectionRequests += 1;
       if (path.endsWith("/tasks/github/issues")) {
@@ -24,7 +26,11 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
       }
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
-    await page.goto("/tasks?githubImport=1");
+    await page.goto("/projects/import-project?tab=tasks");
+    if (layout === "mobile") {
+      await page.getByRole("button", { name: "New task", exact: true }).first().click();
+      await page.getByRole("menuitem", { name: "Import GitHub issues", exact: true }).click();
+    } else await page.getByRole("button", { name: "Import GitHub issues", exact: true }).click();
     const drawer = page.getByRole("dialog", { name: "Import GitHub issues" });
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveCSS("opacity", "1");
@@ -62,7 +68,7 @@ test("GitHub import has clear loading, recovery, empty, and imported states", as
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { tasks: [], sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], skills: [] };
+    let body: unknown = { tasks: [], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "a1", userId: "u1", username: "ada", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/tasks/github/issues")) {
       if (mode === "error") {
@@ -77,7 +83,8 @@ test("GitHub import has clear loading, recovery, empty, and imported states", as
     }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/tasks?githubImport=1");
+  await page.goto("/projects/import-project?tab=tasks");
+    await page.getByRole("button", { name: "Import GitHub issues", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "Import GitHub issues" });
   await expect(drawer).toHaveCSS("opacity", "1");
   const repository = drawer.getByRole("textbox", { name: /^Repository\b/ });

@@ -36,7 +36,7 @@ def _register_node(app: Any, node_id: str, *, user: str = ALICE) -> dict[str, An
             "nodeLocation": "user-device",
             "protocolVersion": 1,
             "supportedAgents": ["claude", "codex"],
-            "capabilities": ["thread-workspaces", "agent-model"],
+            "capabilities": ["workspace-scope", "thread-workspaces", "agent-model"],
             "status": "ready",
         }
     )

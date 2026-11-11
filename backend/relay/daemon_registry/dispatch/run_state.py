@@ -33,6 +33,7 @@ from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_PROJECT_SETUP,
     DAEMON_CAPABILITY_RELAY_THREAD_RECORDS,
     DAEMON_CAPABILITY_THREAD_WORKSPACES,
+    DAEMON_CAPABILITY_WORKSPACE_SCOPE,
     has_capability,
     DAEMON_CAPABILITY_WORK_RESULTS,
 )
@@ -87,6 +88,10 @@ def _check_workspace_support(
     sandbox: dict[str, Any], workspace_layout: str, workspace_subpath: Any
 ) -> None:
     """Refuse a workspace layout the node's daemon cannot honor."""
+    if not has_capability(sandbox, DAEMON_CAPABILITY_WORKSPACE_SCOPE):
+        raise _DeliveryRefused(
+            "This workspace requires a daemon with workspace-scope support; update the Computer client."
+        )
     if workspace_layout == "thread" and not has_capability(
         sandbox, DAEMON_CAPABILITY_THREAD_WORKSPACES
     ):

@@ -156,7 +156,8 @@ def task_workspace_nodes(
 ) -> list[dict[str, Any]]:
     binding = recorded_task_workspace(task, session_store, nodes)
     if not binding or binding.get("unbound"):
-        return nodes
+        identity = task.get("computerId")
+        return [node for node in nodes if computer_id(node) == identity] if identity else nodes
     return [node for node in nodes if computer_id(node) == binding["computerId"]]
 
 

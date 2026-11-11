@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -33,14 +35,21 @@ def _admin_user_id(app: Any) -> str:
 
 
 def _create_agent(app: Any) -> dict[str, Any]:
-    return app.state.agent_store.create_agent(
+    node = app.state.registry.register({
+        "sandboxId": "history-computer", "userId": _admin_user_id(app),
+        "token": "fixture-token", "protocolVersion": 1, "supportedAgents": [],
+        "capabilities": ["workspace-scope", "task-workspaces"], "status": "stopped",
+    })
+    agent = app.state.agent_store.create_agent(
         _admin_user_id(app),
-        {"displayName": "Routine Runner", "executorKind": "claude", "defaultRole": "implementer"},
+        {"displayName": "Routine Runner", "executorKind": "claude", "defaultRole": "implementer", "computerId": f"node:{node['id']}"},
     )
+    app.state.agent_placement_store.create_placement(agent, node["id"], {"computerId": agent["computerId"]})
+    return agent
 
 
 def _create_routine(client: TestClient, agent_id: str) -> dict[str, Any]:
-    response = client.post("/api/v1/tasks", json={
+    response = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client, agent=client.app.state.agent_store.get_agent(agent_id)),
         "title": "Weekly status deck",
         "assignedAgentId": agent_id,
         "isRoutine": True,

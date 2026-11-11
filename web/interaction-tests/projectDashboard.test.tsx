@@ -34,7 +34,7 @@ const tileOf = (eyebrow: string) => screen.getByText(eyebrow).closest(".adm-dash
 
 it("subscribes to the task flow policy cache without requiring a fetch function", async () => {
   const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-  const { client } = renderDashboard([task({ id: "a" })]);
+  const { client, onOpenBoard } = renderDashboard([task({ id: "a" })]);
   // Project activity never presents a user limit as project capacity.
   expect(tileOf("backlog.metric_active").querySelector(".adm-dash-tile-hint")).toBeNull();
 
@@ -48,7 +48,9 @@ it("subscribes to the task flow policy cache without requiring a fetch function"
   });
   expect(screen.getByText("backlog.metric_active").nextElementSibling?.textContent).toBe("0");
   expect(tileOf("backlog.metric_active").querySelector(".adm-dash-tile-hint")).toBeNull();
-  expect(screen.getByRole("link", { name: "project.dashboard_view_user_tasks" }).getAttribute("href")).toBe("/backlog?assignee=alice");
+  fireEvent.click(screen.getByRole("button", { name: "project.dashboard_view_project_tasks" }));
+  expect(onOpenBoard).toHaveBeenCalledOnce();
+  expect(screen.queryByRole("link", { name: "project.dashboard_view_user_tasks" })).toBeNull();
   expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining("No queryFn was passed"));
   client.clear();
 });

@@ -91,14 +91,14 @@ test("task board preserves blocked review and accepts it only after unblocking",
   await expect(page.getByRole("menuitem", { name: "Block", exact: true })).toBeVisible();
 });
 
-test("the global Tasks page lays its queue out as the same board, and a drop commits", async ({ page }) => {
+test("the Project Tasks page lays its queue out as a board, and a drop commits", async ({ page }) => {
   const writes = await mockQueuedTask(page);
-  await page.goto("/tasks");
+  await page.goto("/projects/p?tab=tasks");
   await page.getByRole("button", { name: "Board", exact: true }).click();
   await expect(page.locator(".backlog-lane")).toHaveCount(7);
   const card = page.locator('.backlog-lane[data-status="assigned"] article');
-  // Read across projects, a card names its project.
-  await expect(card).toContainText("Launch");
+  // The Project board keeps the card focused on the work.
+  await expect(card).toContainText("Queued delivery");
   await page.screenshot({ path: test.info().outputPath("tasks-board.png") });
   await dragCard(page, card, page.locator('.backlog-lane[data-status="running"]'));
   await expect.poll(() => writes).toEqual(["run"]);
@@ -179,7 +179,7 @@ test("Space on a card's checkbox selects it instead of picking the card up", asy
 
 test("the due date is picked from a calendar and kept as a day key", async ({ page }) => {
   await mockQueuedTask(page);
-  await page.goto("/tasks");
+  await page.goto("/projects/p?tab=tasks");
   await page.getByRole("button", { name: "New task" }).first().click();
   const due = page.getByRole("button", { name: /^Due Choose a date$/ });
   await due.click();
@@ -206,7 +206,7 @@ test("queued and cancelled tasks have distinct lanes and global capacity stays v
   });
   await page.goto("/projects/p");
   await expect(page.getByText("Your WIP across projects: 5 / 5")).toBeVisible();
-  await expect(page.getByRole("link", { name: "View your tasks across projects" })).toHaveAttribute("href", "/backlog?assignee=review-user");
+  await expect(page.getByRole("button", { name: "View Project tasks", exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("capacity-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByText("Your WIP across projects: 5 / 5")).toBeVisible();

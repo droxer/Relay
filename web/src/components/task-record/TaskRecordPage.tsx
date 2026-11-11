@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useProjectLookup } from "../../hooks/useProjectLookup";
 import { useUrlSearchState } from "../../hooks/useUrlSearchState";
-import { pathForAppState } from "../../lib/appRoute";
+import { recordHrefForLocation } from "../../lib/workspaceScope";
 import { projectReadOnly } from "../../lib/projectPage";
 import { navigateRecordBack, recordBackHref } from "../../lib/recordBack";
 import type { CurrentUser, RelayTaskListItem } from "../../types";
@@ -164,15 +164,8 @@ export function TaskRecordPage({
     />,
   );
 
-  const listPath = pathForAppState({
-    route: variant === "routine" ? "routine" : "backlog",
-    mobileView: "chat",
-    sessionId: null,
-  });
-  // A run belongs to its routine, not to the backlog it happens to sit in.
-  const backHref = parentRoutine
-    ? pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: parentRoutine.id })
-    : recordBackHref(listPath);
+  const listPath = recordHrefForLocation(variant === "routine" ? "routine" : "backlog", null);
+  const backHref = parentRoutine ? recordHrefForLocation("routine", parentRoutine.id) : recordBackHref(listPath);
   const backLabel = parentRoutine ? parentRoutine.title : t(variant === "routine" ? "nav.routine" : "nav.backlog");
 
   const drawer = presentation === "drawer";
@@ -271,13 +264,7 @@ export function TaskRecordPage({
             />
             <RecordRuns
               taskId={task.id}
-              hrefForRun={hrefForRun ?? ((runTaskId) => pathForAppState({
-                route: "routine",
-                mobileView: "chat",
-                sessionId: null,
-                taskId: task.id,
-                runId: runTaskId,
-              }))}
+              hrefForRun={hrefForRun ?? ((runTaskId) => recordHrefForLocation("routine", task.id, runTaskId))}
               onOpenRun={onOpenRun}
               onOpenThread={onOpenThread}
             />

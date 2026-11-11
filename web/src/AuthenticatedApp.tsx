@@ -53,6 +53,10 @@ import { useUserAgents } from "./hooks/useUserAgents";
 import { useTeams } from "./hooks/useTeams";
 import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
+import { ComputerWorkspaceNav } from "./components/ComputerWorkspaceNav";
+import { computerId as stableComputerId, computerName } from "./lib/createAgent";
+import { computerWorkHref, sessionComputer, taskComputer } from "./lib/workspaceScope";
+import { useWorkspaceRoute } from "./hooks/useWorkspaceRoute";
 import { ThreadsView } from "./components/ThreadsView";
 import { OnboardingPanel } from "./components/onboarding/OnboardingPanel";
 import { DefaultAgentsPrompt } from "./components/computer/DefaultAgentsPrompt";
@@ -68,7 +72,7 @@ import { useNotifications } from "./hooks/useNotifications";
 import { computerManagementDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
 import { hrefForSettingsSection } from "./lib/appRoute";
 import type { NotificationBellBinding } from "./components/notifications/NotificationBell";
-import type { MobileView } from "./lib/viewTypes";
+import type { AppRoute, MobileView } from "./lib/viewTypes";
 
 type UserPreferences = ReturnType<typeof useUserPreferences>;
 
@@ -152,7 +156,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     refresh,
     setSandboxes,
   } = useRelayData(selectedUserToken, true,
-    !openingRoute || ["home", "main", "projects", "backlog", "routine"].includes(openingRoute.route));
+    !openingRoute || ["home", "main", "projects", "backlog", "routine", "computers"].includes(openingRoute.route));
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel(),
   );
@@ -192,17 +196,24 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   });
   const { activeSessionId } = useActiveSession(selectedUser, myThreads);
   const requestedSessionId = openingRoute?.sessionId ?? undefined;
+  const openingComputerId = openingRoute?.computerId ?? null;
+  const openingProjectId = openingRoute?.projectId ?? null;
   const activeSession = useMemo(
     () => pickActiveThreadSession({
-      threads: myThreads,
+      threads: requestedSessionId ? myThreads : myThreads.filter(session => openingComputerId
+        ? !session.projectId && sessionComputer(session, runtimeNodes) === openingComputerId
+        : openingProjectId ? session.projectId === openingProjectId : !session.projectId),
       selectedSessionId,
       activeSessionId,
       composingNew,
       requestedSessionId,
     }),
-    [activeSessionId, composingNew, myThreads, selectedSessionId, requestedSessionId],
+    [activeSessionId, composingNew, myThreads, selectedSessionId, requestedSessionId, openingComputerId, openingProjectId, runtimeNodes],
   );
   const space = useThreadSpace(activeSession?.id);
+  const targetComputerId = openingRoute?.computerId ?? projects.find(project => project.id === openingRoute?.projectId)?.computerId;
+  const threadTargetNodes = useMemo(() => targetComputerId ? runtimeNodes.filter(node => stableComputerId(node) === targetComputerId) : runtimeNodes,
+    [runtimeNodes, targetComputerId]);
   const {
     assignableComputers,
     threadComputers,
@@ -218,7 +229,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     composingNew,
     logicalAgents,
     newThreadNodeId,
-    runtimeNodes,
+    runtimeNodes: threadTargetNodes,
     selectedUser,
     teams,
   });
@@ -263,6 +274,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     mobileView,
     routedSessionId,
     projectId: routedProjectId,
+    computerId: routedComputerId,
     agentId,
     recordTaskId,
     recordRunId,
@@ -273,7 +285,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     notFound,
     navigateToRoute,
     navigateToMobileView,
-    hrefForSideNavRoute,
+    hrefForSideNavRoute: globalHrefForSideNavRoute,
     syncThreadUrl,
     navigateToAgent,
     navigateToTaskRecord,
@@ -292,6 +304,28 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     onApplySessionFromPath: applySessionFromHash,
     onSetComposingNewFromPath: setComposingNewFromPath,
   });
+  const workspacePending = useWorkspaceRoute({ location: openingRoute, tasks, sessions: myThreads, nodes: runtimeNodes,
+    ready: tasksStatus === "ready" && !sessionsLoading && nodesReady });
+  const workspaceNode = runtimeNodes.find(node => stableComputerId(node) === routedComputerId);
+  const workspaceTasks = useMemo(() => routedComputerId ? tasks.filter(task => !task.projectId
+    && taskComputer(task, runtimeNodes, myThreads) === routedComputerId) : tasks,
+    [tasks, routedComputerId, runtimeNodes, myThreads]);
+  const unplacedTasks = useMemo(() => tasks.filter(task => !task.deletedAt && !task.projectId && !task.computerId && !task.sourceRoutineId
+    && (!taskComputer(task, runtimeNodes, myThreads) || taskComputer(task, runtimeNodes, myThreads) === routedComputerId)), [tasks, runtimeNodes, myThreads, routedComputerId]);
+  const workspaceNodes = useMemo(() => routedComputerId ? runtimeNodes.filter(node => stableComputerId(node) === routedComputerId) : visibleNodes,
+    [routedComputerId, runtimeNodes, visibleNodes]);
+  const hrefForSideNavRoute = useCallback((nextRoute: AppRoute) => {
+    if (!["main", "backlog", "routine"].includes(nextRoute)) return globalHrefForSideNavRoute(nextRoute);
+    if (routedProjectId) {
+      const path = `/projects/${encodeURIComponent(routedProjectId)}`;
+      return nextRoute === "backlog" ? `${path}?tab=tasks` : nextRoute === "routine" ? `${path}?tab=automations` : path;
+    }
+    return routedComputerId ? computerWorkHref(routedComputerId, nextRoute) : "/computers";
+  }, [globalHrefForSideNavRoute, routedComputerId, routedProjectId]);
+  const navigateWorkspaceRoute = useCallback((nextRoute: AppRoute) => {
+    if (["main", "backlog", "routine"].includes(nextRoute)) void navigateToAppPath(hrefForSideNavRoute(nextRoute));
+    else navigateToRoute(nextRoute);
+  }, [hrefForSideNavRoute, navigateToRoute]);
   /* The inbox. A computer notice opens wherever that computer is managed:
      the person's own Computers page for a machine they hold, the control panel
      for shared hardware an admin is told about. */
@@ -349,9 +383,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // The thread names a project whose record has not loaded yet: until it does
   // the composer would read the thread as an ordinary (team) thread and draw
   // that thread's controls, then swap them for the project room's.
-  const projectContextPending = Boolean(activeSession?.projectId) && !activeProject && projectsStatus === "loading";
+  const projectContextPending = Boolean(routedProjectId || activeSession?.projectId) && !activeProject && projectsStatus === "loading";
   const dispatchDisabled = Boolean(
     (requestedSessionId && !activeSession)
+    || (routedProjectId && !activeProject)
     || (activeProject && (activeProject.archivedAt || !activeProject.enabled)),
   );
   const {
@@ -439,6 +474,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
 
   const { directoryProjects, directoryThreads, threadItems, projectFilterOptions, projectFilter } = useThreadDirectory({
     route,
+    computerId: routedComputerId,
     myThreads,
     projects,
     routedProjectId,
@@ -627,7 +663,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     // The queued intent is picked up by the tasks board, which is no
     // longer the project's default tab — ask for it by name.
     if (showProjectOverview && routedProjectId) void navigateToAppPath(`/projects/${encodeURIComponent(routedProjectId)}?tab=tasks`);
-    else if (route !== "backlog") navigateToRoute("backlog");
+    else if (route !== "backlog") navigateWorkspaceRoute("backlog");
   });
   const onRefresh = useStableEvent(() => refresh());
   // useThreadNavigation hands back plain closures; the memoized work page
@@ -654,7 +690,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       taskWorkspace={isTasksWorkspace}
       taskThread={isTaskThread}
       notFound={notFound}
-      onNavigateRoute={navigateToRoute}
+      onNavigateRoute={navigateWorkspaceRoute}
       hrefForRoute={hrefForSideNavRoute}
       mobileView={mobileView}
       onMobileViewChange={onMobileViewChange}
@@ -692,14 +728,18 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     >
       <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${recordTaskId}:${recordRunId}:${teamWorkspaceId}`}>
       <Suspense fallback={<RouteFallback />}>
-        {showsWorkRoutePage(route, notFound, isTaskThread) ? (
+        {workspacePending ? <RouteFallback /> : showsWorkRoutePage(route, notFound, isTaskThread) ? (
           <WorkRoutePage
             route={route}
+            computerId={routedComputerId}
+            computerReadOnly={!workspaceNode || workspaceNode.userId !== user.userId || Boolean(workspaceNode.retiredAt)}
+            computerLabel={workspaceNode ? computerName(workspaceNode) : routedComputerId ?? undefined}
             notFound={notFound}
             user={user}
             projects={projects}
             projectsStatus={projectsStatus}
-            tasks={tasks}
+            tasks={workspaceTasks}
+            unplacedTasks={unplacedTasks}
             sessions={sessions}
             homeItems={homeItems}
             homeStatus={homeStatus}
@@ -707,7 +747,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onOpenOnboarding={openOnboarding}
             selectedUser={selectedUser}
             setUser={setUser}
-            visibleNodes={visibleNodes}
+            visibleNodes={workspaceNodes}
             runtimeNodes={runtimeNodes}
             isRefreshing={isRefreshing}
             onRefresh={onRefresh}
@@ -734,6 +774,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
           />
         ) : (
           <ThreadsView
+            workspaceNavigation={routedComputerId ? <ComputerWorkspaceNav computerId={routedComputerId} label={workspaceNode ? computerName(workspaceNode) : routedComputerId} route={route} /> : undefined}
             onOpenTaskRecord={openTaskRecord}
             taskThread={isTaskThread}
             listOnScreen={mobileView === "threads"}

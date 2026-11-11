@@ -140,13 +140,14 @@ def test_project_move_refusals(triage_context):
     assert not app.state.task_store.get_task(done["id"]).get("projectId")
 
 
-def test_projectless_routines_still_accept_an_agent(triage_context):
+def test_new_projectless_routines_require_a_computer(triage_context):
     _app, client, _node, _project, lead = triage_context
     created = client.post("/api/v1/tasks", json={
         "title": "Nightly", "isRoutine": True, "routineState": "active",
         "routineTriggers": WEEKLY_TRIGGERS, "assignedAgentId": lead["id"],
     })
-    assert created.status_code == 201, created.text
+    assert created.status_code == 409, created.text
+    assert created.json()["detail"] == "task_workspace_required"
 
 
 def test_intake_cannot_spoof_a_routine_run_in_create(triage_context):
@@ -177,3 +178,116 @@ def test_intake_cannot_move_to_another_users_project(triage_context):
     response = client.patch(f"/api/v1/tasks/{issue['id']}", json={"projectId": other["id"]})
     assert response.status_code == 403, response.text
     assert not app.state.task_store.get_task(issue["id"]).get("projectId")
+
+
+def test_computer_task_can_be_assigned_and_scope_survives_reads(triage_context):
+    from relay.core.computer_identity import computer_id
+    app, client, node, _project, lead = triage_context
+    node = app.state.registry.register({**node, "sandboxId": node["id"], "protocolVersion": 1, "token": f"token_{node['id']}", "supportedAgents": ["codex", "claude"], "capabilities": [*node["capabilities"], "task-workspaces"]})
+    identity = computer_id(node)
+    task = _issue(client, computerId=identity, assignedAgentId=lead["id"])
+    assert task["computerId"] == identity
+    assert app.state.task_store.get_task(task["id"])["computerId"] == identity
+    listed = client.get("/api/v1/tasks?view=summary").json()["tasks"]
+    assert next(item for item in listed if item["id"] == task["id"])["computerId"] == identity
+    started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+    assert started.status_code in (200, 202), started.text
+    assert started.json()["dispatch"]["state"] in ("started", "queued")
+
+
+@pytest.mark.parametrize("identity", ["node:missing", "device:another-user:private"])
+def test_task_cannot_claim_another_computer(triage_context, identity):
+    _app, client, _node, _project, _lead = triage_context
+    response = client.post("/api/v1/tasks", json={"title": "Wrong computer", "computerId": identity})
+    assert response.status_code == 403, response.text
+
+
+def test_task_has_exactly_one_workspace_scope(triage_context):
+    from relay.core.computer_identity import computer_id
+    _app, client, node, project, _lead = triage_context
+    response = client.post("/api/v1/tasks", json={"title": "Ambiguous", "computerId": computer_id(node), "projectId": project["id"]})
+    assert response.status_code == 400, response.text
+
+
+def test_legacy_intake_can_choose_a_computer_once(triage_context):
+    from relay.core.computer_identity import computer_id
+    _app, client, node, _project, lead = triage_context
+    task = _issue(client)
+    identity = computer_id(node)
+    placed = client.patch(f"/api/v1/tasks/{task['id']}", json={"computerId": identity})
+    assert placed.status_code == 200, placed.text
+    assert placed.json()["computerId"] == identity
+    assigned = client.patch(f"/api/v1/tasks/{task['id']}", json={"assignedAgentId": lead["id"]})
+    assert assigned.status_code == 200, assigned.text
+    moved = client.patch(f"/api/v1/tasks/{task['id']}", json={"computerId": "node:other"})
+    assert moved.status_code == 409, moved.text
+
+
+def test_computer_scope_refuses_an_agent_on_a_different_computer(triage_context):
+    from relay.core.computer_identity import computer_id
+    app, client, node, _project, _lead = triage_context
+    other = _register_computer(app, "node_other_scope", "other-scope")
+    client.cookies.clear()
+    # Admin creates the other declared Agent, then Alice owns the Task.
+    client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"})
+    other_agent = _agent(client, app, other, "Elsewhere", "codex")
+    _login_alice(client)
+    response = client.post("/api/v1/tasks", json={"title": "Wrong Agent", "computerId": computer_id(node), "assignedAgentId": other_agent["id"]})
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "task_assignment_off_computer"
+
+
+def test_intake_cannot_be_converted_into_an_unscoped_automation(triage_context):
+    _app, client, _node, _project, _lead = triage_context
+    task = _issue(client)
+    response = client.patch(f"/api/v1/tasks/{task['id']}", json={
+        "isRoutine": True, "routineTriggers": WEEKLY_TRIGGERS,
+    })
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "task_workspace_required"
+
+
+def test_computer_task_created_with_thread_uses_its_durable_workspace(triage_context):
+    from relay.core.computer_identity import computer_id
+    app, client, node, _project, lead = triage_context
+    task = _issue(client, computerId=computer_id(node), assignedAgentId=lead["id"], createSession=True)
+    session = app.state.session_store.get_session(task["linkedSessionIds"][0])
+    assert session["workspacePath"] == node["workspacePath"]
+    assert session["workspaceLayout"] == "task"
+    assert session["workspaceSubpath"] == f"tasks/{task['id']}"
+    assert session["computerId"] == computer_id(node)
+
+
+def test_new_automation_keeps_its_explicit_computer(triage_context):
+    from relay.core.computer_identity import computer_id
+    _app, client, node, _project, lead = triage_context
+    task = _issue(client, computerId=computer_id(node), assignedAgentId=lead["id"],
+                  isRoutine=True, routineState="active", routineTriggers=WEEKLY_TRIGGERS)
+    assert task["computerId"] == computer_id(node)
+
+
+def test_old_daemon_cannot_receive_a_workspace_scoped_run(triage_context):
+    app, client, node, project, lead = triage_context
+    app.state.registry.register({
+        **node, "sandboxId": node["id"], "token": f"token_{node['id']}",
+        "protocolVersion": 1, "supportedAgents": ["codex"],
+        "capabilities": [cap for cap in node["capabilities"] if cap != "workspace-scope"],
+    })
+    task = _issue(client, projectId=project["id"], assignedAgentId=lead["id"])
+    started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+    assert started.status_code == 202, started.text
+    assert app.state.registry.take_commands(node["id"], f"token_{node['id']}") == []
+    session = app.state.session_store.get_session(started.json()["session"]["id"])
+    assert session["status"] == "failed"
+    assert "workspace-scope" in str(session["events"])
+
+
+@pytest.mark.parametrize("identity", [" ", {"id": "fake"}, ["fake"]])
+def test_new_automation_requires_a_valid_computer_identity(triage_context, identity):
+    _app, client, _node, _project, _lead = triage_context
+    response = client.post("/api/v1/tasks", json={
+        "title": "Invalid scope", "isRoutine": True, "computerId": identity,
+        "routineTriggers": WEEKLY_TRIGGERS,
+    })
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "task_workspace_required"

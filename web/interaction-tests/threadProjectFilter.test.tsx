@@ -36,7 +36,7 @@ const ids = (result: ReturnType<typeof directory>) => result.directoryThreads.ma
 
 it("leaves the ordinary rail alone when no project is chosen", () => {
   const result = directory("all");
-  expect(ids(result)).toEqual(["s-chat", "s-task"]);
+  expect(ids(result)).toEqual(["s-chat"]);
   expect(result.projectFilterOptions.map((option) => option.name)).toEqual(["Autumn launch", "Docs"]);
 });
 
@@ -55,5 +55,5 @@ it("combines the project filter with the search", () => {
 it("falls back to every thread when the chosen project no longer exists", () => {
   const result = directory(threadProjectFilterFor("p-gone"));
   expect(result.projectFilter).toBe("all");
-  expect(ids(result)).toEqual(["s-chat", "s-task"]);
+  expect(ids(result)).toEqual(["s-chat"]);
 });

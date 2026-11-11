@@ -202,6 +202,7 @@ export function InlineAssignee({
 
   const options = taskAssignmentOptions({
     project,
+    computerId: task.computerId,
     agents,
     teams,
     assigneeUserId: task.assigneeUserId ?? task.ownerUserId ?? "",

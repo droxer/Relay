@@ -170,7 +170,7 @@ def test_workspace_event_is_authorized_and_persists_response(monkeypatch, databa
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -222,7 +222,7 @@ def test_daemon_heartbeat_is_authenticated_and_returns_lease_policy(
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -323,7 +323,7 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
                 "sandboxMode": "boxlite",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -371,7 +371,7 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
                 "sandboxMode": "boxlite",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -413,7 +413,7 @@ def test_user_daemon_list_replaces_retired_managed_runtime_with_one_placeholder(
                 "token": runtime_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -445,7 +445,7 @@ def test_user_daemon_list_hides_superseded_local_runtime(monkeypatch) -> None:
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["thread-workspaces"],
+            "capabilities": ["workspace-scope", "thread-workspaces"],
             "status": "ready",
         }
         app.state.registry.register(
@@ -568,7 +568,7 @@ def test_recovered_managed_node_reattaches_the_original_agent(monkeypatch) -> No
                 "token": token,
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -605,7 +605,7 @@ def test_recovered_managed_node_reattaches_the_original_agent(monkeypatch) -> No
                 "token": replacement_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -710,7 +710,7 @@ def test_permanent_delete_retires_leftover_managed_runtime(monkeypatch) -> None:
                 "token": runtime_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -751,7 +751,7 @@ def test_delete_managed_node_cleans_orphaned_runtime(monkeypatch) -> None:
                 "token": runtime_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -794,7 +794,7 @@ def test_managed_node_runtime_cannot_be_drained_or_retired_during_active_run(
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -854,7 +854,7 @@ def test_running_managed_runtime_retirement_preserves_agent_and_placement(
                 "token": runtime_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -925,7 +925,7 @@ def test_stopped_managed_runtime_preserves_agent_for_restart(monkeypatch) -> Non
                 "token": runtime_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -987,7 +987,7 @@ def test_backend_startup_does_not_reconcile_runtime_capabilities_into_agents(
                 "token": runtime_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1014,7 +1014,7 @@ def test_backend_startup_does_not_reconcile_runtime_capabilities_into_agents(
                 "token": replacement_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1093,7 +1093,7 @@ def test_fastapi_daemon_routes_register_and_poll(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1161,7 +1161,7 @@ def test_explicit_run_lease_expiry_retains_ownership_until_exit(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1262,7 +1262,7 @@ def test_output_event_does_not_replace_explicit_lease_heartbeat(monkeypatch) -> 
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1335,7 +1335,7 @@ def test_run_completed_finalizes_even_when_token_usage_is_unusable(monkeypatch) 
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 },
                 headers={"Authorization": "Bearer ui_token"},
@@ -1402,7 +1402,7 @@ def test_daemon_delivery_output_reaches_the_canonical_session_stream(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1516,7 +1516,7 @@ def test_cancel_command_is_redelivered_until_run_termination_confirms_it(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1615,7 +1615,7 @@ def test_session_cancel_uses_durable_run_when_node_monitor_is_stale(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1679,7 +1679,7 @@ def test_cancel_returns_terminal_session_when_run_finishes_before_request(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1764,7 +1764,7 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "agentHealth": {
                     "codex": {
                         "status": "ready",
@@ -1828,7 +1828,7 @@ def test_admin_creates_user_login_and_assigns_unassigned_node(monkeypatch) -> No
                 "workspacePath": "/workspace/unassigned",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1903,7 +1903,7 @@ def test_admin_assigns_unassigned_node_to_existing_user(monkeypatch) -> None:
                 "workspacePath": "/workspace/unassigned",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -1986,7 +1986,7 @@ def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -2008,7 +2008,7 @@ def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
                 "token": "node_token_2",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -2155,7 +2155,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
                 "sandboxMode": "boxlite",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -2173,7 +2173,7 @@ def test_control_panel_creates_pending_daemon_node_and_reuses_duplicate(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -3064,7 +3064,7 @@ def test_control_panel_creates_unassigned_pending_daemon_node(monkeypatch) -> No
                 "workspacePath": "/workspace/shared",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -3080,7 +3080,7 @@ def test_control_panel_creates_unassigned_pending_daemon_node(monkeypatch) -> No
                 "workspacePath": "/workspace/shared",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -3105,7 +3105,7 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3246,7 +3246,7 @@ def test_user_can_ask_assigned_daemon_node_without_daemon_node_token(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3303,7 +3303,7 @@ def test_user_can_ask_assigned_daemon_node_without_daemon_node_token(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3359,7 +3359,7 @@ def test_user_can_name_owned_computer_and_name_survives_heartbeat(
                 "workspaceId": "mch_alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3405,7 +3405,7 @@ def test_user_can_name_owned_computer_and_name_survives_heartbeat(
                 "workspaceId": "mch_alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3423,7 +3423,7 @@ def test_user_can_name_owned_computer_and_name_survives_heartbeat(
                 "workspaceId": "mch_alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer replacement_ui_token"},
@@ -3457,7 +3457,7 @@ def test_computer_naming_enforces_ownership_and_validates_names(monkeypatch) -> 
                     "token": f"{handle}_node_token",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 },
                 headers={"Authorization": f"Bearer {handle}_ui_token"},
@@ -3537,7 +3537,7 @@ def test_computer_naming_enforces_ownership_and_validates_names(monkeypatch) -> 
                 "token": "alice_node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer alice_ui_token"},
@@ -3583,7 +3583,7 @@ def test_user_renames_managed_computer_through_runtime_identity(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -3659,7 +3659,7 @@ def test_sandbox_run_accepts_decision_metadata(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3710,7 +3710,7 @@ def test_sandbox_run_accepts_fresh_new_conversation_payload(monkeypatch) -> None
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3753,7 +3753,7 @@ def test_only_owner_can_start_existing_user_session_on_personal_computer(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -3768,7 +3768,7 @@ def test_only_owner_can_start_existing_user_session_on_personal_computer(
                 "workspacePath": "/workspace/bob",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer bob_ui_token"},
@@ -3993,7 +3993,7 @@ def test_admin_updates_disabled_agents_for_daemon_node(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex", "pi"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -4130,15 +4130,14 @@ def test_run_completed_generated_files_flow_over_http(monkeypatch) -> None:
                 "workspacePath": "/remote/daemon/workspace",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["generated-files", "thread-workspaces"],
+                "capabilities": ["generated-files", "workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
         )
         assert response.status_code == 200
         assert response.json()["capabilities"] == [
-            "generated-files",
-            "thread-workspaces",
+            "generated-files", "thread-workspaces", "workspace-scope",
         ]
 
         run = _legacy_ui_client(client).post(
@@ -4256,7 +4255,7 @@ def test_cancel_recovers_a_session_whose_run_request_is_stuck_finalizing(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -4685,7 +4684,7 @@ def test_daemon_heartbeat_state_drains_and_rejects_unknown_values(monkeypatch) -
                 "token": "node_token",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )

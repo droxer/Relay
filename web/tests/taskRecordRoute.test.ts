@@ -288,7 +288,7 @@ describe("record actions", () => {
   });
 
   it("will not dispatch a record that has nobody to dispatch to", () => {
-    const unassigned = { assignedAgentId: "", assignedTeamId: "", routineState: "active" as const, projectId: "project-1" };
+    const unassigned = { assignedAgentId: "", assignedTeamId: "", routineState: "active" as const, computerId: "computer-1" };
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: true, status: "backlog" }), []);
     // Unblocking is the status control's job; with nobody to run it there is no retry.
     assert.deepEqual(recordActions({ ...unassigned, isRoutine: false, status: "blocked" }), []);
@@ -353,4 +353,13 @@ describe("the record surface owns what the drawer used to", () => {
       assert.doesNotMatch(definition, new RegExp(banded.replace(".", "\\.")), `definition restates ${banded}`);
     }
   });
+});
+
+
+it("offers Project roster execution without an individual assignment", () => {
+  const task = { status: "backlog" as const, isRoutine: true, projectId: "p" };
+  assert.deepEqual(recordActions(task), ["run"]);
+  assert.deepEqual(recordActions({ ...task, isRoutine: false, status: "blocked" }), ["retry"]);
+  assert.deepEqual(recordActions(task, { readOnly: true }), []);
+  assert.deepEqual(recordActions({ ...task, routineState: "paused_by_relay", routinePauseReason: "rate_limited" }), []);
 });

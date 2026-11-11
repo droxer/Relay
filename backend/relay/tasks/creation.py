@@ -13,12 +13,15 @@ from .flow import NEW_TASK_ACCEPTANCE_POLICY
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 from .assignment import (
     validate_task_owner_assignment,
+    validate_task_computer,
+    validate_computer_assignment,
     logical_agent_for_assignment,
     team_for_assignment,
     validate_project_assignment,
     validate_trigger_scope,
 )
 from .placement import task_goal_text
+from .workspace import task_workspace_nodes, task_workspace_subpath
 from .requests import (
     TaskRequestError,
     TaskRequestReader,
@@ -65,7 +68,14 @@ class _Plan:
 
 
 def create_task(ctx: Any, actor: Actor, request: TaskCreateRequest) -> dict[str, Any]:
+    identity = request.reader.string(request.body, "computerId")
+    if identity:
+        if request.project:
+            raise TaskRequestError(400, "task_workspace_scope_conflict")
+        validate_task_computer(ctx, identity, request.owner)
     assignment = _resolve_assignment(ctx, actor, request)
+    if identity:
+        validate_computer_assignment(ctx, identity, assignment.agent_id, assignment.team_id)
     plan = _plan_creation(ctx, request, assignment)
     task = _create_record(ctx, request, assignment, plan)
     if plan.creates_thread:
@@ -111,13 +121,19 @@ def _plan_creation(
     if "status" in body and not status:
         raise TaskRequestError(400, "status is not a recognized task status.")
     routine = request.reader.routine(body, current=None)
+    if routine.get("isRoutine") and not (project or request.reader.string(body, "computerId")):
+        raise TaskRequestError(409, "task_workspace_required")
     if "routineTriggers" in body:
         validate_trigger_scope(ctx, routine.get("routineTriggers"), owner=request.owner)
     creates_thread = body.get("createSession") is True or isinstance(
         body.get("assignments"), list
     )
     assigned = bool(assignment.agent_id or assignment.team_id)
-    if issue_needs_project({**routine, "projectId": project and project["id"]}) and (
+    scope = {
+        **routine, "projectId": project and project["id"],
+        "computerId": request.reader.string(body, "computerId"),
+    }
+    if issue_needs_project(scope) and (
         status == "assigned" or assigned or creates_thread
     ):
         raise TaskRequestError(409, ISSUE_NEEDS_PROJECT)
@@ -152,6 +168,7 @@ def _create_record(
             "ownerUserId": request.owner,
             "assigneeUserId": assignment.assignee,
             **({"projectId": project["id"]} if project else {}),
+            **({"computerId": request.reader.string(body, "computerId")} if body.get("computerId") else {}),
             "dueDate": request.reader.date(body, "dueDate"),
             "status": plan.status,
             "acceptancePolicy": plan.acceptance_policy or NEW_TASK_ACCEPTANCE_POLICY,
@@ -187,6 +204,17 @@ def _open_task_thread(
         "workspace_path", reader.string(body, "workspacePath") or "/workspace"
     )
     session_fields = {key: value for key, value in project_fields.items() if key != "workspace_path"}
+    if task.get("computerId") and not project:
+        nodes = [
+            node for node in task_workspace_nodes(task, ctx.registry.monitor_nodes())
+            if not node.get("retiredAt")
+        ]
+        node = min(nodes, key=lambda item: (not item.get("online"), item["id"]), default={})
+        workspace_path = node.get("workspacePath") or "/workspace"
+        session_fields.update(
+            workspace_layout="task", workspace_subpath=task_workspace_subpath(task),
+            computer_id=task["computerId"],
+        )
     thread_ownership = _thread_ownership(ctx, task)
     assignments = task_thread_assignments(
         task,

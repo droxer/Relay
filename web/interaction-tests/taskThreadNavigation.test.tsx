@@ -11,17 +11,17 @@ it("round trips a task thread deep link within Tasks", () => {
   expect(browserUrlForAppState({ ...state, sessionId: null }, "/tasks/task/threads/thread", "?project=p&q=ship&space=1")).toBe("/tasks/task?project=p&q=ship");
 });
 
-it("loads a task thread and keeps sends and mobile Back in the task context", async () => {
+it("loads a legacy task thread and keeps sends and mobile Back in its Project", async () => {
   window.history.replaceState({}, "", "/tasks/task/threads/thread?project=p");
   const apply = vi.fn();
   const options = { composingNew: false, activeSessionId: "thread", selectedSessionId: "thread", activeSession: undefined, onApplySessionFromPath: apply, onSetComposingNewFromPath: vi.fn(), onClearPendingMessage: vi.fn() };
   const { result, unmount } = renderHook(() => useAppRouter(options));
   expect(apply).toHaveBeenCalledWith("thread");
   await act(async () => result.current.syncThreadUrl("thread", true, "p"));
-  expect(window.location.pathname).toBe("/tasks/task/threads/thread");
+  expect(window.location.pathname).toBe("/projects/p/threads/thread");
   await act(async () => result.current.navigateToMobileView("threads"));
-  expect(window.location.pathname).toBe("/tasks/task");
-  expect(window.location.search).toBe("?project=p");
+  expect(window.location.pathname).toBe("/projects/p");
+  expect(window.location.search).toBe("");
   unmount();
 });
 
@@ -36,18 +36,18 @@ it("keeps the mobile return control for issue threads", async () => {
   expect(screen.queryByRole("link", { name: "thread.back_to_project_activities" })).toBeNull();
 });
 
-it("opens a project task conversation in Threads and returns to the thread list", async () => {
+it("opens a Project Task conversation and returns to its Project", async () => {
   window.history.replaceState({}, "", "/tasks/task?project=p");
   const options = { composingNew: false, activeSessionId: "thread", selectedSessionId: "thread", activeSession: undefined, onApplySessionFromPath: vi.fn(), onSetComposingNewFromPath: vi.fn(), onClearPendingMessage: vi.fn() };
   const { result } = renderHook(() => useAppRouter(options));
   await act(async () => result.current.syncThreadUrl("thread", false, "p", "task"));
-  expect(window.location.pathname).toBe("/threads/thread");
-  expect(result.current.route).toBe("main");
+  expect(window.location.pathname).toBe("/projects/p/threads/thread");
+  expect(result.current.route).toBe("projects");
   expect(result.current.recordTaskId).toBeNull();
   await act(async () => result.current.syncThreadUrl("thread", true, "p"));
-  expect(window.location.pathname).toBe("/threads/thread");
+  expect(window.location.pathname).toBe("/projects/p/threads/thread");
   await act(async () => result.current.navigateToMobileView("threads"));
-  expect(window.location.pathname).toBe("/threads");
+  expect(window.location.pathname).toBe("/projects/p");
 });
 
 it("opens and retains a Project Manager's ordinary Thread", async () => {
@@ -60,5 +60,5 @@ it("opens and retains a Project Manager's ordinary Thread", async () => {
   rerender({ready:true});
   act(()=>result.current.openThread('manager'));
   expect(navigate).not.toHaveBeenCalled();
-  expect(sync).toHaveBeenCalledWith('manager',false,'project',null);
+  expect(sync).toHaveBeenCalledWith('manager',false,'project',null,null);
 });

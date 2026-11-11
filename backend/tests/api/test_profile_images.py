@@ -54,7 +54,7 @@ def _agent(client: TestClient, handle: str) -> dict:
             "workspacePath": f"/workspace/{handle}",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["thread-workspaces"],
+            "capabilities": ["workspace-scope", "thread-workspaces"],
             "status": "stopped",
         }
     )
@@ -266,7 +266,7 @@ def test_agents_and_teams_can_be_created_with_a_preset(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "stopped",
             }
         )
@@ -327,7 +327,7 @@ def test_admin_creates_agent_and_team_with_a_preset(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "stopped",
             }
         )

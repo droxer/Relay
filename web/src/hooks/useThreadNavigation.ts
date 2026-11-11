@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { sessionComputer } from "../lib/workspaceScope";
+import { type RefObject } from "react";
 import type { ComposerHandle } from "../components/composer/Composer";
 import type { RelaySession, RelayTaskSummary } from "../types";
 import type { AppRoute } from "../lib/viewTypes";
-import { hrefForRoute, navigateToAppPath } from "../lib/appRoute";
 import { useComposerTargetStore } from "../lib/composerTargetStore";
 import { useRelayStore } from "../lib/store";
-import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { resolveNewThreadComputer } from "../lib/threadRuntime";
 
 type ThreadComputer = Parameters<typeof resolveNewThreadComputer>[1][number];
@@ -29,22 +28,16 @@ interface ThreadNavigationInput {
   composerRef: RefObject<ComposerHandle | null>;
   pinTranscriptToBottom: () => void;
   showThreadList: () => void;
-  syncThreadUrl: (sessionId: string | null, replace?: boolean, projectId?: string | null, taskId?: string | null) => void;
+  syncThreadUrl: (sessionId: string | null, replace?: boolean, projectId?: string | null, taskId?: string | null, computerId?: string | null) => void;
   navigateToProject: (projectId: string | null) => void;
 }
 
 /** Opening a thread, staging a new one, and picking a project — plus the
-    redirect that moves old project-thread links to where they live now. */
+    keeping each conversation in its owning workspace. */
 export function useThreadNavigation({
   route,
   myThreads,
-  projects = [],
-  projectsReady = true,
   tasks,
-  tasksStatus,
-  activeSession,
-  composingNew,
-  routedSessionId,
   routedProjectId,
   recordTaskId,
   threadComputers,
@@ -65,49 +58,15 @@ export function useThreadNavigation({
     const session = myThreads.find((candidate) => candidate.id === sessionId);
     const ownerTaskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
     const taskId = parentTaskId ?? (route === "main" ? null : ownerTaskId ?? (route === "backlog" ? recordTaskId : null));
-    const managerThread = projects.some(project => project.managerThreadId === sessionId);
-    if (session?.projectId && !ownerTaskId && !taskId && !managerThread) {
-      navigateToProject(session.projectId);
-      return;
-    }
     // useThreadComposerSelection owns restoration and the thread's default.
     // Reopening the active thread must not reset its automatic agent pick.
     openSession(sessionId);
     if (taskId) showThreadList();
-    syncThreadUrl(sessionId, replace, session?.projectId ?? routedProjectId,
-      taskId);
+    syncThreadUrl(sessionId, replace, session ? session.projectId ?? null : routedProjectId,
+      taskId, session ? sessionComputer(session, threadComputers) : null);
   }
 
-  // Old project thread links resolve to their task; standalone project rooms
-  // no longer have a conversation surface. The redirect only fires while the
-  // URL addresses the thread — a bare /threads is the list, and the sidenav's
-  // Threads destination must stay there even when the active thread is a
-  // project room.
-  useEffect(() => {
-    const projectId = routedProjectId ?? activeSession?.projectId;
-    if (!projectsReady) return;
-    if (activeSession && projects.some(project => project.managerThreadId === activeSession.id)) return;
-    if ((route !== "projects" && route !== "main") || !projectId) return;
-    if (route === "projects" && composingNew) {
-      void navigateToAppPath(`${hrefForRoute("backlog")}?project=${encodeURIComponent(projectId)}`, { replace: true });
-    } else if (tasksStatus === "ready" && !composingNew && activeSession
-      && routedSessionId === activeSession.id) {
-      const sessionId = activeSession.id;
-      const taskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
-      if (route === "main" && taskId) return;
-      const path = taskId
-        ? `${hrefForRoute("backlog")}/${encodeURIComponent(taskId)}/threads/${encodeURIComponent(sessionId)}?project=${encodeURIComponent(projectId)}`
-        : `/projects/${encodeURIComponent(projectId)}`;
-      void navigateToAppPath(path, { replace: true });
-    }
-  }, [route, routedProjectId, routedSessionId, activeSession, composingNew, tasks, tasksStatus, projects, projectsReady]);
-
-  function startNewThread(projectId: string | null = null) {
-    if (projectId) {
-      taskCreateIntent()?.queue();
-      void navigateToAppPath(`${hrefForRoute("backlog")}?project=${encodeURIComponent(projectId)}`);
-      return;
-    }
+  function startNewThread(projectId: string | null = routedProjectId) {
     pickRoom();
     startComposing();
     // Same rule as the staging effect: a pick survives a heartbeat flap, and

@@ -396,7 +396,7 @@
     "setup_task_after_existing_other": "在 {{count}} 个已有任务之后",
     "setup_tasks_failed": "部分任务未能添加：{{message}} 再次应用即可添加其余任务，已添加的任务不会重复。",
     "dashboard_user_wip": "你在所有项目中的进行中任务：{{count}} / {{limit}}",
-    "dashboard_view_user_tasks": "查看你在所有项目中的任务",
+    "dashboard_view_project_tasks": "查看项目任务",
     "member_make_manager": "项目负责人"
   },
   "thread": {
@@ -1132,7 +1132,9 @@
     "device_expired_title": "此请求已过期",
     "device_expired_body": "连接请求有效期为 10 分钟，且只能使用一次。请在终端中重新运行安装以获取新链接。",
     "device_retry": "重试",
-    "device_open_computers": "打开电脑"
+    "device_open_computers": "打开电脑",
+    "unplaced_work": "未分配工作区的工作（{{count}}）",
+    "place_work_here": "放到此计算机"
   },
   "routine": {
     "schedule": "触发器",

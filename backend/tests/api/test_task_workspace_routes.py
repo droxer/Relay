@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from automation_helpers import WEEKLY_TRIGGERS
 
 import asyncio
@@ -59,7 +61,7 @@ def _register_node(app, node_id: str, machine_id: str, capabilities: list[str]) 
             "token": f"token_{node_id}",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": capabilities,
+            "capabilities": ["workspace-scope", *capabilities],
             "status": "ready",
             "workspacePath": "/workspace/relay",
             "workspaceId": machine_id,
@@ -193,7 +195,7 @@ def routine_with_occurrence(client: TestClient):
         agent = _agent(client, node, name="Routine Runner")
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=agent),
                 "title": "Weekly report",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,

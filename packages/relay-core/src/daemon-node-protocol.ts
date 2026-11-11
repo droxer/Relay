@@ -76,7 +76,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records";
+export type DaemonNodeCapability = "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope";
 export const DAEMON_CAPABILITY_DURABLE_REPORTS: DaemonNodeCapability = "durable-reports";
 export const DAEMON_CAPABILITY_PROJECT_MANAGER_MCP: DaemonNodeCapability = "project-manager-mcp";
 /** Roster members other than the Project Lead get read-only Relay MCP tools. */
@@ -309,6 +309,7 @@ export interface DaemonNodeHeartbeat {
 }
 
 export interface DaemonNodeRegistrationResponse {
+  computerId?: string;
   heartbeat?: DaemonNodeHeartbeatSettings;
   /** Journaled runs the backend has accounted for; the daemon may forget them. */
   acknowledgedJournalIds?: string[];
@@ -380,6 +381,8 @@ export interface DaemonNodeRunCommand {
     artifacts: Array<{ artifactId: string; path: string; sha256: string | null }>;
   };
   workspacePath?: string;
+  /** Authoritative execution ownership, independent of agent-supplied state. */
+  workspaceScope?: { computerId: string; projectId?: string; taskId?: string; automationId?: string; legacyLayout?: "thread" | "node-root" };
   /** Missing means node-root for compatibility with commands from older backends. */
   workspaceLayout?: DaemonWorkspaceLayout;
   /** Required when workspaceLayout is project. */
@@ -700,3 +703,6 @@ export type DaemonNodeEvent =
       code: DaemonWorkspaceErrorCode;
       message: string;
     };
+
+/** Validates run ownership before admitting or preparing a workspace. */
+export const DAEMON_CAPABILITY_WORKSPACE_SCOPE: DaemonNodeCapability = "workspace-scope";

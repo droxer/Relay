@@ -23,3 +23,37 @@ def active_routine(triggers=None):
 
 def paused_routine(triggers=None):
     return {**active_routine(triggers), "routineState": "paused"}
+
+
+def computer_for_automation(client, owner=None, *, agent=None):
+    """Explicitly provision an offline Computer for API automation fixtures."""
+    from relay.core.computer_identity import computer_id
+    if agent:
+        placements = client.app.state.agent_placement_store
+        active = [p for p in placements.list_placements(agent_id=agent["id"])
+                  if p.get("desiredState") != "removed" and p.get("computerId")]
+        if active:
+            return active[-1]["computerId"]
+        identity = agent.get("computerId") or computer_for_automation(client, agent["supervisorUserId"])
+        node = next(node for node in client.app.state.registry.monitor_nodes()
+                    if computer_id(node) == identity)
+        placements.create_placement(agent, node["id"], {"computerId": identity})
+        return identity
+    account = client.get("/api/v1/auth/me").json()["user"]
+    if not owner or account["role"] != "admin":
+        owner = account["userId"]
+    existing = [node for node in client.app.state.registry.monitor_nodes()
+                if node.get("userId") == owner and not node.get("retiredAt")]
+    if len(existing) == 1:
+        return computer_id(existing[0])
+    node_id = f"automation-fixture-{owner}"
+    node = client.app.state.registry.get(node_id)
+    if not node:
+        node = client.app.state.registry.register({
+            "sandboxId": node_id, "userId": owner, "workspaceId": node_id,
+            "token": "fixture-token", "protocolVersion": 1,
+            "workspacePath": f"/workspace/{owner}", "supportedAgents": [],
+            "capabilities": ["workspace-scope", "thread-workspaces", "task-workspaces"],
+            "status": "stopped",
+        })
+    return computer_id(node)

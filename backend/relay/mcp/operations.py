@@ -11,6 +11,8 @@ from .errors import McpError
 
 
 def list_projects(ctx: Any, grant: dict[str, Any]) -> dict[str, Any]:
+    if grant.get("computerId") and not grant.get("commandId"):
+        return {"projects": []}
     projects = ctx.project_store.list_projects(grant["ownerUserId"], include_archived=True)
     return {
         "projects": [

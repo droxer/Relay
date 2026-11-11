@@ -19,7 +19,7 @@ def _register(app, node_id: str, *, setup: bool = True) -> dict:
             "protocolVersion": 1,
             "supportedAgents": ["codex", "claude"],
             "capabilities": [
-                "thread-workspaces",
+                "workspace-scope", "thread-workspaces",
                 "project-workspaces",
                 *(["project-setup"] if setup else []),
             ],

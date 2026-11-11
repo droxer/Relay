@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from collections.abc import Iterator
 from tempfile import TemporaryDirectory
 
@@ -59,7 +61,7 @@ def _register_alice_client(
                 "nodeLocation": "user-device",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": node_status,
             }
         )
@@ -122,7 +124,7 @@ def _birth_computer_id(
             "workspacePath": f"/workspace/{handle}",
             "protocolVersion": 1,
             "supportedAgents": sorted(existing_ready | {executor_kind}),
-            "capabilities": ["thread-workspaces"],
+            "capabilities": ["workspace-scope", "thread-workspaces"],
             "status": status,
         }
     )
@@ -263,7 +265,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
                 "nodeLocation": "user-device",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "stopped",
             },
         )
@@ -283,7 +285,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
                 "nodeLocation": "user-device",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -343,7 +345,7 @@ def test_control_plane_provisioned_node_registration_does_not_materialize_agents
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             },
         )
@@ -430,7 +432,7 @@ def test_legacy_sandbox_run_blocks_unenforced_agent_policy(monkeypatch, database
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -573,7 +575,7 @@ def test_admin_places_agents_on_different_runtime_nodes(monkeypatch) -> None:
                     "token": f"token_{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": [executor],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 }
             )
@@ -644,7 +646,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
                 "sandboxMode": "none",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -671,7 +673,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
                     "sandboxMode": "boxlite",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 },
             ).status_code
@@ -779,7 +781,7 @@ def test_user_dispatches_work_by_logical_agent_id(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -882,7 +884,7 @@ def test_mentioning_an_agent_grows_the_room_and_later_messages_reach_it(
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -947,7 +949,7 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "kimi"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1013,7 +1015,7 @@ def test_mentioning_two_agents_dispatches_one_round_with_both(monkeypatch) -> No
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1086,7 +1088,7 @@ def test_message_retry_reconciles_participants_after_post_dispatch_failure(
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1163,7 +1165,7 @@ def test_room_message_fans_out_to_every_participant(monkeypatch) -> None:
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1229,7 +1231,7 @@ def test_mentioning_an_agent_from_another_computer_is_rejected(monkeypatch) -> N
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1241,7 +1243,7 @@ def test_mentioning_an_agent_from_another_computer_is_rejected(monkeypatch) -> N
                 "workspacePath": "/workspace/admin-2",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1308,7 +1310,7 @@ def test_semantic_message_retry_reconciles_a_prepared_attempt_without_duplicate_
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1422,7 +1424,7 @@ def test_new_thread_retry_resumes_the_session_owned_by_its_prepared_admission(
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1491,7 +1493,7 @@ def test_completed_thread_retry_reopens_after_message_commit_interruption(
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1577,7 +1579,7 @@ def test_owner_can_replay_a_scoped_message_for_their_thread(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1641,7 +1643,7 @@ def test_existing_thread_resumes_after_managed_runtime_replacement_without_read(
                 "token": runtime_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1684,7 +1686,7 @@ def test_existing_thread_resumes_after_managed_runtime_replacement_without_read(
                 "token": replacement_token,
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1753,7 +1755,7 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1826,7 +1828,7 @@ def test_logical_agent_handoff_records_the_target_agent_id(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -1905,7 +1907,7 @@ def test_user_cannot_dispatch_a_team_across_shared_workspace_nodes(
                     "workspaceId": f"machine:alice:{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": [executor],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "maxConcurrentRuns": 2,
                     "status": "ready",
                 }
@@ -1990,7 +1992,7 @@ def test_new_thread_runs_on_the_selected_computer(monkeypatch) -> None:
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 }
             )
@@ -2070,7 +2072,7 @@ def test_new_thread_rejects_an_agent_outside_the_selected_computer(
                     "workspacePath": f"/workspace/{node_id}",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 }
             )
@@ -2130,7 +2132,7 @@ def test_user_cannot_list_or_dispatch_another_users_agent(monkeypatch) -> None:
                 "workspacePath": "/workspace/shared",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -2195,7 +2197,7 @@ def test_legacy_sandbox_run_cannot_move_a_thread_to_another_computer(
                     "workspacePath": f"/workspace/{machine_id}",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 }
             )
@@ -2267,7 +2269,7 @@ def test_legacy_run_reuses_compatibility_agent_after_device_reregistration(
                     "workspacePath": "/workspace/alice",
                     "protocolVersion": 1,
                     "supportedAgents": ["codex"],
-                    "capabilities": ["thread-workspaces"],
+                    "capabilities": ["workspace-scope", "thread-workspaces"],
                     "status": "ready",
                 }
             )
@@ -2331,7 +2333,7 @@ def test_agent_stays_on_roster_when_its_computer_is_gone(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -2422,7 +2424,7 @@ def test_agent_stays_on_roster_when_its_computer_is_deregistered(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -2488,7 +2490,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", "project-workspaces"],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", "project-workspaces"],
                 "status": "ready",
             }
         )
@@ -2646,7 +2648,7 @@ def test_user_task_writes_require_named_agents_and_preserve_status(
 
         agentless_routine = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=agent),
                 "title": "Unsafe routine",
                 "isRoutine": True,
                 "routineState": "active",
@@ -2708,7 +2710,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", "project-workspaces"],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", "project-workspaces"],
                 "status": "ready",
             }
         )
@@ -2781,7 +2783,7 @@ def test_failed_agent_first_run_finalizes_instead_of_wedging(monkeypatch) -> Non
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -3083,7 +3085,7 @@ def test_creation_does_not_place_on_an_online_node_that_lacks_the_runtime(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "stopped",
             }
         )
@@ -3098,7 +3100,7 @@ def test_creation_does_not_place_on_an_online_node_that_lacks_the_runtime(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -3166,7 +3168,7 @@ def test_creation_rejects_a_real_computer_belonging_to_another_user(
                 "workspacePath": "/workspace/bob",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -3255,7 +3257,7 @@ def test_agent_view_lists_skills_installed_for_its_runtime(monkeypatch) -> None:
                 "nodeLocation": "user-device",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
                 "agentInventory": {
                     "claude": {
@@ -3398,7 +3400,7 @@ def test_admin_placement_on_another_computer_moves_the_agent(
                 "workspacePath": "/workspace/alice-laptop",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )
@@ -3473,7 +3475,7 @@ def test_admin_placement_refuses_to_move_an_agent_off_its_team_computer(
                 "workspacePath": "/workspace/alice-laptop",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["thread-workspaces"],
+                "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
         )

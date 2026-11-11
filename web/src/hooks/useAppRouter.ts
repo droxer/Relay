@@ -103,40 +103,35 @@ export function useAppRouter({
       mobileView: nextMobileView,
       sessionId: nextMobileView === "chat" ? currentSessionId ?? null : null,
       projectId: locationState.projectId ?? activeSession?.projectId ?? null,
+      computerId: locationState.computerId,
       composingNew: nextMobileView === "chat" && composingNew,
     });
   }, [activeSession?.projectId, composingNew, currentSessionId, locationState, navigateToAppState]);
 
   const hrefForSideNavRoute = useCallback((nextRoute: AppRoute) => buildHrefForRoute(nextRoute), []);
 
-  const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null, taskId?: string | null) => {
-    // An explicit task opens its conversation in Threads. Only an in-place
-    // update of an existing nested deep link retains the legacy task route.
-    const parentTaskId = taskId === undefined && locationState.route === "backlog"
-      ? locationState.taskId : null;
+  const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null, _taskId?: string | null, computerId?: string | null) => {
     const state: AppLocationState = {
-      route: sessionId && parentTaskId ? "backlog" : sessionId ? "main" : projectId ? "projects" : "main",
-      taskId: sessionId ? parentTaskId : null,
-      mobileView: "chat",
-      sessionId,
-      projectId: projectId ?? null,
+      route: projectId ? "projects" : "main",
+      computerId: projectId ? null : computerId ?? locationState.computerId,
+      mobileView: "chat", sessionId, projectId: projectId ?? null,
       composingNew: sessionId === null,
     };
     void syncAppStateToUrl(state, replace, () => setLocationState(state));
-  }, [locationState.route, locationState.taskId]);
+  }, [locationState.computerId]);
 
   /* The record routes. `null` returns to the list, which is what a breadcrumb
      does when the reader arrived by deep link and has no history to go back
      to — see `navigateBackToList` in lib/recordBack. */
   const navigateToTaskRecord = useCallback((taskId: string | null) => {
     if (taskId) rememberListUrl();
-    navigateToAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
-  }, [navigateToAppState]);
+    navigateToAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId, computerId: locationState.computerId });
+  }, [navigateToAppState, locationState.computerId]);
 
   const navigateToRoutineRecord = useCallback((routineId: string | null, runId: string | null = null) => {
     if (routineId) rememberListUrl();
-    navigateToAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: routineId, runId });
-  }, [navigateToAppState]);
+    navigateToAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: routineId, runId, computerId: locationState.computerId });
+  }, [navigateToAppState, locationState.computerId]);
 
   const navigateToAgent = useCallback((agentId: string | null) => {
     navigateToAppState({ route: "agents", mobileView: "chat", sessionId: null, agentId });
@@ -176,6 +171,7 @@ export function useAppRouter({
     mobileView: locationState.mobileView,
     routedSessionId: locationState.sessionId,
     projectId: locationState.projectId ?? null,
+    computerId: locationState.computerId ?? null,
     agentId: locationState.agentId ?? null,
     recordTaskId: locationState.taskId ?? null,
     recordRunId: locationState.runId ?? null,

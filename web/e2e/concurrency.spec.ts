@@ -34,11 +34,13 @@ test("browser, backend and daemon queue overflow and resume after a real process
   });
   const tasks: RelayTask[] = [];
   const markers: string[] = [];
+  const projectIds: string[] = [];
   for (let index = 0; index < 3; index++) {
     const { project } = await post(context.request, "/projects", {
       name: `Concurrency ${index}`, daemonNodeId: node.id, leadAgentId: agent.id,
       members: [{ agentId: agent.id, role: "implementer", responsibilities: "Exercise concurrency" }],
     });
+    projectIds.push(project.id);
     tasks.push(await post(context.request, "/tasks", {
       title: `Concurrent work ${index}`, projectId: project.id, assignedAgentId: agent.id, status: "backlog",
     }));
@@ -59,7 +61,7 @@ test("browser, backend and daemon queue overflow and resume after a real process
   const pids = markers.slice(0, 2).map(path => Number(readFileSync(path, "utf8")));
   expect(pids.every(alive)).toBe(true);
   expect(existsSync(markers[2])).toBe(false);
-  await page.goto("/tasks");
+  await page.goto(`/projects/${projectIds[2]}?tab=tasks`);
   await expect(page.getByText("Queued: this task will start automatically when an execution slot opens on its Computer.", { exact: true })).toBeVisible();
 
   // The UI requests cancellation; the daemon must prove child exit before
@@ -71,11 +73,12 @@ test("browser, backend and daemon queue overflow and resume after a real process
   await expect.poll(async () => (await getTask(2)).status).toBe("running");
   const thirdPid = Number(readFileSync(markers[2], "utf8"));
   expect(alive(pids[1]) && alive(thirdPid)).toBe(true);
-  await page.goto("/tasks");
+  await page.goto(`/projects/${projectIds[2]}?tab=tasks`);
   await expect(page.getByText("Queued: this task will start automatically when an execution slot opens on its Computer.", { exact: true })).toHaveCount(0);
   for (const index of [1, 2]) {
     await page.goto(`/tasks/${tasks[index].id}`);
     await page.getByRole("button", { name: "Cancel run", exact: true }).click();
   }
   await expect.poll(() => alive(pids[1]) || alive(thirdPid)).toBe(false);
+  for (const task of tasks) expect((await context.request.delete(`/api/v1/tasks/${task.id}`)).ok()).toBeTruthy();
 });

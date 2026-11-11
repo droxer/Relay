@@ -26,14 +26,14 @@ TOOL_OPERATIONS = {
 _DESCRIPTIONS = {
     "projects": "List Projects this token can access.",
     "overview": "Read current Project goal, context, roster and Task counts.",
-    "tasks": "List Tasks. Omit projectId for standalone work; Project roster members may read Project work.",
+    "tasks": "List Tasks. Omit projectId for the current run scope; standalone work is limited to the current Computer.",
     "task": "Read a Task and its current revision before proposing edits.",
     "review": "Read Task review evidence.",
     "activity": "Read Project activity within an explicit time window.",
     "threads": "List Project Threads.",
     "thread": "Read a Project Thread.",
     "propose": "Stage up to 20 Task operations for owner review. Does not apply or start work.",
-    "automations": "List Automations. Omit projectId for standalone Automations.",
+    "automations": "List Automations. Omit projectId for the current run scope.",
     "automation": "Read an Automation, its triggers and current state.",
 }
 _TEXT = {"type": "string"}
@@ -157,7 +157,7 @@ def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
                 required.append("fields")
             tools.append(Tool(
                 name=name,
-                description=f"{verb.title()} {'an Automation' if kind == 'automation' else 'a Task'}. All Agents may manage standalone work; only the Project Lead may change Project work. Acceptance and execution recovery remain owner-only.",
+                description=f"{verb.title()} {'an Automation' if kind == 'automation' else 'a Task'}. Standalone runs manage work only on their Computer; Project runs stay in their Project and only its Lead may change Project work. Acceptance and execution recovery remain owner-only.",
                 inputSchema={"type": "object", "properties": properties, "required": required, "additionalProperties": False},
                 annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=verb == "delete"),
             ))

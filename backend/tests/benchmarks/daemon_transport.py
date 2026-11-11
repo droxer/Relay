@@ -66,7 +66,7 @@ def serve() -> FastAPI:
             owner = ctx.auth_store.ensure_user('transport-benchmark')['id']
             ctx.registry.register({'sandboxId': node_id, 'userId': owner, 'token': token,
                 'protocolVersion': 2, 'supportedAgents': ['codex'], 'maxConcurrentRuns': 3,
-                'capabilities': ['thread-workspaces', 'durable-reports'],
+                'capabilities': ["workspace-scope", 'thread-workspaces', 'durable-reports'],
                 'executorCapabilities': [{'executorKind': 'codex', 'status': 'ready', 'adapter': 'cli', 'maxConcurrentRuns': 3}]})
             return {'token': token}
         session = ctx.backend._run_sync(node_id, {'taskGoal': 'synthetic transport load',

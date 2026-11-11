@@ -28,7 +28,7 @@ def _register(registry: DaemonNodeRegistry, workspace: str) -> None:
             "workspacePath": workspace,
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["thread-workspaces", "generated-files"],
+            "capabilities": ["workspace-scope", "thread-workspaces", "generated-files"],
             "status": "ready",
         },
         "ui_token",

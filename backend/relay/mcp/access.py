@@ -34,7 +34,16 @@ def authorize(ctx: Any, token: str | None) -> dict[str, Any]:
         # A run token carries its Agent's Project access: the lead may manage
         # Project work, while other roster members only read it.
         scope = command_project_access(command["command"].get("state", {}), command["command"].get("logicalAgentId"))
-        return {**grant, "access": scope[1] if scope else "read",
+        session = ctx.session_store.get_session_header(command["command"]["sessionId"])
+        project_id = session.get("projectId")
+        execution_scope = command["command"].get("workspaceScope")
+        if execution_scope and (execution_scope.get("computerId") != grant.get("computerId")
+                                or execution_scope.get("projectId") != project_id):
+            raise McpError(403, "Execution workspace scope mismatch.")
+        if scope and scope[0]["projectId"] != project_id:
+            raise McpError(403, "Project workspace scope mismatch.")
+        return {**grant, "workspaceProjectId": project_id, "projectIds": [project_id] if project_id else [],
+                "access": scope[1] if scope else "read",
                 "agentId": command["command"].get("logicalAgentId")}
     if grant.get("computerId") and not any(
         computer_id(node) == grant["computerId"]
@@ -62,6 +71,8 @@ def assert_project_manage(grant: dict[str, Any], project: dict[str, Any]) -> Non
 
 
 def assert_standalone(grant: dict[str, Any]) -> None:
+    if grant.get("commandId") and grant.get("workspaceProjectId"):
+        raise McpError(403, "Project runs cannot access standalone work.")
     if not grant.get("commandId") and grant.get("projectIds") is not None:
         raise McpError(403, "This token is limited to Projects.")
 
@@ -69,6 +80,8 @@ def assert_standalone(grant: dict[str, Any]) -> None:
 def scoped_project(ctx: Any, grant: dict[str, Any], project_id: str) -> dict[str, Any]:
     if names_no_uuid_row(ctx.project_store.engine, project_id):
         raise McpError(404, "project_not_found")
+    if grant.get("computerId") and not grant.get("commandId"):
+        raise McpError(403, "Project workspace scope required.")
     project = ctx.project_store.get_project(project_id)
     if not project:
         raise McpError(404, "project_not_found")

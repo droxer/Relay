@@ -6011,3 +6011,35 @@ test('durable peers keep independent probes during a held poll at the advertised
     assert.equal(beats, 2);
   } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test("daemon rejects a scope mismatch before acquiring a workspace or spawning an agent", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-scope-"));
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  let served = false;
+  let acquired = 0;
+  const environment = fakeEnvironment({ exec: async () => { throw new Error("Agent must not execute"); } });
+  const acquire = environment.acquireWorkspace;
+  environment.acquireWorkspace = async (...args) => { acquired += 1; return acquire(...args); };
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "scope-test", userId: "alice", workspacePath: root,
+      token: "token", pollIntervalMs: 5, shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal, environment,
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ computerId: "computer" });
+        if (path.endsWith("/commands")) {
+          if (served) { stop.abort(); return jsonResponse({ commands: [] }); }
+          served = true;
+          return jsonResponse({ commands: [{ ...runCommand("scope-rejected"), workspaceLayout: "project", workspaceSubpath: "projects/other", workspaceScope: { computerId: "computer", projectId: "mine" } }] });
+        }
+        if (path.endsWith("/events")) { events.push(await jsonBody<DaemonNodeEvent>(init)); return jsonResponse({ ok: true }, 202); }
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+    assert.equal(acquired, 0);
+    assert.equal(existsSync(join(root, "projects")), false);
+    assert.ok(events.some(event => event.type === "run.failed" && event.commandId === "scope-rejected"));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

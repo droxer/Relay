@@ -8,6 +8,8 @@ import { expect, test, type Page } from "@playwright/test";
    which is why it needs a test rather than a review. */
 
 const USER_ID = "perf-user";
+const computer = { id: "perf-node", userId: USER_ID, online: true, stale: false, status: "ready", agents: { claude: "ready" }, activeRuns: [] };
+const workPath = "/computers/node%3Aperf-node";
 const T0 = Date.parse("2026-09-17T09:00:00Z");
 const hoursAgo = (hours: number) => new Date(T0 - hours * 3_600_000).toISOString();
 const USER = { id: USER_ID, userId: USER_ID, username: "perf", role: "user", theme: "light", language: "en" };
@@ -27,7 +29,7 @@ function session(id: string, index: number, turns = 0) {
   }
   return {
     id, title: `Thread number ${index}`, taskGoal: `Thread number ${index}`, status: ["completed", "failed"][index % 2],
-    ownerUserId: USER_ID, workspacePath: "/w", phase: "created", participants: ["human"],
+    ownerUserId: USER_ID, computerId: "node:perf-node", projectId: null, workspacePath: "/w", phase: "created", participants: ["human"],
     createdAt: hoursAgo(index + 10), updatedAt: hoursAgo(index + 1),
     events, agentRuns, artifacts: [], decisions: [], collaborationRounds: [],
     eventCount: events.length, runCount: agentRuns.length, artifactCount: 0,
@@ -47,7 +49,7 @@ test("a mobile deep link keeps the composer docked while summary and detail arri
   const detailGate = new Promise<void>((resolve) => { releaseDetail = resolve; });
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
+    let body: unknown = { agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     else if (path.endsWith(`/threads/${thread.id}`)) {
       await detailGate;
@@ -59,7 +61,7 @@ test("a mobile deep link keeps the composer docked while summary and detail arri
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   try {
-    await page.goto(`/threads/${thread.id}`);
+    await page.goto(`${workPath}/threads/${thread.id}`);
     const composer = page.locator("form.composer");
     await expect(composer).toBeVisible();
     const top = await composer.evaluate((element) => element.getBoundingClientRect().top);
@@ -106,7 +108,7 @@ for (const width of [1280, 390]) {
       const path = new URL(route.request().url()).pathname;
       const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
         : path.endsWith("/threads/opencode") ? thread
-          : { sessions: [thread], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
+          : { sessions: [thread], agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [], skills: [] };
       await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
     });
     await page.goto("/threads/opencode");
@@ -142,7 +144,7 @@ for (const width of [1280, 390]) {
 async function mockApi(page: Page) {
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: THREADS, agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
+    let body: unknown = { sessions: THREADS, agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [], skills: [] };
     if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     else if (/\/threads\/s-\d+$/.test(pathname)) body = pathname.endsWith("/s-0") ? LONG_THREAD : THREADS.find((t) => pathname.endsWith(`/${t.id}`));
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
@@ -184,7 +186,7 @@ function installCommitCounter() {
 test("identical polls do not re-render the app or the thread rail", async ({ page }) => {
   await page.addInitScript(installCommitCounter);
   await mockApi(page);
-  await page.goto("/threads");
+  await page.goto(`${workPath}/threads`);
   await expect(page.locator(".conversation-name").first()).toBeVisible();
   // Let first-load commits settle, then watch 10s of identical polls: two
   // sessions polls (5s) plus a nodes and a tasks poll (10s) — see
@@ -201,7 +203,7 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
 
 test("the thread rail mounts a bounded window and grows as it scrolls", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/threads");
+  await page.goto(`${workPath}/threads`);
   const rows = page.locator(".thread-panel .conversation-name");
   await expect(rows.first()).toBeVisible();
   const initial = await rows.count();
@@ -215,7 +217,7 @@ test("the thread rail mounts a bounded window and grows as it scrolls", async ({
 test("a selected thread deep in the rail is mounted and can load the remaining threads", async ({ page }) => {
   await mockApi(page);
   await page.goto("/threads/s-350");
-  await expect(page.locator('.thread-panel [aria-current="page"]')).toContainText("Thread number 350");
+  await expect(page.locator('.thread-panel .conversation-row [aria-current="page"]')).toContainText("Thread number 350");
   await page.locator(".thread-panel .conversation-list").evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
@@ -274,11 +276,11 @@ test("a Chinese-language user still gets the lazily loaded catalogue", async ({ 
     const pathname = new URL(route.request().url()).pathname;
     const body = pathname.endsWith("/auth/me")
       ? { authenticated: true, user: { ...USER, language: "zh-CN" } }
-      : { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [], skills: [] };
+      : { sessions: [], agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [], skills: [] };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.goto("/tasks");
-  await expect(page.getByRole("heading", { name: "没有未完成的任务" })).toBeVisible();
+  await page.goto(`${workPath}/tasks`);
+  await expect(page.getByRole("heading", { name: "暂无任务" })).toBeVisible();
 });
 
 test("a deep link outside the first page loads only its requested transcript", async ({ page }) => {
@@ -288,7 +290,7 @@ test("a deep link outside the first page loads only its requested transcript", a
   const gate = new Promise<void>(resolve => { release = resolve; });
   await page.route("**/api/**", async route => {
     const path = new URL(route.request().url()).pathname;
-    let body: unknown = { sessions: THREADS.slice(0, 20), nextCursor: "older-page", agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+    let body: unknown = { sessions: THREADS.slice(0, 20), nextCursor: "older-page", agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
     else if (/\/threads\/[^/]+$/.test(path)) {
       details.push(path);
@@ -315,7 +317,7 @@ test("settings does not preload the first page's transcripts", async ({ page }) 
     const path = new URL(route.request().url()).pathname;
     if (/\/threads\/[^/]+$/.test(path)) details.push(path);
     const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
-      : { sessions: THREADS.slice(0, 20), agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+      : { sessions: THREADS.slice(0, 20), agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/settings");
@@ -337,7 +339,7 @@ test("a missing deep link shows a retry without another conversation or an enabl
     }
     const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
       : path.endsWith("/threads/missing-link") ? thread
-        : { sessions: THREADS.slice(0, 20), nextCursor: "older", agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+        : { sessions: THREADS.slice(0, 20), nextCursor: "older", agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/threads/missing-link");

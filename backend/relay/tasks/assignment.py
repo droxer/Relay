@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..automations.model import EVENT_KINDS
+from ..core.computer_identity import computer_id
 from ..projects.runtime import project_task_assignment_error
 from ..projects.access import ProjectAccessError, project_for_owner
 from ..security.actor import Actor
@@ -82,6 +83,8 @@ def validate_project_task_assignment(
 ) -> None:
     project_id = task.get("projectId")
     if not project_id:
+        if identity := task.get("computerId"):
+            validate_computer_assignment(ctx, identity, assigned_agent_id, assigned_team_id)
         return
     project = ctx.project_store.get_project(project_id)
     if not project:
@@ -176,3 +179,27 @@ def _ensure_filter_targets_exist(ctx: Any, filters: dict[str, Any], at: str) -> 
             found = None
         if not found:
             raise TaskRequestError(400, f"{at} filters.{key} does not exist.")
+
+
+def validate_task_computer(ctx: Any, identity: str, owner: str) -> None:
+    """A work scope may name only a Computer assigned to this owner."""
+    if not any(
+        computer_id(node) == identity and node.get("userId") == owner
+        and not node.get("retiredAt")
+        for node in ctx.registry.monitor_nodes()
+    ):
+        raise TaskRequestError(403, "task_computer_forbidden")
+
+
+def validate_computer_assignment(
+    ctx: Any, identity: str, agent_id: str | None, team_id: str | None,
+) -> None:
+    team = ctx.team_store.get_team(team_id) if team_id else None
+    members = [agent_id] if agent_id else (team or {}).get("memberAgentIds", [])
+    for member in members:
+        if not any(
+            placement.get("desiredState") != "removed"
+            and placement.get("computerId") == identity
+            for placement in ctx.agent_placement_store.list_placements(agent_id=member)
+        ):
+            raise TaskRequestError(400, "task_assignment_off_computer")

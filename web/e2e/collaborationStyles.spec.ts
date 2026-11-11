@@ -85,7 +85,7 @@ for (const mobile of [false, true]) {
 
 test("task override can be saved and cleared to inherit", async ({ page }) => {
   const { patches } = await fixture(page);
-  await page.goto("/backlog/task?tab=definition");
+  await page.goto("/projects/project?task=task&recordTab=definition");
   await expect(page.getByText("Team default (Build and review)")).toBeVisible();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("combobox", { name: "Collaboration style", exact: true }).click();

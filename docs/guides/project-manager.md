@@ -61,8 +61,8 @@ change Project work: the run token's grant reads `access: "read"`, `tools/list`
 omits `relay_propose_task_changes`, and a propose call answers 403
 `project_manager_required`. Only the holder's `project_manager` scope grants
 `access: "manage"`. An Agent assigned Project work without being on the roster
-gets neither Project scope, while still receiving standalone work tools on an
-updated daemon. Reader scopes go only to Computers advertising
+gets neither Project read nor management authority. It cannot use standalone
+work tools to escape its Project execution scope. Reader scopes go only to Computers advertising
 `project-reader-mcp`; older ones run those Agents without the tools.
 
 Holding the role never stops an Agent from running. On a Computer that does not
@@ -121,8 +121,8 @@ stores only a SHA-256 digest; issuance returns plaintext once with `no-store`.
 
 For standalone local CLI sessions, an enrolled Computer obtains a 90-day token
 using its existing daemon credential.
-That token manages its owner's standalone Tasks and Automations and reads the
-owner's Projects on that Computer. It cannot act as a Project Lead, and stops
+That token manages only standalone Tasks and Automations bound to its Computer.
+It cannot read or mutate Project work. It cannot act as a Project Lead, and stops
 working if the Computer is retired or ownership changes. Tokens can be revoked
 individually. Reconciliation checks the saved credential with the backend and
 renews it within seven days of expiry, including recovery after expiry. Renewal
@@ -158,8 +158,8 @@ token health. Revoking a standalone token does not substitute a new broad grant
 or prevent a separately authorized managed run from using its own scope.
 
 An installed Relay MCP server in a managed process uses only that run context.
-Other Projects/backends are refused. Every run can manage standalone Tasks and
-Automations, including runs outside a Project; none of these processes fall back
+Other Projects/backends are refused. Standalone runs manage only Tasks and
+Automations bound to their Computer. Project runs stay in their admitted Project; none of these processes fall back
 to the standalone Computer credential.
 The daemon proxy lazily obtains a command-bound MCP token and calls the same
 MCP API using that token. Isolated runtimes use their host/guest transport to the
@@ -222,15 +222,14 @@ adapters over the same Python operations for older clients and workspace helpers
   for owner review. Proposals record MCP provenance and the lead's actual
   daemon run. Pi adds the installed server suffix to tool names.
 
-Work lists and creates accept optional `projectId`; omitting it selects standalone
-work. Get/update/delete use `taskId` or `automationId`; the stored record's Project
+Work lists and creates accept optional `projectId`; omitting it selects the admitted Project for a Project run and the current
+Computer for a standalone run. Get/update/delete use `taskId` or `automationId`; the stored record's Project
 determines authority even when no `projectId` was supplied. Create/update take
 `fields`; Automation fields include `routineTriggers` and `routineState`
 (`active`/`paused`). Lists are bounded to 100 snapshots with a keyset `nextCursor`.
-All Agents may manage standalone work. Enabled Project roster members may read
+Standalone Agents may manage only their Computer's standalone work. Enabled Project roster members may read
 Project work; only the admitted Project Lead may write it or stage proposals.
-Local Computer/owner grants never act as the Project Lead. A reader still
-discovers mutation tools for standalone work. Writes cannot change resource
+Local Computer/owner grants never act as the Project Lead. A Project reader cannot use mutation tools to create standalone work. Writes cannot change resource
 ownership or move work between Projects. There is no Apply, acceptance,
 run-start, or reconciliation MCP tool. Browser owner authentication is required
 for Apply. Assigning ready work or activating an Automation may let the scheduler

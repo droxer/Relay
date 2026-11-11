@@ -8,7 +8,7 @@ const user = { id: "u", userId: "u", username: "review", role: "user", theme: "l
 // Real tasks carry an id and a per-scope number; the row's ref link reads
 // "#1", so its name never collides with the title link beside it.
 function task(number: number, title: string, priority: string) {
-  return { id: `task_${number}`, number, title, description: "", priority, status: "backlog", workflowStage: "backlog", ownerUserId: "u",
+  return { id: `task_${number}`, number, title, description: "", priority, status: "backlog", workflowStage: "backlog", ownerUserId: "u", computerId: "node:filters",
     acceptancePolicy: "human", isRoutine: false, linkedSessionIds: [], createdAt: stamp,
     updatedAt: stamp, eventCount: 1, activityCount: 0 };
 }
@@ -18,7 +18,7 @@ async function mockApi(page: Page, extra: Record<string, unknown> = {}) {
     const path = new URL(route.request().url()).pathname;
     const body = path.endsWith("/auth/me") ? { authenticated: true, user } : {
       tasks: [task(1, "Urgent fix", "high"), task(2, "Tidy docs", "low")],
-      sessions: [], agents: [], teams: [], nodes: [], projects: [], sandboxes: [], ...extra,
+      sessions: [], agents: [], teams: [], nodes: [{ id: "filters", userId: "u", online: true, stale: false, status: "ready", activeRuns: [], agents: {} }], projects: [], sandboxes: [], ...extra,
     };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
@@ -26,7 +26,7 @@ async function mockApi(page: Page, extra: Record<string, unknown> = {}) {
 
 test("a filter is added as a chip, lands in the URL, and filters the list", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/tasks");
+  await page.goto("/computers/node%3Afilters/tasks");
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("option", { name: /^Priority/ }).click();
   // One condition ("is"), so the value list opens straight away.
@@ -39,7 +39,7 @@ test("a filter is added as a chip, lands in the URL, and filters the list", asyn
 
 test("a filter in the URL is drawn as a chip, and Clear removes it", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/tasks?priority=low");
+  await page.goto("/computers/node%3Afilters/tasks?priority=low");
   const chips = page.locator(".backlog-filter-chips");
   await expect(chips.getByRole("button", { name: "Low" })).toBeVisible();
   await chips.getByRole("button", { name: "Clear" }).click();
@@ -50,7 +50,7 @@ test("a filter in the URL is drawn as a chip, and Clear removes it", async ({ pa
 
 test("the chip menu offers no rule the URL cannot hold", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/tasks?priority=high");
+  await page.goto("/computers/node%3Afilters/tasks?priority=high");
   await page.getByRole("button", { name: "Priority filter options" }).click();
   await expect(page.getByRole("menuitem", { name: "Remove" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Duplicate" })).toHaveCount(0);
@@ -59,7 +59,7 @@ test("the chip menu offers no rule the URL cannot hold", async ({ page }) => {
 
 test("routines filter by their own fields", async ({ page }) => {
   await mockApi(page);
-  await page.goto("/automations");
+  await page.goto("/computers/node%3Afilters/automations");
   await page.getByRole("button", { name: "Add filter" }).click();
   await expect(page.getByRole("option")).toHaveText([/^Trigger/, /^Agent/, /^Assignee/]);
 });

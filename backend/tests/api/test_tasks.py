@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from automation_helpers import computer_for_automation
+
 from store_fixtures import create_run_request_on_node
 
 import pytest
@@ -123,7 +125,7 @@ def _create_agent(
                 "workspacePath": f"/workspace/{user_id}",
                 "protocolVersion": 1,
                 "supportedAgents": sorted(existing_ready | {executor_kind}),
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "stopped",
             }
         )
@@ -163,7 +165,7 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
 
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=agent),
                 "title": "Ship backlog",
                 "description": "Add the task board.",
                 "priority": "high",
@@ -348,7 +350,7 @@ def test_routine_create_defaults_to_paused(monkeypatch) -> None:
 
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, ALICE),
                 "title": "Daily routine",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -364,7 +366,7 @@ def test_routine_create_defaults_to_paused(monkeypatch) -> None:
 
         run_now_only = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, ALICE),
                 "title": "Manual routine",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -388,7 +390,7 @@ def test_routine_next_run_follows_the_schedule_timezone(monkeypatch) -> None:
         tokyo = [{"kind": "schedule", "schedule": {"timezone": "Asia/Tokyo", "repeat": {"every": "day", "at": "09:00"}}}]
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=agent),
                 "title": "Timezone-aware routine",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -412,7 +414,7 @@ def test_routine_schedule_change_and_resume_recalculate_next_run(monkeypatch) ->
         agent = _create_agent(client, ALICE)
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=agent),
                 "title": "Routine",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -515,7 +517,7 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -610,7 +612,7 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -736,7 +738,7 @@ def test_task_start_runs_multi_agent_adaptive_pipeline(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -853,7 +855,7 @@ def test_unassigned_project_task_runs_the_project_roster(
                 "nodeLocation": "user-device",
                 "protocolVersion": 1,
                 "supportedAgents": [],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "stopped",
             },
             "ui_token",
@@ -869,7 +871,7 @@ def test_unassigned_project_task_runs_the_project_roster(
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1023,7 +1025,7 @@ def test_agent_selected_review_work_uses_normal_task_completion(monkeypatch) -> 
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1104,7 +1106,7 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1112,7 +1114,7 @@ def test_agentless_routine_cannot_start_as_team_discussion(monkeypatch) -> None:
         assert registered.status_code == 200
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, ALICE),
                 "title": "Weekly retro",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -1155,7 +1157,7 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1221,7 +1223,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1231,7 +1233,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
 
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=agent),
                 "title": "Weekly report",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -1289,7 +1291,7 @@ def test_routine_start_reuses_an_open_overdue_occurrence(monkeypatch) -> None:
         agent = _create_agent(client, ALICE)
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=agent),
                 "title": "Retry queued report",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -1351,7 +1353,7 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex", "claude"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1365,7 +1367,7 @@ def test_routine_start_reuses_the_occurrence_assignment_snapshot(monkeypatch) ->
         )
         routine = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, agent=original_agent),
                 "title": "Stable assignment report",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -1520,7 +1522,7 @@ def test_assigned_task_rejects_run_assignment_override(monkeypatch) -> None:
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
                 "supportedAgents": ["claude", "codex"],
-                "capabilities": ["task-workspaces", "thread-workspaces", PROJECT_CAPABILITY],
+                "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
@@ -1598,14 +1600,14 @@ def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
         for field in ("routineType", "routineCadence", "routineNextRunDate", "routineEnabled"):
             legacy = client.post(
                 "/api/v1/tasks",
-                json={"title": "Legacy routine", "isRoutine": True, field: "daily"},
+                json={"computerId": computer_for_automation(client), "title": "Legacy routine", "isRoutine": True, field: "daily"},
             )
             assert legacy.status_code == 400
             assert field in legacy.json()["detail"]
 
         invalid_state = client.post(
             "/api/v1/tasks",
-            json={"title": "Bad state", "isRoutine": True, "routineState": "yes"},
+            json={"computerId": computer_for_automation(client), "title": "Bad state", "isRoutine": True, "routineState": "yes"},
         )
         assert invalid_state.status_code == 400
         assert "routineState" in invalid_state.json()["detail"]
@@ -1620,7 +1622,7 @@ def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
         _login(client, "alice")
         active_without_target = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client),
                 "title": "Never assigned",
                 "assigneeUserId": ALICE,
                 "isRoutine": True,
@@ -1780,7 +1782,7 @@ def test_task_delete_hides_task_from_list_and_get(monkeypatch) -> None:
 
         created = client.post(
             "/api/v1/tasks",
-            json={
+            json={"computerId": computer_for_automation(client, ALICE),
                 "title": "Delete me",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
@@ -1948,7 +1950,7 @@ def test_routine_delete_cascades_all_occurrence_threads(monkeypatch, active) -> 
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
         _bootstrap_admin(client)
-        routine = client.post("/api/v1/tasks", json={
+        routine = client.post("/api/v1/tasks", json={"computerId": computer_for_automation(client),
             "title": "Routine cleanup", "isRoutine": True,
             "routineTriggers": DAILY_TRIGGERS, "routineState": "paused",
         }).json()
@@ -2011,7 +2013,7 @@ def test_task_delete_deletes_its_threads(monkeypatch, routine) -> None:
         _bootstrap_admin(client)
         task = client.post("/api/v1/tasks", json={
             "title": "Work cleanup",
-            **({"isRoutine": True, "routineTriggers": DAILY_TRIGGERS,
+            **({"computerId": computer_for_automation(client), "isRoutine": True, "routineTriggers": DAILY_TRIGGERS,
                 "routineState": "paused"} if routine else {}),
         }).json()
         other = client.post("/api/v1/tasks", json={"title": "Still here"}).json()
@@ -2062,7 +2064,7 @@ def test_task_delete_rollback_preserves_artifact_snapshots(monkeypatch, routine)
         _bootstrap_admin(client)
         task = client.post("/api/v1/tasks", json={
             "title": "Atomic cleanup",
-            **({"isRoutine": True, "routineTriggers": DAILY_TRIGGERS,
+            **({"computerId": computer_for_automation(client), "isRoutine": True, "routineTriggers": DAILY_TRIGGERS,
                 "routineState": "paused"} if routine else {}),
         }).json()
         sessions = client.app.state.session_store
@@ -2119,7 +2121,7 @@ def test_task_delete_uses_execution_truth(monkeypatch, routine, session_status, 
         _bootstrap_admin(client)
         payload = {"title": "Delete idle work"}
         if routine:
-            payload.update(isRoutine=True, routineTriggers=DAILY_TRIGGERS, routineState="paused")
+            payload.update(computerId=computer_for_automation(client), isRoutine=True, routineTriggers=DAILY_TRIGGERS, routineState="paused")
         task = client.post("/api/v1/tasks", json=payload).json()
         tasks = client.app.state.task_store
         if routine:

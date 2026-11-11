@@ -141,6 +141,14 @@ without a persistent lifecycle status in the UI; live execution, requests for
 input, and execution recovery still surface while relevant. A Project
 Conversation can also be a Standalone Thread.
 
+**Computer Workspace (UI)**:
+The client surface for a Computer's standalone Threads, Tasks, and Automations.
+Project work appears only in its Project surface. This navigation scope does
+not make the Computer's storage root a shared execution workspace: standalone
+Threads and Tasks retain the isolated directories described below. Tasks and
+Automations save a stable `computerId` before running; legacy unplaced work
+can be explicitly placed from a Computer's Tasks or Automations tab.
+
 **Thread Workspace**:
 The writable work context of a Thread that belongs to neither a Task nor a
 Project. Every Agent participating in that Thread shares it; no Agent workspace
@@ -227,8 +235,8 @@ Only the owner assigns the lead, which must be an enabled roster member. It
 reads live Project records, explains progress and priorities, and manages its
 Project Tasks and Automations through Relay MCP. It may also stage batch Task
 proposals for owner review. Other enabled Project Agents have read-only access
-to Project records and work. Every Agent may manage the owner's standalone
-Tasks and Automations. The lead does not gain acceptance or execution authority.
+to Project records and work. Agents in a standalone run may manage only standalone Tasks and Automations
+on that run's Computer. Project runs may access only their admitted Project. The lead does not gain acceptance or execution authority.
 The dashboard names it; there is no separate
 chat to open there. Historical `managerAgentId` and member `projectManager`
 wire fields are derived aliases of the lead for client compatibility.
@@ -245,8 +253,9 @@ impersonate it. Batch Task proposals still require a separate owner Apply.
 Runtime configuration references a private token file rather than embedding
 credentials in a Project workspace or prompt. Managed
 runs use a separate run-scoped grant held by the Daemon Node, including runs
-outside Projects. Every run can manage standalone work; Project access stays
-limited to its admitted Project and enabled roster identity. The standalone
+outside Projects. Standalone runs manage work only on their Computer; Project runs cannot
+access standalone work. Project access stays limited to the admitted Project
+and enabled roster identity. The standalone
 Computer grant is never a fallback for a managed run. Capability is
 resolved from the Agent's enabled Project role and pinned in its run context,
 then checked against live roster membership and leadership on each call,

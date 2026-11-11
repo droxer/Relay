@@ -20,7 +20,7 @@ import { TaskAssignee } from "../TaskAssignee";
 import { TaskSelectCheckbox } from "./TaskSelection";
 import { formatNextRunAt } from "./RoutineChrome";
 import { runNowRefused, type RoutineListState } from "../../lib/routine";
-import { pathForAppState } from "../../lib/appRoute";
+import { recordHrefForLocation } from "../../lib/workspaceScope";
 import { TaskRefLink } from "./TaskRefLink";
 import { sortIndicator, type SortState } from "../../lib/listSort";
 import type { RelayTaskListItem } from "../../types";
@@ -29,7 +29,7 @@ import { createCellState } from "../../lib/cellState";
 import type { TFunction } from "i18next";
 
 function hrefForRoutineRecord(routineId: string): string {
-  return pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: routineId });
+  return recordHrefForLocation("routine", routineId);
 }
 
 /** The columns the routine list can order by. Mirrors `routineSortColumns`. */

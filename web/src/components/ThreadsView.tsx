@@ -97,6 +97,7 @@ function ProjectLoadingState() {
 }
 
 type ThreadsViewProps = {
+  workspaceNavigation?: ReactNode;
   taskThread?: boolean;
   /** On a phone, the list pane is the one showing (mobile view "threads"). */
   listOnScreen: boolean;
@@ -205,6 +206,7 @@ type ThreadsViewProps = {
 };
 
 export function ThreadsView({
+  workspaceNavigation,
   taskThread = false,
   listOnScreen,
   directoryMode,
@@ -458,6 +460,7 @@ export function ThreadsView({
   return (
     <>
       {!taskThread && <ThreadListPanel
+        workspaceNavigation={workspaceNavigation}
         directoryMode={directoryMode}
         threads={filteredThreads}
         tasks={tasks}

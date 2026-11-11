@@ -15,7 +15,7 @@ from user_ids import user_id
 
 ALICE = user_id("alice")
 
-LINK_CAPABILITIES = ["thread-workspaces", "project-workspaces", "project-links"]
+LINK_CAPABILITIES = ["workspace-scope", "thread-workspaces", "project-workspaces", "project-links"]
 
 
 def _register(app, node_id: str, *, capabilities: list[str] = LINK_CAPABILITIES) -> dict:
@@ -138,7 +138,7 @@ def test_project_path_must_be_absolute_text(env, daemon, path) -> None:
 def test_older_daemon_cannot_link(env, daemon) -> None:
     app, client, _ = env
     sent, _ = daemon
-    older = _register(app, "node_older", capabilities=["thread-workspaces", "project-workspaces"])
+    older = _register(app, "node_older", capabilities=["workspace-scope", "thread-workspaces", "project-workspaces"])
 
     response = _create(client, older, workspaceHostPath="/Users/alice/code/app")
 
@@ -323,7 +323,7 @@ def test_linked_workspace_commands_are_not_delivered_after_a_downgrade(env, comm
         "hostPath": "/Users/alice/code/app", "path": "README.md",
     }
     app.state.registry.enqueue(node["id"], command)
-    _register(app, node["id"], capabilities=["thread-workspaces", "project-workspaces"])
+    _register(app, node["id"], capabilities=["workspace-scope", "thread-workspaces", "project-workspaces"])
     assert app.state.registry.take_commands(node["id"], f"token_{node['id']}") == []
     response = app.state.daemon_store.get_workspace_response(command["id"])
     assert response["type"] == "workspace.error"

@@ -40,7 +40,7 @@ def _agent(client: TestClient) -> dict:
             "workspacePath": "/workspace/alice",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
-            "capabilities": ["thread-workspaces"],
+            "capabilities": ["workspace-scope", "thread-workspaces"],
             "status": "stopped",
         }
     )

@@ -9,8 +9,8 @@ const session = { id: "s", projectId: "p", taskGoal: "Release discussion", statu
 const project = { id: "p", name: "Autumn launch" } as ProjectRecord;
 const task = { id: "t", title: "Release notes", linkedSessionIds: ["s"] } as RelayTaskListItem;
 
-it("lists task threads in Threads with their project name and updates renamed projects", () => {
-  const options = { route: "main", myThreads: [session], projects: [project], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [] };
+it("lists task threads in their Project with its name and updates renamed projects", () => {
+  const options = { route: "projects", myThreads: [session], projects: [project], routedProjectId: "p", threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [] };
   const hook = renderHook((props) => useThreadDirectory(props), { initialProps: options });
   expect(hook.result.current.directoryThreads.map(item => item.session.id)).toEqual(["s"]);
   const select = vi.fn();
@@ -26,7 +26,7 @@ it("lists task threads in Threads with their project name and updates renamed pr
 it("names its project in plain words, with no agent faces or runtime marks", () => {
   const agent = { id: "ag1", displayName: "Ada", profileImageUrl: null, placements: [] };
   const room = { ...session, participantAgentIds: ["ag1"], currentAgent: "claude" } as unknown as RelaySession;
-  const options = { route: "main", myThreads: [room], projects: [project], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [agent] };
+  const options = { route: "projects", myThreads: [room], projects: [project], routedProjectId: "p", threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [agent] };
   const { result } = renderHook((props) => useThreadDirectory(props), { initialProps: options });
   const { container } = render(<ThreadRow item={result.current.directoryThreads[0]} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
   expect(container.querySelector(".conversation-subline")?.textContent).toBe("Autumn launch");
@@ -34,20 +34,19 @@ it("names its project in plain words, with no agent faces or runtime marks", () 
   expect(container.querySelector(".conversation-subline svg, [data-slot=badge]")).toBeNull();
 });
 
-it("keeps a task conversation in Threads when sending from Threads", async () => {
+it("moves a legacy Task conversation into its Project when sending", async () => {
   window.history.replaceState({}, "", "/threads/s");
   const options = { composingNew: false, activeSessionId: "s", selectedSessionId: "s", activeSession: session, onApplySessionFromPath: vi.fn(), onSetComposingNewFromPath: vi.fn(), onClearPendingMessage: vi.fn() };
   const { result } = renderHook(() => useAppRouter(options));
   await act(async () => result.current.syncThreadUrl("s", true, "p"));
-  expect(window.location.pathname).toBe("/threads/s");
+  expect(window.location.pathname).toBe("/projects/p/threads/s");
   await act(async () => result.current.navigateToMobileView("threads"));
-  expect(window.location.pathname).toBe("/threads");
+  expect(window.location.pathname).toBe("/projects/p");
 });
 
-it("keeps a task thread visible while projects load and names it by its ID", () => {
+it("keeps Project task threads out of the standalone rail while projects load", () => {
   const { result } = renderHook(() => useThreadDirectory({ route: "main", myThreads: [session], projects: [], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [] }));
-  render(<ThreadRow item={result.current.directoryThreads[0]} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
-  expect(screen.getByText("p").closest(".conversation-project")).toBeTruthy();
+  expect(result.current.directoryThreads).toEqual([]);
 });
 
 it("does not give an independent thread a project badge", () => {
