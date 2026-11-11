@@ -19,6 +19,7 @@ export function assertRunWorkspaceScope(command: DaemonNodeRunCommand, computerI
     return;
   }
   if (!scope.computerId || !computerId || scope.computerId !== computerId) fail();
+  if (scope.projectWorkspaceSubpath !== undefined && !scope.projectId) fail();
   if (scope.legacyLayout !== undefined) {
     // Only the backend may authorize a recorded pre-task-workspace binding.
     if (scope.projectId || scope.legacyLayout !== layout || path !== undefined
@@ -27,7 +28,14 @@ export function assertRunWorkspaceScope(command: DaemonNodeRunCommand, computerI
     return;
   }
   if (scope.projectId) {
-    if (layout !== "project" || (path !== `projects/${scope.projectId}` && path !== `links/${scope.projectId}`)) fail();
+    const recorded = scope.projectWorkspaceSubpath;
+    if (recorded !== undefined) {
+      // A linked folder is created before its Project and has a separate id.
+      // Accept only the backend's exact recorded binding, never any other link.
+      if (typeof recorded !== "string" || (recorded !== `projects/${scope.projectId}`
+        && !/^links\/(?!\.{1,2}$)[^/\\\u0000]+$/.test(recorded))) fail();
+      if (layout !== "project" || path !== recorded) fail();
+    } else if (layout !== "project" || (path !== `projects/${scope.projectId}` && path !== `links/${scope.projectId}`)) fail();
   } else if (scope.taskId) {
     const owner = scope.automationId ?? scope.taskId;
     if (layout !== "task" || (path !== `tasks/${owner}` && !(scope.automationId && path === `tasks/${owner}/${scope.taskId}`))) fail();

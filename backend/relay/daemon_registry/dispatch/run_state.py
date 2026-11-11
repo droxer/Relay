@@ -101,7 +101,7 @@ def _check_workspace_support(
     if workspace_layout not in ("project", "task"):
         return
     for required_capability in required_workspace_capabilities(
-        workspace_layout, workspace_subpath
+        workspace_layout, workspace_subpath, execution=True
     ):
         if not has_capability(sandbox, required_capability):
             raise _DeliveryRefused(

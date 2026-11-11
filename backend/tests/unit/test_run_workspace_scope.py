@@ -20,6 +20,7 @@ def test_run_scope_is_built_from_authoritative_records(project, task, automation
     )
     assert command["workspaceScope"] == {
         "computerId": "device:owner:host", **({"projectId": project} if project else {}),
+        **({"projectWorkspaceSubpath": path} if project else {}),
         **({"taskId": task} if task else {}), **({"automationId": automation} if automation else {}),
     }
 

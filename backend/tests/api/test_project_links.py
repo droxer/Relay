@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 from typing import Any
 
@@ -9,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.api.projects import links as project_links
 from relay.app import create_app
+from relay.daemon_registry.dispatch.run_start import _run_start_command
 
 from test_project_routes import _bootstrap, _login_alice
 from user_ids import user_id
@@ -106,6 +110,41 @@ def test_project_without_a_path_keeps_its_canonical_workspace(env, daemon) -> No
     assert sent == []
     assert project["workspaceSubpath"] == f"projects/{project['id']}"
     assert "workspaceHostPath" not in project
+
+
+@pytest.mark.parametrize("linked", [False, True])
+@pytest.mark.parametrize("task,automation", [(None, None), ("task", None), ("occurrence", "automation")])
+def test_project_run_commands_satisfy_the_daemon_scope_contract(env, daemon, linked, task, automation) -> None:
+    _, client, node = env
+    response = _create(client, node, **({"workspaceHostPath": "/Users/alice/code/app"} if linked else {}))
+    assert response.status_code == 201, response.text
+    project = response.json()["project"]
+    if linked:
+        assert project["workspaceSubpath"] != f"links/{project['id']}"
+    command = _run_start_command(
+        run_request={"id": "request", "sessionId": "thread", "taskGoal": "Work", **({"taskId": task} if task else {})},
+        assignment={"executorKind": "pi", "assignmentId": "assignment"}, sandbox=node,
+        session_snapshot={"projectId": project["id"], "workspaceSubpath": project["workspaceSubpath"]},
+        node_id=node["id"], run_id="run",
+        state={"team_phase": "execution", "project_reader": {"projectId": project["id"]}},
+        role=None, workspace_layout="project", artifacts_dir=None, context=None, handoff_validation=None,
+        task_snapshot={"sourceRoutineId": automation} if automation else None,
+    )
+    # Exercise the real TypeScript consumer, so backend-only fixtures cannot
+    # accidentally agree on a path convention the daemon rejects.
+    result = subprocess.run(
+        ["node", "--experimental-strip-types", "--input-type=module", "-e", """
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { assertRunWorkspaceScope } from './packages/relay-daemon/src/run-workspace.ts';
+const command = JSON.parse(readFileSync(0, 'utf8'));
+assertRunWorkspaceScope(command, command.workspaceScope.computerId);
+assert.throws(() => assertRunWorkspaceScope({ ...command, workspaceSubpath: 'links/another-project' }, command.workspaceScope.computerId), /workspace scope/i);
+"""],
+        input=json.dumps(command), text=True, capture_output=True,
+        cwd=Path(__file__).parents[3], timeout=10, check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_refused_directory_creates_no_project(env, daemon) -> None:

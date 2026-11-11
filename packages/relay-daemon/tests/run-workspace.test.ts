@@ -81,4 +81,12 @@ test("Project directory authorization cannot escape or override a different layo
     const scope = { computerId: "c", projectId: "p", projectWorkspaceSubpath: path };
     assert.throws(() => assertRunWorkspaceScope(command({ workspaceLayout: "project", workspaceSubpath: path, workspaceScope: scope }), "c"), /workspace scope/i);
   }
+  for (const fields of [
+    { workspaceLayout: "thread" as const },
+    { workspaceLayout: "task" as const, workspaceSubpath: "tasks/t" },
+    { workspaceLayout: "node-root" as const },
+  ]) {
+    const scope = { computerId: "c", taskId: "t", projectWorkspaceSubpath: "links/folder-binding" };
+    assert.throws(() => assertRunWorkspaceScope(command({ ...fields, workspaceScope: scope }), "c"), /workspace scope/i);
+  }
 });

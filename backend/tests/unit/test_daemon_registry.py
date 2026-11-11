@@ -942,7 +942,8 @@ def test_task_dispatch_fails_if_the_daemon_loses_task_workspace_support() -> Non
 
 
 @pytest.mark.parametrize("downgrade_before_dispatch", [False, True])
-def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_before_dispatch) -> None:
+@pytest.mark.parametrize("lost_capability", ["project-links", "project-workspace-scope"])
+def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_before_dispatch, lost_capability) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = make_session_store(root)
@@ -956,7 +957,7 @@ def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_be
                 "workspaceId": "machine-a",
                 "protocolVersion": 1,
                 "supportedAgents": ["codex"],
-                "capabilities": ["workspace-scope", "thread-workspaces", "project-workspaces", "project-links"],
+                "capabilities": ["workspace-scope", "thread-workspaces", "project-workspaces", "project-links", "project-workspace-scope"],
                 "status": "ready",
             }
             registry.register(registration, "ui_token")
@@ -973,7 +974,7 @@ def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_be
 
             if downgrade_before_dispatch:
                 registry.register(
-                    {**registration, "capabilities": ["workspace-scope", "thread-workspaces", "project-workspaces"]},
+                    {**registration, "capabilities": [cap for cap in registration["capabilities"] if cap != lost_capability]},
                     "ui_token",
                 )
             await backend.run(
@@ -987,7 +988,7 @@ def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_be
             registry.register(
                 {
                     **registration,
-                    "capabilities": ["workspace-scope", "thread-workspaces", "project-workspaces"],
+                    "capabilities": [cap for cap in registration["capabilities"] if cap != lost_capability],
                 },
                 "ui_token",
             )
@@ -995,7 +996,7 @@ def test_linked_project_dispatch_fails_if_daemon_loses_link_support(downgrade_be
             assert registry.take_commands("sbx_alice", "node_token") == []
             failed = session_store.get_session(session["id"])
             assert failed["status"] == "failed"
-            assert "project-links support" in failed["finalOutcome"]
+            assert f"{lost_capability} support" in failed["finalOutcome"]
 
     asyncio.run(run_flow())
 

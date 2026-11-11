@@ -57,6 +57,13 @@ Every agent run requires the daemon's `workspace-scope` capability; an older
 client is refused before a run command is published. Backend-issued scope may
 include `legacyLayout` (`thread` or `node-root`) only to preserve an existing
 standalone workspace binding. It never authorizes a Project workspace.
+Project commands also carry the recorded directory as
+`workspaceScope.projectWorkspaceSubpath`. A linked directory is created before
+its Project and its `links/<linkId>` need not contain the Project id. The daemon
+requires the command's path to match this binding exactly. Linked Project runs
+require `project-workspace-scope`; clients lacking it must run `relay update`
+after the fixed backend and installer bundle are deployed. Directory browsing
+does not require this execution capability. Existing directories are preserved.
 Missing Task or Automation links keep their address and show record recovery
 instead of opening the Computer picker. A Thread deep link waits for the
 addressed Thread before canonicalizing its scope; failed routing data must not

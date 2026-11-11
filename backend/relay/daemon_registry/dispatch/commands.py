@@ -47,7 +47,8 @@ def missing_workspace_capability(
         (DAEMON_CAPABILITY_PROJECT_LINKS,)
         if command.get("type") == "workspace.link"
         else required_workspace_capabilities(
-            command.get("workspaceLayout"), command.get("workspaceSubpath")
+            command.get("workspaceLayout"), command.get("workspaceSubpath"),
+            execution=command.get("type") == "run.start",
         )
     )
     return next(

@@ -68,6 +68,8 @@ def _run_start_command(
             "computerId": computer_id(sandbox),
             **({"legacyLayout": legacy_layout} if legacy_layout else {}),
             **({"projectId": session_snapshot["projectId"]} if session_snapshot.get("projectId") else {}),
+            **({"projectWorkspaceSubpath": session_snapshot["workspaceSubpath"]}
+               if session_snapshot.get("projectId") and workspace_layout == "project" else {}),
             **({"taskId": run_request["taskId"]} if run_request.get("taskId") else {}),
             **({"automationId": task_snapshot["sourceRoutineId"]} if task_snapshot and task_snapshot.get("sourceRoutineId") else {}),
         },

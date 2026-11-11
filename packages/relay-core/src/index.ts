@@ -154,6 +154,7 @@ export {
   type DaemonNodeRegistration,
   type DaemonNodeRegistrationResponse,
   DAEMON_CAPABILITY_WORKSPACE_SCOPE,
+  DAEMON_CAPABILITY_PROJECT_WORKSPACE_SCOPE,
   type DaemonNodeRunCommand,
   type ThreadImageAttachment,
   type DaemonNodeSandboxMode,
