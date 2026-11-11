@@ -49,3 +49,15 @@ export function recordHrefForLocation(route: 'backlog' | 'routine', taskId: stri
   }
   return pathForAppState({ route, computerId: location.computerId, mobileView: 'chat', sessionId: null, taskId, runId });
 }
+
+/** The sidebar opens global lists until a workspace has been selected. */
+export function workspaceNavigationHref(route: AppRoute, identity: string | null, projectId: string | null): string {
+  if (["main", "backlog", "routine"].includes(route)) {
+    if (projectId) {
+      const path = `/projects/${encodeURIComponent(projectId)}`;
+      return route === "backlog" ? `${path}?tab=tasks` : route === "routine" ? `${path}?tab=automations` : path;
+    }
+    if (identity) return computerWorkHref(identity, route);
+  }
+  return pathForAppState({ route, mobileView: route === "main" ? "threads" : "chat", sessionId: null });
+}

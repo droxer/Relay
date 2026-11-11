@@ -18,6 +18,7 @@ const HomePage = lazy(() => import("./home/HomePage").then((m) => ({ default: m.
 const AdminPage = lazy(() => import("./AdminPage").then((m) => ({ default: m.AdminPage })));
 const ChannelsPage = lazy(() => import("./ChannelsPage").then((m) => ({ default: m.ChannelsPage })));
 const BacklogPage = lazy(() => import("./BacklogPage").then((m) => ({ default: m.BacklogPage })));
+const TasksWorkspace = lazy(() => import("./TasksWorkspace").then((m) => ({ default: m.TasksWorkspace })));
 const RoutinesPage = lazy(() => import("./RoutinesPage").then((m) => ({ default: m.RoutinesPage })));
 const AgentsPage = lazy(() => import("./AgentsPage").then((m) => ({ default: m.AgentsPage })));
 const TeamsPage = lazy(() => import("./TeamsPage").then((m) => ({ default: m.TeamsPage })));
@@ -177,7 +178,12 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
         readOnly={props.computerReadOnly} computerId={props.computerId} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
         recordTaskId={props.recordTaskId} onOpenRecord={props.onOpenTaskRecord} onOpenThread={openTaskThread}
       /></div>
-    </div> : null
+    </div> : <TasksWorkspace
+      projects={props.projects} projectsStatus={props.projectsStatus} tasks={props.tasks}
+      nodes={props.visibleNodes} currentUser={user} recordTaskId={props.recordTaskId}
+      onOpenRecord={props.onOpenTaskRecord} onOpenThread={openTaskThread}
+      isRefreshing={props.isRefreshing} onRefresh={props.onRefresh}
+    />
   ) : route === "routine" ? (
     props.computerId ? <div className="tasks-workspace computer-workspace">
       <ComputerWorkspaceNav computerId={props.computerId} label={props.computerLabel ?? props.computerId} route={route} />
@@ -187,7 +193,12 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
         onOpenRecord={props.onOpenRoutineRecord} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
         onOpenThread={onOpenThread}
       /></div>
-    </div> : null
+    </div> : <RoutinesPage
+      projects={props.projects} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
+      recordTaskId={props.recordTaskId} recordRunId={props.recordRunId}
+      onOpenRecord={props.onOpenRoutineRecord} onOpenThread={onOpenThread}
+      isRefreshing={props.isRefreshing} onRefresh={props.onRefresh}
+    />
   ) : route === "teams" ? (
     <TeamsPage
       currentUser={user}

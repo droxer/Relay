@@ -52,7 +52,7 @@ test("dirty agent profile survives cancelled sidebar and Back navigation", async
   await page.locator('[data-nav="backlog"]').click();
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole("button", { name: /Discard/ }).click();
-  await expect(page).toHaveURL(/\/computers$/);
+  await expect(page).toHaveURL(/\/tasks$/);
 });
 
 test("mobile Back asks once before discarding an agent draft", async ({ page }) => {
