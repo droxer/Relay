@@ -602,6 +602,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let outboxTask: Promise<void> | undefined;
   let exitRecheckTask: Promise<void> | undefined;
   let diagnosticsTask: Promise<void> | undefined;
+  const cancellationReports = new Map<string, Promise<void>>();
   try {
     const reconnectControl = {
       signal: runtimeSignal,
@@ -1168,6 +1169,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             // response was lost) or the daemon restarted since. The daemon is
             // the only party that knows the run is not executing, so it must
             // say so; otherwise the backend holds the run's slot forever.
+            const reportKey = JSON.stringify([command.commandId, command.targetLeaseId ?? null]);
+            if (cancellationReports.has(reportKey)) continue;
             logger.warn("cancel for a run this daemon is not executing; reporting it cancelled", {
               sandboxId,
               commandId: command.commandId,
@@ -1175,7 +1178,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               sessionId: command.sessionId,
               runId: command.runId,
             });
-            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+            // Retain the report before sending, and retry beside the poll loop.
+            // A failed acknowledgement must not stop this computer taking work.
+            const report = postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
               type: "run.cancelled",
               commandId: command.commandId,
               ...(command.targetLeaseId ? { leaseId: command.targetLeaseId } : {}),
@@ -1189,7 +1194,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
                 commandId: command.commandId,
                 error: error instanceof Error ? error.message : String(error),
               });
-            });
+            }).finally(() => { cancellationReports.delete(reportKey); });
+            cancellationReports.set(reportKey, report);
           }
         } else if (command.type === "workspace.delete") {
           try {
@@ -1298,6 +1304,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     await outboxTask;
     await exitRecheckTask;
     await diagnosticsTask;
+    await Promise.allSettled(cancellationReports.values());
     cleanupShutdownListeners();
   }
 }
