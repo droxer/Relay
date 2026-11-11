@@ -236,6 +236,34 @@ test('installer verifies authentication and writes a service using the real pack
       assert.equal(readFileSync(diagnostics, 'utf8'), snapshot);
       assert.equal(readFileSync(join(reports, 'retained.rejected'), 'utf8'), '409');
     }
+    // Standalone MCP diagnostics must not prevent updating the daemon itself.
+    const mcpStatus = join(stateDir, 'mcp-status.json');
+    const codexConfig = join(customHome, 'config.toml');
+    const userConfig = '# personal MCP configuration\n[mcp_servers.personal]\ncommand = "personal-tool"\n';
+    writeFileSync(codexConfig, userConfig);
+    for (const snapshot of [
+      JSON.stringify({ status: 'blocked', runtimes: [], checkedAt: Date.now(),
+        code: 'mcp_configuration_conflict (codex): check runtime configuration and Relay MCP installation lock' }),
+      JSON.stringify({ status: 'retrying', runtimes: [], checkedAt: Date.now(), code: 'mcp_setup_unavailable' }),
+      JSON.stringify({ status: 'ready', runtimes: ['codex'], checkedAt: 0 }),
+      '{unreadable',
+    ]) {
+      writeFileSync(mcpStatus, snapshot);
+      const retried = await exec(process.execPath, [...setupCommand, '--runtime-profile', profile], {
+        env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
+      });
+      assert.match(retried.stdout, /relay-mcp:/);
+      assert.match(retried.stdout, /Connected to Relay Dev/);
+      assert.equal(readFileSync(mcpStatus, 'utf8'), snapshot);
+      assert.equal(readFileSync(codexConfig, 'utf8'), userConfig);
+      assert.equal(readFileSync(profile, 'utf8'), savedProfile);
+      const diagnosed = await exec(process.execPath, [resolve('packages/relay-daemon/dist/cli.js'),
+        ...command.slice(1), '--sandbox', 'none', '--allow-host-agent-execution', '--runtime-profile', profile, '--doctor'], {
+        env: { HOME: home, PATH: '/usr/bin:/bin' }, timeout: 30_000,
+      }).catch((error: { stdout: string; stderr: string; code: number }) => error);
+      assert.match(diagnosed.stdout, /FAIL relay-mcp/);
+    }
+    // Keep the MCP failure present while checking that authentication still blocks install.
     // Doctor continues to fail on the incident, independently of installation.
     writeFileSync(diagnostics, quarantined);
     const healthCheck = await exec(process.execPath, [resolve('packages/relay-daemon/dist/cli.js'),
@@ -253,6 +281,7 @@ test('installer verifies authentication and writes a service using the real pack
     deleted = false;
     assert.equal(readFileSync(service, 'utf8'), beforeRejectedInstall);
     rmSync(diagnostics);
+    rmSync(mcpStatus);
     // Device setup names the workspace by its canonical path (macOS /var is /private/var),
     // and still recognized the services that spelled it differently as this computer.
     const canonicalContent = content.replace(`<string>${workspace}</string>`, `<string>${realpathSync.native(workspace)}</string>`);

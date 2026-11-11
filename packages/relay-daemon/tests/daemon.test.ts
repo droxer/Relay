@@ -1996,7 +1996,7 @@ test("relay daemon completes a run whose output the backend keeps failing, and s
   assert.ok(warnings.some((warning) => /output delivery stalled/.test(warning.message)));
 });
 
-test("relay daemon batches large alternating output without losing order", async (t) => {
+async function checkOutputBatching(t: TestContext, forceReplay: boolean): Promise<void> {
   const previousDrain = process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS;
   process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS = "5000";
   t.after(() => restoreEnv("RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS", previousDrain));
@@ -2009,6 +2009,11 @@ test("relay daemon batches large alternating output without losing order", async
   let commandServed = false;
   let terminalType = "";
   let registration: DaemonNodeRegistration | undefined;
+  const awaitingReplay = new Map<number, () => void>();
+  t.after(() => {
+    stop.abort();
+    for (const release of awaitingReplay.values()) release();
+  });
   const outputBatches: Array<{
     type: "run.output.batch";
     entries: Array<{ stream: "stdout" | "stderr"; text: string; sequence: number }>;
@@ -2023,7 +2028,7 @@ test("relay daemon batches large alternating output without losing order", async
     pollIntervalMs: 1,
     shutdownGraceMs: 50,
     logger: testLogger(),
-    signal: stop.signal,
+    signal: AbortSignal.any([stop.signal, t.signal]),
     environment: fakeEnvironment({
       exec: async (_cmd, args, options) => {
         if (!isInventoryProbe(args)) {
@@ -2053,7 +2058,21 @@ test("relay daemon batches large alternating output without losing order", async
       }
       if (path.endsWith("/events")) {
         const event = await jsonBody<DaemonNodeEvent | typeof outputBatches[number]>(init);
-        if (event.type === "run.output.batch") outputBatches.push(event);
+        if (event.type === "run.output.batch") {
+          outputBatches.push(event);
+          if (forceReplay) {
+            // Hold acceptance until durable replay sends this same batch too.
+            // Every batch is observed twice, independent of disk/runner speed.
+            const sequence = event.entries[0].sequence;
+            const release = awaitingReplay.get(sequence);
+            if (release) {
+              awaitingReplay.delete(sequence);
+              release();
+            } else {
+              await new Promise<void>(resolve => awaitingReplay.set(sequence, resolve));
+            }
+          }
+        }
         if (event.type === "run.failed" || event.type === "run.completed") {
           terminalType = event.type;
           setTimeout(() => stop.abort(), 0);
@@ -2066,9 +2085,18 @@ test("relay daemon batches large alternating output without losing order", async
 
   assert.equal(terminalType, "run.completed");
   assert.equal(registration?.protocolVersion, 2);
-  assert.ok(outputBatches.length < 64, `expected bounded HTTP batches, received ${outputBatches.length}`);
-  // Live delivery can race durable replay. Verify the consumer's sequence-
-  // deduplicated stream rather than counting retry copies as new output.
+  // Live delivery can race durable replay. Count distinct batches rather than
+  // delivery attempts, and require retries of one identity to carry identical output.
+  const batchesBySequence = new Map<number, typeof outputBatches[number]>();
+  for (const batch of outputBatches) {
+    const sequence = batch.entries[0].sequence;
+    const previous = batchesBySequence.get(sequence);
+    if (previous) assert.deepEqual(batch.entries, previous.entries);
+    else batchesBySequence.set(sequence, batch);
+  }
+  assert.ok(batchesBySequence.size < 64, `expected bounded output batches, received ${batchesBySequence.size}`);
+  if (forceReplay) assert.ok(outputBatches.length > batchesBySequence.size, "expected replayed batches");
+  // Verify the consumer's sequence-deduplicated stream.
   const entries = [...new Map(outputBatches.flatMap((event) => event.entries).map(entry => [entry.sequence, entry])).values()];
   assert.equal(entries.map((entry) => entry.text).join(""), rawChunks.join(""));
   assert.equal(
@@ -2085,7 +2113,13 @@ test("relay daemon batches large alternating output without losing order", async
   );
   assert.match(entries[0]?.text ?? "", /^000:/);
   assert.match(entries.at(-1)?.text ?? "", /^299:/);
-});
+}
+
+for (const forceReplay of [false, true]) {
+  test(`relay daemon batches large alternating output without losing order (${forceReplay ? "replay races" : "live delivery"})`, { timeout: 15_000 }, async (t) => {
+    await checkOutputBatching(t, forceReplay);
+  });
+}
 
 test("relay daemon defers delivery to durable replay when its memory budget fills", async () => {
   const previousLimit = process.env.RELAY_DAEMON_OUTPUT_BACKLOG_BYTES;

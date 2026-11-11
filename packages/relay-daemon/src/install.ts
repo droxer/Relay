@@ -319,13 +319,14 @@ async function install(): Promise<void> {
   } finally {
     process.env = installerEnvironment;
   }
-  // Transport diagnostics belong to the running (or stopped) client. Retained
-  // reports must survive an upgrade, but must not prevent installing its repair.
-  // Doctor still reports the incident as a failure for explicit health checks.
+  // Transport and standalone MCP diagnostics describe the existing client.
+  // Preserve them and warn, but allow an upgrade to install their repair.
+  // Doctor still reports these incidents as failures for explicit health checks.
+  const retainedDiagnostics = new Set(['transport', 'relay-mcp']);
   for (const check of report.checks) {
-    if (!check.ok && check.name === 'transport') console.log(out.notice(`${check.name}: ${check.detail}`));
+    if (!check.ok && retainedDiagnostics.has(check.name)) console.log(out.notice(`${check.name}: ${check.detail}`));
   }
-  const failures = report.checks.filter(check => !check.ok && !check.name.startsWith('agent:') && check.name !== 'transport');
+  const failures = report.checks.filter(check => !check.ok && !check.name.startsWith('agent:') && !retainedDiagnostics.has(check.name));
   if (failures.length) throw new Error(failures.map(check => `${check.name}: ${check.detail}`).join('\n'));
   // Persist the already-issued token only after read-only authentication succeeds.
   // The running daemon owns registration; reinstalling never marks a live node stopped.
