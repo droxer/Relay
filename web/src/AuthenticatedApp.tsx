@@ -34,6 +34,7 @@ import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
 import { useThreadDirectory } from "./hooks/useThreadDirectory";
 import { THREAD_PROJECT_FILTER_ALL, type ThreadProjectFilter } from "./lib/threadProjectFilter";
+import { sessionTrailsSummary } from "./lib/sessionPollMerge";
 import { useThreadComposerSelection } from "./hooks/useThreadComposerSelection";
 import { useThreadTargets } from "./hooks/useThreadTargets";
 import type { useUserPreferences } from "./hooks/useUserPreferences";
@@ -254,6 +255,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     targetsReady: agentsReady && teamsReady && nodesReady,
     teamIds: composerTeamIds,
     threadAgent,
+    threadDetailsReady: !sessionTrailsSummary(activeSession),
     roleBindingKey: projects.find(project => project.managerThreadId === activeSession?.id)?.managerAgentId ?? (projects.some(project => project.managerThreadId === activeSession?.id) ? "unassigned" : undefined),
   });
 

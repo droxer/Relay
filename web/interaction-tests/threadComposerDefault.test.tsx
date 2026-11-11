@@ -3,7 +3,9 @@ import { beforeEach, expect, it } from "vitest";
 import { useThreadComposerSelection } from "../src/hooks/useThreadComposerSelection";
 import { useComposerTargetStore } from "../src/lib/composerTargetStore";
 import { useThreadNavigation } from "../src/hooks/useThreadNavigation";
-import type { RelaySession, RelayTaskSummary } from "../src/types";
+import { threadOwnAgentId } from "../src/lib/threadRuntime";
+import { mergeSessionSummaries, sessionTrailsSummary } from "../src/lib/sessionPollMerge";
+import type { RelaySession, RelayTaskSummary, SessionSummary } from "../src/types";
 
 const taskAgent = { id: "agt_task", executorKind: "codex" as const };
 type Props = Parameters<typeof useThreadComposerSelection>[0];
@@ -81,5 +83,38 @@ it("keeps the task's agent when navigation reopens the active thread", () => {
   expect(useComposerTargetStore.getState().projectRoomTarget).toBe(false);
   act(() => result.current.openThread(session.id));
   expect(useComposerTargetStore.getState().projectRoomTarget).toBe(false);
+  expect(target()).toBe(taskAgent.id);
+});
+
+it.each([false, true])("waits for current task thread details (project: %s) before defaulting", (project) => {
+  const previous = {
+    id: "ses_task", projectId: "prj_task", events: [{}],
+    collaborationRounds: [{
+      workScope: { kind: "task", taskId: "tsk_previous" },
+      assignments: [{ agentId: "agt_crew" }],
+    }],
+  } as RelaySession;
+  const summary = mergeSessionSummaries(project ? [previous] : [], [{
+    id: "ses_task", ...(project ? { projectId: "prj_task" } : {}),
+    participantAgentIds: ["agt_crew", taskAgent.id], eventCount: 3,
+  } as SessionSummary])[0];
+  const detail = {
+    ...summary, events: Array.from({ length: 3 }, () => ({})),
+    agentRuns: [{ logicalAgentId: taskAgent.id }],
+    collaborationRounds: [{
+      workScope: { kind: "task", taskId: "tsk_task" },
+      assignments: [{ agentId: taskAgent.id }],
+    }],
+  } as RelaySession;
+  const { rerender } = renderHook(({ session }) => {
+    const id = threadOwnAgentId(session);
+    useThreadComposerSelection({
+      ...base,
+      threadDetailsReady: !sessionTrailsSummary(session),
+      threadAgent: id ? { id, executorKind: "codex" } : null,
+    });
+  }, { initialProps: { session: summary } });
+  expect(target()).toBe("agt_last_used");
+  rerender({ session: detail });
   expect(target()).toBe(taskAgent.id);
 });
