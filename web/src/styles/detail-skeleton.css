@@ -1,0 +1,67 @@
+/* Shares ListSkeleton's paint and blink; a11y.css settles reduced motion. */
+.detail-skeleton {
+  min-width: 0;
+  width: 100%;
+}
+
+.detail-skeleton-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-6) clamp(var(--sp-4), 4vw, var(--sp-8));
+  border-bottom: 1px solid var(--line-1);
+}
+
+.detail-skeleton .list-skeleton-bar {
+  display: block;
+  max-width: 100%;
+}
+
+.detail-skeleton-title {
+  width: 45%;
+  height: var(--sp-6);
+}
+
+.detail-skeleton-meta {
+  width: 60%;
+}
+
+.detail-skeleton-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  padding-top: var(--sp-4);
+}
+
+.detail-skeleton-tabs > span {
+  width: var(--sp-8);
+}
+
+.detail-skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-8);
+  max-width: 920px;
+  padding: var(--sp-6) clamp(var(--sp-4), 4vw, var(--sp-8));
+}
+
+.detail-skeleton-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.detail-skeleton-heading {
+  width: 26%;
+  height: var(--sp-4);
+  margin-bottom: var(--sp-2);
+}
+
+.detail-skeleton-line { width: 94%; }
+.detail-skeleton-line:nth-of-type(3n) { width: 68%; }
+.detail-skeleton-line:nth-of-type(3n + 1) { width: 82%; }
+.detail-skeleton-section:nth-child(2) > span { animation-delay: calc(var(--t-stagger) * 2); }
+
+/* The drawer already supplies the outer inset and record header. */
+.detail-skeleton--preview .detail-skeleton-body { padding: var(--sp-2) 0; }
+.detail-skeleton--file .detail-skeleton-body { padding: var(--sp-5); }

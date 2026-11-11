@@ -17,6 +17,7 @@
 @import "./project-manager.css" layer(relay);
 @import "./run-receipt.css" layer(relay);
 @import "./list-skeleton.css" layer(relay);
+@import "./detail-skeleton.css" layer(relay);
 @import "./collab-style.css" layer(relay);
 @import "./agent-stream.css" layer(relay);
 /* KaTeX's own stylesheet, pulled into `relay` so markdown.css can override its
