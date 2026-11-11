@@ -40,6 +40,17 @@ it("defaults to seven days and changes both historical queries together", async 
   expect(vi.mocked(getDashboardTokens).mock.calls.at(-1)?.[2]).toEqual(range);
 });
 
+it("filters both historical queries to today in the viewer's local calendar", async () => {
+  show();
+  await selectRange("today");
+  await waitFor(() => expect(getDashboardSessions).toHaveBeenCalledTimes(2));
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const range = { start: today, end: today };
+  expect(vi.mocked(getDashboardSessions).mock.calls.at(-1)?.[1]).toEqual(range);
+  expect(vi.mocked(getDashboardTokens).mock.calls.at(-1)?.[2]).toEqual(range);
+});
+
 it("uses the previous calendar month and only applies a valid custom range on submit", async () => {
   show();
   await selectRange("month");
@@ -61,6 +72,8 @@ it("uses the previous calendar month and only applies a valid custom range on su
 
 it("handles month boundaries, leap years, and custom range limits", async () => {
   const { dashboardPresetRange, validDashboardRange } = await import("../src/lib/dashboardRange");
+  expect(dashboardPresetRange("today", new Date(2026, 0, 1, 0, 1))).toEqual({ start: "2026-01-01", end: "2026-01-01" });
+  expect(dashboardPresetRange("today", new Date(2024, 1, 29, 23, 59))).toEqual({ start: "2024-02-29", end: "2024-02-29" });
   expect(dashboardPresetRange("month", new Date(2026, 0, 15))).toEqual({ start: "2025-12-01", end: "2025-12-31" });
   expect(dashboardPresetRange("month", new Date(2024, 2, 15))).toEqual({ start: "2024-02-01", end: "2024-02-29" });
   expect(dashboardPresetRange("7d", new Date(2026, 0, 3))).toEqual({ start: "2025-12-28", end: "2026-01-03" });
@@ -83,6 +96,8 @@ it("keeps loading token usage unavailable instead of showing zero or an empty re
 it("describes chart results using the selected range in both languages", async () => {
   const en = (await import("../src/i18n/locales/en/translation.json")).default.admin.v2;
   const zh = (await import("../src/i18n/locales/zh-CN/translation.json")).default.admin.v2;
+  expect(en.dash_range_today).toBe("Today");
+  expect(zh.dash_range_today).toBe("今天");
   expect(en.dash_sessions_title).toBe("Threads");
   expect(en.dash_sessions_empty).toBe("No threads in the selected range.");
   expect(zh.dash_sessions_title).toBe("对话趋势");

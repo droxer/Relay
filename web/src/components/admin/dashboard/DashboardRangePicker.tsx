@@ -20,6 +20,7 @@ export function DashboardRangePicker({ preset, range, onPreset, onApply }: {
   const [draft, setDraft] = useState(() => range === "all" ? dashboardPresetRange("7d") : range);
   const valid = validDashboardRange(draft);
   const items = [
+    { value: "today", label: t("admin.v2.dash_range_today") },
     { value: "7d", label: t("admin.v2.dash_range_7d") },
     { value: "30d", label: t("admin.v2.dash_range_30d") },
     { value: "month", label: t("admin.v2.dash_range_month") },
