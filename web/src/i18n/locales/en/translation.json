@@ -1333,6 +1333,7 @@
       "dash_sessions_hint_day": "Peak {{count}} in one day.",
       "dash_sessions_hint_month": "Peak {{count}} in one month.",
       "dash_sessions_hint_year": "Peak {{count}} in one year.",
+      "dash_range_today": "Today",
       "dash_range_7d": "Last 7 days",
       "dash_range_30d": "Last 30 days",
       "dash_range_month": "Last month",

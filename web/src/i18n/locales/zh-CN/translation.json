@@ -1303,6 +1303,7 @@
       "dash_sessions_hint_day": "单日峰值 {{count}}。",
       "dash_sessions_hint_month": "单月峰值 {{count}}。",
       "dash_sessions_hint_year": "年度峰值 {{count}}。",
+      "dash_range_today": "今天",
       "dash_range_7d": "最近 7 天",
       "dash_range_30d": "最近 30 天",
       "dash_range_month": "上个月",

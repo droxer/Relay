@@ -7,7 +7,7 @@ export type DashboardRange = DashboardDateRange | "all";
 export type DashboardRangeSelection = DashboardPreset | "all" | "custom";
 export type DashboardBucketSize = "day" | "month" | "year";
 
-export type DashboardPreset = "7d" | "30d" | "month";
+export type DashboardPreset = "today" | "7d" | "30d" | "month";
 
 function localDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -20,7 +20,7 @@ export function dashboardPresetRange(preset: DashboardPreset, now = new Date()):
     start.setDate(1);
     start.setMonth(start.getMonth() - 1);
     end.setDate(0);
-  } else {
+  } else if (preset !== "today") {
     start.setDate(start.getDate() - (preset === "7d" ? 6 : 29));
   }
   return { start: localDate(start), end: localDate(end) };
