@@ -106,6 +106,43 @@ test('terminal replay takes priority over a large output backlog', async t => {
   assert.equal(sent[0], 'run.completed');
 });
 
+for (const batching of [false, true]) {
+  test(`replay fairly interleaves streams with different sequence positions (batching=${batching})`, async t => {
+    const outbox = new TerminalOutbox(fixture(t));
+    outbox.negotiate(true, batching);
+    for (let seq = 0; seq < 60; seq++) await outbox.retain(output(seq, 'bulk')).durable;
+    await outbox.retain(output(10000, 'interactive')).durable;
+    const sent: string[] = [];
+    await outbox.replay(async (_url, init) => {
+      const payload = JSON.parse(String(init?.body));
+      if (payload.reports) {
+        sent.push(...payload.reports.map((report: { body: string }) => JSON.parse(report.body).commandId));
+        return Response.json({ receipts: payload.reports.map((r: { id: string; digest: string }) => ({ ...r, status: 200 })) });
+      }
+      sent.push(payload.commandId);
+      const headers = new Headers(init?.headers);
+      return new Response('{}', { headers });
+    }, 'http://backend/events', 'token');
+    assert.ok(sent.indexOf('interactive') >= 0 && sent.indexOf('interactive') < 3, sent.join(','));
+  });
+}
+
+test('quarantined backlog does not repeatedly enumerate the index per successor', async t => {
+  const outbox = new TerminalOutbox(fixture(t));
+  for (let seq = 0; seq < 256; seq++) await outbox.retain(output(seq)).durable;
+  await outbox.wrapFetch(async () => new Response('conflict', { status: 409 }))('http://backend/events', {
+    method: 'POST', body: JSON.stringify(output()),
+  });
+  // Count metadata visits rather than asserting machine-dependent timings.
+  const index = (outbox as unknown as { index: Map<string, unknown> }).index;
+  const iterate = index[Symbol.iterator].bind(index);
+  let visits = 0;
+  index[Symbol.iterator] = function* () { for (const item of iterate()) { visits++; yield item; } return undefined; };
+  outbox.negotiate(true, true);
+  await outbox.replay(async () => { throw new Error('blocked output must not be sent'); }, 'http://backend/events', 'token');
+  assert.ok(visits < 2000, `replay visited ${visits} metadata entries`);
+});
+
 test('strict peers retain reports until identity and payload acceptance are proven', async t => {
   const root = fixture(t);
   const outbox = new TerminalOutbox(root);

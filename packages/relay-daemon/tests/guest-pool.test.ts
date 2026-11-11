@@ -135,3 +135,29 @@ test("a pool reports a borrowable guest only once one has booted", async () => {
   await pool.close();
   assert.equal(pool.hasBootedGuest(), false);
 });
+
+test("cancelling a boot waiter releases it without recycling the booting slot", async () => {
+  const { pool, boots } = controlledPool(1);
+  const abort = new AbortController();
+  const acquiring = pool.acquire("/w/a", abort.signal);
+  await tick();
+  abort.abort();
+  let result = "pending";
+  void acquiring.then(() => { result = "resolved"; }, () => { result = "cancelled"; });
+  await tick();
+  try {
+    assert.equal(result, "cancelled");
+    const other = pool.acquire("/w/b");
+    await tick();
+    assert.equal(boots.length, 1, "an unfinished boot must keep its slot fenced");
+    boots[0]!.resolve();
+    await tick();
+    assert.equal(boots.length, 2);
+    boots[1]!.resolve();
+    (await other).release();
+  } finally {
+    boots.forEach(boot => boot.resolve());
+    await acquiring.then(lease => lease.release(), () => undefined);
+    await pool.close();
+  }
+});
