@@ -31,7 +31,9 @@ const previousDaemonStateDir = process.env.RELAY_DAEMON_STATE_DIR;
 const testDaemonStateDir = mkdtempSync(join(tmpdir(), "relay-daemon-private-state-"));
 process.env.RELAY_DAEMON_STATE_DIR = testDaemonStateDir;
 // Tests reuse synthetic command IDs; only restart tests share durable evidence.
-beforeEach(() => rmSync(join(testDaemonStateDir, "terminal-events"), { recursive: true, force: true }));
+beforeEach(() => {
+  for (const name of ["terminal-events", "admissions"]) rmSync(join(testDaemonStateDir, name), { recursive: true, force: true });
+});
 after(() => {
   if (previousDaemonStateDir === undefined) delete process.env.RELAY_DAEMON_STATE_DIR;
   else process.env.RELAY_DAEMON_STATE_DIR = previousDaemonStateDir;
@@ -6134,4 +6136,66 @@ test("cancellation delivery started before shutdown stops retrying when the daem
     await new Promise(resolve => setTimeout(resolve, 250));
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('text log retention bounds aggregate and completed-run files', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-log-bounds-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const config = { workspacePath: root, sandboxId: 'bounded', logDir: root,
+    maxFileBytes: 1024, maxRunBytes: 2048, maxRunFiles: 3, maxQueueBytes: 4096 };
+  const logger = createDaemonLogger(config);
+  for (let i = 0; i < 20; i++) {
+    logger.output({ stream: 'stderr', text: 'x'.repeat(300), runId: `run-${i}` });
+    await logger.flush?.();
+  }
+  await logger.close?.();
+  const { statSync } = await import('node:fs');
+  const files = readdirSync(root).filter(name => name !== 'bounded.log' && name !== 'bounded.log.1');
+  assert.ok(files.length <= 3, `retained ${files.length} run logs`);
+  for (const name of readdirSync(root)) assert.ok(statSync(join(root, name)).size <= 2048, name);
+});
+
+test('production output capture coalesces behind unacknowledged durable reports', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-capture-pressure-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const command = { ...runCommand('coalesced'), workspacePath: root };
+  let served = false;
+  const outputs = new Set<string>();
+  const terminals: DaemonNodeEvent[] = [];
+  const daemon = runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'sbx_test', userId: 'alice', token: 'node_token',
+    workspacePath: root, stateDir: join(root, 'state'), logger: testLogger(), signal: stop.signal,
+    pollIntervalMs: 5, shutdownGraceMs: 50,
+    environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
+      if (!isInventoryProbe(args)) {
+        for (let i = 0; i < 20; i++) {
+          options?.stdoutRenderer?.('small output\n');
+          await new Promise(resolve => setTimeout(resolve, 15));
+        }
+      }
+      return { exit_code: 0, stdout: 'done', stderr: '' };
+    } }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === '/api') return jsonResponse({});
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({});
+      if (path.endsWith('/commands')) { const commands = served ? [] : [command]; served = true; return jsonResponse({ commands }); }
+      if (path.endsWith('/events')) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        if (event.type === 'run.output.batch') { outputs.add(JSON.stringify(event.entries)); return jsonResponse({}, 503); }
+        if (['run.completed', 'run.failed', 'run.cancelled'].includes(event.type)) { terminals.push(event); stop.abort(); }
+        return jsonResponse({});
+      }
+      throw new Error(`unexpected URL ${path}`);
+    },
+  });
+  await daemon;
+  assert.equal(terminals[0]?.type, 'run.completed', JSON.stringify(terminals));
+  assert.ok(outputs.size > 0, 'the agent must emit actual captured output');
+  const retained = readdirSync(join(root, 'state', 'terminal-events')).filter(name => name.endsWith('.json'))
+    .map(name => JSON.parse(readFileSync(join(root, 'state', 'terminal-events', name), 'utf8')))
+    .filter(event => event.type === 'run.output.batch');
+  assert.ok(retained.length <= 2, `captured ${retained.length} tiny batches behind failed delivery`);
 });

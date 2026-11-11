@@ -130,3 +130,12 @@ describe("OutputEventBuffer", () => {
     buffer.close();
   });
 });
+
+it('busy capture still flushes within its maximum durability delay', async () => {
+  const emitted: unknown[] = [];
+  const buffer = new OutputEventBuffer(entries => emitted.push(entries), { delayMs: 1, maxDelayMs: 10, isBusy: () => true });
+  buffer.push('stdout', 'capture me');
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(emitted.length, 1);
+  buffer.close();
+});

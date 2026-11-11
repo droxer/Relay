@@ -12,9 +12,10 @@ interface Boot {
 }
 
 /** A pool whose guests boot only when the test says so. */
-function controlledPool(capacity: number) {
+function controlledPool(capacity: number, options: Record<string, number> = {}) {
   const boots: Boot[] = [];
   const pool = new GuestPool({
+    ...options,
     capacity,
     boxName: (slot) => `box-${slot}`,
     createManager: () => ({}) as ExecutionManager,
@@ -160,4 +161,40 @@ test("cancelling a boot waiter releases it without recycling the booting slot", 
     await acquiring.then(lease => lease.release(), () => undefined);
     await pool.close();
   }
+});
+
+test('boot deadlines quarantine the slot until late boot cleanup proves it stopped', async () => {
+  const { pool, boots } = controlledPool(1, { bootTimeoutMs: 10 });
+  let error: unknown;
+  const acquiring = pool.acquire('/w/a').catch(reason => { error = reason; });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  try {
+    assert.match(String(error), /timed out/);
+    const next = pool.acquire('/w/b');
+    await tick();
+    assert.equal(boots.length, 1);
+    boots[0]!.resolve();
+    await tick();
+    assert.equal(boots[0]!.closed, true);
+    assert.equal(boots.length, 2);
+    boots[1]!.resolve();
+    (await next).release();
+  } finally {
+    boots.forEach(boot => boot.resolve());
+    await acquiring;
+    await pool.close();
+  }
+});
+
+test('closing a pool has a deadline and cleans up a boot that finishes later', async () => {
+  const { pool, boots } = controlledPool(1, { closeTimeoutMs: 10 });
+  const acquiring = pool.acquire('/w/a').catch(() => undefined);
+  await tick();
+  let error: unknown;
+  const closing = pool.close().catch(reason => { error = reason; });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  try { assert.match(String(error), /timed out/); }
+  finally { boots[0]!.resolve(); await acquiring; await closing; }
+  await tick();
+  assert.equal(boots[0]!.closed, true);
 });
