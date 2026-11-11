@@ -4434,6 +4434,7 @@ test("relay daemon fails a run.start command with an escaping workspaceSubpath i
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
   let served = false;
+  let polledAfterRejection = false;
   const badCommand: DaemonNodeRunCommand = {
     ...runCommand("cmd_bad_run"),
     workspacePath: root,
@@ -4452,11 +4453,13 @@ test("relay daemon fails a run.start command with an escaping workspaceSubpath i
         if (!served) { served = true; return jsonResponse({ commands: [badCommand] }); }
         // Polling keeps working after the bad command is rejected — the daemon
         // process must not have crashed out of runRelayDaemon.
-        stop.abort();
+        polledAfterRejection = true;
+        if (events.some(event => event.type === "run.failed")) stop.abort();
         return jsonResponse({ commands: [] });
       }
       if (path.endsWith("/events")) {
         events.push(await jsonBody<DaemonNodeEvent>(init));
+        if (polledAfterRejection) stop.abort();
         return jsonResponse({ ok: true }, 202);
       }
       throw new Error(`Unexpected URL ${url}`);
@@ -4467,6 +4470,7 @@ test("relay daemon fails a run.start command with an escaping workspaceSubpath i
   const failed = events.find((event) => event.type === "run.failed");
   assert.ok(failed && failed.type === "run.failed", "expected a run.failed event for the bad workspaceSubpath");
   assert.equal(failed.commandId, "cmd_bad_run");
+  assert.equal(polledAfterRejection, true);
 });
 
 for (const workspaceLayout of ["task", "node-root"] as const) {
@@ -6053,6 +6057,7 @@ test("daemon rejects a scope mismatch before acquiring a workspace or spawning a
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
   let served = false;
+  let polledAfterRejection = false;
   let acquired = 0;
   const environment = fakeEnvironment({ exec: async () => { throw new Error("Agent must not execute"); } });
   const acquire = environment.acquireWorkspace;
@@ -6066,14 +6071,23 @@ test("daemon rejects a scope mismatch before acquiring a workspace or spawning a
         if (path === "/api") return jsonResponse({ name: "Relay backend" });
         if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ computerId: "computer" });
         if (path.endsWith("/commands")) {
-          if (served) { stop.abort(); return jsonResponse({ commands: [] }); }
+          if (served) {
+            polledAfterRejection = true;
+            if (events.some(event => event.type === "run.failed")) stop.abort();
+            return jsonResponse({ commands: [] });
+          }
           served = true;
           return jsonResponse({ commands: [{ ...runCommand("scope-rejected"), workspaceLayout: "project", workspaceSubpath: "projects/other", workspaceScope: { computerId: "computer", projectId: "mine" } }] });
         }
-        if (path.endsWith("/events")) { events.push(await jsonBody<DaemonNodeEvent>(init)); return jsonResponse({ ok: true }, 202); }
+        if (path.endsWith("/events")) {
+          events.push(await jsonBody<DaemonNodeEvent>(init));
+          if (polledAfterRejection) stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
         throw new Error(`Unexpected URL ${url}`);
       },
     });
+    assert.equal(polledAfterRejection, true);
     assert.equal(acquired, 0);
     assert.equal(existsSync(join(root, "projects")), false);
     assert.ok(events.some(event => event.type === "run.failed" && event.commandId === "scope-rejected"));
@@ -6271,4 +6285,35 @@ for (const rejectedStart of [false, true]) test(`failed control acknowledgement 
   assert.ok(polls > 1, `only ${polls} poll while event ingestion is unavailable`);
   const pending = readdirSync(join(root, 'state', 'terminal-events')).filter(name => name.endsWith('.json'));
   assert.equal(pending.length, 1, 'the acknowledgement remains durable for recovery');
+});
+
+test('control-report capture failure protects storage without crashing command polling', { timeout: 5000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-control-capture-fault-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const prior = process.env.RELAY_DAEMON_REPORT_STORAGE_BYTES;
+  process.env.RELAY_DAEMON_REPORT_STORAGE_BYTES = '1';
+  t.after(() => restoreEnv('RELAY_DAEMON_REPORT_STORAGE_BYTES', prior));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const timeout = setTimeout(() => stop.abort(), 200);
+  t.after(() => clearTimeout(timeout));
+  let polls = 0;
+  const warnings: string[] = [];
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'control-capture-fault', userId: 'alice', token: 'fixture',
+    workspacePath: root, stateDir: join(root, 'state'), preflight: false, pollIntervalMs: 10,
+    environment: fakeEnvironment(), signal: stop.signal,
+    logger: { ...testLogger(), error: message => warnings.push(message) },
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({});
+      if (path.endsWith('/commands')) {
+        polls++;
+        return jsonResponse({ commands: polls === 1 ? [{ type: 'run.cancel', id: 'cancel', commandId: 'target', sessionId: 's', runId: 'r', agent: 'codex' }] : [] });
+      }
+      throw new Error('No report may be sent without durable capture');
+    },
+  });
+  assert.ok(polls > 1);
+  assert.ok(warnings.includes('cancel acknowledgement capture failed'));
 });

@@ -148,6 +148,13 @@ fifth of the node liveness timeout, so longer recovery waits do not delay lease
 renewal or cause an idle node to appear offline. These intervals bound recovery
 reads rather than guaranteed end-to-end dispatch latency under load.
 
+Cancellation acknowledgements for runs that are not executing, and failure
+reports for rejected starts, are durably retained directly from the command
+loop. Their HTTP delivery runs in the independent outbox worker. An unavailable
+event-ingestion endpoint therefore cannot stop command polling while independent
+heartbeats continue to advertise liveness. A capture failure activates storage
+protection and remains visible without crashing the poll loop.
+
 Output batches are retained before sending and live output cannot pass an
 unacknowledged earlier sequence for the same command lease. Replay sends the
 pending sequences in order. Concurrent live/replay copies may arrive late, but

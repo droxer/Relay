@@ -89,3 +89,47 @@ The first broad backend attempt was interrupted after 760 passes, seven skips, a
 The [heartbeat guide](../guides/node-heartbeats.md#daemon-resource-bounds) documents budgets, diagnostic-log retention, capture latency under pressure, and durable admission backups. No wire protocol, database schema, or credential format changed. Execution evidence remains separate from diagnostic logs. Timeout alone never proves guest exit.
 
 Tests use controlled guest lifecycles; no real BoxLite boot/stop or fleet load test was performed. The rebuilt installer is local. Running Computers need the updated client before these fixes take effect; this task did not restart or deploy them.
+
+
+## Follow-up for online Computers that stop polling
+
+A production cancellation was followed by continuing heartbeat/diagnostics errors
+and no new command-poll activity. The command loop awaited indefinite HTTP retry
+for an orphan cancellation acknowledgement. The same coupling existed for
+rejected starts. Independent heartbeat success could therefore keep a Computer
+online after its command poll became stale.
+
+Checkpoint `c84906a4` reproduced both paths: only one poll occurred during a
+400 ms event-ingestion outage, although the terminal report was already durable.
+The fix retains these control reports and lets the existing outbox worker send
+them. A separate regression forces a synchronous capture fault and checks that
+storage protection is surfaced while polling continues. Two older tests now
+wait for both the next poll and asynchronous report delivery before stopping;
+their workspace confinement and rejection assertions remain intact.
+
+The focused polling/scope/capture-fault command passed five tests:
+
+```bash
+node --test --test-name-pattern='scope mismatch|escaping workspaceSubpath|failed control acknowledgement|control-report capture failure' \
+  dist/packages/relay-daemon/tests/daemon.test.js
+```
+
+The computer's installed LaunchAgent still points at its older release. A
+read-only update dry run found zero journaled executions and 50 retained reports.
+Updating that live service is separate from committing the fix; private report
+and credential state must be preserved. A fresh unauthenticated backend health
+request returned HTTP 200; the original process's low-level connection failure
+remains unclassified until the updated client's error details are available.
+
+The complete affected suite passed all 258 tests after this follow-up:
+
+```bash
+node --test dist/packages/relay-daemon/tests/daemon.test.js \
+  dist/packages/relay-daemon/tests/terminal-outbox.test.js \
+  dist/packages/relay-daemon/tests/report-reliability.test.js
+```
+
+The package typecheck, rebuilt standalone installer smoke test, `git diff
+--check`, and dependency audit also passed (zero vulnerabilities). The local
+updater was prepared in `/private/tmp/relay-update-b427f8c4.py` and run in its
+read-only mode; no live service update was performed during this verification.

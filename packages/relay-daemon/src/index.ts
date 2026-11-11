@@ -869,12 +869,17 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // alive, but must not leave a retry loop running after its lifetime ends.
     const cancellationTerminalEventSignal = (): AbortSignal =>
       stopping ? AbortSignal.timeout(shutdownRegistrationTimeoutMs) : runtimeSignal;
-    // A start this daemon refuses is failed in place. The post is never allowed
-    // to throw into the poll loop: an event the backend refuses (409, or a 401
-    // from a stale lease) is about that run, not this daemon's credential, so
-    // it must not stop the daemon.
+    // Control acknowledgements use the independent durable replay worker, so
+    // failed uploads cannot stall polling while heartbeat probes keep succeeding.
+    const retainControlReport = async (event: DaemonNodeEvent, failureMessage: string, fields: DaemonLogFields): Promise<void> => {
+      try { await persistTerminalEvent(fetchFn, event); }
+      catch (error) {
+        logger.error(failureMessage, { ...fields, error: transportErrorDetail(error) });
+        protectStorage();
+      }
+    };
     const postRejectedStart = async (command: DaemonNodeRunCommand, detail: string): Promise<void> => {
-      await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+      await retainControlReport({
         type: "run.failed",
         commandId: command.id,
         ...commandLeaseEventFields(command),
@@ -883,12 +888,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         agent: command.agent,
         error: detail,
         exitCode: 1,
-      } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
-        logger.error("rejected start report failed", {
-          ...commandLogFields(sandboxId, command),
-          error: transportErrorDetail(error),
-        });
-      });
+      } satisfies DaemonNodeEvent, "rejected start report capture failed", commandLogFields(sandboxId, command));
     };
     while (!stopping) {
       void refreshMcp();
@@ -1181,7 +1181,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               sessionId: command.sessionId,
               runId: command.runId,
             });
-            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+            await retainControlReport({
               type: "run.cancelled",
               commandId: command.commandId,
               ...(command.targetLeaseId ? { leaseId: command.targetLeaseId } : {}),
@@ -1189,13 +1189,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               runId: command.runId,
               agent: command.agent,
               reason: command.reason || "Run was not executing on this computer.",
-            } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
-              logger.error("cancel acknowledgement post failed", {
-                sandboxId,
-                commandId: command.commandId,
-                error: transportErrorDetail(error),
-              });
-            });
+            } satisfies DaemonNodeEvent, "cancel acknowledgement capture failed", { sandboxId, commandId: command.commandId });
           }
         } else if (command.type === "workspace.delete") {
           try {
