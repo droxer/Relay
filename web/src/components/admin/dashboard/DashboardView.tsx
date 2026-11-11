@@ -138,40 +138,32 @@ export function DashboardView({
         </section>
       </div>
 
-      {/* 2:1 editorial split — time-series in the wide column, rosters in the
-          rail. The two stacks are independent, so a short card cannot drag a
-          hole through the row beside it the way the old three-across belt did. */}
+      {/* Related panels share a row. DOM order keeps fleet health directly
+          after activity when the available canvas becomes a single column. */}
       <div className="adm-dash-grid">
-        <div className="adm-dash-col">
-          <ActivityChart
-            daily={sessions.dailyCounts}
-            bucketSize={sessions.bucketSize}
-            ready={sessionsReady}
-            error={sessionsQuery.error}
-          />
-          <RuntimeUsage snapshot={tokens} />
-          {showTokens ? (
-            <TokenUsageChart snapshot={tokens} />
-          ) : null}
-        </div>
-        <div className="adm-dash-col">
-          {/* Both rail panels take the fixed instrument frame: their contents
-              arrive and re-rank live, and a panel that resized with them
-              would move the other one under the reader's eye. */}
-          <NodeStatusCard
-            nodes={nodes}
-            queued={metrics.queued}
-            onManageNodes={onManageNodes}
-            className="adm-dash-panel"
-          />
-          <RuntimeInventory nodes={nodes} loading={inventoryLoading} error={inventoryError} />
-          <TopUsers
-            className="adm-dash-panel"
-            users={users}
-            ranked={sessions.topUsers}
-            error={sessionsQuery.error}
-          />
-        </div>
+        <ActivityChart
+          daily={sessions.dailyCounts}
+          bucketSize={sessions.bucketSize}
+          ready={sessionsReady}
+          error={sessionsQuery.error}
+        />
+        <NodeStatusCard
+          nodes={nodes}
+          queued={metrics.queued}
+          onManageNodes={onManageNodes}
+          className="adm-dash-health"
+        />
+        {showTokens ? (
+          <TokenUsageChart snapshot={tokens} />
+        ) : null}
+        <TopUsers
+          className={`adm-dash-panel${showTokens ? "" : " adm-dash-panel--wide"}`}
+          users={users}
+          ranked={sessions.topUsers}
+          error={sessionsQuery.error}
+        />
+        <RuntimeUsage snapshot={tokens} />
+        <RuntimeInventory nodes={nodes} loading={inventoryLoading} error={inventoryError} />
       </div>
     </div>
   );

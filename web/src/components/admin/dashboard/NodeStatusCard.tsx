@@ -86,7 +86,7 @@ export function NodeStatusCard({ nodes, queued, onManageNodes, className }: Node
         <CardDescription render={<span />}>
           {t("admin.v2.dash_health_total", { count: total })}
         </CardDescription>
-        <Button variant="ghost" size="dense" onClick={onManageNodes}>
+        <Button variant="ghost" size="dense" className="h-auto min-h-(--control-h-xs) max-w-full whitespace-normal" onClick={onManageNodes}>
           {t("admin.control_panel.manage_fleet")}
           <span aria-hidden="true">↗</span>
         </Button>
