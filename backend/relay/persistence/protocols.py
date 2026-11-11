@@ -11,12 +11,13 @@ from ..core.models import AgentName
 
 @dataclass(frozen=True)
 class TaskDispatchAssignment:
-    """Task fields that must remain stable between routing and dispatch claim."""
+    """Assignment and execution revision fenced between routing and dispatch claim."""
 
     agent_id: str | None
     team_id: str | None
     project_id: str | None
     user_id: str | None
+    execution_revision: int = 0
 
     @classmethod
     def capture(cls, task: dict[str, Any]) -> TaskDispatchAssignment:
@@ -26,6 +27,7 @@ class TaskDispatchAssignment:
             project_id=task.get("projectId"),
             user_id=task.get("assigneeUserId")
             or task.get("ownerUserId"),
+            execution_revision=(task.get("executionOwner") or {}).get("revision", 0),
         )
 
     def matches(self, task: dict[str, Any]) -> bool:

@@ -629,3 +629,70 @@ def test_manual_dispatch_ambiguous_failure_consumes_no_retry_budget(
             for event in failed["events"]
             if event["type"] == "task.dispatch_retry"
         ]
+
+
+@pytest.mark.parametrize("race_stage", ["routing", "claim"])
+def test_manual_start_preserves_a_scheduler_run_admitted_during_preparation(
+    monkeypatch, race_stage,
+) -> None:
+    from relay.tasks.dispatch import TaskDispatcher
+
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        node = _register_node(
+            app, "sbx_alice", capabilities=["workspace-scope", "thread-workspaces", "task-workspaces"]
+        )
+        agent = _agent(app, node)
+        store = app.state.task_store
+        task = store.create_task({
+            **ROUTINE_RUN, "title": "One admitted execution",
+            "assignedAgent": "codex", "assignedAgentId": agent["id"],
+            "ownerUserId": ALICE, "assigneeUserId": ALICE, "status": "backlog",
+        })
+        scheduler = TaskScheduler(task_store=store, registry=app.state.registry, backend=app.state.backend)
+        competed = False
+
+        def admit_competitor():
+            nonlocal competed
+            if not competed:
+                competed = True
+                # The manual start has promoted Backlog to Ready, then yielded
+                # while routing. Admit and release a real scheduler claim before
+                # the manual start attempts to claim the same Task.
+                assert asyncio.run(scheduler.tick()).dispatched == 1
+
+        if race_stage == "routing":
+            original_route = TaskDispatcher._resolve_node
+
+            def route_then_compete(dispatcher):
+                routed = original_route(dispatcher)
+                admit_competitor()
+                return routed
+
+            monkeypatch.setattr(TaskDispatcher, "_resolve_node", route_then_compete)
+        else:
+            original_claim = store.claim_task_for_dispatch
+
+            def compete_then_claim(*args, **kwargs):
+                admit_competitor()
+                return original_claim(*args, **kwargs)
+
+            monkeypatch.setattr(store, "claim_task_for_dispatch", compete_then_claim)
+
+        result = asyncio.run(start_task_on_ready_node(
+            app_context_for(app), task, {"userId": ALICE, "isAdmin": True},
+        ))
+
+        assert competed
+        assert result is not None
+        assert result["dispatch"]["state"] == "queued", result
+        assert result["session"] is None
+        current = store.get_task(task["id"])
+        assert current["status"] == "assigned"
+        assert len(current["linkedSessionIds"]) == 1
+        assert "dispatchClaim" not in current
+        assert current["executionOwner"]["revision"] == 1
+        assert len(app.state.registry.take_commands(node["id"], "token_sbx_alice")) == 1
