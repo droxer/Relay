@@ -8,7 +8,7 @@ const port = process.env.RELAY_E2E_PORT ?? "5124";
    docked toolbar can hold there and slip in Safari. */
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "surfaceLayout.spec.ts",
+  testMatch: ["surfaceLayout.spec.ts", "routes.spec.ts"],
   fullyParallel: true,
   use: {
     baseURL: `http://127.0.0.1:${port}`,

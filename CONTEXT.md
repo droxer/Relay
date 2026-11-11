@@ -143,7 +143,10 @@ Conversation can also be a Standalone Thread.
 
 **Computer Workspace (UI)**:
 The client surface for a Computer's standalone Threads, Tasks, and Automations.
-Project work appears only in its Project surface. This navigation scope does
+The main navigation's Threads, Tasks, and Automations entries open global
+collections. Opening a placed record resolves its owning Project or Computer;
+unplaced work stays on its global record route, and local workspace tabs keep
+their scope. This navigation scope does
 not make the Computer's storage root a shared execution workspace: standalone
 Threads and Tasks retain the isolated directories described below. Tasks and
 Automations save a stable `computerId` before running; legacy unplaced work

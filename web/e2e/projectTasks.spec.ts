@@ -255,11 +255,8 @@ for (const mobile of [false, true]) {
   });
 }
 
-/* A standalone project room (no task links it) is only reachable through its
-   project, but it still counts as the most recent thread: with it active, the
-   sidenav's Threads destination must still open the thread list rather than
-   bounce the reader back to the project. */
-test("sidenav work links keep the active Project", async ({ page }) => {
+/* Global work destinations remain stable even when a Project owns the active Thread. */
+test("sidenav work links open global collections from a Project", async ({ page }) => {
   const stamp = "2026-09-01T00:00:00Z";
   const project = { id: "p", name: "Launch", ownerUserId: "u", computerId: "c", enabled: true, members: [], leadAgentId: null, version: 1, workspaceLayout: "project", createdAt: stamp, updatedAt: stamp };
   const room = { id: "s", title: "Release discussion", taskGoal: "Write release notes", projectId: "p", workspacePath: "/workspace", ownerUserId: "u", participants: ["human"], status: "completed", phase: "created", createdAt: stamp, updatedAt: stamp, agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0, artifactCount: 0, runCount: 0 };
@@ -274,9 +271,9 @@ test("sidenav work links keep the active Project", async ({ page }) => {
   await page.goto("/projects/p?tab=tasks");
   await expect(page.getByRole("tabpanel", { name: "Tasks", exact: true })).toBeVisible();
   await page.locator('[data-nav="threads"]').click();
-  await expect(page).toHaveURL(/\/projects\/p$/);
-  await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("href", "/projects/p?tab=tasks");
-  await expect(page.locator('[data-nav="routine"]')).toHaveAttribute("href", "/projects/p?tab=automations");
+  await expect(page).toHaveURL(/\/threads$/);
+  await expect(page.locator('[data-nav="backlog"]')).toHaveAttribute("href", "/tasks");
+  await expect(page.locator('[data-nav="routine"]')).toHaveAttribute("href", "/automations");
 });
 
 test("renaming without a runtime node recovers from a concurrent project edit", async ({ page }) => {

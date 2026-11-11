@@ -57,3 +57,14 @@ it("preserves a mobile view change when the canonical pathname stays the same", 
   expect(window.location.pathname).toBe("/threads");
   unmount();
 });
+
+it.each(["/teams", "/teams/team-one"])("keeps the team roster search on %s", async path => {
+  const { renderHook, act } = await import("@testing-library/react");
+  const { useUrlSearchState } = await import("../src/hooks/useUrlSearchState");
+  window.history.replaceState({}, "", path);
+  const { result, unmount } = renderHook(() => useUrlSearchState("q", "", value => value ?? "", value => value || null));
+  await act(async () => result.current[1]("release"));
+  expect(window.location.search).toBe("?q=release");
+  expect(result.current[0]).toBe("release");
+  unmount();
+});

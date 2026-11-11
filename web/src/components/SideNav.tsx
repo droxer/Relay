@@ -42,9 +42,6 @@ type MoreRoute = MoreSheetRoute & { adminOnly?: boolean };
  *  knows one layout knows the other. A table rather than repeated <a> blocks:
  *  rows differ only in icon, label, and route, and admin only in being gated. */
 const MORE_GROUPS: readonly { labelKey: string; routes: readonly MoreRoute[] }[] = [
-  { labelKey: "nav.workspace", routes: [
-    { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
-  ] },
   { labelKey: "nav.workforce", routes: [
     { route: "agents", Icon: NavAgents, labelKey: "nav.agents" },
     { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
@@ -194,39 +191,9 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <NavThreads size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.threads")}</span>
           </a>
-          <a
-            className={`sidenav-btn sidenav-secondary-item ${route === "routine" ? "active" : ""}`}
-            data-nav="routine"
-            href={hrefForRoute("routine")}
-            aria-label={t("nav.routine")}
-            aria-current={route === "routine" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "routine")}
-            onMouseEnter={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavRoutine size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("nav.routine")}</span>
-          </a>
         </div>
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workspace")}>
           <span className="sidenav-group-label sr-only" aria-hidden="true">{t("nav.workspace")}</span>
-          <a
-            className={`sidenav-btn ${route === "projects" ? "active" : ""}`}
-            data-nav="projects"
-            href={hrefForRoute("projects")}
-            aria-label={t("project.projects")}
-            aria-current={route === "projects" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "projects")}
-            onMouseEnter={(e) => showNavTooltip(t("project.projects"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("project.projects"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavProjects size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("project.projects")}</span>
-          </a>
           <a
             className={`sidenav-btn ${route === "backlog" ? "active" : ""}`}
             data-nav="backlog"
@@ -241,6 +208,36 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           >
             <NavBacklog size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.backlog")}</span>
+          </a>
+          <a
+            className={`sidenav-btn ${route === "routine" ? "active" : ""}`}
+            data-nav="routine"
+            href={hrefForRoute("routine")}
+            aria-label={t("nav.routine")}
+            aria-current={route === "routine" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "routine")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.routine"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavRoutine size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.routine")}</span>
+          </a>
+          <a
+            className={`sidenav-btn ${route === "projects" ? "active" : ""}`}
+            data-nav="projects"
+            href={hrefForRoute("projects")}
+            aria-label={t("project.projects")}
+            aria-current={route === "projects" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "projects")}
+            onMouseEnter={(e) => showNavTooltip(t("project.projects"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("project.projects"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavProjects size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("project.projects")}</span>
           </a>
         </div>
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.workforce")}>

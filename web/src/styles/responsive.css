@@ -592,7 +592,7 @@
   .messenger-shell .sidenav-nav .sidenav-group:nth-child(3) .sidenav-btn { animation-delay: calc(var(--t-stagger) * 3); }
   .messenger-shell .sidenav-nav .sidenav-group:nth-child(4) .sidenav-btn { animation-delay: calc(var(--t-stagger) * 4); }
 
-  /* Keep five stable primary tabs on phones. Operational and management
+  /* Keep work destinations together on phones. Operational and management
      destinations remain available through More without crushing their labels.
      Specificity, not !important: through the shell and panel, plus the button
      class, this outranks every `.sidenav-btn` display rule in sidenav.css (the

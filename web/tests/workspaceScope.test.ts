@@ -59,7 +59,7 @@ test('legacy records recover only recorded execution, and record links preserve 
   assert.equal(taskWorkspaceHref({ ...base, projectId: 'p' }, null), '/projects/p?task=t');
   assert.equal(taskWorkspaceHref({ ...base, isRoutine: true }, 'c', 'run'), '/computers/c/automations/t/runs/run');
   assert.equal(taskWorkspaceHref({ ...base, isRoutine: true, projectId: 'p' }, null), '/projects/p?tab=automations&automation=t');
-  assert.equal(taskWorkspaceHref(base, null), null);
+  assert.equal(taskWorkspaceHref(base, null), "/tasks/t");
   assert.equal(computerWorkHref('c'), '/computers/c/threads');
   assert.equal(recordHrefForLocation('routine', 'a', 'r', '/projects/p'), '/projects/p?tab=automations&automation=a&run=r');
   assert.equal(recordHrefForLocation('backlog', null, null, '/projects/p'), '/projects/p?tab=tasks');

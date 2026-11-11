@@ -81,6 +81,6 @@ test("an expired session returns to sign-in with the current destination", async
   await page.locator('[data-nav="backlog"]').click();
   // Threads and Tasks share the cached task list; explicitly request a read.
   await page.reload();
-  await expect(page).toHaveURL(url => url.pathname === "/login" && url.searchParams.get("returnTo") === "/computers/node%3Areview-node/tasks");
+  await expect(page).toHaveURL(url => url.pathname === "/login" && url.searchParams.get("returnTo") === "/tasks");
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });

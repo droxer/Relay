@@ -55,7 +55,7 @@ import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { ComputerWorkspaceNav } from "./components/ComputerWorkspaceNav";
 import { computerId as stableComputerId, computerName } from "./lib/createAgent";
-import { workspaceNavigationHref, sessionComputer, taskComputer } from "./lib/workspaceScope";
+import { sessionComputer, taskComputer } from "./lib/workspaceScope";
 import { useWorkspaceRoute } from "./hooks/useWorkspaceRoute";
 import { ThreadsView } from "./components/ThreadsView";
 import { OnboardingPanel } from "./components/onboarding/OnboardingPanel";
@@ -72,7 +72,7 @@ import { useNotifications } from "./hooks/useNotifications";
 import { computerManagementDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
 import { hrefForSettingsSection } from "./lib/appRoute";
 import type { NotificationBellBinding } from "./components/notifications/NotificationBell";
-import type { AppRoute, MobileView } from "./lib/viewTypes";
+import type { MobileView } from "./lib/viewTypes";
 
 type UserPreferences = ReturnType<typeof useUserPreferences>;
 
@@ -285,7 +285,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     notFound,
     navigateToRoute,
     navigateToMobileView,
-    hrefForSideNavRoute: globalHrefForSideNavRoute,
+    hrefForSideNavRoute,
     syncThreadUrl,
     navigateToAgent,
     navigateToTaskRecord,
@@ -305,7 +305,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     onSetComposingNewFromPath: setComposingNewFromPath,
   });
   const workspacePending = useWorkspaceRoute({ location: openingRoute, tasks, sessions: myThreads, nodes: runtimeNodes,
-    ready: tasksStatus === "ready" && !sessionsLoading && nodesReady });
+    ready: tasksStatus === "ready" && !sessionsLoading && nodesReady, failed: homeStatus === "error" });
   const workspaceNode = runtimeNodes.find(node => stableComputerId(node) === routedComputerId);
   const workspaceTasks = useMemo(() => routedComputerId ? tasks.filter(task => !task.projectId
     && taskComputer(task, runtimeNodes, myThreads) === routedComputerId) : tasks,
@@ -314,14 +314,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     && (!taskComputer(task, runtimeNodes, myThreads) || taskComputer(task, runtimeNodes, myThreads) === routedComputerId)), [tasks, runtimeNodes, myThreads, routedComputerId]);
   const workspaceNodes = useMemo(() => routedComputerId ? runtimeNodes.filter(node => stableComputerId(node) === routedComputerId) : visibleNodes,
     [routedComputerId, runtimeNodes, visibleNodes]);
-  const hrefForSideNavRoute = useCallback((nextRoute: AppRoute) => {
-    if (!["main", "backlog", "routine"].includes(nextRoute)) return globalHrefForSideNavRoute(nextRoute);
-    return workspaceNavigationHref(nextRoute, routedComputerId, routedProjectId);
-  }, [globalHrefForSideNavRoute, routedComputerId, routedProjectId]);
-  const navigateWorkspaceRoute = useCallback((nextRoute: AppRoute) => {
-    if (["main", "backlog", "routine"].includes(nextRoute)) void navigateToAppPath(hrefForSideNavRoute(nextRoute));
-    else navigateToRoute(nextRoute);
-  }, [hrefForSideNavRoute, navigateToRoute]);
   /* The inbox. A computer notice opens wherever that computer is managed:
      the person's own Computers page for a machine they hold, the control panel
      for shared hardware an admin is told about. */
@@ -659,7 +651,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     // The queued intent is picked up by the tasks board, which is no
     // longer the project's default tab — ask for it by name.
     if (showProjectOverview && routedProjectId) void navigateToAppPath(`/projects/${encodeURIComponent(routedProjectId)}?tab=tasks`);
-    else if (route !== "backlog") navigateWorkspaceRoute("backlog");
+    else if (route !== "backlog") navigateToRoute("backlog");
   });
   const onRefresh = useStableEvent(() => refresh());
   // useThreadNavigation hands back plain closures; the memoized work page
@@ -686,7 +678,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       taskWorkspace={isTasksWorkspace}
       taskThread={isTaskThread}
       notFound={notFound}
-      onNavigateRoute={navigateWorkspaceRoute}
+      onNavigateRoute={navigateToRoute}
       hrefForRoute={hrefForSideNavRoute}
       mobileView={mobileView}
       onMobileViewChange={onMobileViewChange}

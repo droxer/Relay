@@ -2,8 +2,8 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useWorkspaceRoute } from '../src/hooks/useWorkspaceRoute';
 import { useThreadNavigation } from '../src/hooks/useThreadNavigation';
-import { workspaceNavigationHref } from '../src/lib/workspaceScope';
 import { parseAppPath } from '../src/lib/appRoute';
+import { workspaceNavigationHref } from '../src/lib/workspaceScope';
 import type { RelayTaskListItem, RelaySession } from '../src/types';
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
@@ -60,10 +60,11 @@ it('starts a Project conversation without turning it into a global Task', () => 
   expect(navigate).not.toHaveBeenCalled();
 });
 
-it('keeps old Project filters inside the Project', () => {
+it('keeps Project filters on the global Tasks collection', () => {
   window.history.replaceState({}, '', '/tasks?project=p');
-  renderHook(() => useWorkspaceRoute({ ...inputs, location: parseAppPath('/tasks') }));
-  expect(navigate).toHaveBeenCalledWith('/projects/p?tab=tasks', { replace: true });
+  const { result } = renderHook(() => useWorkspaceRoute({ ...inputs, location: parseAppPath('/tasks') }));
+  expect(result.current).toBe(false);
+  expect(navigate).not.toHaveBeenCalled();
 });
 
 it('moves an Automation run out of a mismatched Project', () => {
@@ -91,9 +92,10 @@ it('preserves an explicitly addressed older Thread while its detail loads', () =
 });
 
 it.each(['/tasks/missing', '/automations/missing', '/automations/missing/runs/missing-run'])(
-  'provides a deliberate fallback for unresolved legacy record %s', path => {
-    renderHook(() => useWorkspaceRoute({ ...inputs, location: parseAppPath(path) }));
-    expect(navigate).toHaveBeenCalledWith('/computers', { replace: true });
+  'keeps an unresolved global record %s available for its not-found state', path => {
+    const { result } = renderHook(() => useWorkspaceRoute({ ...inputs, location: parseAppPath(path) }));
+    expect(result.current).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
   },
 );
 
@@ -115,21 +117,52 @@ it.each([
   expect(navigate).toHaveBeenCalledWith(expected, { replace: true });
 });
 
-// Global navigation must work before a Computer workspace has been selected.
-it.each(['/threads', '/automations', '/tasks'])('keeps the global list %s open', path => {
-  const { result, rerender } = renderHook(({ ready }) => useWorkspaceRoute({ ...inputs, ready, location: parseAppPath(path) }), { initialProps: { ready: false } });
+// Global collection destinations must stay accessible from the main navigation.
+it.each(['/threads', '/threads/new', '/tasks', '/automations'])(
+  'keeps the global collection %s open before and after data loads', path => {
+    window.history.replaceState({}, '', path);
+    const { result, rerender } = renderHook(({ ready }) => useWorkspaceRoute({
+      ...inputs, ready, location: parseAppPath(path),
+    }), { initialProps: { ready: false } });
+    expect(result.current).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+    rerender({ ready: true });
+    expect(result.current).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+  },
+);
+
+it.each([
+  ['/tasks/unplaced', false], ['/automations/unplaced', true],
+] as const)('opens an unplaced record at %s without choosing a Computer', (path, isRoutine) => {
+  const unplaced = { ...task, id: 'unplaced', projectId: undefined, isRoutine };
+  window.history.replaceState({}, '', path);
+  const { result } = renderHook(() => useWorkspaceRoute({ ...inputs, tasks: [unplaced], location: parseAppPath(path) }));
   expect(result.current).toBe(false);
-  rerender({ ready: true });
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it('keeps a legacy unplaced Thread readable without choosing a Computer', () => {
+  const unplaced = { ...session, id: 'unplaced', projectId: undefined };
+  const { result } = renderHook(() => useWorkspaceRoute({ ...inputs, sessions: [unplaced], location: parseAppPath('/threads/unplaced') }));
+  expect(result.current).toBe(false);
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it('shows record recovery instead of waiting forever after a routing source fails', () => {
+  const { result } = renderHook(() => useWorkspaceRoute({
+    ...inputs, ready: false, failed: true, location: parseAppPath('/tasks/missing'),
+  }));
   expect(result.current).toBe(false);
   expect(navigate).not.toHaveBeenCalled();
 });
 
 it.each([['main', '/threads'], ['routine', '/automations'], ['backlog', '/tasks']] as const)(
-  'links the unscoped %s navigation to its list', (route, href) => {
+  'builds the unscoped %s workspace link to its list', (route, href) => {
     expect(workspaceNavigationHref(route, null, null)).toBe(href);
   },
 );
-it('retains the current workspace for scoped navigation', () => {
+it('retains the current workspace for local navigation', () => {
   expect(workspaceNavigationHref('routine', 'c', null)).toBe('/computers/c/automations');
   expect(workspaceNavigationHref('main', null, 'p')).toBe('/projects/p');
   expect(workspaceNavigationHref('routine', null, 'p')).toBe('/projects/p?tab=automations');

@@ -736,14 +736,21 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
      their own headings, then Sign out alone (MobileMoreSheet.tsx). */
   const page = await openPage(browser, "/home", true);
   const tabs = page.locator(".sidenav-panel .sidenav-btn:visible");
-  await expect(tabs).toHaveCount(5);
+  await expect(tabs).toHaveCount(6);
+  expect(await tabs.evaluateAll((elements) => elements.map((element) => element.getAttribute("data-nav"))))
+    .toEqual(["home", "threads", "backlog", "routine", "projects", "more"]);
+  for (const box of await tabs.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))) {
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  }
+  await page.screenshot({ path: testInfo.outputPath("workspace-tabs.png") });
   await page.getByRole("button", { name: "More pages" }).tap();
   const sheet = page.getByRole("dialog", { name: "More" });
   await expect(sheet).toBeVisible();
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 
-  await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Workspace", "Agents and teams", "Resources", "Manage"]);
-  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Automations", "Agents", "Teams", "Computers", "Skills", "Settings"]);
+  await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Agents and teams", "Resources", "Manage"]);
+  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Agents", "Teams", "Computers", "Skills", "Settings"]);
   const controls = sheet.locator("button, a");
   await expect(controls.first()).toHaveText("Search");
   await expect(controls.last()).toHaveText("Sign out");
@@ -898,4 +905,50 @@ for (const width of [320, 390]) {
     if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}-lead-${width}.png` });
     await page.context().close();
   });
+}
+
+for (const touch of [false, true]) {
+  for (const start of ["/home", "/projects/nav-project", "/computers/node%3Alayout/tasks"]) {
+    test(`workspace menu opens global Tasks and Automations from ${start} (${touch ? "touch" : "pointer"})`, async ({ browser }) => {
+      const project = { id: "nav-project", name: "Navigation project", ownerUserId: USER.id,
+        computerId: "node:layout", enabled: true, members: [], leadAgentId: null, version: 1,
+        workspaceLayout: "project", workspaceSubpath: "projects/nav-project", createdAt: stamp, updatedAt: stamp };
+      const page = await openPage(browser, start, touch, undefined, undefined, { projects: [project] });
+      const tasksTab = page.locator('.sidenav-panel [data-nav="backlog"]');
+      const automationsTab = page.locator('.sidenav-panel [data-nav="routine"]');
+      await expect(tasksTab).toHaveAttribute("href", "/tasks");
+      await expect(automationsTab).toHaveAttribute("href", "/automations");
+      // Phone project details hide the global bar until returning to the directory.
+      if (touch && start.startsWith("/projects/")) {
+        await page.getByRole("button", { name: "Projects", exact: true }).click();
+      }
+      await tasksTab.click();
+      await expect(page).toHaveURL(/\/tasks$/);
+      await expect(tasksTab).toHaveAttribute("aria-current", "page");
+      await expect(page.locator(".tasks-workspace")).toBeVisible();
+      await expect(page.getByRole("link", { name: task.title, exact: true })).toBeVisible();
+      await page.reload();
+      await expect(page.locator(".tasks-workspace")).toBeVisible();
+      await expect(page).toHaveURL(/\/tasks$/);
+      await automationsTab.click();
+      await expect(page).toHaveURL(/\/automations$/);
+      await expect(automationsTab).toHaveAttribute("aria-current", "page");
+      await expect(page.locator(".routine-page")).toBeVisible();
+      await page.reload();
+      await expect(page.locator(".routine-page")).toBeVisible();
+      await expect(page).toHaveURL(/\/automations$/);
+      await page.goBack();
+      await expect(page).toHaveURL(/\/tasks$/);
+      await expect(page.locator(".tasks-workspace")).toBeVisible();
+      const threadsTab = page.locator('.sidenav-panel [data-nav="threads"]');
+      await expect(threadsTab).toHaveAttribute("href", "/threads");
+      await threadsTab.click();
+      await expect(page).toHaveURL(/\/threads$/);
+      await expect(threadsTab).toHaveAttribute("aria-current", "page");
+      await page.reload();
+      await expect(page).toHaveURL(/\/threads$/);
+      await expect(page.locator(".thread-panel")).toBeVisible();
+      await page.context().close();
+    });
+  }
 }
