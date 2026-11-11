@@ -3036,6 +3036,91 @@ for (const failure of ["stalled", "unavailable"] as const) {
   });
 }
 
+for (const kind of ["workspace.list", "workspace.read", "workspace.link", "workspace.delete", "rejected-start"] as const) {
+  test(`relay daemon keeps polling while ${kind} acknowledgement stalls`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "relay-command-delivery-"));
+    const stop = new AbortController();
+    const deadline = setTimeout(() => stop.abort(), 500);
+    let polls = 0;
+    let reports = 0;
+    const command: DaemonNodeCommand = kind === "rejected-start"
+      ? { ...runCommand("invalid-start"), workspaceLayout: "task", workspaceSubpath: "../escape" }
+      : kind === "workspace.link"
+        ? { id: "cmd", type: kind, leaseId: "lease", workspaceSubpath: "projects/p", hostPath: root, dryRun: true }
+        : kind === "workspace.delete"
+          ? { id: "cmd", type: kind, leaseId: "lease", sessionId: "p", workspaceLayout: "project", workspaceSubpath: "projects/p", path: "" }
+          : { id: "cmd", type: kind, leaseId: "lease", path: "" };
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+        workspacePath: root, sandbox: "none", token: "node_token", pollIntervalMs: 5,
+        shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+        environment: fakeEnvironment(),
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path.endsWith("/commands")) {
+            polls += 1;
+            if (polls === 3) stop.abort();
+            return jsonResponse({ commands: polls < 3 ? [command] : [] });
+          }
+          if (path.endsWith("/events")) {
+            reports += 1;
+            return new Promise<Response>((_resolve, reject) => {
+              const abort = () => reject(new Error("Request aborted"));
+              if (init?.signal?.aborted) abort();
+              else init?.signal?.addEventListener("abort", abort, { once: true });
+            });
+          }
+          return jsonResponse({});
+        },
+      });
+      assert.equal(polls, 3, "acknowledgement delivery must not block command polls");
+      assert.equal(reports, 1, "redelivery must share pending command work");
+    } finally {
+      clearTimeout(deadline);
+      stop.abort();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const sandbox of ["none", "boxlite"] as const) {
+  test(`explicit runtime refresh keeps polling on ${sandbox}`, async () => {
+    const stop = new AbortController();
+    let release!: () => void;
+    const probe = new Promise<void>(resolve => { release = resolve; });
+    const deadline = setTimeout(() => { stop.abort(); release(); }, 500);
+    let requested = false;
+    let probing = false;
+    let pollsDuringProbe = 0;
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+        workspacePath: process.cwd(), sandbox, token: "node_token", pollIntervalMs: 5,
+        shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+        environment: {
+          ...fakeEnvironment({ ensure: async () => {
+            if (requested) { probing = true; await probe; }
+          } }),
+          canProbeWithoutBooting: () => sandbox === "none",
+        },
+        fetchFn: async (url) => {
+          if (new URL(String(url)).pathname.endsWith("/commands")) {
+            if (!requested) {
+              requested = true;
+              return jsonResponse({ commands: [{ id: "refresh", type: "runtime.refresh", leaseId: "lease" }] });
+            }
+            if (probing && ++pollsDuringProbe >= 2) { release(); stop.abort(); }
+            return jsonResponse({ commands: [] });
+          }
+          return jsonResponse({});
+        },
+      });
+      assert.equal(pollsDuringProbe, 2, "runtime probes must run beside command polling");
+    } finally { clearTimeout(deadline); stop.abort(); release(); }
+  });
+}
+
 test("relay daemon advertises five concurrent runs by default", async () => {
   const previous = captureEnv(["RELAY_DAEMON_MAX_CONCURRENT_RUNS"]);
   delete process.env.RELAY_DAEMON_MAX_CONCURRENT_RUNS;
@@ -5206,7 +5291,6 @@ test("explicit runtime refresh re-registers before the periodic refresh is due",
           served = true;
           return jsonResponse({ commands: [{ id: "refresh-1", type: "runtime.refresh", leaseId: "lease-refresh" }] });
         }
-        if (registrations.length < 2) stop.abort();
         return jsonResponse({ commands: [] });
       }
       if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: { intervalMs: 5000, timeoutMs: 15000 } });
