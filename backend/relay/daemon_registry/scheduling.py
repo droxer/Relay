@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from ..core.daemon_records import runtime_run_capacity
 from ..core.models import AGENT_NAMES, AGENT_ROLES
 
 
@@ -44,10 +45,15 @@ def node_accepts_run(
     *,
     active_runs: list[dict[str, Any]],
     session_id: str | None = None,
+    executor_kind: str | None = None,
 ) -> bool:
     if node.get("retiredAt"):
         return False
     if session_id and any(run.get("sessionId") == session_id for run in active_runs):
+        return False
+    if executor_kind and sum(
+        (run.get("executorKind") or run.get("agent")) == executor_kind for run in active_runs
+    ) >= runtime_run_capacity(node, executor_kind):
         return False
     return len(active_runs) < normalize_run_capacity(node)
 

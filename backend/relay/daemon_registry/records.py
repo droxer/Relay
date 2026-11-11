@@ -198,7 +198,7 @@ def _string_metadata(value: Any, limit: int = 500) -> str | None:
 
 def agent_registration_state(
     payload: dict[str, Any],
-) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     supported = set(payload.get("supportedAgents") or [])
     raw_health = (
         payload.get("agentHealth")
@@ -215,7 +215,7 @@ def agent_registration_state(
         if isinstance(item, dict) and item.get("executorKind") in AGENT_NAMES
     }
     agents: dict[str, str] = {}
-    details: dict[str, dict[str, str]] = {}
+    details: dict[str, dict[str, Any]] = {}
     for agent in AGENT_NAMES:
         raw = capability_by_kind.get(agent) or (
             raw_health.get(agent) if isinstance(raw_health, dict) else None
@@ -229,11 +229,14 @@ def agent_registration_state(
             else "unknown"
         )
         if isinstance(raw, dict):
-            detail: dict[str, str] = {}
+            detail: dict[str, Any] = {}
             for key in ("detail", "version", "adapter"):
                 value = _string_metadata(raw.get(key))
                 if value:
                     detail[key] = value
+            limit = raw.get("maxConcurrentRuns")
+            if type(limit) is int and limit > 0:
+                detail["maxConcurrentRuns"] = limit
             if detail:
                 details[agent] = detail
     return agents, details

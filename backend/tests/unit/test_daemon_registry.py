@@ -6767,7 +6767,7 @@ def test_explicit_heartbeat_renews_local_and_managed_node_leases(
 
         assert heartbeat["intervalMs"] == 3_000
         assert heartbeat["timeoutMs"] == 15_000
-        assert heartbeat["features"] == ["poll-liveness", "state", "durable-reports", "transport-status", "report-batches"]
+        assert heartbeat["features"] == ["poll-liveness", "state", "durable-reports", "transport-status", "report-batches", "admission-retry"]
         assert heartbeat["observedAt"] != "2020-01-01T00:00:00.000Z"
         assert registry.get(node_id)["status"] == "ready"
         assert registry.get(node_id)["nodeLocation"] == node_location

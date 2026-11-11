@@ -60,7 +60,7 @@ def missing_workspace_capability(
     )
 
 
-HEARTBEAT_FEATURES = ("poll-liveness", "state", "durable-reports", "transport-status", "report-batches")
+HEARTBEAT_FEATURES = ("poll-liveness", "state", "durable-reports", "transport-status", "report-batches", "admission-retry")
 HEARTBEAT_STATES = ("ready", "draining", "stopped")
 
 

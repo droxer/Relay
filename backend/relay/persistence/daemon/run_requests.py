@@ -22,6 +22,8 @@ from ..engine import store_transaction
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from .rules import _assert_node_run_request_capacity
 from ...core.daemon_records import (
+    assignment_runtime,
+    runtime_run_capacity,
     DISPATCH_CLAIM_EXPIRES_STATE_KEY,
     DISPATCH_CLAIM_ID_STATE_KEY,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
@@ -343,20 +345,33 @@ class RunRequestRows(DaemonStoreState):
             node = conn.execute(select(self.nodes).where(
                 self.nodes.c.id == row["node_id"]
             ).with_for_update()).mappings().one()
-            reserved_sessions = set(conn.execute(select(self.runs.c.session_id).where(
-                self.runs.c.node_id == row["node_id"],
-                self.runs.c.status.in_(("pending", "running")),
-            )).scalars())
-            reserved_sessions.update(conn.execute(select(self.run_requests.c.session_id).where(
+            # Deduplicate a published run and its still-dispatching request.
+            reservations = {str(item["session_id"]): item["agent"] for item in conn.execute(
+                select(self.runs.c.session_id, self.runs.c.agent).where(
+                    self.runs.c.node_id == row["node_id"],
+                    self.runs.c.status.in_(("pending", "running")),
+                )
+            ).mappings()}
+            for item in conn.execute(select(self.run_requests).where(
                 self.run_requests.c.node_id == row["node_id"],
                 self.run_requests.c.status == "dispatching",
                 self.run_requests.c.id != request_id,
-            )).scalars())
-            # Recovery of this request's unpublished command reuses its slot.
-            reserved_sessions.discard(request["sessionId"])
+            )).mappings():
+                reservations[str(item["session_id"])] = assignment_runtime(row_to_run_request(item))
+            reservations.pop(request["sessionId"], None)
             capacity = node["max_concurrent_runs"] or 1
-            if len(reserved_sessions) >= max(1, capacity):
+            if len(reservations) >= max(1, capacity):
                 return None
+            executor_kind = assignment_runtime(request)
+            if executor_kind:
+                details = conn.execute(select(self.node_agents.c.details).where(
+                    self.node_agents.c.node_id == row["node_id"],
+                    self.node_agents.c.agent == executor_kind,
+                )).scalar_one_or_none()
+                limit = runtime_run_capacity({"maxConcurrentRuns": capacity,
+                    "agentDetails": {executor_kind: details}}, executor_kind)
+                if sum(kind == executor_kind for kind in reservations.values()) >= limit:
+                    return None
             state.update(
                 {
                     DISPATCH_CLAIM_ID_STATE_KEY: claim_id,

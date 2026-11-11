@@ -146,6 +146,24 @@ class RunProgressionMixin(RegistryState):
             )
             return
         turn = decide_turn_finalization(run_request, event, session_before)
+        if (
+            turn.event["type"] == "run.failed"
+            and event.get("admissionRejected") in ("computer-capacity", "runtime-capacity")
+        ):
+            # The authenticated daemon attests it never admitted this command.
+            # Keep the assignment and Task owner; retry with a fresh command id.
+            self._close_terminal_session_agent({**event, "type": "run.cancelled"})
+            state = turn.state
+            self.clear_run_output(event["runId"])
+            self.daemon_store.update_run_request_if_claimed(
+                run_request["id"], TERMINAL_CLAIM_ID_STATE_KEY, terminal_claim_id,
+                advanced_run_cursor(run_request.get("currentIndex", 0), state),
+            )
+            logger.info(
+                "Daemon admission deferred; assignment remains queued",
+                request_id=run_request["id"], reason=event["admissionRejected"],
+            )
+            return
         if not turn.already_recorded:
             self._record_project_setup_result(run_request, turn.event)
         if turn.event["type"] == "run.failed":

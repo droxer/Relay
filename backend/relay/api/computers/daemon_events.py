@@ -400,6 +400,8 @@ def _run_failed(value: dict[str, Any], envelope: EventFields) -> EventFields:
     return {
         **_terminal_output_cursor(value),
         "error": string_field(value, "error") or "Daemon node command failed.",
+        **({"admissionRejected": value["admissionRejected"]}
+           if value.get("admissionRejected") in ("computer-capacity", "runtime-capacity") else {}),
         **_runtime_session_field(value),
         **_optional_agent_log(value),
         **({"exitCode": int(exit_code)} if isinstance(exit_code, (int, float)) else {}),

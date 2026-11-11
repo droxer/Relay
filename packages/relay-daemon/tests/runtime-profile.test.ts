@@ -38,9 +38,10 @@ test("background setup cannot silently lose launch credentials or load arbitrary
 test("background setup preserves the daemon run capacity across launches", () => {
   const root = mkdtempSync(join(tmpdir(), "relay-runtime-profile-"));
   try {
-    const profile = captureRuntimeProfile({ RELAY_DAEMON_MAX_CONCURRENT_RUNS: "4" });
+    const profile = captureRuntimeProfile({ RELAY_DAEMON_MAX_CONCURRENT_RUNS: "4", RELAY_DAEMON_RUNTIME_LIMITS: '{"codex":2}' });
     const path = writeRuntimeProfile(root, profile);
     assert.equal(loadRuntimeProfile(path).RELAY_DAEMON_MAX_CONCURRENT_RUNS, "4");
+    assert.equal(loadRuntimeProfile(path).RELAY_DAEMON_RUNTIME_LIMITS, '{"codex":2}');
 
     const environmentFile = join(root, "runtime-env.json");
     writeFileSync(environmentFile, JSON.stringify({ RELAY_DAEMON_MAX_CONCURRENT_RUNS: "6" }), { mode: 0o600 });
