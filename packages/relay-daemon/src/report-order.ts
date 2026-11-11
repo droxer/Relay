@@ -60,13 +60,14 @@ export class ReportOrder {
 
   candidates(eligible: (key: string) => boolean, limit = 50): string[] {
     const keys: string[] = [];
-    let examined = 0;
+    const examined: string[] = [];
     for (const key of this.terminals) {
-      if (++examined > 200 || keys.length >= limit) break;
+      if (examined.length >= 200 || keys.length >= limit) break;
+      examined.push(key);
       // Rotate quarantined terminal evidence as well as output owners.
       if (eligible(key)) keys.push(key);
     }
-    for (const key of [...this.terminals].slice(0, Math.min(examined, 200))) {
+    for (const key of examined) {
       this.terminals.delete(key); this.terminals.add(key);
     }
     const owners: Array<[string, Stream, number]> = [];
@@ -75,12 +76,16 @@ export class ReportOrder {
       owners.push([owner, stream, stream.head]);
       if (owners.length >= 200) break;
     }
-    for (const [owner, stream] of owners) { this.streams.delete(owner); this.streams.set(owner, stream); }
+    const rotated = new Set<string>();
     let progress = true;
     while (keys.length < limit && progress) {
       progress = false;
       for (const entry of owners) {
-        const [, stream] = entry;
+        const [owner, stream] = entry;
+        if (!rotated.has(owner)) {
+          this.streams.delete(owner); this.streams.set(owner, stream);
+          rotated.add(owner);
+        }
         while (entry[2] < stream.entries.length && !this.present.has(stream.entries[entry[2]].key)) entry[2]++;
         const key = stream.entries[entry[2]]?.key;
         if (!key || !eligible(key)) continue;

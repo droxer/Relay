@@ -7,6 +7,8 @@ export type BufferedOutput = {
 
 type OutputEventBufferOptions = {
   delayMs?: number;
+  /** Maximum in-memory delay while earlier durable output is unacknowledged. */
+  maxDelayMs?: number;
   maxChars?: number;
   maxEntries?: number;
   /**
@@ -51,6 +53,7 @@ export class OutputEventBuffer {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private held = false;
   private readonly delayMs: number;
+  private readonly maxDelayMs: number;
   private readonly maxChars: number;
   private readonly maxEntries: number;
   private readonly isBusy: () => boolean;
@@ -60,6 +63,7 @@ export class OutputEventBuffer {
     options: OutputEventBufferOptions = {},
   ) {
     this.delayMs = Math.max(1, options.delayMs ?? DEFAULT_DELAY_MS);
+    this.maxDelayMs = Math.max(this.delayMs, options.maxDelayMs ?? 1000);
     this.maxChars = Math.max(1, options.maxChars ?? DEFAULT_MAX_CHARS);
     this.maxEntries = Math.max(1, options.maxEntries ?? DEFAULT_MAX_ENTRIES);
     this.isBusy = options.isBusy ?? (() => false);
@@ -111,6 +115,8 @@ export class OutputEventBuffer {
     this.timer = undefined;
     if (this.isBusy()) {
       this.held = true;
+      this.timer = setTimeout(() => this.flush(), this.maxDelayMs - this.delayMs);
+      this.timer.unref?.();
       return;
     }
     this.flush();

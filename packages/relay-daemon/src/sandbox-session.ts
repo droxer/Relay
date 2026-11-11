@@ -1,3 +1,4 @@
+import { ExecutionCleanupError } from "./execution-deadline.js";
 import {
   acquireBoxliteHomeLock,
   importBoxLite,
@@ -291,7 +292,10 @@ export async function startOrchestratorSession(
       close,
     };
   } catch (error) {
-    await close().catch(() => undefined);
+    try { await close(); }
+    catch (cleanupError) {
+      throw new ExecutionCleanupError("Guest startup failed and cleanup is unconfirmed.", { cause: new AggregateError([error, cleanupError]) });
+    }
     throw error;
   }
 }

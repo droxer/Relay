@@ -20,3 +20,23 @@ export async function responseErrorDetail(response: Response): Promise<string> {
   const body = await response.text().catch(() => "");
   return errorBodyDetail(body);
 }
+
+/** Keep useful Node transport codes, without dumping request/response objects or cause payloads. */
+export function transportErrorDetail(error: unknown): string {
+  const parts = [error instanceof Error ? error.message : String(error)];
+  const seen = new Set<unknown>([error]);
+  const pending: unknown[] = error instanceof Error
+    ? [error.cause, ...(error instanceof AggregateError ? error.errors : [])] : [];
+  while (pending.length && seen.size < 16) {
+    const item = pending.shift();
+    if (!item || typeof item !== 'object' || seen.has(item)) continue;
+    seen.add(item);
+    const detail = item as { code?: unknown; syscall?: unknown; hostname?: unknown; cause?: unknown; errors?: unknown };
+    const safe = [detail.code, detail.syscall, detail.hostname].filter((value): value is string =>
+      typeof value === 'string' && /^[a-zA-Z0-9_.:-]{1,253}$/.test(value));
+    if (safe.length) parts.push(safe.join(' '));
+    pending.push(detail.cause);
+    if (item instanceof AggregateError) pending.push(...item.errors.slice(0, 8));
+  }
+  return [...new Set(parts)].join('; ').slice(0, 1000);
+}
