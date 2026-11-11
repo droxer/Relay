@@ -57,6 +57,22 @@ describe('relay control CLI', () => {
     } finally { cleanup(); }
   });
 
+  it('waits for macOS shutdown to finish before reporting stop success', () => {
+    let polls = 0;
+    const { deps, lines, cleanup } = fixture('darwin', ['node-1'], (_command, args) =>
+      args[0] === 'print' && ++polls < 3
+        ? { status: 0, stdout: '\tstate = running\n\tpid = 4242\n' }
+        : { status: args[0] === 'print' ? 113 : 0, stdout: '' });
+    const waits: number[] = [];
+    deps.sleep = ms => { waits.push(ms); };
+    try {
+      assert.equal(runControl(['stop'], deps), 0);
+      assert.equal(polls, 3);
+      assert.deepEqual(waits, [250, 250]);
+      assert.match(lines[0]!, /Relay stopped/);
+    } finally { cleanup(); }
+  });
+
   it('reports macOS status from launchd', () => {
     const { deps, lines, cleanup } = fixture('darwin', ['node-1'], () => ({ status: 0, stdout: '\tstate = running\n\tpid = 4242\n' }));
     try {

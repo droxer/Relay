@@ -158,6 +158,33 @@ export function parseControlArgs(args: string[]): ControlArgs {
   return { command: command || 'help', follow, ...(computer ? { computer } : {}), ...(force ? { force } : {}), ...(report ? { report } : {}), ...(acknowledgeLoss ? { acknowledgeLoss } : {}) };
 }
 
+/** `launchctl print` exits 113 once launchd no longer knows the label. */
+const LAUNCHD_NO_SUCH_SERVICE = 113;
+const UNLOAD_POLL_MS = 250;
+const UNLOAD_CLEANUP_MS = 30_000;
+const sleepSync = (ms: number): void => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
+
+/**
+ * Boots a launchd service out and waits until launchd forgets its label.
+ * bootout returns while the old process is still exiting, and bootstrapping
+ * the label before then fails with "5: Input/output error".
+ */
+export function bootoutLaunchdService(runner: Pick<ControlDeps, 'run' | 'sleep'>, target: string): boolean {
+  // Match the daemon's default/configured active-run grace, then leave time for
+  // its stopped registration, environment cleanup and launchd label removal.
+  const configuredGrace = Number(process.env.RELAY_DAEMON_SHUTDOWN_GRACE_MS);
+  const shutdownGraceMs = Number.isFinite(configuredGrace) && configuredGrace > 0
+    ? Math.floor(configuredGrace) : 10_000;
+  const unloadPolls = Math.ceil((shutdownGraceMs + UNLOAD_CLEANUP_MS) / UNLOAD_POLL_MS);
+  // An already unloaded service can reject bootout; print must prove the label is absent.
+  runner.run('launchctl', ['bootout', target]);
+  for (let poll = 0; ; poll++) {
+    if (runner.run('launchctl', ['print', target]).status === LAUNCHD_NO_SUCH_SERVICE) return true;
+    if (poll >= unloadPolls) return false;
+    (runner.sleep ?? sleepSync)(UNLOAD_POLL_MS);
+  }
+}
+
 /** Whether a service is running, as reported by launchd or systemd. */
 function serviceState(deps: ControlDeps, service: InstalledService): { running: boolean; detail: string } {
   if (deps.platform === 'darwin') {
@@ -193,9 +220,7 @@ function stop(deps: ControlDeps, service: InstalledService): boolean {
   if (deps.platform === 'darwin') {
     const target = `gui/${deps.uid}/${service.name}`;
     if (deps.run('launchctl', ['disable', target]).status !== 0) return false;
-    // An unloaded service is already stopped, which bootout reports as a failure.
-    deps.run('launchctl', ['bootout', target]);
-    return !serviceState(deps, service).running;
+    return bootoutLaunchdService(deps, target);
   }
   if (deps.platform === 'win32') return stopWindowsTask(deps, service.name);
   return deps.run('systemctl', ['--user', 'disable', '--now', `${service.name}.service`]).status === 0;

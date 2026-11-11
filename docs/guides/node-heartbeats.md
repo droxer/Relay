@@ -169,7 +169,16 @@ than retaining locks across unrelated Computers.
 
 Transient failures retry indefinitely with jitter, bounded request deadlines,
 and `Retry-After`. Permanent report rejections are quarantined with their bytes
-and reason intact. Contact loss alone neither reruns nor kills an active agent.
+and reason intact. One terminal-report exception handles the backend's explicit
+identity/owner/payload receipt conflict: the daemon retries the exact retained
+payload under a deterministic ID derived from its local report ID and payload
+digest, preserving the original receipt. A batch 409 is checked individually
+for that exact conflict before retrying. The retry requires matching report-ID
+and digest receipt headers even without durable-report negotiation; missing or
+mismatched proof keeps the report pending. Unknown-command and command-ownership
+rejections still quarantine the report. This recovery does not automatically
+unquarantine reports already retained for intervention.
+Contact loss alone neither reruns nor kills an active agent.
 An unacknowledged start may be redelivered with its original command and lease;
 the daemon's execution journal fences duplicate admission. An uncertain process
 exit keeps the execution reservation until observed exit or a recorded human

@@ -246,10 +246,13 @@ clean exit, including when the backend reports the computer was deleted. Existin
 service definitions receive this policy on the next setup run. Login startup is
 still enabled; a deleted registration exits cleanly if launched again at login.
 
-On macOS, setup and service removal wait for launchd to unload the old service.
+On macOS, `relay stop`, setup, and service removal wait for launchd to unload
+the old service.
 The wait allows the default 10-second shutdown grace (or the positive
 `RELAY_DAEMON_SHUTDOWN_GRACE_MS` value in the invoking environment), plus 30
-seconds for cleanup. Setup starts the replacement only after the old label is gone.
+seconds for cleanup. `relay stop` reports success only after the label is gone;
+if unloading cannot be confirmed within that deadline, it reports failure. Setup
+starts the replacement only after the old label is gone.
 
 ## Pre-commit hooks
 

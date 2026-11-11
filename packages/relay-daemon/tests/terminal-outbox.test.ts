@@ -399,3 +399,96 @@ test("terminal replay watermark is isolated to its lease and includes collaborat
   assert.equal(outbox.retain({ type: "run.failed", commandId: "empty", leaseId: "lease" }).event.lastOutputSequence, -1);
   await outbox.flush();
 });
+
+for (const delivery of ['live', 'replay', 'batch'] as const) {
+  test(`${delivery} recovers a terminal identity accepted before its payload gained a watermark`, async t => {
+    const root = mkdtempSync(join(tmpdir(), 'relay-terminal-identity-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const outbox = new TerminalOutbox(root);
+    outbox.negotiate(true, delivery === 'batch');
+    const event = { type: 'run.cancelled', commandId: 'cmd', runId: 'run', reason: 'stopped' };
+    const retained = outbox.retain(event);
+    const receipts = new Map<string, string>([[retained.key, 'legacy-payload-digest']]);
+    const send: typeof fetch = async (url, init) => {
+      if (String(url).endsWith('/reports')) {
+        const { reports } = JSON.parse(String(init?.body));
+        return Response.json({ receipts: reports.map((report: { id: string; digest: string }) => ({
+          ...report, status: receipts.has(report.id) && receipts.get(report.id) !== report.digest ? 409 : 200,
+        })) });
+      }
+      const headers = new Headers(init?.headers);
+      const id = headers.get('X-Relay-Report-Id')!;
+      const digest = headers.get('X-Relay-Report-Digest')!;
+      if (receipts.has(id) && receipts.get(id) !== digest) {
+        return Response.json({ detail: 'Report identity already accepted with a different owner or payload.' }, { status: 409 });
+      }
+      receipts.set(id, digest);
+      return new Response('{}', { headers: { 'X-Relay-Report-Id': id, 'X-Relay-Report-Digest': digest } });
+    };
+    if (delivery === 'live') {
+      const response = await outbox.wrapFetch(send)('http://backend/events', { method: 'POST', body: JSON.stringify(event) });
+      assert.equal(response.status, 200);
+    } else await outbox.replay(send, 'http://backend/events', 'token');
+    assert.equal(outbox.status().pending, 0);
+    assert.equal(outbox.status().quarantined, 0);
+    assert.equal(receipts.get(retained.key), 'legacy-payload-digest');
+    assert.equal(receipts.size, 2);
+  });
+}
+
+for (const negotiated of [false, true]) {
+  for (const proof of ['missing', 'wrong-id', 'wrong-digest']) {
+    test(`terminal identity recovery rejects ${proof} proof across restart (negotiated=${negotiated})`, async t => {
+      const root = mkdtempSync(join(tmpdir(), 'relay-terminal-identity-restart-'));
+      t.after(() => rmSync(root, { recursive: true, force: true }));
+      const outbox = new TerminalOutbox(root);
+      if (negotiated) outbox.negotiate(true);
+      const event = { type: 'run.cancelled', commandId: 'cmd', reason: 'stopped' };
+      const legacy = outbox.retain(event).key;
+      const attempts: Array<[string, string]> = [];
+      let missingProof = true;
+      const send: typeof fetch = async (_url, init) => {
+        const headers = new Headers(init?.headers);
+        const id = headers.get('X-Relay-Report-Id')!;
+        const digest = headers.get('X-Relay-Report-Digest')!;
+        if (id === legacy) return Response.json({ detail: 'Report identity already accepted with a different owner or payload.' }, { status: 409 });
+        attempts.push([id, digest]);
+        if (missingProof) {
+          missingProof = false;
+          return new Response('{}', { headers: proof === 'missing' ? {} : {
+            'X-Relay-Report-Id': proof === 'wrong-id' ? 'wrong' : id,
+            'X-Relay-Report-Digest': proof === 'wrong-digest' ? 'wrong' : digest,
+          } });
+        }
+        return new Response('{}', { headers: { 'X-Relay-Report-Id': id, 'X-Relay-Report-Digest': digest } });
+      };
+      const first = await outbox.wrapFetch(send)('http://backend/events', { method: 'POST', body: JSON.stringify(event) });
+      assert.equal(first.status, 503);
+      assert.equal(outbox.status().pending, 1);
+      const restarted = new TerminalOutbox(root);
+      if (negotiated) restarted.negotiate(true);
+      await restarted.replay(send, 'http://backend/events', 'token');
+      assert.equal(restarted.status().pending, 0);
+      assert.equal(attempts.length, 2);
+      assert.deepEqual(attempts[0], attempts[1]);
+    });
+  }
+}
+
+for (const detail of ['Report names an unknown command.', 'Report does not match its command ownership.']) {
+  test(`terminal identity recovery preserves quarantine for ${detail}`, async t => {
+    const root = mkdtempSync(join(tmpdir(), 'relay-terminal-identity-refused-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const outbox = new TerminalOutbox(root);
+    outbox.negotiate(true);
+    let calls = 0;
+    const send = outbox.wrapFetch(async () => {
+      calls++;
+      return Response.json({ detail }, { status: 409 });
+    });
+    const response = await send('http://backend/events', { method: 'POST', body: JSON.stringify({ type: 'run.cancelled', commandId: 'cmd' }) });
+    assert.equal(response.status, 409);
+    assert.equal(calls, 1);
+    assert.equal(outbox.status().quarantined, 1);
+  });
+}

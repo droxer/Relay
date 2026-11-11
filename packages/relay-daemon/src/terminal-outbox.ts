@@ -251,21 +251,33 @@ export class TerminalOutbox {
     const originalBody = JSON.stringify(event);
     let sentDigest = '';
     let sentReportId = record.key;
+    let payloadBoundIdentity = false;
     const verifiedSend: typeof fetch = async (url, request) => {
       sentDigest = digest(String(request?.body));
       // A compact representation must not reuse an identity already bound
       // to the full payload. Derive it deterministically for crash/retry safety.
-      sentReportId = request?.body === originalBody ? record.key : digest(JSON.stringify([record.key, sentDigest]));
+      sentReportId = !payloadBoundIdentity && request?.body === originalBody ? record.key : digest(JSON.stringify([record.key, sentDigest]));
       const headers = new Headers(request?.headers);
       headers.set('X-Relay-Report-Id', sentReportId);
       headers.set('X-Relay-Report-Digest', sentDigest);
       return send(url, { ...request, headers });
     };
     const request = { ...init, body: originalBody };
-    const response = terminalTypes.has(String(event.type))
+    let response = terminalTypes.has(String(event.type))
       ? await sendTerminalEvent(verifiedSend, input, request, event) : await verifiedSend(input, request);
+    if (response.status === 409 && terminalTypes.has(String(event.type))) {
+      const rejection = await response.clone().json().catch(() => null) as { detail?: string } | null;
+      if (rejection?.detail === 'Report identity already accepted with a different owner or payload.') {
+        // A later terminal acknowledgement can reuse the command's old local
+        // slot after acceptance, with a different watermark or result. Keep
+        // the old receipt immutable and submit this exact payload separately.
+        await response.body?.cancel();
+        payloadBoundIdentity = true;
+        response = await sendTerminalEvent(verifiedSend, input, request, event);
+      }
+    }
     if (response.ok) {
-      if (this.strictAcknowledgements && (response.headers.get('X-Relay-Report-Id') !== sentReportId
+      if ((this.strictAcknowledgements || payloadBoundIdentity) && (response.headers.get('X-Relay-Report-Id') !== sentReportId
         || response.headers.get('X-Relay-Report-Digest') !== sentDigest)) {
         await response.body?.cancel();
         return new Response('Missing durable acceptance proof.', { status: 503 });
@@ -337,7 +349,17 @@ export class TerminalOutbox {
     for (const receipt of result.receipts ?? []) {
       if (expected.get(receipt.id) !== receipt.digest) continue;
       if (receipt.status === 200) this.acknowledge(receipt.id);
-      else if (permanentlyRejected(receipt.status)) this.quarantine(receipt.id, receipt.status);
+      else if (receipt.status === 409 && this.index.get(receipt.id)?.terminal) {
+        // Batch receipts carry no rejection detail. Probe individually so only
+        // an explicit identity collision can use the payload-bound fallback.
+        try {
+          const single = await this.deliver(send, eventUrl, { method: 'POST', headers: {
+            'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+          }, this.read(receipt.id));
+          await single.body?.cancel();
+        } catch { /* Retain the report for the next replay attempt. */ }
+      } else if (permanentlyRejected(receipt.status)) this.quarantine(receipt.id, receipt.status);
     }
   }
   async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {

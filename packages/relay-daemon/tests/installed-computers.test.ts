@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { serviceDefinition } from '../src/install.js';
-import { bootoutLaunchdService, installedComputers, removeService, sameComputer, serviceArguments } from '../src/installed-computers.js';
+import { bootoutLaunchdService } from '../src/control.js';
+import { installedComputers, removeService, sameComputer, serviceArguments } from '../src/installed-computers.js';
 
 const argv = ['/a path/node', '/relay/cli.js', '--backend-url', 'https://relay.example.com', '--user-id', 'alice',
   '--workspace', `/tmp/" & % $(touch x) 'w'`, '--sandbox', 'none'];
