@@ -31,6 +31,7 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
 import { useKeyChange } from "../hooks/useKeyChange";
 import { ListSkeleton } from "./ListSkeleton";
+import { DetailSkeleton } from "./DetailSkeleton";
 
 type CreateMode = "upload" | "github";
 const SOURCE_LABELS: Record<CreateMode, string> = {
@@ -383,7 +384,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
           <MobileTopbarBack label={t("skills.title")} onBack={() => onSelectSkill(null)} fallback={null} />
         ) : null}
         {detailQuery.isLoading ? (
-          <p className="route-loading" role="status">{t("skills.loading_detail")}</p>
+          <DetailSkeleton label={t("skills.loading_detail")} />
         ) : detailQuery.error ? (
           <p className="route-loading" role="alert">
             {/* A skill is addressable now, so a stale link lands here: say it

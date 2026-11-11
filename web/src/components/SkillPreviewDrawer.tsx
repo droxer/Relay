@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { readSkillFile } from "../api";
 import { SKILLS_QUERY_KEY, useSkill } from "../hooks/useSkills";
 import { Drawer } from "@/components/ui/Drawer";
+import { DetailSkeleton } from "./DetailSkeleton";
 
 interface SkillPreviewDrawerProps {
   skillId: string;
@@ -73,7 +74,7 @@ export function SkillPreviewDrawer({
       bodyClassName="skill-drawer skill-preview"
     >
       {detailQuery.isLoading ? (
-        <p className="skill-muted" role="status">{t("skills.loading_detail")}</p>
+        <DetailSkeleton variant="preview" label={t("skills.loading_detail")} />
       ) : detailQuery.error ? (
         <p className="skill-muted" role="alert">{errorText(detailQuery.error)}</p>
       ) : skill ? (
@@ -114,7 +115,7 @@ export function SkillPreviewDrawer({
               {file ? <span className="skill-preview-bytes">{bytes(file.bytes)}</span> : null}
             </div>
             {fileQuery.isLoading ? (
-              <p className="skill-preview-state" role="status">{t("skills.preview_loading")}</p>
+              <DetailSkeleton variant="file" label={t("skills.preview_loading")} />
             ) : fileQuery.error ? (
               <p className="skill-preview-state" role="alert">{errorText(fileQuery.error)}</p>
             ) : file?.binary ? (

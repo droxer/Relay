@@ -72,6 +72,7 @@ import { ProjectDrawer } from "./ProjectDrawer";
 // date picker); load it with the first project opened, not with every thread.
 const ProjectWorkspacePage = lazy(() => import("./ProjectWorkspacePage").then((m) => ({ default: m.ProjectWorkspacePage })));
 import { RelayEmptyState } from "./RelayEmptyState";
+import { DetailSkeleton } from "./DetailSkeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -81,17 +82,12 @@ function ProjectLoadingState() {
   return (
     <section
       id="project-detail-panel"
-      className="chat-panel project-directory-empty project-route-state"
+      className="workspace-page project-workspace-page"
       aria-label={t("project.loading")}
       aria-busy="true"
-      role="status"
       tabIndex={-1}
     >
-      <RelayEmptyState feature="projects"
-        fill
-        title={t("project.loading")}
-        body={t("project.loading_body")}
-      />
+      <DetailSkeleton variant="project" label={t("project.loading")} />
     </section>
   );
 }
