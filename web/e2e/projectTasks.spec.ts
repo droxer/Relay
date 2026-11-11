@@ -333,18 +333,20 @@ test("edits a task's priority, status and due date from its row", async ({ page 
   await page.setViewportSize({ width: 1440, height: 900 });
   const stamp = "2026-09-01T00:00:00Z";
   const project = { id: "launch", name: "Autumn launch", ownerUserId: "u", computerId: "c", enabled: true,
-    members: [], leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp };
+    members: [{ agentId: "agent-atlas", enabled: true, role: "implementer", responsibilities: "Deliver" }],
+    leadAgentId: "agent-atlas", version: 1, workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp };
   const task = { id: "task_0abcdef", title: "Write the release brief", projectId: "launch", status: "backlog", workflowStage: "backlog",
     description: "", priority: "normal", isRoutine: false,
     linkedSessionIds: [], ownerUserId: "u", createdAt: stamp, updatedAt: stamp };
-  // One agent placed on the project's computer, so the row may offer it.
+  // Only the enabled Project Agent is offered, even when another Agent shares its Computer.
   const atlas = { id: "agent-atlas", displayName: "Atlas", executorKind: "codex", enabled: true, availability: "ready",
     placements: [{ computerId: "c", desiredState: "active" }], deletedAt: null, createdAt: stamp, updatedAt: stamp };
+  const outsider = { ...atlas, id: "agent-outsider", displayName: "Neighbour" };
   const patches: Array<Record<string, unknown>> = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    let body: unknown = { sessions: [], agents: [atlas], teams: [], nodes: [], projects: [project], tasks: [task], sandboxes: [], skills: [] };
+    let body: unknown = { sessions: [], agents: [atlas, outsider], teams: [], nodes: [], projects: [project], tasks: [task], sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
     if (path.endsWith(`/tasks/${task.id}`) && request.method() === "PATCH") {
       const input = request.postDataJSON();
@@ -376,6 +378,7 @@ test("edits a task's priority, status and due date from its row", async ({ page 
   await expect(row.getByRole("button", { name: /^Due / })).toBeVisible();
   // The assignee is the row's own chip; the shared roster picker opens from it.
   await row.getByRole("combobox", { name: /^Assignee: Unassigned/ }).click();
+  await expect(page.getByRole("option", { name: /Neighbour/ })).toHaveCount(0);
   await page.screenshot({ path: "test-results/project-tasks-inline-assignee.png", clip: { x: 900, y: 320, width: 540, height: 360 } });
   await page.getByRole("option", { name: /Atlas/ }).click();
   await expect(row.getByRole("combobox", { name: /^Assignee: Atlas/ })).toBeVisible();
