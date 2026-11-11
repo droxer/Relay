@@ -23,6 +23,7 @@ WEB_UI_ROUTE_ROOTS = frozenset(
         "computer",
         "computers",
         "forgot-password",
+        "home",
         "issues",
         "join",
         "login",

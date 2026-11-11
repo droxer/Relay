@@ -593,14 +593,18 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
     const tab = requestedTab && AGENT_TABS.has(requestedTab) ? requestedTab : "profile";
     if (tab !== "profile") target.set("tab", tab);
   } else if (head === "teams" && !entityId) {
+    copyParam(source, target, "q");
     if (source.get("dialog") === "create") target.set("dialog", "create");
   } else if (head === "teams" && entityId && rest.length === 0) {
+    copyParam(source, target, "q");
     const requestedTab = source.get("tab");
     const tab = requestedTab && TEAM_TABS.has(requestedTab) ? requestedTab : "profile";
     if (tab !== "profile") target.set("tab", tab);
     // The add-team drawer can open over a selected team's profile. Retain its
     // URL-backed state instead of immediately canonicalizing the click away.
     if (source.get("dialog") === "create") target.set("dialog", "create");
+  } else if (head === "channels" && !entityId && CHANNELS_ENABLED) {
+    copyParam(source, target, "channel");
   } else if (head === "admin") {
     // Same shape as settings: the section is a path segment, so the sort,
     // page, and filter params of the user and computer tables have to be
@@ -707,6 +711,13 @@ export function browserUrlForAppState(
     && ["tasks", "automations"].includes(nextSegments[2])) return canonicalBrowserUrl(nextPath, currentSearch);
   const [nextHead] = nextSegments;
   const [currentHead] = currentSegments;
+  if (nextHead === "teams" && currentHead === "teams") {
+    const rosterSearch = new URLSearchParams(currentSearch);
+    // A team's own tab is local to that team; only the roster search follows selection.
+    rosterSearch.delete("tab");
+    rosterSearch.delete("dialog");
+    return canonicalBrowserUrl(nextPath, rosterSearch.toString());
+  }
   if ((nextHead === "routines" || nextHead === "backlog") && nextHead === currentHead) {
     return canonicalBrowserUrl(nextPath, currentSearch);
   }

@@ -27,7 +27,7 @@ export function computerWorkHref(identity: string, route: AppRoute = 'main', tas
   return pathForAppState({ route, computerId: identity, mobileView: route === 'main' ? 'threads' : 'chat', sessionId: null, taskId, runId });
 }
 
-export function taskWorkspaceHref(task: RelayTaskListItem, identity: string | null, runId?: string | null): string | null {
+export function taskWorkspaceHref(task: RelayTaskListItem, identity: string | null, runId?: string | null): string {
   const automationId = task.sourceRoutineId ?? (task.isRoutine ? task.id : null);
   const occurrenceId = task.sourceRoutineId ? task.id : runId;
   if (task.projectId) {
@@ -35,7 +35,8 @@ export function taskWorkspaceHref(task: RelayTaskListItem, identity: string | nu
     if (automationId && occurrenceId) search.set("run", occurrenceId);
     return canonicalBrowserUrl(`/projects/${encodeURIComponent(task.projectId)}`, search.toString());
   }
-  return identity ? computerWorkHref(identity, automationId ? "routine" : "backlog", automationId ?? task.id, occurrenceId) : null;
+  return pathForAppState({ route: automationId ? "routine" : "backlog", computerId: identity,
+    mobileView: "chat", sessionId: null, taskId: automationId ?? task.id, runId: occurrenceId });
 }
 
 /** Record links inherit the workspace of the board rendering them. */
@@ -50,7 +51,7 @@ export function recordHrefForLocation(route: 'backlog' | 'routine', taskId: stri
   return pathForAppState({ route, computerId: location.computerId, mobileView: 'chat', sessionId: null, taskId, runId });
 }
 
-/** The sidebar opens global lists until a workspace has been selected. */
+/** Build local workspace links; the main navigation uses global hrefForRoute links. */
 export function workspaceNavigationHref(route: AppRoute, identity: string | null, projectId: string | null): string {
   if (["main", "backlog", "routine"].includes(route)) {
     if (projectId) {

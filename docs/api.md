@@ -41,10 +41,10 @@ Standalone work lives under its Computer's stable identity. Project Tasks
 open at `/projects/{projectId}?task={taskId}`; Automations and their runs open
 at `/projects/{projectId}?tab=automations&automation={automationId}&run={runId}`.
 Legacy `/threads`, `/tasks`, and `/automations` record links resolve to the
-record's owning workspace. Their unscoped lists remain available without
-selecting a Computer; sidebar links retain the current Computer or Project
-when navigating within a workspace. Legacy `?project=` lists open the
-corresponding Project tab.
+record's owning workspace when one is assigned. The main navigation always
+opens the global `/threads`, `/tasks`, and `/automations` lists; local Computer
+and Project tabs retain their scope. Unplaced records remain readable at their
+global addresses. A global Task list's `?project=` parameter filters the list.
 
 A standalone Task or Automation supplies `computerId` when created, mutually
 exclusive with `projectId`. The backend checks Computer ownership and constrains
@@ -57,8 +57,10 @@ Every agent run requires the daemon's `workspace-scope` capability; an older
 client is refused before a run command is published. Backend-issued scope may
 include `legacyLayout` (`thread` or `node-root`) only to preserve an existing
 standalone workspace binding. It never authorizes a Project workspace.
-Missing unscoped Task or Automation links return to the Computer picker; a
-Thread deep link waits for the addressed Thread before canonicalizing its scope.
+Missing Task or Automation links keep their address and show record recovery
+instead of opening the Computer picker. A Thread deep link waits for the
+addressed Thread before canonicalizing its scope; failed routing data must not
+leave any deep link waiting indefinitely.
 
 Agent lists use `q` and `availability`. Agent and team details use
 `tab`; project details use `tab` plus `path` and `item` on the Workspace tab;
