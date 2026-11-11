@@ -171,12 +171,12 @@ export function ThreadListPanel({
     ] as const;
     return [...sections.map(({ group, ...section }) => group.items.length > 0 ? (
       <div key={section.key} className="conversation-group" data-tone={section.tone}>
-        <div className="conversation-group-label">
+        {section.key !== "idle" && <div className="conversation-group-label">
           <span>{section.label}</span>
           {/* The group's full count, not the mounted rows — the rail mounts a
               window and grows it as the reader scrolls. */}
           <span className="conversation-group-count tnum">{group.total}</span>
-        </div>
+        </div>}
         {/* Rows are <li>s, so each group carries its own list. The group label
             names it rather than sitting inside it — a heading is not a row. */}
         <ul className="conversation-rows" aria-label={section.label}>

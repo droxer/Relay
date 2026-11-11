@@ -27,6 +27,7 @@ it('shows the Thread list beside an open Project thread instead of Project folde
   expect(within(rail).getByRole('heading', { name: 'nav.threads' })).toBeTruthy();
   for (const session of sessions) expect(within(rail).getByText(session.title!)).toBeTruthy();
   expect(rail.querySelector('.project-folder')).toBeNull();
+  expect(rail.querySelector('.conversation-group[data-tone="idle"] .conversation-group-label')).toBeNull();
 });
 
 it('keeps the Project directory when no Thread is open', () => {

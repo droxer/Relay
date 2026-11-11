@@ -192,6 +192,7 @@ test("all thread routes share list controls, geometry, search and creation", asy
     await page.goto(path);
     const rail = page.locator("#thread-panel");
     await expect(rail.locator(".conversation-row")).toHaveCount(7);
+    await expect(rail.locator('.conversation-group[data-tone="idle"] .conversation-group-label')).toHaveCount(0);
     const layout = await rail.evaluate(element => {
       const style = (selector: string) => {
         const node = selector === ".conversation-row"
