@@ -101,6 +101,13 @@ stale status. Revocation stays blocked until explicit reconnection. Managed
 launches verify their own runtime configuration before execution and fail closed
 on configuration conflicts.
 
+Installing or updating the Computer client warns about saved Relay MCP failures
+(including conflicts, retrying, stale or unreadable status) and continues when
+backend authentication and workspace checks pass. It preserves runtime settings
+and the saved MCP status; the daemon reconciles after startup. An explicit doctor
+check still reports the MCP failure. Updating alone does not resolve an edited
+or unowned runtime entry.
+
 The installed process is the bundled Node executable and `relay-mcp.js`, with
 `--config <private-config.json>`. `relay mcp --config <path>` is also available
 through the installed Relay control CLI. The config contains a backend URL and
