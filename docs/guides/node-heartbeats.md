@@ -34,6 +34,16 @@ so daemon clock skew cannot extend a lease. Durable `lastSeenAt` writes remain
 throttled and are not appended to the event log, and the fleet-wide read that
 merges other replicas' observations runs at most once per persist interval.
 
+Routine heartbeats read only current credential, lifecycle, and observation
+fields. They do not load runtime inventory. A Computer first discovered on
+another backend loads its configuration once; command admission continues to
+refresh full configuration. Ordinary timestamp writes use a database-time due
+predicate shared across replicas, with separate seen/poll clocks. Conditional
+writes also check the observed credential/version, lifecycle state, and drain
+marker; a skipped write is distinguished from a changed credential or deleted
+Computer by a narrow authoritative reread. Local throttling records success
+only after storage commits, so failed writes remain eligible for retry.
+
 ## Background load
 
 The daemon honors the backend's advertised heartbeat interval (6 seconds by
@@ -125,9 +135,9 @@ the owner that has authority to act.
 ## Command notification recovery
 
 Command polls wake on committed queue notifications. With a PostgreSQL bridge
-that has completed `LISTEN`, an idle poll still re-reads the queue every half
-second as a recovery path for missed notifications. SQLite and disconnected
-bridges use the same bound. Notifications wake polls immediately.
+that has completed `LISTEN`, an idle poll re-reads the queue every six
+seconds as a recovery path for missed notifications. SQLite and disconnected
+bridges use a two-second bound. Notifications wake polls immediately.
 
 The wait is also capped at one third of the requested command lease and one
 fifth of the node liveness timeout, so longer recovery waits do not delay lease
