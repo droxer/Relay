@@ -6135,3 +6135,83 @@ test("cancellation delivery started before shutdown stops retrying when the daem
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("runtime admission defers Codex while Claude executes", { timeout: 10_000 }, async () => {
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  let commandServed = false;
+  let redelivered = false;
+  let executions = 0;
+  let registration: DaemonNodeRegistration | undefined;
+  const first = runCommand("cmd_busy_1");
+  const second = { ...runCommand("cmd_busy_2"), runId: "run_2", sessionId: "ses_2" } satisfies DaemonNodeCommand;
+  const third = { ...runCommand("cmd_claude"), agent: "claude", runId: "run_3", sessionId: "ses_3" } satisfies DaemonNodeCommand;
+  const daemon = runRelayDaemon({
+    backendUrl: "http://relay.test",
+    sandboxId: "sbx_test",
+    userId: "alice",
+    workspacePath: process.cwd(),
+    token: "node_token",
+    pollIntervalMs: 5,
+    shutdownGraceMs: 100,
+    // The Computer has room, but a second Codex run exceeds its own limit.
+    maxConcurrentRuns: 3,
+    runtimeLimits: { codex: 1 },
+    logger: testLogger(),
+    signal: stop.signal,
+    environment: fakeEnvironment({
+      exec: async (_cmd, args, options) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        executions++;
+        while (!events.some((event) => event.type === "run.failed" && event.commandId === "cmd_busy_2")) {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+        options?.sink?.("done\n");
+        return { exit_code: 0, stdout: "done\n", stderr: "" };
+      },
+    }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path === "/api/v1/daemon-node-registrations") {
+        registration = await jsonBody<DaemonNodeRegistration>(init);
+        return jsonResponse({ heartbeat: { intervalMs: 6000, timeoutMs: 30000, features: ["admission-retry"] } });
+      }
+      if (path.endsWith("/commands")) {
+        if (!commandServed) {
+          commandServed = true;
+          return jsonResponse({ commands: [first, second, third] });
+        }
+        if (events.filter(item => item.type === "run.completed").length >= 2 && !redelivered) {
+          redelivered = true;
+          return jsonResponse({ commands: [second] });
+        }
+        if (redelivered) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          stop.abort();
+        }
+        return jsonResponse({ commands: [] });
+      }
+      if (path.endsWith("/events")) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        events.push(event);
+
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  await daemon;
+  assert.equal(executions, 2, "a rejected start must never execute when redelivered");
+  assert.equal(events.some(e => e.type === "run.executing" && e.commandId === second.id), false,
+    "a rejected command must remain fenced when capacity opens");
+  assert.equal(registration?.executorCapabilities?.find(c => c.executorKind === "codex")?.maxConcurrentRuns, 1);
+  assert.equal(registration?.executorCapabilities?.find(c => c.executorKind === "claude")?.maxConcurrentRuns, 3);
+  assert.equal(events.find(e => e.type === "run.failed")?.type === "run.failed" &&
+    (events.find(e => e.type === "run.failed") as Extract<DaemonNodeEvent, {type: "run.failed"}>).admissionRejected, "runtime-capacity");
+  assert.equal(events.some(e => e.type === "run.completed" && e.commandId === "cmd_claude"), true);
+
+  assert.equal(events.some((event) => event.type === "run.failed" && event.commandId === "cmd_busy_2"), true);
+  assert.equal(events.some((event) => event.type === "run.completed" && event.commandId === "cmd_busy_1"), true);
+});

@@ -283,7 +283,7 @@ export interface DaemonNodeRegistration {
  * poll already renews liveness and leases, so a daemon may skip beats while
  * one is in flight. `state`: the heartbeat body may carry `state`.
  */
-export type DaemonNodeHeartbeatFeature = "poll-liveness" | "state" | "durable-reports" | "transport-status" | "report-batches";
+export type DaemonNodeHeartbeatFeature = "poll-liveness" | "state" | "durable-reports" | "transport-status" | "report-batches" | "admission-retry";
 
 export type DaemonNodeHeartbeatState = "ready" | "draining" | "stopped";
 
@@ -649,6 +649,8 @@ export type DaemonNodeEvent =
     }
   | {
       type: "run.failed";
+      /** Daemon refused before journaling or starting any execution. Negotiated by admission-retry. */
+      admissionRejected?: "computer-capacity" | "runtime-capacity";
       /** Last captured output sequence still requiring replay; -1 when none is pending. */
       lastOutputSequence?: number;
       commandId: string;

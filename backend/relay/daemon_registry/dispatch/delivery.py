@@ -201,10 +201,11 @@ class AssignmentDeliveryMixin(RegistryState):
                 # The run would only wait on the daemon's workspace gate while
                 # holding a slot an independent workspace could use. Leave it
                 # undelivered and unreserved; recovery retries it in order.
-                self._note_capacity_wait(run_request, index, node_runs)
+                self._note_capacity_wait(run_request, index, node_runs, reason="workspace-busy")
                 return False
             if not node_accepts_run(
-                sandbox, active_runs=node_runs, session_id=run_request["sessionId"]
+                sandbox, active_runs=node_runs, session_id=run_request["sessionId"],
+                executor_kind=assignment["executorKind"]
             ):
                 # Preserve the admitted request and assignment index. Recovery
                 # retries this undelivered assignment when a slot is available.
@@ -507,7 +508,8 @@ class AssignmentDeliveryMixin(RegistryState):
         }
 
     def _note_capacity_wait(
-        self, run_request: dict[str, Any], index: int, node_runs: list[dict[str, Any]]
+        self, run_request: dict[str, Any], index: int, node_runs: list[dict[str, Any]],
+        *, reason: str = "execution-capacity",
     ) -> None:
         """Log once which runs hold the slots a waiting assignment needs.
 
@@ -526,6 +528,9 @@ class AssignmentDeliveryMixin(RegistryState):
             session_id=run_request["sessionId"],
             node_id=run_request["nodeId"],
             current_index=index,
+            wait_reason=reason,
+            executor_kind=(run_request["assignments"][index].get("executorKind")
+                           or run_request["assignments"][index].get("agent")),
             blocking_run_ids=[run.get("runId") for run in node_runs],
             same_session=[
                 run.get("runId") for run in node_runs

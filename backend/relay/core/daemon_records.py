@@ -53,3 +53,20 @@ def assigned_node_location(node: dict[str, Any]) -> str:
     if node.get("managedNodeId"):
         return "managed"
     return "user-device"
+
+
+def runtime_run_capacity(node: dict[str, Any], executor_kind: str) -> int:
+    """An omitted runtime limit inherits the Computer limit (legacy daemons)."""
+    total = node.get("maxConcurrentRuns")
+    total = total if type(total) is int and total > 0 else 1
+    raw = ((node.get("agentDetails") or {}).get(executor_kind) or {}).get("maxConcurrentRuns")
+    return min(total, raw) if type(raw) is int and raw > 0 else total
+
+
+def assignment_runtime(request: dict[str, Any]) -> str | None:
+    assignments = request.get("assignments") or []
+    index = request.get("currentIndex", 0)
+    if not 0 <= index < len(assignments):
+        return None
+    assignment = assignments[index]
+    return assignment.get("executorKind") or assignment.get("agent")

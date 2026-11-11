@@ -1,3 +1,4 @@
+import { admissionWaitReason, parseRuntimeLimits, type RuntimeLimits, type AdmissionWaitReason } from "./run-admission.js";
 import { syncDirectory } from "./sync-directory.js";
 import { retryAfterMs } from "./transport-retry.js";
 import { ReportStoragePolicy } from "./report-storage.js";
@@ -167,6 +168,7 @@ export interface DaemonRuntimeOptions {
   exitRecheckIntervalMs?: number;
   agentHome?: string;
   maxConcurrentRuns?: number;
+  runtimeLimits?: RuntimeLimits;
   environment?: DaemonExecutionEnvironment;
   preflight?: boolean;
   /** Echo rendered agent output to the daemon's own stdout/stderr. Defaults
@@ -369,6 +371,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const maxConcurrentRuns = options.maxConcurrentRuns
     ?? positiveIntEnv("RELAY_DAEMON_MAX_CONCURRENT_RUNS")
     ?? DEFAULT_MAX_CONCURRENT_RUNS;
+  const runtimeLimits = parseRuntimeLimits(options.runtimeLimits === undefined
+    ? process.env.RELAY_DAEMON_RUNTIME_LIMITS : JSON.stringify(options.runtimeLimits));
   const environment = options.environment
     ?? createExecutionEnvironment(sandboxMode, sandboxId, workspacePath, logger, maxConcurrentRuns);
   if (sandboxMode === "boxlite" && !options.environment) {
@@ -454,7 +458,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       executorKind: executorKind as AgentName,
       status: health.status,
       adapter: health.adapter ?? "cli",
-      maxConcurrentRuns,
+      maxConcurrentRuns: Math.min(maxConcurrentRuns, runtimeLimits[executorKind as AgentName] ?? maxConcurrentRuns),
       ...(agentInventory[executorKind as AgentName] ? { inventory: agentInventory[executorKind as AgentName] } : {}),
     })),
     runtimeRefreshCommands: refreshedCommands,
@@ -863,11 +867,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // alive, but must not leave a retry loop running after its lifetime ends.
     const cancellationTerminalEventSignal = (): AbortSignal =>
       stopping ? AbortSignal.timeout(shutdownRegistrationTimeoutMs) : runtimeSignal;
-    // A start this daemon refuses is failed in place. The post is never allowed
+    // Capacity refusals attest non-execution and may be retried by a negotiated
+    // backend; other refusals fail in place. The post is never allowed
     // to throw into the poll loop: an event the backend refuses (409, or a 401
     // from a stale lease) is about that run, not this daemon's credential, so
     // it must not stop the daemon.
-    const postRejectedStart = async (command: DaemonNodeRunCommand, detail: string): Promise<void> => {
+    const postRejectedStart = async (command: DaemonNodeRunCommand, detail: string, reason?: AdmissionWaitReason): Promise<void> => {
+      // A refusal is final for this command id. Capacity opening later must
+      // never let its redelivery race the backend’s retry with a new id.
+      admittedExecutions.add(command.id);
       await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
         type: "run.failed",
         commandId: command.id,
@@ -876,6 +884,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         runId: command.runId,
         agent: command.agent,
         error: detail,
+        ...(reason && heartbeatFeatures.has("admission-retry") ? { admissionRejected: reason } : {}),
         exitCode: 1,
       } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
         logger.error("rejected start report failed", {
@@ -998,10 +1007,14 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             logger.warn("Unconfirmed execution will not be restarted", commandLogFields(sandboxId, command));
             continue;
           }
-          if (!canStartCommand(activeRuns, maxConcurrentRuns, terminalCommands)) {
+          const admissionWait = admissionWaitReason(
+            [...activeRuns].filter(([id]) => !terminalCommands.has(id)).map(([, run]) => run.command),
+            command.agent, maxConcurrentRuns, runtimeLimits,
+          );
+          if (admissionWait) {
             const detail = "Daemon node has no available execution slot for this run.";
-            logger.warn("command rejected while daemon busy", { ...commandLogFields(sandboxId, command), error: detail });
-            await postRejectedStart(command, detail);
+            logger.warn("command rejected while daemon busy", { ...commandLogFields(sandboxId, command), waitReason: admissionWait, error: detail });
+            await postRejectedStart(command, detail, admissionWait);
             continue;
           }
           // A malformed or escaping workspaceSubpath throws out of resolveSubpath;
@@ -2304,14 +2317,6 @@ function daemonCommandsUrl(
 
 function formatQueryNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
-}
-
-function canStartCommand(
-  activeRuns: Map<string, { command: DaemonNodeRunCommand }>,
-  maxConcurrentRuns: number,
-  terminalCommands: Set<string>,
-): boolean {
-  return [...activeRuns.keys()].filter((id) => !terminalCommands.has(id)).length < maxConcurrentRuns;
 }
 
 export function createDaemonLogger(input: {
