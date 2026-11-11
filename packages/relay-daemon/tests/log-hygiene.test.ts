@@ -35,3 +35,19 @@ test("a present but failing agent CLI keeps its preflight detail", () => {
   assert.equal(error instanceof AgentNotInstalledError, false);
   assert.equal(error.message, "Codex auth check failed (exit code 1).\nNot logged in");
 });
+
+test('transport failures preserve nested error codes without logging cause payloads', async () => {
+  const { transportErrorDetail } = await import('../src/http-error-detail.js');
+  const lookup = Object.assign(new Error('private response payload'), {
+    code: 'ENOTFOUND', syscall: 'getaddrinfo', hostname: 'api.get-relay.cc',
+  });
+  const error = new TypeError('fetch failed', { cause: new AggregateError([lookup], 'private aggregate') });
+  const detail = transportErrorDetail(error);
+  assert.match(detail, /fetch failed/);
+  assert.match(detail, /ENOTFOUND/);
+  assert.match(detail, /api.get-relay.cc/);
+  assert.doesNotMatch(detail, /private/);
+  const cyclic = new Error('fetch failed');
+  cyclic.cause = cyclic;
+  assert.equal(transportErrorDetail(cyclic), 'fetch failed');
+});

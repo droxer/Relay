@@ -12,9 +12,10 @@ interface Boot {
 }
 
 /** A pool whose guests boot only when the test says so. */
-function controlledPool(capacity: number) {
+function controlledPool(capacity: number, options: Record<string, number> = {}) {
   const boots: Boot[] = [];
   const pool = new GuestPool({
+    ...options,
     capacity,
     boxName: (slot) => `box-${slot}`,
     createManager: () => ({}) as ExecutionManager,
@@ -118,7 +119,7 @@ test("closing during a boot stops that guest once it comes up", async () => {
   boots[0]!.resolve();
   await closing;
   assert.equal(boots[0]!.closed, true);
-  (await acquiring).release();
+  await assert.rejects(acquiring, /closed/);
   await assert.rejects(pool.acquire("/w/b"), /closed/);
 });
 
@@ -134,4 +135,102 @@ test("a pool reports a borrowable guest only once one has booted", async () => {
   lease.release();
   await pool.close();
   assert.equal(pool.hasBootedGuest(), false);
+});
+
+test("cancelling a boot waiter releases it without recycling the booting slot", async () => {
+  const { pool, boots } = controlledPool(1);
+  const abort = new AbortController();
+  const acquiring = pool.acquire("/w/a", abort.signal);
+  await tick();
+  abort.abort();
+  let result = "pending";
+  void acquiring.then(() => { result = "resolved"; }, () => { result = "cancelled"; });
+  await tick();
+  try {
+    assert.equal(result, "cancelled");
+    const other = pool.acquire("/w/b");
+    await tick();
+    assert.equal(boots.length, 1, "an unfinished boot must keep its slot fenced");
+    boots[0]!.resolve();
+    await tick();
+    assert.equal(boots.length, 2);
+    boots[1]!.resolve();
+    (await other).release();
+  } finally {
+    boots.forEach(boot => boot.resolve());
+    await acquiring.then(lease => lease.release(), () => undefined);
+    await pool.close();
+  }
+});
+
+test('boot deadlines quarantine the slot until late boot cleanup proves it stopped', async () => {
+  const { pool, boots } = controlledPool(1, { bootTimeoutMs: 10 });
+  let error: unknown;
+  const acquiring = pool.acquire('/w/a').catch(reason => { error = reason; });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  try {
+    assert.match(String(error), /timed out/);
+    const next = pool.acquire('/w/b');
+    await tick();
+    assert.equal(boots.length, 1);
+    boots[0]!.resolve();
+    await tick();
+    assert.equal(boots[0]!.closed, true);
+    assert.equal(boots.length, 2);
+    boots[1]!.resolve();
+    (await next).release();
+  } finally {
+    boots.forEach(boot => boot.resolve());
+    await acquiring;
+    await pool.close();
+  }
+});
+
+test('closing a pool has a deadline and cleans up a boot that finishes later', async () => {
+  const { pool, boots } = controlledPool(1, { closeTimeoutMs: 10 });
+  const acquiring = pool.acquire('/w/a').catch(() => undefined);
+  await tick();
+  let error: unknown;
+  const closing = pool.close().catch(reason => { error = reason; });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  try { assert.match(String(error), /timed out/); }
+  finally { boots[0]!.resolve(); await acquiring; await closing; }
+  await tick();
+  assert.equal(boots[0]!.closed, true);
+});
+
+test('failed guest teardown never frees its slot for another workspace', async () => {
+  let starts = 0;
+  const pool = new GuestPool({
+    capacity: 1, boxName: () => 'owned', createManager: () => ({}) as ExecutionManager,
+    start: async () => { starts++; return { session: {} as ActiveOrchestratorSession['session'], close: async () => { throw new Error('stop failed'); } }; },
+  });
+  (await pool.acquire('/w/a')).release();
+  await assert.rejects(pool.acquire('/w/b'), /stop failed/);
+  const abort = new AbortController();
+  const waiting = pool.acquire('/w/c', abort.signal);
+  await tick();
+  abort.abort();
+  await assert.rejects(waiting, /cancelled/);
+  assert.equal(starts, 1);
+  await pool.close();
+});
+
+test('uncertain startup cleanup keeps the slot fenced and surfaces its failure', async () => {
+  const { ExecutionCleanupError } = await import('../src/execution-deadline.js');
+  let starts = 0;
+  const failures: unknown[] = [];
+  const pool = new GuestPool({
+    capacity: 1, boxName: () => 'uncertain', createManager: () => ({}) as ExecutionManager,
+    onUnconfirmed: error => failures.push(error),
+    start: async () => { starts++; throw new ExecutionCleanupError('cleanup unconfirmed'); },
+  });
+  await assert.rejects(pool.acquire('/w/a'), /cleanup unconfirmed/);
+  const abort = new AbortController();
+  const waiting = pool.acquire('/w/b', abort.signal);
+  await tick(); abort.abort();
+  await assert.rejects(waiting, /cancelled/);
+  assert.equal(starts, 1);
+  assert.equal(failures.length, 1);
+  await pool.close();
 });

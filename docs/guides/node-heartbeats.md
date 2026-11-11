@@ -66,7 +66,11 @@ Transport diagnostics are still sampled locally every second. The daemon sends
 health transitions immediately, coalesces activity changes to at most one report
 per 5 seconds, and refreshes an unchanged healthy snapshot every 30 seconds.
 Unresolved incidents refresh every 5 seconds to preserve recovery/progress
-observations. Failed deliveries remain due for retry on the next sample.
+observations. Failed deliveries back off from 5 seconds to a maximum of 60
+seconds, honor `Retry-After`, and warn at most once per 30 seconds. A successful
+upload resets the backoff. Sampling and heartbeat probes continue independently.
+Transport errors include nested DNS/TLS/socket codes when available, without
+logging request headers or cause payloads.
 
 ## Alive is not listening
 
@@ -161,6 +165,14 @@ fifth of the node liveness timeout, so longer recovery waits do not delay lease
 renewal or cause an idle node to appear offline. These intervals bound recovery
 reads rather than guaranteed end-to-end dispatch latency under load.
 
+Cancellation acknowledgements for runs that are not executing, and failure
+reports for rejected starts, are durably retained directly from the command
+loop. Their HTTP delivery runs in bounded background tasks and the independent
+outbox replay worker. An unavailable
+event-ingestion endpoint therefore cannot stop command polling while independent
+heartbeats continue to advertise liveness. A capture failure activates storage
+protection and remains visible without crashing the poll loop.
+
 Output batches are retained before sending and live output cannot pass an
 unacknowledged earlier sequence for the same command lease. Replay sends the
 pending sequences in order. Concurrent live/replay copies may arrive late, but
@@ -207,7 +219,12 @@ rejections still quarantine the report. This recovery does not automatically
 unquarantine reports already retained for intervention.
 Contact loss alone neither reruns nor kills an active agent.
 An unacknowledged start may be redelivered with its original command and lease;
-the daemon's execution journal fences duplicate admission. An uncertain process
+the daemon's execution journal fences unresolved admission. A compact private
+`admissions/` ledger also preserves command hashes after completion and across
+restarts. Its hot cache is bounded to 4,096 identities; evicting a cache entry
+never removes its durable fence. Each identity uses a 32-byte SHA-256 record,
+partitioned across 4,096 shard files. Backups include this ledger along with
+`executions/` and `terminal-events/`. An uncertain process
 exit keeps the execution reservation until observed exit or a recorded human
 assertion.
 
@@ -280,3 +297,30 @@ termination, and holds execution until cleanup is verified or a person reports
 it gone. On Windows, unavailable process enumeration likewise keeps the run
 reserved even after the root's pipes close; enumeration errors are terminating
 PowerShell failures rather than an apparently empty successful process list.
+
+
+## Daemon resource bounds
+
+Replay maintains ordered queues per command lease. Each turn selects at most
+50 reports and examines at most 200 output owners and 200 terminal records.
+Quarantined heads block their own stream without repeatedly scanning its tail;
+terminal evidence keeps priority and output owners rotate across turns, even
+when their requests fail.
+
+Output normally flushes after 25 ms. While earlier output is unacknowledged,
+the daemon coalesces small chunks for at most one second, still flushing at
+256 Ki characters or 1,024 entries. In-memory chunks and writes that have not
+finished flushing remain outside the crash-survival boundary.
+
+A guest boot has a 60-second deadline. Cancelling a waiter releases the run
+promptly without cancelling another borrower's boot. A timed-out boot retains
+its slot until late startup and cleanup prove it stopped; failed teardown never
+frees a slot. Pool shutdown and native runtime shutdown each have a 10-second
+waiting deadline. Expiring a deadline does not assert that a guest exited.
+
+Diagnostic logs use a queue bounded to 4 MiB and 4,096 entries. Under pressure,
+diagnostic records can be omitted with a throttled warning; durable reports use
+a separate path. The aggregate daemon log keeps two generations of at most
+10 MiB each. Run logs are capped at 10 MiB per file, 100 MiB total, and 1,000
+files, including cleanup of older logs at startup. Diagnostic-log shutdown
+waits at most one second. Service-manager log rotation remains separate.

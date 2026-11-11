@@ -31,7 +31,9 @@ const previousDaemonStateDir = process.env.RELAY_DAEMON_STATE_DIR;
 const testDaemonStateDir = mkdtempSync(join(tmpdir(), "relay-daemon-private-state-"));
 process.env.RELAY_DAEMON_STATE_DIR = testDaemonStateDir;
 // Tests reuse synthetic command IDs; only restart tests share durable evidence.
-beforeEach(() => rmSync(join(testDaemonStateDir, "terminal-events"), { recursive: true, force: true }));
+beforeEach(() => {
+  for (const name of ["terminal-events", "admissions"]) rmSync(join(testDaemonStateDir, name), { recursive: true, force: true });
+});
 after(() => {
   if (previousDaemonStateDir === undefined) delete process.env.RELAY_DAEMON_STATE_DIR;
   else process.env.RELAY_DAEMON_STATE_DIR = previousDaemonStateDir;
@@ -4586,6 +4588,7 @@ test("relay daemon fails a run.start command with an escaping workspaceSubpath i
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
   let served = false;
+  let polledAfterRejection = false;
   const badCommand: DaemonNodeRunCommand = {
     ...runCommand("cmd_bad_run"),
     workspacePath: root,
@@ -4604,11 +4607,13 @@ test("relay daemon fails a run.start command with an escaping workspaceSubpath i
         if (!served) { served = true; return jsonResponse({ commands: [badCommand] }); }
         // Polling keeps working after the bad command is rejected — the daemon
         // process must not have crashed out of runRelayDaemon.
-        stop.abort();
+        polledAfterRejection = true;
+        if (events.some(event => event.type === "run.failed")) stop.abort();
         return jsonResponse({ commands: [] });
       }
       if (path.endsWith("/events")) {
         events.push(await jsonBody<DaemonNodeEvent>(init));
+        if (polledAfterRejection) stop.abort();
         return jsonResponse({ ok: true }, 202);
       }
       throw new Error(`Unexpected URL ${url}`);
@@ -4619,6 +4624,7 @@ test("relay daemon fails a run.start command with an escaping workspaceSubpath i
   const failed = events.find((event) => event.type === "run.failed");
   assert.ok(failed && failed.type === "run.failed", "expected a run.failed event for the bad workspaceSubpath");
   assert.equal(failed.commandId, "cmd_bad_run");
+  assert.equal(polledAfterRejection, true);
 });
 
 for (const workspaceLayout of ["task", "node-root"] as const) {
@@ -6204,6 +6210,7 @@ test("daemon rejects a scope mismatch before acquiring a workspace or spawning a
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
   let served = false;
+  let polledAfterRejection = false;
   let acquired = 0;
   const environment = fakeEnvironment({ exec: async () => { throw new Error("Agent must not execute"); } });
   const acquire = environment.acquireWorkspace;
@@ -6217,14 +6224,23 @@ test("daemon rejects a scope mismatch before acquiring a workspace or spawning a
         if (path === "/api") return jsonResponse({ name: "Relay backend" });
         if (path.endsWith("/daemon-node-registrations")) return jsonResponse({ computerId: "computer" });
         if (path.endsWith("/commands")) {
-          if (served) { stop.abort(); return jsonResponse({ commands: [] }); }
+          if (served) {
+            polledAfterRejection = true;
+            if (events.some(event => event.type === "run.failed")) stop.abort();
+            return jsonResponse({ commands: [] });
+          }
           served = true;
           return jsonResponse({ commands: [{ ...runCommand("scope-rejected"), workspaceLayout: "project", workspaceSubpath: "projects/other", workspaceScope: { computerId: "computer", projectId: "mine" } }] });
         }
-        if (path.endsWith("/events")) { events.push(await jsonBody<DaemonNodeEvent>(init)); return jsonResponse({ ok: true }, 202); }
+        if (path.endsWith("/events")) {
+          events.push(await jsonBody<DaemonNodeEvent>(init));
+          if (polledAfterRejection) stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
         throw new Error(`Unexpected URL ${url}`);
       },
     });
+    assert.equal(polledAfterRejection, true);
     assert.equal(acquired, 0);
     assert.equal(existsSync(join(root, "projects")), false);
     assert.ok(events.some(event => event.type === "run.failed" && event.commandId === "scope-rejected"));
@@ -6367,4 +6383,170 @@ test("runtime admission defers Codex while Claude executes", { timeout: 10_000 }
 
   assert.equal(events.some((event) => event.type === "run.failed" && event.commandId === "cmd_busy_2"), true);
   assert.equal(events.some((event) => event.type === "run.completed" && event.commandId === "cmd_busy_1"), true);
+});
+
+test('text log retention bounds aggregate and completed-run files', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-log-bounds-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const config = { workspacePath: root, sandboxId: 'bounded', logDir: root,
+    maxFileBytes: 1024, maxRunBytes: 2048, maxRunFiles: 3, maxQueueBytes: 4096 };
+  const logger = createDaemonLogger(config);
+  for (let i = 0; i < 20; i++) {
+    logger.output({ stream: 'stderr', text: 'x'.repeat(300), runId: `run-${i}` });
+    await logger.flush?.();
+  }
+  await logger.close?.();
+  const { statSync } = await import('node:fs');
+  const files = readdirSync(root).filter(name => name !== 'bounded.log' && name !== 'bounded.log.1');
+  assert.ok(files.length <= 3, `retained ${files.length} run logs`);
+  for (const name of readdirSync(root)) assert.ok(statSync(join(root, name)).size <= 2048, name);
+});
+
+for (const batching of [false, true]) test(`production output capture coalesces behind unacknowledged durable reports (batching=${batching})`, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-capture-pressure-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const command = { ...runCommand('coalesced'), workspacePath: root };
+  let served = false;
+  const outputs = new Set<string>();
+  const terminals: DaemonNodeEvent[] = [];
+  const daemon = runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'sbx_test', userId: 'alice', token: 'node_token',
+    workspacePath: root, stateDir: join(root, 'state'), logger: testLogger(), signal: stop.signal,
+    pollIntervalMs: 5, shutdownGraceMs: 50,
+    environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
+      if (!isInventoryProbe(args)) {
+        for (let i = 0; i < 20; i++) {
+          options?.stdoutRenderer?.('small output\n');
+          await new Promise(resolve => setTimeout(resolve, 15));
+        }
+      }
+      return { exit_code: 0, stdout: 'done', stderr: '' };
+    } }),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === '/api') return jsonResponse({});
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse(batching ? { heartbeat: { intervalMs: 6000, timeoutMs: 30000, features: ['durable-reports', 'report-batches'] } } : {});
+      if (path.endsWith('/commands')) { const commands = served ? [] : [command]; served = true; return jsonResponse({ commands }); }
+      if (path.endsWith('/reports')) {
+        const { reports } = await jsonBody<{ reports: Array<{ body: string }> }>(init);
+        for (const report of reports) { const event = JSON.parse(report.body); if (event.type === 'run.output.batch') outputs.add(JSON.stringify(event.entries)); }
+        return jsonResponse({}, 503);
+      }
+      if (path.endsWith('/events')) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        if (event.type === 'run.output.batch') { outputs.add(JSON.stringify(event.entries)); return jsonResponse({}, 503); }
+        if (['run.completed', 'run.failed', 'run.cancelled'].includes(event.type)) { terminals.push(event); stop.abort(); }
+        return jsonResponse({});
+      }
+      throw new Error(`unexpected URL ${path}`);
+    },
+  });
+  await daemon;
+  assert.equal(terminals[0]?.type, 'run.completed', JSON.stringify(terminals));
+  assert.ok(outputs.size > 0, 'the agent must emit actual captured output');
+  const retained = readdirSync(join(root, 'state', 'terminal-events')).filter(name => name.endsWith('.json'))
+    .map(name => JSON.parse(readFileSync(join(root, 'state', 'terminal-events', name), 'utf8')))
+    .filter(event => event.type === 'run.output.batch');
+  assert.ok(retained.length <= 2, `captured ${retained.length} tiny batches behind failed delivery`);
+});
+
+test('failed production diagnostics back off without suppressing heartbeat probes', { timeout: 10_000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-diagnostics-backoff-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  let diagnostics = 0;
+  let heartbeats = 0;
+  const warnings: string[] = [];
+  const heartbeat = { intervalMs: 100, timeoutMs: 1000, features: ['durable-reports', 'transport-status'] };
+  const timeout = setTimeout(() => stop.abort(), 2200);
+  t.after(() => clearTimeout(timeout));
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'diagnostics-backoff', userId: 'alice', token: 'fixture',
+    workspacePath: root, stateDir: join(root, 'state'), preflight: false,
+    logger: { ...testLogger(), warn: (message, fields) => { warnings.push(`${message} ${fields?.error ?? ''}`); } },
+    environment: fakeEnvironment(), signal: stop.signal, pollIntervalMs: 20,
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({ heartbeat });
+      if (path.endsWith('/commands')) return jsonResponse({ commands: [], heartbeat });
+      if (path.endsWith('/heartbeat')) { heartbeats++; return jsonResponse({ heartbeat }); }
+      if (path.endsWith('/transport')) {
+        diagnostics++;
+        throw new TypeError('fetch failed', { cause: Object.assign(new Error('lookup failed'), { code: 'ENOTFOUND' }) });
+      }
+      throw new Error(`Unexpected URL ${path}`);
+    },
+  });
+  assert.equal(diagnostics, 1, 'a failed diagnostics upload must not retry every sample');
+  assert.ok(heartbeats > 1, 'liveness probing must continue independently');
+  assert.equal(warnings.filter(message => message.startsWith('Transport diagnostics')).length, 1);
+  assert.ok(warnings.some(message => /ENOTFOUND/.test(message)));
+});
+
+for (const rejectedStart of [false, true]) test(`failed control acknowledgement cannot stall command polling (rejectedStart=${rejectedStart})`, { timeout: 5000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-poll-control-report-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const timer = setTimeout(() => stop.abort(), 400);
+  t.after(() => clearTimeout(timer));
+  let polls = 0;
+  let reports = 0;
+  const start = { ...runCommand('blocked-control'), workspacePath: root, workspaceLayout: 'project' as const, workspaceSubpath: '../escape' };
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'control-poll', userId: 'alice', token: 'fixture',
+    workspacePath: root, stateDir: join(root, 'state'), preflight: false, pollIntervalMs: 10,
+    environment: fakeEnvironment(), logger: testLogger(), signal: stop.signal,
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({});
+      if (path.endsWith('/commands')) {
+        polls++;
+        return jsonResponse({ commands: polls === 1 ? [rejectedStart ? start : {
+          type: 'run.cancel', id: 'stop-control', commandId: start.id,
+          sessionId: start.sessionId, runId: start.runId, agent: start.agent,
+        }] : [] });
+      }
+      if (path.endsWith('/events')) { reports++; return jsonResponse({}, 503); }
+      throw new Error(`Unexpected ${path}`);
+    },
+  });
+  assert.ok(reports > 0, 'the failed report must actually be attempted');
+  assert.ok(polls > 1, `only ${polls} poll while event ingestion is unavailable`);
+  const pending = readdirSync(join(root, 'state', 'terminal-events')).filter(name => name.endsWith('.json'));
+  assert.equal(pending.length, 1, 'the acknowledgement remains durable for recovery');
+});
+
+test('control-report capture failure protects storage without crashing command polling', { timeout: 5000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-control-capture-fault-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const prior = process.env.RELAY_DAEMON_REPORT_STORAGE_BYTES;
+  process.env.RELAY_DAEMON_REPORT_STORAGE_BYTES = '1';
+  t.after(() => restoreEnv('RELAY_DAEMON_REPORT_STORAGE_BYTES', prior));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const timeout = setTimeout(() => stop.abort(), 200);
+  t.after(() => clearTimeout(timeout));
+  let polls = 0;
+  const warnings: string[] = [];
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'control-capture-fault', userId: 'alice', token: 'fixture',
+    workspacePath: root, stateDir: join(root, 'state'), preflight: false, pollIntervalMs: 10,
+    environment: fakeEnvironment(), signal: stop.signal,
+    logger: { ...testLogger(), error: message => warnings.push(message) },
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({});
+      if (path.endsWith('/commands')) {
+        polls++;
+        return jsonResponse({ commands: polls === 1 ? [{ type: 'run.cancel', id: 'cancel', commandId: 'target', sessionId: 's', runId: 'r', agent: 'codex' }] : [] });
+      }
+      throw new Error('No report may be sent without durable capture');
+    },
+  });
+  assert.ok(polls > 1);
+  assert.ok(warnings.includes('cancel acknowledgement capture failed'));
 });

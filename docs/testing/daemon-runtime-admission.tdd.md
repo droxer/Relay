@@ -82,3 +82,8 @@ nonblocking command-report queue while retaining runtime admission reasons and
 refused-command fencing. After resolution: TypeScript compilation, 16 focused
 backend tests, and 20 daemon admission/replay/shutdown/polling checks passed.
 The full backend suite result above predates this integration merge.
+
+A second main update landed during PR creation. Preserved its durable admission
+ledger, bounded log/output resources, and nonblocking capture diagnostics. The
+combined branch passed TypeScript compilation plus 22 targeted daemon/resource
+checks after resolving the import and appended-test conflicts.

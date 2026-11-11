@@ -1,3 +1,4 @@
+import { ExecutionCleanupError, ExecutionDeadlineError, withExecutionDeadline } from "./execution-deadline.js";
 import { resolve } from "node:path";
 import type { ExecutionManager } from "./execution.js";
 import type { ActiveOrchestratorSession } from "./sandbox-session.js";
@@ -11,6 +12,9 @@ export interface GuestStartInput {
 export interface GuestPoolOptions {
   /** Most guests booted at once; the daemon passes its run capacity. */
   capacity: number;
+  bootTimeoutMs?: number;
+  closeTimeoutMs?: number;
+  onUnconfirmed?(error: unknown): void;
   boxName(slot: number): string;
   createManager(): ExecutionManager;
   start(input: GuestStartInput): Promise<ActiveOrchestratorSession>;
@@ -27,6 +31,8 @@ interface Guest {
   readonly slot: number;
   readonly manager: ExecutionManager;
   readonly starting: Promise<ActiveOrchestratorSession>;
+  readonly started: () => boolean;
+  readonly rawStarting: Promise<ActiveOrchestratorSession>;
   booted: boolean;
   users: number;
   lastReleasedAt: number;
@@ -45,8 +51,9 @@ interface Guest {
 export class GuestPool {
   private readonly guests = new Map<string, Guest>();
   private readonly freeSlots: number[];
-  private waiters: Array<() => void> = [];
+  private waiters = new Set<() => void>();
   private closed = false;
+  private readonly retiring = new Set<Promise<void>>();
 
   constructor(private readonly options: GuestPoolOptions) {
     const capacity = Math.max(1, Math.floor(options.capacity));
@@ -59,7 +66,7 @@ export class GuestPool {
     for (;;) {
       this.assertOpen(signal);
       const guest = this.guests.get(workspace) ?? this.claimSlot(workspace);
-      if (guest) return this.lease(guest);
+      if (guest) return this.lease(guest, signal);
       await this.nextRelease(signal);
     }
   }
@@ -73,7 +80,7 @@ export class GuestPool {
     this.assertOpen(signal);
     // Prefer a guest that is already up; one still booting may yet fail.
     const booted = [...this.guests.values()].find((guest) => guest.booted);
-    return booted ? this.lease(booted) : this.acquire(fallbackWorkspace, signal);
+    return booted ? this.lease(booted, signal) : this.acquire(fallbackWorkspace, signal);
   }
 
   /** Whether `acquireAny` would borrow a booted guest instead of booting one. */
@@ -86,14 +93,15 @@ export class GuestPool {
     this.wake();
     const guests = [...this.guests.values()];
     this.guests.clear();
-    await Promise.all(guests.map((guest) => stopGuest(guest)));
+    await withExecutionDeadline(Promise.all([...guests.map((guest) => stopGuest(guest)), ...this.retiring]),
+      this.options.closeTimeoutMs ?? 10_000, "Guest pool shutdown");
   }
 
   private claimSlot(workspace: string): Guest | undefined {
     const free = this.freeSlots.shift();
     if (free !== undefined) return this.boot(workspace, free);
     const idle = [...this.guests.values()]
-      .filter((guest) => guest.users === 0)
+      .filter((guest) => guest.users === 0 && guest.booted)
       .sort((left, right) => left.lastReleasedAt - right.lastReleasedAt)[0];
     if (!idle) return undefined;
     this.guests.delete(idle.workspace);
@@ -104,23 +112,41 @@ export class GuestPool {
     const manager = this.options.createManager();
     const boxName = this.options.boxName(slot);
     // The replaced guest owns this slot's box name until it has stopped.
-    const starting = previous.then(() => this.options.start({ workspace, boxName, manager }));
-    const guest: Guest = { workspace, slot, manager, starting, booted: false, users: 0, lastReleasedAt: 0 };
+    let started = false;
+    const rawStarting = previous.then(() => {
+      started = true;
+      return this.options.start({ workspace, boxName, manager });
+    });
+    const starting = withExecutionDeadline(rawStarting, this.options.bootTimeoutMs ?? 60_000, "Guest boot");
+    const guest: Guest = { workspace, slot, manager, starting, rawStarting, started: () => started, booted: false, users: 0, lastReleasedAt: 0 };
     this.guests.set(workspace, guest);
-    starting.then(() => { guest.booted = true; }, () => {
+    void starting.then(() => { guest.booted = true; this.wake(); }, (error: unknown) => {
       if (this.guests.get(workspace) === guest) this.guests.delete(workspace);
-      if (!this.closed) this.freeSlots.push(slot);
+      if (error instanceof ExecutionDeadlineError) {
+        // The timeout is not exit proof. Cleanup a late boot before reusing its slot.
+        const retirement = stopGuest(guest);
+        this.retiring.add(retirement);
+        void retirement.then(() => {
+          this.retiring.delete(retirement);
+          if (!this.closed) this.freeSlots.push(slot);
+          this.wake();
+        }, failure => { this.options.onUnconfirmed?.(failure); });
+      } else if (started && !(error instanceof ExecutionCleanupError)) {
+        if (!this.closed) this.freeSlots.push(slot);
+      } else this.options.onUnconfirmed?.(error); // Previous occupant could not be stopped.
       this.wake();
     });
     return guest;
   }
 
-  private async lease(guest: Guest): Promise<GuestLease> {
+  private async lease(guest: Guest, signal?: AbortSignal): Promise<GuestLease> {
     guest.users++;
     try {
-      await guest.starting;
+      await waitForGuest(guest.starting, signal);
+      this.assertOpen(signal);
     } catch (error) {
       guest.users--;
+      this.wake();
       throw error;
     }
     let released = false;
@@ -140,17 +166,18 @@ export class GuestPool {
   private nextRelease(signal?: AbortSignal): Promise<void> {
     return new Promise((resolveWait) => {
       const done = (): void => {
+        this.waiters.delete(done);
         signal?.removeEventListener("abort", done);
         resolveWait();
       };
-      this.waiters.push(done);
+      this.waiters.add(done);
       signal?.addEventListener("abort", done, { once: true });
     });
   }
 
   private wake(): void {
     const waiters = this.waiters;
-    this.waiters = [];
+    this.waiters = new Set();
     for (const waiter of waiters) waiter();
   }
 
@@ -161,10 +188,21 @@ export class GuestPool {
 }
 
 async function stopGuest(guest: Guest): Promise<void> {
-  try {
-    const active = await guest.starting;
-    await active.close();
-  } catch {
-    // The guest never came up; nothing to tear down.
-  }
+  let active: ActiveOrchestratorSession;
+  try { active = await guest.rawStarting; }
+  catch (error) { if (!guest.started() || error instanceof ExecutionCleanupError) throw error; return; } // Startup owns cleanup on failure.
+  // A teardown failure must not be mistaken for a free slot.
+  await active.close();
+}
+
+async function waitForGuest<T>(starting: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return starting;
+  if (signal.aborted) throw new Error("Guest acquisition cancelled.");
+  let onAbort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new Error("Guest acquisition cancelled."));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try { return await Promise.race([starting, aborted]); }
+  finally { signal.removeEventListener("abort", onAbort); }
 }
