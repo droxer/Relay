@@ -113,12 +113,12 @@ async function serveRouteWork(page: import("@playwright/test").Page) {
 const routeSurfaces = [
   { path: "/projects", title: "Projects", selected: "projects", rows: 0, folders: 2 },
   { path: "/projects/launch", title: "Projects", selected: "projects", rows: 0, folders: 2 },
-  { path: "/projects/launch/threads/project-task", title: "Threads", selected: "threads", rows: 3, folders: 0 },
-  { path: "/projects/launch/threads/project-automation", title: "Threads", selected: "threads", rows: 3, folders: 0 },
-  { path: "/projects/launch/new", title: "Threads", selected: "threads", rows: 3, folders: 0 },
+  { path: "/projects/launch/threads/project-task", title: "Threads", selected: "threads", rows: 7, folders: 0 },
+  { path: "/projects/launch/threads/project-automation", title: "Threads", selected: "threads", rows: 7, folders: 0 },
+  { path: "/projects/launch/new", title: "Threads", selected: "threads", rows: 7, folders: 0 },
   { path: "/threads", title: "Threads", selected: "threads", rows: 7, folders: 0 },
-  { path: "/computers/route-computer/threads/task", title: "Threads", selected: "threads", rows: 3, folders: 0 },
-  { path: "/computers/route-computer/threads/automation", title: "Threads", selected: "threads", rows: 3, folders: 0 },
+  { path: "/computers/route-computer/threads/task", title: "Threads", selected: "threads", rows: 7, folders: 0 },
+  { path: "/computers/route-computer/threads/automation", title: "Threads", selected: "threads", rows: 7, folders: 0 },
 ] as const;
 
 for (const mobile of [false, true]) {
@@ -136,15 +136,13 @@ for (const mobile of [false, true]) {
         await expect(rail.locator(".project-folder")).toHaveCount(surface.folders);
         await expect(page.locator(`.sidenav-nav [data-nav="${surface.selected}"]`)).toHaveAttribute("aria-current", "page");
         await expect(page.locator('.sidenav-nav [aria-current="page"]')).toHaveCount(1);
-        if (surface.rows === 3) {
-          const projectId = surface.path.startsWith("/projects/") ? "launch" : null;
-          await expect(rail.locator(".conversation-name")).toHaveText(routeThreads.filter(thread => thread.projectId === projectId).map(thread => thread.title));
-        }
         if (surface.rows === 7) {
           await expect(rail.locator(".conversation-name")).toHaveText(routeThreads.map(thread => thread.title));
         }
-        if (surface.path.startsWith("/computers/")) {
-          await expect(rail.locator(".computer-workspace-tabs")).toHaveCount(0);
+        if (surface.selected === "threads") {
+          await expect(rail.locator(".computer-workspace-nav")).toHaveCount(0);
+          await expect(rail.locator('[name="thread-project-filter"]')).toHaveCount(1);
+          await expect(page.locator('.messenger-shell')).toHaveAttribute("data-route", "main");
         }
       }
     });
@@ -156,7 +154,7 @@ test("project thread, Projects link, and browser history keep their matching lis
   await page.goto("/threads");
   await page.locator("#thread-panel .conversation-row-inner").filter({ hasText: "Route project-task" }).click();
   await expect(page).toHaveURL(/\/projects\/launch\/threads\/project-task$/);
-  await expect(page.locator('#thread-panel .conversation-row')).toHaveCount(3);
+  await expect(page.locator('#thread-panel .conversation-row')).toHaveCount(7);
   await page.locator('.sidenav-nav [data-nav="projects"]').click();
   await expect(page).toHaveURL(/\/projects$/);
   await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Projects");
@@ -176,7 +174,7 @@ test("project thread creation and mobile Back stay in Threads", async ({ page })
   await serveRouteWork(page);
   await page.goto("/projects/launch/threads/project-task");
   await page.locator("#thread-panel").getByRole("button", { name: "New thread", exact: true }).click();
-  await expect(page).toHaveURL(/\/projects\/launch\/new$/);
+  await expect(page).toHaveURL(/\/threads\/new$/);
   await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Threads");
   await expect(page.locator('.sidenav-nav [data-nav="threads"]')).toHaveAttribute("aria-current", "page");
   await page.setViewportSize({ width: 390, height: 844 });
@@ -185,4 +183,35 @@ test("project thread creation and mobile Back stay in Threads", async ({ page })
   await expect(page).toHaveURL(/\/threads$/);
   await expect(page.locator("#thread-panel")).toBeVisible();
   await expect(page.locator('#thread-panel .conversation-row')).toHaveCount(7);
+});
+
+test("all thread routes share list controls, geometry, search and creation", async ({ page }, testInfo) => {
+  await serveRouteWork(page);
+  let baseline: unknown;
+  for (const path of ["/threads", "/projects/launch/threads/project-task", "/computers/route-computer/threads/task"]) {
+    await page.goto(path);
+    const rail = page.locator("#thread-panel");
+    await expect(rail.locator(".conversation-row")).toHaveCount(7);
+    const layout = await rail.evaluate(element => {
+      const style = (selector: string) => {
+        const node = selector === ".conversation-row"
+          ? element.querySelector('strong[title="Route other-chat"]')!.closest("li")!
+          : element.querySelector(selector)!;
+        const css = getComputedStyle(node);
+        return { height: node.getBoundingClientRect().height, padding: css.padding,
+          fontSize: css.fontSize, background: css.backgroundColor, gap: css.gap };
+      };
+      return { header: style(".page-header"), filters: style(".list-filter-bar"), row: style(".conversation-row") };
+    });
+    if (baseline) expect(layout).toEqual(baseline);
+    else baseline = layout;
+    await rail.screenshot({ path: testInfo.outputPath(`${path.includes("projects") ? "project" : path.includes("computers") ? "task" : "global"}-thread-list.png`) });
+    const search = rail.locator('input[name="thread-search"]');
+    await search.fill("Route automation");
+    await expect(rail.locator(".conversation-name")).toHaveText(["Route automation"]);
+    await search.fill("");
+    await expect(rail.locator(".conversation-row")).toHaveCount(7);
+    await rail.getByRole("button", { name: "New thread", exact: true }).click();
+    await expect(page).toHaveURL(/\/threads\/new$/);
+  }
 });

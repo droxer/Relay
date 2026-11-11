@@ -113,7 +113,7 @@ export function useAppRouter({
   const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null, _taskId?: string | null, computerId?: string | null) => {
     const state: AppLocationState = {
       route: projectId ? "projects" : "main",
-      computerId: projectId ? null : computerId ?? locationState.computerId,
+      computerId: projectId ? null : computerId ?? (sessionId ? locationState.computerId : null),
       mobileView: "chat", sessionId, projectId: projectId ?? null,
       composingNew: sessionId === null,
     };

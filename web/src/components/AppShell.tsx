@@ -200,7 +200,8 @@ export function AppShell({
     [isAdmin, t],
   );
 
-  const topbar = mobileTopbarMode({ route, notFound, taskThread, taskWorkspace, mobileView });
+  const surfaceRoute = threadOpen && !notFound ? "main" : route;
+  const topbar = mobileTopbarMode({ route: surfaceRoute, notFound, taskThread: taskThread && !threadOpen, taskWorkspace, mobileView });
   const isMobileChat = topbar.chat;
   const directoryLabel = t(topbar.directoryKey);
   const mobileTitle = topbar.titleKey === null ? activeThreadLabel : t(topbar.titleKey);
@@ -218,7 +219,7 @@ export function AppShell({
       className="messenger-shell"
       data-mobile-view={mobileView}
       data-mobile-chat={isMobileChat || undefined}
-      data-route={route}
+      data-route={surfaceRoute}
       data-task-thread={taskThread || undefined}
       data-task-workspace={taskWorkspace || undefined}
       data-sidenav={sidenavExpanded ? "open" : "closed"}

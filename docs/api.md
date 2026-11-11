@@ -1424,7 +1424,7 @@ must persist with the daemon host; deleting it requires a new provisioning grant
 
 The global Threads list includes standalone conversations, Task threads, and
 Automation run threads across all Projects. Project conversations use
-`/projects/{projectId}/threads/{threadId}` and display their sibling threads;
+`/projects/{projectId}/threads/{threadId}` and display the same global thread list;
 new Project conversations use `/projects/{projectId}/new`. Both select Threads
 in the sidebar. The conversation's mobile Back control returns to Threads.
 
