@@ -6,6 +6,8 @@ interface ThreadComposerSelectionInput {
   sessionId: string | undefined;
   composingNew: boolean;
   targetsReady: boolean;
+  /** Summary participants cannot identify the agent of the latest task run. */
+  threadDetailsReady?: boolean;
   teamIds: readonly string[];
   /** The agent the open thread runs (`threadOwnAgentId`), once the roster knows it. */
   roleBindingKey?: string;
@@ -13,7 +15,7 @@ interface ThreadComposerSelectionInput {
 }
 
 /** Restore automatic thread selection too, and validate only a loaded roster. */
-export function useThreadComposerSelection({ sessionId, composingNew, targetsReady, teamIds, threadAgent, roleBindingKey }: ThreadComposerSelectionInput) {
+export function useThreadComposerSelection({ sessionId, composingNew, targetsReady, threadDetailsReady = true, teamIds, threadAgent, roleBindingKey }: ThreadComposerSelectionInput) {
   const restoredSessionId = useRef<string | undefined>(undefined);
   const restoredBinding = useRef<string | undefined>(undefined);
   const defaultedSessionId = useRef<string | undefined>(undefined);
@@ -49,11 +51,11 @@ export function useThreadComposerSelection({ sessionId, composingNew, targetsRea
   const threadAgentId = threadAgent?.id;
   const threadAgentKind = threadAgent?.executorKind;
   useEffect(() => {
-    if (composingNew || !sessionId || !threadAgentId || !threadAgentKind) return;
+    if (composingNew || !sessionId || !threadAgentId || !threadAgentKind || !threadDetailsReady) return;
     if (defaultedSessionId.current === sessionId) return;
     defaultedSessionId.current = sessionId;
     defaultThreadPick(sessionId, { id: threadAgentId, executorKind: threadAgentKind });
-  }, [composingNew, defaultThreadPick, sessionId, threadAgentId, threadAgentKind]);
+  }, [composingNew, defaultThreadPick, sessionId, threadAgentId, threadAgentKind, threadDetailsReady]);
 
   useEffect(() => {
     if (!targetsReady || (!composingNew && !sessionId)) return;
