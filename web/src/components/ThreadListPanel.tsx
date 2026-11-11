@@ -15,10 +15,7 @@ import { buildThreadWaitIndex } from "../lib/awaitingInput";
 import { limitThreadGroups, railLimitFor, RAIL_PAGE_SIZE } from "../lib/threads";
 import { useStableCallback } from "@/hooks/useStableCallback";
 import { projectThreadBuckets } from "../lib/threads";
-import {
-  projectDirectoryState,
-  projectFolderSelection,
-} from "../lib/projectDirectory";
+import { projectDirectoryState } from "../lib/projectDirectory";
 import {
   clampThreadListWidth,
   maxThreadListWidth,
@@ -190,7 +187,7 @@ export function ThreadListPanel({
               key={item.session.id}
               item={item}
               tone={section.tone}
-              layout={directoryMode === "projects" ? "nested" : "full"}
+              layout="full"
               selected={selectedSessionId === item.session.id}
               onSelect={selectThread}
               onRename={renameThread}
@@ -277,13 +274,8 @@ export function ThreadListPanel({
         // mode the list must keep conversation-list's tight single-line gap.
         className={directoryMode === "projects" ? "conversation-list project-directory" : "conversation-list"}
       >
-        {directoryMode === "projects" && hierarchy ? hierarchy.projects.map(({ project, threads: projectThreads }) => {
-          const selection = projectFolderSelection({
-            projectId: project.id,
-            selectedProjectId,
-            selectedSessionId,
-            threadIds: projectThreads.map((item) => item.session.id),
-          });
+        {directoryMode === "projects" && hierarchy ? hierarchy.projects.map(({ project }) => {
+          const selection = selectedProjectId === project.id ? "selected" : null;
           return (
           <section key={project.id} className={`project-folder${selection ? ` ${selection}` : ""}${project.archivedAt ? " archived" : ""}`}>
             {/* The folder header is a rail row like any other — `.rail-row` +
@@ -321,7 +313,6 @@ export function ThreadListPanel({
                 ) : null}
               </Button>
             </div>
-            {selectedProjectId === project.id ? renderThreads() : null}
           </section>
         )}) : renderThreads()}
         {/* The rail is too narrow for a doodle, so the vignette is dropped;

@@ -237,6 +237,13 @@ for (const mobile of [false, true]) {
       if (path.endsWith("/runs")) body = { runs: [{ ...task, taskId: "t", latestSessionId: "s", startedAt: stamp, endedAt: stamp, artifactCount: 0 }] };
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
     });
+    await page.goto("/projects/p");
+    if (mobile) await page.getByRole("button", { name: "Projects", exact: true }).click();
+    const projectList = page.locator("#thread-panel");
+    const projectRow = projectList.getByRole("button", { name: "Launch · 0 agents", exact: true });
+    await expect(projectRow).toBeVisible();
+    if (!mobile) await expect(projectRow).toHaveAttribute("aria-current", "page");
+    await expect(projectList.getByText("Release discussion", { exact: true })).toHaveCount(0);
     await page.goto("/projects/p/threads/s");
     await expect(page).toHaveURL(/\/projects\/p\/threads\/s$/);
     await expect(page.locator("#chat-panel")).toBeVisible();
