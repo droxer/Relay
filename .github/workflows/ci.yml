@@ -82,6 +82,17 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - run: npm ci
       - run: uv sync --project backend --locked --extra dev
+      - name: Use Ubuntu archives for browser dependencies
+        # The runner's Azure-first mirror list can stall on DNS failures.
+        # Change only its URI; retain suites, components, and signing keys.
+        run: |
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          path = Path("/etc/apt/sources.list.d/ubuntu.sources")
+          path.write_text(path.read_text().replace(
+              "mirror+file:/etc/apt/apt-mirrors.txt", "https://archive.ubuntu.com/ubuntu/",
+          ))
+          PY
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
         working-directory: web
