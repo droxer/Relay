@@ -2,7 +2,7 @@ import { existsSync, chmodSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { relayApiUrl } from 'relay-core/api-url';
-import { installRelayMcp, privateWrite } from './relay-mcp-install.js';
+import { installRelayMcp, McpInstallError, privateWrite } from './relay-mcp-install.js';
 
 export class McpSetupError extends Error {
   constructor(readonly code: string, readonly blocked = false) { super(code); }
@@ -43,12 +43,17 @@ export function configureRelayMcp(options: {
   privateWrite(configFile, JSON.stringify({ backendUrl: options.backendUrl, tokenFile }));
   chmodSync(configFile, 0o600);
   const suffix = createHash('sha256').update(`${options.backendUrl}:${options.sandboxId}`).digest('hex').slice(0, 8);
-  const installed: string[] = []; const conflicts: string[] = [];
+  const installed: string[] = []; const failures: string[] = []; let blocked = false;
   for (const runtime of options.runtimes) {
     try { installed.push(...installRelayMcp({ home: options.home, runtimes: [runtime], configFile, serverName: `relay-projects-${suffix}`, env: options.env ?? process.env })); }
-    catch { conflicts.push(runtime); }
+    catch (error) {
+      if (error instanceof McpInstallError) {
+        failures.push(`${error.code} (${runtime}): ${error.message}`);
+        blocked ||= error.blocked;
+      } else failures.push(`mcp_installation_failed (${runtime}): setup failed; check filesystem access and retry.`);
+    }
   }
-  if (conflicts.length) throw new McpSetupError(`mcp_configuration_conflict (${conflicts.join(', ')}): check runtime configuration and Relay MCP installation lock`, true);
+  if (failures.length) throw new McpSetupError(failures.join('; '), blocked);
   return installed;
 }
 export interface McpSetupStatus { status: 'ready'|'retrying'|'blocked'; runtimes: string[]; code?: string; checkedAt: number }
