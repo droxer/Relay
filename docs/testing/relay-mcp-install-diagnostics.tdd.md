@@ -70,3 +70,42 @@ User-owned entries, ownership manifests, and lock safety checks retain their
 existing protections. No account credentials or third-party resources changed.
 The affected Computer needs the updated client to report its specific cause;
 this change does not silently overwrite a genuinely conflicting configuration.
+
+## CI follow-up: scheduler admission racing a manual Task start
+
+The failed [concurrency CI run](https://github.com/droxer/Relay/actions/runs/43030762809)
+uploaded a trace showing an earlier failure hidden by teardown. The scheduler
+admitted the first capacity-blocker Task after the manual start promoted it from
+Backlog to Ready. The manual caller then claimed the same Task after the
+scheduler released its dispatch claim, linked a second Thread, and failed with
+`task_ownership_conflict`. The test observed that second Thread as terminal;
+cleanup stopped it but left the original run active. DELETE correctly returned
+409 `task_execution_active`.
+
+Two deterministic interleavings in
+`test_manual_start_preserves_a_scheduler_run_admitted_during_preparation`
+admit a real scheduler run either after manual routing or immediately before the
+database claim. Both failed before the fix and passed afterward:
+
+```sh
+PYTHONPATH=backend backend/.venv/bin/python -m pytest \
+  backend/tests/unit/test_task_dispatch.py -k admitted_during_preparation -q
+```
+
+The manual path now rechecks for active execution after routing. The existing
+row-locked claim also compares the routed Task's execution revision, protecting
+both manual and scheduler callers if another admission wins after the check.
+The losing caller leaves exactly one linked Thread, one command, revision 1,
+and no retained dispatch claim; it neither blocks the Task nor changes the
+admitted execution. RED checkpoint: `dfa157f2`; GREEN checkpoint: `1e17d778`.
+
+- Full browser/backend/daemon suite: `UV_NO_SYNC=1 npm exec -w web -- playwright test -c playwright.concurrency.config.ts`
+  passed all four tests, including the reported Automation test.
+- Related dispatch, scheduler, ownership, dispatch-result, concurrency, layering,
+  and module-size Python tests passed: 73 passed, two skipped.
+- Full production web export passed after installing the locked dependencies
+  locally. Ruff passed; mypy reported no issues in 459 source files. Pre-commit
+  checks, including the web typecheck, passed.
+- Teardown assertions now include the Task ID, DELETE status and response body.
+  Temporary timing probes were removed. No execution-recovery or deletion
+  safeguards were relaxed, and no schema migration is required.
