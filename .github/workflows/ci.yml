@@ -83,7 +83,9 @@ jobs:
       - run: npm ci
       - run: uv sync --project backend --locked --extra dev
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        # ubuntu-24.04 already supplies Chromium's native libraries. Avoid
+        # re-installing them through APT, whose mirror DNS can be unavailable.
+        run: npx playwright install chromium
         working-directory: web
       - name: Exercise real backend and daemon through the browser
         run: npm run test:e2e:concurrency -w web

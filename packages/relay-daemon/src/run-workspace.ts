@@ -41,3 +41,15 @@ export function assertRunWorkspaceScope(command: DaemonNodeRunCommand, computerI
     if (layout !== "task" || (path !== `tasks/${owner}` && !(scope.automationId && path === `tasks/${owner}/${scope.taskId}`))) fail();
   } else if (layout !== "thread" || scope.automationId) fail();
 }
+
+/** "project" and "task" both resolve to a shared durable subpath below the node root. */
+export function durableWorkspaceLayout(layout: string | undefined): boolean {
+  return layout === "project" || layout === "task";
+}
+
+export function requiredWorkspaceSubpath(command: { workspaceSubpath?: string }): string {
+  if (!command.workspaceSubpath) {
+    throw new Error("Durable workspace command is missing workspaceSubpath.");
+  }
+  return command.workspaceSubpath;
+}

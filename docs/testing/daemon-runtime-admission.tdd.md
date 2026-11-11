@@ -74,3 +74,11 @@ remain the next stages in the design. No hosted deployment or throughput
 benchmark was performed. The new cross-replica tests use independent SQLite store
 instances; PostgreSQL row-lock concurrency tests require a PostgreSQL test service.
 Backend rollout precedes daemon rollout for retryable admission negotiation.
+
+## PR integration check
+
+Merged current `origin/main` before opening the PR. Preserved its bounded,
+nonblocking command-report queue while retaining runtime admission reasons and
+refused-command fencing. After resolution: TypeScript compilation, 16 focused
+backend tests, and 20 daemon admission/replay/shutdown/polling checks passed.
+The full backend suite result above predates this integration merge.
