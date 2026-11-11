@@ -88,7 +88,7 @@ The first broad backend attempt was interrupted after 760 passes, seven skips, a
 
 The [heartbeat guide](../guides/node-heartbeats.md#daemon-resource-bounds) documents budgets, diagnostic-log retention, capture latency under pressure, and durable admission backups. No wire protocol, database schema, or credential format changed. Execution evidence remains separate from diagnostic logs. Timeout alone never proves guest exit.
 
-Tests use controlled guest lifecycles; no real BoxLite boot/stop or fleet load test was performed. The rebuilt installer is local. Running Computers need the updated client before these fixes take effect; this task did not restart or deploy them.
+Tests use controlled guest lifecycles; no real BoxLite boot/stop or fleet load test was performed. The installer was rebuilt locally. A later, separately approved update installed this client on one Computer; that Computer’s HTTP/1.1 preload workaround lives in its local service configuration and is not included in this PR.
 
 
 ## Follow-up for online Computers that stop polling
@@ -114,12 +114,11 @@ node --test --test-name-pattern='scope mismatch|escaping workspaceSubpath|failed
   dist/packages/relay-daemon/tests/daemon.test.js
 ```
 
-The computer's installed LaunchAgent still points at its older release. A
-read-only update dry run found zero journaled executions and 50 retained reports.
-Updating that live service is separate from committing the fix; private report
-and credential state must be preserved. A fresh unauthenticated backend health
-request returned HTTP 200; the original process's low-level connection failure
-remains unclassified until the updated client's error details are available.
+Before the approved live update, a read-only dry run found zero journaled
+executions and 50 retained reports. The later update preserved credentials and
+reports. Production command polls and heartbeats resumed. Some report recovery
+remains blocked by a backend KeyError for a missing thread and quarantined
+cancellation reports; this PR does not claim to fix that backend issue.
 
 The complete affected suite passed all 258 tests after this follow-up:
 
@@ -133,3 +132,20 @@ The package typecheck, rebuilt standalone installer smoke test, `git diff
 --check`, and dependency audit also passed (zero vulnerabilities). The local
 updater was prepared in `/private/tmp/relay-update-b427f8c4.py` and run in its
 read-only mode; no live service update was performed during this verification.
+
+
+## Integration with main
+
+Main's merged PR #747 introduces bounded `CommandTasks` for command work and
+report delivery. Conflict resolution retains that dispatch structure, workspace
+lanes, and lease handling, while keeping this branch's capture-fault protection,
+contextual transport errors, bounded resources, and regression tests. Control
+reports are retained before any background task is submitted; the independent
+outbox also covers a full task queue.
+
+
+Post-merge validation: all 3,213 built Node tests passed across core, daemon,
+supervisor, and web. The 17 backend dispatch tests passed, and backend mypy
+reported no issues in 460 source files. The daemon package and installer were
+rebuilt; dependency audit still reports zero vulnerabilities and the diff
+whitespace check passes.

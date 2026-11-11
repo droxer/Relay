@@ -7,11 +7,17 @@ import { parse as parseToml } from 'smol-toml';
 import { parse, modify, applyEdits, type ParseError } from 'jsonc-parser';
 
 type Runtime = 'codex' | 'claude' | 'kimi' | 'opencode' | 'pi';
+export class McpInstallError extends Error {
+  constructor(readonly code: string, message: string, readonly blocked = true) { super(message); }
+}
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-function json(text: string): any {
+function json(text: string, path: string): any {
   const errors: ParseError[] = []; const value = parse(text, errors, { allowTrailingComma: true });
-  if (errors.length || !value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid runtime configuration; refusing to overwrite it.');
+  if (errors.length || !value || typeof value !== 'object' || Array.isArray(value)) throw new McpInstallError('mcp_invalid_configuration', `Invalid configuration in ${path}; repair the JSON/JSONC before retrying. The file was not changed.`);
   return value;
+}
+function conflict(path: string, serverName: string): never {
+  throw new McpInstallError('mcp_configuration_conflict', `Relay MCP conflict: user owned or modified entry ${serverName} in ${path}; review this entry and the ownership record in installed-servers.json under ~/.relay/mcp before retrying. User changes were preserved.`);
 }
 export function privateWrite(path: string, text: string): void {
   const target = existsSync(path) ? realpathSync(path) : path;
@@ -22,13 +28,25 @@ export function privateWrite(path: string, text: string): void {
 }
 type InstallOptions = { home: string; runtimes: readonly string[]; configFile: string; serverName: string; env?: NodeJS.ProcessEnv };
 export function installRelayMcp(options: InstallOptions): string[] {
+  try { return lockedInstall(options); }
+  catch (error) {
+    if (error instanceof McpInstallError) throw error;
+    // Never forward parser exceptions or raw configuration values into saved
+    // status, doctor output, or installer logs.
+    const errno = (error as NodeJS.ErrnoException | undefined)?.code;
+    const code = typeof errno === 'string' && /^E[A-Z]+$/.test(errno) ? errno : 'unknown';
+    throw new McpInstallError('mcp_installation_failed', `Relay MCP installation failed (${code}); check runtime configuration paths and filesystem permissions. Setup will retry.`, false);
+  }
+}
+function lockedInstall(options: InstallOptions): string[] {
   const root = join(options.home, '.relay', 'mcp');
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const lock = join(root, 'install.lock');
   try { mkdirSync(lock, { mode: 0o700 }); }
-  catch {
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
     const stat = lstatSync(lock);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Unsafe Relay MCP installation lock.');
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new McpInstallError('mcp_unsafe_installation_lock', `Unsafe Relay MCP installation lock at ${lock}; inspect it before retrying.`);
     let stale = false;
     try {
       const owner = JSON.parse(readFileSync(join(lock,'owner.json'),'utf8')) as {pid?:number};
@@ -37,7 +55,7 @@ export function installRelayMcp(options: InstallOptions): string[] {
         catch (error) { stale = (error as NodeJS.ErrnoException).code === 'ESRCH'; }
       }
     } catch { stale = Date.now() - stat.mtimeMs > 120_000; }
-    if (!stale) throw new Error('Another Relay MCP installer is active; retry setup after it finishes.');
+    if (!stale) throw new McpInstallError('mcp_installation_busy', `Another Relay MCP installer is active at ${lock}; setup will retry after it finishes.`, false);
     rmSync(lock,{recursive:true}); mkdirSync(lock,{mode:0o700});
   }
   writeFileSync(join(lock,'owner.json'),JSON.stringify({pid:process.pid}),{mode:0o600,flag:'wx'});
@@ -50,19 +68,21 @@ function install(options: InstallOptions): string[] {
   const server = fileURLToPath(new URL('./relay-mcp.js', import.meta.url));
   const args = [server, '--config', configFile];
   const manifestPath = join(home, '.relay', 'mcp', 'installed-servers.json');
-  const manifest: Record<string, string> = existsSync(manifestPath) ? json(readFileSync(manifestPath, 'utf8')) : {};
+  const manifest: Record<string, string> = existsSync(manifestPath) ? json(readFileSync(manifestPath, 'utf8'), manifestPath) : {};
   const installed: string[] = [];
   for (const runtime of options.runtimes as Runtime[]) {
     let path: string; let keys: string[]; let entry: unknown;
     if (runtime === 'codex') {
       path = join(env.CODEX_HOME ?? join(home, '.codex'), 'config.toml');
       const text = existsSync(path) ? readFileSync(path, 'utf8') : '';
-      const config = parseToml(text) as any;
+      let config: any;
+      try { config = parseToml(text); }
+      catch { throw new McpInstallError('mcp_invalid_configuration', `Invalid configuration in ${path}; repair the TOML before retrying. The file was not changed.`); }
       const current = config.mcp_servers?.[serverName];
       const begin = `# BEGIN RELAY MCP ${serverName}`; const end = `# END RELAY MCP ${serverName}`;
       const marker = text.indexOf(begin); const endIndex = text.indexOf(end, marker);
       const key = `${path}:${serverName}`;
-      if ((current || marker >= 0) && (!manifest[key] || digest(current) !== manifest[key] || marker < 0 || endIndex < 0)) throw new Error(`Relay MCP conflict: user owned or modified entry in ${path}`);
+      if ((current || marker >= 0) && (!manifest[key] || !current || digest(current) !== manifest[key] || marker < 0 || endIndex < 0)) conflict(path, serverName);
       const block = `${begin}\n[mcp_servers.${serverName}]\ncommand = ${JSON.stringify(process.execPath)}\nargs = ${JSON.stringify(args)}\nenv_vars = ["RELAY_MCP_RUN_CONTEXT"]\n${end}\n`;
       const next = marker >= 0 ? text.slice(0, marker) + block + text.slice(endIndex + end.length).replace(/^\r?\n/, '') : text + (text.endsWith('\n') || !text ? '' : '\n') + block;
       const updated = parseToml(next) as any;
@@ -78,12 +98,12 @@ function install(options: InstallOptions): string[] {
         path = join(env.PI_CODING_AGENT_DIR ?? join(home, '.pi', 'agent'), 'extensions', `${serverName}.mjs`);
         const source = piExtension(process.execPath, args, serverName);
         const key = `${path}:${serverName}`;
-        if (existsSync(path) && (!manifest[key] || digest(readFileSync(path, 'utf8')) !== manifest[key])) throw new Error(`Relay MCP conflict: user owned or modified extension in ${path}`);
+        if (existsSync(path) && (!manifest[key] || digest(readFileSync(path, 'utf8')) !== manifest[key])) conflict(path, serverName);
         privateWrite(path, source); manifest[key] = digest(source); privateWrite(manifestPath, JSON.stringify(manifest, null, 2)); installed.push(runtime); continue;
       } else continue;
-      const text = existsSync(path) ? readFileSync(path, 'utf8') : '{}\n'; const config = json(text);
+      const text = existsSync(path) ? readFileSync(path, 'utf8') : '{}\n'; const config = json(text, path);
       const current = config[keys[0]!]?.[keys[1]!]; const key = `${path}:${serverName}`;
-      if (current !== undefined && (!manifest[key] || digest(current) !== manifest[key])) throw new Error(`Relay MCP conflict: user owned or modified entry in ${path}`);
+      if (current !== undefined && (!manifest[key] || digest(current) !== manifest[key])) conflict(path, serverName);
       privateWrite(path, applyEdits(text, modify(text, keys, entry, { formattingOptions: { insertSpaces: true, tabSize: 2 } })));
       manifest[key] = digest(entry);
     }

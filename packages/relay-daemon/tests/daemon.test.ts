@@ -2981,6 +2981,157 @@ test("relay daemon reports a cancel for a run it never received as cancelled", a
   }]);
 });
 
+for (const failure of ["stalled", "unavailable"] as const) {
+  test(`relay daemon keeps polling while a cancellation report is ${failure}`, async () => {
+    const stop = new AbortController();
+    const deadline = setTimeout(() => stop.abort(), 500);
+    let polls = 0;
+    let cancellationAttempts = 0;
+    const lost = runCommand("cmd_lost_start");
+    const cancelCommand: DaemonNodeCommand = {
+      id: "cmd_lost_cancel", type: "run.cancel", commandId: lost.id,
+      targetLeaseId: "lease_lost_start", sessionId: lost.sessionId,
+      runId: lost.runId, agent: lost.agent, reason: "Thread deletion requested.",
+    };
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+        workspacePath: process.cwd(), sandbox: "none", token: "node_token", pollIntervalMs: 5,
+        shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+        environment: fakeEnvironment(),
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/api" || path.endsWith("/daemon-node-registrations")) return jsonResponse({});
+          if (path.endsWith("/commands")) {
+            polls += 1;
+            if (polls >= 3) stop.abort();
+            // Redelivery must not create another concurrent report sender.
+            return jsonResponse({ commands: polls < 3 ? [cancelCommand] : [] });
+          }
+          if (path.endsWith("/events")) {
+            const event = await jsonBody<DaemonNodeEvent>(init);
+            if (event.type === "run.cancelled") {
+              cancellationAttempts += 1;
+              if (failure === "unavailable") return jsonResponse({ error: "temporary" }, 503);
+              return new Promise<Response>((_resolve, reject) => {
+                const abort = () => reject(new Error("Request aborted"));
+                if (init?.signal?.aborted) abort();
+                else init?.signal?.addEventListener("abort", abort, { once: true });
+              });
+            }
+          }
+          return jsonResponse({});
+        },
+      });
+    } finally {
+      clearTimeout(deadline);
+      stop.abort();
+    }
+    assert.equal(polls, 3, "failed cancellation delivery must not block command polls");
+    assert.equal(cancellationAttempts, 1, "redelivery must share the pending report sender");
+    const reports = readdirSync(join(testDaemonStateDir, "terminal-events"))
+      .filter(name => name.endsWith(".json"))
+      .map(name => JSON.parse(readFileSync(join(testDaemonStateDir, "terminal-events", name), "utf8")));
+    assert.ok(reports.some(event => event.type === "run.cancelled"
+      && event.commandId === lost.id && event.leaseId === "lease_lost_start"),
+    "the cancellation must remain durable for replay after shutdown");
+  });
+}
+
+for (const kind of ["workspace.list", "workspace.read", "workspace.link", "workspace.delete", "rejected-start"] as const) {
+  test(`relay daemon keeps polling while ${kind} acknowledgement stalls`, async () => {
+    const root = mkdtempSync(join(tmpdir(), "relay-command-delivery-"));
+    const stop = new AbortController();
+    const deadline = setTimeout(() => stop.abort(), 500);
+    let polls = 0;
+    let reports = 0;
+    const command: DaemonNodeCommand = kind === "rejected-start"
+      ? { ...runCommand("invalid-start"), workspaceLayout: "task", workspaceSubpath: "../escape" }
+      : kind === "workspace.link"
+        ? { id: "cmd", type: kind, leaseId: "lease", workspaceSubpath: "projects/p", hostPath: root, dryRun: true }
+        : kind === "workspace.delete"
+          ? { id: "cmd", type: kind, leaseId: "lease", sessionId: "p", workspaceLayout: "project", workspaceSubpath: "projects/p", path: "" }
+          : { id: "cmd", type: kind, leaseId: "lease", path: "" };
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+        workspacePath: root, sandbox: "none", token: "node_token", pollIntervalMs: 5,
+        shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+        environment: fakeEnvironment(),
+        fetchFn: async (url, init) => {
+          const path = new URL(String(url)).pathname;
+          if (path.endsWith("/commands")) {
+            polls += 1;
+            if (polls > 1 && kind !== "rejected-start") {
+              assert.ok(new URL(String(url)).searchParams.getAll("activeCommandLease").includes("cmd:lease"),
+                "queued workspace work must renew its command lease");
+            }
+            if (polls === 3) stop.abort();
+            return jsonResponse({ commands: polls < 3 ? [command] : [] });
+          }
+          if (path.endsWith("/events")) {
+            reports += 1;
+            return new Promise<Response>((_resolve, reject) => {
+              const abort = () => reject(new Error("Request aborted"));
+              if (init?.signal?.aborted) abort();
+              else init?.signal?.addEventListener("abort", abort, { once: true });
+            });
+          }
+          return jsonResponse({});
+        },
+      });
+      assert.equal(polls, 3, "acknowledgement delivery must not block command polls");
+      assert.equal(reports, 1, "redelivery must share pending command work");
+    } finally {
+      clearTimeout(deadline);
+      stop.abort();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const sandbox of ["none", "boxlite"] as const) {
+  test(`explicit runtime refresh keeps polling on ${sandbox}`, async () => {
+    const stop = new AbortController();
+    let release!: () => void;
+    const probe = new Promise<void>(resolve => { release = resolve; });
+    const deadline = setTimeout(() => { stop.abort(); release(); }, 500);
+    let requested = false;
+    let probing = false;
+    let pollsDuringProbe = 0;
+    try {
+      await runRelayDaemon({
+        backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+        workspacePath: process.cwd(), sandbox, token: "node_token", pollIntervalMs: 5,
+        shutdownGraceMs: 50, logger: testLogger(), signal: stop.signal,
+        environment: {
+          ...fakeEnvironment({ ensure: async () => {
+            if (requested) { probing = true; await probe; }
+          } }),
+          canProbeWithoutBooting: () => sandbox === "none",
+        },
+        fetchFn: async (url) => {
+          if (new URL(String(url)).pathname.endsWith("/commands")) {
+            if (!requested) {
+              requested = true;
+              return jsonResponse({ commands: [{ id: "refresh", type: "runtime.refresh", leaseId: "lease" }] });
+            }
+            if (probing) {
+              const request = new URL(String(url));
+              assert.ok(request.searchParams.getAll("activeCommandLease").includes("refresh:lease"));
+              if (sandbox === "boxlite") assert.equal(request.searchParams.get("admitRuns"), "false");
+              if (++pollsDuringProbe >= 2) { release(); stop.abort(); }
+            }
+            return jsonResponse({ commands: [] });
+          }
+          return jsonResponse({});
+        },
+      });
+      assert.equal(pollsDuringProbe, 2, "runtime probes must run beside command polling");
+    } finally { clearTimeout(deadline); stop.abort(); release(); }
+  });
+}
+
 test("relay daemon advertises five concurrent runs by default", async () => {
   const previous = captureEnv(["RELAY_DAEMON_MAX_CONCURRENT_RUNS"]);
   delete process.env.RELAY_DAEMON_MAX_CONCURRENT_RUNS;
@@ -4304,7 +4455,10 @@ test("relay daemon confines thread workspace reads to the thread directory", asy
     assert.ok(file && file.type === "workspace.file");
     assert.equal(Buffer.from(file.contentBase64 ?? "", "base64").toString(), "thread content");
     const errors = events.filter((event) => event.type === "workspace.error");
-    assert.deepEqual(errors.map((event) => event.code), ["not-found", "invalid-path", "invalid-path", "invalid-path"]);
+    assert.deepEqual(Object.fromEntries(errors.map(event => [event.commandId, event.code])), {
+      cmd_thread_missing: "not-found", cmd_thread_escape: "invalid-path",
+      cmd_thread_bad_id: "invalid-path", cmd_thread_no_id: "invalid-path",
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -5155,7 +5309,6 @@ test("explicit runtime refresh re-registers before the periodic refresh is due",
           served = true;
           return jsonResponse({ commands: [{ id: "refresh-1", type: "runtime.refresh", leaseId: "lease-refresh" }] });
         }
-        if (registrations.length < 2) stop.abort();
         return jsonResponse({ commands: [] });
       }
       if (path.endsWith("/heartbeat")) return jsonResponse({ heartbeat: { intervalMs: 5000, timeoutMs: 15000 } });

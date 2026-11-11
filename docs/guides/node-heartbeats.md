@@ -74,6 +74,23 @@ logging request headers or cause payloads.
 
 ## Alive is not listening
 
+Command handling runs beside polling. Run starts retain their execution capacity
+limit, and cancellations signal active runs immediately. Workspace commands and
+cancellation/rejected-run reports use a background queue with at most 32 admitted
+tasks and four active senders. Requests for the same workspace remain ordered;
+other workspaces can progress independently. Duplicate pending command/lease
+pairs share their task. Polls and heartbeats renew queued workspace and runtime
+refresh leases alongside active run leases, within the wire's 50-lease bound.
+
+Runtime refreshes, including explicit refresh requests, probe in the background.
+An idle BoxLite Computer can boot a guest for the refresh while continuing to
+poll; new runs are deferred while the guest is unavailable. Shutdown aborts
+network work, drops queued workspace requests for lease redelivery, and settles
+active background tasks. Run outcomes enter the durable outbox before queue
+admission; workspace replies continue to rely on command redelivery after a
+restart. Filesystem helpers retain their existing synchronous validation and I/O;
+this scheduling change removes network retry and probe waits from polling.
+
 `online` says the daemon is alive. `dispatchable` says it will take work:
 online, and its last command poll (`lastPollAt`, advanced only by
 `take_commands`) is younger than one maximal poll hold plus the liveness
@@ -150,7 +167,8 @@ reads rather than guaranteed end-to-end dispatch latency under load.
 
 Cancellation acknowledgements for runs that are not executing, and failure
 reports for rejected starts, are durably retained directly from the command
-loop. Their HTTP delivery runs in the independent outbox worker. An unavailable
+loop. Their HTTP delivery runs in bounded background tasks and the independent
+outbox replay worker. An unavailable
 event-ingestion endpoint therefore cannot stop command polling while independent
 heartbeats continue to advertise liveness. A capture failure activates storage
 protection and remains visible without crashing the poll loop.

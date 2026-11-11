@@ -91,7 +91,12 @@ Concurrent installers use an exclusive installation lock with an owner PID;
 a dead owner's lock is reclaimed, while an active installer remains exclusive.
 An unowned lock abandoned before its owner file was written becomes reclaimable
 after two minutes. Configuration conflicts preserve user changes and report the
-affected runtime. Other runtimes are still configured.
+affected runtime, server name, and configuration path for review against the
+ownership record at `~/.relay/mcp/installed-servers.json`. Invalid TOML or
+JSON/JSONC reports the file to repair without printing its contents. A busy lock
+or filesystem error reports a retrying installation failure rather than a blocked
+configuration conflict. An unsafe lock stays blocked for inspection. Other
+runtimes are still configured.
 
 Setup reconciles beside command polling: transient failures retry with backoff,
 ready configurations are rechecked every 15 minutes, and newly ready runtimes

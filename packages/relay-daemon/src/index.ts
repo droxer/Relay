@@ -6,7 +6,8 @@ import { retryAfterMs } from "./transport-retry.js";
 import { ReportStoragePolicy } from "./report-storage.js";
 import { TransportMonitor } from "./transport-monitor.js";
 import { DiagnosticsSchedule } from "./diagnostics-schedule.js";
-import { assertRunWorkspaceScope } from "./run-workspace.js";
+import { CommandTasks } from "./command-tasks.js";
+import { assertRunWorkspaceScope, durableWorkspaceLayout, requiredWorkspaceSubpath } from "./run-workspace.js";
 import { RELAY_CLIENT_VERSION } from "./client-version.js";
 import { createHash } from "node:crypto";
 import type { StreamRenderer } from "relay-core";
@@ -96,11 +97,11 @@ import {
   relayApiUrl,
 } from "relay-core";
 import { DAEMON_ADVERTISED_CAPABILITIES } from "./capabilities.js";
-import { workspaceCommandEvent } from "./workspace-read.js";
+import { workspaceReply } from "./workspace-commands.js";
 import {
   DEFAULT_ARTIFACTS_DIR, THREAD_RECORDS_DIR, THREAD_RECORDS_DIRS, ThreadWorkspaceManager,
 } from "./thread-workspace.js";
-import { configuredProjectRoots, ProjectLinkError, ProjectLinkRegistry } from "./project-links.js";
+import { configuredProjectRoots, ProjectLinkRegistry } from "./project-links.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
@@ -608,6 +609,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let outboxTask: Promise<void> | undefined;
   let exitRecheckTask: Promise<void> | undefined;
   let diagnosticsTask: Promise<void> | undefined;
+  const commandTasks = new CommandTasks(runtimeSignal, (error, key) => {
+    logger.error("background command failed; unacknowledged work will retry", { sandboxId, key, error: String(error) });
+  });
+  let backgroundRuntimeRefresh: Promise<void> | undefined;
   try {
     const reconnectControl = {
       signal: runtimeSignal,
@@ -698,6 +703,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         if (Number.isFinite(duration)) executionWatchdog.renew(lease.commandId, duration, observedAt);
       }
     };
+    const activeCommandLeases = () => [
+      ...[...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id))
+        .map(({ command }) => ({ commandId: command.id, leaseId: command.leaseId })),
+      ...commandTasks.leases(),
+      ...[...runtimeRefreshCommands].map(([commandId, leaseId]) => ({ commandId, leaseId })),
+    ].slice(0, 50);
     const sendHeartbeat = async (state?: DaemonNodeHeartbeatState, signal: AbortSignal = runtimeSignal): Promise<void> => {
       const sentAt = performance.now();
       const renewing = [...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id));
@@ -708,10 +719,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           url,
           {
             leaseSeconds: commandLeaseSeconds,
-            activeCommandLeases: renewing.map(({ command }) => ({
-              commandId: command.id,
-              ...(command.leaseId ? { leaseId: command.leaseId } : {}),
-            })),
+            activeCommandLeases: activeCommandLeases(),
             ...(state ? { state } : {}),
           } satisfies DaemonNodeHeartbeat,
           token,
@@ -759,7 +767,6 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // probing them would touch the credentials the running agent is using. A
     // BoxLite node probes inside a guest that is already up and, while busy,
     // skips the round while none is.
-    let backgroundRuntimeRefresh: Promise<void> | undefined;
     const refreshIdleRuntimesInBackground = async (): Promise<void> => {
       const inUse = new Set([...activeRuns.values()].map(({ command }) => command.agent));
       const idle = AGENT_NAMES.filter((agent) => !inUse.has(agent));
@@ -790,7 +797,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         // A failed attempt waits out the interval instead of retrying every
         // poll; an unacknowledged refresh request is redelivered once its
         // lease lapses.
-        for (const [commandId] of commands) runtimeRefreshCommands.delete(commandId);
+        for (const [commandId, leaseId] of commands) {
+          if (runtimeRefreshCommands.get(commandId) === leaseId) runtimeRefreshCommands.delete(commandId);
+        }
         lastRegisteredAt = Date.now();
       }
     };
@@ -869,17 +878,25 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // alive, but must not leave a retry loop running after its lifetime ends.
     const cancellationTerminalEventSignal = (): AbortSignal =>
       stopping ? AbortSignal.timeout(shutdownRegistrationTimeoutMs) : runtimeSignal;
-    // Control acknowledgements use the independent durable replay worker, so
-    // failed uploads cannot stall polling while heartbeat probes keep succeeding.
-    const retainControlReport = async (event: DaemonNodeEvent, failureMessage: string, fields: DaemonLogFields): Promise<void> => {
-      try { await persistTerminalEvent(fetchFn, event); }
+    // A start this daemon refuses is failed in place. The post is never allowed
+    // to throw into the poll loop: an event the backend refuses (409, or a 401
+    // from a stale lease) is about that run, not this daemon's credential, so
+    // it must not stop the daemon.
+    const queueReport = (event: Extract<DaemonNodeEvent, { type: "run.failed" | "run.cancelled" }>, failureMessage: string, fields: DaemonLogFields): void => {
+      // Capture terminal evidence even when every background sender is busy.
+      // The outbox replays reports that cannot enter the bounded task queue.
+      try { terminalOutbox.retain({ ...event }); }
       catch (error) {
         logger.error(failureMessage, { ...fields, error: transportErrorDetail(error) });
         protectStorage();
+        return;
       }
+      commandTasks.submit(JSON.stringify(["report", event.commandId, event.leaseId ?? null]), () =>
+        postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
+          event, token, runtimeSignal));
     };
-    const postRejectedStart = async (command: DaemonNodeRunCommand, detail: string): Promise<void> => {
-      await retainControlReport({
+    const postRejectedStart = (command: DaemonNodeRunCommand, detail: string): void => {
+      queueReport({
         type: "run.failed",
         commandId: command.id,
         ...commandLeaseEventFields(command),
@@ -888,7 +905,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         agent: command.agent,
         error: detail,
         exitCode: 1,
-      } satisfies DaemonNodeEvent, "rejected start report capture failed", commandLogFields(sandboxId, command));
+      }, "rejected start report capture failed", commandLogFields(sandboxId, command));
     };
     while (!stopping) {
       void refreshMcp();
@@ -906,27 +923,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         // Capability re-registration refreshes agent inventory independently
         // of the lightweight liveness heartbeat.
         const runtimeRefreshDue = runtimeRefreshCommands.size > 0 || Date.now() - lastRegisteredAt >= registrationRefreshIntervalMs;
-        // An explicit refresh on an idle computer is the one round that runs
-        // before the poll: the person asked for it and its acknowledgement
-        // rides on the registration that answers. Everything else runs beside
-        // the poll. An idle BoxLite node with no guest up still boots one
-        // first, as it always has, rather than racing a run for the pool.
-        const explicitIdleRefresh = runtimeRefreshCommands.size > 0 && activeRuns.size === 0;
         const canProbeNow = environment.canProbeWithoutBooting?.() ?? true;
-        const refreshInBackground = runtimeRefreshDue && !explicitIdleRefresh && canProbeNow;
-        if (refreshInBackground && !backgroundRuntimeRefresh) {
+        // Even an explicit refresh runs beside polling. An idle BoxLite guest
+        // may boot for the probe; do not admit new runs until that boot ends.
+        if (runtimeRefreshDue && (canProbeNow || activeRuns.size === 0) && !backgroundRuntimeRefresh) {
           backgroundRuntimeRefresh = refreshIdleRuntimesInBackground().finally(() => { backgroundRuntimeRefresh = undefined; });
-        }
-        if (runtimeRefreshDue && !refreshInBackground && activeRuns.size === 0 && !backgroundRuntimeRefresh) {
-          agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, runtimeSignal, AGENT_NAMES, agentHealth);
-          agentInventory = await discoverAgentInventory(environment.execStream, runtimeSignal, inventoryDiscoveryTimeoutMs);
-          agentDefaultModels = {};
-          agentModels = await discoverAgentModels(environment.execStream, readyAgents(agentHealth), runtimeSignal, inventoryDiscoveryTimeoutMs, providerModelLists, agentDefaultModels);
-          refreshedCommands = [...runtimeRefreshCommands].slice(0, 50).map(([commandId, leaseId]) => ({ commandId, leaseId }));
-          updateHeartbeatSettings(await register());
-          for (const { commandId } of refreshedCommands) runtimeRefreshCommands.delete(commandId);
-          refreshedCommands = [];
-          lastRegisteredAt = Date.now();
         }
         pollAbort = new AbortController();
         commandPollStartedAt = performance.now();
@@ -935,12 +936,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           fetchFn,
           daemonCommandsUrl(backendUrl, sandboxId, {
             waitSeconds: recoveryPollPending ? 0 : commandPollWaitMs / 1000,
-            admitRuns: storageDecision.admit,
+            admitRuns: storageDecision.admit && (canProbeNow || !backgroundRuntimeRefresh),
             leaseSeconds: commandLeaseSeconds,
-            activeCommandLeases: [...activeRuns.values()].filter(({ command }) => !terminalCommands.has(command.id)).map(({ command }) => ({
-              commandId: command.id,
-              leaseId: command.leaseId,
-            })),
+            activeCommandLeases: activeCommandLeases(),
           }),
           token,
           AbortSignal.any([runtimeSignal, pollAbort.signal]),
@@ -984,7 +982,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       if (stopping) break;
       for (const command of body.commands ?? []) {
         if (command.type === "runtime.refresh") {
-          runtimeRefreshCommands.set(command.id, command.leaseId);
+          if (runtimeRefreshCommands.has(command.id) || runtimeRefreshCommands.size < 10) runtimeRefreshCommands.set(command.id, command.leaseId);
           continue;
         }
         if (command.type === "run.start") {
@@ -1007,7 +1005,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           if (!canStartCommand(activeRuns, maxConcurrentRuns, terminalCommands)) {
             const detail = "Daemon node has no available execution slot for this run.";
             logger.warn("command rejected while daemon busy", { ...commandLogFields(sandboxId, command), error: detail });
-            await postRejectedStart(command, detail);
+            postRejectedStart(command, detail);
             continue;
           }
           // A malformed or escaping workspaceSubpath throws out of resolveSubpath;
@@ -1025,7 +1023,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           } catch (error) {
             const detail = transportErrorDetail(error);
             logger.warn("command rejected for invalid workspace subpath", { ...commandLogFields(sandboxId, command), error: detail });
-            await postRejectedStart(command, detail);
+            postRejectedStart(command, detail);
             continue;
           }
           logger.info("command received", commandLogFields(sandboxId, command));
@@ -1067,8 +1065,22 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               });
             },
           });
-          const promise = Promise.resolve().then(() =>
-            workspaceRunGate.run(sharedWorkspaceKey, controller.signal, () => {
+          // Older backends can deliver a run despite admitRuns=false. Keep its
+          // reservation, but wait beside polling instead of racing guest boot.
+          const preparation = environment.canProbeWithoutBooting?.() === false ? backgroundRuntimeRefresh : undefined;
+          const promise = Promise.resolve().then(async () => {
+            if (preparation) {
+              const signal = controller.signal;
+              let cancel!: () => void;
+              const aborted = new Promise<never>((_resolve, reject) => {
+                cancel = () => reject(new Error("Run cancelled while waiting for runtime refresh."));
+                if (signal.aborted) cancel();
+                else signal.addEventListener("abort", cancel, { once: true });
+              });
+              try { await Promise.race([preparation, aborted]); }
+              finally { signal.removeEventListener("abort", cancel); }
+            }
+            return workspaceRunGate.run(sharedWorkspaceKey, controller.signal, () => {
               if (!options.environment && sandboxMode === "none") configureRelayMcp({home:homedir(),stateDir,sandboxId,backendUrl,runtimes:[command.agent],env:process.env});
               return executeCommand(
               backendUrl,
@@ -1096,8 +1108,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
                   ...(blockingSessionId ? { blockingSessionId } : {}),
                 } satisfies DaemonNodeEvent, token, controller.signal);
               },
-            } : undefined),
-          ).then(async (event) => {
+            } : undefined);
+          }).then(async (event) => {
             // The workspace gate has released and the process has exited. The
             // outbox marks this command terminal before HTTP delivery begins,
             // so pending acknowledgements consume neither execution nor workspace slots.
@@ -1181,7 +1193,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               sessionId: command.sessionId,
               runId: command.runId,
             });
-            await retainControlReport({
+            // Retain the report before sending, and retry beside the poll loop.
+            // A failed acknowledgement must not stop this computer taking work.
+            queueReport({
               type: "run.cancelled",
               commandId: command.commandId,
               ...(command.targetLeaseId ? { leaseId: command.targetLeaseId } : {}),
@@ -1189,78 +1203,19 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               runId: command.runId,
               agent: command.agent,
               reason: command.reason || "Run was not executing on this computer.",
-            } satisfies DaemonNodeEvent, "cancel acknowledgement capture failed", { sandboxId, commandId: command.commandId });
+            }, "cancel acknowledgement capture failed", { sandboxId, commandId: command.commandId });
           }
-        } else if (command.type === "workspace.delete") {
-          try {
-            if (command.workspaceLayout !== "project" || command.path !== "") {
-              throw new Error("Only a complete project workspace can be deleted.");
-            }
-            threadWorkspaces.deleteProject(command.sessionId, command.workspaceSubpath);
-            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
-              type: "workspace.deleted", commandId: command.id,
-              ...(command.leaseId ? { leaseId: command.leaseId } : {}), path: "",
-            }, token, runtimeSignal);
-          } catch (error) {
-            // Unacknowledged leases are retried. Cleanup must survive I/O
-            // failures and lost acknowledgements, and is idempotent.
-            logger.error("project workspace cleanup failed; will retry", {
-              sandboxId, commandId: command.id,
-              error: transportErrorDetail(error),
-            });
-          }
-        } else if (command.type === "workspace.link") {
-          let event: DaemonNodeEvent;
-          try {
-            const hostPath = command.dryRun
-              ? projectLinks.validate(command.hostPath)
-              : projectLinks.link(command.workspaceSubpath, command.hostPath);
-            event = {
-              type: "workspace.linked", commandId: command.id,
-              ...(command.leaseId ? { leaseId: command.leaseId } : {}), path: "", hostPath,
-            };
-          } catch (error) {
-            event = {
-              type: "workspace.error",
-              commandId: command.id,
-              ...(command.leaseId ? { leaseId: command.leaseId } : {}),
-              path: "",
-              code: error instanceof ProjectLinkError ? error.code : "io-error",
-              message: transportErrorDetail(error),
-            };
-          }
-          await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), event, token, runtimeSignal).catch((error: unknown) => {
-            logger.error("project link event post failed", { sandboxId, commandId: command.id, error: transportErrorDetail(error) });
-          });
-        } else if (command.type === "workspace.list" || command.type === "workspace.read") {
-          // Thread ids and durable workspaceSubpaths are validated before the workspace-read helpers
-          // run, so an escaping path throws here rather than inside workspaceCommandEvent —
-          // catch it the same way, as a workspace.error event, instead of letting it
-          // fall out of the poll loop and take the whole daemon down.
-          let event: DaemonNodeEvent;
-          try {
-            if (command.workspaceLayout === "thread" && !command.sessionId) {
-              throw new Error("Thread workspace command is missing sessionId.");
-            }
-            const commandWorkspacePath = command.workspaceLayout === "thread"
-              ? threadWorkspaces.resolve(command.sessionId!).hostPath
-              : durableWorkspaceLayout(command.workspaceLayout) && command.sessionId
-                ? threadWorkspaces.resolveSubpath(command.sessionId, requiredWorkspaceSubpath(command)).hostPath
-                : workspacePath;
-            event = workspaceCommandEvent(commandWorkspacePath, command);
-          } catch (error) {
-            event = {
-              type: "workspace.error",
-              commandId: command.id,
-              ...(command.leaseId ? { leaseId: command.leaseId } : {}),
-              path: command.path,
-              code: "invalid-path",
-              message: transportErrorDetail(error),
-            };
-          }
-          await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), event, token, runtimeSignal).catch((error: unknown) => {
-            logger.error("workspace event post failed", { sandboxId, commandId: command.id, error: transportErrorDetail(error) });
-          });
+        } else {
+          const key = JSON.stringify([command.id, command.leaseId ?? null]);
+          const lane = command.workspaceSubpath
+            ? resolve(workspacePath, command.workspaceSubpath)
+            : "workspaceLayout" in command && command.workspaceLayout === "thread"
+              ? resolve(workspacePath, ".threads", command.sessionId ?? "") : workspacePath;
+          commandTasks.submit(key, async () => {
+            const event = workspaceReply(command, workspacePath, threadWorkspaces, projectLinks);
+            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
+              event, token, runtimeSignal);
+          }, { lane, lease: { commandId: command.id, leaseId: command.leaseId } });
         }
       }
       // A successful long-poll already supplied the idle wait, and a poll that
@@ -1298,6 +1253,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     await outboxTask;
     await exitRecheckTask;
     await diagnosticsTask;
+    await commandTasks.close();
+    await backgroundRuntimeRefresh;
     cleanupShutdownListeners();
   }
 }
@@ -1495,18 +1452,6 @@ function checkWorkspace(workspacePath: string): void {
   const stat = statSync(workspacePath);
   if (!stat.isDirectory()) throw new Error(`Workspace path is not a directory: ${workspacePath}`);
   accessSync(workspacePath, constants.R_OK | constants.W_OK);
-}
-
-/** "project" and "task" both resolve to a shared durable subpath below the node root. */
-function durableWorkspaceLayout(layout: string | undefined): boolean {
-  return layout === "project" || layout === "task";
-}
-
-function requiredWorkspaceSubpath(command: { workspaceSubpath?: string }): string {
-  if (!command.workspaceSubpath) {
-    throw new Error("Durable workspace command is missing workspaceSubpath.");
-  }
-  return command.workspaceSubpath;
 }
 
 async function executeCommand(

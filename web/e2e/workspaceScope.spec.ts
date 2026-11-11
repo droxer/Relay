@@ -129,7 +129,8 @@ test("Project roster Automation exposes Run now and dashboard opens its own Task
   } finally {
     for (const sessionId of sessions) await stop(context.request, sessionId);
     for (const taskId of [...blockers, ...(automationId ? [automationId] : [])]) {
-      expect((await context.request.delete(`/api/v1/tasks/${taskId}`)).ok()).toBeTruthy();
+      const response = await context.request.delete(`/api/v1/tasks/${taskId}`);
+      expect(response.ok(), `Delete ${taskId}: ${response.status()} ${await response.text()}`).toBeTruthy();
     }
   }
 });
