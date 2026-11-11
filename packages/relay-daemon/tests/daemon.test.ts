@@ -6043,3 +6043,61 @@ test("daemon rejects a scope mismatch before acquiring a workspace or spawning a
     assert.ok(events.some(event => event.type === "run.failed" && event.commandId === "scope-rejected"));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("cancellation delivery started before shutdown stops retrying when the daemon exits", { timeout: 3000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-cancel-delivery-shutdown-"));
+  const stop = new AbortController();
+  const command = { ...runCommand("cancel-delivery-shutdown"), workspacePath: root };
+  let started = false;
+  let served = false;
+  let cancelled = false;
+  let acknowledge = false;
+  let terminalSignal: AbortSignal | null | undefined;
+  const deadline = setTimeout(() => stop.abort(), 2000);
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "cancel-delivery-shutdown", userId: "alice",
+      token: "fixture", workspacePath: root, stateDir: root, pollIntervalMs: 5,
+      shutdownGraceMs: 20, signal: stop.signal, logger: testLogger(),
+      environment: fakeEnvironment({ exec: async (_cmd, args, options) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        started = true;
+        await new Promise<void>(resolve => {
+          if (options?.signal?.aborted) resolve();
+          else options?.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return { exit_code: 0, stdout: "", stderr: "" };
+      } }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith("/commands")) {
+          if (!served) { served = true; return jsonResponse({ commands: [command] }); }
+          if (started && !cancelled) {
+            cancelled = true;
+            return jsonResponse({ commands: [{ id: "cancel", type: "run.cancel", commandId: command.id,
+              sessionId: command.sessionId, runId: command.runId, agent: command.agent, reason: "Stop this run" }] });
+          }
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          if (event.type === "run.cancelled" && !acknowledge) {
+            terminalSignal ??= init?.signal;
+            setImmediate(() => stop.abort());
+            return jsonResponse({ error: "temporarily unavailable" }, 503);
+          }
+        }
+        return jsonResponse({ ok: true });
+      },
+    });
+    assert.ok(terminalSignal, "the cancelled run must attempt terminal delivery before shutdown");
+    assert.equal(terminalSignal.aborted, true, "daemon shutdown must abort an already retrying terminal report");
+  } finally {
+    clearTimeout(deadline);
+    stop.abort();
+    // Let the pre-fix reporter finish too, so a red regression run cannot leak retries.
+    acknowledge = true;
+    await new Promise(resolve => setTimeout(resolve, 250));
+    rmSync(root, { recursive: true, force: true });
+  }
+});

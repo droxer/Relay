@@ -859,8 +859,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // A terminal event sent while stopping gets the same bound as the stop
     // notice: one slow round trip, inside the service manager's exit deadline.
     // What does not land in time waits in the outbox for the next start.
-    const cancellationTerminalEventSignal = (): AbortSignal | undefined =>
-      stopping ? AbortSignal.timeout(shutdownRegistrationTimeoutMs) : undefined;
+    // A cancellation reported before shutdown can retry while the daemon is
+    // alive, but must not leave a retry loop running after its lifetime ends.
+    const cancellationTerminalEventSignal = (): AbortSignal =>
+      stopping ? AbortSignal.timeout(shutdownRegistrationTimeoutMs) : runtimeSignal;
     // A start this daemon refuses is failed in place. The post is never allowed
     // to throw into the poll loop: an event the backend refuses (409, or a 401
     // from a stale lease) is about that run, not this daemon's credential, so
