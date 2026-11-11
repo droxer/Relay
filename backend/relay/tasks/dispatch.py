@@ -470,6 +470,11 @@ class TaskDispatcher:
             self.temporary_group_status = not bool(
                 self.task.get("assignedAgentId") or self.task.get("assignedTeamId")
             )
+        # Routing can yield after Backlog becomes Ready. The scheduler may
+        # already have admitted the Task and released its dispatch claim.
+        if self._execution_active():
+            self.task = self.ctx.task_store.get_task(self.task["id"])
+            return self._active_result()
         claim_agent = valid_agent(self.task.get("assignedAgent")) or self.agent
         if not claim_agent:
             return None
