@@ -6238,3 +6238,37 @@ test('failed production diagnostics back off without suppressing heartbeat probe
   assert.equal(warnings.filter(message => message.startsWith('Transport diagnostics')).length, 1);
   assert.ok(warnings.some(message => /ENOTFOUND/.test(message)));
 });
+
+for (const rejectedStart of [false, true]) test(`failed control acknowledgement cannot stall command polling (rejectedStart=${rejectedStart})`, { timeout: 5000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-poll-control-report-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const timer = setTimeout(() => stop.abort(), 400);
+  t.after(() => clearTimeout(timer));
+  let polls = 0;
+  let reports = 0;
+  const start = { ...runCommand('blocked-control'), workspacePath: root, workspaceLayout: 'project' as const, workspaceSubpath: '../escape' };
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'control-poll', userId: 'alice', token: 'fixture',
+    workspacePath: root, stateDir: join(root, 'state'), preflight: false, pollIntervalMs: 10,
+    environment: fakeEnvironment(), logger: testLogger(), signal: stop.signal,
+    fetchFn: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse({});
+      if (path.endsWith('/commands')) {
+        polls++;
+        return jsonResponse({ commands: polls === 1 ? [rejectedStart ? start : {
+          type: 'run.cancel', id: 'stop-control', commandId: start.id,
+          sessionId: start.sessionId, runId: start.runId, agent: start.agent,
+        }] : [] });
+      }
+      if (path.endsWith('/events')) { reports++; return jsonResponse({}, 503); }
+      throw new Error(`Unexpected ${path}`);
+    },
+  });
+  assert.ok(reports > 0, 'the failed report must actually be attempted');
+  assert.ok(polls > 1, `only ${polls} poll while event ingestion is unavailable`);
+  const pending = readdirSync(join(root, 'state', 'terminal-events')).filter(name => name.endsWith('.json'));
+  assert.equal(pending.length, 1, 'the acknowledgement remains durable for recovery');
+});
