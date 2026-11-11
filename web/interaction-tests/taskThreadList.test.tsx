@@ -41,15 +41,36 @@ it("moves a legacy Task conversation into its Project when sending", async () =>
   await act(async () => result.current.syncThreadUrl("s", true, "p"));
   expect(window.location.pathname).toBe("/projects/p/threads/s");
   await act(async () => result.current.navigateToMobileView("threads"));
-  expect(window.location.pathname).toBe("/projects/p");
+  expect(window.location.pathname).toBe("/threads");
 });
 
-it("keeps Project task threads out of the standalone rail while projects load", () => {
+it("includes Project task threads in the global rail while projects load", () => {
   const { result } = renderHook(() => useThreadDirectory({ route: "main", myThreads: [session], projects: [], routedProjectId: null, threadQuery: "", tasks: [task], visibleNodes: [], runtimeNodes: [], logicalAgents: [] }));
-  expect(result.current.directoryThreads).toEqual([]);
+  expect(result.current.directoryThreads.map(item => item.session.id)).toEqual(["s"]);
 });
 
 it("does not give an independent thread a project badge", () => {
   const { container } = render(<ThreadRow item={{ session: { ...session, projectId: undefined } }} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} />);
   expect(container.querySelector(".conversation-project")).toBeNull();
+});
+
+it.each(["main", "projects"])("includes chats, task threads and automation runs on %s", route => {
+  const sessions = [
+    { ...session, id: "chat", projectId: undefined },
+    { ...session, id: "task", projectId: undefined },
+    { ...session, id: "run", projectId: undefined },
+    { ...session, id: "project-chat" },
+    { ...session, id: "project-task" },
+    { ...session, id: "project-run" },
+    { ...session, id: "other-project", projectId: "other" },
+  ];
+  const tasks = [
+    { ...task, linkedSessionIds: ["task", "project-task"] },
+    { ...task, id: "occurrence", sourceRoutineId: "automation", linkedSessionIds: ["run", "project-run"] },
+  ];
+  const { result } = renderHook(() => useThreadDirectory({ route, myThreads: sessions, projects: [project], routedProjectId: route === "projects" ? "p" : null, threadQuery: "", tasks, visibleNodes: [], runtimeNodes: [], logicalAgents: [] }));
+  expect(result.current.directoryThreads.map(item => item.session.id)).toEqual(
+    route === "main" ? sessions.map(s => s.id) : ["project-chat", "project-task", "project-run"],
+  );
+  expect(result.current.directoryThreads.find(item => item.session.id === "project-run")?.origin?.kind).toBe("routine");
 });

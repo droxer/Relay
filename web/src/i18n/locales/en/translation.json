@@ -410,7 +410,7 @@
     "search_placeholder": "Search threads…",
     "search_label": "Search threads",
     "project_filter_label": "Filter threads by project",
-    "project_filter_all": "All projects",
+    "project_filter_all": "All threads",
     "project_filter_none": "No project",
     "project_filter_archived": "{{name}} (archived)",
     "project_filter_empty": "No threads in this project yet.",

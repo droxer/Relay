@@ -14,6 +14,14 @@ vi.mock('../src/components/ui/DialogProvider', () => ({ useDialogs: () => ({ ann
 vi.mock('../src/hooks/useUnsavedChangesGuard', () => ({ useUnsavedChangesGuard: () => vi.fn(async () => true) }));
 const user = { userId: 'u', username: 'u' } as CurrentUser;
 
+it('shows only the Computer name above the Thread list', () => {
+  render(<ComputerWorkspaceNav computerId="device:u:host" label="My Computer" route="main" />);
+  expect(screen.getByRole('link', { name: 'My Computer' }).getAttribute('href')).toBe('/computers');
+  expect(screen.queryByRole('link', { name: 'nav.backlog' })).toBeNull();
+  expect(screen.queryByRole('link', { name: 'nav.routine' })).toBeNull();
+  expect(screen.queryByRole('link', { name: 'nav.threads' })).toBeNull();
+});
+
 it('keeps every Computer tab under the same stable identity', () => {
   render(<ComputerWorkspaceNav computerId="device:u:host" label="My Computer" route="backlog" />);
   expect(screen.getByRole('link', { name: 'nav.threads' }).getAttribute('href')).toBe('/computers/device%3Au%3Ahost/threads');

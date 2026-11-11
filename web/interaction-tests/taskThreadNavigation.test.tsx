@@ -11,7 +11,7 @@ it("round trips a task thread deep link within Tasks", () => {
   expect(browserUrlForAppState({ ...state, sessionId: null }, "/tasks/task/threads/thread", "?project=p&q=ship&space=1")).toBe("/tasks/task?project=p&q=ship");
 });
 
-it("loads a legacy task thread and keeps sends and mobile Back in its Project", async () => {
+it("keeps legacy task sends in its Project and returns mobile Back to Threads", async () => {
   window.history.replaceState({}, "", "/tasks/task/threads/thread?project=p");
   const apply = vi.fn();
   const options = { composingNew: false, activeSessionId: "thread", selectedSessionId: "thread", activeSession: undefined, onApplySessionFromPath: apply, onSetComposingNewFromPath: vi.fn(), onClearPendingMessage: vi.fn() };
@@ -20,7 +20,7 @@ it("loads a legacy task thread and keeps sends and mobile Back in its Project", 
   await act(async () => result.current.syncThreadUrl("thread", true, "p"));
   expect(window.location.pathname).toBe("/projects/p/threads/thread");
   await act(async () => result.current.navigateToMobileView("threads"));
-  expect(window.location.pathname).toBe("/projects/p");
+  expect(window.location.pathname).toBe("/threads");
   expect(window.location.search).toBe("");
   unmount();
 });
@@ -36,7 +36,7 @@ it("keeps the mobile return control for issue threads", async () => {
   expect(screen.queryByRole("link", { name: "thread.back_to_project_activities" })).toBeNull();
 });
 
-it("opens a Project Task conversation and returns to its Project", async () => {
+it("opens a Project Task conversation and returns to Threads", async () => {
   window.history.replaceState({}, "", "/tasks/task?project=p");
   const options = { composingNew: false, activeSessionId: "thread", selectedSessionId: "thread", activeSession: undefined, onApplySessionFromPath: vi.fn(), onSetComposingNewFromPath: vi.fn(), onClearPendingMessage: vi.fn() };
   const { result } = renderHook(() => useAppRouter(options));
@@ -47,7 +47,7 @@ it("opens a Project Task conversation and returns to its Project", async () => {
   await act(async () => result.current.syncThreadUrl("thread", true, "p"));
   expect(window.location.pathname).toBe("/projects/p/threads/thread");
   await act(async () => result.current.navigateToMobileView("threads"));
-  expect(window.location.pathname).toBe("/projects/p");
+  expect(window.location.pathname).toBe("/threads");
 });
 
 it("opens and retains a Project Manager's ordinary Thread", async () => {

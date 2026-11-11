@@ -43,7 +43,7 @@ import { useComposerRouting } from "./hooks/useComposerRouting";
 import { useThreadEditing } from "./hooks/useThreadEditing";
 import { useThreadNavigation } from "./hooks/useThreadNavigation";
 import { useThreadTranscript } from "./hooks/useThreadTranscript";
-import { myThreadSessions, pickActiveThreadSession } from "./lib/threads";
+import { myThreadSessions, pickActiveThreadSession, threadDirectoryMode } from "./lib/threads";
 import { faviconState } from "./lib/faviconState";
 import { useLiveFavicon } from "./hooks/useLiveFavicon";
 import { shouldTailSessionEvents } from "./lib/sessionEventStream";
@@ -53,7 +53,6 @@ import { useUserAgents } from "./hooks/useUserAgents";
 import { useTeams } from "./hooks/useTeams";
 import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
-import { ComputerWorkspaceNav } from "./components/ComputerWorkspaceNav";
 import { computerId as stableComputerId, computerName } from "./lib/createAgent";
 import { sessionComputer, taskComputer } from "./lib/workspaceScope";
 import { useWorkspaceRoute } from "./hooks/useWorkspaceRoute";
@@ -202,7 +201,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     () => pickActiveThreadSession({
       threads: requestedSessionId ? myThreads : myThreads.filter(session => openingComputerId
         ? !session.projectId && sessionComputer(session, runtimeNodes) === openingComputerId
-        : openingProjectId ? session.projectId === openingProjectId : !session.projectId),
+        : openingProjectId ? session.projectId === openingProjectId : true),
       selectedSessionId,
       activeSessionId,
       composingNew,
@@ -460,9 +459,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     && space.open
     && Boolean(activeSession);
 
+  const directoryMode = threadDirectoryMode(route, routedSessionId, composingNew);
   const { directoryProjects, directoryThreads, threadItems, projectFilterOptions, projectFilter } = useThreadDirectory({
-    route,
-    computerId: routedComputerId,
+    route: directoryMode === "threads" ? "main" : route,
     myThreads,
     projects,
     routedProjectId,
@@ -675,6 +674,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   return (
     <AppShell
       route={route}
+      threadOpen={Boolean(routedSessionId) || composingNew}
       taskWorkspace={isTasksWorkspace}
       taskThread={isTaskThread}
       notFound={notFound}
@@ -762,17 +762,16 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
           />
         ) : (
           <ThreadsView
-            workspaceNavigation={routedComputerId ? <ComputerWorkspaceNav computerId={routedComputerId} label={workspaceNode ? computerName(workspaceNode) : routedComputerId} route={route} /> : undefined}
             onOpenTaskRecord={openTaskRecord}
             taskThread={isTaskThread}
             listOnScreen={mobileView === "threads"}
-            directoryMode={route === "projects" ? "projects" : "threads"}
+            directoryMode={directoryMode}
             tasks={tasks}
             currentUser={user}
             onboardingPanel={onboardingPanel}
             filteredThreads={directoryThreads}
-            projects={route === "projects" ? directoryProjects : projects}
-            selectedProjectId={route === "projects" ? routedProjectId : null}
+            projects={directoryMode === "projects" ? directoryProjects : projects}
+            selectedProjectId={directoryMode === "projects" ? routedProjectId : null}
             projectsStatus={projectsStatus}
             projectsError={projectsError}
             onRetryProjects={() => void refresh()}

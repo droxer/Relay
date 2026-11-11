@@ -68,7 +68,7 @@ function visibleMoreGroups(isAdmin: boolean): MoreSheetGroup[] {
 
 // Left rail: brand, collapse toggle, route nav, settings/logout. Owns its own
 // collapsed-state hover tooltip (only shown while the rail is collapsed).
-export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu, onboarding = null, onOpenOnboarding, notifications, homeNeedsYou = 0 }: {
+export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, onResizeActive, route: workspaceRoute, threadOpen = false, onNavigateRoute, hrefForRoute, isAdmin, onLogout, onOpenCommandMenu, onboarding = null, onOpenOnboarding, notifications, homeNeedsYou = 0 }: {
   sidenavExpanded: boolean;
   setSidenavExpanded: (expanded: boolean) => void;
   width: number;
@@ -76,6 +76,8 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   onResizeActive: (active: boolean) => void;
   /** null on a page that is not found: no destination is current. */
   route: AppRoute | null;
+  /** An open Thread belongs to Threads regardless of its workspace URL. */
+  threadOpen?: boolean;
   onNavigateRoute: (route: AppRoute) => void;
   hrefForRoute: (route: AppRoute) => string;
   isAdmin: boolean;
@@ -89,6 +91,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
   homeNeedsYou?: number;
 }) {
   const { t } = useTranslation();
+  const route = threadOpen && workspaceRoute ? "main" : workspaceRoute;
   const [navTooltip, setNavTooltip] = useState<{ text: string; x: number; y: number } | null>(null);
   const tooltipSuppressRef = useRef<HTMLElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);

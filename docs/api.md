@@ -1422,16 +1422,17 @@ On process restart they reuse that identity instead of redeeming the expired
 grant. Bootstrap state is scoped to the backend URL and provisioning grant and
 must persist with the daemon host; deleting it requires a new provisioning grant.
 
-Existing `/issues/{taskId}/threads/{threadId}` deep links retain the Tasks
-destination. Legacy `/projects/{projectId}/threads/{threadId}` links
-resolve to the linked task; unlinked project conversations return to project
-details. Legacy `/projects/{projectId}/new` opens the project's task list.
-Projects no longer offer standalone conversation creation in the browser.
+The global Threads list includes standalone conversations, Task threads, and
+Automation run threads across all Projects. Project conversations use
+`/projects/{projectId}/threads/{threadId}` and display the same global thread list;
+new Project conversations use `/projects/{projectId}/new`. Both select Threads
+in the sidebar. The conversation's mobile Back control returns to Threads.
 
-Opening a conversation from a task goes to Threads at `/threads/{threadId}`
-with the thread list visible and a project badge on project task threads.
-Sending from Threads preserves that destination. Existing nested task links
-and Threads share the same conversation and provide access to its owning task.
+The Projects sidebar link opens `/projects` with the Project directory;
+`/projects/{projectId}` shows the Project overview. Neither displays thread rows
+in place of the Project directory. Existing nested Task conversation links
+resolve to the conversation's Project or Computer workspace and share the same
+conversation and access to its owning Task.
 
 ## Waitlist
 

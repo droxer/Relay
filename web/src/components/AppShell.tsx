@@ -36,6 +36,7 @@ type MobileChatChrome = {
 type AppShellProps = {
   taskWorkspace?: boolean;
   taskThread?: boolean;
+  threadOpen?: boolean;
   /** The path named no page; the shell must not dress it as a thread. */
   notFound?: boolean;
   onNewTask?: () => void;
@@ -87,6 +88,7 @@ const ShortcutsHelp = memo(ShortcutsHelpView);
 export function AppShell({
   taskWorkspace = false,
   taskThread = false,
+  threadOpen = false,
   notFound = false,
   onNewTask,
   route,
@@ -198,7 +200,8 @@ export function AppShell({
     [isAdmin, t],
   );
 
-  const topbar = mobileTopbarMode({ route, notFound, taskThread, taskWorkspace, mobileView });
+  const surfaceRoute = threadOpen && !notFound ? "main" : route;
+  const topbar = mobileTopbarMode({ route: surfaceRoute, notFound, taskThread: taskThread && !threadOpen, taskWorkspace, mobileView });
   const isMobileChat = topbar.chat;
   const directoryLabel = t(topbar.directoryKey);
   const mobileTitle = topbar.titleKey === null ? activeThreadLabel : t(topbar.titleKey);
@@ -216,7 +219,7 @@ export function AppShell({
       className="messenger-shell"
       data-mobile-view={mobileView}
       data-mobile-chat={isMobileChat || undefined}
-      data-route={route}
+      data-route={surfaceRoute}
       data-task-thread={taskThread || undefined}
       data-task-workspace={taskWorkspace || undefined}
       data-sidenav={sidenavExpanded ? "open" : "closed"}
@@ -291,6 +294,7 @@ export function AppShell({
         onResize={onSidenavResize}
         onResizeActive={onSidenavResizeActive}
         route={notFound ? null : route}
+        threadOpen={threadOpen}
         onNavigateRoute={onNavigateRoute}
         hrefForRoute={hrefForRoute}
         isAdmin={isAdmin}

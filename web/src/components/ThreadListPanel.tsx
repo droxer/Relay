@@ -35,7 +35,6 @@ import { ListSkeleton } from "./ListSkeleton";
 import { FilterSelect } from "./FiltersBar";
 import {
   THREAD_PROJECT_FILTER_ALL,
-  THREAD_PROJECT_FILTER_NONE,
   type ThreadProjectFilter,
   type ThreadProjectOption,
 } from "../lib/threadProjectFilter";
@@ -152,7 +151,6 @@ export function ThreadListPanel({
   const railWindow = useRailWindow(threads, tasks, selectedSessionId, `${projectFilter}\n${query}`);
   const projectFilterChoices = useMemo(() => [
     { value: THREAD_PROJECT_FILTER_ALL, label: t("thread.project_filter_all") },
-    { value: THREAD_PROJECT_FILTER_NONE, label: t("thread.project_filter_none") },
     ...projectFilterOptions.map((option) => ({
       value: option.value,
       label: option.archived ? t("thread.project_filter_archived", { name: option.name }) : option.name,
@@ -173,12 +171,12 @@ export function ThreadListPanel({
     ] as const;
     return [...sections.map(({ group, ...section }) => group.items.length > 0 ? (
       <div key={section.key} className="conversation-group" data-tone={section.tone}>
-        <div className="conversation-group-label">
+        {section.key !== "idle" && <div className="conversation-group-label">
           <span>{section.label}</span>
           {/* The group's full count, not the mounted rows — the rail mounts a
               window and grows it as the reader scrolls. */}
           <span className="conversation-group-count tnum">{group.total}</span>
-        </div>
+        </div>}
         {/* Rows are <li>s, so each group carries its own list. The group label
             names it rather than sitting inside it — a heading is not a row. */}
         <ul className="conversation-rows" aria-label={section.label}>
@@ -235,7 +233,7 @@ export function ThreadListPanel({
               type="button"
               className="page-header-icon-action page-header-icon-action--primary"
               tooltip={createLabel}
-              onClick={directoryMode === "projects" ? onCreateProject : () => onNewThread(null)}
+              onClick={directoryMode === "projects" ? onCreateProject : () => onNewThread(selectedProjectId)}
             >
               <ActionAdd size={ICON.md} />
             </Button>
@@ -254,7 +252,7 @@ export function ThreadListPanel({
         />
         {/* Only once there is a project to choose — with none, "All projects"
             and "No project" would be the same list twice. */}
-        {directoryMode === "threads" && (projectFilterOptions.length > 0 || projectFiltered) ? (
+        {directoryMode === "threads" && !selectedProjectId && (projectFilterOptions.length > 0 || projectFiltered) ? (
           <FilterSelect
             name="thread-project-filter"
             label={t("thread.project_filter_label")}

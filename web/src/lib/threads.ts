@@ -75,7 +75,12 @@ type ProjectThreadBucket = {
 
 type ThreadDirectoryMode = "threads" | "projects";
 
-/** Threads includes task conversations; Projects scopes its own directory. */
+/** List type follows the addressed page, never a retained session selection. */
+export function threadDirectoryMode(route: string, sessionId: string | null | undefined, composingNew = false): ThreadDirectoryMode {
+  return route === "projects" && !sessionId && !composingNew ? "projects" : "threads";
+}
+
+/** The global list includes every thread; Projects scopes its own directory. */
 export function threadsForDirectory(
   threads: readonly ThreadItem[],
   projects: readonly ProjectRecord[],
@@ -84,7 +89,7 @@ export function threadsForDirectory(
   const projectIds = new Set(projects.map((project) => project.id));
   return threads.filter((thread) => {
     const projectId = thread.session.projectId;
-    return mode === "projects" ? Boolean(projectId && projectIds.has(projectId)) : !projectId;
+    return mode === "projects" ? Boolean(projectId && projectIds.has(projectId)) : true;
   });
 }
 

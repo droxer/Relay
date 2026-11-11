@@ -97,12 +97,12 @@ export function useAppRouter({
       navigateToAppState({ ...locationState, sessionId: nextMobileView === "chat" ? currentSessionId : null, mobileView: "chat" });
       return;
     }
-    const threadRoute = locationState.route === "projects" ? "projects" : "main";
+    const threadRoute = locationState.route === "projects" && nextMobileView === "chat" ? "projects" : "main";
     navigateToAppState({
       route: threadRoute,
       mobileView: nextMobileView,
       sessionId: nextMobileView === "chat" ? currentSessionId ?? null : null,
-      projectId: locationState.projectId ?? activeSession?.projectId ?? null,
+      projectId: threadRoute === "projects" ? locationState.projectId ?? activeSession?.projectId ?? null : null,
       computerId: locationState.computerId,
       composingNew: nextMobileView === "chat" && composingNew,
     });
@@ -113,7 +113,7 @@ export function useAppRouter({
   const syncThreadUrl = useCallback((sessionId: string | null, replace = false, projectId?: string | null, _taskId?: string | null, computerId?: string | null) => {
     const state: AppLocationState = {
       route: projectId ? "projects" : "main",
-      computerId: projectId ? null : computerId ?? locationState.computerId,
+      computerId: projectId ? null : computerId ?? (sessionId ? locationState.computerId : null),
       mobileView: "chat", sessionId, projectId: projectId ?? null,
       composingNew: sessionId === null,
     };
