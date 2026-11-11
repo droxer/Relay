@@ -78,3 +78,16 @@ No workspace rename, database migration, Project recreation, or file deletion
 is needed. Updating does not itself retry already-failed work. Commands queued
 before the fix retain their original payload; retry failed work after updating
 to generate a fresh command with the recorded directory binding.
+
+## CI follow-up: exact runtime scope assertions
+
+The Browser/backend/daemon concurrency job in run `43007474806` failed two
+Project assertions after the hotfix: the real runtime scope correctly included
+`projectWorkspaceSubpath`, but the expected objects omitted it. The local
+`CI=true npx playwright test -c playwright.concurrency.config.ts` run reproduced
+both failures (two passed, two failed).
+
+The Project Task and Automation expectations now include the Project's recorded
+`workspaceSubpath`. Full-object equality is retained; standalone scopes remain
+unchanged. The same real browser/backend/daemon suite then passed all four tests
+with `CI=true` (30.2 seconds). This follow-up changes test expectations only.

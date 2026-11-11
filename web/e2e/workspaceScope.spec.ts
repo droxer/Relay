@@ -124,7 +124,8 @@ test("Project roster Automation exposes Run now and dashboard opens its own Task
     sessions.add(sessionId);
     expect(started.task.projectId).toBe(p.id);
     await assertExecution(context.request, node, sessionId, p.workspaceSubpath,
-      { computerId: identity, projectId: p.id, taskId: started.task.id, automationId: automation.id });
+      { computerId: identity, projectId: p.id, projectWorkspaceSubpath: p.workspaceSubpath,
+        taskId: started.task.id, automationId: automation.id });
   } finally {
     for (const sessionId of sessions) await stop(context.request, sessionId);
     for (const taskId of [...blockers, ...(automationId ? [automationId] : [])]) {
@@ -147,7 +148,9 @@ test("Computer Tasks and Automations keep their files and Project work stays in 
     try {
       const relative = record.projectId ? p.workspaceSubpath : `tasks/${record.id}`;
       await assertExecution(context.request, node, sessionId, relative, {
-        computerId: identity, ...(record.projectId ? { projectId: p.id } : {}), taskId: started.task.id,
+        computerId: identity,
+        ...(record.projectId ? { projectId: p.id, projectWorkspaceSubpath: p.workspaceSubpath } : {}),
+        taskId: started.task.id,
         ...(record.isRoutine ? { automationId: record.id } : {}),
       });
     } finally { await stop(context.request, sessionId); }
