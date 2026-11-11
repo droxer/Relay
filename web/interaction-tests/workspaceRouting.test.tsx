@@ -2,6 +2,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useWorkspaceRoute } from '../src/hooks/useWorkspaceRoute';
 import { useThreadNavigation } from '../src/hooks/useThreadNavigation';
+import { workspaceNavigationHref } from '../src/lib/workspaceScope';
 import { parseAppPath } from '../src/lib/appRoute';
 import type { RelayTaskListItem, RelaySession } from '../src/types';
 
@@ -17,9 +18,6 @@ it.each([
   ['/computers/c/tasks/t', '/projects/p?task=t'],
   ['/threads/s', '/projects/p/threads/s'],
   ['/computers/c/threads/s', '/projects/p/threads/s'],
-  ['/tasks', '/computers'],
-  ['/automations', '/computers'],
-  ['/threads', '/computers'],
 ])('moves %s into its owning workspace', async (path, destination) => {
   window.history.replaceState({}, '', path);
   const { result } = renderHook(() => useWorkspaceRoute({ ...inputs, location: parseAppPath(path) }));
@@ -115,4 +113,24 @@ it.each([
   window.history.replaceState({}, '', url);
   renderHook(() => useWorkspaceRoute({ ...inputs, tasks: [record as RelayTaskListItem], location: parseAppPath(window.location.pathname) }));
   expect(navigate).toHaveBeenCalledWith(expected, { replace: true });
+});
+
+// Global navigation must work before a Computer workspace has been selected.
+it.each(['/threads', '/automations', '/tasks'])('keeps the global list %s open', path => {
+  const { result, rerender } = renderHook(({ ready }) => useWorkspaceRoute({ ...inputs, ready, location: parseAppPath(path) }), { initialProps: { ready: false } });
+  expect(result.current).toBe(false);
+  rerender({ ready: true });
+  expect(result.current).toBe(false);
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it.each([['main', '/threads'], ['routine', '/automations'], ['backlog', '/tasks']] as const)(
+  'links the unscoped %s navigation to its list', (route, href) => {
+    expect(workspaceNavigationHref(route, null, null)).toBe(href);
+  },
+);
+it('retains the current workspace for scoped navigation', () => {
+  expect(workspaceNavigationHref('routine', 'c', null)).toBe('/computers/c/automations');
+  expect(workspaceNavigationHref('main', null, 'p')).toBe('/projects/p');
+  expect(workspaceNavigationHref('routine', null, 'p')).toBe('/projects/p?tab=automations');
 });

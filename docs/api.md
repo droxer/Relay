@@ -12,6 +12,9 @@ documentation locations, and UI metadata from the backend's shared constants.
 /waitlist
 /join#token={inviteToken}
 /home
+/threads
+/tasks
+/automations
 /computers
 /computers/{computerId}/threads
 /computers/{computerId}/threads/new
@@ -38,8 +41,10 @@ Standalone work lives under its Computer's stable identity. Project Tasks
 open at `/projects/{projectId}?task={taskId}`; Automations and their runs open
 at `/projects/{projectId}?tab=automations&automation={automationId}&run={runId}`.
 Legacy `/threads`, `/tasks`, and `/automations` record links resolve to the
-record's owning workspace. Their unscoped lists open the Computer picker;
-legacy `?project=` lists open the corresponding Project tab.
+record's owning workspace. Their unscoped lists remain available without
+selecting a Computer; sidebar links retain the current Computer or Project
+when navigating within a workspace. Legacy `?project=` lists open the
+corresponding Project tab.
 
 A standalone Task or Automation supplies `computerId` when created, mutually
 exclusive with `projectId`. The backend checks Computer ownership and constrains

@@ -55,7 +55,7 @@ import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { ComputerWorkspaceNav } from "./components/ComputerWorkspaceNav";
 import { computerId as stableComputerId, computerName } from "./lib/createAgent";
-import { computerWorkHref, sessionComputer, taskComputer } from "./lib/workspaceScope";
+import { workspaceNavigationHref, sessionComputer, taskComputer } from "./lib/workspaceScope";
 import { useWorkspaceRoute } from "./hooks/useWorkspaceRoute";
 import { ThreadsView } from "./components/ThreadsView";
 import { OnboardingPanel } from "./components/onboarding/OnboardingPanel";
@@ -316,11 +316,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     [routedComputerId, runtimeNodes, visibleNodes]);
   const hrefForSideNavRoute = useCallback((nextRoute: AppRoute) => {
     if (!["main", "backlog", "routine"].includes(nextRoute)) return globalHrefForSideNavRoute(nextRoute);
-    if (routedProjectId) {
-      const path = `/projects/${encodeURIComponent(routedProjectId)}`;
-      return nextRoute === "backlog" ? `${path}?tab=tasks` : nextRoute === "routine" ? `${path}?tab=automations` : path;
-    }
-    return routedComputerId ? computerWorkHref(routedComputerId, nextRoute) : "/computers";
+    return workspaceNavigationHref(nextRoute, routedComputerId, routedProjectId);
   }, [globalHrefForSideNavRoute, routedComputerId, routedProjectId]);
   const navigateWorkspaceRoute = useCallback((nextRoute: AppRoute) => {
     if (["main", "backlog", "routine"].includes(nextRoute)) void navigateToAppPath(hrefForSideNavRoute(nextRoute));

@@ -49,11 +49,11 @@ export function useWorkspaceRoute({ location, tasks, sessions, nodes, ready }: {
       const legacyProject = search.get("project");
       destination = legacyProject
         ? `/projects/${encodeURIComponent(legacyProject)}${location.route === "main" ? "" : location.route === "routine" ? "?tab=automations" : "?tab=tasks"}`
-        : "/computers";
+        : location.taskId ? "/computers" : null;
     }
   }
   useEffect(() => { if (destination) void navigateToAppPath(destination, { replace: true }); }, [destination]);
-  return Boolean(destination) || Boolean(workRoute && !location?.computerId && !ready);
+  return Boolean(destination) || Boolean(workRoute && !location?.computerId && (location?.sessionId || location?.taskId || search.has("project")) && !ready);
 }
 
 /** Keep panel/filter state while replacing the record's workspace coordinates. */
