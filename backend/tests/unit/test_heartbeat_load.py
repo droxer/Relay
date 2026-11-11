@@ -52,10 +52,65 @@ def test_replicas_share_seen_throttle_and_preserve_poll_clock(tmp_path):
     for replica in [first, second] * 4:
         replica.heartbeat('heartbeat-load', 'test-node-token')
     writes = [sql for sql in statements if sql.startswith('update daemon_nodes')]
-    # Due predicates may attempt updates, but only one timestamp value changes.
+    # Subsequent authoritative reads see a fresh stamp and skip the UPDATE.
     assert len(writes) == 1
     first.take_commands('heartbeat-load', 'test-node-token', renew_known_active=False)
     assert store.get_node('heartbeat-load')['lastPollAt']
+
+
+def test_fresh_authorized_heartbeat_reads_once_without_a_write(tmp_path):
+    registry, store = setup_registry(tmp_path)
+    registry.heartbeat('heartbeat-load', 'test-node-token')
+    statements = capture(store)
+    registry.heartbeat('heartbeat-load', 'test-node-token')
+    sql = [statement for statement in statements if not statement.startswith('begin')]
+    assert len(sql) == 1
+    assert sql[0].startswith('select')
+
+
+def test_failed_persistence_does_not_suppress_next_attempt(tmp_path, monkeypatch):
+    registry, store = setup_registry(tmp_path)
+    with store.engine.begin() as conn:
+        conn.execute(update(store.nodes).values(last_seen_at=None))
+    original = store.touch_node_observation
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError('injected database failure')
+
+    monkeypatch.setattr(store, 'touch_node_observation', fail)
+    with pytest.raises(RuntimeError, match='injected'):
+        registry.heartbeat('heartbeat-load', 'test-node-token')
+    monkeypatch.setattr(store, 'touch_node_observation', original)
+    registry.heartbeat('heartbeat-load', 'test-node-token')
+    assert store.get_node('heartbeat-load')['lastSeenAt']
+
+
+@pytest.mark.parametrize('change', ['token', 'deleted', 'retired', 'drained'])
+def test_control_change_between_read_and_touch_is_not_overwritten(tmp_path, monkeypatch, change):
+    registry, store = setup_registry(tmp_path)
+    with store.engine.begin() as conn:
+        conn.execute(update(store.nodes).values(last_seen_at=None))
+    original = store.touch_node_observation
+
+    def change_then_touch(observed, **kwargs):
+        values = {
+            'token': {'node_token_hash': hash_daemon_node_token('replacement'), 'credential_version': 2},
+            'deleted': {'status': 'deleted'},
+            'retired': {'retired_at': require_db_time('2026-01-01T00:00:00Z')},
+            'drained': {'last_poll_at': require_db_time(NODE_POLL_DRAINED_AT)},
+        }[change]
+        with store.engine.begin() as conn:
+            conn.execute(update(store.nodes).values(**values))
+        return original(observed, **kwargs)
+
+    monkeypatch.setattr(store, 'touch_node_observation', change_then_touch)
+    if change == 'drained':
+        registry.heartbeat('heartbeat-load', 'test-node-token')
+        assert store.get_node('heartbeat-load')['lastPollAt'] == NODE_POLL_DRAINED_AT
+    else:
+        with pytest.raises(DeletedDaemonNodeError if change == 'deleted' else PermissionError):
+            registry.heartbeat('heartbeat-load', 'test-node-token')
+        assert store.get_node('heartbeat-load').get('lastSeenAt') is None
 
 
 @pytest.mark.parametrize('change', ['token', 'deleted', 'retired', 'missing'])
@@ -92,6 +147,17 @@ def test_active_heartbeat_batches_command_observations(tmp_path):
     assert {item['commandId'] for item in result['commandLeases']} == {key for key, _ in leases}
     for item in result['commandLeases']:
         assert item['leaseExpiresAt'] == store.get_command(item['commandId'])['leaseExpiresAt']
+
+
+def test_mismatched_lease_cannot_record_progress(tmp_path, monkeypatch):
+    registry, store = setup_registry(tmp_path)
+    store.enqueue_command('heartbeat-load', {'id': new_database_id(), 'type': 'runtime.refresh'})
+    [record] = store.take_queued_commands('heartbeat-load')
+    progress = []
+    monkeypatch.setattr(registry, '_note_run_progress', progress.append)
+    result = registry.heartbeat('heartbeat-load', 'test-node-token', [(record['id'], 'superseded')])
+    assert result['commandLeases'] == []
+    assert progress == []
 
 
 def test_store_observation_compare_and_set_fences_control_changes(tmp_path):

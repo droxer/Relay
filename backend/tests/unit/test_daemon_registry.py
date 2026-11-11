@@ -6688,6 +6688,10 @@ def test_daemon_poll_heartbeats_are_throttled_before_reaching_the_store() -> Non
             self.mark_seen_calls += 1
             return super().mark_node_seen(node_id, patch, polled=polled)
 
+        def touch_node_observation(self, observed, **kwargs):
+            self.mark_seen_calls += 1
+            return super().touch_node_observation(observed, **kwargs)
+
     with TemporaryDirectory() as root:
         session_store = make_session_store(root)
         daemon_store = CountingLocalDaemonStore(root)

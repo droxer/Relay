@@ -390,29 +390,42 @@ class CommandQueueMixin(RegistryState):
         """
         if state is not None and state not in HEARTBEAT_STATES:
             raise ValueError(f"Unknown heartbeat state {state!r}.")
-        self._hydrate_node(sandbox_id)
+        observation = self._hydrate_node_observation(sandbox_id)
         with self.dispatch_scope([sandbox_id]):
             self._assert_authorized(sandbox_id, token)
+            # A Computer registered on another replica needs its configuration
+            # once. Routine probes keep using only the narrow projection.
+            if 'agents' not in self.sandboxes[sandbox_id]:
+                self._hydrate_node(sandbox_id)
+                self._assert_authorized(sandbox_id, token)
             sandbox = self.sandboxes[sandbox_id]
             if sandbox.get("retiredAt"):
                 raise PermissionError("Retired daemon node cannot renew its lease.")
             if state == "stopped":
                 self.update_status(sandbox_id, {"status": "stopped", "lastError": None})
             else:
-                self._mark_seen(sandbox_id, polled=False if state == "draining" else None)
+                self._mark_seen(
+                    sandbox_id, polled=False if state == "draining" else None,
+                    observation=observation,
+                )
+            self._assert_authorized(sandbox_id, token)
+            if self.sandboxes[sandbox_id].get('retiredAt'):
+                raise PermissionError('Retired daemon node cannot renew its lease.')
+            records = None
             if command_leases:
-                self._renew_command_leases(
+                records = self._renew_command_leases(
                     sandbox_id,
                     command_leases,
                     lease_seconds=lease_seconds,
                 )
             return {
-                **self.command_lease_observations(sandbox_id, command_leases or []),
+                **self.command_lease_observations(sandbox_id, command_leases or [], records=records),
                 **self.heartbeat_settings(),
             }
 
     def command_lease_observations(
-        self, sandbox_id: str, command_leases: list[tuple[str, str | None]]
+        self, sandbox_id: str, command_leases: list[tuple[str, str | None]],
+        *, records: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Read matching ownership evidence after an authenticated renewal/poll.
 
@@ -423,8 +436,10 @@ class CommandQueueMixin(RegistryState):
         """
         accepted = []
         settled = []
-        for command_id, lease_id in command_leases:
-            record = self.daemon_store.get_command(command_id)
+        if records is None:
+            records = self._command_lease_records(command_leases)
+        for command_id, lease_id in dict(command_leases).items():
+            record = records.get(command_id)
             if not record or record.get("nodeId") != sandbox_id:
                 continue
             if record.get("status") in ("completed", "failed", "cancelled"):
@@ -467,6 +482,9 @@ class CommandQueueMixin(RegistryState):
         drained = bool(sandbox and sandbox.get("lastPollAt") == NODE_POLL_DRAINED_AT)
         if not drained:
             self._mark_seen(sandbox_id, polled=True)
+            self._assert_authorized(sandbox_id, token)
+            sandbox = self.sandboxes.get(sandbox_id)
+            drained = bool(sandbox and sandbox.get('lastPollAt') == NODE_POLL_DRAINED_AT)
         if sandbox and (sandbox.get("retiredAt") or drained):
             if renew_known_active:
                 self._renew_known_active_command_leases(
@@ -635,7 +653,7 @@ class CommandQueueMixin(RegistryState):
         command_leases: list[tuple[str, str | None]],
         *,
         lease_seconds: float,
-    ) -> None:
+    ) -> dict[str, dict[str, Any]]:
         # The durable store, not this registry replica's memory, is the source
         # of truth for command ownership. A poll may land on a different
         # backend process from the one that dispatched the command.
@@ -648,8 +666,24 @@ class CommandQueueMixin(RegistryState):
             # Output is not: an agent can spend twenty minutes in a build or a
             # single slow tool call without printing a line, and judging it by
             # output alone reaps work that is plainly alive.
-            for command_id, _lease_id in renewable:
-                self._note_command_lease_progress(sandbox_id, command_id)
+            records = self._command_lease_records(renewable)
+            for command_id, lease_id in renewable:
+                record = records.get(command_id)
+                if (record and record.get('nodeId') == sandbox_id
+                        and record.get('status') == 'dispatched'
+                        and (lease_id is None or record.get('leaseId') == lease_id)):
+                    self._note_run_progress(record['command'])
+            return records
+        return {}
+
+    def _command_lease_records(
+        self, command_leases: list[tuple[str, str | None]],
+    ) -> dict[str, dict[str, Any]]:
+        ids = list(dict(command_leases))
+        records = {}
+        for offset in range(0, len(ids), 50):
+            records.update(self.daemon_store.get_commands(set(ids[offset:offset + 50])))
+        return records
 
     def _renew_known_active_command_leases(
         self, sandbox_id: str, *, lease_seconds: float
@@ -665,12 +699,3 @@ class CommandQueueMixin(RegistryState):
             self.daemon_store.renew_command_leases(
                 sandbox_id, active_leases, lease_seconds=lease_seconds
             )
-
-    def _note_command_lease_progress(self, sandbox_id: str, command_id: str) -> None:
-        """Treat a renewed command lease as progress on the run it belongs to."""
-        record = self.daemon_store.get_command(command_id)
-        if not record or record.get("nodeId") != sandbox_id:
-            return
-        if record.get("status") != "dispatched":
-            return
-        self._note_run_progress(record["command"])

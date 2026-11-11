@@ -13,6 +13,7 @@ from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from ...core.daemon_records import TERMINAL_DAEMON_STATUSES
 from .rows import terminal_time_expression
 from .nodes import NodeRows
+from .observations import NodeObservationRows
 from .commands import CommandQueueRows
 from .run_requests import RunRequestRows
 from .workspace_responses import WorkspaceResponseRows
@@ -27,6 +28,7 @@ from ..listeners import ChangeListener
 
 class DatabaseDaemonStore(
     NodeRows,
+    NodeObservationRows,
     CommandQueueRows,
     RunRequestRows,
     WorkspaceResponseRows,

@@ -262,7 +262,8 @@ class NodeRows(DaemonStoreState):
 
         No row lock and no read-modify-write of the other 20 columns or the
         per-agent rows -- a heartbeat with nothing to report cannot change
-        them. None of the columns is indexed, so this stays a HOT update.
+        them. None of the columns is indexed, making this HOT-eligible when
+        PostgreSQL has sufficient space on the original heap page.
         """
         now = require_db_time(now_iso())
         poll_values = (
