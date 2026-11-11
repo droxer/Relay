@@ -38,3 +38,18 @@ test('activity is coalesced while health transitions report immediately', () => 
   assert.equal(schedule.due(recovered, 21000), false);
   assert.equal(schedule.due(recovered, 46000), true);
 });
+
+test('failures back off independently of health changes and throttle warnings', () => {
+  const schedule = new DiagnosticsSchedule();
+  assert.equal(schedule.failed(0), true);
+  assert.equal(schedule.due(healthy, 1000), false);
+  assert.equal(schedule.due({ ...healthy, state: 'retrying' }, 4999), false);
+  assert.equal(schedule.due(healthy, 5000), true);
+  assert.equal(schedule.failed(5000, 60_000), false);
+  assert.equal(schedule.due(healthy, 64_999), false);
+  assert.equal(schedule.due(healthy, 65_000), true);
+  assert.equal(schedule.failed(65_000), true);
+  schedule.sent(healthy, 65_001);
+  assert.equal(schedule.due(healthy, 95_001), true);
+  assert.equal(schedule.failed(95_001), true);
+});

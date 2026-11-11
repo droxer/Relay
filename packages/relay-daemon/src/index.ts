@@ -1,3 +1,6 @@
+import { DaemonLogWriter, type DaemonLogWriterOptions } from "./daemon-log-writer.js";
+import { AdmissionLedger } from "./admission-ledger.js";
+import { withExecutionDeadline } from "./execution-deadline.js";
 import { syncDirectory } from "./sync-directory.js";
 import { retryAfterMs } from "./transport-retry.js";
 import { ReportStoragePolicy } from "./report-storage.js";
@@ -14,10 +17,9 @@ import { legacyUserId, userIdFromEnv } from "./legacy-names.js";
 import { loadManagedEnrollment, saveManagedEnrollment } from "./managed-enrollment.js";
 import { createLocalRuntime, localProcessExecStream } from "./local-runtime.js";
 import { AgentNotInstalledError, AgentUnresponsiveError } from "./agent-preflight.js";
-import { responseErrorDetail } from "./http-error-detail.js";
+import { responseErrorDetail, transportErrorDetail } from "./http-error-detail.js";
 export { localProcessExecStream } from "./local-runtime.js";
 import { accessSync, closeSync, fsyncSync, openSync, writeFileSync, renameSync, chmodSync, constants, mkdirSync, statSync, statfsSync, existsSync, readFileSync } from "node:fs";
-import { appendFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 
@@ -72,7 +74,7 @@ async function verifyBoxlitePrerequisites(sandboxId: string): Promise<void> {
     ensureLocalDevboxOci((text) => console.log(`  ${text.trimEnd()}`));
   } catch (error) {
     console.error(err.error(`Failed to prepare BoxLite devbox image for sandbox ${sandboxId}:`));
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(transportErrorDetail(error));
     console.error(`Run: ${err.command("make devbox-oci")}`);
     process.exit(1);
   }
@@ -320,7 +322,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const executionJournal = new ExecutionJournal(join(stateDir, "executions"));
   const terminalOutbox = new TerminalOutbox(join(stateDir, "terminal-events"), (id) => {
     executionJournal.confirmExit(id);
-    terminalCommands.add(id);
+    // Only live run promises need a terminal marker for capacity/lease bookkeeping.
+    // Orphan cancellation acknowledgements must not grow a lifetime in-memory set.
+    if (activeRuns.has(id)) terminalCommands.add(id);
+    unconfirmedExecutions.delete(id);
     executionWatchdog.forget(id);
   }, positiveIntEnv("RELAY_DAEMON_REPORT_STORAGE_BYTES"), (error) => {
     reportPersistenceFault = true;
@@ -337,7 +342,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   // Retained executions the backend has not yet accounted for. Reported at
   // registration until acknowledged; unconfirmedExecutions keeps fencing them.
   const unreportedExecutions = new Set(unconfirmedExecutions);
-  const admittedExecutions = new Set([...unconfirmedExecutions, ...terminalOutbox.commandIds()]);
+  const admittedExecutions = new AdmissionLedger(join(stateDir, "admissions"));
+  for (const id of [...unconfirmedExecutions, ...terminalOutbox.commandIds()]) admittedExecutions.add(id);
   fetchFn = terminalOutbox.wrapFetch(rawFetch);
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const tokenResolution = ensureDaemonNodeToken({
@@ -538,7 +544,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             AbortSignal.timeout(shutdownRegistrationTimeoutMs),
           );
         await stopNotice.catch((error: unknown) => {
-          logger.warn("daemon stopped notice failed", { sandboxId, error: error instanceof Error ? error.message : String(error) });
+          logger.warn("daemon stopped notice failed", { sandboxId, error: transportErrorDetail(error) });
         });
       }
       await environment.close();
@@ -637,7 +643,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         reason,
       } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
         logger.warn("proven-exit report failed; the outbox will retry", {
-          sandboxId, commandId: record.id, error: error instanceof Error ? error.message : String(error),
+          sandboxId, commandId: record.id, error: transportErrorDetail(error),
         });
       });
     };
@@ -749,7 +755,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     const shutdownBeat = (state: DaemonNodeHeartbeatState) => async (): Promise<void> => {
       // Not the runtime signal: it is already aborted while we drain.
       await sendHeartbeat(state, AbortSignal.timeout(shutdownRegistrationTimeoutMs)).catch((error: unknown) => {
-        logger.warn(`daemon ${state} heartbeat failed`, { sandboxId, error: error instanceof Error ? error.message : String(error) });
+        logger.warn(`daemon ${state} heartbeat failed`, { sandboxId, error: transportErrorDetail(error) });
         if (state === "stopped") throw error;
       });
     };
@@ -784,7 +790,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         updateHeartbeatSettings(await register());
       } catch (error) {
         logger.warn("busy runtime refresh failed; it will retry", {
-          sandboxId, error: error instanceof Error ? error.message : String(error),
+          sandboxId, error: transportErrorDetail(error),
         });
       } finally {
         refreshedCommands = [];
@@ -808,7 +814,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             diagnosticsSchedule.sent(snapshot, performance.now());
           }
         } catch (error) {
-          if (!runtimeSignal.aborted) logger.warn('Transport diagnostics retained locally; delivery will retry', { sandboxId, error: error instanceof Error ? error.message : String(error) });
+          if (!runtimeSignal.aborted && diagnosticsSchedule.failed(performance.now(), error instanceof DaemonHttpError ? error.retryAfterMs : 0)) logger.warn('Transport diagnostics retained locally; delivery will retry', { sandboxId, error: transportErrorDetail(error) });
         }
         await delay(1000, runtimeSignal);
       }
@@ -848,7 +854,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           if (transient) reconnectControl.onTransientFailure();
           if (error instanceof DaemonHttpError) nextBeatAt = Math.max(nextBeatAt, performance.now() + error.retryAfterMs);
           logger.warn("liveness heartbeat failed; next beat retries", {
-            sandboxId, error: error instanceof Error ? error.message : String(error),
+            sandboxId, error: transportErrorDetail(error),
           });
         }
       }
@@ -862,7 +868,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       }
       logger.error("liveness heartbeat stopped", {
         sandboxId,
-        error: error instanceof Error ? error.message : String(error),
+        error: transportErrorDetail(error),
       });
     });
     // A terminal event sent while stopping gets the same bound as the stop
@@ -876,12 +882,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // to throw into the poll loop: an event the backend refuses (409, or a 401
     // from a stale lease) is about that run, not this daemon's credential, so
     // it must not stop the daemon.
-    const queueReport = (event: Extract<DaemonNodeEvent, { type: "run.failed" | "run.cancelled" }>): void => {
+    const queueReport = (event: Extract<DaemonNodeEvent, { type: "run.failed" | "run.cancelled" }>, failureMessage: string, fields: DaemonLogFields): void => {
       // Capture terminal evidence even when every background sender is busy.
       // The outbox replays reports that cannot enter the bounded task queue.
       try { terminalOutbox.retain({ ...event }); }
       catch (error) {
-        logger.error("command report capture failed; execution remains protected", { sandboxId, error: String(error) });
+        logger.error(failureMessage, { ...fields, error: transportErrorDetail(error) });
+        protectStorage();
         return;
       }
       commandTasks.submit(JSON.stringify(["report", event.commandId, event.leaseId ?? null]), () =>
@@ -898,7 +905,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         agent: command.agent,
         error: detail,
         exitCode: 1,
-      });
+      }, "rejected start report capture failed", commandLogFields(sandboxId, command));
     };
     while (!stopping) {
       void refreshMcp();
@@ -1014,7 +1021,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
                 ? threadWorkspaces.resolve(command.sessionId).hostPath
                 : workspacePath;
           } catch (error) {
-            const detail = error instanceof Error ? error.message : String(error);
+            const detail = transportErrorDetail(error);
             logger.warn("command rejected for invalid workspace subpath", { ...commandLogFields(sandboxId, command), error: detail });
             postRejectedStart(command, detail);
             continue;
@@ -1036,7 +1043,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               } catch (error) {
                 logger.warn("could not record the run's process group", {
                   ...commandLogFields(sandboxId, command),
-                  error: error instanceof Error ? error.message : String(error),
+                  error: transportErrorDetail(error),
                 });
               }
             },
@@ -1053,7 +1060,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
                 logger.warn("exit-unconfirmed report failed", {
                   ...commandLogFields(sandboxId, command),
-                  error: error instanceof Error ? error.message : String(error),
+                  error: transportErrorDetail(error),
                 });
               });
             },
@@ -1110,7 +1117,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               event, token, controller.signal.aborted ? cancellationTerminalEventSignal() : controller.signal,
               eventPostRetryLogger(logger, { ...commandLogFields(sandboxId, command), eventType: event.type }));
           }).catch(async (error: unknown) => {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = transportErrorDetail(error);
             if (terminalCommands.has(command.id)) {
               // Execution already produced durable exit evidence. A failed or
               // aborted upload cannot change that outcome into cancellation.
@@ -1179,7 +1186,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             // response was lost) or the daemon restarted since. The daemon is
             // the only party that knows the run is not executing, so it must
             // say so; otherwise the backend holds the run's slot forever.
-            logger.warn("cancel for a run this daemon is not executing; reporting it cancelled", {
+            logger.info("cancel for a run this daemon is not executing; reporting it cancelled", {
               sandboxId,
               commandId: command.commandId,
               ...(command.targetLeaseId ? { leaseId: command.targetLeaseId } : {}),
@@ -1196,7 +1203,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               runId: command.runId,
               agent: command.agent,
               reason: command.reason || "Run was not executing on this computer.",
-            });
+            }, "cancel acknowledgement capture failed", { sandboxId, commandId: command.commandId });
           }
         } else {
           const key = JSON.stringify([command.id, command.leaseId ?? null]);
@@ -1302,17 +1309,17 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
     if (!token) throw new Error("No saved node token. Enroll this computer before running doctor.");
     add("token", true, "daemon node token resolved.");
   } catch (error) {
-    add("token", false, error instanceof Error ? error.message : String(error));
+    add("token", false, transportErrorDetail(error));
   }
   await checkBackendReachable(fetchFn, backendUrl, options.signal).then(
     () => add("backend", true, `${backendUrl} is reachable.`),
-    (error: unknown) => add("backend", false, error instanceof Error ? error.message : String(error)),
+    (error: unknown) => add("backend", false, transportErrorDetail(error)),
   );
   try {
     checkWorkspace(workspacePath);
     add("workspace", true, `${workspacePath} exists and is writable.`);
   } catch (error) {
-    add("workspace", false, error instanceof Error ? error.message : String(error));
+    add("workspace", false, transportErrorDetail(error));
   }
   const environment = options.environment ?? createExecutionEnvironment(sandboxMode, sandboxId, workspacePath, logger);
   const agentHealth = await discoverDaemonAgentHealth(environment, logger, sandboxId, options.signal);
@@ -1326,7 +1333,7 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
       if (body.sandboxId !== sandboxId || body.authenticated !== true) throw new Error("Token does not identify this enrolled node.");
       add("authentication", true, "backend accepted the enrolled node token.");
     } catch (error) {
-      add("authentication", false, error instanceof Error ? error.message : String(error));
+      add("authentication", false, transportErrorDetail(error));
     }
   }
   for (const agent of AGENT_NAMES) {
@@ -1379,7 +1386,7 @@ async function runStartupPreflight(input: {
     input.logger.warn("daemon backend preflight failed; registration will retry", {
       sandboxId: input.sandboxId,
       check: "backend",
-      error: error instanceof Error ? error.message : String(error),
+      error: transportErrorDetail(error),
     });
   }
 }
@@ -1405,7 +1412,7 @@ async function discoverDaemonAgentHealth(
     } catch (error) {
       health[agent] = {
         status: agentHealthStatusFor(error),
-        detail: error instanceof Error ? error.message : String(error),
+        detail: transportErrorDetail(error),
         adapter: "cli",
       };
     }
@@ -1570,7 +1577,7 @@ async function executeCommand(
     } catch (error) {
       // Never fall back to the runtime's headless command: Pi and Kimi there
       // run every tool without asking anyone, which a native policy forbids.
-      const message = error instanceof Error ? error.message : String(error);
+      const message = transportErrorDetail(error);
       logger.warn("permission broker unavailable; the run cannot ask a person", {
         ...commandLogFields(sandboxId, command),
         error: message,
@@ -1754,7 +1761,7 @@ async function executeCommand(
     // that grows by one post (and one durable record) every latency window.
     const outputBuffer = new OutputEventBuffer(
       (entries) => emitOutputBatch(command.agent, entries),
-      { isBusy: () => false },
+      { isBusy: () => !!outputPostDrain || outputDeliveryDeferred || hasPendingOutput(fetchFn, command.id) },
     );
     const eventSink = {
       agentOutput: (_runId: string, _agent: AgentName, stream: "stdout" | "stderr", text: string): void => {
@@ -1875,7 +1882,7 @@ async function executeCommand(
       throw error;
     } finally {
       try { imageInput?.cleanup(); } catch (error) {
-        logger.warn("Could not remove temporary image inputs", { ...commandLogFields(sandboxId, command), error: error instanceof Error ? error.message : String(error) });
+        logger.warn("Could not remove temporary image inputs", { ...commandLogFields(sandboxId, command), error: transportErrorDetail(error) });
       }
       outputBuffer.close();
       await settleOutputPosts();
@@ -1912,6 +1919,7 @@ async function executeCommand(
       ? await diffGeneratedFiles(threadWorkspace.hostPath, workspaceSnapshot, scanOptions)
       : [];
     if (outputPostFailure) {
+      logger.error("run failed", { ...commandLogFields(sandboxId, command), error: `Daemon lost agent output: ${outputPostFailure.message}` });
       return {
         type: "run.failed",
         commandId: command.id,
@@ -2080,6 +2088,7 @@ export function createBoxliteEnvironment(
   const pool = new GuestPool({
     capacity: options.maxGuests ?? 1,
     boxName: (slot) => boxNameForSandbox(sandboxId, slot),
+    onUnconfirmed: (error) => logger.error("Guest retirement unconfirmed; slot remains fenced", { sandboxId, error: transportErrorDetail(error) }),
     createManager: () => options.executionManager ?? new BoxLiteExecutionManager(),
     start: ({ workspace, boxName, manager }) => startOrchestratorSession((text) => {
       logger.info("sandbox", { sandboxId, text: text.trimEnd() });
@@ -2115,7 +2124,7 @@ export function createBoxliteEnvironment(
         // Every runtime on this computer is unreachable, not misconfigured:
         // say so, so the detail names the sandbox rather than the runtime.
         if (signal?.aborted) throw error;
-        throw new Error(`The sandbox did not start: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`The sandbox did not start: ${transportErrorDetail(error)}`);
       }
       try {
         await probeAgentReadiness(agent, signal, lease.manager);
@@ -2140,7 +2149,7 @@ export function createBoxliteEnvironment(
       try {
         await pool.close();
       } finally {
-        await runtimeOwner.close();
+        await withExecutionDeadline(runtimeOwner.close(), 10_000, "BoxLite runtime shutdown");
       }
     },
   };
@@ -2165,7 +2174,7 @@ async function proveJournaledExits(
   } catch (error) {
     // No proof is the safe answer: those runs wait for a person instead.
     logger.warn("could not check runs admitted before the restart", {
-      sandboxId, error: error instanceof Error ? error.message : String(error),
+      sandboxId, error: transportErrorDetail(error),
     });
     return [];
   }
@@ -2256,23 +2265,24 @@ export function createDaemonLogger(input: {
   workspacePath: string;
   sandboxId: string;
   logDir?: string;
-}): DaemonLogger {
+} & DaemonLogWriterOptions): DaemonLogger {
   const logDir = input.logDir
     ?? join(homedir(), ".relay", "daemon-nodes", safeLogFileName(input.sandboxId), "logs");
   mkdirSync(logDir, { recursive: true, mode: 0o700 });
   chmodSync(logDir, 0o700);
   const logPath = join(logDir, `${safeLogFileName(input.sandboxId)}.log`);
-  return new TextDaemonLogger(logDir, logPath);
+  return new TextDaemonLogger(logDir, logPath, input);
 }
 
 class TextDaemonLogger implements DaemonLogger {
   private readonly renderers = new Map<string, StreamRenderer>();
-  private pendingWrite: Promise<void> = Promise.resolve();
+  private readonly writer: DaemonLogWriter;
 
   constructor(
     private readonly logDir: string,
     public readonly logPath: string,
-  ) {}
+    options: DaemonLogWriterOptions = {},
+  ) { this.writer = new DaemonLogWriter(logDir, logPath, options); }
 
   info(message: string, fields: DaemonLogFields = {}): void {
     this.write("info", message, fields);
@@ -2301,32 +2311,22 @@ class TextDaemonLogger implements DaemonLogger {
   }
 
   private write(level: string, message: string, fields: DaemonLogFields): void {
-    if (fields.runId && ["run completed", "run cancelled", "command failed before completion"].includes(message)) {
+    if (fields.runId && ["run completed", "run cancelled", "run failed", "command failed before completion"].includes(message)) {
       this.renderers.delete(fields.runId);
     }
     const line = formatDaemonLog(new Date().toISOString(), level, message, fields);
     // Service managers capture stdout. Agent output already reaches it through
     // the runtime renderer (unless a supervisor explicitly disables that echo).
     if (level !== "output") process.stdout.write(line);
-    const paths = [this.logPath];
-    if (typeof fields.runId === "string" && fields.runId) {
-      paths.push(join(this.logDir, `${safeLogFileName(fields.runId)}.log`));
-    }
-    this.pendingWrite = this.pendingWrite
-      .then(async () => {
-        await Promise.all(paths.map((path) => appendFile(path, line, "utf8")));
-      })
-      .catch((error: unknown) => {
-        process.stderr.write(`Relay daemon log write failed: ${error instanceof Error ? error.message : String(error)}\n`);
-      });
+    this.writer.write(line, typeof fields.runId === "string" && fields.runId ? safeLogFileName(fields.runId) : undefined);
   }
 
   async flush(): Promise<void> {
-    await this.pendingWrite;
+    await this.writer.flush();
   }
 
   async close(): Promise<void> {
-    await this.flush();
+    await this.writer.close();
     this.renderers.clear();
   }
 }
@@ -2482,7 +2482,7 @@ async function withBackendReconnect<T>(
       }
       control.onTransientFailure?.();
       attempt += 1;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = transportErrorDetail(error);
       const backoff = Math.max(backendReconnectDelayMs(attempt), error instanceof DaemonHttpError ? error.retryAfterMs : 0);
       logger.warn(`${context.what} failed; retrying`, {
         sandboxId: context.sandboxId,
@@ -2618,7 +2618,7 @@ async function postJsonWithRetry(
         onRetry?.({
           attempt,
           ...(error instanceof DaemonHttpError ? { status: error.status } : {}),
-          error: error instanceof Error ? error.message : String(error),
+          error: transportErrorDetail(error),
           backoffMs: backoff,
         });
       }

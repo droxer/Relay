@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { open, rename } from 'node:fs/promises';
+import { ReportOrder } from './report-order.js';
 import { retryAfterMs } from './transport-retry.js';
 import { syncDirectory, syncDirectoryAsync } from './sync-directory.js';
 import { sendTerminalEvent, terminalEventPayload } from './terminal-event-payload.js';
@@ -34,7 +35,7 @@ interface RecordIndex { owner: string; sequence: number; terminal: boolean; byte
 
 /** Private, write-ahead report storage. Only verified acceptance removes evidence. */
 export class TerminalOutbox {
-  private offset = 0;
+  private readonly order = new ReportOrder();
   private readonly index = new Map<string, RecordIndex>();
   private readonly rejected = new Map<string, number>();
   private readonly corrupt = new Set<string>();
@@ -49,6 +50,7 @@ export class TerminalOutbox {
   private persistenceFault = false;
   private readonly writes = new Map<string, { event: Record<string, unknown>; done: Promise<void>; bytes: number }>();
   private writingBytes = 0;
+  private readonly outputCounts = new Map<string, number>();
   private readonly positions = new Map<string, number>();
   private onPressure?: () => void;
   private onAcceptance?: () => void;
@@ -73,15 +75,25 @@ export class TerminalOutbox {
         this.fail(new Error(`Unreadable retained report ${key}; evidence preserved.`));
       }
     }
+    for (const [key, record] of this.index) {
+      this.order.add(key, record);
+      if (!record.terminal) this.countOutput(record.owner, 1);
+    }
   }
   negotiate(verified: boolean, batching = false): void { this.strictAcknowledgements = verified; this.batching = verified && batching; }
   usesBatching(): boolean { return this.batching; }
   hasPendingOutput(commandId: string): boolean {
-    return [...this.index.values()].some(record => !record.terminal && JSON.parse(record.owner)[0] === commandId);
+    return (this.outputCounts.get(commandId) ?? 0) > 0;
   }
   status(): { bytes: number; limitBytes: number; pending: number; quarantined: number; corrupt: number; persistenceFault: boolean; verified: boolean; accepted: number; quotaExceeded: boolean; capturingBytes: number; positions: Array<{ commandId: string; sequence: number }> } {
     return { bytes: this.bytes, limitBytes: this.maxOutputBytes, pending: this.index.size,
       quarantined: this.rejected.size, corrupt: this.corrupt.size, persistenceFault: this.persistenceFault, verified: this.strictAcknowledgements, accepted: this.accepted, quotaExceeded: this.quotaExceeded, capturingBytes: this.writingBytes, positions: [...this.positions].map(([commandId, sequence]) => ({ commandId, sequence })) };
+  }
+  private countOutput(owner: string, delta: number): void {
+    const commandId = String(JSON.parse(owner)[0]);
+    const count = (this.outputCounts.get(commandId) ?? 0) + delta;
+    if (count > 0) this.outputCounts.set(commandId, count);
+    else this.outputCounts.delete(commandId);
   }
   private fail(error: Error): void { this.persistenceFault = true; this.onWriteError?.(error); }
   private write(path: string, data: string): void {
@@ -165,6 +177,8 @@ export class TerminalOutbox {
       if (synchronous) this.write(join(this.directory, `${key}.json`), data);
       this.bytes += bytes;
       this.index.set(key, { owner: owner(event), sequence: sequence(event), terminal: !output, bytes });
+      this.order.add(key, this.index.get(key)!);
+      if (output) this.countOutput(owner(event), 1);
       if (!synchronous) {
         this.writingBytes += bytes;
         const done = this.writeOutput(key, data);
@@ -198,6 +212,8 @@ export class TerminalOutbox {
     rmSync(join(this.directory, `${key}.json`), { force: true });
     this.bytes -= record.bytes;
     if (this.bytes < this.maxOutputBytes * 0.5) this.quotaExceeded = false;
+    if (!record.terminal) this.countOutput(record.owner, -1);
+    this.order.remove(key, record);
     this.index.delete(key);
     this.retryAt.delete(key);
     const rejection = join(this.directory, `${key}.rejected`);
@@ -241,7 +257,7 @@ export class TerminalOutbox {
   }
   private blocked(record: TerminalRecord): boolean {
     const current = this.index.get(record.key);
-    return !current?.terminal && [...this.index.values()].some(other => other.owner === current?.owner && other.sequence < current.sequence);
+    return !!current && !this.order.ready(record.key, current);
   }
   private async deliver(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
     await this.stored(record.key);
@@ -305,9 +321,9 @@ export class TerminalOutbox {
     for (const [key, current] of ordered) {
       if (reports.length >= 50 || signal?.aborted) break;
       if (!this.index.has(key) || this.rejected.has(key) || Date.now() < (this.retryAt.get(key) ?? 0)) continue;
-      if (!current.terminal && [...this.index].some(([otherKey, other]) => other.owner === current.owner && other.sequence < current.sequence && !selected.has(otherKey))) continue;
+      if (!this.order.ready(key, current, selected)) continue;
       let record: TerminalRecord;
-      try { await this.stored(key); record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
+      try { await this.stored(key); if (!this.index.has(key)) continue; record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
       const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
       const body = JSON.stringify(event);
       const size = Buffer.byteLength(JSON.stringify(body)) + 200;
@@ -368,13 +384,9 @@ export class TerminalOutbox {
     try {
       // Terminal evidence goes first. Round-robin streams prevent one backlog
       // monopolizing replay; only read a payload when it is actually attempted.
-      const entries = [...this.index];
-      const terminals = entries.filter(([, record]) => record.terminal);
-      const outputs = entries.filter(([, record]) => !record.terminal).sort((a, b) => a[1].sequence - b[1].sequence);
-      const owners = [...new Set(outputs.map(([, record]) => record.owner))];
-      const start = this.offset++ % Math.max(1, owners.length);
-      const orderedOwners = [...owners.slice(start), ...owners.slice(0, start)];
-      const ordered = [...terminals, ...outputs.sort((a, b) => a[1].sequence - b[1].sequence || orderedOwners.indexOf(a[1].owner) - orderedOwners.indexOf(b[1].owner))];
+      const ordered = this.order.candidates(key => !this.rejected.has(key)
+        && Date.now() >= (this.retryAt.get(key) ?? 0))
+        .map(key => [key, this.index.get(key)!] as [string, RecordIndex]);
       if (this.batching) {
         try { await this.replayBatch(send, eventUrl, token, ordered, signal); } catch { /* Retry the same durable identities next tick. */ }
         return;
@@ -384,7 +396,7 @@ export class TerminalOutbox {
         if (signal?.aborted || attempts >= 50) return;
         if (!this.index.has(key) || this.rejected.has(key) || Date.now() < (this.retryAt.get(key) ?? 0)) continue;
         let record: TerminalRecord;
-        try { await this.stored(key); record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
+        try { await this.stored(key); if (!this.index.has(key)) continue; record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
         if (this.blocked(record)) continue;
         attempts++;
         try {
