@@ -177,7 +177,7 @@
      matters because the codebase has one other source of hue and a reader
      who takes the rule literally will file it as a bug:
 
-       App icons — favicon.svg and both relay-mark.svg carry a brand fill,
+       App icons — favicon.svg and both relay-mark.svg carry brand strokes,
        because a neutral chevron on a neutral square is invisible at 16px.
 
      That is not a status, so it does not compete with --live for meaning. Any

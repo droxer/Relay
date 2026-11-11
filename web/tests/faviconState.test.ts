@@ -56,16 +56,16 @@ describe("favicon state", () => {
 });
 
 describe("favicon mark", () => {
-  it("lights only the half that is acting", () => {
+  it("keeps idle tabs colorful and emphasizes the acting half during activity", () => {
     const ink = FAVICON_INK;
-    assert.deepEqual(strokes(faviconSvg("idle")), [ink.unlit, ink.unlit]);
+    assert.deepEqual(strokes(faviconSvg("idle")), [ink.action, ink.live]);
     assert.deepEqual(strokes(faviconSvg("running")), [ink.unlit, ink.live]);
     assert.deepEqual(strokes(faviconSvg("waiting")), [ink.action, ink.unlit]);
   });
 
   it("keeps an idle mark legible on its tile", () => {
-    // WCAG relative luminance; an unlit chevron at the old ~2.7:1 vanished
-    // in a 16px tab.
+    // WCAG relative luminance: the inactive half stays bright enough to
+    // preserve the silhouette beside the colored activity indicator.
     const luminance = (hex: string) => {
       const [r, g, b] = [1, 3, 5].map((i) => {
         const c = parseInt(hex.slice(i, i + 2), 16) / 255;
@@ -77,6 +77,7 @@ describe("favicon mark", () => {
       const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
       return (hi + 0.05) / (lo + 0.05);
     };
+    assert.ok(contrast(FAVICON_INK.unlit, FAVICON_INK.canvas) >= 12);
     for (const hue of [FAVICON_INK.unlit, FAVICON_INK.action, FAVICON_INK.live]) {
       assert.ok(contrast(hue, FAVICON_INK.canvas) >= 4.5, `${hue} on ${FAVICON_INK.canvas}`);
     }
@@ -91,6 +92,9 @@ describe("favicon mark", () => {
     assert.deepEqual(geometry(faviconSvg("idle")), geometry(shipped));
     assert.deepEqual(geometry(shipped), [FAVICON_PATHS.lead, FAVICON_PATHS.trail]);
     assert.deepEqual(strokes(shipped), [FAVICON_INK.action, FAVICON_INK.live]);
+    assert.deepEqual(strokes(faviconSvg("idle")), strokes(shipped));
     assert.ok(shipped.includes(`fill="${FAVICON_INK.canvas}"`));
+    const tile = (svg: string) => svg.match(/<rect [^>]*\/>/)?.[0];
+    assert.equal(tile(faviconSvg("idle")), tile(shipped));
   });
 });

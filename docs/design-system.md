@@ -255,8 +255,9 @@ deliberate — a reader who takes the rule literally will file them as bugs:
 - **Link ink is wayfinding, not decoration**: anchors in prose (`--link`)
   and the focus ring (`--focus-outline`). It is ink, told apart by its
   underline (the ring by its offset) — never a fill, a status, or a hue.
-- **The brand mark is the one orange.** `favicon.svg` (follows the viewer's scheme; the signed-in app redraws it in the painted theme),
-  `relay-mark.svg` (light register, source of `apple-touch-icon.png`), the
+- **The brand mark is the one orange.** `favicon.svg` (a fixed charcoal tile with a subtle hairline; the signed-in app highlights
+  the acting chevron and keeps both brand colors when idle), `relay-mark.svg` (the same
+  badge, shared with the PWA and opaque Apple/Android launcher variants), the
   wordmark `relay-logo.svg` (follows the viewer's scheme), and `RelayMark`'s
   `tone="brand"` (side nav, sign-in, landing, empty transcript) draw a
   `--brand-lead` lead chevron and a `--live` trailing chevron; the login and

@@ -8,34 +8,40 @@ do not duplicate its token table here.
 
 Two chevrons draw a handoff. The lead chevron is the baton orange
 (`--brand-lead`, a person handing work on); the trailing chevron is the
-`--live` blue (an agent carrying the work on). Every copy draws one geometry:
-`RelayMark`'s chevrons (64-unit box, stroke 7). The badges scale them by 0.7
-about the centre, so the pair sits on the badge's centre, with a 6.5 stroke
-that holds up at 16px. The wordmark draws them unscaled beside the name in
-the `--font-sans` stack at weight 500, in `--ink-1`. The colours are the palette's own tokens for
-each register, never new hexes, and `web/tests/paletteTokens.test.ts` fails if
-an icon drifts from them.
+`--live` blue (an agent carrying the work on). Application chrome and
+wordmarks use `RelayMark`'s chevrons (64-unit box, stroke 7). Small launcher
+badges use the bolder, more separated paths in
+`web/public/favicon.svg` (stroke 12) to stay readable at 16px. The wordmark uses
+the sans stack at weight 500 and follows the viewer's color scheme. Launcher
+badges use a fixed charcoal canvas with orange and blue from the dark palette,
+so they remain recognizable independently of the surrounding theme.
 
 ## Files
 
 - `relay-logo.svg` is the primary wordmark for documentation and other
   standalone surfaces. Its ink and both chevrons follow the viewer's light or
   dark color scheme.
-- `relay-mark.svg` is the light app-icon badge.
+- `relay-mark.svg` is the fixed charcoal app-icon badge, generated from the favicon.
 - `relay-logo-concept.png` is an early concept reference. Do not ship or embed
   it when an SVG is available.
 
 The web app has delivery copies under `web/public/brand/` (byte-identical to
 the two SVGs here), plus:
 
-- `web/public/favicon.svg`, the browser-tab icon: dark by default, white
-  with the `--line-1` hairline when the viewer's scheme is light. Once the
-  signed-in app mounts, `useLiveFavicon` redraws it (`faviconState.ts`) in
-  the app's own painted theme, so a theme switch repaints the tab.
-- `web/public/apple-touch-icon.png`, rendered at 180×180 from
-  `relay-mark.svg` cropped to its badge, as an opaque square without the
-  hairline (iOS applies its own mask and paints transparency black).
+- `web/public/favicon.svg`, the browser-tab icon, uses a charcoal tile with a
+  subtle hairline. The signed-in app redraws it through `faviconState.ts`:
+  orange and blue chevrons when idle, a blue trailing chevron while running, and an
+  orange lead chevron when input is needed. Browser and app themes are independent.
+- `web/public/apple-touch-icon.png`, an opaque 180×180 square with the same
+  colors and mark. iOS supplies its own rounded mask.
+- `web/public/icons/icon-{192,512}.png`, the PWA install and shortcut icons.
+- `web/public/icons/icon-maskable-512.png`, a full-bleed opaque square with
+  the chevrons inside Android's central 80% safe circle, without an inset tile.
 - `web/public/favicon.ico`, 16/32/48px PNGs rendered from `favicon.svg`.
+
+Regenerate all launcher assets and both `relay-mark.svg` delivery copies with
+`node web/scripts/generate-pwa-icons.mjs`. Edit `favicon.svg` first; keep the
+runtime tile, paths and colors in `faviconState.ts` in sync.
 
 ## Usage
 

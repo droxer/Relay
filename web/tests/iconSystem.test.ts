@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { resolve } from "node:path";
+import sharp from "sharp";
 
 const webRoot = resolve("web");
 const readWeb = (path: string) => readFileSync(resolve(webRoot, path), "utf8");
@@ -81,6 +82,41 @@ describe("icon system regressions", () => {
     const ico = readFileSync(resolve(webRoot, "public/favicon.ico"));
     assert.deepEqual([...ico.subarray(0, 4)], [0, 0, 1, 0]);
     assert.ok(ico.readUInt16LE(4) > 0, "favicon.ico holds no images");
+  });
+
+  it("supplies opaque OS icons with a consistent canvas and safe Android artwork", async () => {
+    const favicon = readWeb("public/favicon.svg");
+    const canvas = favicon.match(/<rect[^>]*fill="(#[0-9a-f]{6})"/)?.[1];
+    assert.ok(canvas);
+    const background = [1, 3, 5].map(offset => parseInt(canvas.slice(offset, offset + 2), 16));
+    for (const [file, size] of [["apple-touch-icon.png", 180], ["icons/icon-maskable-512.png", 512]] as const) {
+      const { data, info } = await sharp(resolve(webRoot, "public", file)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      assert.equal(info.width, size);
+      assert.equal(info.height, size);
+      let artworkPixels = 0;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const offset = (y * size + x) * 4;
+          assert.equal(data[offset + 3], 255, `${file} must be opaque`);
+          const difference = background.reduce((sum, channel, index) => sum + Math.abs(data[offset + index] - channel), 0);
+          if (difference <= 24) continue; // Ignore antialiasing at the edge.
+          artworkPixels++;
+          if (file.includes("maskable")) {
+            assert.ok(Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) <= size * 0.4,
+              "Android may crop artwork outside its safe circle");
+          }
+        }
+      }
+      assert.ok(artworkPixels > size * size * 0.1, `${file} mark is too small or missing`);
+      assert.deepEqual([...data.subarray(0, 3)], background);
+    }
+    const manifest = JSON.parse(readWeb("public/manifest.webmanifest"));
+    assert.equal(manifest.background_color, canvas);
+    assert.equal(manifest.theme_color, canvas);
+    for (const icon of manifest.icons) {
+      const metadata = await sharp(resolve(webRoot, "public", icon.src.slice(1))).metadata();
+      assert.equal(`${metadata.width}x${metadata.height}`, icon.sizes);
+    }
   });
 
   it("uses the large-stroke tier for every hero-sized Lucide illustration", () => {

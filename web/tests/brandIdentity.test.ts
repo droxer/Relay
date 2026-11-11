@@ -145,7 +145,7 @@ describe("the handoff mark", () => {
   const strokes = (svg: string) => [...svg.matchAll(/<path [^>]*stroke="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
   const icons = [
     { file: ["web", "public", "favicon.svg"], register: "dark" },
-    { file: ["web", "public", "brand", "relay-mark.svg"], register: "light" },
+    { file: ["web", "public", "brand", "relay-mark.svg"], register: "dark" },
   ] as const;
 
   for (const { file, register } of icons) {
