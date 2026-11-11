@@ -60,3 +60,25 @@ test("backend-approved legacy bindings resume without opening another workspace"
   assert.doesNotThrow(() => assertRunWorkspaceScope(command({ workspaceLayout: "node-root", workspaceScope: { computerId: "c", legacyLayout: "node-root" } as never }), "c"));
   assert.throws(() => assertRunWorkspaceScope(command({ workspaceLayout: "project", workspaceSubpath: "projects/p", workspaceScope: { computerId: "c", projectId: "p", legacyLayout: "thread" } as never }), "c"), /workspace scope/i);
 });
+
+test("linked Project runs use their recorded link identity rather than the Project id", () => {
+  // The link is created before the Project and has an independent id.
+  const scope = { computerId: "c", projectId: "p", projectWorkspaceSubpath: "links/folder-binding" };
+  for (const work of [{}, { taskId: "t" }, { taskId: "occurrence", automationId: "a" }]) {
+    const linked = command({ workspaceLayout: "project", workspaceSubpath: scope.projectWorkspaceSubpath,
+      workspaceScope: { ...scope, ...work },
+      state: { project_reader: { projectId: "p", agentId: "agent", bindingRevision: 1 } } as never });
+    assert.doesNotThrow(() => assertRunWorkspaceScope(linked, "c"));
+    for (const workspaceSubpath of ["links/other", "links/p", "projects/p", "tasks/t"]) {
+      assert.throws(() => assertRunWorkspaceScope({ ...linked, workspaceSubpath }, "c"), /workspace scope/i);
+    }
+    assert.throws(() => assertRunWorkspaceScope(linked, "other"), /workspace scope/i);
+  }
+});
+
+test("Project directory authorization cannot escape or override a different layout", () => {
+  for (const path of ["projects/other", "tasks/t", "links/../p", "links/.", "links/..", "links/a/b", "links/a\\b", "links/a\u0000b", "/tmp/p"]) {
+    const scope = { computerId: "c", projectId: "p", projectWorkspaceSubpath: path };
+    assert.throws(() => assertRunWorkspaceScope(command({ workspaceLayout: "project", workspaceSubpath: path, workspaceScope: scope }), "c"), /workspace scope/i);
+  }
+});
