@@ -2,6 +2,7 @@
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { computerId } from "../src/lib/createAgent";
 import type { ControlPanelDaemonNodeRecord } from "../src/types";
 
@@ -35,6 +36,15 @@ async function stop(api: APIRequestContext, sessionId: string) {
   await post(api, `/threads/${sessionId}/cancellations`, {});
   await expect.poll(async () => (await get(api, `/threads/${sessionId}`)).execution.phase).toBe("terminal");
 }
+async function taskSession(api: APIRequestContext, taskId: string): Promise<string> {
+  let sessionId: string | undefined;
+  await expect.poll(async () => {
+    const task = await get(api, `/tasks/${taskId}`);
+    sessionId = task.linkedSessionIds.at(-1);
+    return sessionId;
+  }, { message: `Task ${taskId} should acquire a linked session` }).toBeTruthy();
+  return sessionId!;
+}
 function runtimeScope(node: ControlPanelDaemonNodeRecord, relative: string) {
   return JSON.parse(readFileSync(join(node.workspacePath, relative, ".relay/e2e-workspace-scope.json"), "utf8"));
 }
@@ -46,7 +56,7 @@ async function assertExecution(api: APIRequestContext, node: ControlPanelDaemonN
   expect(runtime.scope).toEqual(scope);
 }
 async function project(api: APIRequestContext, node: ControlPanelDaemonNodeRecord, agentId: string, name: string) {
-  return (await post(api, "/projects", { name, daemonNodeId: node.id, leadAgentId: agentId,
+  return (await post(api, "/projects", { name: `${name} ${randomUUID()}`, daemonNodeId: node.id, leadAgentId: agentId,
     members: [{ agentId, role: "implementer", responsibilities: "Exercise workspace boundaries", enabled: true }] })).project;
 }
 
@@ -72,24 +82,54 @@ test("standalone Thread renders real null Project summaries after reload and pol
 
 test("Project roster Automation exposes Run now and dashboard opens its own Tasks", async ({ page, context }) => {
   const { node, identity, agent } = await setup(page, context);
-  const p = await project(context.request, node, agent.id, "Roster Automation");
-  const automation = await post(context.request, "/tasks", { title: "Project crew Automation", projectId: p.id,
-    isRoutine: true, routineState: "active", routineTriggers: [] });
-  await page.goto(`/projects/${p.id}`);
-  await page.getByRole("button", { name: "View Project tasks", exact: true }).click();
-  await expect(page).toHaveURL(url => url.pathname === `/projects/${p.id}` && url.searchParams.get("tab") === "tasks");
-  await page.goto(`/projects/${p.id}?tab=automations&automation=${automation.id}`);
-  const record = page.getByRole("dialog", { name: automation.title, exact: true });
-  const response = page.waitForResponse(r => r.url().endsWith(`/tasks/${automation.id}/runs`) && r.request().method() === "POST");
-  await record.getByRole("button", { name: "Run now", exact: true }).click();
-  const started = await (await response).json();
+  // Occupy both real daemon slots so Run now must return an accepted queue
+  // response without a session, regardless of which scheduler wins the claim.
+  const blockers: string[] = [];
+  const sessions = new Set<string>();
+  let automationId: string | undefined;
   try {
+    for (let index = 0; index < 2; index++) {
+      const task = await post(context.request, "/tasks", { title: `Capacity blocker ${index}`,
+        computerId: identity, assignedAgentId: agent.id });
+      blockers.push(task.id);
+      await post(context.request, `/tasks/${task.id}/runs`, {});
+      const sessionId = await taskSession(context.request, task.id);
+      sessions.add(sessionId);
+      await assertExecution(context.request, node, sessionId, `tasks/${task.id}`,
+        { computerId: identity, taskId: task.id });
+    }
+    const p = await project(context.request, node, agent.id, "Roster Automation");
+    const automation = await post(context.request, "/tasks", { title: "Project crew Automation", projectId: p.id,
+      isRoutine: true, routineState: "active", routineTriggers: [] });
+    automationId = automation.id;
+    await page.goto(`/projects/${p.id}`);
+    await page.getByRole("button", { name: "View Project tasks", exact: true }).click();
+    await expect(page).toHaveURL(url => url.pathname === `/projects/${p.id}` && url.searchParams.get("tab") === "tasks");
+    await page.goto(`/projects/${p.id}?tab=automations&automation=${automation.id}`);
+    const record = page.getByRole("dialog", { name: automation.title, exact: true });
+    const response = page.waitForResponse(r => r.url().endsWith(`/tasks/${automation.id}/runs`) && r.request().method() === "POST");
+    await record.getByRole("button", { name: "Run now", exact: true }).click();
+    const accepted = await response;
+    expect(accepted.status()).toBe(202);
+    const started = await accepted.json();
+    expect(started.session).toBeNull();
+    expect(started.dispatch.state).toBe("queued");
+    for (const sessionId of sessions) {
+      await stop(context.request, sessionId);
+      sessions.delete(sessionId);
+    }
+    // The scheduler can claim an occurrence before the HTTP caller does.
+    // The persisted Task, rather than the initial 202 envelope, owns its link.
+    const sessionId = await taskSession(context.request, started.task.id);
+    sessions.add(sessionId);
     expect(started.task.projectId).toBe(p.id);
-    await assertExecution(context.request, node, started.session.id, p.workspaceSubpath,
+    await assertExecution(context.request, node, sessionId, p.workspaceSubpath,
       { computerId: identity, projectId: p.id, taskId: started.task.id, automationId: automation.id });
   } finally {
-    await stop(context.request, started.session.id);
-    expect((await context.request.delete(`/api/v1/tasks/${automation.id}`)).ok()).toBeTruthy();
+    for (const sessionId of sessions) await stop(context.request, sessionId);
+    for (const taskId of [...blockers, ...(automationId ? [automationId] : [])]) {
+      expect((await context.request.delete(`/api/v1/tasks/${taskId}`)).ok()).toBeTruthy();
+    }
   }
 });
 
@@ -103,13 +143,14 @@ test("Computer Tasks and Automations keep their files and Project work stays in 
   ];
   for (const record of records) {
     const started = await post(context.request, `/tasks/${record.id}/runs`, {});
+    const sessionId = await taskSession(context.request, started.task.id);
     try {
       const relative = record.projectId ? p.workspaceSubpath : `tasks/${record.id}`;
-      await assertExecution(context.request, node, started.session.id, relative, {
+      await assertExecution(context.request, node, sessionId, relative, {
         computerId: identity, ...(record.projectId ? { projectId: p.id } : {}), taskId: started.task.id,
         ...(record.isRoutine ? { automationId: record.id } : {}),
       });
-    } finally { await stop(context.request, started.session.id); }
+    } finally { await stop(context.request, sessionId); }
   }
   await page.goto(`${path}/tasks`);
   await expect(page.getByRole("link", { name: "Computer Task", exact: true })).toBeVisible();

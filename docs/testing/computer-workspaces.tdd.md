@@ -227,3 +227,24 @@ Final validation:
 Browser reports and traces for this follow-up are under
 `output/playwright/workspace-fixes/`; the real server harness removes its
 disposable backend, daemon, and workspace when the suite exits.
+
+## CI follow-up: asynchronous Automation dispatch
+
+The PR concurrency job exposed a scheduler race in the browser test. The
+scheduler had already claimed and linked the manual occurrence when the HTTP
+start handler attempted its claim. The valid `202` response contained
+`session: null` and `dispatch.code: task_execution_active`, while the persisted
+Task already held the session link. The test dereferenced the response's null
+session; cleanup masked the initial assertion with the same error.
+
+The regression now occupies both real daemon slots before clicking Run now,
+asserts an accepted queued response with no session, frees the slots, and waits
+for the occurrence's persisted session link. This reproduced the exact null
+dereference before the fix. All Task/Automation starts in the workspace test
+now resolve that durable link before checking cwd/scope and stopping the run.
+Project fixture names are unique so repeated runs exercise this path without
+colliding with prior fixtures. No runtime or scheduling behavior is changed.
+
+Validation: the deterministic queued regression passed five consecutive runs
+(15.8 seconds), and the full four-test real backend/daemon browser suite passed
+with `CI=true`. Both use the existing concurrency Playwright configuration.
