@@ -375,6 +375,24 @@ class NodeLivenessMixin(RegistryState):
             due = True
         return due
 
+    def _remember_persisted_observation(
+        self, sandbox_id: str, persisted: dict[str, Any], *, polled: bool,
+    ) -> None:
+        # A poll-only UPDATE must not restart the seen clock. Reconstruct each
+        # deadline from the timestamp actually stored, using database age when
+        # available so backend wall-clock skew does not change the due time.
+        observed_ms = iso_epoch_ms(persisted.get('_observedAt') or now_iso())
+        monotonic_now = time.monotonic()
+        clocks = [('lastSeenAt', self._last_seen_persisted_at)]
+        if polled:
+            clocks.append(('lastPollAt', self._last_poll_persisted_at))
+        for field, stamps in clocks:
+            durable_ms = iso_epoch_ms(persisted.get(field))
+            if durable_ms is None or observed_ms is None:
+                stamps.pop(sandbox_id, None)
+            else:
+                stamps[sandbox_id] = monotonic_now - max(0, observed_ms - durable_ms) / 1000
+
     def _mark_seen(
         self, sandbox_id: str, *, polled: bool | None = None,
         observation: dict[str, Any] | None = None,
@@ -436,10 +454,7 @@ class NodeLivenessMixin(RegistryState):
                         if revived or polled is False
                         else merge_observation_fields(updated, persisted)
                     )
-                    stamp = time.monotonic()
-                    self._last_seen_persisted_at[sandbox_id] = stamp
-                    if polled:
-                        self._last_poll_persisted_at[sandbox_id] = stamp
+                    self._remember_persisted_observation(sandbox_id, persisted, polled=bool(polled))
                 else:
                     self.sandboxes.pop(sandbox_id, None)
             if revived:
