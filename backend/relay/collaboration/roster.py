@@ -10,7 +10,7 @@ from ..projects.runtime import (
     ProjectDispatchError,
     project_member_ids,
     project_thread_assignments,
-    project_task_assignment_error,
+    project_computer_assignment_error,
     project_runtime_snapshot,
 )
 from ..teams.dispatch import (
@@ -256,13 +256,12 @@ class RosterMixin(ConductorState):
         """The one agent drafting a project's setup.
 
         Setup happens before there is a crew, so the drafter is admitted by
-        the rule project tasks use — any agent on the project's computer —
-        rather than by roster membership.
+        the project's Computer rather than roster membership.
         """
         if not selected_ids or len(selected_ids) != 1:
             raise CollaborationError("project_setup_agent_required", status=400)
         agent_id = selected_ids[0]
-        error = project_task_assignment_error(
+        error = project_computer_assignment_error(
             project,
             agent_id=agent_id,
             team=None,

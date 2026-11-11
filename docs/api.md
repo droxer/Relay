@@ -694,7 +694,10 @@ clients cannot create a routine run by supplying `sourceRoutineId` to POST.
 
 `PATCH /api/v1/tasks/{id}` with `projectId` moves unstarted intake into an enabled
 project owned by the same user and records `task.project_set`. An assignment
-may accompany the move, subject to the project's normal assignment rules.
+may accompany the move. Project Tasks and Automations can select only enabled
+Project Agents; a selected Team must consist entirely of enabled Project Agents
+on the Project's Computer. Creation, assignment updates, and dispatch enforce
+this rule (`project_agent_not_member` / `project_team_not_member`).
 Project membership cannot subsequently be cleared or changed. Work with linked
 threads, routines, and routine runs cannot be moved. Clearing a legacy intake
 assignment is allowed and returns Ready intake to Backlog.

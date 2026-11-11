@@ -767,7 +767,7 @@ def _team(client: TestClient, lead: dict, *members: dict, name: str = "Crew") ->
     return response.json()["team"]
 
 
-def test_project_task_accepts_any_agent_or_team_on_the_project_computer(
+def test_project_task_accepts_a_project_agent_or_team(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -776,10 +776,9 @@ def test_project_task_accepts_any_agent_or_team_on_the_project_computer(
         client = TestClient(app)
         _bootstrap(client)
         computer = _register_computer(app, "node_alice_a", "machine-a")
-        lead = _agent(client, app, computer, "Lead", "codex")
         neighbour = _agent(client, app, computer, "Neighbour", "claude")
         _login_alice(client)
-        project = _project(client, computer, lead)
+        project = _project(client, computer, neighbour)
         team = _team(client, neighbour, name="Neighbours")
         task_id = client.post(
             "/api/v1/tasks",
@@ -868,10 +867,9 @@ def test_project_task_assigned_to_a_team_dispatches_the_team_in_the_project_work
         client = TestClient(app)
         _bootstrap(client)
         computer = _register_computer(app, "node_alice_a", "machine-a")
-        lead = _agent(client, app, computer, "Lead", "codex")
         neighbour = _agent(client, app, computer, "Neighbour", "claude")
         _login_alice(client)
-        project = _project(client, computer, lead)
+        project = _project(client, computer, neighbour)
         team = _team(client, neighbour, name="Solo")
         task = client.post(
             "/api/v1/tasks",
@@ -896,17 +894,16 @@ def test_project_task_assigned_to_a_team_dispatches_the_team_in_the_project_work
         assert command["logicalAgentId"] == neighbour["id"]
 
 
-def test_project_task_assigned_to_a_non_member_dispatches_that_agent(monkeypatch) -> None:
+def test_project_task_assigned_to_a_member_dispatches_that_agent(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
         computer = _register_computer(app, "node_alice_a", "machine-a")
-        lead = _agent(client, app, computer, "Lead", "codex")
         neighbour = _agent(client, app, computer, "Neighbour", "claude")
         _login_alice(client)
-        project = _project(client, computer, lead)
+        project = _project(client, computer, neighbour)
         task = client.post(
             "/api/v1/tasks",
             json={
@@ -1559,7 +1556,7 @@ def _finish_only_command(app, computer: dict) -> None:
 
 
 @pytest.mark.parametrize("address", [False, True])
-def test_crewless_project_task_thread_continues_with_the_agent_that_ran_it(
+def test_project_task_thread_continues_with_its_assigned_member(
     monkeypatch, address
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -1572,7 +1569,9 @@ def test_crewless_project_task_thread_continues_with_the_agent_that_ran_it(
         _login_alice(client)
         created = client.post(
             "/api/v1/projects",
-            json={"name": "No crew", "daemonNodeId": computer["id"], "members": [], "managerAgentId": None},
+            json={"name": "Crew", "daemonNodeId": computer["id"],
+                  "members": [{"agentId": alex["id"], "role": "implementer", "responsibilities": "Deliver"}],
+                  "leadAgentId": alex["id"]},
         )
         assert created.status_code == 201, created.text
         project = created.json()["project"]
@@ -1630,17 +1629,16 @@ def test_project_thread_refuses_to_address_an_agent_on_another_computer(monkeypa
         assert response.json()["detail"]["code"] == "project_agent_off_computer"
 
 
-def test_answer_to_an_outside_agents_question_goes_back_to_that_agent(monkeypatch) -> None:
+def test_answer_to_an_assigned_members_question_goes_back_to_that_agent(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
         client = TestClient(app)
         _bootstrap(client)
         computer = _register_computer(app, "node_alice_a", "machine-a")
-        lead = _agent(client, app, computer, "Lead", "codex")
         alex = _agent(client, app, computer, "Alex", "claude")
         _login_alice(client)
-        project = _project(client, computer, lead)
+        project = _project(client, computer, alex)
         task = client.post(
             "/api/v1/tasks",
             json={"title": "Ask first", "projectId": project["id"], "assignedAgentId": alex["id"]},

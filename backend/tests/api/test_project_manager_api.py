@@ -97,6 +97,7 @@ def test_manager_conversation_is_an_ordinary_thread_and_is_reused(managed_env):
 
 def test_live_tools_proposals_apply_once_in_backlog(managed_env):
     app, client, node, project, _, builder = managed_env
+    _join(managed_env, builder)
     result, command = _start(managed_env)
     url = f"/api/v1/projects/{project['id']}/manager"
     task = client.post("/api/v1/tasks", json={"title": "Old title", "projectId": project["id"]}).json()
@@ -517,14 +518,14 @@ def test_manager_brings_its_tools_to_its_own_task_runs(managed_env):
     assert _tool(managed_env, command, "overview").status_code == 200
 
 
-def test_another_agents_task_run_gets_no_manager_tools(managed_env):
-    _, _, _, _, _, builder = managed_env
-    command = _run_task(managed_env, {"title": "Build the page", "assignedAgentId": builder["id"]})
-    assert command["logicalAgentId"] == builder["id"]
-    assert "project_manager" not in command["state"]
-    # Not on the roster: no Project tools at all.
-    assert "project_reader" not in command["state"]
-    assert _tool(managed_env, command, "overview").status_code == 403
+def test_non_member_cannot_receive_a_project_task(managed_env):
+    app, client, node, project, _, builder = managed_env
+    response = client.post("/api/v1/tasks", json={
+        "projectId": project["id"], "title": "Build the page", "assignedAgentId": builder["id"],
+    })
+    assert response.status_code == 400, response.text
+    assert response.json()["detail"] == "project_agent_not_member"
+    assert app.state.registry.take_commands(node["id"], f"token_{node['id']}") == []
 
 
 def _join(env, agent, role="implementer"):

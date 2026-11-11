@@ -204,6 +204,9 @@ _Avoid_: Workspace, Agent home
 **Project**:
 A user-owned collaboration boundary with one persistent workspace, an
 ordered roster of Project Agents, and any number of Project Conversations.
+Project Tasks and Automations may be assigned only to enabled Project Agents;
+a selected Team must consist entirely of enabled Project Agents. Membership
+is checked again when work is dispatched.
 Project, Task, Automation, and Thread records are private to their owning User;
 an Account's admin role and a Task's assignee do not grant access to another
 User's records. Administrative hardware and account management are separate

@@ -24,7 +24,7 @@ reaches the next round, never half of a running one.
 
 **Agents propose, owners apply.** Setup is an ordinary daemon run — the backend
 still never executes agents. One agent on the project's computer, admitted by
-the project-task rule rather than roster membership (there is no crew yet),
+the project Computer rule rather than roster membership (there is no crew yet),
 reads the owner's intent and the candidate agents and writes a proposal file.
 The backend normalizes it to the PATCH's shape and stores it on the project.
 Applying is the ordinary project PATCH carrying the accepted fields plus

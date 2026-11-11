@@ -104,12 +104,9 @@ export function teamSharesOneComputer(
 
 /**
  * The agents and teams a task may be given — the one rule the task drawer and
- * an inline row picker share. A project owns a computer and everyone on it
- * shares the project workspace, so a project task offers every agent (and
- * every team whose whole roster) lives there, plus the project's enabled
- * members. Outside a project a team still runs on one computer, so only a
- * co-located roster is offered. The current pick always stays listed so a
- * trigger can name it.
+ * an inline row picker share. Project work offers only enabled roster
+ * members and teams entirely made up of those members. Standalone work keeps
+ * its Computer scope and current selection.
  */
 export function taskAssignmentOptions({
   project,
@@ -129,16 +126,18 @@ export function taskAssignmentOptions({
   assignedTeamId?: string;
 }): { agents: UserAgent[]; teams: AgentTeam[] } {
   const identity = project?.computerId ?? computerId;
-  const agentOnTaskComputer = (agent: UserAgent) => (!project && !identity)
-    || Boolean(project?.members.some((member) => member.agentId === agent.id && member.enabled))
-    || Boolean(identity && agentOnComputer(agent, identity));
+  const projectMembers = new Set(project?.members.filter((member) => member.enabled).map((member) => member.agentId));
+  const agentOnTaskComputer = (agent: UserAgent) => project
+    ? projectMembers.has(agent.id)
+    : !identity || agentOnComputer(agent, identity);
   const teamOnTaskComputer = (team: AgentTeam) => identity
     ? teamOnComputer(team, agents, identity)
     : !project && teamSharesOneComputer(team, agents);
   return {
-    agents: agents.filter((agent) => (agent.id === assignedAgentId || agentOnTaskComputer(agent))
+    agents: agents.filter((agent) => ((!project && agent.id === assignedAgentId) || agentOnTaskComputer(agent))
       && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, agent.id === assignedAgentId)),
-    teams: teams.filter((team) => (team.id === assignedTeamId || teamOnTaskComputer(team))
+    teams: teams.filter((team) => ((!project && team.id === assignedTeamId) || (teamOnTaskComputer(team)
+      && (!project || team.memberAgentIds.every((id) => projectMembers.has(id)))))
       && assignmentOptionVisible(team.ownerUserId, assigneeUserId, team.id === assignedTeamId)),
   };
 }
