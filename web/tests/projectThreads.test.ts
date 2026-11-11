@@ -60,7 +60,7 @@ describe("project thread buckets", () => {
     assert.deepEqual(result.unclassified.map((item) => item.session.id), ["legacy", "orphan"]);
   });
 
-  it("separates independent conversations from project conversations", () => {
+  it("includes all conversations globally and scopes the Project directory", () => {
     const projects = [project("alpha", "Alpha")];
     const threads = [thread("project-thread", "alpha"), thread("independent"), thread("orphan", "deleted")];
 
@@ -70,14 +70,14 @@ describe("project thread buckets", () => {
     );
     assert.deepEqual(
       threadsForDirectory(threads, projects, "threads").map((item) => item.session.id),
-      ["independent"],
+      ["project-thread", "independent", "orphan"],
     );
   });
 
-  it("lists the Project Manager conversation only in its Project", () => {
+  it("lists the Project Manager conversation globally and in its Project", () => {
     const managerProject = {...project("alpha", "Alpha"), managerThreadId:"manager"};
     const items = [thread("manager", "alpha"), thread("room", "alpha")];
-    assert.deepEqual(threadsForDirectory(items, [managerProject], "threads").map(item=>item.session.id), []);
+    assert.deepEqual(threadsForDirectory(items, [managerProject], "threads").map(item=>item.session.id), ["manager", "room"]);
     assert.deepEqual(threadsForDirectory(items, [managerProject], "projects").map(item=>item.session.id), ["manager", "room"]);
   });
 

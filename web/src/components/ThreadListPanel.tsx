@@ -235,7 +235,7 @@ export function ThreadListPanel({
               type="button"
               className="page-header-icon-action page-header-icon-action--primary"
               tooltip={createLabel}
-              onClick={directoryMode === "projects" ? onCreateProject : () => onNewThread(null)}
+              onClick={directoryMode === "projects" ? onCreateProject : () => onNewThread(selectedProjectId)}
             >
               <ActionAdd size={ICON.md} />
             </Button>
@@ -254,7 +254,7 @@ export function ThreadListPanel({
         />
         {/* Only once there is a project to choose — with none, "All projects"
             and "No project" would be the same list twice. */}
-        {directoryMode === "threads" && (projectFilterOptions.length > 0 || projectFiltered) ? (
+        {directoryMode === "threads" && !selectedProjectId && (projectFilterOptions.length > 0 || projectFiltered) ? (
           <FilterSelect
             name="thread-project-filter"
             label={t("thread.project_filter_label")}

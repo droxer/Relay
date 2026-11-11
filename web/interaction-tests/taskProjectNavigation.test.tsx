@@ -33,3 +33,13 @@ it("preserves automation filters on a project's Automations tab", () => {
   expect(canonicalBrowserUrl("/projects/p", "?tab=automations&q=review&state=paused&sort=title&page=2"))
     .toBe("/projects/p?tab=automations&q=review&state=paused&sort=title&page=2");
 });
+
+it.each(["projects", "backlog", "routine"] as const)("selects Threads for an open thread on %s", route => {
+  render(<SideNav sidenavExpanded={false} setSidenavExpanded={vi.fn()} width={200}
+    onResize={vi.fn()} onResizeActive={vi.fn()} route={route} threadOpen onNavigateRoute={vi.fn()}
+    hrefForRoute={route => `/${route}`} isAdmin={false} onLogout={vi.fn()} onOpenCommandMenu={vi.fn()} />);
+  expect(screen.getByRole("link", { name: "nav.threads" }).getAttribute("aria-current")).toBe("page");
+  for (const name of ["project.projects", "nav.backlog", "nav.routine"]) {
+    expect(screen.getByRole("link", { name }).getAttribute("aria-current")).toBeNull();
+  }
+});

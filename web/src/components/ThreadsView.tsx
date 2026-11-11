@@ -476,7 +476,7 @@ export function ThreadsView({
         /* No thread is on screen while a project overview or a route state
            occupies the pane, so no thread row may claim selection — the
            active session outlives the route that opened it. */
-        selectedSessionId={projectOverviewState === "hidden" ? activeSession?.id : undefined}
+        selectedSessionId={projectOverviewState === "hidden" && !showProjectDirectoryEmpty ? activeSession?.id : undefined}
         selectedProjectId={selectedProjectId}
         listOnScreen={listOnScreen}
         onSelectThread={onSelectThread}

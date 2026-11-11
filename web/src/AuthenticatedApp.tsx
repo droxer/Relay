@@ -43,7 +43,7 @@ import { useComposerRouting } from "./hooks/useComposerRouting";
 import { useThreadEditing } from "./hooks/useThreadEditing";
 import { useThreadNavigation } from "./hooks/useThreadNavigation";
 import { useThreadTranscript } from "./hooks/useThreadTranscript";
-import { myThreadSessions, pickActiveThreadSession } from "./lib/threads";
+import { myThreadSessions, pickActiveThreadSession, threadDirectoryMode } from "./lib/threads";
 import { faviconState } from "./lib/faviconState";
 import { useLiveFavicon } from "./hooks/useLiveFavicon";
 import { shouldTailSessionEvents } from "./lib/sessionEventStream";
@@ -202,7 +202,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     () => pickActiveThreadSession({
       threads: requestedSessionId ? myThreads : myThreads.filter(session => openingComputerId
         ? !session.projectId && sessionComputer(session, runtimeNodes) === openingComputerId
-        : openingProjectId ? session.projectId === openingProjectId : !session.projectId),
+        : openingProjectId ? session.projectId === openingProjectId : true),
       selectedSessionId,
       activeSessionId,
       composingNew,
@@ -675,6 +675,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   return (
     <AppShell
       route={route}
+      threadOpen={Boolean(routedSessionId) || composingNew}
       taskWorkspace={isTasksWorkspace}
       taskThread={isTaskThread}
       notFound={notFound}
@@ -766,7 +767,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onOpenTaskRecord={openTaskRecord}
             taskThread={isTaskThread}
             listOnScreen={mobileView === "threads"}
-            directoryMode={route === "projects" ? "projects" : "threads"}
+            directoryMode={threadDirectoryMode(route, routedSessionId, composingNew)}
             tasks={tasks}
             currentUser={user}
             onboardingPanel={onboardingPanel}

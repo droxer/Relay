@@ -36,6 +36,7 @@ type MobileChatChrome = {
 type AppShellProps = {
   taskWorkspace?: boolean;
   taskThread?: boolean;
+  threadOpen?: boolean;
   /** The path named no page; the shell must not dress it as a thread. */
   notFound?: boolean;
   onNewTask?: () => void;
@@ -87,6 +88,7 @@ const ShortcutsHelp = memo(ShortcutsHelpView);
 export function AppShell({
   taskWorkspace = false,
   taskThread = false,
+  threadOpen = false,
   notFound = false,
   onNewTask,
   route,
@@ -291,6 +293,7 @@ export function AppShell({
         onResize={onSidenavResize}
         onResizeActive={onSidenavResizeActive}
         route={notFound ? null : route}
+        threadOpen={threadOpen}
         onNavigateRoute={onNavigateRoute}
         hrefForRoute={hrefForRoute}
         isAdmin={isAdmin}

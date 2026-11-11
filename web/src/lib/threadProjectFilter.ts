@@ -7,10 +7,8 @@ type ProjectScoped = { session: { projectId?: string | null } };
  * to one project.
  *
  * Choosing a project shows every thread of that project — its room threads
- * included — even though the unfiltered rail leaves room threads to the
- * Projects directory: a list that answers "this project's threads" with only
- * some of them would be wrong, not narrow. The value is prefixed so a project
- * id can never be mistaken for one of the two fixed choices.
+ * included. The unfiltered rail includes all projects as well. The value is
+ * prefixed so a project id cannot be mistaken for either fixed choice.
  */
 export type ThreadProjectFilter = "all" | "none" | `project:${string}`;
 
@@ -64,8 +62,7 @@ export function resolveThreadProjectFilter(
 
 /**
  * Applies the filter on top of the search query.
- * - `railThreads`: the ordinary threads rail (query-matched, room threads left
- *   to the Projects directory).
+ * - `railThreads`: the ordinary threads rail (all query-matched threads).
  * - `matchedThreads`: every query-matched thread, room threads included.
  */
 export function applyThreadProjectFilter<T extends ProjectScoped>(

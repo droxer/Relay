@@ -19,7 +19,7 @@ test('Computer workspace routes retain their Computer and records', () => {
   assert.equal(parseAppPath('/computers/c/automations/a/runs/r').runId, 'r');
 });
 
-test('Threads outside Projects never include Project tasks or manager conversations', () => {
+test('Global Threads includes Project tasks, manager conversations and unknown Projects', () => {
   const projects = [{ id: 'p', managerThreadId: 'manager' }] as any;
   const threads = [
     { session: { id: 'standalone' } },
@@ -27,7 +27,7 @@ test('Threads outside Projects never include Project tasks or manager conversati
     { session: { id: 'manager', projectId: 'p' } },
     { session: { id: 'missing-project', projectId: 'gone' } },
   ] as any;
-  assert.deepEqual(threadsForDirectory(threads, projects, 'threads').map(t => t.session.id), ['standalone']);
+  assert.deepEqual(threadsForDirectory(threads, projects, 'threads').map(t => t.session.id), ['standalone', 'task', 'manager', 'missing-project']);
 });
 
 test('standalone records use their recorded Computer and Automation runs use their parent', async () => {

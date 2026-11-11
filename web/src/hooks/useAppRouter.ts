@@ -97,12 +97,12 @@ export function useAppRouter({
       navigateToAppState({ ...locationState, sessionId: nextMobileView === "chat" ? currentSessionId : null, mobileView: "chat" });
       return;
     }
-    const threadRoute = locationState.route === "projects" ? "projects" : "main";
+    const threadRoute = locationState.route === "projects" && nextMobileView === "chat" ? "projects" : "main";
     navigateToAppState({
       route: threadRoute,
       mobileView: nextMobileView,
       sessionId: nextMobileView === "chat" ? currentSessionId ?? null : null,
-      projectId: locationState.projectId ?? activeSession?.projectId ?? null,
+      projectId: threadRoute === "projects" ? locationState.projectId ?? activeSession?.projectId ?? null : null,
       computerId: locationState.computerId,
       composingNew: nextMobileView === "chat" && composingNew,
     });

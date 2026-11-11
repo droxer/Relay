@@ -59,3 +59,130 @@ test("unknown routes, disabled Channels and non-admin control panel routes recov
   await expect(page).toHaveURL(/\/threads$/);
   await expect(page.locator("#thread-panel")).toBeVisible();
 });
+
+// Keep URL, shell navigation, and rail contents in one test: checking each
+// component separately missed a retained selection changing /projects to Threads.
+const routeStamp = "2026-11-11T00:00:00.000Z";
+const routeProjects = ["launch", "other"].map(id => ({
+  id, name: id === "launch" ? "Route launch" : "Other project", ownerUserId: "routes-user",
+  computerId: "route-computer", enabled: true, members: [], leadAgentId: null,
+  version: 1, createdAt: routeStamp, updatedAt: routeStamp,
+}));
+const routeThreads = [
+  ["chat", null], ["task", null], ["automation", null],
+  ["project-chat", "launch"], ["project-task", "launch"], ["project-automation", "launch"],
+  ["other-chat", "other"],
+].map(([id, projectId]) => ({
+  id: id!, title: `Route ${id}`, taskGoal: `Route ${id}`, projectId,
+  computerId: "route-computer", ownerUserId: "routes-user", participants: ["human"],
+  status: "completed", phase: "completed", createdAt: routeStamp, updatedAt: routeStamp,
+  agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [],
+  eventCount: 0, artifactCount: 0, runCount: 0,
+}));
+const routeTasks = ["task", "automation", "project-task", "project-automation"].map(id => ({
+  id: `task-${id}`, title: `Origin ${id}`, description: "", priority: "normal", status: "done",
+  projectId: id.startsWith("project-") ? "launch" : null, computerId: "route-computer",
+  isRoutine: false, ...(id.includes("automation") ? { sourceRoutineId: `parent-${id}` } : {}),
+  linkedSessionIds: [id], ownerUserId: "routes-user", createdAt: routeStamp, updatedAt: routeStamp,
+}));
+
+async function serveRouteWork(page: import("@playwright/test").Page) {
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/events")) {
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
+    }
+    let body: unknown = {
+      sessions: routeThreads, tasks: routeTasks, projects: routeProjects, agents: [], teams: [],
+      nodes: [{ id: "route-node", computerId: "route-computer", userId: "routes-user", status: "ready", online: true, stale: false, activeRuns: [], agents: {} }],
+      sandboxes: [], skills: [], notifications: [], files: [], entries: [], hasMore: false,
+    };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: {
+      id: "routes-user", userId: "routes-user", username: "Routes", role: "user", theme: "light", language: "en",
+    } };
+    const thread = routeThreads.find(item => path.endsWith(`/threads/${item.id}`));
+    if (thread) body = thread;
+    const project = routeProjects.find(item => path.endsWith(`/projects/${item.id}`));
+    if (project) body = { project };
+    const task = routeTasks.find(item => path.endsWith(`/tasks/${item.id}`));
+    if (task) body = { ...task, events: [], activity: [] };
+    await route.fulfill({ json: body });
+  });
+}
+
+const routeSurfaces = [
+  { path: "/projects", title: "Projects", selected: "projects", rows: 0, folders: 2 },
+  { path: "/projects/launch", title: "Projects", selected: "projects", rows: 0, folders: 2 },
+  { path: "/projects/launch/threads/project-task", title: "Threads", selected: "threads", rows: 3, folders: 0 },
+  { path: "/projects/launch/threads/project-automation", title: "Threads", selected: "threads", rows: 3, folders: 0 },
+  { path: "/projects/launch/new", title: "Threads", selected: "threads", rows: 3, folders: 0 },
+  { path: "/threads", title: "Threads", selected: "threads", rows: 7, folders: 0 },
+  { path: "/computers/route-computer/threads/task", title: "Threads", selected: "threads", rows: 3, folders: 0 },
+  { path: "/computers/route-computer/threads/automation", title: "Threads", selected: "threads", rows: 3, folders: 0 },
+] as const;
+
+for (const mobile of [false, true]) {
+  for (const surface of routeSurfaces) {
+    test(`route rail and sidebar survive reload: ${surface.path} (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+      await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+      await serveRouteWork(page);
+      await page.goto(surface.path);
+      for (const reload of [false, true]) {
+        if (reload) await page.reload();
+        await expect(page).toHaveURL(url => url.pathname === surface.path);
+        const rail = page.locator("#thread-panel");
+        await expect(rail.locator("h2.page-header-title")).toHaveText(surface.title);
+        await expect(rail.locator(".conversation-row")).toHaveCount(surface.rows);
+        await expect(rail.locator(".project-folder")).toHaveCount(surface.folders);
+        await expect(page.locator(`.sidenav-nav [data-nav="${surface.selected}"]`)).toHaveAttribute("aria-current", "page");
+        await expect(page.locator('.sidenav-nav [aria-current="page"]')).toHaveCount(1);
+        if (surface.rows === 3) {
+          const projectId = surface.path.startsWith("/projects/") ? "launch" : null;
+          await expect(rail.locator(".conversation-name")).toHaveText(routeThreads.filter(thread => thread.projectId === projectId).map(thread => thread.title));
+        }
+        if (surface.rows === 7) {
+          await expect(rail.locator(".conversation-name")).toHaveText(routeThreads.map(thread => thread.title));
+        }
+        if (surface.path.startsWith("/computers/")) {
+          await expect(rail.locator(".computer-workspace-tabs")).toHaveCount(0);
+        }
+      }
+    });
+  }
+}
+
+test("project thread, Projects link, and browser history keep their matching lists", async ({ page }) => {
+  await serveRouteWork(page);
+  await page.goto("/threads");
+  await page.locator("#thread-panel .conversation-row-inner").filter({ hasText: "Route project-task" }).click();
+  await expect(page).toHaveURL(/\/projects\/launch\/threads\/project-task$/);
+  await expect(page.locator('#thread-panel .conversation-row')).toHaveCount(3);
+  await page.locator('.sidenav-nav [data-nav="projects"]').click();
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Projects");
+  await expect(page.locator('#thread-panel .project-folder')).toHaveCount(2);
+  await expect(page.locator('#thread-panel .conversation-row')).toHaveCount(0);
+  await page.goBack();
+  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Threads");
+  await expect(page.locator('.sidenav-nav [data-nav="threads"]')).toHaveAttribute("aria-current", "page");
+  await page.goForward();
+  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Projects");
+  await page.locator(".project-folder-select").filter({ hasText: "Route launch" }).click();
+  await expect(page).toHaveURL(/\/projects\/launch$/);
+  await expect(page.getByRole("tab", { name: "Dashboard", exact: true })).toHaveAttribute("aria-selected", "true");
+});
+
+test("project thread creation and mobile Back stay in Threads", async ({ page }) => {
+  await serveRouteWork(page);
+  await page.goto("/projects/launch/threads/project-task");
+  await page.locator("#thread-panel").getByRole("button", { name: "New thread", exact: true }).click();
+  await expect(page).toHaveURL(/\/projects\/launch\/new$/);
+  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Threads");
+  await expect(page.locator('.sidenav-nav [data-nav="threads"]')).toHaveAttribute("aria-current", "page");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/projects/launch/threads/project-automation");
+  await page.locator(".mobile-topbar-back").click();
+  await expect(page).toHaveURL(/\/threads$/);
+  await expect(page.locator("#thread-panel")).toBeVisible();
+  await expect(page.locator('#thread-panel .conversation-row')).toHaveCount(7);
+});

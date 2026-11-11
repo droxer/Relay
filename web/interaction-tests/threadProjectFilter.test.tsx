@@ -10,8 +10,7 @@ function session(id: string, taskGoal: string, projectId?: string): RelaySession
 
 const launch = { id: "p-launch", name: "Autumn launch" } as ProjectRecord;
 const docs = { id: "p-docs", name: "Docs" } as ProjectRecord;
-// A standalone chat, a task thread in the launch project (the ordinary rail
-// shows it), and the launch project's room thread (left to Projects).
+// The global list includes standalone chats and every project thread.
 const chat = session("s-chat", "Lunch plans");
 const taskThread = session("s-task", "Release notes", launch.id);
 const room = session("s-room", "Launch room", launch.id);
@@ -34,9 +33,9 @@ function directory(threadProjectFilter: ThreadProjectFilter, threadQuery = "") {
 
 const ids = (result: ReturnType<typeof directory>) => result.directoryThreads.map((item) => item.session.id).sort();
 
-it("leaves the ordinary rail alone when no project is chosen", () => {
+it("shows all threads when no project is chosen", () => {
   const result = directory("all");
-  expect(ids(result)).toEqual(["s-chat"]);
+  expect(ids(result)).toEqual(["s-chat", "s-room", "s-task"]);
   expect(result.projectFilterOptions.map((option) => option.name)).toEqual(["Autumn launch", "Docs"]);
 });
 
@@ -55,5 +54,5 @@ it("combines the project filter with the search", () => {
 it("falls back to every thread when the chosen project no longer exists", () => {
   const result = directory(threadProjectFilterFor("p-gone"));
   expect(result.projectFilter).toBe("all");
-  expect(ids(result)).toEqual(["s-chat"]);
+  expect(ids(result)).toEqual(["s-chat", "s-room", "s-task"]);
 });
