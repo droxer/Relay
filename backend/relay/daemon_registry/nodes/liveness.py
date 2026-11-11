@@ -93,6 +93,20 @@ def merge_node_observation(
     return refreshed
 
 
+def merge_observation_fields(
+    current: dict[str, Any], observed: dict[str, Any],
+) -> dict[str, Any]:
+    """A narrow observation never clears configuration it did not select."""
+    refreshed = {**current, **{key: value for key, value in observed.items() if not key.startswith('_')}}
+    refreshed.update(_newest('lastSeenAt', current, observed))
+    refreshed.update(_newest('updatedAt', current, observed))
+    if observed.get('lastPollAt') and observed['lastPollAt'] != NODE_POLL_DRAINED_AT:
+        refreshed.update(_newest('lastPollAt', current, observed))
+    if current.get('retiredAt'):
+        refreshed['retiredAt'] = observed.get('retiredAt') or current['retiredAt']
+    return refreshed
+
+
 class NodeLivenessMixin(RegistryState):
     def get(self, sandbox_id: str) -> dict[str, Any] | None:
         if sandbox_id not in self.sandboxes:
@@ -311,6 +325,16 @@ class NodeLivenessMixin(RegistryState):
                     self.sandboxes.get(sandbox_id), persisted
                 )
 
+    def _hydrate_node_observation(self, sandbox_id: str) -> dict[str, Any]:
+        with self.dispatch_scope([sandbox_id]):
+            observed = self.daemon_store.get_node_observation(sandbox_id)
+            if observed is None:
+                self.sandboxes.pop(sandbox_id, None)
+                raise UnknownDaemonNodeError(f'Unknown sandbox {sandbox_id}.')
+            current = self.sandboxes.get(sandbox_id, {})
+            self.sandboxes[sandbox_id] = merge_observation_fields(current, observed)
+            return observed
+
     def _assert_authorized(self, sandbox_id: str, token: str | None) -> None:
         sandbox = self.sandboxes.get(sandbox_id)
         if not sandbox:
@@ -335,7 +359,6 @@ class NodeLivenessMixin(RegistryState):
             and monotonic_now - last < config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS
         ):
             return False
-        stamps[sandbox_id] = monotonic_now
         return True
 
     def _should_persist_seen(self, sandbox_id: str, *, polled: bool = False) -> bool:
@@ -352,7 +375,28 @@ class NodeLivenessMixin(RegistryState):
             due = True
         return due
 
-    def _mark_seen(self, sandbox_id: str, *, polled: bool | None = None) -> None:
+    def _remember_persisted_observation(
+        self, sandbox_id: str, persisted: dict[str, Any], *, polled: bool,
+    ) -> None:
+        # A poll-only UPDATE must not restart the seen clock. Reconstruct each
+        # deadline from the timestamp actually stored, using database age when
+        # available so backend wall-clock skew does not change the due time.
+        observed_ms = iso_epoch_ms(persisted.get('_observedAt') or now_iso())
+        monotonic_now = time.monotonic()
+        clocks = [('lastSeenAt', self._last_seen_persisted_at)]
+        if polled:
+            clocks.append(('lastPollAt', self._last_poll_persisted_at))
+        for field, stamps in clocks:
+            durable_ms = iso_epoch_ms(persisted.get(field))
+            if durable_ms is None or observed_ms is None:
+                stamps.pop(sandbox_id, None)
+            else:
+                stamps[sandbox_id] = monotonic_now - max(0, observed_ms - durable_ms) / 1000
+
+    def _mark_seen(
+        self, sandbox_id: str, *, polled: bool | None = None,
+        observation: dict[str, Any] | None = None,
+    ) -> None:
         """Record an observation of the daemon.
 
         ``polled`` True is a command poll (the node is listening for work);
@@ -396,9 +440,23 @@ class NodeLivenessMixin(RegistryState):
                 or polled is False
                 or self._should_persist_seen(sandbox_id, polled=bool(polled))
             ):
-                persisted = self.daemon_store.mark_node_seen(sandbox_id, patch, polled=polled)
+                if revived or polled is False:
+                    persisted = self.daemon_store.mark_node_seen(sandbox_id, patch, polled=polled)
+                else:
+                    persisted = self.daemon_store.touch_node_observation(
+                        observation if observation is not None else sandbox,
+                        interval_seconds=config.DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS,
+                        polled=polled,
+                    )
                 if persisted:
-                    self.sandboxes[sandbox_id] = merge_node_observation(updated, persisted)
+                    self.sandboxes[sandbox_id] = (
+                        merge_node_observation(updated, persisted)
+                        if revived or polled is False
+                        else merge_observation_fields(updated, persisted)
+                    )
+                    self._remember_persisted_observation(sandbox_id, persisted, polled=bool(polled))
+                else:
+                    self.sandboxes.pop(sandbox_id, None)
             if revived:
                 logger.info(
                     "Daemon node came online",

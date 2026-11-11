@@ -117,6 +117,9 @@ class RegistryState:
         def _hydrate_node(self, sandbox_id: str) -> None:
             ...
 
+        def _hydrate_node_observation(self, sandbox_id: str) -> dict[str, Any]:
+            ...
+
         def _linked_workspace_path(self, session: dict[str, Any]) -> str | None:
             ...
 
@@ -126,7 +129,10 @@ class RegistryState:
         def _liveness(self, sandbox: dict[str, Any]) -> dict[str, Any]:
             ...
 
-        def _mark_seen(self, sandbox_id: str, *, polled: bool | None = None) -> None:
+        def _mark_seen(
+            self, sandbox_id: str, *, polled: bool | None = None,
+            observation: dict[str, Any] | None = None,
+        ) -> None:
             ...
 
         def _next_index_after_success(self, run_request: dict[str, Any], next_state: dict[str, Any]) -> tuple[int, dict[str, Any]]:
