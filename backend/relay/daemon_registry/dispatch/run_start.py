@@ -54,6 +54,10 @@ def _run_start_command(
         workspace_layout == "node-root"
         or (workspace_layout == "thread" and run_request.get("taskId"))
     ) else None
+    # A discussion uses the same directory without claiming Task execution.
+    workspace_task_id = run_request.get("taskId") or (
+        task_snapshot.get("id") if task_snapshot and workspace_layout == "task" else None
+    )
     return {
         "id": new_database_id(),
         "type": "run.start",
@@ -70,7 +74,7 @@ def _run_start_command(
             **({"projectId": session_snapshot["projectId"]} if session_snapshot.get("projectId") else {}),
             **({"projectWorkspaceSubpath": session_snapshot["workspaceSubpath"]}
                if session_snapshot.get("projectId") and workspace_layout == "project" else {}),
-            **({"taskId": run_request["taskId"]} if run_request.get("taskId") else {}),
+            **({"taskId": workspace_task_id} if workspace_task_id else {}),
             **({"automationId": task_snapshot["sourceRoutineId"]} if task_snapshot and task_snapshot.get("sourceRoutineId") else {}),
         },
         **(

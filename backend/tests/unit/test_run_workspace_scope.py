@@ -1,4 +1,6 @@
 import pytest
+from types import SimpleNamespace
+from relay.daemon_registry.dispatch.delivery import AssignmentDeliveryMixin
 from relay.daemon_registry.dispatch.run_start import _run_start_command
 
 
@@ -72,3 +74,17 @@ def test_linked_projects_require_the_fixed_scope_contract():
         {"capabilities": [*old_client["capabilities"], "project-workspace-scope"]},
         "project", "links/independent-link",
     )
+
+
+@pytest.mark.parametrize("task,layout,path", [
+    ({"id": "other"}, "task", "tasks/original"),
+    ({"id": "original", "deletedAt": "2026-11-12T00:00:00Z"}, "task", "tasks/original"),
+    ({"id": "original", "isRoutine": True}, "task", "tasks/original"),
+    ({"id": "original"}, "project", "projects/original"),
+    ({"id": "original"}, "thread", None),
+])
+def test_historical_links_cannot_authorize_a_different_workspace(task, layout, path):
+    registry = SimpleNamespace(task_store=SimpleNamespace(list_tasks_for_session=lambda _: [task]))
+    assert AssignmentDeliveryMixin._workspace_task(
+        registry, {}, {"id": "thread", "workspaceLayout": layout, "workspaceSubpath": path}
+    ) is None

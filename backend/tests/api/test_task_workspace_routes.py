@@ -489,6 +489,61 @@ def test_wait_status_tracks_daemon_queue_events_and_clears_on_acquire(client, ta
     assert client.get(f"/api/v1/tasks/{task['id']}/workspace/status").json() == {"waiting": False}
 
 
+@pytest.mark.parametrize("automation", [False, True])
+def test_standalone_dispatch_scope_matches_its_durable_workspace(client, automation):
+    app = client.app
+    node = _register_node(app, "scope-node", "scope-machine", ["task-workspaces", "artifact-layout"])
+    agent = _agent(client, node)
+    task = app.state.task_store.create_task({
+        "title": "Run standalone work", "ownerUserId": ALICE, "assigneeUserId": ALICE,
+        "assignedAgentId": agent["id"], "assignedAgent": "codex", "status": "assigned",
+        "computerId": computer_id(node),
+        **({"sourceRoutineId": "routine-scope"} if automation else {}),
+    })
+    assert asyncio.run(app.state.task_scheduler.tick()).dispatched == 1
+    [command] = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
+    assert command["workspaceScope"] == {
+        "computerId": computer_id(node), "taskId": task["id"],
+        **({"automationId": "routine-scope"} if automation else {}),
+    }
+    assert command["workspaceLayout"] == "task"
+    assert command["workspaceSubpath"] == f"tasks/{'routine-scope' if automation else task['id']}"
+
+
+@pytest.mark.parametrize("automation,shared", [(False, True), (True, True), (True, False)])
+def test_followup_message_keeps_standalone_workspace_scope(client, automation, shared):
+    app = client.app
+    node = _register_node(app, "scope-node", "scope-machine", ["task-workspaces", "artifact-layout"])
+    agent = _agent(client, node)
+    task = app.state.task_store.create_task({
+        "title": "Finished work", "ownerUserId": ALICE, "assignedAgentId": agent["id"],
+        **({"sourceRoutineId": "routine-scope"} if automation else {}),
+    })
+    subpath = f"tasks/{'routine-scope' if automation else task['id']}"
+    if automation and not shared:
+        subpath += f"/{task['id']}"
+    session = SessionController(
+        app.state.session_store, task_store=app.state.task_store, task_id=task["id"],
+        owner_user_id=ALICE, workspace_path=node["workspacePath"], daemon_node_id=node["id"],
+        computer_id=computer_id(node), workspace_layout="task", workspace_subpath=subpath,
+    ).create_session("Finished work", ["human", "codex"])
+    before = app.state.task_store.get_task(task["id"])
+    response = client.post(f"/api/v1/threads/{session['id']}/messages", json={
+        "text": "Explain the result", "intent": "discuss", "addressAgentIds": [agent["id"]],
+    })
+    assert response.status_code == 202, response.text
+    [command] = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
+    assert command["workspaceScope"] == {
+        "computerId": computer_id(node), "taskId": task["id"],
+        **({"automationId": "routine-scope"} if automation else {}),
+    }
+    assert command["workspaceSubpath"] == subpath
+    assert command["artifactsDir"] == (f"artifacts/{task['id']}" if automation and shared else "artifacts")
+    request = app.state.daemon_store.active_run_request_for_session_any_node(session["id"])
+    assert not request.get("taskId")  # Workspace identity never claims execution.
+    assert app.state.task_store.get_task(task["id"]) == before
+
+
 def test_task_admission_rejects_another_computer_even_without_dispatch_helper(client, task_with_run):
     task, node = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
     other = _register_node(client.app, "other", "other-machine", ["task-workspaces"])

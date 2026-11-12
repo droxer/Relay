@@ -16,6 +16,7 @@ from ...core.runtime_status import executor_not_ready_message
 from ...core.next_steps import NEXT_STEPS_RELATIVE_PATH
 from ...core.workspace_layout import workspace_artifacts_dir
 from ...tasks.execution import request_execution_owner
+from ...tasks.workspace import task_workspace_subpath
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_ROUND_RESULT,
     has_capability,
@@ -310,6 +311,7 @@ class AssignmentDeliveryMixin(RegistryState):
         role = effective_role_for_assignment(sandbox, assignment)
         if role:
             state = {**state, "agent_role": role}
+        workspace_task = self._workspace_task(run_request, session_snapshot)
         command = _run_start_command(
             run_request=run_request,
             assignment=assignment,
@@ -320,10 +322,10 @@ class AssignmentDeliveryMixin(RegistryState):
             state=state,
             role=role,
             workspace_layout=workspace_layout,
-            artifacts_dir=self._artifacts_dir(run_request, workspace_layout, session_snapshot),
+            artifacts_dir=self._artifacts_dir(run_request, workspace_layout, session_snapshot, workspace_task),
             context=context,
             handoff_validation=handoff_validation,
-            task_snapshot=self.task_store.get_task(run_request["taskId"]) if run_request.get("taskId") and self.task_store else None,
+            task_snapshot=workspace_task,
         )
         command = self._with_skill_bundle(command, sandbox, session_snapshot.get("projectId"))
         if self.connection_grant_resolver:
@@ -346,16 +348,40 @@ class AssignmentDeliveryMixin(RegistryState):
             **({"_followUp": follow_up} if follow_up else {}),
         }
 
+    def _workspace_task(
+        self, run_request: dict[str, Any], session: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Directory ownership survives conversational rounds without Task execution.
+
+        A historical link alone is insufficient: the stored Task must also
+        name the exact directory this Thread already occupies.
+        """
+        if not self.task_store:
+            return None
+        if run_request.get("taskId"):
+            return self.task_store.get_task(run_request["taskId"])
+        if session.get("workspaceLayout") != "task":
+            return None
+        return next((
+            task for task in self.task_store.list_tasks_for_session(session["id"])
+            if not task.get("deletedAt") and not task.get("isRoutine")
+            and session.get("workspaceSubpath") in (
+                task_workspace_subpath(task),
+                task_workspace_subpath(task, shared_automation=False),
+            )
+        ), None)
+
     def _artifacts_dir(
         self,
         run_request: dict[str, Any],
         workspace_layout: str,
         session_snapshot: dict[str, Any],
+        task_snapshot: dict[str, Any] | None = None,
     ) -> str | None:
         """Where this run's deliverables go; an occurrence needs its task to know."""
-        task = None
+        task = task_snapshot
         task_id = run_request.get("taskId")
-        if task_id and self.task_store and workspace_layout == "task":
+        if task is None and task_id and self.task_store and workspace_layout == "task":
             try:
                 task = self.task_store.get_task(task_id)
             except (KeyError, FileNotFoundError):
