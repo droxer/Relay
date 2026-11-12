@@ -82,7 +82,13 @@ setInterval(() => {}, 1000);
 `);
   const execution = {
     ensureAgentReady: async () => undefined,
-    execStream: (_command, _args, options) => localProcessExecStream(process.execPath, [agentScript], options),
+    async execStream(_command, _args, options) {
+      const result = await localProcessExecStream(process.execPath, [agentScript], options);
+      // Process exit precedes terminal evidence reaching the backend. Keep that
+      // interval observable so browser cleanup cannot rely on local PID checks.
+      await delay(500);
+      return result;
+    },
     release() {},
   };
   daemon = runRelayDaemon({
