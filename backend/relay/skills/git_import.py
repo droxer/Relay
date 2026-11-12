@@ -209,14 +209,18 @@ def _read_bundle(data: bytes, selected_path: PurePosixPath, deadline: float) -> 
                     archive_root = member_path.parts[0]
                 elif member_path.parts[0] != archive_root:
                     raise SkillImportError("unsafe-archive", "Archive contains more than one root")
-                if not (member.isdir() or member.isreg()):
-                    raise SkillImportError("unsafe-archive", "Archive contains a link or special file")
                 if member.isreg():
                     expanded_bytes += member.size
                     if expanded_bytes > MAX_EXPANDED_ARCHIVE_BYTES:
                         raise SkillImportError("archive-too-large", "Expanded archive exceeds the size limit")
                 relative = PurePosixPath(*member_path.parts[1:])
-                if member.isdir() or not _is_beneath(relative, selected_path):
+                if not _is_beneath(relative, selected_path):
+                    continue
+                # Unrelated repository links are never imported or followed.
+                # Keep rejecting every non-regular file in the selected bundle.
+                if not (member.isdir() or member.isreg()):
+                    raise SkillImportError("unsafe-archive", "Archive contains a link or special file")
+                if member.isdir():
                     continue
                 output_path = relative.relative_to(selected_path).as_posix()
                 if not output_path or output_path == ".":

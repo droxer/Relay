@@ -966,6 +966,9 @@ Imports support public GitHub repositories over HTTPS, without redirects.
 Admin organization settings expose `skillImportAllowedHosts`, initially
 `["github.com"]`; adding a host does not add another Git provider implementation.
 DNS, download, and archive processing share a 30-second deadline.
+Links and special files within the selected Skill subpath are rejected; those
+outside it are ignored and never followed. Path traversal, multiple archive
+roots, and archive size and entry limits are checked across the whole archive.
 
 Grants resolve at dispatch time. Revocation takes effect on the next run;
 running commands keep their captured manifests. Generic agent creation and

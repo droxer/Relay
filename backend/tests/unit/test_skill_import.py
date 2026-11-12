@@ -206,9 +206,30 @@ def test_rejects_non_global_download_addresses(monkeypatch: pytest.MonkeyPatch, 
 
 
 @pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo"])
-def test_rejects_special_archive_members(monkeypatch: pytest.MonkeyPatch, kind: str):
+@pytest.mark.parametrize("name", [
+    "tools-main/AGENTS.md",
+    "tools-main/other/link",
+    "tools-main/skills/reviewer/link",
+])
+def test_ignores_special_members_outside_selected_skill(monkeypatch, kind, name):
+    assert _fetch(monkeypatch, [
+        (name, None, kind),
+        ("tools-main/skills/review/SKILL.md", b"skill", "file"),
+    ]) == [{"path": "SKILL.md", "content": b"skill"}]
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo"])
+@pytest.mark.parametrize("name", ["tools-main/skills/review/bad", "tools-main/skills/review"])
+def test_rejects_special_archive_members(monkeypatch: pytest.MonkeyPatch, kind: str, name: str):
     assert _error_code(
-        lambda: _fetch(monkeypatch, [("tools-main/skills/review/bad", None, kind)])
+        lambda: _fetch(monkeypatch, [(name, None, kind)])
+    ) == "unsafe-archive"
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo"])
+def test_repository_root_import_still_rejects_special_members(monkeypatch, kind):
+    assert _error_code(
+        lambda: _fetch(monkeypatch, [("tools-main/other/link", None, kind)], subpath="")
     ) == "unsafe-archive"
 
 
