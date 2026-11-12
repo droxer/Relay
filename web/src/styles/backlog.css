@@ -278,6 +278,7 @@
 /* Cards own surface-1 on the palette ladder (the lane beneath them is
    transparent, so there is no parent plane to lift off). */
 .backlog-task {
+  --agent-pip-surface: var(--surface-1);
   position: relative;
   content-visibility: auto;
   contain-intrinsic-size: auto var(--card-h-tile);

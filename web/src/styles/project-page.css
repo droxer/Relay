@@ -67,6 +67,7 @@ button.project-member-row {
 }
 
 button.project-member-row:hover {
+  --agent-pip-surface: var(--surface-1);
   background: var(--surface-1);
 }
 

@@ -214,6 +214,7 @@ The other hues are meanings too: `--warn` gold is a person needed (a question,
 a check, a stopped gate), `--err` crimson a failure, `--ok` green done. The
 task status icon keeps those states apart by shape as well as hue: running is
 a half fill that breathes, waiting on a person is a still centre dot.
+Blocked uses a barred ring; Cancelled uses a slashed ring.
 
 Task status uses the same `TaskStatusIcon` in thread lists and headers,
 task lists and boards, status menus, records and lifecycle history. Running
@@ -737,6 +738,12 @@ readout: live-carrying elements when work is in flight, none when idle.
   inline padding. Both use 12px/500 labels. Offline uses compact for title
   lines; surface styles own tone, not size. At 24px height, the default
   12px corners form rounded endcaps; compact corners stay at 8px.
+- Badge text uses a shrinking, ellipsized label; icons and status marks retain
+  an independent fixed size. Use `BadgeLabel` for structured text children.
+  Member cards show the Lead label; compact lead marks use a keyboard-accessible
+  Tooltip. Existing detail groups may wrap their badges onto another line.
+- Avatar presence separators use `--agent-pip-surface`, supplied by the host
+  surface (including selected rows and highlighted menus), with canvas fallback.
 - Toast stack geometry belongs to Toast; its appearance uses `--shadow-2`,
   `--ease`, `--t-slow` for movement/opacity and `--t-fast` for height.
 

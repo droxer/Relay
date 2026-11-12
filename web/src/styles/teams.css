@@ -473,6 +473,7 @@
 }
 
 .team-work-member {
+  --agent-pip-surface: var(--surface-1);
   display: grid;
   align-content: start;
   gap: var(--sp-3);
