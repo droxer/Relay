@@ -35,21 +35,45 @@ function task(over: Partial<RelayTaskListItem> = {}): RelayTaskListItem {
 const ids = (records: ReadonlyArray<{ id: string }>) => records.map((record) => record.id);
 
 describe("task assignment rules", () => {
-  it("offers agents and whole teams on the project's computer, plus enabled members", () => {
+  it("offers only enabled Project Agents and teams wholly in the roster", () => {
     const agents = [agent("here", "c1"), agent("away", "c2"), agent("remote-member", "c2"), agent("theirs", "c1", "someone-else")];
     const teams = [team("local", ["here"]), team("split", ["here", "away"])];
     const options = taskAssignmentOptions({ project, agents, teams, assigneeUserId: "me" });
-    assert.deepEqual(ids(options.agents), ["here", "remote-member"]);
-    assert.deepEqual(ids(options.teams), ["local"]);
+    assert.deepEqual(ids(options.agents), ["remote-member"]);
+    assert.deepEqual(ids(options.teams), []);
   });
 
-  it("keeps the current pick listed even when it no longer qualifies", () => {
+  it("excludes a current assignment outside the Project roster", () => {
     const options = taskAssignmentOptions({
       project, agents: [agent("away", "c2")], teams: [team("split", ["away"])],
       assigneeUserId: "me", assignedAgentId: "away", assignedTeamId: "split",
     });
-    assert.deepEqual(ids(options.agents), ["away"]);
-    assert.deepEqual(ids(options.teams), ["split"]);
+    assert.deepEqual(ids(options.agents), []);
+    assert.deepEqual(ids(options.teams), []);
+  });
+
+  it("filters disabled members and mixed teams, including current selections", () => {
+    const roster = { ...project, members: [
+      { agentId: "here", enabled: true }, { agentId: "disabled", enabled: false },
+    ] } as ProjectRecord;
+    const agents = [agent("here", "c1"), agent("disabled", "c1"), agent("outsider", "c1")];
+    const options = taskAssignmentOptions({
+      project: roster, agents,
+      teams: [team("valid", ["here"]), team("disabled", ["here", "disabled"]), team("mixed", ["here", "outsider"])],
+      assigneeUserId: "me", assignedAgentId: "disabled", assignedTeamId: "mixed",
+    });
+    assert.deepEqual(ids(options.agents), ["here"]);
+    assert.deepEqual(ids(options.teams), ["valid"]);
+  });
+
+  it("preserves standalone Computer scope and current selection", () => {
+    const agents = [agent("here", "c1"), agent("away", "c2")];
+    const options = taskAssignmentOptions({
+      computerId: "c1", agents, teams: [team("local", ["here"])],
+      assigneeUserId: "me", assignedAgentId: "away",
+    });
+    assert.deepEqual(ids(options.agents), ["here", "away"]);
+    assert.deepEqual(ids(options.teams), ["local"]);
   });
 
   it("edits assignment only before work starts, and never on an intake issue", () => {

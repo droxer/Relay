@@ -69,11 +69,11 @@ it("lets a routine be created without a project", () => {
   expect(screen.queryByText("project.required")).toBeNull();
 });
 
-it("offers every agent and team on the project's computer, not just its roster", () => {
+it.each([false, true])("limits Project Agent and Team choices to the roster (automation: %s)", (automation) => {
   const on = (computerId: string) => [{ computerId, desiredState: "active" }];
   const onComputer = [{ id: "pc", name: "On computer", enabled: true, computerId: "pc-1", members: [{ agentId: "a", enabled: true }] }] as unknown as ProjectRecord[];
   function Placed() {
-    const [form, setForm] = useState<TaskBoardFormState>({ ...emptyBacklogForm(user), title: "Ship", projectId: "pc" });
+    const [form, setForm] = useState<TaskBoardFormState>({ ...(automation ? emptyRoutineForm(user) : emptyBacklogForm(user)), title: "Ship", projectId: "pc" });
     return <TaskDrawer open form={form} onChange={setForm} onSubmit={vi.fn()} onClose={vi.fn()}
       saving={false} title="New" subtitle="Task" projects={onComputer}
       logicalAgents={[
@@ -82,12 +82,13 @@ it("offers every agent and team on the project's computer, not just its roster",
         { id: "c", displayName: "Far", supervisorUserId: "u", placements: on("pc-2") },
       ] as any}
       teams={[
+        { id: "member", name: "Project team", ownerUserId: "u", memberAgentIds: ["a"] },
         { id: "near", name: "Near team", ownerUserId: "u", memberAgentIds: ["a", "b"] },
         { id: "split", name: "Split team", ownerUserId: "u", memberAgentIds: ["a", "c"] },
       ] as any} />;
   }
   render(<QueryClientProvider client={new QueryClient()}><Placed /></QueryClientProvider>);
-  expect(screen.getByTestId("assignment-options").textContent).toBe("Member,NeighbourNear team");
+  expect(screen.getByTestId("assignment-options").textContent).toBe("MemberProject team");
 });
 
 

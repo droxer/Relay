@@ -46,9 +46,8 @@ def agent_on_project_computer(
 ) -> bool:
     """True when the agent lives on the project's computer.
 
-    A project owns a computer, and every agent on that computer shares its
-    workspace root, so a task in the project may be handed to any of them — the
-    roster names who answers the project room, not who may ever touch it.
+    Used by project conversations and setup drafting, which may address
+    Agents before they join the project roster.
     """
     return any(
         placement.get("desiredState") != "removed"
@@ -57,14 +56,14 @@ def agent_on_project_computer(
     )
 
 
-def project_task_assignment_error(
+def project_computer_assignment_error(
     project: dict[str, Any],
     *,
     agent_id: str | None,
     team: dict[str, Any] | None,
     placement_store: Any,
 ) -> str | None:
-    """The one admission rule for who a project task may be assigned to.
+    """Computer admission for project conversations and setup drafting.
 
     A member the project disabled stays refused: that is a deliberate project
     decision, not an agent the roster simply never listed.
@@ -78,6 +77,20 @@ def project_task_assignment_error(
         for member_id in team.get("memberAgentIds") or []
     ):
         return "project_team_off_computer"
+    return None
+
+
+def project_task_assignment_error(
+    project: dict[str, Any], *, agent_id: str | None, team: dict[str, Any] | None,
+) -> str | None:
+    """Tasks and Automations may run only enabled Project Agents."""
+    members = project_member_ids(project)
+    if agent_id and agent_id not in members:
+        return "project_agent_not_member"
+    if team and any(
+        member_id not in members for member_id in team.get("memberAgentIds") or []
+    ):
+        return "project_team_not_member"
     return None
 
 
@@ -102,8 +115,7 @@ def resolve_project_task_assignments(
     ]
     member_ids = [member.get("agentId") for member in members]
     lead_agent_id = project.get("leadAgentId")
-    # Only a task that names no one falls back to the roster; one assigned to an
-    # agent or team on the project's computer runs even when the crew is empty.
+    # Only an unassigned task falls back to the project's full roster.
     names_runner = task.get("assignedAgentId") or task.get("assignedTeamId")
     if not names_runner and (not members or lead_agent_id not in member_ids):
         raise ProjectDispatchError("project_roster_invalid", permanent=True)
@@ -139,10 +151,8 @@ def _project_task_assignments(
 ) -> list[dict[str, Any]]:
     """Who runs a project task: its team, its agent, or the project roster.
 
-    A team or a non-member agent runs inside the project workspace exactly as a
-    member would; `resolve_agent_assignments` pins every one of them to the
-    project's node, so a placement that moved away fails the round instead of
-    running it somewhere without the project's files.
+    Recheck roster membership at dispatch, including old saved assignments.
+    Placement resolution also pins every Agent to the project's Computer.
     """
     team_id = task.get("assignedTeamId")
     if team_id:
@@ -155,6 +165,8 @@ def _project_task_assignments(
             )
         except TeamDispatchError as error:
             raise ProjectDispatchError(error.code, permanent=error.permanent) from error
+        if code := project_task_assignment_error(project, agent_id=None, team=team):
+            raise ProjectDispatchError(code, permanent=True)
         return [
             {**assignment, "projectSnapshot": snapshot}
             for assignment in team_member_assignments(
@@ -162,17 +174,6 @@ def _project_task_assignments(
             )
         ]
     assigned_agent_id = task.get("assignedAgentId")
-    if assigned_agent_id and assigned_agent_id not in project_listed_agent_ids(project):
-        return [
-            _outside_agent_assignment(
-                assigned_agent_id,
-                mode="action",
-                coordinator=True,
-                brief="Complete this project task in the shared project workspace.",
-                snapshot=snapshot,
-                agent_store=agent_store,
-            )
-        ]
     return project_member_assignments(
         project,
         selected_agent_ids=[assigned_agent_id] if assigned_agent_id else None,
@@ -249,9 +250,8 @@ def project_thread_assignments(
     """Who answers a message in a project thread.
 
     Crew members answer as the roster configures them. Any other agent on the
-    project's computer may be addressed by name — the rule a project task's
-    assignee already follows — so the agent that ran a task can be asked to
-    continue it. A bare message goes to the crew, or, in a project without
+    project's computer may be addressed by name to contribute to the conversation.
+    A bare message goes to the crew, or, in a project without
     one, to the agents already in the thread.
     """
     member_ids = project_member_ids(project)
@@ -262,7 +262,7 @@ def project_thread_assignments(
         selected = [
             agent_id
             for agent_id in room_agent_ids
-            if not project_task_assignment_error(
+            if not project_computer_assignment_error(
                 project, agent_id=agent_id, team=None, placement_store=placement_store
             )
         ]
@@ -277,7 +277,7 @@ def project_thread_assignments(
                 )
             )
             continue
-        code = project_task_assignment_error(
+        code = project_computer_assignment_error(
             project, agent_id=agent_id, team=None, placement_store=placement_store
         )
         if code:

@@ -187,7 +187,7 @@ export function InlineAssignee({
   task: RelayTaskListItem;
   agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
-  /** The task's project — its computer decides who may take the task. */
+  /** The task's Project — only enabled Project Agents may take the task. */
   project?: ProjectRecord | null;
   /** The row's resolved assignee, as the static chip draws it. */
   display: { name?: string; imageUrl?: string | null; ready: boolean };

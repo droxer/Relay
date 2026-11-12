@@ -9,7 +9,7 @@ from typing import Any
 
 from ..automations.model import EVENT_KINDS
 from ..core.computer_identity import computer_id
-from ..projects.runtime import project_task_assignment_error
+from ..projects.runtime import project_task_assignment_error, project_computer_assignment_error
 from ..projects.access import ProjectAccessError, project_for_owner
 from ..security.actor import Actor
 from .requests import TaskRequestError
@@ -104,15 +104,17 @@ def validate_project_assignment(
     assigned_agent_id: str | None,
     assigned_team_id: str | None,
 ) -> None:
-    """A project task may go to anyone who shares the project's computer."""
+    """A project task requires enabled roster membership and the project Computer."""
     team = ctx.team_store.get_team(assigned_team_id) if assigned_team_id else None
     if assigned_team_id and (not team or team.get("deletedAt")):
         raise TaskRequestError(404, "Team not found.")
-    if code := project_task_assignment_error(
-        project,
-        agent_id=assigned_agent_id,
-        team=team,
+    if code := project_computer_assignment_error(
+        project, agent_id=assigned_agent_id, team=team,
         placement_store=ctx.agent_placement_store,
+    ):
+        raise TaskRequestError(400, code)
+    if code := project_task_assignment_error(
+        project, agent_id=assigned_agent_id, team=team,
     ):
         raise TaskRequestError(400, code)
 
