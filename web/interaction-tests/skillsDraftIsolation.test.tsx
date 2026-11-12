@@ -23,7 +23,7 @@ const LABELS: Record<string, string> = {
   "skills.publish": "Publish",
   "skills.cancel": "Cancel",
   "skills.visibility.private": "Private",
-  "skills.visibility.org": "Organization",
+  "skills.visibility.public": "Public",
   "skills.visibility_label": "Visibility",
   "skills.optional": "optional",
   "skills.revision_note": "Revision note",
@@ -36,7 +36,7 @@ vi.mock("react-i18next", () => ({
 const skill = {
   id: "skill-1", ownerUserId: "user-1", name: "release", slug: "release",
   displayName: "Release notes", description: "Draft concise release notes",
-  visibility: "org" as const, source: "authored" as const, currentRevisionId: "rev-1",
+  visibility: "public" as const, source: "authored" as const, currentRevisionId: "rev-1",
   grantedAgentIds: [], revisions: [{ id: "rev-1", revision: 1, note: "", createdAt: "2026-09-01T00:00:00Z" }],
   files: [{ path: "SKILL.md", sha256: "a".repeat(64), bytes: 64 }],
 };
@@ -115,4 +115,24 @@ it("marks the editor's required fields and gates Save on them", async () => {
   // A real, valid edit is what Save is for.
   await user.type(screen.getByLabelText(/^Display name/), " v2");
   expect(save().disabled).toBe(false);
+});
+
+
+it("saves public and private visibility from the skill editor", async () => {
+  const user = userEvent.setup();
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider>
+    <SkillsPage currentUser={{ userId: "user-1" } as any} skillId={null} onSelectSkill={() => {}} />
+  </DialogProvider></QueryClientProvider>);
+  expect(screen.getByRole("button", { name: "Public" }).getAttribute("aria-pressed")).toBe("true");
+  await user.click(screen.getByRole("button", { name: "Private" }));
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(updateSkill).toHaveBeenLastCalledWith(skill.id, {
+    displayName: skill.displayName, description: skill.description, visibility: "private",
+  });
+  await user.click(screen.getByRole("button", { name: "Public" }));
+  await user.type(screen.getByLabelText(/^Display name/), " v2");
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(updateSkill).toHaveBeenLastCalledWith(skill.id, {
+    displayName: `${skill.displayName} v2`, description: skill.description, visibility: "public",
+  });
 });

@@ -1,4 +1,4 @@
-export type SkillVisibility = "private" | "org";
+export type SkillVisibility = "private" | "public";
 export type SkillSource = "authored" | "upload" | "git";
 export interface SkillFileInput { path: string; contentBase64: string }
 export interface SkillRevision { id: string; revision: number; bytes: number; manifestSha256: string; createdAt: string; createdByUserId: string; note?: string | null }

@@ -11,6 +11,16 @@ The person who owns agents, computers, threads, tasks, and projects. Stored in
 _Avoid_: Employee (the pre-rename name; old data and daemons are upgraded by
 `backend/relay/core/legacy_names.py`), Member
 
+**Skill Publication**:
+A user-owned, versioned bundle of agent instructions in the skill catalog.
+`private` visibility permits only its owner to view and use it; `public`
+visibility permits every signed-in User to discover and use it. Visibility
+never transfers ownership: only the owner edits or deletes the publication.
+Public visibility makes a skill available, while assignments choose which
+agents receive it. The `org` assignment target is a delivery scope, not a
+publication visibility.
+_Avoid_: Organization-visible skill (the retired `org` visibility)
+
 **Account**:
 A User's login credential — username, password hash, role, preferences —
 stored in `auth_accounts` and pointing at its User through `userId`. Sessions

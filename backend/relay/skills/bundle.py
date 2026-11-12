@@ -79,7 +79,7 @@ def resolve_bundle(
                 _skipped(skill_id, slug, "deleted", grant.get("assignmentMode"))
             )
             continue
-        if skill.get("visibility") != "org" and skill.get("ownerUserId") != owner:
+        if skill.get("visibility") != "public" and skill.get("ownerUserId") != owner:
             skipped.append(
                 _skipped(
                     skill_id,

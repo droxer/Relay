@@ -517,7 +517,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                       role="group"
                       aria-labelledby={editorVisibilityLabelId}
                     >
-                      {(["private", "org"] as const).map((option) => (
+                      {(["private", "public"] as const).map((option) => (
                         <button
                           key={option}
                           type="button"
@@ -774,7 +774,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               hint={t(`skills.visibility_hints.${draft.visibility}`)}
             >
               <div className="adm-profile-segment" role="group" aria-labelledby={visibilityLabelId}>
-                {(["private", "org"] as const).map((option) => (
+                {(["private", "public"] as const).map((option) => (
                   <button
                     key={option}
                     type="button"

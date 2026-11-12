@@ -616,12 +616,12 @@ def test_visibility_covers_catalog_downloads_and_assignment(client, visibility):
     }).status_code == (201 if visibility == "public" else 404)
     if visibility == "public":
         ctx = client.app.state.context
-        assert resolve_bundle(ctx, ctx.agent_store.get_agent(agent["id"]))["skills"]
+        assert resolve_bundle(ctx, ctx.agent_store.get_agent(agent["id"]))[0]["skills"]
         login(client, "alice")
         assert client.patch(url, json={"visibility": "private"}).status_code == 200
         login(client, "bob")
         assert client.get(url).status_code == 404
-        assert resolve_bundle(ctx, ctx.agent_store.get_agent(agent["id"]))["skills"] == []
+        assert resolve_bundle(ctx, ctx.agent_store.get_agent(agent["id"]))[0]["skills"] == []
 
 
 def test_admin_cannot_read_another_users_private_skill(client):

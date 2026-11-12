@@ -13,7 +13,7 @@ def publish_repository(
 ) -> dict[str, Any]:
     namespace = _namespace(metadata.get("namespace"))
     visibility = metadata.get("visibility", "private")
-    if visibility not in ("private", "org"):
+    if visibility not in ("private", "public"):
         raise SkillValidationError("invalid-visibility")
     payloads = []
     failed = []

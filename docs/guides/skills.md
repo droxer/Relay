@@ -177,8 +177,13 @@ the directory flag. OpenCode receives instruction paths in all environments.
   publications may be exported.
 - A caller may assign a visible publication only to a target they own.
 - Organization assignments require an administrator.
-- Private publications remain usable only by their owner targets; `org`
-  visibility enables discovery and assignment by other users.
+- Private publications can be viewed and used only by their owner; `public`
+  publications are discoverable and usable by all signed-in users. Only the
+  owner may edit, publish revisions, change visibility, or delete a publication.
+  Public visibility does not assign a skill automatically: each user chooses
+  which of their agents or scopes receives it. Making a skill private again
+  blocks other users from reading or downloading it and skips it on their
+  subsequent runs, even when an assignment or grant still exists.
 - Soft deletion and immutable events keep historical failures explainable.
 
 Approval workflows, scanning attestations, quarantine, and cross-organization
@@ -193,3 +198,15 @@ When Relay adds remote object storage, implement the existing
 properties are content-addressed keys, atomic visibility after a successful
 put, digest verification, bounded reads, and no public object URLs. Database
 events and revision manifests remain authoritative.
+
+
+### Upgrading skill visibility
+
+Migration `20261112_0124` renames the former `org` publication visibility to
+`public`; `private` publications keep their owner-only audience. Stop old
+backend writers before running `make backend-migrate`, then deploy the updated
+backend and web client together. API create, import, and update requests now
+accept `private` or `public`. The migration updates catalog projections and
+appends visibility events so event replay agrees without rewriting earlier
+history. Downgrading appends the reverse events and restores `org` validation.
+The administrator-only `org` assignment target remains a separate delivery scope.

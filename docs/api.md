@@ -942,10 +942,15 @@ representation and `204` otherwise.
 
 ## Shared skills
 
-Catalog routes require an authenticated user. Private skills are visible
-only to their owner; organization skills can be browsed and granted by other
-users. Only the publisher can edit or delete a skill. Each user can
-grant only to their own logical agents.
+Catalog routes require an authenticated user. Visibility is `private` (the
+default) or `public`. Private skills can be viewed and used only by their
+owner; public skills can be browsed, previewed, downloaded, and assigned by
+all signed-in users. Only the publisher can edit, revise, change visibility,
+or delete a skill. Each user can grant only to their own Logical Agents.
+Changing a publication back to private blocks other users from reading it
+and excludes it from their subsequent runs, even with an existing grant.
+The retired `org` visibility is migrated to `public` by `20261112_0124`;
+`org` assignment targets remain administrator-only delivery scopes.
 
 | Method and path under `/api/v1` | Request / result |
 | :- | :- |

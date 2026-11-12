@@ -53,7 +53,7 @@ class SkillWriteRows(SkillStoreState):
             raise SkillValidationError("skill-name-mismatch")
         visibility = payload.get("visibility", "private")
         source = payload.get("source", "authored")
-        if visibility not in ("private", "org"):
+        if visibility not in ("private", "public"):
             raise SkillValidationError("invalid-visibility")
         if source not in ("authored", "upload", "git"):
             raise SkillValidationError("invalid-source")
@@ -269,7 +269,7 @@ class SkillWriteRows(SkillStoreState):
         normalized = dict(patch)
         if "visibility" in normalized and normalized["visibility"] not in (
             "private",
-            "org",
+            "public",
         ):
             raise SkillValidationError("invalid-visibility")
         if "displayName" in normalized:
