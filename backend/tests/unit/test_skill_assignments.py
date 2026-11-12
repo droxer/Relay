@@ -173,6 +173,19 @@ def _ctx(store, alice: str, bob: str):
     )
 
 
+@pytest.mark.parametrize("mode", ["optional", "suggested"])
+def test_explicit_agent_override_suppresses_inherited_automatic_assignment(tmp_path, mode):
+    store, alice, bob = _store(tmp_path)
+    ctx = _ctx(store, alice, bob)
+    skill = _skill(store, alice)
+    assign(ctx, skill["id"], "user", alice, alice, invocation="implicit")
+    override = assign(ctx, skill["id"], "agent", "agent-a", alice, mode=mode, invocation="explicit")
+    agent = ctx.agent_store.get_agent("agent-a")
+    assert effective_assignments(ctx, agent) == []
+    revoke(ctx, override["id"], alice)
+    assert [item["targetType"] for item in effective_assignments(ctx, agent)] == ["user"]
+
+
 def test_assignment_service_enforces_target_ownership(tmp_path):
     store, alice, bob = _store(tmp_path)
     skill = _skill(store, alice)

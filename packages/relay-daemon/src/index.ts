@@ -117,7 +117,7 @@ import { createRunMcpProxy, MANAGED_MCP_CONTEXT_ENV } from "./relay-mcp-managed.
 import { startNativeMcpBridge } from "./relay-mcp-native.js";
 import { bootstrapRelayMcp, createMcpReconciler, configureRelayMcp } from "./relay-mcp-bootstrap.js";
 import { createProjectManagerBridge, managerWorkspaceTool } from "./project-manager.js";
-import { materializeSkills } from "./agent-skills.js";
+import { materializeSkills, runSkillDelivery } from "./agent-skills.js";
 import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
 import { permissionAdapterLaunch } from "./permission-adapters/index.js";
 
@@ -1610,13 +1610,10 @@ async function executeCommand(
     }
     logger.info("agent ready", commandLogFields(sandboxId, command));
     const executionAgentHome = environment.sandboxMode === "boxlite" ? "/home/agent" : agentHomePath();
-    const delivery = getAgent(command.agent).skillDelivery;
     const materialized = await materializeSkills({
       bundle: command.skills,
       agentId: command.logicalAgentId ?? `${command.agent}:${command.sessionId}`,
-      delivery: environment.sandboxMode === "none" && delivery.kind === "config-dir"
-        ? { kind: "prompt-paths" }
-        : delivery,
+      delivery: runSkillDelivery(command.agent, environment.sandboxMode),
       agentHome: executionAgentHome,
       cacheDir: join(executionAgentHome, ".relay", "managed-skills"),
       execStream: execution.execStream,

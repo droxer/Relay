@@ -60,6 +60,12 @@ def _create(store, owner, name="review", **overrides):
     )
 
 
+def test_empty_published_file_is_not_treated_as_a_missing_blob(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    _create(store, alice, files=_files(extra=[{"path": "scripts/empty.py", "content": b""}]))
+    assert store.blob(hashlib.sha256(b"").hexdigest()) == b""
+
+
 def test_create_skill_is_event_authoritative_and_makes_revision(tmp_path):
     store, alice, _ = _store(tmp_path)
     skill = _create(store, alice)

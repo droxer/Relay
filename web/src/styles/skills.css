@@ -225,6 +225,30 @@
   color: var(--ink-3);
 }
 
+.skill-revisions li {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .skill-revisions li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .skill-revisions span {
+    grid-column: 2 / -1;
+  }
+
+  .skill-revisions time {
+    grid-column: 1 / 3;
+  }
+
+  .skill-revisions button,
+  .skill-revisions small {
+    grid-column: 3;
+  }
+}
+
 .skill-revisions strong {
   min-width: 2.5ch;
   font: var(--type-body-sm);

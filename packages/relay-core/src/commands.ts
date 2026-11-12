@@ -333,7 +333,7 @@ function withSkillEnv(command: string, state: AgentState, allowedKey: string): s
 // OpenCode CLI. `opencode run --format json` prints the NDJSON stream that
 // OpenCodeStreamRenderer reads; the ACP adapter prints the same lines.
 export function buildOpenCodeCommand(state: AgentState, workspacePath?: string): string {
-  const prompt = nativeSkillPrompt(opencodeTaskPrompt(state), state);
+  const prompt = withSkillInstructions(opencodeTaskPrompt(state), state);
   const launch = permissionPromptLaunch(state, "opencode-acp");
   if (launch) return buildOpenCodeAcpInvocation(launch, prompt, workspacePath, state.agent_model);
   // `opencode run` never waits for an answer: a tool that needs approval
@@ -420,7 +420,11 @@ function agentArgv(agent: string): string[] {
 
 /** Local skills are task context; the CLI keeps its own config and auth home. */
 function nativeSkillPrompt(prompt: string, state: AgentState): string {
-  if (!isLocalAgentExecution() || !state.skill_paths?.length) return prompt;
+  return isLocalAgentExecution() ? withSkillInstructions(prompt, state) : prompt;
+}
+
+function withSkillInstructions(prompt: string, state: AgentState): string {
+  if (!state.skill_paths?.length) return prompt;
   const paths = state.skill_paths.map((path) => JSON.stringify(`${path}/SKILL.md`));
   return `${prompt}\n\n[Assigned skills]\nRead and follow these skill instructions before working:\n${paths.join("\n")}`;
 }

@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { runAsAgent, shellCommand, type AgentExecutor, type DaemonRunSkillBundle, type DaemonSkippedSkill, type SkillDelivery } from "relay-core";
+import { getAgent, runAsAgent, shellCommand, type AgentExecutor, type AgentName, type DaemonNodeSandboxMode, type DaemonRunSkillBundle, type DaemonSkippedSkill, type SkillDelivery } from "relay-core";
+import { permissionPromptsApply } from "./permission-broker.js";
 
 interface MaterializedSkills { skillPaths: string[]; env: Record<string, string>; slugs: string[]; skipped: DaemonSkippedSkill[]; }
 interface MaterializeSkillsOptions {
@@ -16,6 +17,17 @@ const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_FILES = 300;
 const MAX_REVISION_BYTES = 4 * 1024 * 1024;
 const TRANSFER_CHUNK_BYTES = 48 * 1024;
+
+export function runSkillDelivery(agent: AgentName, sandboxMode: DaemonNodeSandboxMode): SkillDelivery {
+  const delivery = getAgent(agent).skillDelivery;
+  // Local config-dir runtimes keep their native home. Kimi's ACP adapter
+  // likewise needs individual instruction paths, since it has no --skills-dir.
+  if (sandboxMode === "none" && (delivery.kind === "config-dir"
+    || (delivery.kind === "skills-dir-flag" && permissionPromptsApply(agent, sandboxMode)))) {
+    return { kind: "prompt-paths" };
+  }
+  return delivery;
+}
 
 export async function materializeSkills(options: MaterializeSkillsOptions): Promise<MaterializedSkills> {
   if (options.bundle === undefined) return { skillPaths: [], env: {}, slugs: [], skipped: [] };
