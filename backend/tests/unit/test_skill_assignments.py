@@ -58,7 +58,7 @@ def _skill(store: DatabaseSkillStore, owner: str, name: str = "review") -> dict:
         owner,
         {
             "name": name,
-            "visibility": "org",
+            "visibility": "public",
             "source": "authored",
             "files": _files(name),
         },
