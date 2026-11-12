@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { GithubMark } from "../landing/GithubMark";
 import { listConnections, listConnectionProviders, startConnection, disconnectConnection, connectionUsage } from "../../api-client/connections";
 
 export function ConnectionsSection() {
@@ -31,10 +32,13 @@ export function ConnectionsSection() {
       <h3 id="your-connections" className="pref-group-label">{t("connections.yours")}</h3>
       {!records.length && <p className="connections-hint">{t("connections.empty")}</p>}
       {records.map(connection => <div className="connection-row" key={connection.id}>
-        <div className="connection-identity">
-          <span className="pref-option-label">{providers.data?.providers.find(p => p.id === connection.provider)?.name} · {connection.label}</span>
-          <span className="pref-option-sub">{connection.identity}</span>
-          <Badge variant={connection.status === "connected" ? "neutral" : "warning"}>{t(`connections.status.${connection.status}`)}</Badge>
+        <div className="connection-overview">
+          {connection.provider === "github" && <GithubMark size={28} className="connection-provider-mark" />}
+          <div className="connection-identity">
+            <span className="pref-option-label">{providers.data?.providers.find(p => p.id === connection.provider)?.name} · {connection.label}</span>
+            <span className="pref-option-sub">{connection.identity}</span>
+            <Badge variant={connection.status === "connected" ? "neutral" : "warning"}>{t(`connections.status.${connection.status}`)}</Badge>
+          </div>
         </div>
         <div className="connection-actions">
           {connection.status !== "connected" && <Button type="button" variant="outline" disabled={authorize.isPending}
@@ -61,8 +65,11 @@ export function ConnectionsSection() {
     <section aria-labelledby="available-connections">
       <h3 id="available-connections" className="pref-group-label">{t("connections.available")}</h3>
       {providers.data?.providers.map(provider => <div className="connection-row" key={provider.id}>
-        <div className="connection-identity"><span className="pref-option-label">{provider.name}</span>
-          <span className="pref-option-sub">{t(provider.configured ? `connections.provider_hint.${provider.id}` : "connections.not_configured")}</span>
+        <div className="connection-overview">
+          {provider.id === "github" && <GithubMark size={28} className="connection-provider-mark" />}
+          <div className="connection-identity"><span className="pref-option-label">{provider.name}</span>
+            <span className="pref-option-sub">{t(provider.configured ? `connections.provider_hint.${provider.id}` : "connections.not_configured")}</span>
+          </div>
         </div>
         {provider.configured && <Button type="button" variant="outline" disabled={authorize.isPending}
           aria-label={`${t("connections.connect")} ${provider.name}`}
