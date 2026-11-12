@@ -303,11 +303,13 @@ their own; an Automation's tags are copied onto every Task it fires.
 _Avoid_: Label, category
 
 **Issue Import**:
-Bringing a public GitHub repository's issues into Relay as backlog Tasks, into a
+Bringing a GitHub repository's issues into Relay as backlog Tasks, into a
 Project or the importer's intake. It is one-way and one-shot: the Task keeps a
 link to its issue (`externalSource`) but never writes back or follows later
 edits, and an issue already in the same destination is skipped. GitHub labels
-become Tags.
+become Tags. Public repositories can be read anonymously; private repositories
+require an explicitly selected, User-owned GitHub Connection. Importing does not
+create Connection Grants for the resulting Tasks.
 _Avoid_: Sync, mirror, GitHub task
 
 **Connection**:
@@ -326,7 +328,8 @@ _Avoid_: Skill, Placement, global agent access
 **GitHub Connection**:
 A Connection authorizing GitHub issue reads for selected work through a GitHub
 OAuth App. The older Account GitHub App installation flow remains disabled;
-Issue Import still supports public repositories anonymously.
+Issue Import can use an explicitly selected GitHub Connection for private
+repository reads, and defaults to anonymous reads for public repositories.
 
 **Wait**:
 A Task parked at `waiting_for_human` on a person, recorded as its

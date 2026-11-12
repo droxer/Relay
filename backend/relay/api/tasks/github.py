@@ -1,8 +1,9 @@
 """Importing GitHub issues as tasks: a preview, then the import itself.
 
-Both routes read public repositories anonymously. Tokens and saved account
-connections are not used. ``projectId`` names the destination backlog; without
-it, issues land in the caller's intake.
+Both routes read public repositories anonymously unless the signed-in owner
+explicitly selects a GitHub Connection. Credentials remain on the backend.
+``projectId`` names the destination backlog; without it, issues land in the
+caller's intake.
 """
 
 from __future__ import annotations
@@ -11,7 +12,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ...core.connections import ConnectionError
 from ...security.actor import Actor
+from ...security.request_auth import require_user_session
 from ...tasks.github_import import (
     MAX_IMPORT_ISSUES,
     ImportDestination,
@@ -44,7 +47,7 @@ def preview_github_issues(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
-    repo = _public_repository(body)
+    repo = _repository(body)
     destination = _destination(ctx, actor, body)
     state = string_field(body, "state") or "open"
     if state not in ISSUE_STATES:
@@ -54,8 +57,8 @@ def preview_github_issues(
         raise HTTPException(400, "github_labels_invalid")
     page = _page(body.get("page"))
     try:
-        with GitHubIssueClient() as client:
-            client.require_public_repository(repo)
+        with _github_client(request, ctx, actor, body) as client:
+            client.require_repository(repo)
             listing = client.list_issues(repo, state=state, labels=labels, page=page)
     except GitHubError as error:
         raise HTTPException(error.status, error.code) from error
@@ -83,12 +86,12 @@ def import_github_issues(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
-    repo = _public_repository(body)
+    repo = _repository(body)
     destination = _destination(ctx, actor, body)
     numbers = _issue_numbers(body.get("numbers"))
-    with task_request_errors(), GitHubIssueClient() as client:
+    with task_request_errors(), _github_client(request, ctx, actor, body) as client:
         try:
-            client.require_public_repository(repo)
+            client.require_repository(repo)
         except GitHubError as error:
             raise HTTPException(error.status, error.code) from error
         result = import_issues(
@@ -110,13 +113,32 @@ def import_github_issues(
     }
 
 
-def _public_repository(body: dict[str, Any]) -> Repository:
+def _repository(body: dict[str, Any]) -> Repository:
     if "token" in body:
         raise HTTPException(400, "github_public_repositories_only")
     try:
         return parse_repository(body.get("repository"))
     except GitHubError as error:
         raise HTTPException(error.status, error.code) from error
+
+
+def _github_client(request: Request, ctx: AppContext, actor: Actor, body: dict[str, Any]) -> GitHubIssueClient:
+    if "connectionId" not in body:
+        return GitHubIssueClient()
+    connection_id = body["connectionId"]
+    if not isinstance(connection_id, str) or not connection_id.strip() or len(connection_id) > 200:
+        raise HTTPException(400, "github_connection_invalid")
+    # A chat-service actor cannot borrow the named user's saved credentials.
+    account = require_user_session(request, ctx.auth_store)
+    if (account.get("userId") or account["id"]) != actor["userId"]:
+        raise HTTPException(403, "connection_access_denied")
+    if ctx.connections is None:
+        raise HTTPException(503, "connections_not_configured")
+    try:
+        token = ctx.connections.github_import_token(actor["userId"], connection_id)
+    except ConnectionError as error:
+        raise HTTPException(error.status, error.code) from error
+    return GitHubIssueClient(token=token)
 
 
 def _destination(ctx: AppContext, actor: Actor, body: dict[str, Any]) -> ImportDestination:

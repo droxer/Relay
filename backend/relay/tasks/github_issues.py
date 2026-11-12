@@ -3,8 +3,8 @@
 The import only ever reads, and only from ``api.github.com``: the host is
 fixed, redirects are not followed, and a repository is named by validated
 ``owner``/``name`` segments, so a request can never be pointed elsewhere.
-Every request is anonymous, and the repository's visibility is checked before
-its issues are previewed or imported.
+Anonymous requests require public visibility. Authenticated requests use only
+a server-held token from an explicitly selected, owner-scoped Connection.
 
 Pull requests share the issues endpoint; they are flagged so the import can
 leave them out.
@@ -80,12 +80,15 @@ class IssuePage:
 
 
 class GitHubIssueClient:
-    def __init__(self):
+    def __init__(self, *, token: str | None = None):
+        self._authenticated = bool(token)
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": API_VERSION,
             "User-Agent": "relay-issue-import",
         }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         self._client = httpx.Client(
             base_url=API_ROOT,
             headers=headers,
@@ -100,12 +103,12 @@ class GitHubIssueClient:
     def __exit__(self, *_exc: object) -> None:
         self._client.close()
 
-    def require_public_repository(self, repo: Repository) -> None:
+    def require_repository(self, repo: Repository) -> None:
         response = self._get(f"/repos/{repo.owner}/{repo.name}", None)
         payload = response.json()
         if not isinstance(payload, dict):
             raise GitHubError(502, "github_unexpected_response")
-        if payload.get("private") is not False or payload.get("visibility") != "public":
+        if not self._authenticated and (payload.get("private") is not False or payload.get("visibility") != "public"):
             raise GitHubError(403, "github_public_repositories_only")
 
     def list_issues(

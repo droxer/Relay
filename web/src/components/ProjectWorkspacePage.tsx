@@ -68,7 +68,6 @@ export function ProjectWorkspacePage({
   currentUser,
   computers,
   onOpenThread,
-  onNewThread,
   onDeleted,
   onBack,
 }: {
@@ -81,7 +80,6 @@ export function ProjectWorkspacePage({
   currentUser: CurrentUser;
   computers: DaemonNodeMonitorRecord[];
   onOpenThread: (sessionId: string) => void;
-  onNewThread?: () => void;
   onDeleted: () => void;
   onBack: () => void;
 }) {
@@ -189,13 +187,10 @@ export function ProjectWorkspacePage({
         titleVariant="record"
         layout="stacked"
         actions={(
-          <>
-            {onNewThread && !membersReadOnly ? <Button type="button" size="dense" onClick={onNewThread}>{t("project.new_thread_short")}</Button> : null}
-            <Button type="button" variant="ghost" size="dense" className="project-mobile-back" onClick={onBack}>
-              <NavBack size={ICON.sm} aria-hidden="true" />
-              {t("project.back")}
-            </Button>
-          </>
+          <Button type="button" variant="ghost" size="dense" className="project-mobile-back" onClick={onBack}>
+            <NavBack size={ICON.sm} aria-hidden="true" />
+            {t("project.back")}
+          </Button>
         )}
         toolbar={(
           <TabsList className="workspace-page-tabs" stripKey={pageTab} aria-label={t("project.sections")}>

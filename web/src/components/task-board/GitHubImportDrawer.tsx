@@ -2,13 +2,13 @@
 
 import { useId, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { importGitHubIssues, previewGitHubIssues, RelayApiError } from "../../api";
 import type { GitHubIssuePreview, GitHubIssueState, GitHubIssuesResponse, ProjectRecord } from "../../types";
 import { TASKS_QUERY_KEY } from "../../hooks/useRelayData";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
-import { GitHubConnectionPanel } from "../settings/GitHubConnectionPanel";
+import { listConnections } from "../../api-client/connections";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
 
 const STATES: GitHubIssueState[] = ["open", "closed", "all"];
 const NO_PROJECT = "__intake__";
+const PUBLIC_ONLY = "__public__";
 
 interface GitHubImportDrawerProps {
   open: boolean;
@@ -55,13 +56,19 @@ function errorCode(error: unknown): string | undefined {
 /**
  * Brings a GitHub repository's issues in as backlog tasks: name the
  * repository, load a page of issues, tick the ones to bring in. Issues the
- * destination already holds are shown but cannot be picked again. Only public
- * repositories are supported; requests never use GitHub credentials.
+ * destination already holds are shown but cannot be picked again. Private
+ * repositories use an explicitly selected Connection; credentials stay server-side.
  */
 export function GitHubImportDrawer({ open, onClose, lockedProject, projects = [], initialProjectId, onOpenTask }: GitHubImportDrawerProps) {
   const { t } = useTranslation();
   const { announce } = useDialogs();
   const queryClient = useQueryClient();
+  const connectionLabelId = useId();
+  const [connectionId, setConnectionId] = useState<string | undefined>();
+  const connections = useQuery({ queryKey: ["connections", "list"], queryFn: listConnections, enabled: open });
+  const githubConnections = connections.data?.connections.filter((item) => item.provider === "github" && item.status !== "disconnected") ?? [];
+  const chosenConnection = githubConnections.find((item) => item.id === connectionId);
+  const connectionUnavailable = Boolean(connectionId) && (!chosenConnection || chosenConnection.status !== "connected");
   const stateLabelId = useId();
   const projectLabelId = useId();
   const [repository, setRepository] = useState("");
@@ -76,7 +83,7 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
   const destinationId = lockedProject?.id ?? projectId;
   const openProjects = projects.filter((project) => project.enabled && !project.archivedAt);
   const chosenProject = lockedProject ?? openProjects.find((project) => project.id === projectId);
-  const query = { repository: repository.trim(), projectId: destinationId, state, labels: labels.trim() };
+  const query = { connectionId, repository: repository.trim(), projectId: destinationId, state, labels: labels.trim() };
   const queryKey = JSON.stringify(query);
 
   async function load(page: number) {
@@ -98,12 +105,13 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
   }
 
   async function runImport() {
-    if (!listing || !selected.size) return;
+    if (!listing || !selected.size || listing.key !== queryKey || connectionUnavailable) return;
     setBusy("importing");
     setError(null);
     try {
       const result = await importGitHubIssues({
         repository: listing.response.repository.fullName,
+        connectionId,
         projectId: destinationId,
         numbers: [...selected],
       });
@@ -132,7 +140,7 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (query.repository && !busy) void load(1);
+    if (query.repository && !busy && !connectionUnavailable) void load(1);
   }
 
   const stale = listing !== null && listing.key !== queryKey;
@@ -151,6 +159,30 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
       bodyClassName="github-import"
     >
       <form className="github-import-query" onSubmit={submit} aria-busy={busy !== null}>
+        <Field label={t("github_import.connection")} labelId={connectionLabelId} wrapper="div" hint={t("github_import.connection_hint")}>
+          <Select disabled={busy !== null || connections.isPending} value={connectionId ?? PUBLIC_ONLY} onValueChange={(value) => {
+            if (value) setConnectionId(value === PUBLIC_ONLY ? undefined : value);
+          }}>
+            <SelectTrigger className="w-full" aria-labelledby={connectionLabelId}>
+              <SelectValue>{() => chosenConnection?.label ?? t("github_import.public_only")}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={PUBLIC_ONLY}>{t("github_import.public_only")}</SelectItem>
+              {githubConnections.map((item) => (
+                <SelectItem key={item.id} value={item.id} disabled={item.status !== "connected"}>
+                  {item.label}{item.status !== "connected" ? ` — ${t("github_import.reconnect")}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {connections.isPending ? <p role="status">{t("connections.loading")}</p> : null}
+          {connections.isError ? <div role="alert">
+            <p>{t("connections.load_failed")}</p>
+            <Button type="button" variant="ghost" disabled={busy !== null} onClick={() => void connections.refetch()}>{t("github_connection.retry")}</Button>
+          </div> : null}
+          {connectionUnavailable ? <p role="alert">{t("github_import.errors.connection_unavailable")}</p> : null}
+          <a href="/settings/connections">{t("github_import.manage_connections")}</a>
+        </Field>
         <Field label={t("github_import.repository")} required hint={t("github_import.repository_hint")} disabled={busy !== null}>
           <Input
             data-modal-initial-focus
@@ -208,7 +240,7 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
           </Field>
         </div>
         <div className="github-import-query-actions">
-          <Button type="submit" variant={!listing || stale || !importable.length ? "default" : "outline"} loading={busy === "loading"} disabled={!query.repository || busy !== null}>
+          <Button type="submit" variant={!listing || stale || !importable.length ? "default" : "outline"} loading={busy === "loading"} disabled={!query.repository || busy !== null || connectionUnavailable}>
             {busy === "loading" ? t("github_import.loading") : t("github_import.load")}
           </Button>
         </div>
@@ -259,13 +291,11 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
 
       {error ? <p role="alert" className="github-import-error">{error}</p> : null}
 
-      <div className="github-import-connection-note"><GitHubConnectionPanel /></div>
-
       <footer className="adm-form-actions">
         <Button variant="ghost" disabled={busy !== null} onClick={onClose}>
           {t("github_import.cancel")}
         </Button>
-        <Button disabled={!selected.size || busy !== null || stale} onClick={() => void runImport()}>
+        <Button disabled={!selected.size || busy !== null || stale || connectionUnavailable} onClick={() => void runImport()}>
           {busy === "importing"
             ? t("github_import.importing")
             : t("github_import.import", { count: selected.size })}

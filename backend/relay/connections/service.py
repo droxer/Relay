@@ -145,6 +145,13 @@ class ConnectionService:
             self.store.save(owner, {**_public(current), "status": "reconnect_required",
                 "revision": current["revision"] + 1, "updatedAt": now_iso()}, current.get("sealedSecret"))
 
+    def github_import_token(self, owner: str, connection_id: str) -> str:
+        """User-initiated issue import; never borrows another owner's Connection."""
+        record = self._connection(owner, connection_id)
+        if record["provider"] != "github" or "github.list_issues" not in record["actions"]:
+            raise ConnectionError("connection_access_denied", 403)
+        return self.token(owner, connection_id)
+
     def resources(self, owner: str, connection_id: str, cursor: str = "") -> dict[str, Any]:
         record = self._connection(owner, connection_id)
         return providers.resources(record["provider"], self.token(owner, connection_id), cursor)

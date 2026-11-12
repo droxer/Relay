@@ -90,9 +90,12 @@ installation flow and never reuses its saved credentials. See
 - A failed write is never retried automatically. If the response is lost after
   a provider may have accepted it, inspect the external resource before retrying.
 
-Public GitHub issue import remains anonymous and public-only. Connections do not
-change the importer's visibility contract. The legacy `/account/github` API
-remains disabled except for credential cleanup.
+GitHub issue import defaults to anonymous public reads. In the import drawer,
+select a GitHub account to preview and import issues from repositories that
+account can access, including private repositories. Both import endpoints accept
+an optional `connectionId`, validate its owner and availability, and use the
+backend-held credential. Imports do not grant subsequent Tasks access to GitHub.
+The legacy `/account/github` API remains disabled except for credential cleanup.
 
 ## API
 

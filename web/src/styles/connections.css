@@ -44,7 +44,7 @@
 .composer .connection-grant-options { padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3); margin-inline-start: var(--sp-4); border-inline-start: 1px solid var(--line-1); }
 .composer .connection-grant-options legend { font: var(--type-meta); }
 .composer .connection-grant-options .connection-choice { min-height: var(--control-h-sm); }
-@media (min-width: 641px) {
+@media (min-width: 640px) {
   .composer .connection-grant-options { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--sp-5); }
   .composer .connection-grant-options > [role="alert"] { grid-column: 1 / -1; }
 }
@@ -54,7 +54,7 @@
 @media (max-width: 640px) {
   .connection-row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
   .connection-row > .connection-actions,
-  .connection-row > button { justify-self: start; margin-inline-start: calc(28px + var(--sp-3)); }
+  .connection-row > button { justify-self: start; margin-inline-start: calc(var(--icon-xl) + var(--sp-3)); }
   .connection-actions { width: 100%; }
   .connection-row > .connection-actions { width: auto; }
 }
