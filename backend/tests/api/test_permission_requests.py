@@ -348,8 +348,15 @@ def test_a_prompt_notifies_the_threads_owner_once(monkeypatch) -> None:
         _bootstrap(client)
         session_id = _create_session(client)
         command = _dispatched_run(app, session_id)
-        _ask(client, command)
-        _ask(client, command)  # the retried post is not news
+        from loguru import logger
+        messages = []
+        sink = logger.add(lambda message: messages.append(message.record), level="INFO")
+        try:
+            _ask(client, command)
+            _ask(client, command)  # the retried post is not news
+        finally:
+            logger.remove(sink)
+        assert len([m for m in messages if m['message'] == 'Run asked for permission']) == 1
 
         inbox = client.get("/api/v1/notifications").json()
         prompts = [item for item in inbox["notifications"] if item["kind"] == "permission_requested"]

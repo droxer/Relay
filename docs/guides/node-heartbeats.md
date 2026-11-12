@@ -210,7 +210,11 @@ Transient failures retry indefinitely with jitter, bounded request deadlines,
 and `Retry-After`. Permanent report rejections are quarantined with their bytes
 and reason intact. Only malformed input is a 400: unexpected processing
 exceptions, including `ValueError`, `TypeError`, and `KeyError` after validation,
-roll back their batch group and return a retryable 500. Unrelated groups can
+roll back their batch group and return a retryable 500. A thread missing when
+acquiring its mutation lock is a terminal 409 instead: an unaccepted report
+cannot be applied to deleted history. Its bytes remain quarantined, and no
+acceptance receipt or execution-exit evidence is fabricated. Previously accepted
+reports still replay from their durable receipts. Unrelated groups can
 still commit. Batch rejection receipts include a bounded reason, without
 returning internal exception details.
 

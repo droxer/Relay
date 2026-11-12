@@ -220,3 +220,13 @@ the migration reuses the column, repeats the backfill, and rebuilds invalid
 indexes. Downgrade removes these indexes and the derived search column while
 preserving task snapshots and event histories; stop the new application before
 rolling back. SQLite fixtures also exercise upgrade, retry and downgrade.
+
+
+## Backend log streams
+
+The default logger writes levels below ERROR to stdout and ERROR/CRITICAL to
+stderr, so Railway does not classify ordinary access logs as errors. Text
+includes the application level and selected operational identifiers (thread,
+run, permission request, Computer and command); arbitrary bound payloads and
+exception local-variable values are omitted. Permission retries do not emit a
+second prompt-opened INFO entry. `RELAY_LOG_LEVEL` controls the minimum level.

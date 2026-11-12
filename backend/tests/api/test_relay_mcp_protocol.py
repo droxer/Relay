@@ -166,3 +166,27 @@ def test_mcp_errors_hide_internal_failures_and_bound_the_actual_wire_result(setu
         )
         assert failed.json()["result"]["isError"] is True
         assert "private-database-credential" not in failed.text
+
+
+def test_discovery_probe_returns_method_not_found(setup_env):
+    app, owner, _, project, *_ = setup_env
+    grant = _token(owner, project)
+    with TestClient(app) as client:
+        response = _rpc(client, grant['token'], 'server/discover', request_id='probe')
+        assert response.status_code == 200
+        assert response.json() == {'jsonrpc': '2.0', 'id': 'probe',
+                                   'error': {'code': -32601, 'message': 'Method not found'}}
+        assert response.headers['cache-control'] == 'no-store'
+
+
+def test_discovery_probe_preserves_auth_protocol_and_size_checks(setup_env):
+    app, owner, _, project, *_ = setup_env
+    grant = _token(owner, project)
+    probe = {'jsonrpc': '2.0', 'id': 1, 'method': 'server/discover'}
+    with TestClient(app) as client:
+        assert client.post(ENDPOINT, json=probe).status_code == 401
+        headers = _headers(grant['token'])
+        assert client.post(ENDPOINT, headers={**headers, 'MCP-Protocol-Version': 'invalid'}, json=probe).status_code == 400
+        oversized = {**probe, 'params': {'padding': 'x' * (128 * 1024)}}
+        assert client.post(ENDPOINT, headers=headers, json=oversized).status_code == 413
+        assert _rpc(client, grant['token'], 'tools/list').status_code == 200
