@@ -455,7 +455,7 @@
     "remove_confirm": "Remove @{{id}} from this browser?",
     "agent_running_aria": "Agent running",
     "token_usage_title": "Input {{input}} · Output {{output}} · Cache write {{cacheWrite}} · Cache read {{cacheRead}}",
-    "output_truncated": "Some live output from this run wasn’t saved. The final result is complete.",
+    "output_truncated": "Some live output was unconfirmed when this run finished and may arrive later. The final result is complete.",
     "no_sessions": "—",
     "rename": "Rename",
     "more_actions": "More actions for {{name}}",

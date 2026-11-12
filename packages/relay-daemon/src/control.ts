@@ -331,7 +331,13 @@ export function runControl(args: string[], deps: ControlDeps): number {
     if (options.command === 'reports') {
       const status = outbox.status();
       deps.log(`Reports: ${status.pending} pending, ${status.quarantined} quarantined, ${status.bytes} bytes retained.`);
-      for (const report of outbox.summaries()) deps.log(`${report.id}  ${report.commandId}  ${report.status}`);
+      for (const report of outbox.summaries()) {
+        deps.log(`${report.id}  ${report.commandId}  ${report.status}`);
+        if (report.rejection) {
+          deps.log(`  Original rejection: ${report.rejection.detail}${report.rejection.at ? ` (${report.rejection.at})` : ''}`);
+          deps.log(`  After fixing the rejection: stop this Computer, then ${brand.command} retry-report --computer ${service.id} --report ${report.id}, then start it.`);
+        }
+      }
     } else {
       if (!options.report) throw new Error('Choose the exact report with --report <id>.');
       if (options.command === 'retry-report') outbox.retryQuarantined(options.report, `local-uid:${deps.uid}`);

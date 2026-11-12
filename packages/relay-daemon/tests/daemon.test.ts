@@ -2981,6 +2981,44 @@ test("relay daemon reports a cancel for a run it never received as cancelled", a
   }]);
 });
 
+test('quarantined cancellation redelivery stays quiet while the daemon continues polling', async () => {
+  const stop = new AbortController();
+  const deadline = setTimeout(() => stop.abort(), 1500);
+  const lost = runCommand('quarantined_start');
+  const cancel: DaemonNodeCommand = {
+    id: 'quarantined_cancel', type: 'run.cancel', commandId: lost.id,
+    sessionId: lost.sessionId, runId: lost.runId, agent: lost.agent, reason: 'Thread deletion requested.',
+  };
+  let polls = 0;
+  let sends = 0;
+  const messages: string[] = [];
+  const logger = testLogger();
+  logger.error = message => { messages.push(message); };
+  logger.info = message => { messages.push(message); };
+  try {
+    await runRelayDaemon({
+      backendUrl: 'http://relay.test', sandboxId: 'sbx_test', userId: 'alice',
+      workspacePath: process.cwd(), sandbox: 'none', token: 'node_token', pollIntervalMs: 5,
+      shutdownGraceMs: 50, logger, signal: stop.signal, environment: fakeEnvironment(),
+      fetchFn: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === '/api' || path.endsWith('/daemon-node-registrations')) return jsonResponse({});
+        if (path.endsWith('/commands')) {
+          if (++polls === 6) stop.abort();
+          return jsonResponse({ commands: [cancel] });
+        }
+        if (path.endsWith('/events')) { sends++; return jsonResponse({ detail: 'Invalid cancellation.' }, 400); }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    assert.equal(polls, 6);
+    assert.equal(sends, 1);
+    assert.equal(messages.filter(message => message === 'report quarantined; automatic retries paused').length, 1);
+    assert.equal(messages.filter(message => message.includes('unacknowledged work will retry')).length, 0);
+    assert.equal(messages.filter(message => message === 'cancel command received').length, 1);
+  } finally { clearTimeout(deadline); }
+});
+
 for (const failure of ["stalled", "unavailable"] as const) {
   test(`relay daemon keeps polling while a cancellation report is ${failure}`, async () => {
     const stop = new AbortController();

@@ -1,10 +1,78 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { TerminalOutbox } from "../src/terminal-outbox.js";
+
+for (const delivery of ['live', 'batch'] as const) {
+  test(`${delivery} quarantine preserves the original rejection across restart and explicit retry`, async t => {
+    const root = mkdtempSync(join(tmpdir(), 'relay-rejection-detail-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const event = { type: 'run.cancelled', commandId: 'cmd', leaseId: 'lease', runId: 'run' };
+    const outbox = new TerminalOutbox(root);
+    if (delivery === 'live') {
+      await outbox.wrapFetch(async () => Response.json({ detail: 'Cancellation owner mismatch.' }, { status: 400 }))(
+        'http://backend/events', { method: 'POST', body: JSON.stringify(event) });
+    } else {
+      outbox.negotiate(true, true);
+      outbox.retain(event);
+      await outbox.replay(async (_url, init) => {
+        const { reports } = JSON.parse(String(init?.body));
+        return Response.json({ receipts: reports.map((report: { id: string; digest: string }) => ({
+          id: report.id, digest: report.digest, status: 400, detail: 'Cancellation owner mismatch.',
+        })) });
+      }, 'http://backend/events', 'token');
+    }
+    const restarted = new TerminalOutbox(root);
+    const [summary] = restarted.summaries();
+    assert.equal(summary.rejection?.status, 400);
+    assert.match(summary.rejection?.detail ?? '', /Cancellation owner mismatch/);
+    assert.ok(summary.rejection?.at);
+    let sends = 0;
+    const response = await restarted.wrapFetch(async () => { sends++; return new Response('{}'); })(
+      'http://backend/events', { method: 'POST', body: JSON.stringify(event) });
+    assert.equal(response.status, 409);
+    assert.match(await response.text(), /400.*Cancellation owner mismatch/);
+    assert.equal(sends, 0);
+    restarted.retryQuarantined(summary.id, 'test-operator');
+    await restarted.replay(async () => { sends++; return new Response('{}'); }, 'http://backend/events', 'token');
+    assert.equal(sends, 1);
+    assert.equal(restarted.status().pending, 0);
+    const audit = readdirSync(root).find(name => name.endsWith('.audit'))!;
+    const intervention = JSON.parse(readFileSync(join(root, audit), 'utf8'));
+    assert.equal(intervention.rejection.status, 400, 'retry must not erase the original refusal evidence');
+    assert.match(intervention.rejection.detail, /Cancellation owner mismatch/);
+  });
+}
+
+test('legacy quarantine markers remain isolated with an honest unknown reason', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-legacy-rejection-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  const record = outbox.retain({ type: 'run.cancelled', commandId: 'cmd' });
+  writeFileSync(join(root, `${record.key}.rejected`), '400');
+  const restarted = new TerminalOutbox(root);
+  assert.equal(restarted.summaries()[0].rejection?.status, 400);
+  assert.match(restarted.summaries()[0].rejection?.detail ?? '', /not recorded/i);
+  assert.equal(JSON.parse(readFileSync(join(root, `${record.key}.json`), 'utf8')).commandId, 'cmd');
+});
+
+test('rejection diagnostics are bounded and safe to display in a terminal', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-rejection-safe-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  await outbox.wrapFetch(async () => new Response('\u001b[31mblocked\n' + 'x'.repeat(10000), { status: 400 }))(
+    'http://backend/events', { method: 'POST', body: JSON.stringify({ type: 'run.cancelled', commandId: 'cmd' }) });
+  const rejection = new TerminalOutbox(root).summaries()[0].rejection!;
+  assert.ok(rejection.detail.length <= 201);
+  assert.doesNotMatch(rejection.detail, /\p{Cc}/u);
+  assert.equal(outbox.quarantined('cmd', 'other-lease'), undefined, 'a different lease has its own report');
+  const report = outbox.quarantined('cmd')!;
+  assert.equal(report.status, 400);
+  assert.equal(report.reportId, outbox.summaries()[0].id);
+});
 
 test("terminal result survives failed delivery and daemon restart", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-outbox-"));

@@ -27,15 +27,16 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
     for report in reports:
         try:
             event = daemon_node_event(json.loads(report['body']))
-        except (ValueError, TypeError, KeyError):
-            receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 400})
+        except (ValueError, TypeError, KeyError) as error:
+            parse_detail = str(error)[:200] if isinstance(error, ValueError) else 'Invalid daemon report payload.'
+            receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 400, 'detail': parse_detail})
             continue
         # Retries may outlive command and thread history; acknowledge from
         # their bound receipts before acquiring a live thread mutation scope.
         try:
             accepted = registry.daemon_store.report_was_accepted(sandbox_id, event['commandId'], report['id'], report['digest'])
-        except ReportReceiptConflict:
-            receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 409})
+        except ReportReceiptConflict as error:
+            receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 409, 'detail': str(error)})
             continue
         if accepted:
             receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 200})
@@ -54,21 +55,27 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
                     stack.enter_context(registry.store.mutation_scope(session_id))
                 for report, event in group:
                     status = 200
+                    detail: str | None = None
                     try:
                         registry.handle_durable_report(sandbox_id, event, token, report['id'], report['digest'])
-                    except ReportPredecessorMissing:
+                    except ReportPredecessorMissing as error:
                         status = 503
-                    except CommandEventMismatchError:
+                        detail = str(error)
+                    except CommandEventMismatchError as error:
                         status = 409
-                    except (ValueError, TypeError, KeyError):
-                        status = 400
-                    group_receipts.append({'id': report['id'], 'digest': report['digest'], 'status': status})
+                        detail = str(error)
+                    # Validation ended before this transaction. Unexpected
+                    # processing errors must roll it back and stay retryable,
+                    # just as they do on the single-event endpoint.
+                    group_receipts.append({'id': report['id'], 'digest': report['digest'], 'status': status,
+                                           **({'detail': detail[:200]} if detail else {})})
         except Exception:  # noqa: BLE001 - a failed transaction rolls back this stream; unrelated report groups must still progress
             logger.exception('Durable report group failed', node_id=sandbox_id, session_id=session_id)
             for _report, event in group:
                 registry.output_sequences.pop(event['runId'], None)
                 registry.output_sequences_hydrated.discard(event['runId'])
-            group_receipts = [{'id': report['id'], 'digest': report['digest'], 'status': 500} for report, _event in group]
+            group_receipts = [{'id': report['id'], 'digest': report['digest'], 'status': 500,
+                               'detail': 'Report processing failed; retry later.'} for report, _event in group]
         receipts.extend(group_receipts)
     return receipts
 
