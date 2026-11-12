@@ -140,11 +140,13 @@
 }
 
 .skill-detail-body {
-  max-width: 920px;
-  padding: var(--sp-6) var(--sp-8) var(--sp-8);
+  max-width: 800px;
+  padding: var(--sp-6) var(--sp-7) var(--sp-8);
 }
 
 .skill-description {
+  max-width: var(--measure-wide);
+  overflow-wrap: anywhere;
   margin: 0;
   color: var(--ink-2);
 }
@@ -164,12 +166,12 @@
   margin-top: var(--sp-7);
 }
 
-/* Section titles in the detail pane: the structural micro label. */
+/* Clear section labels without the all-caps metadata treatment. */
 .skill-detail-body h3 {
   margin: 0 0 var(--sp-2);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  color: var(--ink-3);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  color: var(--ink-1);
 }
 
 /* Section titles in a skill DRAWER take the drawers' section-title role
@@ -197,7 +199,7 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--sp-3);
-  padding: var(--sp-2) 0;
+  padding: var(--sp-3) 0;
   border-bottom: 0.5px solid var(--line-2);
 }
 
@@ -211,11 +213,14 @@
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
   color: var(--ink-2);
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .skill-file-list span {
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
+  flex: none;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   color: var(--ink-3);
 }
 
@@ -282,6 +287,24 @@
   border-top: 0.5px solid var(--line-1);
 }
 
+.skill-metadata-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-4) var(--sp-5);
+}
+
+.skill-description-field {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.skill-revision-fields {
+  display: grid;
+  gap: var(--sp-4);
+  padding-top: var(--sp-5);
+  border-top: 0.5px solid var(--line-2);
+}
+
 /* Actions in one row, destructive pushed to the leading edge — the
    .adm-form-actions shape. */
 .skill-owner-actions {
@@ -301,7 +324,8 @@
    <Field> wrapper, since that — not the segment — is the grid item. */
 .skill-owner-tools .skill-visibility-field {
   justify-self: start;
-  min-width: min(260px, 100%);
+  min-width: 0;
+  width: 100%;
 }
 
 /* The visibility and source choices are the shared segmented control,
@@ -461,6 +485,14 @@
 
 
 @media (max-width: 480px) {
+  .skill-metadata-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .skill-description-field {
+    grid-row: auto;
+  }
+
   /* Below the drawer's own width the paired GitHub fields stack rather than
      splitting a phone-width sheet into two unusably narrow inputs. */
   .skill-field-row {
@@ -490,7 +522,7 @@
   }
 
   .skill-owner-actions > button {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
     min-width: 0;
     white-space: normal;
     height: auto;

@@ -439,7 +439,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
             />
             <div className="skill-detail-body">
             {!mode && error ? <p role="alert" className="skill-error">{error}</p> : null}
-            <p className="skill-description">{skill.description}</p>
+            {skill.description ? <p className="skill-description">{skill.description}</p> : null}
             {/* One quiet meta line, not a stat band: three small counts do not
                 earn display-size numerals between two hairlines. */}
             <p className="skill-meta tnum">
@@ -497,49 +497,51 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
             {owned ? (
               <section className="skill-owner-tools">
                 <h3>{t("skills.manage")}</h3>
-                <Field label={t("skills.display_name")} required>
-                  <Input
-                    required
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                  />
-                </Field>
-                <Field label={t("skills.description")} required>
-                  <Textarea
-                    required
-                    rows={2}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </Field>
-                <Field
-                  className="skill-visibility-field"
-                  label={t("skills.visibility_label")}
-                  labelId={editorVisibilityLabelId}
-                  wrapper="div"
-                  hint={t(`skills.visibility_hints.${visibility}`)}
-                >
-                  <div
-                    className="adm-profile-segment"
-                    role="group"
-                    aria-labelledby={editorVisibilityLabelId}
+                <div className="skill-metadata-fields">
+                  <Field label={t("skills.display_name")} required>
+                    <Input
+                      required
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                    />
+                  </Field>
+                  <Field
+                    className="skill-visibility-field"
+                    label={t("skills.visibility_label")}
+                    labelId={editorVisibilityLabelId}
+                    wrapper="div"
+                    hint={t(`skills.visibility_hints.${visibility}`)}
                   >
-                    {(["private", "org"] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        className="adm-profile-segment-btn"
-                        data-active={visibility === option ? "true" : "false"}
-                        aria-pressed={visibility === option}
-                        onClick={() => setVisibility(option)}
-                      >
-                        {t(`skills.visibility.${option}`)}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
+                    <div
+                      className="adm-profile-segment"
+                      role="group"
+                      aria-labelledby={editorVisibilityLabelId}
+                    >
+                      {(["private", "org"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="adm-profile-segment-btn"
+                          data-active={visibility === option ? "true" : "false"}
+                          aria-pressed={visibility === option}
+                          onClick={() => setVisibility(option)}
+                        >
+                          {t(`skills.visibility.${option}`)}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field className="skill-description-field" label={t("skills.description")} required>
+                    <Textarea
+                      required
+                      rows={2}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  </Field>
+                </div>
                 {skill.source === "git" ? null : (
-                  <>
+                  <div className="skill-revision-fields">
                     <Field
                       label={t("skills.new_bundle")}
                       optional={t("skills.optional")}
@@ -569,7 +571,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                         onChange={(e) => setRevisionNote(e.target.value)}
                       />
                     </Field>
-                  </>
+                  </div>
                 )}
                 {/* Fields above, actions in one row below — the shape every
                     other form in the app has. These used to be four stretched
