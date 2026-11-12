@@ -124,16 +124,48 @@ it("marks which publish fields are required", async () => {
 });
 
 
-it("keeps the GitHub form open with directory guidance when a collection root is selected", async () => {
-  importSkill.mockRejectedValueOnce(new Error("skill-directory-required"));
+it("keeps the GitHub form open when no Skills can be discovered", async () => {
+  importSkill.mockRejectedValueOnce(new Error("no-skills-found"));
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
   await user.click(createButton());
   await user.click(screen.getByRole("button", { name: "GitHub" }));
-  await user.type(screen.getByLabelText(/Skill name/), "code-review");
   await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/mattpocock/skills");
   expect(screen.getByText("skills.subpath_hint")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Publish" }));
-  expect((await screen.findByRole("alert")).textContent).toBe("skills.errors.skill-directory-required");
+  expect((await screen.findByRole("alert")).textContent).toBe("skills.errors.no-skills-found");
   expect(screen.getByLabelText(/skills.subpath/)).toBeTruthy();
+});
+
+it("publishes a repository without a directory or name and shows each import result", async () => {
+  importSkill.mockResolvedValueOnce({
+    skills: [{ id: "review", displayName: "Code review" }, { id: "triage", displayName: "Issue triage" }],
+    failed: [{ subpath: "skills/broken", code: "invalid-skill-md" }],
+  });
+  const user = userEvent.setup();
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
+  await user.click(createButton());
+  await user.click(screen.getByRole("button", { name: "GitHub" }));
+  await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/mattpocock/skills");
+  expect(screen.queryByLabelText(/Skill name/)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Publish" }));
+  expect(await screen.findByText("Code review")).toBeTruthy();
+  expect(screen.getByText("Issue triage")).toBeTruthy();
+  expect(screen.getByText("skills/broken")).toBeTruthy();
+  expect(screen.getByText("skills.errors.invalid-skill-md")).toBeTruthy();
+  expect(importSkill).toHaveBeenCalledWith(expect.objectContaining({ subpath: "", url: "https://github.com/mattpocock/skills" }));
+  expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
+});
+
+it("shows all-rejected batch results without selecting a missing publication", async () => {
+  importSkill.mockResolvedValueOnce({ skills: [], failed: [{ subpath: "broken", code: "invalid-skill-md" }] });
+  const user = userEvent.setup();
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
+  await user.click(createButton());
+  await user.click(screen.getByRole("button", { name: "GitHub" }));
+  await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/example/skills");
+  await user.click(screen.getByRole("button", { name: "Publish" }));
+  expect(await screen.findByText("broken")).toBeTruthy();
+  expect(screen.getByRole("status").textContent).toBe("skills.imported_count");
+  expect(screen.queryByRole("alert")).toBeNull();
 });

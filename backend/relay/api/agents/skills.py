@@ -15,10 +15,12 @@ from ...skills.rules import (
     MAX_FILES,
     MAX_REVISION_BYTES,
     SkillValidationError,
+    _validate_files,
 )
 from ...skills import assignments as skill_assignments
 from ...skills import git_import as skill_import
 from ...skills import grants as skill_grants
+from ...skills.publication import publish_repository
 from ..deps import AppContextDep
 from ..actors import request_actor
 
@@ -160,33 +162,50 @@ def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, 
     }
 
 
-async def import_files(ctx: AppContextDep, source: dict[str, Any]) -> list[dict[str, Any]]:
+async def import_files(ctx: AppContextDep, source: dict[str, Any], *, discover: bool = False) -> list[dict[str, Any]]:
     if not isinstance(source.get("url"), str) or not isinstance(source.get("ref"), str):
         raise HTTPException(422, "invalid-source-ref")
     if not isinstance(source.get("subpath", ""), str):
         raise HTTPException(422, "invalid-subpath")
     try:
         settings = await run_in_threadpool(ctx.org_settings_store.get_settings)
+        if discover:
+            return await run_in_threadpool(
+                skill_import.fetch_skill_repository, source["url"], source["ref"],
+                allowed_hosts=settings["skillImportAllowedHosts"],
+            )
         return await run_in_threadpool(
             skill_import.fetch_skill_bundle, source["url"], source["ref"], source.get("subpath", ""),
             allowed_hosts=settings["skillImportAllowedHosts"],
         )
     except skill_import.SkillImportError as error:
-        size_errors = _SIZE_ERRORS | {"archive-too-large", "bundle-too-large"}
+        size_errors = _SIZE_ERRORS | {"archive-too-large", "bundle-too-large", "too-many-skills"}
         raise HTTPException(413 if error.code in size_errors else 422, error.code) from error
 
 
 @router.post("/skills/import", status_code=201)
-async def import_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+async def import_skill(request: Request, response: Response, ctx: AppContextDep) -> dict[str, Any]:
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = await skill_body(request, {
         "name", "namespace", "displayName", "description", "visibility", "url", "ref", "subpath",
     })
     source = {"url": body.get("url"), "ref": body.get("ref", "HEAD"), "subpath": body.get("subpath", "")}
+    if source["subpath"] == "":
+        bundles = await import_files(ctx, source, discover=True)
+        try:
+            result = await run_in_threadpool(publish_repository, ctx, actor["userId"], source, body, bundles)
+        except SkillValidationError as error:
+            raise skill_error(error) from error
+        if not result["skills"]:
+            response.status_code = 200
+        return result
     files = await import_files(ctx, source)
     payload = {key: value for key, value in body.items() if key not in source}
     payload.update(source="git", sourceRef=source, files=files, ownerHandle=actor["userId"])
     try:
+        if not payload.get("name"):
+            _, manifest = _validate_files(files)
+            payload["name"] = manifest["name"]
         return await run_in_threadpool(ctx.skill_store.create_skill, actor["userId"], payload)
     except SkillValidationError as error:
         raise skill_error(error) from error

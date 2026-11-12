@@ -3,6 +3,7 @@ import type {
   SkillFileInput,
   SkillFilePreview,
   SkillRecord,
+  SkillRepositoryImportResult,
   SkillsResponse,
   SkillVisibility,
 } from "../types.ts";
@@ -11,7 +12,7 @@ import { apiJson } from "./client.ts";
 export function listSkills(signal?: AbortSignal): Promise<SkillsResponse> { return apiJson("/skills", { signal }); }
 export function getSkill(skillId: string, signal?: AbortSignal): Promise<SkillDetail> { return apiJson(`/skills/${encodeURIComponent(skillId)}`, { signal }); }
 export function createSkill(input: { name: string; namespace?: string; displayName?: string; description?: string; visibility: SkillVisibility; source: "authored" | "upload"; files: SkillFileInput[] }): Promise<SkillRecord> { return apiJson("/skills", { method: "POST", body: input }); }
-export function importSkill(input: { name: string; namespace?: string; displayName?: string; description?: string; visibility?: SkillVisibility; url: string; ref: string; subpath: string }): Promise<SkillRecord> { return apiJson("/skills/import", { method: "POST", body: input }); }
+export function importSkill(input: { name?: string; namespace?: string; displayName?: string; description?: string; visibility?: SkillVisibility; url: string; ref: string; subpath: string }): Promise<SkillRecord | SkillRepositoryImportResult> { return apiJson("/skills/import", { method: "POST", body: input }); }
 export function reimportSkill(skillId: string) { return apiJson(`/skills/${encodeURIComponent(skillId)}/import`, { method: "POST", body: {} }); }
 export function reviseSkill(skillId: string, files: SkillFileInput[], note?: string) { return apiJson(`/skills/${encodeURIComponent(skillId)}/revisions`, { method: "POST", body: { files, ...(note ? { note } : {}) } }); }
 export function updateSkill(skillId: string, patch: { displayName?: string; description?: string; visibility?: SkillVisibility }): Promise<SkillRecord> { return apiJson(`/skills/${encodeURIComponent(skillId)}`, { method: "PATCH", body: patch }); }

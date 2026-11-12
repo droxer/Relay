@@ -169,11 +169,18 @@ def test_imports_only_selected_subpath_and_strips_archive_prefix(monkeypatch: py
 
 
 @pytest.mark.parametrize("with_root_link", [True, False])
-def test_repository_collection_requires_a_skill_directory(monkeypatch, with_root_link):
+def test_repository_collection_discovers_skills_with_one_download(monkeypatch, with_root_link):
     entries = [("tools-main/skills/review/SKILL.md", b"skill", "file")]
     if with_root_link:
         entries.insert(0, ("tools-main/AGENTS.md", None, "symlink"))
-    assert _error_code(lambda: _fetch(monkeypatch, entries, subpath="")) == "skill-directory-required"
+    entries.append(("tools-main/skills/other/SKILL.md", b"other", "file"))
+    calls = _install_network(monkeypatch, _archive(entries))
+    discovered = skill_import.fetch_skill_repository(
+        "https://github.com/acme/tools", "main", allowed_hosts=["github.com"],
+    )
+    assert [item["subpath"] for item in discovered] == ["skills/other", "skills/review"]
+    assert discovered[1]["files"] == [{"path": "SKILL.md", "content": b"skill"}]
+    assert len(calls) == 1
     assert _fetch(monkeypatch, entries) == [{"path": "SKILL.md", "content": b"skill"}]
 
 
@@ -185,12 +192,53 @@ def test_repository_root_skill_can_include_nested_skill_documents(monkeypatch):
     assert [file["path"] for file in files] == ["SKILL.md", "examples/review/SKILL.md"]
 
 
+def test_repository_discovery_reports_bad_bundle_and_preserves_other_skills(monkeypatch):
+    _install_network(monkeypatch, _archive([
+        ("tools-main/good/SKILL.md", b"good", "file"),
+        ("tools-main/bad/SKILL.md", b"bad", "file"),
+        ("tools-main/bad/link", None, "symlink"),
+    ]))
+    discovered = skill_import.fetch_skill_repository("https://github.com/acme/tools", "main", allowed_hosts=["github.com"])
+    assert discovered[0] == {"subpath": "bad", "error": "unsafe-archive"}
+    assert discovered[1]["subpath"] == "good"
+
+
+def test_repository_discovery_requires_a_manifest(monkeypatch):
+    _install_network(monkeypatch, _archive([("tools-main/README.md", b"readme", "file")]))
+    assert _error_code(lambda: skill_import.fetch_skill_repository(
+        "https://github.com/acme/tools", "main", allowed_hosts=["github.com"],
+    )) == "no-skills-found"
+
+
+def test_discovery_keeps_root_skill_examples_inside_their_bundle(monkeypatch):
+    _install_network(monkeypatch, _archive([
+        ("tools-main/SKILL.md", b"root", "file"),
+        ("tools-main/examples/SKILL.md", b"example", "file"),
+    ]))
+    discovered = skill_import.fetch_skill_repository("https://github.com/acme/tools", "main", allowed_hosts=["github.com"])
+    assert len(discovered) == 1
+    assert discovered[0]["subpath"] == ""
+    assert len(discovered[0]["files"]) == 2
+
+
+def test_discovery_caps_repository_skill_count(monkeypatch):
+    _install_network(monkeypatch, _archive([
+        (f"tools-main/skill-{i}/SKILL.md", b"skill", "file") for i in range(101)
+    ]))
+    assert _error_code(lambda: skill_import.fetch_skill_repository(
+        "https://github.com/acme/tools", "main", allowed_hosts=["github.com"],
+    )) == "too-many-skills"
+
+
 @pytest.mark.parametrize("unsafe_name", ["/escape", "tools-main/../escape", "other-root/file"])
-def test_collection_guidance_does_not_bypass_archive_safety(monkeypatch, unsafe_name):
-    assert _error_code(lambda: _fetch(monkeypatch, [
+def test_repository_discovery_does_not_bypass_archive_safety(monkeypatch, unsafe_name):
+    _install_network(monkeypatch, _archive([
         ("tools-main/skills/review/SKILL.md", b"skill", "file"),
         (unsafe_name, b"x", "file"),
-    ], subpath="")) == "unsafe-archive"
+    ]))
+    assert _error_code(lambda: skill_import.fetch_skill_repository(
+        "https://github.com/acme/tools", "main", allowed_hosts=["github.com"],
+    )) == "unsafe-archive"
 
 
 @pytest.mark.parametrize(

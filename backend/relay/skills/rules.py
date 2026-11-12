@@ -24,6 +24,9 @@ _FRONTMATTER_FIELDS = {
     "compatibility",
     "metadata",
     "allowed-tools",
+    "disable-model-invocation",
+    "user-invocable",
+    "argument-hint",
 }
 
 
@@ -118,11 +121,20 @@ def _parse_frontmatter(content: bytes) -> dict[str, str]:
     if metadata is not None and (
         not isinstance(metadata, dict)
         or any(
-            not isinstance(key, str) or not isinstance(value, str)
+            not isinstance(key, str) or not _metadata_value(value)
             for key, value in metadata.items()
         )
     ):
         raise SkillValidationError("invalid-metadata")
+    for option in ("disable-model-invocation", "user-invocable"):
+        if option in values and not isinstance(values[option], bool):
+            raise SkillValidationError("invalid-frontmatter-option")
+    if "argument-hint" in values and (
+        not isinstance(values["argument-hint"], str)
+        or not values["argument-hint"].strip()
+        or len(values["argument-hint"]) > 1024
+    ):
+        raise SkillValidationError("invalid-frontmatter-option")
     allowed_tools = values.get("allowed-tools")
     if allowed_tools is not None and (
         not isinstance(allowed_tools, str)
@@ -135,6 +147,15 @@ def _parse_frontmatter(content: bytes) -> dict[str, str]:
         "name": _skill_name(values["name"]),
         "description": description,
     }
+
+
+def _metadata_value(value: Any) -> bool:
+    # Keep vendor credits as one nested string map, without accepting
+    # recursive YAML structures or arbitrary object types.
+    return isinstance(value, str) or (
+        isinstance(value, dict)
+        and all(isinstance(key, str) and isinstance(item, str) for key, item in value.items())
+    )
 
 
 def _skill_name(value: Any) -> str:

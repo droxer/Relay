@@ -134,7 +134,44 @@ def test_import_allowlist_is_admin_only_and_preserves_other_settings(client):
     assert client.put("/api/v1/admin/settings", json={"skillImportAllowedHosts": None}).status_code == 400
 
 
-def test_import_and_reimport_create_immutable_revisions(client, monkeypatch):
+def test_empty_directory_imports_separate_skills_and_reports_invalid_entries(client, monkeypatch):
+    def files(name):
+        return [{"path": "SKILL.md", "content": base64.b64decode(bundle(name)["files"][0]["contentBase64"])}]
+
+    entries = [
+        {"subpath": "skills/review", "files": files("review")},
+        {"subpath": "skills/triage", "files": files("triage")},
+        {"subpath": "skills/invalid", "files": [{"path": "SKILL.md", "content": b"not frontmatter"}]},
+        {"subpath": "skills/unsafe", "error": "unsafe-archive"},
+    ]
+    monkeypatch.setattr("relay.skills.git_import.fetch_skill_repository", lambda *a, **k: entries)
+    payload = {"url": "https://github.com/example/skills", "ref": "main", "visibility": "org", "namespace": "team"}
+    response = client.post("/api/v1/skills/import", json=payload)
+    assert response.status_code == 201, response.text
+    result = response.json()
+    assert [item["name"] for item in result["skills"]] == ["review", "triage"]
+    assert [item["sourceRef"]["subpath"] for item in result["skills"]] == ["skills/review", "skills/triage"]
+    assert all(item["ownerUserId"] == ALICE and item["namespace"] == "team" and item["visibility"] == "org" for item in result["skills"])
+    assert {item["subpath"]: item["code"] for item in result["failed"]} == {
+        "skills/invalid": "invalid-skill-md", "skills/unsafe": "unsafe-archive",
+    }
+    retry = client.post("/api/v1/skills/import", json=payload)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["skills"] == []
+    assert len(client.get("/api/v1/skills").json()["skills"]) == 2
+    assert sum(item["code"] == "skill-name-taken" for item in retry.json()["failed"]) == 2
+
+    seen = []
+    def reimport(url, ref, subpath, **kwargs):
+        seen.append(subpath)
+        return files("review")
+    monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", reimport)
+    assert client.post(f"/api/v1/skills/{result['skills'][0]['id']}/import").status_code == 201
+    assert seen == ["skills/review"]
+
+
+@pytest.mark.parametrize("provide_name", [True, False])
+def test_import_and_reimport_create_immutable_revisions(client, monkeypatch, provide_name):
     calls = []
     def fetch(url, ref, subpath, *, allowed_hosts, **kwargs):
         calls.append((url, ref, subpath, allowed_hosts))
@@ -142,6 +179,8 @@ def test_import_and_reimport_create_immutable_revisions(client, monkeypatch):
     monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fetch)
     payload = {"name": "review", "description": "Reviews code", "visibility": "org",
                "url": "https://github.com/example/skills", "ref": "main", "subpath": "review"}
+    if not provide_name:
+        payload.pop("name")
     response = client.post("/api/v1/skills/import", json=payload)
     assert response.status_code == 201, response.text
     skill = response.json()
@@ -156,12 +195,13 @@ def test_import_and_reimport_create_immutable_revisions(client, monkeypatch):
     assert len(calls) == 2
 
 
-@pytest.mark.parametrize("code", ["host-not-allowed", "skill-directory-required"])
+@pytest.mark.parametrize("code", ["host-not-allowed", "no-skills-found"])
 def test_import_failure_does_not_publish(client, monkeypatch, code):
     from relay.skills.git_import import SkillImportError
     def fail(*args, **kwargs):
         raise SkillImportError(code)
     monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fail)
+    monkeypatch.setattr("relay.skills.git_import.fetch_skill_repository", fail)
     response = client.post("/api/v1/skills/import", json={
         "name": "review", "description": "d", "url": "https://example.com/o/r", "ref": "main",
     })
@@ -483,7 +523,7 @@ def test_preview_reports_binary_and_truncated_bundle_files(client):
     assert binary["content"] == ""
 
 
-@pytest.mark.parametrize("operation", ["create", "import", "reimport", "revision", "promote", "update"])
+@pytest.mark.parametrize("operation", ["create", "import", "repository", "reimport", "revision", "promote", "update"])
 def test_skill_mutations_keep_database_io_off_event_loop(client, monkeypatch, operation):
     import asyncio
 
@@ -493,7 +533,8 @@ def test_skill_mutations_keep_database_io_off_event_loop(client, monkeypatch, op
         return [{"path": "SKILL.md", "content": b"---\nname: imported\ndescription: Imported\n---\nBody"}]
 
     monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fetch)
-    source = {"name": "imported", "description": "Imported", "url": "https://github.com/example/review", "ref": "main"}
+    monkeypatch.setattr("relay.skills.git_import.fetch_skill_repository", lambda *a, **k: [{"subpath": "imported", "files": fetch(None, None, None, allowed_hosts=[])}])
+    source = {"name": "imported", "description": "Imported", "url": "https://github.com/example/review", "ref": "main", "subpath": "imported"}
     if operation == "reimport":
         response = client.post("/api/v1/skills/import", json=source)
         assert response.status_code == 201
@@ -518,6 +559,8 @@ def test_skill_mutations_keep_database_io_off_event_loop(client, monkeypatch, op
             response = client.post("/api/v1/skills", json=bundle(name="another"))
         elif operation == "import":
             response = client.post("/api/v1/skills/import", json=source)
+        elif operation == "repository":
+            response = client.post("/api/v1/skills/import", json={**source, "subpath": ""})
         elif operation == "reimport":
             response = client.post(f"{url}/import")
         elif operation == "revision":
@@ -526,7 +569,7 @@ def test_skill_mutations_keep_database_io_off_event_loop(client, monkeypatch, op
             response = client.post(f"{url}/revisions/{skill['currentRevisionId']}/promote", json={})
         else:
             response = client.patch(url, json={"displayName": "Updated"})
-        assert response.status_code == (201 if operation in {"create", "import", "reimport", "revision"} else 200), response.text
+        assert response.status_code == (201 if operation in {"create", "import", "repository", "reimport", "revision"} else 200), response.text
         assert checked, "the mutation must actually exercise the database"
     finally:
         event.remove(engine, "before_cursor_execute", assert_worker_thread)

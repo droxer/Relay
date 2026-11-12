@@ -26,6 +26,23 @@ from .state import SkillStoreState, _SkillWriteConflict
 
 
 class SkillWriteRows(SkillStoreState):
+    def create_skills(
+        self, owner_user_id: str, payloads: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[tuple[int, str]]]:
+        """Publish a batch; isolate validation/conflicts and roll back storage failures."""
+        created: list[dict[str, Any]] = []
+        failed: list[tuple[int, str]] = []
+        with self._write_lock, store_transaction(self.engine) as conn:
+            for index, payload in enumerate(payloads):
+                try:
+                    with conn.begin_nested():
+                        skill = self.create_skill(owner_user_id, payload)
+                except SkillValidationError as error:
+                    failed.append((index, error.code))
+                else:
+                    created.append(skill)
+        return created, failed
+
     def create_skill(
         self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:

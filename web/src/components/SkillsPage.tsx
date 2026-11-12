@@ -14,7 +14,7 @@ import { RelayApiError } from "../api-client/client";
 import { useSkill, useSkills, SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
-import type { CurrentUser, SkillFileInput, SkillsResponse, SkillVisibility } from "../types";
+import type { CurrentUser, SkillFileInput, SkillRepositoryImportResult, SkillsResponse, SkillVisibility } from "../types";
 import { ActionAdd, ICON } from "./icons";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -99,6 +99,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const [sharing, setSharing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [repositoryResult, setRepositoryResult] = useState<SkillRepositoryImportResult | null>(null);
   const uploadRequest = useRef({ draft: 0, revision: 0 });
   // Publication drafts must not overwrite the selected skill's metadata editor.
   const [draft, setDraft] = useState(EMPTY_DRAFT);
@@ -154,11 +155,13 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
       await queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY, id] });
   }
   function openCreate() {
+    setRepositoryResult(null);
     setDraft(EMPTY_DRAFT);
     setError(null);
     setMode("upload");
   }
   function resetCreate() {
+    setRepositoryResult(null);
     uploadRequest.current.draft++;
     setMode(null);
     setDraft(EMPTY_DRAFT);
@@ -175,15 +178,21 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
       };
       const created =
         mode === "github"
-          ? await importSkill({ ...shared, url: draft.url, ref: draft.ref, subpath: draft.subpath })
+          ? await importSkill({ namespace: draft.namespace || undefined, visibility: draft.visibility, url: draft.url, ref: draft.ref, subpath: draft.subpath.trim() })
           : await createSkill({
               ...shared,
               source: "upload",
               files: draft.files,
             });
-      resetCreate();
-      onSelectSkill(created.id);
-      await refresh(created.id);
+      if ("skills" in created) {
+        setRepositoryResult(created);
+        if (created.skills[0]) onSelectSkill(created.skills[0].id);
+        await refresh(created.skills[0]?.id);
+      } else {
+        resetCreate();
+        onSelectSkill(created.id);
+        await refresh(created.id);
+      }
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -625,6 +634,28 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
           closeLabel={t("skills.close")}
           bodyClassName="skill-drawer"
         >
+            {repositoryResult ? (
+              <div className="skill-import-results">
+                <p role="status">{t("skills.imported_count", { count: repositoryResult.skills.length })}</p>
+                <ul className="skill-file-list">
+                  {repositoryResult.skills.map((item) => <li key={item.id}>{item.displayName}</li>)}
+                </ul>
+                {repositoryResult.failed.length ? (
+                  <>
+                    <h3>{t("skills.import_failed_count", { count: repositoryResult.failed.length })}</h3>
+                    <ul className="skill-file-list">
+                      {repositoryResult.failed.map((item) => (
+                        <li key={item.subpath}>
+                          <code>{item.subpath || "/"}</code>
+                          <span>{t(`skills.errors.${item.code}`, { defaultValue: t("skills.errors.unknown") })}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <footer className="adm-form-actions"><Button onClick={resetCreate} disabled={busy}>{t("skills.close")}</Button></footer>
+              </div>
+            ) : <>
             <Field
               label={t("skills.source_label")}
               labelId={sourceLabelId}
@@ -653,7 +684,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                 ))}
               </div>
             </Field>
-            <Field label={t("skills.skill_name")} required hint={t("skills.skill_name_hint")}>
+            {mode === "upload" ? <Field label={t("skills.skill_name")} required hint={t("skills.skill_name_hint")}>
               <Input
                 data-modal-initial-focus
                 required
@@ -663,7 +694,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                 onChange={(e) => patchDraft({ name: e.target.value })}
                 placeholder="release-notes"
               />
-            </Field>
+            </Field> : <p className="skill-muted">{t("skills.git_names_note")}</p>}
             <Field
               label={t("skills.namespace")}
               optional={t("skills.optional")}
@@ -767,7 +798,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               <Button
                 disabled={
                   busy ||
-                  !draft.name.trim() ||
+                  (mode === "upload" && !draft.name.trim()) ||
                   (mode === "upload" && !draft.files.length) ||
                   (mode === "github" && !draft.url)
                 }
@@ -776,6 +807,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                 {busy ? t("skills.publishing") : t("skills.publish")}
               </Button>
             </footer>
+            </>}
         </Drawer>
       ) : null}
       {sharing && skill ? (
