@@ -3,6 +3,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { AdminConnect, ChevronDownIcon, ICON } from "../icons";
+import { GithubMark } from "../landing/GithubMark";
 import { connectionResources, getConnectionGrants, listConnections,
   type ConnectionGrant, type ConnectionTarget, type ServiceConnection } from "../../api-client/connections";
 
@@ -24,9 +26,14 @@ export function ConnectionGrantField(props: Props) {
   const nothingToGrant = connections.isPending || (connections.isSuccess && !connections.data.connections.length);
   if (nothingToGrant && !props.value?.length) return null;
   return <details className="connection-grants" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
-    <summary>{t("connections.title")} <span className="connections-hint">{props.value?.length
+    <summary>
+      <AdminConnect size={ICON.md} aria-hidden="true" />
+      <span>{t("connections.title")}</span>
+      <span className="connection-grants-status" data-selected={Boolean(props.value?.length) || undefined}>{props.value?.length
       ? t("connections.selected", { count: props.value.length })
-      : t(props.targetId && props.value === undefined ? "connections.review_access" : "connections.none_selected")}</span></summary>
+      : t(props.targetId && props.value === undefined ? "connections.review_access" : "connections.none_selected")}</span>
+      <ChevronDownIcon size={ICON.sm} className="connection-grants-chevron" aria-hidden="true" />
+    </summary>
     {expanded && <ConnectionGrantContent {...props} />}
   </details>;
 }
@@ -57,10 +64,11 @@ function ConnectionGrantContent({ value, targetType = "thread", targetId, disabl
       </p>)}
       {records.map(connection => {
         const grant = selected.find(item => item.connectionId === connection.id);
-        return <div className="connection-grant" key={connection.id}>
-          <label className="connection-choice"><Checkbox checked={Boolean(grant)} disabled={readonly || connection.status !== "connected"}
+        return <div className="connection-grant" key={connection.id} data-selected={Boolean(grant) || undefined}>
+          <label className="connection-choice connection-account"><Checkbox checked={Boolean(grant)} disabled={readonly || connection.status !== "connected"}
             onCheckedChange={checked => update(connection.id, checked ? { actions: connection.actions } : null)} />
-            <span>{connection.label} · {connection.identity}</span>
+            {connection.provider === "github" && <GithubMark size={ICON.lg} className="connection-account-mark" />}
+            <span className="connection-account-copy"><span>{connection.label}</span><span className="connection-account-identity">{connection.identity}</span></span>
           </label>
           {connection.status !== "connected" && <p role="alert">{t("connections.status.reconnect_required")}</p>}
           {grant && <GrantOptions connection={connection} grant={grant} disabled={Boolean(readonly)}
