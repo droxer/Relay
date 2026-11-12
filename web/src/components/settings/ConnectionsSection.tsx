@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GithubMark } from "../landing/GithubMark";
+import { ICON } from "../icons";
 import { listConnections, listConnectionProviders, startConnection, disconnectConnection, connectionUsage } from "../../api-client/connections";
 
 export function ConnectionsSection() {
@@ -33,7 +34,7 @@ export function ConnectionsSection() {
       {!records.length && <p className="connections-hint">{t("connections.empty")}</p>}
       {records.map(connection => <div className="connection-row" key={connection.id}>
         <div className="connection-overview">
-          {connection.provider === "github" && <GithubMark size={28} className="connection-provider-mark" />}
+          {connection.provider === "github" && <GithubMark size={ICON.xl} className="connection-provider-mark" />}
           <div className="connection-identity">
             <span className="pref-option-label">{providers.data?.providers.find(p => p.id === connection.provider)?.name} · {connection.label}</span>
             <span className="pref-option-sub">{connection.identity}</span>
@@ -66,7 +67,7 @@ export function ConnectionsSection() {
       <h3 id="available-connections" className="pref-group-label">{t("connections.available")}</h3>
       {providers.data?.providers.map(provider => <div className="connection-row" key={provider.id}>
         <div className="connection-overview">
-          {provider.id === "github" && <GithubMark size={28} className="connection-provider-mark" />}
+          {provider.id === "github" && <GithubMark size={ICON.xl} className="connection-provider-mark" />}
           <div className="connection-identity"><span className="pref-option-label">{provider.name}</span>
             <span className="pref-option-sub">{t(provider.configured ? `connections.provider_hint.${provider.id}` : "connections.not_configured")}</span>
           </div>

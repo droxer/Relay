@@ -51,3 +51,24 @@ browser visual verification were not completed.
 Coverage was not measured because `pytest-cov` is unavailable; no percentage is
 claimed. Full repository suites were not run. TDD stage evidence is recorded
 here; no Git checkpoint commits were created.
+
+## CI follow-up: Connections design rules
+
+The first PR CI run built successfully but failed two existing source-level
+rules: `connections.css` used an unregistered `641px` breakpoint, and
+`ConnectionsSection.tsx` passed literal `size={28}` twice. Both came from the
+Connections UI already present on the base branch. The focused import tests and
+commit hooks did not execute these repository-wide design rules.
+
+Reproduced with:
+
+```sh
+node_modules/.bin/tsc -p packages/tsconfig.json
+node --test dist/web/tests/designGrid.test.js dist/web/tests/dimensionScales.test.js
+```
+
+The same two assertions failed locally before the fix. Reusing the registered
+`640px` tier and `ICON.xl` makes all **32 tests pass**. The mobile action inset
+now uses the matching `--icon-xl` token. Existing rules remain unchanged and
+serve as regression coverage. The mechanical UI detector and dependency audit
+also passed (zero vulnerabilities).
