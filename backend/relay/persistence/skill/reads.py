@@ -25,7 +25,7 @@ class SkillReadRows(SkillStoreState):
                 select(self.skills.c.id).where(
                     self.skills.c.deleted_at.is_(None),
                     or_(
-                        self.skills.c.visibility == "org",
+                        self.skills.c.visibility == "public",
                         self.skills.c.owner_user_id == viewer_user_id,
                     ),
                 )

@@ -84,7 +84,7 @@ def visible_skill(ctx: AppContextDep, skill_id: str, user_id: str) -> dict[str, 
     skill = ctx.skill_store.get_skill(skill_id)
     if skill is None or skill["deletedAt"] is not None:
         raise HTTPException(404, "skill-not-found")
-    if skill["visibility"] != "org" and skill["ownerUserId"] != user_id:
+    if skill["visibility"] != "public" and skill["ownerUserId"] != user_id:
         raise HTTPException(404, "skill-not-found")
     return skill
 

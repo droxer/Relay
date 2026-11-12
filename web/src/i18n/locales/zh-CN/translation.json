@@ -2382,12 +2382,12 @@
     },
     "visibility": {
       "private": "私有",
-      "org": "组织内"
+      "public": "公开"
     },
     "visibility_label": "可见性",
     "visibility_hints": {
-      "private": "仅你本人可以授予该技能。",
-      "org": "组织内任何人都可以授予该技能。"
+      "private": "仅你本人可以查看和使用此技能。",
+      "public": "所有用户都可以查看和使用此技能。"
     },
     "skip_reason": {
       "unsupported-policy": "不支持此授权策略版本",

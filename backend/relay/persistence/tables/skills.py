@@ -39,7 +39,7 @@ skills = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("deleted_at", DateTime(timezone=True), nullable=True),
     CheckConstraint(
-        "visibility IN ('private', 'org')", name="ck_skills_visibility"
+        "visibility IN ('private', 'public')", name="ck_skills_visibility"
     ),
     Index("ix_skills_owner_updated", "owner_user_id", "updated_at"),
     Index(

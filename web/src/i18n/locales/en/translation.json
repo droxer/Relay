@@ -2438,12 +2438,12 @@
     },
     "visibility": {
       "private": "Private",
-      "org": "Organization"
+      "public": "Public"
     },
     "visibility_label": "Visibility",
     "visibility_hints": {
-      "private": "Only you can grant this skill.",
-      "org": "Anyone in the organization can grant this skill."
+      "private": "Only you can view and use this skill.",
+      "public": "All users can view and use this skill."
     },
     "skip_reason": {
       "unsupported-policy": "grant policy version is not supported",

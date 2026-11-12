@@ -85,3 +85,20 @@ it.each([
   expect(render(1)).toBe(one);
   expect(render(1024)).toBe(many);
 });
+
+
+it.each([
+  ["en", en, "New skill", "Private", "Public", "Only you can view and use this skill.", "All users can view and use this skill."],
+  ["zh-CN", zhCN, "新建技能", "私有", "公开", "仅你本人可以查看和使用此技能。", "所有用户都可以查看和使用此技能。"],
+] as const)("explains private and public audiences in the %s publication form", async (language, resource, create, privateLabel, publicLabel, privateHint, publicHint) => {
+  const instance = createInstance();
+  await instance.init({ lng: language, fallbackLng: false, resources: { [language]: { translation: resource } } });
+  render(providers(instance, <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} skillId={null} onSelectSkill={() => {}} /></DialogProvider>));
+  const user = userEvent.setup();
+  await user.click(screen.getAllByRole("button", { name: create })[0]!);
+  expect(screen.getByRole("button", { name: privateLabel }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByText(privateHint)).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: publicLabel }));
+  expect(screen.getByRole("button", { name: publicLabel }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByText(publicHint)).toBeTruthy();
+});

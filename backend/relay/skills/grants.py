@@ -88,7 +88,7 @@ def _visible_skill(ctx: Any, skill_id: str, user_id: str) -> dict[str, Any]:
         not skill
         or skill.get("deletedAt")
         or (
-            skill.get("visibility") != "org"
+            skill.get("visibility") != "public"
             and skill.get("ownerUserId") != user_id
         )
     ):

@@ -188,7 +188,7 @@ def test_visibility_soft_delete_and_live_uniqueness(tmp_path):
     store, alice, bob = _store(tmp_path)
     mine = _create(store, alice, "mine")
     _create(store, bob, "secret")
-    shared = _create(store, bob, "shared", visibility="org", ownerHandle="bob")
+    shared = _create(store, bob, "shared", visibility="public", ownerHandle="bob")
     assert {s["id"] for s in store.list_skills(alice)} == {mine["id"], shared["id"]}
     deleted = store.delete_skill(mine["id"])
     assert deleted["deletedAt"] and store.get_skill(mine["id"])["deletedAt"]
@@ -197,10 +197,10 @@ def test_visibility_soft_delete_and_live_uniqueness(tmp_path):
 
 def test_slug_allocation_prevents_exact_and_prefix_conflicts(tmp_path):
     store, alice, bob = _store(tmp_path)
-    _create(store, alice, "review", namespace="tools", visibility="org")
-    second = _create(store, bob, "tools", visibility="org", ownerHandle="bob")
+    _create(store, alice, "review", namespace="tools", visibility="public")
+    second = _create(store, bob, "tools", visibility="public", ownerHandle="bob")
     third = _create(
-        store, bob, "review", namespace="tools", visibility="org", ownerHandle="bob"
+        store, bob, "review", namespace="tools", visibility="public", ownerHandle="bob"
     )
     assert second["slug"] == "bob/tools"
     assert third["slug"] == "skill-2/tools/review"

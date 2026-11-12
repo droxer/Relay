@@ -33,7 +33,7 @@ class Store:
 
 def _ctx():
     store = Store()
-    for skill_id, owner, visibility in (("b", "alice", "private"), ("a", "bob", "org")):
+    for skill_id, owner, visibility in (("b", "alice", "private"), ("a", "bob", "public")):
         revision_id = f"rev-{skill_id}"
         store.skills[skill_id] = {
             "id": skill_id,

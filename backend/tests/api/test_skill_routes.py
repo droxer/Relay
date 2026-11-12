@@ -71,7 +71,7 @@ def test_publish_list_detail_revision_and_delete(client):
     detail = client.get(url).json()
     assert [revision["revision"] for revision in detail["revisions"]] == [2, 1]
     assert detail["currentRevisionId"] != first
-    assert client.patch(url, json={"displayName": "Code review", "visibility": "org"}).status_code == 200
+    assert client.patch(url, json={"displayName": "Code review", "visibility": "public"}).status_code == 200
     assert client.get(url).json()["displayName"] == "Code review"
     assert client.delete(url).status_code == 204
     assert client.get(url).status_code == 404
@@ -80,7 +80,7 @@ def test_publish_list_detail_revision_and_delete(client):
 
 def test_private_skill_does_not_leak_and_shared_skill_is_owner_mutable(client):
     private = publish(client, name="secret")
-    shared = publish(client, name="shared", visibility="org")
+    shared = publish(client, name="shared", visibility="public")
     login(client, "bob")
     assert [item["id"] for item in client.get("/api/v1/skills").json()["skills"]] == [shared["id"]]
     for skill, expected in ((private, 404), (shared, 403)):
@@ -170,13 +170,13 @@ def test_empty_directory_imports_separate_skills_and_reports_invalid_entries(cli
         {"subpath": "skills/unsafe", "error": "unsafe-archive"},
     ]
     monkeypatch.setattr("relay.skills.git_import.fetch_skill_repository", lambda *a, **k: entries)
-    payload = {"url": "https://github.com/example/skills", "ref": "main", "visibility": "org", "namespace": "team"}
+    payload = {"url": "https://github.com/example/skills", "ref": "main", "visibility": "public", "namespace": "team"}
     response = client.post("/api/v1/skills/import", json=payload)
     assert response.status_code == 201, response.text
     result = response.json()
     assert [item["name"] for item in result["skills"]] == ["review", "triage"]
     assert [item["sourceRef"]["subpath"] for item in result["skills"]] == ["skills/review", "skills/triage"]
-    assert all(item["ownerUserId"] == ALICE and item["namespace"] == "team" and item["visibility"] == "org" for item in result["skills"])
+    assert all(item["ownerUserId"] == ALICE and item["namespace"] == "team" and item["visibility"] == "public" for item in result["skills"])
     assert {item["subpath"]: item["code"] for item in result["failed"]} == {
         "skills/invalid": "invalid-skill-md", "skills/unsafe": "unsafe-archive",
     }
@@ -202,7 +202,7 @@ def test_import_and_reimport_create_immutable_revisions(client, monkeypatch, pro
         calls.append((url, ref, subpath, allowed_hosts))
         return [{"path": "SKILL.md", "content": base64.b64decode(bundle()["files"][0]["contentBase64"])}]
     monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fetch)
-    payload = {"name": "review", "description": "Reviews code", "visibility": "org",
+    payload = {"name": "review", "description": "Reviews code", "visibility": "public",
                "url": "https://github.com/example/skills", "ref": "main", "subpath": "review"}
     if not provide_name:
         payload.pop("name")
@@ -277,7 +277,7 @@ def test_grant_codex_and_merged_agent_view_then_revoke(client):
 def test_grant_fanout_checks_all_owners_before_writing(client):
     own, _ = create_agent(client)
     other, _ = create_agent(client, owner="bob")
-    skill = publish(client, visibility="org")
+    skill = publish(client, visibility="public")
     response = client.post(f"/api/v1/skills/{skill['id']}/grants", json={"agentIds": [own["id"], other["id"]]})
     assert response.status_code == 403, response.text
     assert client.app.state.agent_store.get_agent(own["id"])["skillPolicy"] == {}
@@ -363,7 +363,7 @@ def test_same_node_agents_receive_only_their_own_catalog_grants(client):
 
 def test_user_assignment_dynamically_delivers_to_current_and_future_agents(client):
     first, node = create_agent(client, name="First reviewer")
-    skill = publish(client, visibility="org")
+    skill = publish(client, visibility="public")
     response = client.post(
         f"/api/v1/skills/{skill['id']}/assignments",
         json={
@@ -411,7 +411,7 @@ def test_user_assignment_dynamically_delivers_to_current_and_future_agents(clien
 
 
 def test_assignment_api_prevents_cross_user_targeting(client):
-    skill = publish(client, visibility="org")
+    skill = publish(client, visibility="public")
     response = client.post(
         f"/api/v1/skills/{skill['id']}/assignments",
         json={"targetType": "user", "targetId": BOB},
@@ -489,7 +489,7 @@ def test_owner_can_promote_and_export_a_portable_skill_bundle(client):
 
 
 def test_viewer_can_preview_a_skill_file_without_downloading_the_bundle(client):
-    skill = publish(client, name="previewable", visibility="org")
+    skill = publish(client, name="previewable", visibility="public")
     url = f"/api/v1/skills/{skill['id']}/files"
 
     preview = client.get(url, params={"path": "SKILL.md"})
@@ -503,7 +503,7 @@ def test_viewer_can_preview_a_skill_file_without_downloading_the_bundle(client):
     assert client.get(url, params={"path": "MISSING.md"}).status_code == 404
     assert client.get(url, params={"path": "SKILL.md", "channel": "nope"}).status_code == 422
 
-    # An org-visible skill previews for a colleague; a private one never does.
+    # An public skill previews for a colleague; a private one never does.
     login(client, "bob")
     assert client.get(url, params={"path": "SKILL.md"}).status_code == 200
     login(client, "alice")
@@ -598,3 +598,35 @@ def test_skill_mutations_keep_database_io_off_event_loop(client, monkeypatch, op
         assert checked, "the mutation must actually exercise the database"
     finally:
         event.remove(engine, "before_cursor_execute", assert_worker_thread)
+
+
+@pytest.mark.parametrize("visibility", ["private", "public"])
+def test_visibility_covers_catalog_downloads_and_assignment(client, visibility):
+    skill = publish(client, visibility=visibility)
+    agent, _ = create_agent(client, owner="bob")
+    login(client, "bob")
+    url = f"/api/v1/skills/{skill['id']}"
+    expected = 200 if visibility == "public" else 404
+    for path in (url, f"{url}/files?path=SKILL.md", f"{url}/export"):
+        assert client.get(path).status_code == expected
+    assert bool(client.get("/api/v1/skills").json()["skills"]) == (visibility == "public")
+    assert client.post(f"{url}/grants", json={"agentIds": [agent["id"]]}).status_code == expected
+    assert client.post(f"{url}/assignments", json={
+        "targetType": "user", "targetId": BOB,
+    }).status_code == (201 if visibility == "public" else 404)
+    if visibility == "public":
+        ctx = client.app.state.context
+        assert resolve_bundle(ctx, ctx.agent_store.get_agent(agent["id"]))[0]["skills"]
+        login(client, "alice")
+        assert client.patch(url, json={"visibility": "private"}).status_code == 200
+        login(client, "bob")
+        assert client.get(url).status_code == 404
+        assert resolve_bundle(ctx, ctx.agent_store.get_agent(agent["id"]))[0]["skills"] == []
+
+
+def test_admin_cannot_read_another_users_private_skill(client):
+    skill = publish(client)
+    client.post("/api/v1/auth/logout")
+    client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"})
+    assert client.get(f"/api/v1/skills/{skill['id']}").status_code == 404
+    assert client.get("/api/v1/skills").json()["skills"] == []
