@@ -190,6 +190,8 @@ export type GitHubIssueState = "open" | "closed" | "all";
 
 export interface GitHubIssueQuery {
   repository: string;
+  /** An owning User’s GitHub Connection; omitted for anonymous public reads. */
+  connectionId?: string;
   /** Omitted for the caller's intake. */
   projectId?: string;
   state?: GitHubIssueState;
@@ -200,6 +202,7 @@ export interface GitHubIssueQuery {
 
 export interface GitHubImportInput {
   repository: string;
+  connectionId?: string;
   projectId?: string;
   numbers: number[];
 }

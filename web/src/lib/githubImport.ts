@@ -8,6 +8,12 @@ import type { GitHubImportResponse, GitHubIssuePreview } from "../types.ts";
  *  as the generic failure. */
 export const GITHUB_ERROR_CODES = [
   "github_repository_required",
+  "github_connection_invalid",
+  "connection_not_found",
+  "connection_unavailable",
+  "connection_reconnect_required",
+  "connection_access_denied",
+  "connections_not_configured",
   "github_public_repositories_only",
   "github_repository_invalid",
   "github_repository_moved",

@@ -1126,10 +1126,13 @@ live fallback for compatibility.
 
 ### Importing GitHub issues
 
-GitHub issue imports support **public repositories only**, without authentication
-to GitHub. Both routes verify the repository's `private: false` and
-`visibility: public` metadata before reading issues. Request tokens are rejected,
-and saved Account connections are never used.
+GitHub issue imports default to anonymous public reads, verifying `private: false`
+and `visibility: public` before reading issues. An optional `connectionId` selects
+the signed-in User’s GitHub Connection for authenticated reads, including private
+repositories accessible to that account. Both routes check connection ownership,
+provider and availability; credentials remain on the backend. Raw request tokens
+and legacy Account connections are never used. Importing does not grant the
+created Tasks ongoing access to GitHub.
 
 The legacy Account GitHub App connection is **coming soon**. `GET /api/v1/account/github` (browser login
 required) answers `{configured: false, connected: false, comingSoon: true,
@@ -1145,6 +1148,7 @@ tasks. Both take a JSON body:
 | Field | Routes | Meaning |
 |---|---|---|
 | `repository` | both | `owner/name` or a `https://github.com/owner/name[...]` URL |
+| `connectionId` | both | Optional owning User’s GitHub Connection; omitted for anonymous public reads |
 | `projectId` | both | Destination project; omitted for the caller's intake |
 | `state` | preview | `open` (default), `closed`, or `all` |
 | `labels` | preview | Comma-separated label filter, as GitHub takes it |
@@ -1171,7 +1175,9 @@ the issue's labels that are valid tags. `POST /tasks` cannot set
 
 A supplied `token` field answers 400 `github_public_repositories_only`; repository
 metadata that is private, internal, or not explicitly public answers the same code
-with 403. Anonymous GitHub reads of inaccessible repositories answer
+with 403 when no Connection is selected. Invalid `connectionId` values answer
+400 `github_connection_invalid`; unavailable, missing or unauthorized Connections
+use the Connections API error codes and never fall back to anonymous reads. Anonymous GitHub reads of inaccessible repositories answer
 `github_not_found`.
 
 Errors are the `detail` codes `github_repository_required`,
@@ -1580,7 +1586,8 @@ per-process auth rate limiter with a separate per-User key.
 
 The provider-neutral Connections API is separate from the legacy Account GitHub
 App API. It authenticates external identities for use in Threads, Tasks, and
-Automations; the public GitHub issue importer retains its anonymous contract.
+Automations. GitHub issue imports may explicitly select an owning User’s
+Connection for private repository reads, and otherwise remain anonymous.
 
 `GET /api/v1/connection-providers` returns deployment availability and supported
 actions. `GET /api/v1/connections` returns only the signed-in User's redacted

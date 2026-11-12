@@ -497,7 +497,6 @@ export function ThreadsView({
             currentUser={currentUser}
             computers={runtimeNodes}
             onOpenThread={onSelectThread}
-            onNewThread={() => onNewThread(selectedProject.id)}
             onDeleted={() => onSelectProject(null)}
             onBack={() => onSelectProject(null)}
           />
