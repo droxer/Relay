@@ -1,6 +1,6 @@
 """Authenticated, transactional acceptance of write-ahead daemon reports."""
 from typing import Any, TYPE_CHECKING
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from ...persistence.daemon.reports import ReportReceiptConflict
 from ..records import CommandEventMismatchError
 from ..state import RegistryState
@@ -39,7 +39,12 @@ class DurableReportMixin(RegistryState):
                 command = record['command']
                 if record['nodeId'] != sandbox_id or any(command.get(key) != event.get(key) for key in ('sessionId', 'runId', 'agent')) or record.get('leaseId') != event.get('leaseId'):
                     raise CommandEventMismatchError('Report does not match its command ownership.')
-                with self.daemon_store.report_ingest_scope(sandbox_id), self.store.mutation_scope(event['sessionId']), self.daemon_store.report_receipt_scope(sandbox_id, event['commandId'], report_id, digest) as apply:
+                # A redundant stop for an already-finished run only settles
+                # the stop command. Its thread may have been deleted meanwhile;
+                # the authenticated command and exact lease remain authority.
+                redundant_stop = event['type'] == 'run.cancelled' and record['status'] in {'completed', 'failed'}
+                session_scope = nullcontext() if redundant_stop else self.store.mutation_scope(event['sessionId'])
+                with self.daemon_store.report_ingest_scope(sandbox_id), session_scope, self.daemon_store.report_receipt_scope(sandbox_id, event['commandId'], report_id, digest) as apply:
                     if apply:
                         self._handle_event_unlocked(sandbox_id, {**event, '_durableReport': True}, token)
         except ReportReceiptConflict as error:

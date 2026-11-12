@@ -6,6 +6,7 @@ import { ReportOrder } from './report-order.js';
 import { retryAfterMs } from './transport-retry.js';
 import { syncDirectory, syncDirectoryAsync } from './sync-directory.js';
 import { sendTerminalEvent, terminalEventPayload } from './terminal-event-payload.js';
+import { errorBodyDetail, responseErrorDetail } from './http-error-detail.js';
 
 const permanentlyRejected = (status: number) => status >= 400 && status < 500 && ![408, 429].includes(status);
 const outboxes = new WeakMap<typeof fetch, TerminalOutbox>();
@@ -32,12 +33,27 @@ export function hasPendingOutput(send: typeof fetch, commandId: string): boolean
 }
 export interface TerminalRecord { key: string; event: Record<string, unknown>; durable?: Promise<void> }
 interface RecordIndex { owner: string; sequence: number; terminal: boolean; bytes: number }
+export interface ReportRejection { status: number; detail: string; at?: string }
+
+function rejectionDetail(value: unknown): string {
+  return errorBodyDetail(typeof value === 'string' ? value.replace(/\p{Cc}/gu, ' ') : 'Backend rejection reason was not recorded.');
+}
+
+function readRejection(data: string): ReportRejection {
+  try {
+    const value = JSON.parse(data) as number | Partial<ReportRejection>;
+    const status = typeof value === 'number' ? value : value?.status;
+    return { status: Number.isInteger(status) && Number(status) >= 400 && Number(status) < 500 ? Number(status) : 409,
+      detail: rejectionDetail(typeof value === 'object' && value ? value.detail : undefined),
+      ...(typeof value === 'object' && value && typeof value.at === 'string' ? { at: value.at } : {}) };
+  } catch { return { status: 409, detail: 'Backend rejection reason was not recorded.' }; }
+}
 
 /** Private, write-ahead report storage. Only verified acceptance removes evidence. */
 export class TerminalOutbox {
   private readonly order = new ReportOrder();
   private readonly index = new Map<string, RecordIndex>();
-  private readonly rejected = new Map<string, number>();
+  private readonly rejected = new Map<string, ReportRejection>();
   private readonly corrupt = new Set<string>();
   private strictAcknowledgements = false;
   private replaying = false;
@@ -69,7 +85,7 @@ export class TerminalOutbox {
         if (!event || !durable(event) || typeof event.commandId !== 'string') throw new Error('Invalid retained report.');
         this.index.set(key, { owner: owner(event), sequence: sequence(event), terminal: terminalTypes.has(String(event.type)), bytes: statSync(join(directory, name)).size });
         const rejection = join(directory, `${key}.rejected`);
-        if (existsSync(rejection)) this.rejected.set(key, Number(readFileSync(rejection, 'utf8')) || 409);
+        if (existsSync(rejection)) this.rejected.set(key, readRejection(readFileSync(rejection, 'utf8')));
       } catch {
         this.corrupt.add(key);
         this.fail(new Error(`Unreadable retained report ${key}; evidence preserved.`));
@@ -220,16 +236,23 @@ export class TerminalOutbox {
     if (existsSync(rejection)) { this.bytes -= statSync(rejection).size; rmSync(rejection); syncDirectory(this.directory); }
     this.rejected.delete(key);
   }
-  summaries(): Array<{ id: string; commandId: string; runId: string; sequence: number | null; status: string }> {
+  quarantined(commandId: string, leaseId?: string): ({ reportId: string } & ReportRejection) | undefined {
+    const reportId = digest(JSON.stringify([commandId, leaseId ?? null]));
+    const rejection = this.rejected.get(reportId);
+    return rejection ? { reportId, ...rejection } : undefined;
+  }
+  summaries(): Array<{ id: string; commandId: string; runId: string; sequence: number | null; status: string; rejection?: ReportRejection }> {
     return [...this.index].slice(0, 200).map(([key, meta]) => {
       const event = this.read(key).event;
+      const rejection = this.rejected.get(key);
       return { id: key, commandId: String(event.commandId), runId: String(event.runId ?? ''),
-        sequence: Number.isFinite(meta.sequence) ? meta.sequence : null, status: this.rejected.has(key) ? `quarantined (HTTP ${this.rejected.get(key)})` : 'pending' };
+        sequence: Number.isFinite(meta.sequence) ? meta.sequence : null,
+        status: rejection ? `quarantined (HTTP ${rejection.status})` : 'pending', ...(rejection ? { rejection } : {}) };
     });
   }
   private audit(action: string, key: string, actor: string): void {
     if (!actor.trim()) throw new Error('An intervention actor is required.');
-    const data = JSON.stringify({ action, reportId: key, actor, at: new Date().toISOString() });
+    const data = JSON.stringify({ action, reportId: key, actor, at: new Date().toISOString(), rejection: this.rejected.get(key) });
     this.write(join(this.directory, `${randomUUID()}.audit`), data);
     this.bytes += Buffer.byteLength(data);
   }
@@ -248,12 +271,13 @@ export class TerminalOutbox {
     this.audit('discard-with-output-loss', key, actor);
     this.acknowledge(key, false);
   }
-  private quarantine(key: string, status: number): void {
+  private quarantine(key: string, status: number, detail?: unknown): void {
     if (this.rejected.has(key) || !this.index.has(key)) return;
-    const data = String(status);
+    const rejection = { status, detail: rejectionDetail(detail), at: new Date().toISOString() };
+    const data = JSON.stringify(rejection);
     this.write(join(this.directory, `${key}.rejected`), data);
     this.bytes += Buffer.byteLength(data);
-    this.rejected.set(key, status);
+    this.rejected.set(key, rejection);
   }
   private blocked(record: TerminalRecord): boolean {
     const current = this.index.get(record.key);
@@ -261,7 +285,8 @@ export class TerminalOutbox {
   }
   private async deliver(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
     await this.stored(record.key);
-    if (this.rejected.has(record.key)) return new Response('Report quarantined; intervention required.', { status: 409 });
+    const rejection = this.rejected.get(record.key);
+    if (rejection) return new Response(`Report quarantined; automatic retries paused. Original HTTP ${rejection.status}: ${rejection.detail} Report ID: ${record.key}. Use relay reports and relay retry-report after stopping the daemon.`, { status: 409 });
     if (this.blocked(record)) return new Response('Earlier output is awaiting delivery.', { status: 503 });
     const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
     const originalBody = JSON.stringify(event);
@@ -299,7 +324,7 @@ export class TerminalOutbox {
         return new Response('Missing durable acceptance proof.', { status: 503 });
       }
       this.acknowledge(record.key);
-    } else if (permanentlyRejected(response.status)) this.quarantine(record.key, response.status);
+    } else if (permanentlyRejected(response.status)) this.quarantine(record.key, response.status, await responseErrorDetail(response.clone()));
     else this.retryAt.set(record.key, Date.now() + retryAfterMs(response.headers.get("Retry-After")));
     return response;
   }
@@ -360,7 +385,7 @@ export class TerminalOutbox {
       return;
     }
     if (!response.ok) { this.replayAfter = Date.now() + retryAfterMs(response.headers.get("Retry-After")); await response.body?.cancel(); return; }
-    const result = await response.json() as { receipts?: Array<{ id: string; digest: string; status: number }> };
+    const result = await response.json() as { receipts?: Array<{ id: string; digest: string; status: number; detail?: string }> };
     const expected = new Map(reports.map(report => [report.id, report.digest]));
     for (const receipt of result.receipts ?? []) {
       if (expected.get(receipt.id) !== receipt.digest) continue;
@@ -375,7 +400,7 @@ export class TerminalOutbox {
           }, this.read(receipt.id));
           await single.body?.cancel();
         } catch { /* Retain the report for the next replay attempt. */ }
-      } else if (permanentlyRejected(receipt.status)) this.quarantine(receipt.id, receipt.status);
+      } else if (permanentlyRejected(receipt.status)) this.quarantine(receipt.id, receipt.status, receipt.detail);
     }
   }
   async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {

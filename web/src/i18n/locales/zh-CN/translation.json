@@ -449,7 +449,7 @@
     "remove_confirm": "从此浏览器移除 @{{id}}？",
     "agent_running_aria": "智能体运行中",
     "token_usage_title": "输入 {{input}} · 输出 {{output}} · 缓存写入 {{cacheWrite}} · 缓存读取 {{cacheRead}}",
-    "output_truncated": "此运行的部分实时输出未保存，最终结果完整。",
+    "output_truncated": "运行结束时，部分实时输出尚未确认保存，可能稍后补传。最终结果完整。",
     "no_sessions": "—",
     "rename": "重命名",
     "more_actions": "{{name}} 的更多操作",

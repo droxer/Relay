@@ -888,6 +888,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // from a stale lease) is about that run, not this daemon's credential, so
     // it must not stop the daemon.
     const queueReport = (event: Extract<DaemonNodeEvent, { type: "run.failed" | "run.cancelled" }>, failureMessage: string, fields: DaemonLogFields): void => {
+      if (terminalOutbox.quarantined(event.commandId, event.leaseId)) return;
       // Capture terminal evidence even when every background sender is busy.
       // The outbox replays reports that cannot enter the bounded task queue.
       try { terminalOutbox.retain({ ...event }); }
@@ -896,9 +897,19 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         protectStorage();
         return;
       }
-      commandTasks.submit(JSON.stringify(["report", event.commandId, event.leaseId ?? null]), () =>
-        postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
-          event, token, runtimeSignal));
+      commandTasks.submit(JSON.stringify(["report", event.commandId, event.leaseId ?? null]), async () => {
+        try {
+          await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
+            event, token, runtimeSignal);
+        } catch (error) {
+          const rejection = terminalOutbox.quarantined(event.commandId, event.leaseId);
+          if (!rejection) throw error;
+          logger.error('report quarantined; automatic retries paused', {
+            ...fields, reportId: rejection.reportId, status: rejection.status,
+            error: rejection.detail, recovery: 'Inspect relay reports; stop the daemon before relay retry-report.',
+          });
+        }
+      });
     };
     const postRejectedStart = (command: DaemonNodeRunCommand, detail: string, reason?: AdmissionWaitReason): void => {
       // Refused ids remain fenced even if capacity opens before redelivery.
@@ -981,7 +992,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         backendUnreachable = false;
         recoveryPollPending = false;
-        pollDeliveredCommands = (parsed.commands?.length ?? 0) > 0;
+        pollDeliveredCommands = (parsed.commands ?? []).some(command => command.type !== 'run.cancel'
+          || !terminalOutbox.quarantined(command.commandId, command.targetLeaseId));
         completedEmptyLongPoll = commandPollWaitMs > 0
           && !pollDeliveredCommands
           && performance.now() - commandPollStartedAt >= commandPollWaitMs;
@@ -1180,6 +1192,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         } else if (command.type === "run.cancel") {
           admittedExecutions.add(command.commandId);
+          const target = activeRuns.get(command.commandId);
+          // Keep the retained evidence and incident visible, but a redelivered
+          // stop cannot make a permanently refused report retryable. Active
+          // or uncertain processes must still receive cancellation handling.
+          if (!target && !unconfirmedExecutions.has(command.commandId)
+            && terminalOutbox.quarantined(command.commandId, command.targetLeaseId)) continue;
           logger.info("cancel command received", {
             sandboxId,
             commandId: command.commandId,
@@ -1187,7 +1205,6 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             runId: command.runId,
             agent: command.agent,
           });
-          const target = activeRuns.get(command.commandId);
           if (target) {
             target.controller.abort(command.reason);
           } else if (unconfirmedExecutions.has(command.commandId) && !terminalCommands.has(command.commandId)) {

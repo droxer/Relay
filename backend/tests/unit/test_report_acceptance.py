@@ -228,7 +228,8 @@ def test_lost_poll_response_redelivers_the_same_start_fence_until_acknowledged(t
     assert daemons.recover_start_deliveries('node', limit=10, lease_seconds=60) == []
 
 
-def test_failed_replay_group_rolls_back_and_does_not_starve_another_run(tmp_path, monkeypatch):
+@pytest.mark.parametrize('failure', [RuntimeError, ValueError, TypeError, KeyError])
+def test_failed_replay_group_rolls_back_and_does_not_starve_another_run(tmp_path, monkeypatch, failure):
     import json
     from relay.api.computers.daemon_reports import _accept_batch
     registry, sessions, first = fixture(tmp_path)
@@ -237,7 +238,7 @@ def test_failed_replay_group_rolls_back_and_does_not_starve_another_run(tmp_path
     def fail_after_ingest(node_id, event, token, report_id, digest):
         original(node_id, event, token, report_id, digest)
         if event['commandId'] == first['commandId']:
-            raise RuntimeError('injected failure before group commit')
+            raise failure('injected failure before group commit')
     monkeypatch.setattr(registry, 'handle_durable_report', fail_after_ingest)
     reports = []
     for index, event in enumerate((first, second)):
@@ -248,6 +249,22 @@ def test_failed_replay_group_rolls_back_and_does_not_starve_another_run(tmp_path
     assert not any(item['type'] == 'agent.output' for item in sessions.get_session(first['sessionId'])['events'])
     monkeypatch.setattr(registry, 'handle_durable_report', original)
     assert _accept_batch(registry, 'node', 'secret', reports)[0]['status'] == 200
+
+
+@pytest.mark.parametrize('invalid, status, detail', [
+    ({'agent': ''}, 400, 'requires commandId'),
+    ({'leaseId': 'wrong'}, 409, 'ownership'),
+])
+def test_batch_rejection_includes_actionable_reason_without_acceptance(tmp_path, invalid, status, detail):
+    import json
+    from relay.api.computers.daemon_reports import _accept_batch
+    registry, _, event = fixture(tmp_path)
+    body = json.dumps({**event, **invalid})
+    report = {'id': '0' * 64, 'digest': sha256(body.encode()).hexdigest(), 'body': body}
+    [receipt] = _accept_batch(registry, 'node', 'secret', [report])
+    assert receipt['status'] == status
+    assert detail in receipt['detail']
+    assert not registry.daemon_store.report_was_accepted('node', event['commandId'], report['id'], report['digest'])
 
 
 @pytest.mark.parametrize("terminal_type", ["run.completed", "run.failed", "run.cancelled"])
@@ -407,6 +424,28 @@ def test_retention_preserves_exit_authority_until_stop_is_acknowledged(tmp_path)
     assert store.get_command(cancel['id'])['status'] == 'completed'
     store.prune_terminal_records(retention_seconds=0, per_node_limit=0)
     assert store.get_command(event['commandId']) is None
+
+
+@pytest.mark.parametrize('terminal_type', ['run.completed', 'run.failed'])
+def test_retained_completed_command_ack_survives_thread_deletion(tmp_path, terminal_type):
+    registry, sessions, output = fixture(tmp_path)
+    store = registry.daemon_store
+    event = {key: value for key, value in output.items()
+             if key not in ('stream', 'sequence', 'text', 'replayed')}
+    registry.handle_event('node', {**event, 'type': terminal_type, 'exitCode': 0}, 'secret')
+    cancel = {'id': new_database_id(), 'type': 'run.cancel',
+              'commandId': event['commandId'], 'sessionId': event['sessionId'],
+              'runId': event['runId'], 'agent': event['agent'], 'reason': 'stop',
+              'targetLeaseId': event['leaseId']}
+    store.enqueue_command('node', cancel)
+    store.take_queued_commands('node')
+    sessions.delete_session(event['sessionId'])
+    with pytest.raises(CommandEventMismatchError, match='ownership'):
+        registry.handle_durable_report('node', {**event, 'type': 'run.cancelled', 'leaseId': 'wrong'}, 'secret', 'c' * 64, 'd' * 64)
+    assert store.get_command(cancel['id'])['status'] == 'dispatched'
+    registry.handle_durable_report('node', {**event, 'type': 'run.cancelled'}, 'secret', 'a' * 64, 'b' * 64)
+    assert store.get_command(cancel['id'])['status'] == 'completed'
+    assert store.report_was_accepted('node', event['commandId'], 'a' * 64, 'b' * 64)
 
 
 def orphaned_stop(tmp_path, *, leased=True):

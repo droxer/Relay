@@ -208,7 +208,23 @@ than retaining locks across unrelated Computers.
 
 Transient failures retry indefinitely with jitter, bounded request deadlines,
 and `Retry-After`. Permanent report rejections are quarantined with their bytes
-and reason intact. One terminal-report exception handles the backend's explicit
+and reason intact. Only malformed input is a 400: unexpected processing
+exceptions, including `ValueError`, `TypeError`, and `KeyError` after validation,
+roll back their batch group and return a retryable 500. Unrelated groups can
+still commit. Batch rejection receipts include a bounded reason, without
+returning internal exception details.
+
+New quarantine markers retain the original HTTP status, bounded rejection
+detail, and timestamp across daemon restarts. `relay reports` displays that
+reason and the Computer-specific recovery command. Historical status-only
+markers remain quarantined and explicitly say their reason was not recorded.
+A redelivered cancellation whose terminal report is quarantined neither
+resubmits it nor repeatedly logs that it will retry; polling continues, with
+the normal idle throttle when the batch contains only quarantined stops.
+The initial live rejection says automatic retries are paused, rather than
+promising recovery that cannot happen automatically.
+
+One terminal-report exception handles the backend's explicit
 identity/owner/payload receipt conflict: the daemon retries the exact retained
 payload under a deterministic ID derived from its local report ID and payload
 digest, preserving the original receipt. A batch 409 is checked individually

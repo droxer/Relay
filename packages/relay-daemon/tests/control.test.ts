@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { serviceDefinition } from '../src/install.js';
+import { TerminalOutbox } from '../src/terminal-outbox.js';
 import { installedServices, parseControlArgs, RELAY_DEV_BRAND, runControl, type CommandResult, type ControlDeps } from '../src/control.js';
 
 type Responder = (command: string, args: string[]) => CommandResult;
@@ -25,6 +26,20 @@ function fixture(platform: 'darwin' | 'linux', ids: string[], respond: Responder
 }
 
 describe('relay control CLI', () => {
+  it('shows original quarantine reason and the exact recovery command for its Computer', async () => {
+    const { home, deps, lines, cleanup } = fixture('darwin', ['node-1']);
+    try {
+      const outbox = new TerminalOutbox(join(home, '.relay', 'daemon-nodes', 'node-1', 'terminal-events'));
+      await outbox.wrapFetch(async () => Response.json({ detail: 'Report ownership mismatch.' }, { status: 409 }))(
+        'http://backend/events', { method: 'POST', body: JSON.stringify({ type: 'run.cancelled', commandId: 'cmd' }) });
+      const [report] = outbox.summaries();
+      assert.equal(runControl(['reports'], deps), 0);
+      assert.match(lines.join('\n'), /Report ownership mismatch/);
+      assert.ok(lines.some(line => line.includes(`retry-report --computer node-1 --report ${report.id}`)));
+      assert.match(lines.join('\n'), /stop this Computer/);
+    } finally { cleanup(); }
+  });
+
   it('parses commands and rejects unknown input', () => {
     assert.deepEqual(parseControlArgs([]), { command: 'help', follow: false });
     assert.deepEqual(parseControlArgs(['logs', '-f', '--computer', 'node-1']), { command: 'logs', follow: true, computer: 'node-1' });
