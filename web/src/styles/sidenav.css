@@ -352,8 +352,9 @@
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(4) .sidenav-label { transition-delay: calc(var(--t-stagger) * 4); }
 .sidenav-panel[data-expanded="true"] .sidenav-group:nth-child(5) .sidenav-label { transition-delay: calc(var(--t-stagger) * 5); }
 
-/* Expanded button layout: icon + label side by side. Compact rows at the
-   40px control height (not the 48px collapsed square), tight label rhythm. */
+/* Expanded button layout: icon + label side by side. Compact rows at
+   --control-h-sm (not the collapsed --touch-target square), tight label
+   rhythm. */
 .sidenav-panel[data-expanded="true"] .sidenav-btn {
   display: flex;
   align-items: center;
@@ -408,24 +409,9 @@
   flex-shrink: 0;
 }
 
-/* "Coming soon" marker (Channels): a micro-caps pill beside the label when
-   the rail is expanded, a corner dot on the icon when collapsed, and the same
-   pill trailing the item inside the mobile More overflow. Decorative only —
-   the state also rides on the link's aria-label and collapsed tooltip. */
-.sidenav-btn[aria-disabled="true"],
-[data-slot="dropdown-menu-link-item"][aria-disabled="true"] {
-  cursor: default;
-}
-
-.sidenav-btn[aria-disabled="true"]:hover,
-[data-slot="dropdown-menu-link-item"][aria-disabled="true"]:hover {
-  background: transparent;
-  border-color: transparent;
-  color: var(--ink-3);
-}
-
-/* Mobile-only More overflow trigger (Channels / Admin) — hidden on desktop
-   where those destinations stay as primary rail items. Last in this file at
+/* Mobile-only More overflow trigger (agents, teams, computers, skills,
+   settings, admin) — hidden on desktop, where those destinations stay in the
+   rail. Last in this file at
    3-class specificity so it outranks every `.sidenav-btn` display rule above
    (including `.sidenav-panel[data-expanded="true"] .sidenav-btn`); the mobile
    bottom-tab media query in responsive.css re-shows it at equal specificity. */
@@ -467,22 +453,13 @@
   background: var(--line-strong);
 }
 
-/* Home's "needs you" count. On the collapsed rail it sits on the icon's
-   corner; on the expanded rail it trails the label like a row count. Ink, not
-   a status hue — the queue on the page says which items are urgent. */
+/* Home's "needs you" count — the shared .count-badge drawing (pills.css);
+   only its placement lives here. On the collapsed rail it sits inside the
+   square's corner; on the expanded rail it trails the label like a row
+   count. */
 .sidenav-count {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--r-pill);
-  background: var(--ink-1);
-  color: var(--surface-0);
-  font: 600 10px/16px var(--font-sans);
-  text-align: center;
-  pointer-events: none;
+  top: var(--sp-1);
+  right: var(--sp-1);
 }
 
 .sidenav-panel[data-expanded="true"] .sidenav-count {

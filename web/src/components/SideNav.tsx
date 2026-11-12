@@ -21,6 +21,7 @@ import {
   NavThreads,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
+import { countBadgeText } from "../lib/countBadge";
 import { commandShortcutLabel } from "../lib/shortcuts";
 import { isAtTabRoot, scrollPanesToTop } from "../lib/tabReselect";
 import { Button } from "@/components/ui/button";
@@ -144,6 +145,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
 
   const moreActive = route !== null && MORE_ROUTES.includes(route);
   const commandMenuHint = `${t("command.title")} · ${commandShortcutLabel()}`;
+  const homeBadge = countBadgeText(homeNeedsYou);
 
   return (
     <aside className="sidenav-panel" aria-label={t("nav.brand")} data-expanded={sidenavExpanded ? "true" : "false"}>
@@ -177,7 +179,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           >
             <NavHome size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.home")}</span>
-            {homeNeedsYou ? <span className="sidenav-count tnum" aria-hidden="true">{homeNeedsYou > 99 ? "99+" : homeNeedsYou}</span> : null}
+            {homeBadge ? <span className="count-badge sidenav-count tnum" aria-hidden="true">{homeBadge}</span> : null}
           </a>
           <a
             className={`sidenav-btn ${route === "main" ? "active" : ""}`}

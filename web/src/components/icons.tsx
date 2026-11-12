@@ -110,8 +110,6 @@ import {
 } from "lucide-react";
 import { createElement, forwardRef, type ComponentProps } from "react";
 
-import { TaskListGlyph, type RelayGlyphProps } from "./navGlyphs";
-
 // Standard refined stroke for every icon in the product. Lucide defaults to
 // 2 which feels chunky next to the rest of the type; 1.75 reads as
 // engineering-precise without losing legibility at 13–18 px.
@@ -188,13 +186,8 @@ export const AVATAR = {
   xl: 56,
 } as const;
 
-/* Accepts a lucide icon or one of Relay's own glyphs from `navGlyphs` — they
-   publish the same call shape on purpose, so the stroke contract is applied
-   once for both and a bespoke glyph cannot drift off the shared weight. */
-type StrokedGlyph = LucideIcon | typeof TaskListGlyph;
-
-function withStandardStroke(Icon: StrokedGlyph, displayName: string) {
-  const Wrapped = forwardRef<SVGSVGElement, LucideProps & RelayGlyphProps>((props, ref) => (
+function withStandardStroke(Icon: LucideIcon, displayName: string) {
+  const Wrapped = forwardRef<SVGSVGElement, LucideProps>((props, ref) => (
     <Icon ref={ref} strokeWidth={ICON_STROKE} aria-hidden="true" {...props} />
   ));
   Wrapped.displayName = displayName;
