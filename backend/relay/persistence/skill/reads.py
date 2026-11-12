@@ -90,4 +90,5 @@ class SkillReadRows(SkillStoreState):
             return None
         # Read legacy database bytes during rolling upgrades, but every new
         # write goes through the filesystem object-store boundary.
-        return self.object_store.get(sha256) or row["content"]
+        content = self.object_store.get(sha256)
+        return content if content is not None else row["content"]

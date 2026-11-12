@@ -5,6 +5,7 @@ import {
   createSkill,
   deleteSkill,
   importSkill,
+  promoteSkillRevision,
   reimportSkill,
   reviseSkill,
   updateSkill,
@@ -226,6 +227,19 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
       setBusy(false);
     }
   }
+  async function promoteRevision(revisionId: string) {
+    if (!skill) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await promoteSkillRevision(skill.id, revisionId);
+      await refresh(skill.id);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function remove() {
     if (!skill) return;
     const confirmed = await confirm({
@@ -415,6 +429,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               }
             />
             <div className="skill-detail-body">
+            {!mode && error ? <p role="alert" className="skill-error">{error}</p> : null}
             <p className="skill-description">{skill.description}</p>
             {/* One quiet meta line, not a stat band: three small counts do not
                 earn display-size numerals between two hairlines. */}
@@ -440,6 +455,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
             </section>
             <section>
               <h3>{t("skills.revision_history")}</h3>
+              {owned ? <p className="skill-muted">{t("skills.stable_delivery_note")}</p> : null}
               <ol className="skill-revisions">
                 {skill.revisions.map((revision) => (
                   <li key={revision.id}>
@@ -451,6 +467,20 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                     <time className="tnum" dateTime={revision.createdAt}>
                       {compactDate(revision.createdAt, i18n.language)}
                     </time>
+                    {revision.id === skill.stableRevisionId ? (
+                      <small className="skill-muted">{t("skills.stable_revision")}</small>
+                    ) : owned ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        aria-label={t("skills.promote_revision_label", { revision: revision.revision })}
+                        onClick={() => void promoteRevision(revision.id)}
+                      >
+                        {t("skills.promote_revision")}
+                      </Button>
+                    ) : null}
                   </li>
                 ))}
               </ol>

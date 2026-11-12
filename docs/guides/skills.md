@@ -41,6 +41,8 @@ is available. Neither implies the other.
 More specific scopes override less specific scopes for the same publication:
 `org < user < team < project < agent`. Assignments are evaluated on every
 dispatch; Relay does not fan them out into per-agent grants.
+An explicit or suggested assignment at a more specific scope suppresses
+automatic delivery from a less specific scope for that publication.
 
 ### Assignment policy
 
@@ -105,6 +107,11 @@ Every edit, upload, or re-import creates a new immutable revision.
   explicit promotion.
 - Exact revision pins never float.
 
+Publication owners can select **Use as stable** on a revision in the web
+revision history. Shared assignments use that revision on their next run;
+uploading or re-importing alone does not promote it. The current stable
+revision is labeled in the history.
+
 `GET /api/v1/skills/{id}/export?channel=stable|latest` returns a portable ZIP
 containing the original bundle paths. Export reads through the object-store
 interface and is subject to the same visibility rules as catalog detail.
@@ -146,6 +153,10 @@ directories; Pi receives explicit `--skill` paths with discovery disabled;
 Kimi receives an isolated `--skills-dir`. Codex skill delivery is supported.
 Unassigned node-local skills remain separate inventory and are never presented
 as Relay-managed assignments.
+Local Claude and Codex runs preserve their native configuration and receive
+instruction paths in their prompt. Kimi's local permission-enabled ACP flow
+also receives individual instruction paths; its trusted and cloud flows keep
+the directory flag. OpenCode receives instruction paths in all environments.
 
 ## Authorization and governance boundary
 

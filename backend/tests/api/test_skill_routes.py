@@ -7,6 +7,7 @@ import zipfile
 import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
+from relay.skills.bundle import resolve_bundle
 
 from user_ids import user_id
 
@@ -229,9 +230,15 @@ def test_generic_agent_patch_cannot_bypass_grant_authorization(client):
 
 
 @pytest.mark.parametrize("supports_skills", [True, False])
-def test_publish_grant_dispatch_delivers_manifest_or_explicit_notice(client, supports_skills):
+@pytest.mark.parametrize("empty_file", [True, False])
+def test_publish_grant_dispatch_delivers_manifest_or_explicit_notice(client, supports_skills, empty_file):
     agent, node = create_agent(client, executor="codex", supports_skills=supports_skills)
-    skill = publish(client)
+    payload = bundle()
+    if empty_file:
+        payload["files"].append({"path": "scripts/empty.py", "contentBase64": ""})
+    published = client.post("/api/v1/skills", json=payload)
+    assert published.status_code == 201, published.text
+    skill = published.json()
     assert client.post(f"/api/v1/skills/{skill['id']}/grants", json={"agentIds": [agent["id"]]}).status_code == 200
     response = client.post("/api/v1/agent-runs", json={"taskGoal": "Review the workspace", "assignments": [{"agentId": agent["id"]}]})
     assert response.status_code == 202, response.text
@@ -243,10 +250,16 @@ def test_publish_grant_dispatch_delivers_manifest_or_explicit_notice(client, sup
         assert entry["skillId"] == skill["id"]
         assert entry["revisionId"] == skill["currentRevisionId"]
         assert set(entry["files"][0]) == {"path", "sha256", "bytes"}
-        sha = entry["files"][0]["sha256"]
-        blob = client.get(f"/api/v1/daemon-nodes/{node['id']}/skill-blobs/{sha}?commandId={command['id']}", headers={"Authorization": "Bearer skill-token-alice"})
-        assert blob.status_code == 200, blob.text
-        assert blob.content == base64.b64decode(bundle()["files"][0]["contentBase64"])
+        for file, expected in zip(entry["files"], payload["files"], strict=True):
+            sha = file["sha256"]
+            blob = client.get(f"/api/v1/daemon-nodes/{node['id']}/skill-blobs/{sha}?commandId={command['id']}", headers={"Authorization": "Bearer skill-token-alice"})
+            assert blob.status_code == 200, blob.text
+            assert blob.content == base64.b64decode(expected["contentBase64"])
+        exported = client.get(f"/api/v1/skills/{skill['id']}/export")
+        assert exported.status_code == 200, exported.text
+        with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+            for file in payload["files"]:
+                assert archive.read(file["path"]) == base64.b64decode(file["contentBase64"])
     else:
         assert "skills" not in command
         session = client.app.state.session_store.get_session(command["sessionId"])
@@ -363,6 +376,11 @@ def test_assignment_api_rejects_unknown_fields_and_invalid_policy(client):
 
 def test_owner_can_promote_and_export_a_portable_skill_bundle(client):
     skill = publish(client, name="portable")
+    agent, _ = create_agent(client)
+    assigned = client.post(f"/api/v1/skills/{skill['id']}/assignments", json={
+        "targetType": "agent", "targetId": agent["id"], "pin": "stable",
+    })
+    assert assigned.status_code == 201, assigned.text
     first_revision = skill["currentRevisionId"]
     revised = client.post(
         f"/api/v1/skills/{skill['id']}/revisions",
@@ -382,12 +400,16 @@ def test_owner_can_promote_and_export_a_portable_skill_bundle(client):
 
     detail = client.get(f"/api/v1/skills/{skill['id']}").json()
     assert detail["stableRevisionId"] == first_revision
+    before, _ = resolve_bundle(client.app.state.context, agent)
+    assert before["skills"][0]["revisionId"] == first_revision
     promoted = client.post(
         f"/api/v1/skills/{skill['id']}/revisions/{second_revision}/promote",
         json={},
     )
     assert promoted.status_code == 200, promoted.text
     assert promoted.json()["stableRevisionId"] == second_revision
+    after, _ = resolve_bundle(client.app.state.context, agent)
+    assert after["skills"][0]["revisionId"] == second_revision
 
     exported = client.get(
         f"/api/v1/skills/{skill['id']}/export?channel=stable"

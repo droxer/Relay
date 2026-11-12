@@ -8,6 +8,7 @@ import {
   buildClaudeCommand,
   buildCodexCommand,
   buildKimiCommand,
+  buildOpenCodeCommand,
   buildPiCommand,
   type AgentState,
   type DaemonNodeRunCommand,
@@ -36,6 +37,12 @@ function asCurrentUser<T>(build: () => T, mode = "1"): T {
 }
 
 describe("skill delivery", () => {
+  it("includes assigned instructions in cloud OpenCode prompts", () => {
+    const command = asCurrentUser(() => buildOpenCodeCommand(state({ skill_paths: ["/views/review"] })), "0");
+    assert.match(command, /\[Assigned skills\]/);
+    assert.match(command, /\/views\/review\/SKILL\.md/);
+  });
+
   it("declares the verified delivery mechanism for every agent", () => {
     for (const name of AGENT_NAMES) {
       assert.ok(AGENT_REGISTRY[name].skillDelivery, `${name} has no skillDelivery`);

@@ -95,10 +95,12 @@ def effective_assignments(
             item["id"],
         ),
     ):
-        if assignment["mode"] == "suggested" or assignment["invocation"] == "explicit":
-            continue
         effective[assignment["skillId"]] = assignment
-    return sorted(effective.values(), key=lambda item: (item["skillId"], item["id"]))
+    automatic = [
+        item for item in effective.values()
+        if item["mode"] != "suggested" and item["invocation"] != "explicit"
+    ]
+    return sorted(automatic, key=lambda item: (item["skillId"], item["id"]))
 
 
 def _visible_skill(ctx: Any, skill_id: str, user_id: str) -> dict[str, Any]:

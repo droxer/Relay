@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import test from "node:test";
 
-import type { DaemonRunSkillBundle, SkillDelivery } from "relay-core";
-import { materializeSkills } from "../src/agent-skills.js";
+import { buildKimiCommand, initialAgentState, type DaemonRunSkillBundle, type SkillDelivery } from "relay-core";
+import { materializeSkills, runSkillDelivery } from "../src/agent-skills.js";
 import { localProcessExecStream } from "../src/index.js";
 
 const configDelivery: SkillDelivery = { kind: "config-dir", envVar: "CLAUDE_CONFIG_DIR", subdir: ".claude", skillsSubpath: "skills" };
@@ -31,6 +31,28 @@ async function withFixture(run: (f: ReturnType<typeof fixture>) => Promise<void>
   const f = fixture();
   try { await run(f); } finally { rmSync(f.root, { recursive: true, force: true }); }
 }
+
+test("native Kimi ACP receives actual instruction files while trusted and cloud runs keep directory delivery", async () => withFixture(async (f) => {
+  const previous = { ...process.env };
+  try {
+    process.env.RELAY_RUN_AS_CURRENT_USER = "1";
+    process.env.RELAY_LOCAL_PERMISSION_POLICY = "native";
+    const result = await materializeSkills({
+      bundle: f.bundle("team/review"), agentId: "agent-kimi", delivery: runSkillDelivery("kimi", "none"),
+      agentHome: f.agentHome, cacheDir: f.cacheDir, execStream: localProcessExecStream,
+      fetchBlob: async (sha) => f.blobs[sha]!,
+    });
+    assert.ok(result.skillPaths.length);
+    for (const path of result.skillPaths) assert.ok(existsSync(join(path, "SKILL.md")));
+    const command = buildKimiCommand({ ...initialAgentState("Review"), skill_paths: result.skillPaths,
+      permission_prompt: { adapter: "kimi-acp", command: "node", args: ["adapter.js"], env: {} } });
+    assert.ok(command.includes(`${result.skillPaths[0]}/SKILL.md`));
+    assert.doesNotMatch(command, /--skills-dir/);
+    assert.equal(runSkillDelivery("kimi", "boxlite").kind, "skills-dir-flag");
+    process.env.RELAY_LOCAL_PERMISSION_POLICY = "trusted";
+    assert.equal(runSkillDelivery("kimi", "none").kind, "skills-dir-flag");
+  } finally { process.env = previous; }
+}));
 
 test("materializes Pi paths in the execution environment and reuses the immutable cache", async () => withFixture(async (f) => {
   let fetches = 0;
