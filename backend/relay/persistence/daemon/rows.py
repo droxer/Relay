@@ -64,22 +64,31 @@ def _node_agent_identity(row: Any) -> tuple[Any, ...]:
         bool(row["disabled"]),
         row["role_default"] or None,
         row["role_override"] or None,
+        row.get("models") or None,
+        bool(row.get("custom_model_endpoint")),
+        row.get("default_model") or None,
     )
 
 
 def node_agent_rows(node: dict[str, Any], node_pk: str) -> list[dict[str, Any]]:
-    """Flatten a node's five per-agent maps into daemon_node_agents rows."""
+    """Flatten a node's per-agent maps into daemon_node_agents rows."""
     statuses = node.get("agents") or {}
     details = node.get("agentDetails") or {}
     disabled = set(node.get("disabledAgents") or [])
     role_defaults = node.get("agentRoleDefaults") or {}
     role_overrides = node.get("agentRoleOverrides") or {}
+    models = node.get("agentModels") or {}
+    custom_endpoints = set(node.get("customModelEndpoints") or [])
+    default_models = node.get("agentDefaultModels") or {}
     names = (
         set(statuses)
         | set(details)
         | disabled
         | set(role_defaults)
         | set(role_overrides)
+        | set(models)
+        | custom_endpoints
+        | set(default_models)
     )
     return [
         {
@@ -90,6 +99,9 @@ def node_agent_rows(node: dict[str, Any], node_pk: str) -> list[dict[str, Any]]:
             "disabled": agent in disabled,
             "role_default": role_defaults.get(agent),
             "role_override": role_overrides.get(agent),
+            "models": models.get(agent),
+            "custom_model_endpoint": agent in custom_endpoints,
+            "default_model": default_models.get(agent),
         }
         for agent in sorted(names)
     ]
@@ -106,6 +118,9 @@ def apply_node_agents(node: dict[str, Any], rows: list[Any]) -> dict[str, Any]:
     disabled: list[str] = []
     role_defaults: dict[str, str] = {}
     role_overrides: dict[str, str] = {}
+    models: dict[str, list[str]] = {}
+    custom_endpoints: list[str] = []
+    default_models: dict[str, str] = {}
     for row in rows:
         agent = row["agent"]
         statuses[agent] = row["status"]
@@ -117,6 +132,12 @@ def apply_node_agents(node: dict[str, Any], rows: list[Any]) -> dict[str, Any]:
             role_defaults[agent] = row["role_default"]
         if row.get("role_override"):
             role_overrides[agent] = row["role_override"]
+        if row.get("models"):
+            models[agent] = list(row["models"])
+        if row.get("custom_model_endpoint"):
+            custom_endpoints.append(agent)
+        if row.get("default_model"):
+            default_models[agent] = row["default_model"]
     return {
         **node,
         "agents": statuses,
@@ -124,6 +145,9 @@ def apply_node_agents(node: dict[str, Any], rows: list[Any]) -> dict[str, Any]:
         **({"disabledAgents": sorted(disabled)} if disabled else {}),
         **({"agentRoleDefaults": role_defaults} if role_defaults else {}),
         **({"agentRoleOverrides": role_overrides} if role_overrides else {}),
+        **({"agentModels": models} if models else {}),
+        **({"customModelEndpoints": sorted(custom_endpoints)} if custom_endpoints else {}),
+        **({"agentDefaultModels": default_models} if default_models else {}),
     }
 
 

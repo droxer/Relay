@@ -87,6 +87,32 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
 }
 
 for (const touch of [false, true]) {
+  test(`new agent exposes runtime model choices ${touch ? "touch" : "desktop"}`, async ({ browser }) => {
+    const page = await openPage(browser, "/agents", touch, undefined, undefined, {
+      nodes: [{ ...computer, capabilities: ["agent-model", "endpoint-models"],
+        agents: { codex: "ready", claude: "ready" },
+        agentModels: { codex: ["gpt-6-luna", "gpt-5.6-terra"], claude: ["opus", "sonnet"] },
+      }],
+    });
+    await page.getByRole("button", { name: "New agent", exact: true }).first().click();
+    await page.getByRole("combobox", { name: "Computer", exact: true }).click();
+    await page.getByRole("option").first().click();
+    await page.getByRole("radio", { name: "Codex", exact: true }).click();
+    const model = page.locator('input[name="agent-model"]');
+    if (touch) await model.tap(); else await model.click();
+    await expect(page.getByRole("option", { name: "gpt-6-luna", exact: true })).toBeVisible();
+    await page.getByRole("option", { name: "gpt-6-luna", exact: true }).click();
+    await expect(model).toHaveValue("gpt-6-luna");
+    await page.getByRole("radio", { name: "Claude", exact: true }).click();
+    await expect(model).toHaveValue("");
+    await page.getByRole("button", { name: "Show models", exact: true }).click();
+    await expect(page.getByRole("option", { name: "opus", exact: true })).toBeVisible();
+    await expect(page.getByRole("option", { name: "gpt-6-luna", exact: true })).toHaveCount(0);
+    await page.context().close();
+  });
+}
+
+for (const touch of [false, true]) {
 for (const theme of ["light", "dark"] as const) {
 test(`project directory shows aligned names and Agent counts without Computer identifiers (${touch ? "touch" : "pointer"}, ${theme})`, async ({ browser }, testInfo) => {
   const project = {

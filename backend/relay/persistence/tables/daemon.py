@@ -122,6 +122,9 @@ node_agents = Table(
     Column("disabled", Boolean, nullable=False),
     Column("role_default", Text, nullable=True),
     Column("role_override", Text, nullable=True),
+    Column("models", json_type(), nullable=True),
+    Column("custom_model_endpoint", Boolean, nullable=True),
+    Column("default_model", Text, nullable=True),
     PrimaryKeyConstraint("node_id", "agent", name="pk_daemon_node_agents"),
     # The point of normalizing: "which nodes can run codex" is an index
     # lookup instead of a scan over every node's JSON.
