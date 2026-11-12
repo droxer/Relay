@@ -25,7 +25,7 @@ try {
     join(staging, 'node_modules/relay-daemon/capabilities.json'),
     JSON.stringify({ clientVersion: RELAY_CLIENT_VERSION, capabilities: [...DAEMON_ADVERTISED_CAPABILITIES].sort() }),
   );
-  for (const dependency of ['smol-toml', 'jsonc-parser']) {
+  for (const dependency of ['smol-toml', 'jsonc-parser', 'undici']) {
     cpSync(resolve(`node_modules/${dependency}`), join(staging, 'node_modules', dependency), { recursive: true });
   }
   mkdirSync(resolve('backend/relay/computer'), { recursive: true });

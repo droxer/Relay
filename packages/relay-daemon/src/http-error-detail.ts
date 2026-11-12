@@ -21,6 +21,13 @@ export async function responseErrorDetail(response: Response): Promise<string> {
   return errorBodyDetail(body);
 }
 
+const HTTP2_RESET_NAMES = [
+  'NO_ERROR', 'PROTOCOL_ERROR', 'INTERNAL_ERROR', 'FLOW_CONTROL_ERROR',
+  'SETTINGS_TIMEOUT', 'STREAM_CLOSED', 'FRAME_SIZE_ERROR', 'REFUSED_STREAM',
+  'CANCEL', 'COMPRESSION_ERROR', 'CONNECT_ERROR', 'ENHANCE_YOUR_CALM',
+  'INADEQUATE_SECURITY', 'HTTP_1_1_REQUIRED',
+];
+
 /** Keep useful Node transport codes, without dumping request/response objects or cause payloads. */
 export function transportErrorDetail(error: unknown): string {
   const parts = [error instanceof Error ? error.message : String(error)];
@@ -31,9 +38,19 @@ export function transportErrorDetail(error: unknown): string {
     const item = pending.shift();
     if (!item || typeof item !== 'object' || seen.has(item)) continue;
     seen.add(item);
-    const detail = item as { code?: unknown; syscall?: unknown; hostname?: unknown; cause?: unknown; errors?: unknown };
+    const detail = item as { code?: unknown; http2ErrorCode?: unknown; syscall?: unknown; hostname?: unknown; cause?: unknown; errors?: unknown };
     const safe = [detail.code, detail.syscall, detail.hostname].filter((value): value is string =>
       typeof value === 'string' && /^[a-zA-Z0-9_.:-]{1,253}$/.test(value));
+    if (typeof detail.http2ErrorCode === 'number' && Number.isInteger(detail.http2ErrorCode)
+      && detail.http2ErrorCode >= 0 && detail.http2ErrorCode <= 0xffffffff) {
+      safe.push(`http2ErrorCode=${detail.http2ErrorCode}`);
+    }
+    // Some Undici versions copy the error message but omit http2ErrorCode.
+    // Extract only a known reset name, never arbitrary cause-message contents.
+    if (detail.code === 'ERR_HTTP2_STREAM_ERROR' && item instanceof Error) {
+      const reset = /^Stream closed with error code NGHTTP2_([A-Z0-9_]+)$/.exec(item.message)?.[1];
+      if (reset && HTTP2_RESET_NAMES.includes(reset)) safe.push(`http2Reset=NGHTTP2_${reset}`);
+    }
     if (safe.length) parts.push(safe.join(' '));
     pending.push(detail.cause);
     if (item instanceof AggregateError) pending.push(...item.errors.slice(0, 8));
