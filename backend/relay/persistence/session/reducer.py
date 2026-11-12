@@ -317,7 +317,12 @@ def _apply_project_manager_assigned(session: dict[str, Any], event: dict[str, An
 
 
 SessionEventHandler = Callable[[dict[str, Any], dict[str, Any]], None]
+def _apply_queue(session: dict[str, Any], event: dict[str, Any]) -> None:
+    session["messageQueue"] = event["queue"]
+
+
 SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
+    "session.queue": _apply_queue,
     "session.status": _apply_session_status,
     "collaboration.round.started": _apply_collaboration_round_started,
     "agent.started": _apply_agent_started,

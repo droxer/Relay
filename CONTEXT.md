@@ -380,3 +380,13 @@ The maximum started, unfinished Tasks a User may have across Projects, including
 review and blocked work. The control panel's Concurrent task limit defaults to
 five; extra starts enter Queued. It bounds work in progress, while a Computer's
 run capacity separately bounds simultaneous agent processes.
+
+
+### Thread message queue
+
+Text follow-ups submitted while a Thread is running belong to its durable,
+owner-managed message queue. The backend dispatches them in order after the
+current execution exits, even when all browsers are closed. This is distinct
+from a composer draft (unsent text local to one browser) and a run waiting for
+Computer capacity (an already accepted execution). Stop pauses follow-ups;
+resuming or choosing a message to send next is an explicit owner action.

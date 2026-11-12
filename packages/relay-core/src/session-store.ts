@@ -298,7 +298,17 @@ export interface ExecutionStatus {
   nextRecoveryAt: string | null;
 }
 
+export interface ThreadMessageQueue {
+  messages: { id: string; text: string; addressAgentIds?: string[] }[];
+  paused: boolean;
+  sending?: string;
+  leaseUntil?: string;
+  sendRequested?: boolean;
+  error?: string;
+}
+
 export interface RelaySession {
+  messageQueue?: ThreadMessageQueue;
   execution?: ExecutionStatus;
   deletionRequestedAt?: string;
   deletionRequestedBy?: string;
@@ -373,6 +383,7 @@ export interface RelaySession {
 }
 
 export type RelayEvent =
+  | { id: string; type: "session.queue"; sessionId: string; timestamp: string; queue: ThreadMessageQueue }
   | {
       id: string;
       type: "system.notice";
@@ -721,7 +732,9 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
   for (const event of events) {
     session.events.push(event);
     session.updatedAt = event.timestamp;
-    if (event.type === "session.status") {
+    if (event.type === "session.queue") {
+      session.messageQueue = event.queue;
+    } else if (event.type === "session.status") {
       session.status = event.status;
       session.phase = event.phase;
       session.pendingDecision = event.pendingDecision;

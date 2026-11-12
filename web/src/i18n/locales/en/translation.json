@@ -581,6 +581,12 @@
     "queue_shortcut": "{{shortcut}} to queue for the next turn"
   },
   "queue": {
+    "sending": "Sending next queued message…",
+    "waiting": "Queue waiting for your reply",
+    "paused_one": "Queue paused · {{count}} message",
+    "paused_other": "Queue paused · {{count}} messages",
+    "saved": "{{count}} queued · Saved across devices",
+    "resume": "Resume queue",
     "title_one": "{{count}} queued message",
     "title_other": "{{count}} queued messages",
     "steer": "Steer",

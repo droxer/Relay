@@ -149,6 +149,7 @@ class TaskScheduler:
         self._today = today
         self._now = now
         self.automations = automations
+        self.thread_queue: Any = None
         self._loop_task: asyncio.Task[None] | None = None
         self._tick_lock = asyncio.Lock()
 
@@ -173,6 +174,8 @@ class TaskScheduler:
 
     async def tick(self) -> SchedulerTickResult:
         async with self._tick_lock:
+            if self.thread_queue:
+                await self.thread_queue.tick()
             # All store transactions stay on one worker thread. Only the
             # asynchronous daemon backend call returns to the application loop.
             work = asyncio.create_task(

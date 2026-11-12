@@ -335,6 +335,8 @@ shows the reason and offers Resume to the owner.
 ```text
 PATCH  /api/v1/threads/{id}                         { title } or { archived: true }
 POST   /api/v1/threads/{id}/cancellations
+GET    /api/v1/threads/{id}/queue                  durable follow-up queue
+POST   /api/v1/threads/{id}/queue                  { action, id?, text? }
 POST   /api/v1/threads/{id}/messages               { text, intent, addressAgentIds?, addressTeamId?, style?, userMessageId?, idempotencyKey? }
 POST   /api/v1/threads/{id}/recoveries             { kind, targetAgentId, mode, note?, idempotencyKey?, resume? }
 PUT    /api/v1/tasks/{id}/assignment
@@ -1702,3 +1704,23 @@ beside other Agents; proposals keep their own Thread/run identity. A computer wi
 without the tools, and the manager view reports
 `project_manager_update_required`. Older Threads may carry the retired
 `thread.project_manager_assigned` event; it still replays.
+
+
+Thread follow-up queues are database-backed `session.queue` events. The owner
+may `enqueue` text with a stable message `id`, `remove`, `edit` (take the message
+back into a local draft), `promote` a message to send next, `pause`, or `resume`.
+`import` accepts legacy browser messages in a paused queue. The response is
+`{ messages: [{ id, text, addressAgentIds? }], paused, sending?, error? }`.
+Enqueue retries use durable receipts, including after a message has been sent.
+There are at most 20 messages, each at most 100,000 characters. Leading mentions
+resolve when enqueued; runtime placement and authorization are checked again
+at dispatch. Editing a message another client already took returns 409.
+
+The existing task scheduler dispatches one queued message per thread per tick,
+through ordinary collaboration admission. It requires confirmed execution exit
+and holds automatic dispatch while the thread needs human input. Failed
+admission retains the message and pauses the queue. An interrupted dispatch
+retries with the same idempotency key after a five-minute claim lease. Disabling
+`RELAY_TASK_SCHEDULER_ENABLED` also disables queue advancement. Queue writes and
+reads remain available. Cancellations pause the queue by default;
+`preserveQueue: true` is used by the explicit “send this next” action.

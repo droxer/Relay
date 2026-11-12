@@ -38,6 +38,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
   }
 
   switch (event.type) {
+    case "session.queue": return { ...next, messageQueue: event.queue };
     case "collaboration.round.started": {
       const existingRounds = next.collaborationRounds ?? [];
       const collaborationRounds = existingRounds.some(

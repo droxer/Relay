@@ -124,6 +124,7 @@ from .bootstrap.stores import (
     Stores,
     build_stores,
 )
+from .collaboration.queue import ThreadQueueDispatcher
 from .bootstrap.runtime import rate_limiter, task_scheduler_from_env
 
 load_backend_env()
@@ -253,6 +254,8 @@ def create_app(
         password_reset=password_reset,
         connections=connections,
     )
+    if scheduler is not None:
+        scheduler.thread_queue = ThreadQueueDispatcher(app.state.context)
     mcp_http = RelayMcpHttp(app.state.context)
     # Exact transport route precedes the web catch-all without swallowing the
     # existing /mcp/tokens and compatibility JSON routes.

@@ -575,6 +575,11 @@
     "queue_shortcut": "{{shortcut}} 加入队列，下一轮发送"
   },
   "queue": {
+    "sending": "正在发送下一条排队消息…",
+    "waiting": "队列正在等待您的回复",
+    "paused": "队列已暂停 · {{count}} 条消息",
+    "saved": "{{count}} 条排队消息 · 已跨设备保存",
+    "resume": "继续队列",
     "title_other": "{{count}} 条排队消息",
     "steer": "Steer",
     "steer_hint": "停止本次运行，接着发送这条消息",

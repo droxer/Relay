@@ -1,0 +1,235 @@
+"""Queues survive independent clients and are advanced without a browser."""
+
+from fastapi.testclient import TestClient
+from relay.app import create_app
+
+
+def test_queue_is_shared_and_owner_scoped(tmp_path, monkeypatch):
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(tmp_path)
+    with TestClient(app) as laptop:
+        login = laptop.post(
+            "/api/v1/auth/bootstrap",
+            json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+        )
+        assert login.status_code == 200
+        owner = app.state.auth_store.resolve_user_id("admin")
+        thread = app.state.session_store.create_session(
+            {"workspacePath": str(tmp_path), "taskGoal": "queue", "ownerUserId": owner}
+        )
+        path = f"/api/v1/threads/{thread['id']}/queue"
+        added = laptop.post(path, json={"action": "enqueue", "id": "q_test", "text": "Next step"})
+        assert added.status_code == 200, added.text
+        with TestClient(create_app(tmp_path)) as phone:
+            phone.cookies.update(laptop.cookies)
+            assert phone.get(path).json()["messages"] == [{"id": "q_test", "text": "Next step"}]
+            assert phone.post(path, json={"action": "remove", "id": "q_test"}).status_code == 200
+        assert laptop.get(path).json()["messages"] == []
+
+
+def test_queue_dispatch_without_browser(tmp_path, monkeypatch):
+    import asyncio
+    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.service import CollaborationConductor
+    from relay.persistence.events import relay_event
+
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    client.post(
+        "/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"}
+    )
+    store = app.state.session_store
+    thread = store.create_session(
+        {
+            "workspacePath": str(tmp_path),
+            "taskGoal": "queue",
+            "ownerUserId": app.state.auth_store.resolve_user_id("admin"),
+        }
+    )
+    tid = thread["id"]
+    store.append_event(tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"}))
+    change_queue(store, tid, "enqueue", message={"id": "q1", "text": "next"})
+    sent = []
+
+    async def submit(self, intent, actor):
+        sent.append(intent)
+        return {}
+
+    monkeypatch.setattr(CollaborationConductor, "submit", submit)
+    dispatcher = ThreadQueueDispatcher(app.state.context)
+    asyncio.run(dispatcher.tick())
+    assert [m.text for m in sent] == ["next"]
+    assert store.get_session(tid)["messageQueue"]["messages"] == []
+    asyncio.run(dispatcher.tick())
+    assert len(sent) == 1
+
+
+def test_queue_failures_pause_and_keep_message(tmp_path, monkeypatch):
+    import asyncio
+    from relay.collaboration.errors import CollaborationError
+    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.service import CollaborationConductor
+    from relay.persistence.events import relay_event
+
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
+    app = create_app(tmp_path)
+    store = app.state.session_store
+    thread = store.create_session({"workspacePath": str(tmp_path), "taskGoal": "queue", "ownerUserId": "owner"})
+    tid = thread["id"]
+    store.append_event(tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"}))
+    change_queue(store, tid, "enqueue", message={"id": "q1", "text": "next"})
+
+    async def submit(self, intent, actor):
+        raise CollaborationError("computer_unavailable", "Choose an available computer.")
+
+    monkeypatch.setattr(CollaborationConductor, "submit", submit)
+    dispatcher = ThreadQueueDispatcher(app.state.context)
+    asyncio.run(dispatcher.tick())
+    state = store.get_session(tid)["messageQueue"]
+    assert state["paused"] and state["messages"][0]["id"] == "q1"
+    assert "available computer" in state["error"]
+    change_queue(store, tid, "resume")
+    # Two workers cannot claim the same message while its dispatch is active.
+    assert dispatcher._claim(tid)
+    assert dispatcher._claim(tid) is None
+    import pytest
+
+    with pytest.raises(ValueError, match="being sent"):
+        change_queue(store, tid, "remove", message_id="q1")
+
+
+def test_queue_receipts_survive_removal_and_import_pauses(tmp_path):
+    from store_fixtures import make_session_store
+    from relay.collaboration.queue import change_queue
+
+    store = make_session_store(tmp_path)
+    thread = store.create_session({"workspacePath": str(tmp_path), "taskGoal": "queue", "ownerUserId": "owner"})
+    tid = thread["id"]
+    message = {"id": "old", "text": "legacy draft"}
+    assert change_queue(store, tid, "import", message=message)["paused"]
+    change_queue(store, tid, "remove", message_id="old")
+    # A lost enqueue response retried after dispatch/removal cannot send twice.
+    assert change_queue(store, tid, "enqueue", message=message)["messages"] == []
+    import pytest
+
+    with pytest.raises(ValueError, match="another message"):
+        change_queue(store, tid, "enqueue", message={"id": "old", "text": "different"})
+
+
+def test_queue_dispatches_real_round_and_retains_mention_target(monkeypatch):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.persistence.events import relay_event
+
+    with _world(monkeypatch) as (app, client, here, there):
+        solo = _agent(app, here, "Solo", "codex")
+        reviewer = _agent(app, here, "Reviewer", "claude")
+        _sync(app, here, there)
+        thread = _thread(app, here, solo)
+        tid = thread["id"]
+        app.state.session_store.append_event(
+            tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"})
+        )
+        response = client.post(
+            f"/api/v1/threads/{tid}/queue",
+            json={"action": "enqueue", "id": "q_review", "text": "@Reviewer check the fix"},
+        )
+        assert response.status_code == 200, response.text
+        asyncio.run(ThreadQueueDispatcher(app.state.context).dispatch(tid))
+        result = app.state.session_store.get_session(tid)
+        assert result["messageQueue"]["messages"] == [], result["messageQueue"]
+        manifest = result["collaborationRounds"][-1]
+        assert [a["agentId"] for a in manifest["assignments"]] == [reviewer["id"]]
+        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(tid)
+
+
+def test_queue_rejects_non_owner_and_invalid_payloads(tmp_path, monkeypatch):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    client.post(
+        "/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"}
+    )
+    thread = app.state.session_store.create_session(
+        {
+            "workspacePath": str(tmp_path),
+            "taskGoal": "queue",
+            "ownerUserId": app.state.auth_store.resolve_user_id("admin"),
+        }
+    )
+    path = f"/api/v1/threads/{thread['id']}/queue"
+    assert client.post(path, json={"action": "enqueue", "id": "q1", "text": " "}).status_code == 400
+    assert client.post(path, json={"action": "enqueue", "id": "q1", "text": "@Missing do work"}).status_code == 400
+    app.state.auth_store.create_account("other", "kestrel-vault-7719")
+    other = TestClient(app)
+    assert (
+        other.post("/api/v1/auth/login", json={"username": "other", "password": "kestrel-vault-7719"}).status_code
+        == 200
+    )
+    assert other.get(path).status_code == 403
+    assert other.post(path, json={"action": "enqueue", "id": "q1", "text": "Private"}).status_code == 403
+
+
+def test_lost_dispatch_ack_replays_same_real_round(monkeypatch):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.persistence.events import relay_event
+
+    with _world(monkeypatch) as (app, client, here, there):
+        solo = _agent(app, here, "Solo", "codex")
+        _sync(app, here)
+        tid = _thread(app, here, solo)["id"]
+        store = app.state.session_store
+        store.append_event(tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"}))
+        assert (
+            client.post(
+                f"/api/v1/threads/{tid}/queue", json={"action": "enqueue", "id": "q_retry", "text": "Continue"}
+            ).status_code
+            == 200
+        )
+        dispatcher = ThreadQueueDispatcher(app.state.context)
+        finish = dispatcher._finish
+        monkeypatch.setattr(dispatcher, "_finish", lambda *args: None)
+        asyncio.run(dispatcher.dispatch(tid))
+        before = store.get_session(tid)
+        assert before["messageQueue"]["sending"] == "q_retry"
+        queue = before["messageQueue"]
+        queue["leaseUntil"] = "2000-01-01T00:00:00+00:00"
+        store.append_event(tid, relay_event("session.queue", tid, {"queue": queue}))
+        monkeypatch.setattr(dispatcher, "_finish", finish)
+        asyncio.run(dispatcher.dispatch(tid))
+        after = store.get_session(tid)
+        assert after["messageQueue"]["messages"] == []
+        assert len(after["collaborationRounds"]) == len(before["collaborationRounds"])
+
+
+def test_stop_between_claim_and_admission_cancels_the_new_run(monkeypatch):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.service import CollaborationConductor
+    from relay.persistence.events import relay_event
+
+    with _world(monkeypatch) as (app, client, here, there):
+        solo = _agent(app, here, "Solo", "codex")
+        _sync(app, here)
+        tid = _thread(app, here, solo)["id"]
+        store = app.state.session_store
+        store.append_event(tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"}))
+        change_queue(store, tid, "enqueue", message={"id": "q_stop", "text": "Continue"})
+        original = CollaborationConductor.submit
+
+        async def stop_then_submit(self, intent, actor):
+            change_queue(store, tid, "pause")
+            return await original(self, intent, actor)
+
+        monkeypatch.setattr(CollaborationConductor, "submit", stop_then_submit)
+        asyncio.run(ThreadQueueDispatcher(app.state.context).dispatch(tid))
+        assert store.get_session(tid)["messageQueue"]["paused"]
+        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(tid) is None
