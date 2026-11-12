@@ -37,7 +37,7 @@
   bottom: -3px;
   width: var(--dot-lg);
   height: var(--dot-lg);
-  border: 2px solid var(--surface-0);
+  border: 2px solid var(--agent-pip-surface, var(--surface-0));
   border-radius: var(--r-full);
   background: var(--tone, var(--ink-4));
 }
@@ -46,7 +46,7 @@
    absence from a ready agent even without color. */
 .agent-state[data-availability="offline"]::after,
 .agent-state.tone-bad::after {
-  background: var(--surface-0);
+  background: var(--agent-pip-surface, var(--surface-0));
   box-shadow: inset 0 0 0 1px var(--tone);
 }
 

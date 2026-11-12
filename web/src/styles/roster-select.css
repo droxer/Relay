@@ -88,6 +88,7 @@
 }
 
 .roster-option {
+  --agent-pip-surface: var(--popover);
   display: flex;
   flex: 1;
   align-items: center;
@@ -147,4 +148,9 @@
 [data-slot="filter-chip"] .agent-state {
   width: var(--avatar-xs);
   height: var(--avatar-xs);
+}
+
+/* Menu highlight is the translucent accent composited over its popup. */
+[data-highlighted] .roster-option {
+  --agent-pip-surface: color-mix(in srgb, var(--ink-1) 16%, var(--popover));
 }

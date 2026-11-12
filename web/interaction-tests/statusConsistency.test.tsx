@@ -37,3 +37,11 @@ it("treats cancellation as settled while retaining failure and block alerts", ()
 it.each(["review", "waiting_for_human"] as const)("uses the task's attention tone in the %s next-step panel", (status) => {
   expect(taskRecoveryGuide({ status } as RelayTaskListItem)?.tone).toBe("warn");
 });
+
+it("distinguishes blocked from cancelled even without color", async () => {
+  const { TaskStatusIcon } = await import("../src/components/TaskStatusIcon");
+  const blocked = render(<TaskStatusIcon status="blocked" />);
+  const cancelled = render(<TaskStatusIcon status="cancelled" />);
+  expect(blocked.container.querySelector("path")?.getAttribute("d"))
+    .not.toBe(cancelled.container.querySelector("path")?.getAttribute("d"));
+});

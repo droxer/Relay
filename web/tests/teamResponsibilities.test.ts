@@ -11,12 +11,13 @@ describe("team member responsibility cards", () => {
     assert.match(source, /<div\s+className="team-work-member"[^>]*?role="group"/);
     assert.match(source, /<header className="team-work-member-head">\s*<AgentStateBadge/);
     assert.match(source, /imageUrl=\{member\.profileImageUrl\}/);
-    // The lead is a mark, not a word: a star badge carrying its name only to
-    // assistive tech and a hovering pointer.
+    // The lead is explicit in member cards; compact marks retain a tooltip.
     assert.match(source, /\{lead \? <LeadBadge \/> : null\}/);
     const badge = await read("web/src/components/LeadBadge.tsx");
     assert.match(badge, /<MarkLead className="fill-current" aria-hidden="true" \/>/);
-    assert.match(badge, /aria-label=\{label\} title=\{label\}/);
+    assert.match(badge, /<Tooltip content=\{label\}>/);
+    assert.match(badge, /aria-label=\{label\} tabIndex=\{0\}/);
+    assert.match(badge, /\{label\}\s*<\/Badge>/);
     // The role shows the role the member will actually play, so an
     // inherited default is visible without opening the select — as plain
     // muted text beside the name, not a pill with its own dot.

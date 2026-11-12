@@ -217,6 +217,7 @@
 /* Who runs the round — the agent, team, or project room, plus a team's
    collaboration style — docked at the card's bottom-left. */
 .composer-targets {
+  --agent-pip-surface: var(--surface-3);
   display: flex;
   flex: 1 1 auto;
   align-items: center;
@@ -284,6 +285,7 @@
 
 :is(.composer-targets, .composer-meta) [data-slot="select-trigger"]:not(:disabled):hover,
 :is(.composer-targets, .composer-meta) [data-slot="select-trigger"][data-popup-open] {
+  --agent-pip-surface: color-mix(in srgb, var(--ink-1) 8%, var(--surface-3));
   background: var(--control-fill);
   color: var(--ink-1);
 }

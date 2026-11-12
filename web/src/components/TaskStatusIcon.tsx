@@ -10,9 +10,9 @@ import type { TaskStatus } from "../types";
  * grey solids — so the glyph carries progress in its fill instead: a dashed
  * ring for work nobody has picked up, an empty ring when it is ready, a ring
  * filling as it moves (running half, review three quarters), a ring holding a
- * still centre dot while it waits on a person, a slashed ring when it is
- * stuck, and a filled check when it is done. Running and waiting used to
- * share the half fill and differ by hue alone. The hue comes from
+ * still centre dot while it waits on a person, a barred ring when it is
+ * stuck, a slashed ring when cancelled, and a filled check when it is done.
+ * Running and waiting used to share the half fill and differ by hue alone. The hue comes from
  * task-status.css, keyed off `data-status`, so the glyph never picks its own;
  * that sheet also breathes the running fill.
  */
@@ -62,7 +62,10 @@ export function TaskStatusIcon({ status, className, empty = false }: { status: T
       {status === "waiting_for_human" ? (
         <circle className="task-status-wait" cx="7" cy="7" r="2.25" fill="currentColor" />
       ) : null}
-      {status === "blocked" || status === "cancelled" ? (
+      {status === "blocked" ? (
+        <path d="M3.5 7h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      ) : null}
+      {status === "cancelled" ? (
         <path d="M3.2 10.8 10.8 3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       ) : null}
     </svg>

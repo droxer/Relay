@@ -2,13 +2,15 @@ import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
 
+import { Children, type ComponentProps } from "react"
+
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
   /* Standard badges use the 24px chip tier, 12px corners and 8px inline pad.
      Compact badges use 20px height, 8px corners and 6px pad for dense title
      lines. Both share the 12px/500 label and the same tone vocabulary. */
-  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 truncate overflow-hidden border text-xs font-medium whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:ring-0 [&>svg]:pointer-events-none [&>svg]:size-3",
+  "group/badge inline-flex min-w-0 max-w-full w-fit items-center justify-center gap-1 overflow-hidden border text-xs font-medium whitespace-nowrap transition-[color,box-shadow,border-color,background-color] duration-(--t-fast) ease-(--ease) focus-visible:ring-0 [&>svg]:shrink-0 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       size: {
@@ -58,6 +60,7 @@ function Badge({
   variant = "neutral",
   size = "default",
   render,
+  children,
   ...props
 }: useRender.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
   return useRender({
@@ -65,6 +68,13 @@ function Badge({
     props: mergeProps<"span">(
       {
         className: cn(badgeVariants({ variant, size }), className),
+        // Text needs its own flex item so it ellipsizes without clipping the
+        // status mark. Structured children retain their own layout contracts.
+        children: Children.map(children, (child) =>
+          typeof child === "string" || typeof child === "number"
+            ? <BadgeLabel>{child}</BadgeLabel>
+            : child
+        ),
       },
       props
     ),
@@ -77,4 +87,8 @@ function Badge({
   })
 }
 
-export { Badge }
+function BadgeLabel({ className, ...props }: ComponentProps<"span">) {
+  return <span data-slot="badge-label" className={cn("min-w-0 truncate", className)} {...props} />
+}
+
+export { Badge, BadgeLabel }

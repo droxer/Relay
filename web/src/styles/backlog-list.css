@@ -51,12 +51,20 @@
   background: var(--surface-0);
 }
 
-.backlog-row { --row-accent: var(--ink-3); }
+.backlog-row {
+  --agent-pip-surface: var(--surface-0);
+  --row-accent: var(--ink-3);
+}
 .backlog-row[data-status="running"] { --row-accent: var(--live); }
 .backlog-row[data-status="waiting_for_human"] { --row-accent: var(--warn); }
 .backlog-row[data-status="review"] { --row-accent: var(--warn); }
 .backlog-row[data-status="blocked"] { --row-accent: var(--err); }
 .backlog-row[data-status="done"] { --row-accent: var(--ok); }
+
+/* Match the table primitive's translucent hover wash on an unselected row. */
+tr[data-slot="table-row"]:not([data-selected="true"]):hover {
+  --agent-pip-surface: color-mix(in srgb, var(--ink-1) 4%, var(--surface-0));
+}
 
 /* The leading rail is a .state-mark; the row owns the accent so the mark and
    the status column below cannot drift apart. `live` supplies its own --live
@@ -534,6 +542,7 @@ button.inline-field[aria-expanded="true"] {
    selector, not .backlog-row: routine rows carry data-selected too. */
 tr[data-selected="true"] {
   background: var(--action-soft);
+  --agent-pip-surface: color-mix(in srgb, var(--action) var(--agent-pip-selection-strength, 8%), var(--surface-0));
 }
 
 /* The accent bar used to be an ::after on a position:relative flex row; a
@@ -551,6 +560,7 @@ tr[data-selected="true"] > td:first-child {
    contract translated to a card. */
 .backlog-task[data-selected="true"] {
   background: var(--action-soft);
+  --agent-pip-surface: color-mix(in srgb, var(--action) var(--agent-pip-selection-strength, 8%), var(--surface-0));
   border-color: var(--action);
   box-shadow: inset 0 0 0 0.5px var(--action);
 }
@@ -921,4 +931,8 @@ tr[data-selected="true"] > td:first-child {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+html[data-theme="light"] :is(tr[data-selected], .backlog-task) {
+  --agent-pip-selection-strength: 6%;
 }

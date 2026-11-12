@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Badge } from "@/components/ui/badge";
+import { Badge, BadgeLabel } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ICON, NodeOffline } from "./icons";
 
@@ -9,7 +9,7 @@ export function OfflineBadge({ className, title }: { className?: string; title?:
   return (
     <Badge size="compact" className={cn("offline-badge", className)} title={title}>
       <NodeOffline size={ICON.xs} aria-hidden="true" />
-      <span>{t("status.offline")}</span>
+      <BadgeLabel>{t("status.offline")}</BadgeLabel>
     </Badge>
   );
 }
