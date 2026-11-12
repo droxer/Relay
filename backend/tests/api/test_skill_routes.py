@@ -156,16 +156,17 @@ def test_import_and_reimport_create_immutable_revisions(client, monkeypatch):
     assert len(calls) == 2
 
 
-def test_import_failure_does_not_publish(client, monkeypatch):
+@pytest.mark.parametrize("code", ["host-not-allowed", "skill-directory-required"])
+def test_import_failure_does_not_publish(client, monkeypatch, code):
     from relay.skills.git_import import SkillImportError
     def fail(*args, **kwargs):
-        raise SkillImportError("host-not-allowed")
+        raise SkillImportError(code)
     monkeypatch.setattr("relay.skills.git_import.fetch_skill_bundle", fail)
     response = client.post("/api/v1/skills/import", json={
         "name": "review", "description": "d", "url": "https://example.com/o/r", "ref": "main",
     })
     assert response.status_code == 422, response.text
-    assert response.json()["detail"] == "host-not-allowed"
+    assert response.json()["detail"] == code
     assert client.get("/api/v1/skills").json()["skills"] == []
 
 

@@ -189,8 +189,6 @@ def _validate_subpath(subpath: str) -> PurePosixPath:
 def _read_bundle(data: bytes, selected_path: PurePosixPath, deadline: float) -> list[dict[str, object]]:
     files: list[dict[str, object]] = []
     selected_bytes = 0
-    expanded_bytes = 0
-    archive_root: str | None = None
     try:
         expanded = bytearray()
         with gzip.GzipFile(fileobj=io.BytesIO(data)) as compressed:
@@ -200,19 +198,19 @@ def _read_bundle(data: bytes, selected_path: PurePosixPath, deadline: float) -> 
                     raise SkillImportError("archive-too-large", "Expanded archive exceeds the size limit")
                 expanded.extend(chunk)
         with tarfile.open(fileobj=io.BytesIO(expanded), mode="r:") as archive:
-            for entry_count, member in enumerate(archive, start=1):
+            members = _checked_archive_members(archive, deadline)
+            if not selected_path.parts:
+                skill_paths = [
+                    PurePosixPath(*path.parts[1:]) for member, path in members
+                    if member.isreg() and path.name == "SKILL.md"
+                ]
+                if skill_paths and PurePosixPath("SKILL.md") not in skill_paths:
+                    raise SkillImportError(
+                        "skill-directory-required",
+                        "Choose a Skill directory containing SKILL.md; this repository root has none",
+                    )
+            for member, member_path in members:
                 _check_deadline(deadline)
-                if entry_count > MAX_ARCHIVE_ENTRIES:
-                    raise SkillImportError("archive-too-large", "Archive contains too many entries")
-                member_path = _safe_archive_path(member.name)
-                if archive_root is None:
-                    archive_root = member_path.parts[0]
-                elif member_path.parts[0] != archive_root:
-                    raise SkillImportError("unsafe-archive", "Archive contains more than one root")
-                if member.isreg():
-                    expanded_bytes += member.size
-                    if expanded_bytes > MAX_EXPANDED_ARCHIVE_BYTES:
-                        raise SkillImportError("archive-too-large", "Expanded archive exceeds the size limit")
                 relative = PurePosixPath(*member_path.parts[1:])
                 if not _is_beneath(relative, selected_path):
                     continue
@@ -245,6 +243,30 @@ def _read_bundle(data: bytes, selected_path: PurePosixPath, deadline: float) -> 
         raise SkillImportError("invalid-archive", "Downloaded content is not a valid gzip tar archive") from error
     files.sort(key=lambda item: str(item["path"]))
     return files
+
+
+def _checked_archive_members(
+    archive: tarfile.TarFile, deadline: float,
+) -> list[tuple[tarfile.TarInfo, PurePosixPath]]:
+    """Bound and validate the whole inventory before identifying a Skill root."""
+    members: list[tuple[tarfile.TarInfo, PurePosixPath]] = []
+    archive_root: str | None = None
+    expanded_bytes = 0
+    for entry_count, member in enumerate(archive, start=1):
+        _check_deadline(deadline)
+        if entry_count > MAX_ARCHIVE_ENTRIES:
+            raise SkillImportError("archive-too-large", "Archive contains too many entries")
+        path = _safe_archive_path(member.name)
+        if archive_root is None:
+            archive_root = path.parts[0]
+        elif path.parts[0] != archive_root:
+            raise SkillImportError("unsafe-archive", "Archive contains more than one root")
+        if member.isreg():
+            expanded_bytes += member.size
+            if expanded_bytes > MAX_EXPANDED_ARCHIVE_BYTES:
+                raise SkillImportError("archive-too-large", "Expanded archive exceeds the size limit")
+        members.append((member, path))
+    return members
 
 
 def _safe_archive_path(name: str) -> PurePosixPath:

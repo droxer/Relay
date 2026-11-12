@@ -8,8 +8,8 @@ import type { CurrentUser } from "../src/domain-types/users";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => ({ "skills.create_action": "New skill", "skills.publish_title": "Publish a skill", "skills.close": "Close", "skills.author": "Author", "skills.upload_bundle": "Upload bundle", "skills.github": "GitHub", "skills.skill_name": "Skill name", "skills.namespace": "Namespace", "skills.description": "Description", "skills.instructions": "Instructions", "skills.publish": "Publish", "skills.cancel": "Cancel", "skills.required": "required", "skills.optional": "optional" }[key] ?? key), i18n: { language: "en" } }) }));
 
-const { createSkill } = vi.hoisted(() => ({ createSkill: vi.fn(async (input: any) => ({ id: "new-skill", ...input })) }));
-vi.mock("../src/api", () => ({ createSkill, importSkill: vi.fn(), deleteSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn() }));
+const { createSkill, importSkill } = vi.hoisted(() => ({ createSkill: vi.fn(async (input: any) => ({ id: "new-skill", ...input })), importSkill: vi.fn() }));
+vi.mock("../src/api", () => ({ createSkill, importSkill, deleteSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn() }));
 vi.mock("../src/hooks/useSkills", () => ({ SKILLS_QUERY_KEY: "skills", useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }), useSkill: () => ({ data: null, isLoading: false, error: null }) }));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
@@ -121,4 +121,19 @@ it("marks which publish fields are required", async () => {
   expect(field("Namespace").textContent).toContain("optional");
   expect(field("Namespace").textContent).not.toContain("*");
   expect((screen.getByRole("button", { name: "Publish" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+
+it("keeps the GitHub form open with directory guidance when a collection root is selected", async () => {
+  importSkill.mockRejectedValueOnce(new Error("skill-directory-required"));
+  const user = userEvent.setup();
+  render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
+  await user.click(createButton());
+  await user.click(screen.getByRole("button", { name: "GitHub" }));
+  await user.type(screen.getByLabelText(/Skill name/), "code-review");
+  await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/mattpocock/skills");
+  expect(screen.getByText("skills.subpath_hint")).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Publish" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("skills.errors.skill-directory-required");
+  expect(screen.getByLabelText(/skills.subpath/)).toBeTruthy();
 });

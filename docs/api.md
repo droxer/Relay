@@ -969,6 +969,8 @@ DNS, download, and archive processing share a 30-second deadline.
 Links and special files within the selected Skill subpath are rejected; those
 outside it are ignored and never followed. Path traversal, multiple archive
 roots, and archive size and entry limits are checked across the whole archive.
+If the root has no `SKILL.md` but subdirectories do, importing with an empty
+`subpath` returns 422 `skill-directory-required`; select one Skill directory.
 
 Grants resolve at dispatch time. Revocation takes effect on the next run;
 running commands keep their captured manifests. Generic agent creation and

@@ -722,7 +722,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                       onChange={(e) => patchDraft({ ref: e.target.value })}
                     />
                   </Field>
-                  <Field label={t("skills.subpath")} optional={t("skills.optional")}>
+                  <Field label={t("skills.subpath")} optional={t("skills.optional")} hint={t("skills.subpath_hint")}>
                     <Input
                       autoComplete="off"
                       spellCheck={false}

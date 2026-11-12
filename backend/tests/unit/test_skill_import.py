@@ -168,6 +168,31 @@ def test_imports_only_selected_subpath_and_strips_archive_prefix(monkeypatch: py
     assert calls == [("https://codeload.github.com/acme/tools/tar.gz/main", "140.82.112.10")]
 
 
+@pytest.mark.parametrize("with_root_link", [True, False])
+def test_repository_collection_requires_a_skill_directory(monkeypatch, with_root_link):
+    entries = [("tools-main/skills/review/SKILL.md", b"skill", "file")]
+    if with_root_link:
+        entries.insert(0, ("tools-main/AGENTS.md", None, "symlink"))
+    assert _error_code(lambda: _fetch(monkeypatch, entries, subpath="")) == "skill-directory-required"
+    assert _fetch(monkeypatch, entries) == [{"path": "SKILL.md", "content": b"skill"}]
+
+
+def test_repository_root_skill_can_include_nested_skill_documents(monkeypatch):
+    files = _fetch(monkeypatch, [
+        ("tools-main/SKILL.md", b"root", "file"),
+        ("tools-main/examples/review/SKILL.md", b"example", "file"),
+    ], subpath="")
+    assert [file["path"] for file in files] == ["SKILL.md", "examples/review/SKILL.md"]
+
+
+@pytest.mark.parametrize("unsafe_name", ["/escape", "tools-main/../escape", "other-root/file"])
+def test_collection_guidance_does_not_bypass_archive_safety(monkeypatch, unsafe_name):
+    assert _error_code(lambda: _fetch(monkeypatch, [
+        ("tools-main/skills/review/SKILL.md", b"skill", "file"),
+        (unsafe_name, b"x", "file"),
+    ], subpath="")) == "unsafe-archive"
+
+
 @pytest.mark.parametrize(
     ("url", "code"),
     [
