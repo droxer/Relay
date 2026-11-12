@@ -6588,3 +6588,48 @@ test('control-report capture failure protects storage without crashing command p
   assert.ok(polls > 1);
   assert.ok(warnings.includes('cancel acknowledgement capture failed'));
 });
+
+test('an unexpected fatal poll response drains active execution before rejecting', { timeout: 5_000 }, async t => {
+  const workspace = mkdtempSync(join(tmpdir(), 'relay-fatal-poll-'));
+  t.after(() => rmSync(workspace, { recursive: true, force: true }));
+  let started!: () => void;
+  const executing = new Promise<void>(resolve => { started = resolve; });
+  let cancelled = false;
+  let closed = false;
+  let delivered = false;
+  const events: DaemonNodeEvent[] = [];
+  const environment = fakeEnvironment({ exec: async (_cmd, args, options) => {
+    if (isInventoryProbe(args)) return { exit_code: 0, stdout: '', stderr: '' };
+    started();
+    await new Promise<void>(resolve => {
+      if (options?.signal?.aborted) resolve();
+      else options?.signal?.addEventListener('abort', () => resolve(), { once: true });
+    });
+    cancelled = true;
+    return { exit_code: 0, stdout: '', stderr: '' };
+  } });
+  environment.close = async () => { closed = true; };
+  await assert.rejects(runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'fatal-poll', userId: 'alice',
+    workspacePath: workspace, token: 'node_token', pollIntervalMs: 1,
+    preflight: false, shutdownGraceMs: 1_000, logger: testLogger(), environment,
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return delivered
+        ? jsonResponse({ error: 'forbidden' }, 403) : jsonResponse({ ok: true });
+      if (path.endsWith('/commands')) {
+        if (!delivered) { delivered = true; return jsonResponse({ commands: [{ ...runCommand('fatal-poll-run'), workspacePath: workspace }] }); }
+        await executing;
+        return jsonResponse({ error: 'forbidden' }, 403);
+      }
+      if (path.endsWith('/events')) {
+        events.push(await jsonBody<DaemonNodeEvent>(init));
+        return jsonResponse({ ok: true }, 202);
+      }
+      throw Error(`unexpected URL ${url}`);
+    },
+  }), /403/);
+  assert.equal(cancelled, true);
+  assert.equal(closed, true);
+  assert.ok(events.some(event => event.type === 'run.cancelled'));
+});

@@ -18,3 +18,12 @@ test("runtime limits are explicit positive integers for known runtimes", () => {
     assert.throws(() => parseRuntimeLimits(raw), /RELAY_DAEMON_RUNTIME_LIMITS/);
   }
 });
+
+test('resource budgets reject invalid values instead of silently reverting to defaults', async () => {
+  const { resourceLimit } = await import('../src/run-admission.js');
+  assert.equal(resourceLimit('GUESTS', undefined, 5), 5);
+  assert.equal(resourceLimit('GUESTS', '2', 5), 2);
+  for (const value of ['', '0', '-1', '1.5', 'no', Infinity, NaN]) {
+    assert.throws(() => resourceLimit('GUESTS', value, 5), /GUESTS/);
+  }
+});

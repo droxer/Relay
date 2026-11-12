@@ -10,8 +10,10 @@ export interface GuestStartInput {
 }
 
 export interface GuestPoolOptions {
-  /** Most guests booted at once; the daemon passes its run capacity. */
+  /** Maximum resident guests, including booting and uncertain retirement. */
   capacity: number;
+  /** Maximum unresolved native boot operations; independent of resident slots. */
+  maxConcurrentBoots?: number;
   bootTimeoutMs?: number;
   closeTimeoutMs?: number;
   onUnconfirmed?(error: unknown): void;
@@ -53,10 +55,15 @@ export class GuestPool {
   private readonly freeSlots: number[];
   private waiters = new Set<() => void>();
   private closed = false;
+  private booting = 0;
+  private readonly bootLimit: number;
   private readonly retiring = new Set<Promise<void>>();
 
   constructor(private readonly options: GuestPoolOptions) {
-    const capacity = Math.max(1, Math.floor(options.capacity));
+    const capacity = options.capacity;
+    if (!Number.isSafeInteger(capacity) || capacity < 1) throw new Error('Guest capacity must be a positive integer.');
+    this.bootLimit = options.maxConcurrentBoots ?? capacity;
+    if (!Number.isSafeInteger(this.bootLimit) || this.bootLimit < 1) throw new Error('Guest boot capacity must be a positive integer.');
     this.freeSlots = Array.from({ length: capacity }, (_, slot) => slot);
   }
 
@@ -98,6 +105,7 @@ export class GuestPool {
   }
 
   private claimSlot(workspace: string): Guest | undefined {
+    if (this.booting >= this.bootLimit) return undefined;
     const free = this.freeSlots.shift();
     if (free !== undefined) return this.boot(workspace, free);
     const idle = [...this.guests.values()]
@@ -113,10 +121,11 @@ export class GuestPool {
     const boxName = this.options.boxName(slot);
     // The replaced guest owns this slot's box name until it has stopped.
     let started = false;
+    this.booting++;
     const rawStarting = previous.then(() => {
       started = true;
       return this.options.start({ workspace, boxName, manager });
-    });
+    }).finally(() => { this.booting--; this.wake(); });
     const starting = withExecutionDeadline(rawStarting, this.options.bootTimeoutMs ?? 60_000, "Guest boot");
     const guest: Guest = { workspace, slot, manager, starting, rawStarting, started: () => started, booted: false, users: 0, lastReleasedAt: 0 };
     this.guests.set(workspace, guest);

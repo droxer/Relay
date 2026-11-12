@@ -67,3 +67,8 @@ test("runtime profile rejects exposed files and malformed values without echoing
     assert.throws(() => loadRuntimeProfile(profile), /Unsupported/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('background service preserves independent guest and boot limits', () => {
+  const environment = { RELAY_DAEMON_MAX_GUESTS: '3', RELAY_DAEMON_MAX_CONCURRENT_BOOTS: '1' };
+  assert.deepEqual(captureRuntimeProfile(environment).environment, environment);
+});

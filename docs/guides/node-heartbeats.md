@@ -256,6 +256,14 @@ Override those physical thresholds with
 `RELAY_DAEMON_REPORT_FREE_ADMISSION_BYTES`, `RELAY_DAEMON_REPORT_FREE_STOP_BYTES`,
 and `RELAY_DAEMON_REPORT_FREE_RESUME_BYTES` (stop < admission < resume).
 
+The daemon supervises its heartbeat and report-replay loops. Expected transport
+failures follow their retry policy. An unexpected loop exit logs a failure and
+drains the daemon, closing admission and requesting execution shutdown; it cannot
+leave the Computer accepting new work with no heartbeat or replay loop. A fatal
+poll/re-registration failure also drains before returning its error. Pending
+reports remain on disk for the next start. Cancelling a retry during shutdown
+does not change an already durable terminal outcome.
+
 `relay status`, `relay doctor`, and `relay reports` expose local diagnostics.
 Stop the daemon before `relay retry-report --report <id>` or
 `relay discard-report --report <id> --acknowledge-output-loss`; both record the

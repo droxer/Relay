@@ -31,3 +31,10 @@ export function admissionWaitReason(
   }
   return undefined;
 }
+
+/** Resource budgets fail startup rather than silently advertising a fallback. */
+export function resourceLimit(name: string, value: string | number | undefined, fallback: number): number {
+  const parsed = value === undefined ? fallback : Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer.`);
+  return parsed;
+}
