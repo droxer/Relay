@@ -728,6 +728,22 @@ environment of the setup command or in the private JSON file supplied with
 `--runtime-env-file`. Setup saves the setting in the runtime profile or
 keeps the file reference. Restart the daemon after editing the file.
 
+BoxLite resources can be bounded separately from admitted runs:
+
+- `RELAY_DAEMON_MAX_GUESTS` caps resident guests, including booting guests and
+  guests whose retirement is unconfirmed. It defaults to the run limit.
+- `RELAY_DAEMON_MAX_CONCURRENT_BOOTS` caps unresolved guest boot operations.
+  It defaults to the guest limit. A boot timeout does not free this budget
+  until the underlying native operation settles.
+
+For example, five admitted runs, three resident guests, and one boot at a time
+can reduce startup spikes. Runs waiting for a guest still occupy run capacity
+and can be cancelled; discovery shares the boot budget. Host-process execution
+has no guest pool. All three limits require positive integers. Both guest
+settings are preserved by background-service setup in the same way as the run
+limit; restart the daemon after changes. Keep the default run limit until
+measurements on the target Computer justify increasing it.
+
 Runs sharing a Project directory or another physical workspace remain serial.
 The backend leaves known workspace contenders undelivered so an independent
 workspace can use a free slot. It bounds active run requests to twice the

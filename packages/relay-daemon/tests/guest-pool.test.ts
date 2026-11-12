@@ -234,3 +234,39 @@ test('uncertain startup cleanup keeps the slot fenced and surfaces its failure',
   assert.equal(failures.length, 1);
   await pool.close();
 });
+
+test('boot concurrency is independent of resident capacity and waiting remains cancellable', async () => {
+  const { pool, boots } = controlledPool(3, { maxConcurrentBoots: 1 });
+  const a = pool.acquire('/w/a');
+  const cancel = new AbortController();
+  const b = pool.acquire('/w/b', cancel.signal);
+  await tick();
+  assert.equal(boots.length, 1);
+  cancel.abort();
+  await assert.rejects(b, /cancelled/);
+  boots[0]!.resolve();
+  const first = await a;
+  const c = pool.acquire('/w/c');
+  await tick();
+  assert.equal(boots.length, 2);
+  boots[1]!.resolve();
+  const second = await c;
+  assert.notEqual(first.workspace, second.workspace);
+  first.release(); second.release();
+  await pool.close();
+});
+
+test('a timed-out boot keeps its boot budget until the underlying operation settles', async () => {
+  const { pool, boots } = controlledPool(2, { maxConcurrentBoots: 1, bootTimeoutMs: 10 });
+  const first = pool.acquire('/w/a');
+  await assert.rejects(first, /deadline|timed out/i);
+  const second = pool.acquire('/w/b');
+  await tick();
+  assert.equal(boots.length, 1);
+  boots[0]!.resolve();
+  await tick();
+  assert.equal(boots.length, 2);
+  boots[1]!.resolve();
+  (await second).release();
+  await pool.close();
+});

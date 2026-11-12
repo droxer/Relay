@@ -66,7 +66,7 @@ relational columns, list summaries, and dashboard rows are projections.
 | Routine scheduling | `backend/relay/tasks/scheduler.py` | task store claim queries and scheduler tests |
 | Agent routing and placement | `backend/relay/agents/routing.py` | agent routes, placement store, daemon registry scheduling |
 | Daemon admission and dispatch | `backend/relay/daemon_registry/node_backend.py` | `registry.py` and its mixins (`admission.py`, `delivery.py`, `progression.py`, …), `scheduling.py`, daemon protocol tests |
-| Daemon command execution | `packages/relay-daemon/src/index.ts` | `sandbox-session.ts`, `execution.ts`, daemon tests |
+| Daemon command execution | `packages/relay-daemon/src/run-supervisor.ts`, `run-execution.ts` | `index.ts` wiring/recovery, `backend-transport.ts`, `background-task.ts`, `guest-pool.ts`, daemon tests |
 | Local agent execution and configuration | `packages/relay-daemon/src/local-runtime.ts`, `runtime-profile.ts` | `process-supervisor.ts`, `agent-inventory.ts`, installer/doctor tests |
 | CLI argv and prompt construction | `packages/relay-core/src/commands.ts`, `prompts.ts` | renderers, handoff tests, daemon execution |
 | Shared TypeScript domain contracts | `packages/relay-core/src/` | Python response shapes and `web/src/types.ts` |
