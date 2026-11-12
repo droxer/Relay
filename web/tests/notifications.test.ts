@@ -8,7 +8,6 @@ import {
   notificationHref,
   notificationView,
   notificationViews,
-  unreadBadgeText,
   type NotificationView,
 } from "../src/lib/notifications.js";
 import {
@@ -141,17 +140,6 @@ describe("notificationView", () => {
     assert.deepEqual(views.map((view) => view.id), ["1", "3"]);
     assert.deepEqual(notificationViews(undefined), []);
     assert.deepEqual(notificationViews({ notifications: [] }), []);
-  });
-});
-
-describe("unreadBadgeText", () => {
-  it("shows nothing at zero and caps the count at 9+", () => {
-    assert.equal(unreadBadgeText(0), "");
-    assert.equal(unreadBadgeText(-1), "");
-    assert.equal(unreadBadgeText(Number.NaN), "");
-    assert.equal(unreadBadgeText(1), "1");
-    assert.equal(unreadBadgeText(9), "9");
-    assert.equal(unreadBadgeText(10), "9+");
   });
 });
 

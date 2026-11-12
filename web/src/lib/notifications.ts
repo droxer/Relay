@@ -38,9 +38,6 @@ export interface NotificationView {
   diagnosticsHref?: string;
 }
 
-/** The unread badge stops counting here; past it the badge reads "9+". */
-export const UNREAD_BADGE_CAP = 9;
-
 /** A burst of arrivals shows at most this many desktop notices; the rest
     fold into one summary so a backlog never fills the screen. */
 export const DESKTOP_BURST_CAP = 3;
@@ -184,12 +181,6 @@ export function notificationViews(notices: readonly RelayNotification[] | unknow
     const view = notificationView(notice);
     return view ? [view] : [];
   });
-}
-
-/** The badge's text: the count, capped at "9+"; empty when nothing is unread. */
-export function unreadBadgeText(count: number): string {
-  if (!Number.isFinite(count) || count <= 0) return "";
-  return count > UNREAD_BADGE_CAP ? `${UNREAD_BADGE_CAP}+` : String(Math.floor(count));
 }
 
 /** The unread notices in `fresh` that were not there before.

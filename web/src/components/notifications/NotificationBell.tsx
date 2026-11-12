@@ -7,7 +7,8 @@ import { StateMark } from "../StateMark";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { NotificationsController } from "../../hooks/useNotifications";
-import { unreadBadgeText, type NotificationTarget, type NotificationView } from "../../lib/notifications";
+import type { NotificationTarget, NotificationView } from "../../lib/notifications";
+import { countBadgeText } from "../../lib/countBadge";
 import { formatThreadStamp } from "../../lib/threadStamp";
 
 /** Plain left click: the app navigates. Anything else (a new tab, a copied
@@ -57,7 +58,7 @@ export function NotificationBell({
   const [now, setNow] = useState(0);
   const headingId = useId();
   const { unreadCount } = controller;
-  const badge = unreadBadgeText(unreadCount);
+  const badge = countBadgeText(unreadCount);
   const label = unreadCount > 0
     ? t("notifications.bell_unread", { count: unreadCount })
     : t("notifications.title");
@@ -95,7 +96,7 @@ export function NotificationBell({
             {...triggerProps}
           >
             <NavNotifications size={ICON.md} aria-hidden="true" />
-            {badge ? <span className="notif-bell-badge tnum" aria-hidden="true">{badge}</span> : null}
+            {badge ? <span className="count-badge notif-bell-badge tnum" aria-hidden="true">{badge}</span> : null}
           </Button>
         }
       />
