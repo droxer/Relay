@@ -88,3 +88,30 @@ Defaults remain unchanged. Persistence offloading, near-quota output recovery,
 long outages, real Agent Runtimes, and Windows/BoxLite hardware validation remain
 required before claiming higher supported capacity. Synthetic throughput is not
 agent throughput, and concurrent regression load makes this an initial baseline.
+
+## CI follow-up: coalescing while durable output is unacknowledged
+
+The TypeScript/web job on PR #763 failed intermittently with
+`captured 3 tiny batches behind failed delivery`. The existing scenario passed
+locally until the first durable-write receipt was deliberately delayed by 100 ms.
+That production-path regression reproduced the same three-batch assertion while
+the ordinary negotiated and legacy cases passed.
+
+Cause: negotiated delivery completes a local post after capture, before backend
+acceptance. The post drain unconditionally resumed a held output buffer at that
+point, treating disk completion as delivery. It now checks the durable outbox's
+pending-output state before resuming. The existing size and maximum-delay flushes
+still bound buffering; no timing assertion was relaxed.
+
+RED: the delayed-capture integration case failed with the CI assertion.
+GREEN: all three coalescing cases and all 67 output-buffer/outbox tests passed.
+
+```sh
+node --test --test-name-pattern='production output capture coalesces' dist/packages/relay-daemon/tests/daemon.test.js
+node --test dist/packages/relay-daemon/tests/output-buffer.test.js dist/packages/relay-daemon/tests/terminal-outbox.test.js
+```
+
+The delayed-capture case also passed five consecutive runs. Final follow-up
+`npm run test:ts` passed package/production builds, **3,235 Node tests**, and
+**1,151 React tests across 175 files**. `git diff --check` passed; the offline
+dependency audit reported zero vulnerabilities.

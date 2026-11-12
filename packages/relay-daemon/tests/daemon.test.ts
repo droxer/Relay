@@ -40,6 +40,7 @@ after(() => {
   rmSync(testDaemonStateDir, { recursive: true, force: true });
 });
 import { ExecutionJournal } from "../src/execution-journal.js";
+import { TerminalOutbox } from "../src/terminal-outbox.js";
 import { AgentNotInstalledError, AgentUnresponsiveError } from "../src/agent-preflight.js";
 import { askBroker } from "../src/permission-adapters/protocol.js";
 import { requestUpdatePause } from "../src/update-pause.js";
@@ -6440,7 +6441,27 @@ test('text log retention bounds aggregate and completed-run files', async t => {
   for (const name of readdirSync(root)) assert.ok(statSync(join(root, name)).size <= 2048, name);
 });
 
-for (const batching of [false, true]) test(`production output capture coalesces behind unacknowledged durable reports (batching=${batching})`, async t => {
+for (const { batching, slowCapture } of [
+  { batching: false, slowCapture: false },
+  { batching: true, slowCapture: false },
+  { batching: true, slowCapture: true },
+]) test(`production output capture coalesces behind unacknowledged durable reports (batching=${batching}${slowCapture ? ', slow capture' : ''})`, async t => {
+  if (slowCapture) {
+    const retain = TerminalOutbox.prototype.retain;
+    let delayedKey: string | undefined;
+    let durable: Promise<void>;
+    t.mock.method(TerminalOutbox.prototype, 'retain', function (this: TerminalOutbox, event: Record<string, unknown>) {
+      const record = retain.call(this, event);
+      if (event.type !== 'run.output.batch') return record;
+      if (delayedKey === undefined) {
+        delayedKey = record.key;
+        // Hold the first write receipt past the next buffer's latency timer.
+        // Finishing capture must not masquerade as backend acknowledgement.
+        durable = Promise.all([record.durable, new Promise(resolve => setTimeout(resolve, 100))]).then(() => {});
+      }
+      return record.key === delayedKey ? { ...record, durable } : record;
+    });
+  }
   const root = mkdtempSync(join(tmpdir(), 'relay-capture-pressure-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const stop = new AbortController();

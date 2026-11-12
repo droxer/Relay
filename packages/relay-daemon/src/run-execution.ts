@@ -251,8 +251,11 @@ export async function executeCommand(
         } finally {
           outputPostBacklogBytes = Math.max(0, outputPostBacklogBytes - item.bytes);
         }
-        // Output held back while this post was in flight goes out as one batch.
-        if (outputPostHead >= outputPostQueue.length && !outputPostFailure) outputBuffer.resume();
+        // Batched delivery can finish this local post after durable capture,
+        // before the backend accepts it. Keep coalescing until that backlog
+        // clears; size and maximum-delay flushes still bound buffered output.
+        if (outputPostHead >= outputPostQueue.length && !outputPostFailure
+          && !hasPendingOutput(fetchFn, command.id)) outputBuffer.resume();
       }
       outputPostQueue.length = 0;
       outputPostHead = 0;
