@@ -51,3 +51,26 @@ test('transport failures preserve nested error codes without logging cause paylo
   cyclic.cause = cyclic;
   assert.equal(transportErrorDetail(cyclic), 'fetch failed');
 });
+
+test('HTTP/2 failures preserve the numeric reset reason without exposing cause messages', async () => {
+  const { transportErrorDetail } = await import('../src/http-error-detail.js');
+  const cause = Object.assign(new Error('private headers and response data'), {
+    code: 'ERR_HTTP2_STREAM_ERROR', http2ErrorCode: 2,
+  });
+  const detail = transportErrorDetail(new TypeError('fetch failed', { cause }));
+  assert.match(detail, /ERR_HTTP2_STREAM_ERROR/);
+  assert.match(detail, /http2ErrorCode=2/);
+  assert.doesNotMatch(detail, /private/);
+  cause.http2ErrorCode = Number.NaN;
+  assert.doesNotMatch(transportErrorDetail(new TypeError('fetch failed', { cause })), /http2ErrorCode=/);
+});
+
+test('HTTP/2 reset names survive wrappers that omit the numeric code', async () => {
+  const { transportErrorDetail } = await import('../src/http-error-detail.js');
+  const cause = Object.assign(new Error('Stream closed with error code NGHTTP2_ENHANCE_YOUR_CALM'), {
+    code: 'ERR_HTTP2_STREAM_ERROR',
+  });
+  assert.match(transportErrorDetail(new TypeError('fetch failed', { cause })), /http2Reset=NGHTTP2_ENHANCE_YOUR_CALM/);
+  cause.message = 'Stream closed with error code NGHTTP2_PRIVATE_PAYLOAD';
+  assert.doesNotMatch(transportErrorDetail(new TypeError('fetch failed', { cause })), /PRIVATE_PAYLOAD/);
+});

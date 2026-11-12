@@ -16,6 +16,7 @@ import { installRootOf, pruneInstallDirectories } from './install-pruning.js';
 import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, withCurrentPath, writeRuntimeProfile } from './runtime-profile.js';
 import { isUserIdFlag } from './legacy-names.js';
 import { err, out } from './terminal-style.js';
+import { createBackendFetch } from './backend-fetch.js';
 import { decodeServiceFile, encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
 
 interface InstallOptions {
@@ -170,12 +171,13 @@ function launcherPathNotice(binDir: string, brand: RelayBrand): string | undefin
 async function reusableComputer(installed: InstalledComputer[], backendUrl: string, workspace: string): Promise<{ computer: InstalledComputer; token: string } | undefined> {
   const newestFirst = installed.filter(computer => sameComputer(computer, backendUrl, workspace))
     .sort((a, b) => statSync(b.file).mtimeMs - statSync(a.file).mtimeMs);
+  const send = createBackendFetch();
   for (const computer of newestFirst) {
     const credentials = join(homedir(), '.relay', 'daemon-nodes', computer.id, 'credentials');
     const token = readDaemonNodeToken(credentials, computer.userId);
     if (!token) continue;
     try {
-      const response = await fetch(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(computer.id)}/auth-check`), {
+      const response = await send(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(computer.id)}/auth-check`), {
         headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000),
       });
       if (response.ok) return { computer, token };

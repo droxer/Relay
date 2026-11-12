@@ -181,6 +181,79 @@ per-stream high-water deduplication then suppresses those duplicates. A failed
 output upload does not prevent terminal evidence from releasing the run;
 retained output can be replayed after completion.
 
+## Repeated HTTP/2 stream failures
+
+Every daemon call to the backend — the daemon loop, `relay doctor`, computer
+setup, and the Relay MCP forwarder — goes through one dedicated dispatcher per
+origin. It speaks HTTP/1.1 by default, on every Node version: each request has
+its own connection, so a cancelled or timed-out request closes its socket and
+the next attempt reconnects. The daemon cancels requests routinely (deadlines,
+and the recovery probe below); over HTTP/2 each cancellation is a stream reset
+on the one shared connection, a pattern peer protections count against the
+client.
+
+`RELAY_DAEMON_HTTP_PROTOCOL=http2` opts a computer in to HTTP/2 when the server
+negotiates it; any other value keeps HTTP/1.1. With it on:
+
+- A failure before response headers retires that origin's connection pool, so
+  the next attempt gets a fresh connection. Stream resets, `GOAWAY`, frame
+  errors, and streams closed before a response all count.
+- Three such failed pools within five minutes switch that origin to HTTP/1.1
+  until the daemon restarts. Successful heartbeats between failed uploads do
+  not erase the failure history; failures age out after five minutes.
+- A request that ends at its deadline also retires the pool, because a silent
+  HTTP/2 connection would otherwise be reused by every later request. A stall
+  may be the backend or the network rather than the protocol, so it never
+  counts toward the downgrade.
+- Ordinary HTTP errors, DNS failures, HTTP/1.1 socket loss, and caller
+  cancellations change nothing. Late results from retired pools cannot change
+  the replacement pool's failure count.
+
+In-flight requests can finish under their existing deadlines; this layer never
+replays a failed POST, since callers and the durable outbox own retries.
+
+Undici 8 (bundled with Node 26) [enables HTTP/2 by default][undici-h2-default];
+daemon builds without this dispatcher inherit the host runtime's global `fetch`
+behavior, so the same build spoke HTTP/2 on Node 26 and HTTP/1.1 on the Node 24
+the installer ships. The dispatcher honors
+`HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` (and their lowercase forms), keeps TLS
+certificate verification, and does not change the process-wide dispatcher.
+Caller-supplied `fetchFn` implementations retain their own transport policy.
+
+`fetch failed; ERR_HTTP2_STREAM_ERROR` means a stream reset, not an HTTP status
+or credential rejection. Retrying the same HTTP/2 path cannot repair a peer that
+consistently resets streams. A local TLS regression test reproduces that failure
+with an HTTP/2-resetting peer that successfully serves HTTP/1.1. This demonstrates
+the compatibility failure, but does not identify which proxy or server caused a
+particular production incident.
+
+`Transport recovery probe superseded a stalled poll` is a separate, locally
+generated cancellation: after a transient failure, the daemon aborts an outstanding
+poll. It does not indicate that a new connection or protocol was selected.
+Errors retain the numeric `http2ErrorCode` when Node supplies one and the known
+`http2Reset` name when a wrapper preserves only the message. Pool replacement and
+HTTP/1.1 fallback each log the origin, path (without query), method, request
+size when known, elapsed time, cause (`reset` or `stall`), failure count, and
+error detail. Arbitrary
+nested error messages and response payloads are not logged.
+
+A captured `http2Reset=NGHTTP2_ENHANCE_YOUR_CALM` identifies a peer protection
+limit, not lack of HTTP/2 support or credential rejection. It does not identify
+the exact frame or rate threshold. [Cloudflare's HTTP/2 guidance][cf-h2-calm]
+explains that legitimate client frame patterns can trigger these protections.
+Correlate the failing operation and timing with upstream logs before attributing
+it to request volume, cancellations, header size, or keepalive frames.
+
+For an older installed daemon exhibiting this pattern, capture its Node version,
+`relay doctor` output, and backend hostname. After deploying a bundle containing
+this transport change, update the affected computer with `relay update`. Updating
+only the backend does not replace an already-running daemon. Preserve the private
+report storage so pending evidence can replay after connectivity returns.
+
+[cf-h2-calm]: https://blog.cloudflare.com/go-and-enhance-your-calm/
+
+[undici-h2-default]: https://github.com/nodejs/undici/blob/main/docs/docs/best-practices/migrating-from-v7-to-v8.md
+
 ## Durable report transport
 
 Apply migrations through `20261110_0123` before deploying this backend. Updated daemons

@@ -1,17 +1,19 @@
 /** Bounded authenticated HTTP transport; no MCP tool catalog or dispatch. */
 import { readFileSync } from 'node:fs';
 import { relayApiUrl } from 'relay-core/api-url';
+import { createBackendFetch } from './backend-fetch.js';
 export type Forward = (message: unknown) => Promise<unknown | undefined>;
 export function forwardMcp(backendUrl: string, tokenFile: string): Forward {
     const url = new URL(backendUrl);
     if (url.username || url.password || url.search || url.hash || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))))
         throw new Error('Relay MCP requires HTTPS or loopback HTTP.');
     let protocolVersion: string | undefined;
+    const send = createBackendFetch();
     return async (message) => {
         const token = readFileSync(tokenFile, 'utf8').trim();
         if (!/^relay_mcp_[A-Za-z0-9_-]+$/.test(token))
             throw new Error('Invalid Relay MCP credential.');
-        const response = await fetch(relayApiUrl(backendUrl, '/mcp'), {
+        const response = await send(relayApiUrl(backendUrl, '/mcp'), {
             method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json',
                 Accept: 'application/json, text/event-stream', ...(protocolVersion ? { 'MCP-Protocol-Version': protocolVersion } : {}) },
             body: JSON.stringify(message), signal: AbortSignal.timeout(60000), redirect: 'error',

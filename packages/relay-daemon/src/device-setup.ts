@@ -1,4 +1,5 @@
 import { relayApiUrl } from "relay-core";
+import { createBackendFetch } from "./backend-fetch.js";
 
 interface ComputerAuthorization {
   sandboxId: string;
@@ -18,7 +19,7 @@ export async function authorizeComputer(options: {
   signal?: AbortSignal;
   pollIntervalMs?: number;
 }): Promise<ComputerAuthorization> {
-  const send = options.fetchFn ?? fetch;
+  const send = options.fetchFn ?? createBackendFetch();
   const timeout = AbortSignal.timeout(10 * 60_000);
   const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
   const requestSignal = () => AbortSignal.any([signal, AbortSignal.timeout(15_000)]);

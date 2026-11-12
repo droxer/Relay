@@ -1,3 +1,4 @@
+import { createBackendFetch } from './backend-fetch.js';
 import { executeCommand } from './run-execution.js';
 import { commandLogFields, commandLeaseEventFields } from './run-events.js';
 import {
@@ -226,7 +227,14 @@ export interface DaemonLogger {
 
 export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promise<void> {
   const backendUrl = normalizeBaseUrl(options.backendUrl ?? process.env.RELAY_BACKEND_URL ?? process.env.RELAY_DAEMON_URL ?? "http://127.0.0.1:8790");
-  let rawFetch = options.fetchFn ?? fetch;
+  let transportLogger = options.logger;
+  let rawFetch = options.fetchFn ?? createBackendFetch(recovery => {
+    transportLogger?.warn(recovery.protocol === 'http/1.1'
+      ? 'Repeated HTTP/2 failures; falling back to HTTP/1.1 until restart'
+      : recovery.cause === 'stall'
+        ? 'Backend request timed out over HTTP/2; retrying with a fresh connection pool'
+        : 'HTTP/2 transport failed; retrying with a fresh connection pool', { sandboxId, ...recovery });
+  });
   let fetchFn = rawFetch;
   let sandboxId = options.sandboxId ?? process.env.RELAY_SANDBOX_ID;
   let configuredUserId = options.userId ?? userIdFromEnv();
@@ -282,6 +290,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const observe = (action: () => void): void => {
     try { action(); } catch { reportPersistenceFault = true; }
   };
+  transportLogger = logger;
   const upstreamFetch = rawFetch;
   rawFetch = async (url, init) => {
     const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url : url.url).pathname;
@@ -1181,7 +1190,9 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
     sandboxId: sandboxId ?? "doctor",
     logDir: options.logDir ?? join(stateDir, "logs"),
   });
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? createBackendFetch(recovery => {
+    logger.warn('Backend transport recovery', { sandboxId, ...recovery });
+  });
   const checks: DaemonDoctorCheck[] = [];
   const add = (name: string, ok: boolean, detail: string): void => {
     checks.push({ name, ok, detail });

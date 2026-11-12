@@ -80,5 +80,19 @@ test("browser, backend and daemon queue overflow and resume after a real process
     await page.getByRole("button", { name: "Cancel run", exact: true }).click();
   }
   await expect.poll(() => alive(pids[1]) || alive(thirdPid)).toBe(false);
-  for (const task of tasks) expect((await context.request.delete(`/api/v1/tasks/${task.id}`)).ok()).toBeTruthy();
+  // Local exit is not backend acknowledgement: deletion must wait for the
+  // daemon's terminal evidence to release each linked execution reservation.
+  for (const [index, task] of tasks.entries()) {
+    const current: RelayTask = await getTask(index);
+    expect(current.linkedSessionIds.length).toBeGreaterThan(0);
+    for (const sessionId of current.linkedSessionIds) {
+      await expect.poll(async () => {
+        const response = await context.request.get(`/api/v1/threads/${sessionId}`);
+        expect(response.ok(), await response.text()).toBeTruthy();
+        return (await response.json()).execution.phase;
+      }, { message: `Execution ${sessionId} must settle before task deletion` }).toBe("terminal");
+    }
+    const response = await context.request.delete(`/api/v1/tasks/${task.id}`);
+    expect(response.ok(), await response.text()).toBeTruthy();
+  }
 });
