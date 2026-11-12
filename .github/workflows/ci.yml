@@ -18,6 +18,22 @@ env:
   UV_LOCKED: "true"
 
 jobs:
+  changes:
+    name: Detect changed surfaces
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select affected suites
+        id: filter
+        run: python3 .github/scripts/ci_changes.py
+
   lint:
     name: Pre-commit checks
     runs-on: ubuntu-24.04
@@ -45,6 +61,7 @@ jobs:
         run: uv run --project backend --extra dev pre-commit run --all-files --show-diff-on-failure
 
   typescript-tests:
+    needs: changes
     name: TypeScript and web tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -60,10 +77,25 @@ jobs:
         run: npm ci
       - name: Test vendored dependency fixes
         run: npm run test:security-dependencies
-      - name: Build and test TypeScript and web
-        run: npm run test:ts
+      - name: Build packages and compile tests
+        run: |
+          npm run build -w relay-core
+          npm run build -w relay-daemon
+          npm run build -w relay-supervisor
+          node tools/build-computer.mjs
+          npx tsc -p packages/tsconfig.json
+      - name: Test TypeScript packages
+        run: node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js
+      - name: Build and test web
+        if: needs.changes.outputs.web == 'true'
+        run: |
+          npm run build -w web
+          node --test dist/web/tests/*.test.js
+          npm run test:react -w web
 
   concurrency-e2e:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     name: Browser/backend/daemon concurrency
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -97,6 +129,8 @@ jobs:
           retention-days: 7
 
   python-tests:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     name: Python tests
     runs-on: ubuntu-24.04
     timeout-minutes: 60
