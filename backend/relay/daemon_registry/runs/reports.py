@@ -1,6 +1,7 @@
 """Authenticated, transactional acceptance of write-ahead daemon reports."""
 from typing import Any, TYPE_CHECKING
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack, nullcontext, contextmanager
+from collections.abc import Iterator
 from ...persistence.daemon.reports import ReportReceiptConflict
 from ..records import CommandEventMismatchError
 from ..state import RegistryState
@@ -13,6 +14,17 @@ class ReportPredecessorMissing(ValueError):
 class DurableReportMixin(RegistryState):
     if TYPE_CHECKING:
         def _handle_event_unlocked(self, sandbox_id: str, event: dict[str, Any], token: str | None) -> None: ...
+
+    @contextmanager
+    def report_session_scope(self, session_id: str) -> Iterator[None]:
+        """Missing thread history is a terminal conflict, not a retryable fault."""
+        with ExitStack() as stack:
+            try:
+                stack.enter_context(self.store.mutation_scope(session_id))
+            except KeyError as error:
+                raise CommandEventMismatchError('Report thread no longer exists.') from error
+            # Do not translate KeyErrors from processing: those remain retryable.
+            yield
 
     def handle_durable_report(self, sandbox_id: str, event: dict[str, Any], token: str | None, report_id: str, digest: str) -> None:
         self._hydrate_node(sandbox_id)
@@ -43,7 +55,7 @@ class DurableReportMixin(RegistryState):
                 # the stop command. Its thread may have been deleted meanwhile;
                 # the authenticated command and exact lease remain authority.
                 redundant_stop = event['type'] == 'run.cancelled' and record['status'] in {'completed', 'failed'}
-                session_scope = nullcontext() if redundant_stop else self.store.mutation_scope(event['sessionId'])
+                session_scope = nullcontext() if redundant_stop else self.report_session_scope(event['sessionId'])
                 with self.daemon_store.report_ingest_scope(sandbox_id), session_scope, self.daemon_store.report_receipt_scope(sandbox_id, event['commandId'], report_id, digest) as apply:
                     if apply:
                         self._handle_event_unlocked(sandbox_id, {**event, '_durableReport': True}, token)

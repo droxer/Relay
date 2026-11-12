@@ -30,10 +30,20 @@ class InterceptHandler(logging.Handler):
         )
 
 
+def _format_record(record: Any) -> str:
+    # Operational identifiers are useful; arbitrary bound payloads can contain
+    # credentials or user content and must not be dumped into production logs.
+    record["extra"]["relay_context"] = {
+        key: value for key, value in record["extra"].items()
+        if key in {"session_id", "run_id", "request_id", "node_id", "sandbox_id", "command_id", "tool"}
+    }
+    return "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message} | {extra[relay_context]}\n{exception}"
+
+
 def setup_logging(
     *,
     level: str | None = None,
-    sink: Any = sys.stderr,
+    sink: Any = None,
 ) -> None:
     """Configure loguru for the Relay backend.
 
@@ -44,12 +54,17 @@ def setup_logging(
     level = (level or os.environ.get("RELAY_LOG_LEVEL", "INFO")).upper()
 
     logger.remove()
-    logger.add(
-        sink,
-        level=level,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-        colorize=True,
-    )
+    options: dict[str, Any] = {
+        "level": level,
+        "format": _format_record,
+        "colorize": False,
+        "diagnose": False,
+    }
+    if sink is not None:
+        logger.add(sink, **options)
+    else:
+        logger.add(sys.stdout, filter=lambda record: record["level"].no < 40, **options)
+        logger.add(sys.stderr, filter=lambda record: record["level"].no >= 40, **options)
 
     logging.basicConfig(handlers=[InterceptHandler()], level=level)
 

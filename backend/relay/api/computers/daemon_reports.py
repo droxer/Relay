@@ -52,7 +52,7 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
                 if streamed:
                     stack.enter_context(registry.dispatch_scope([sandbox_id]))
                     stack.enter_context(registry.daemon_store.report_ingest_scope(sandbox_id))
-                    stack.enter_context(registry.store.mutation_scope(session_id))
+                    stack.enter_context(registry.report_session_scope(session_id))
                 for report, event in group:
                     status = 200
                     detail: str | None = None
@@ -69,6 +69,9 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
                     # just as they do on the single-event endpoint.
                     group_receipts.append({'id': report['id'], 'digest': report['digest'], 'status': status,
                                            **({'detail': detail[:200]} if detail else {})})
+        except CommandEventMismatchError as error:
+            group_receipts = [{'id': report['id'], 'digest': report['digest'], 'status': 409,
+                               'detail': str(error)} for report, _event in group]
         except Exception:  # noqa: BLE001 - a failed transaction rolls back this stream; unrelated report groups must still progress
             logger.exception('Durable report group failed', node_id=sandbox_id, session_id=session_id)
             for _report, event in group:

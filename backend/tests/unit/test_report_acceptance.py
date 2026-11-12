@@ -552,3 +552,28 @@ def test_orphaned_stop_recovery_survives_thread_deletion_over_http(tmp_path, wir
         assert response.json()['receipts'][0]['status'] == 200
     assert response.status_code == 200, response.text
     assert registry.daemon_store.get_command(cancel['id'])['status'] == 'completed'
+
+
+@pytest.mark.parametrize('wire', ['events', 'reports'])
+def test_unaccepted_output_for_missing_thread_is_terminal_conflict(tmp_path, wire):
+    from dataclasses import replace
+    import json
+    from fastapi.testclient import TestClient
+    from relay.app import create_app
+    registry, sessions, event = fixture(tmp_path)
+    sessions.delete_session(event['sessionId'])
+    app = create_app(str(tmp_path / 'app'))
+    app.state.context = replace(app.state.context, registry=registry)
+    client = TestClient(app)
+    raw = json.dumps(event)
+    digest = sha256(raw.encode()).hexdigest()
+    headers = {'Authorization': 'Bearer secret', 'Content-Type': 'application/json'}
+    if wire == 'events':
+        response = client.post('/api/v1/daemon-nodes/node/events', content=raw, headers={
+            **headers, 'X-Relay-Report-Id': 'a' * 64, 'X-Relay-Report-Digest': digest})
+        assert response.status_code == 409, response.text
+    else:
+        response = client.post('/api/v1/daemon-nodes/node/reports', headers=headers,
+                               json={'reports': [{'id': 'a' * 64, 'digest': digest, 'body': raw}]})
+        assert response.json()['receipts'][0]['status'] == 409
+    assert not registry.daemon_store.report_was_accepted('node', event['commandId'], 'a' * 64, digest)

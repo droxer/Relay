@@ -136,13 +136,6 @@ class CommandQueueMixin(RegistryState):
                 else {}
             ),
         }
-        logger.info(
-            "Run asked for permission",
-            session_id=event["sessionId"],
-            run_id=event["runId"],
-            request_id=request["id"],
-            tool=request["toolName"],
-        )
         # A retried post reopens nothing (the reducer dedupes), so it must
         # not notify twice either: only a prompt this write opens does.
         known = permission_request_status(self.store.get_session(event["sessionId"]), request["id"])
@@ -164,6 +157,14 @@ class CommandQueueMixin(RegistryState):
             # may have failed after the request was committed.
             self._apply_standing_grant(event["sessionId"], opened)
             return
+        if known is None:
+            logger.info(
+                "Run asked for permission",
+                session_id=event["sessionId"],
+                run_id=event["runId"],
+                request_id=request["id"],
+                tool=request["toolName"],
+            )
         if known is None and self.notification_store is not None:
             self.notification_store.add(permission_request_rows(session, opened))
 
