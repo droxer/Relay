@@ -107,7 +107,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   async function sendMessage(
     requestedStyle?: import("../types").CollaborationStyle,
     intent: import("../types").ThreadMessageInput["intent"] = "accomplish",
-    { literal = false, questionId, approve = false, attachmentIds = [], connectionGrants, userMessageId: queuedMessageId }: import("../components/composer/Composer").ComposerDispatchOptions = {},
+    { literal = false, questionId, approve = false, attachmentIds = [], userMessageId: queuedMessageId }: import("../components/composer/Composer").ComposerDispatchOptions = {},
   ) {
     const raw = composerRef.current?.getText().trim() ?? "";
     if ((!raw && !attachmentIds.length) || !selectedUser || threadRunning || projectDispatchDisabled) return false;
@@ -243,7 +243,6 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
           })
         : await runLogicalAgentsMutation.mutateAsync({
             taskGoal: goal,
-            ...(connectionGrants !== undefined ? { connectionGrants } : {}),
             attachmentIds,
             userMessageId,
             idempotencyKey: userMessageId,

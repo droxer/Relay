@@ -2,8 +2,9 @@
 
 Connections let a User authenticate an external service and explicitly select
 the resources and actions a Thread, Task, or Automation may use. Open
-**Settings → Connections**, connect a service, and choose it in the work's
-**Connections** section. Multiple external accounts are supported.
+**Settings → Connections**, connect a service, and choose it in a Task or
+Automation’s **Connections** section. The chat input box does not expose a
+Connections picker. Multiple external accounts are supported.
 
 GitHub is the only supported provider for now:
 
@@ -64,8 +65,8 @@ installation flow and never reuses its saved credentials. See
 ## Work and recovery
 
 - New Tasks and Automations save Grants in the same database transaction as
-  the work. New Threads save their Grants before daemon delivery. Existing
-  standalone Threads save edited access when their next message is sent.
+  the work. New Threads created through the API save their Grants before
+  daemon delivery.
 - A Task's linked Threads use its Grants. An Automation occurrence receives
   an immutable access snapshot when its Task is created; its access cannot be
   expanded through Task editing. Removing access from its Automation also

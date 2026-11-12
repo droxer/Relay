@@ -723,7 +723,6 @@ export function ThreadsView({
 
         <Composer
           key={threadSendKey(currentUser.userId ?? currentUser.username, activeSession?.id, threadDraftId)}
-          connectionTargetId={initializingThread ? undefined : activeSession?.id}
           draftKey={threadDraftKey(currentUser, activeSession?.id)}
           ref={composerRef}
           logicalAgents={composerLogicalAgents}

@@ -1,4 +1,4 @@
-import { forwardRef, memo, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, UserAgent, ThreadMessageInput } from "../../types";
 import { ComposerImagePicker, ComposerImagePreviews, useComposerImages } from "./ComposerImages";
@@ -22,9 +22,6 @@ import { MentionPopup } from "./MentionPopup";
 import { CommandInput } from "@/components/ui/command";
 import { ThreadRuntimeReadout, ThreadRuntimeSelect } from "./ThreadRuntimeSelect";
 import { Textarea } from "@/components/ui/textarea";
-import { QueryClientContext } from "@tanstack/react-query";
-import { ConnectionGrantField } from "../connections/ConnectionGrantField";
-import { saveConnectionGrants, validConnectionGrants, type ConnectionGrant } from "../../api-client/connections";
 
 
 export type ComposerHandle = {
@@ -56,14 +53,13 @@ export type ComposerSendOptions = {
  *  sent as written — a leading "@" is the agent's wording, not an address.
  *  `questionId`: the wait this message answers (see `AwaitingInput`).
  *  `approve`: the answer approves that wait's held step. */
-export type ComposerDispatchOptions = { userMessageId?: string; connectionGrants?: ConnectionGrant[]; attachmentIds?: string[]; literal?: boolean; questionId?: string; approve?: boolean };
+export type ComposerDispatchOptions = { userMessageId?: string; attachmentIds?: string[]; literal?: boolean; questionId?: string; approve?: boolean };
 
 // Message composer: textarea, agent control, and the send/cancel
 // control. Draft state stays inside this component so every
 // keystroke does not re-render the full application shell and transcript.
 const ComposerView = forwardRef<ComposerHandle, {
   draftKey?: string;
-  connectionTargetId?: string;
   logicalAgents: UserAgent[];
   activeLogicalAgentId: string | null;
   onLogicalAgentPicked: (agent: UserAgent) => void;
@@ -112,7 +108,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   queue?: ReactNode;
   /** Replaces the default placeholder, e.g. to name who is being answered. */
   placeholder?: string;
-}>(function Composer({ draftKey, connectionTargetId, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, contextPending = false, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
+}>(function Composer({ draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, contextPending = false, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
   const { t } = useTranslation();
   const mounted = useRef(true);
   useEffect(() => {
@@ -122,11 +118,6 @@ const ComposerView = forwardRef<ComposerHandle, {
   const composer = useComposer(draftKey);
   const currentDraft = useRef({ key: draftKey, text: "" });
   const imageInput = useComposerImages(draftKey);
-  const [connectionDrafts, setConnectionDrafts] = useState<Record<string, ConnectionGrant[]>>({});
-  const [connectionError, setConnectionError] = useState(false);
-  const connectionQueryClient = useContext(QueryClientContext);
-  const connectionKey = draftKey ?? connectionTargetId ?? "new";
-  const connectionGrants = connectionDrafts[connectionKey];
   const uploadNode = initializingThread ? selectedRuntimeNode : activeRuntimeNode;
   const uploadUnavailableReason = uploadNode?.clientOutdated === true
     ? t("composer.upload_client_outdated")
@@ -211,8 +202,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   // already drifted: the button also refused a staged thread with no computer
   // picked, but `triggerSend` did not, so the keyboard shortcut dispatched a round with no
   // runtime — the very bypass the mention comment below was added to close.
-  const cannotSendAsWritten = !validConnectionGrants(connectionGrants)
-    || readOnly
+  const cannotSendAsWritten = readOnly
     || imageInput.busy
     || (!!uploadUnavailableReason && imageInput.images.length > 0)
     || (!composerText.trim() && !imageInput.images.length)
@@ -247,25 +237,15 @@ const ComposerView = forwardRef<ComposerHandle, {
       const teamStyle = activeTeamId && !projectName && !addressed && (intent ?? "accomplish") === "accomplish"
         ? style ?? undefined
         : undefined;
-      if (connectionTargetId && connectionGrants !== undefined) {
-        try {
-          await saveConnectionGrants("thread", connectionTargetId, connectionGrants);
-          setConnectionDrafts(previous => { const next = { ...previous }; delete next[connectionKey]; return next; });
-          await connectionQueryClient?.invalidateQueries({ queryKey: ["connections", "grants"] });
-          setConnectionError(false);
-        } catch { setConnectionError(true); return false; }
-      }
       if (!mounted.current) return false;
       const sent = await onSend(teamStyle, intent, {
         ...(userMessageId ? { userMessageId } : {}),
-        ...(!connectionTargetId && connectionGrants !== undefined ? { connectionGrants } : {}),
         ...(literal ? { literal: true } : {}),
         ...(approve ? { approve: true } : {}),
         ...(imageInput.images.length ? { attachmentIds: imageInput.images.map(image => image.id) } : {}),
       });
       if (sent === false) return false;
       if (!mounted.current) return true;
-      setConnectionDrafts(previous => { const next = { ...previous }; delete next[connectionKey]; return next; });
       setStyle(null);
       imageInput.clear();
       return true;
@@ -384,10 +364,6 @@ const ComposerView = forwardRef<ComposerHandle, {
       {queue}
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
-          {connectionQueryClient && <ConnectionGrantField key={connectionKey} targetId={connectionTargetId} value={connectionGrants}
-            disabled={readOnly || running || sendPending}
-            onChange={grants => setConnectionDrafts(previous => ({ ...previous, [connectionKey]: grants }))} />}
-          {connectionError && <p role="alert">{t("connections.action_failed")}</p>}
           <ComposerImagePreviews input={imageInput} />
           <MentionPopup matches={mentions.matches} onPick={mentions.pick}>
           {/* The mirror sits under the textarea inside a positioned wrapper so
