@@ -108,6 +108,10 @@ class SessionLifecycleRows(SessionStoreState):
                     },
                 )
             )
+        if payload.get("title"):
+            events.append(
+                relay_event("session.renamed", session_id, {"title": payload["title"]})
+            )
         session = materialize_events(events)
         try:
             with store_transaction(self.engine) as conn:

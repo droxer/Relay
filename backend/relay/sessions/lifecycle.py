@@ -54,6 +54,7 @@ class SessionLifecycleMixin(SessionControllerState):
                 ),
                 **({"computerId": self.computer_id} if self.computer_id else {}),
                 "taskGoal": task_goal,
+                "title": self._task_thread_title(),
                 **({"attachments": attachments} if attachments else {}),
                 "participants": participants or ["human"],
                 "status": "running",
@@ -68,6 +69,23 @@ class SessionLifecycleMixin(SessionControllerState):
             owner=self.owner_user_id,
         )
         return session
+
+    def _task_thread_title(self) -> str | None:
+        if not self.task_store or not self.task_id:
+            return None
+        task = self.task_store.get_task(self.task_id)
+        title = task["title"]
+        routine_id = task.get("sourceRoutineId")
+        if routine_id:
+            try:
+                routine = self.task_store.get_task(routine_id)
+            except KeyError:
+                # Legacy occurrences can outlive their Automation record.
+                return title
+            occurrence_ids = routine.get("occurrenceIds", [])
+            if self.task_id in occurrence_ids:
+                return f"{title} #{occurrence_ids.index(self.task_id) + 1}"
+        return title
 
     def reopen_expired_admission(self, session_id: str) -> dict[str, Any]:
         """Authoritatively reopen only a session failed by admission expiry."""
