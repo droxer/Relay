@@ -264,7 +264,10 @@ def test_rejects_unsafe_refs(monkeypatch: pytest.MonkeyPatch, value: str):
     assert _error_code(lambda: _fetch(monkeypatch, [], ref=value)) == "invalid-ref"
 
 
-@pytest.mark.parametrize("value", ["../secret", "/root", "skills/../../secret", "skills//review"])
+@pytest.mark.parametrize("value", [
+    "../secret", "/root", "skills/../../secret", "skills//review", "skills/./review", "skills/review/",
+    "skills\\review", "skills/review\x00", "skills/review\n", "skills/review\x7f", "skills/\ud800",
+])
 def test_rejects_unsafe_subpaths(monkeypatch: pytest.MonkeyPatch, value: str):
     assert _error_code(lambda: _fetch(monkeypatch, [], subpath=value)) == "invalid-subpath"
 
@@ -306,7 +309,10 @@ def test_repository_root_import_still_rejects_special_members(monkeypatch, kind)
     ) == "unsafe-archive"
 
 
-@pytest.mark.parametrize("name", ["/absolute", "../escape", "tools-main/../../escape"])
+@pytest.mark.parametrize("name", [
+    "/absolute", "../escape", "tools-main/../../escape", "tools-main/skills\\review/SKILL.md",
+    "tools-main/skills/review\n/SKILL.md", "tools-main/skills/review\x7f/SKILL.md",
+])
 def test_rejects_absolute_and_traversing_members(monkeypatch: pytest.MonkeyPatch, name: str):
     assert _error_code(lambda: _fetch(monkeypatch, [(name, b"x", "file")])) == "unsafe-archive"
 

@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from pathlib import PurePosixPath
 from queue import Empty, Queue
 from threading import BoundedSemaphore, Thread, Timer
+from unicodedata import category
 from urllib.parse import quote, urlsplit
 
 MAX_FILES = 300
@@ -193,11 +194,7 @@ def _validate_subpath(subpath: str) -> PurePosixPath:
     if subpath.startswith("/") or "//" in subpath:
         raise SkillImportError("invalid-subpath", "Invalid skill subpath")
     parts = subpath.split("/")
-    if any(
-        part in {"", ".", ".."}
-        or not all(character.isascii() and (character.isalnum() or character in "._- ") for character in part)
-        for part in parts
-    ):
+    if any(not _safe_path_component(part) for part in parts):
         raise SkillImportError("invalid-subpath", "Invalid skill subpath")
     return PurePosixPath(*parts)
 
@@ -318,9 +315,18 @@ def _checked_archive_members(
 
 def _safe_archive_path(name: str) -> PurePosixPath:
     path = PurePosixPath(name)
-    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+    if path.is_absolute() or not path.parts or any(not _safe_path_component(part) for part in path.parts):
         raise SkillImportError("unsafe-archive", "Archive contains an unsafe path")
     return path
+
+
+def _safe_path_component(part: str) -> bool:
+    # Repository selectors are literal POSIX paths, never shell arguments or
+    # host filesystem paths. Preserve Unicode and punctuation across discovery
+    # and re-import while rejecting traversal and non-portable control bytes.
+    return part not in {"", ".", ".."} and "\\" not in part and all(
+        category(character) not in {"Cc", "Cs"} for character in part
+    )
 
 
 def _is_beneath(path: PurePosixPath, parent: PurePosixPath) -> bool:

@@ -981,6 +981,9 @@ otherwise 200. No manifests returns 422 `no-skills-found`; over 100 Skills retur
 failures. Every publication saves its own source subpath for later re-imports.
 An explicit `subpath` retains the single-record response. Its name may be
 omitted to use the manifest name; a supplied name must match it.
+Source directory selectors preserve Unicode and punctuation such as `+` and
+`@` across discovery, explicit import, and re-import. Absolute paths, traversal,
+backslashes, control characters, and invalid Unicode surrogates are rejected.
 
 Grants resolve at dispatch time. Revocation takes effect on the next run;
 running commands keep their captured manifests. Generic agent creation and

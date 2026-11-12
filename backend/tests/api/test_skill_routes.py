@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import tarfile
 import zipfile
 
 import pytest
@@ -132,6 +133,30 @@ def test_import_allowlist_is_admin_only_and_preserves_other_settings(client):
     response = client.put("/api/v1/admin/settings", json={"maxTaskRounds": 9})
     assert response.json()["settings"]["skillImportAllowedHosts"] == []
     assert client.put("/api/v1/admin/settings", json={"skillImportAllowedHosts": None}).status_code == 400
+
+
+@pytest.mark.parametrize("subpath", ["skills/foo+bar", "skills/审查", "@scope/code-review", "skills/team review"])
+def test_discovered_skill_paths_support_explicit_import_and_reimport(client, monkeypatch, subpath):
+    content = base64.b64decode(bundle()["files"][0]["contentBase64"])
+    compressed = io.BytesIO()
+    with tarfile.open(fileobj=compressed, mode="w:gz") as archive:
+        member = tarfile.TarInfo(f"tools-main/{subpath}/SKILL.md")
+        member.size = len(content)
+        archive.addfile(member, io.BytesIO(content))
+    data = compressed.getvalue()
+    monkeypatch.setattr("relay.skills.git_import._resolve_host", lambda host: ["140.82.112.10"])
+    monkeypatch.setattr("relay.skills.git_import._download_archive", lambda *args: (200, {}, iter([data])))
+    source = {"url": "https://github.com/acme/tools", "ref": "main"}
+    response = client.post("/api/v1/skills/import", json=source)
+    assert response.status_code == 201, response.text
+    skill = response.json()["skills"][0]
+    assert skill["sourceRef"]["subpath"] == subpath
+    reimported = client.post(f"/api/v1/skills/{skill['id']}/import")
+    assert reimported.status_code == 201, reimported.text
+    assert len(client.get(f"/api/v1/skills/{skill['id']}").json()["revisions"]) == 2
+    explicit = client.post("/api/v1/skills/import", json={**source, "namespace": "explicit", "subpath": subpath})
+    assert explicit.status_code == 201, explicit.text
+    assert explicit.json()["sourceRef"]["subpath"] == subpath
 
 
 def test_empty_directory_imports_separate_skills_and_reports_invalid_entries(client, monkeypatch):
