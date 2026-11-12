@@ -229,6 +229,15 @@
   flex-wrap: wrap;
 }
 
+.skill-import-results .skill-file-list li {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.skill-import-results code {
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 640px) {
   .skill-revisions li {
     display: grid;

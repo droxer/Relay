@@ -66,6 +66,19 @@ def test_empty_published_file_is_not_treated_as_a_missing_blob(tmp_path):
     assert store.blob(hashlib.sha256(b"").hexdigest()) == b""
 
 
+def test_batch_publication_rolls_back_all_catalog_entries_on_storage_failure(tmp_path, monkeypatch):
+    store, alice, _ = _store(tmp_path)
+    def fail_put(digest, content):
+        if b"triage" in content:
+            raise OSError("storage unavailable")
+    monkeypatch.setattr(store.object_store, "put", fail_put)
+    with pytest.raises(OSError, match="storage unavailable"):
+        store.create_skills(alice, [
+            {"name": name, "files": _files(name=name)} for name in ("review", "triage")
+        ])
+    assert store.list_skills(alice) == []
+
+
 def test_create_skill_is_event_authoritative_and_makes_revision(tmp_path):
     store, alice, _ = _store(tmp_path)
     skill = _create(store, alice)
@@ -91,6 +104,14 @@ def test_frontmatter_supports_yaml_folded_description_and_string_metadata(tmp_pa
     content = b'---\nname: review\ndescription: >-\n  Reviews code\n  carefully.\nlicense: Apache-2.0\ncompatibility: Requires git\nmetadata:\n  author: relay\n  version: "1.0"\nallowed-tools: Read Bash(git:*)\n---\nBody'
     skill = _create(store, alice, files=[{"path": "SKILL.md", "content": content}])
     assert skill["description"] == "Reviews code carefully."
+
+
+def test_frontmatter_preserves_typed_runtime_extensions_and_nested_credits(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    content = b'---\nname: review\ndescription: Reviews code\ndisable-model-invocation: true\nuser-invocable: false\nargument-hint: file\nmetadata:\n  credits:\n    author: Matt\n    url: https://example.com\n---\nBody'
+    skill = _create(store, alice, files=[{"path": "SKILL.md", "content": content}])
+    digest = store.revision_files(skill["currentRevisionId"])[0]["sha256"]
+    assert store.blob(digest) == content
 
 
 def test_frontmatter_accepts_spec_length_boundaries(tmp_path):
@@ -297,9 +318,12 @@ def test_skill_md_frontmatter_is_validated(tmp_path, body, code):
             "invalid-metadata",
         ),
         (
-            b"---\nname: n\ndescription: d\nargument-hint: file\n---\n",
+            b"---\nname: n\ndescription: d\nunknown-option: file\n---\n",
             "unexpected-frontmatter-field",
         ),
+        (b'---\nname: n\ndescription: d\ndisable-model-invocation: "true"\n---\n', "invalid-frontmatter-option"),
+        (b'---\nname: n\ndescription: d\nuser-invocable: yes-please\n---\n', "invalid-frontmatter-option"),
+        (b'---\nname: n\ndescription: d\nargument-hint: []\n---\n', "invalid-frontmatter-option"),
         (b"---\nname: n\ndescription: d\nlicense: []\n---\n", "invalid-license"),
         (
             b"---\nname: n\ndescription: d\nallowed-tools: []\n---\n",

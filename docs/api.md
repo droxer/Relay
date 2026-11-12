@@ -955,7 +955,7 @@ grant only to their own logical agents.
 | `PATCH /skills/{id}` | `displayName`, `description`, or `visibility` |
 | `DELETE /skills/{id}` | Soft deletion; returns 204 |
 | `POST /skills/{id}/revisions` | `files` and optional `note`; creates an immutable revision |
-| `POST /skills/import` | Metadata, GitHub `url`, optional `ref` (HEAD), `subpath` |
+| `POST /skills/import` | GitHub `url`, optional `ref` (HEAD), `subpath`; a directory imports one Skill, empty/omitted discovers all |
 | `POST /skills/{id}/import` | Re-import the saved Git source as a new revision |
 | `POST /skills/{id}/grants` | `agentIds`, optional `pin`: `"latest"` or `{revisionId}` |
 | `DELETE /skills/{id}/grants/{agentId}` | Revoke a grant, including a dangling grant; returns 204 |
@@ -974,6 +974,21 @@ DNS, download, and archive processing share a 30-second deadline.
 Links and special files within the selected Skill subpath are rejected; those
 outside it are ignored and never followed. Path traversal, multiple archive
 roots, and archive size and entry limits are checked across the whole archive.
+An empty or omitted `subpath` downloads the archive once and discovers up to
+100 Skill directories. Names and descriptions come from each `SKILL.md`;
+optional `namespace` and `visibility` apply to every entry. A Skill directory's
+nested example manifests remain assets of that Skill, not separate publications.
+The response is `{skills: SkillRecord[], failed: [{subpath, code}]}`. Valid
+entries are published; invalid bundles and existing owner/name collisions are
+reported per directory. The response status is 201 when anything was created,
+otherwise 200. No manifests returns 422 `no-skills-found`; over 100 Skills returns
+413 `too-many-skills`. Database writes roll back together on infrastructure
+failures. Every publication saves its own source subpath for later re-imports.
+An explicit `subpath` retains the single-record response. Its name may be
+omitted to use the manifest name; a supplied name must match it.
+Source directory selectors preserve Unicode and punctuation such as `+` and
+`@` across discovery, explicit import, and re-import. Absolute paths, traversal,
+backslashes, control characters, and invalid Unicode surrogates are rejected.
 
 Grants resolve at dispatch time. Revocation takes effect on the next run;
 running commands keep their captured manifests. Generic agent creation and

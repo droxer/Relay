@@ -11,9 +11,11 @@ import ssl
 import tarfile
 import time
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import PurePosixPath
 from queue import Empty, Queue
 from threading import BoundedSemaphore, Thread, Timer
+from unicodedata import category
 from urllib.parse import quote, urlsplit
 
 MAX_FILES = 300
@@ -32,17 +34,32 @@ class SkillImportError(ValueError):
 
 
 def fetch_skill_bundle(
+    url: str, ref: str, subpath: str, *, allowed_hosts: list[str], timeout_seconds: float = 30.0,
+) -> list[dict[str, object]]:
+    """Download one archive and read the explicitly selected Skill."""
+    selected_path = _validate_subpath(subpath)
+    data, deadline = _fetch_archive(url, ref, allowed_hosts=allowed_hosts, timeout_seconds=timeout_seconds)
+    return _read_bundle(data, selected_path, deadline)
+
+
+def fetch_skill_repository(
+    url: str, ref: str, *, allowed_hosts: list[str], timeout_seconds: float = 30.0,
+) -> list[dict[str, object]]:
+    """Discover separate Skill bundles from a single bounded download."""
+    data, deadline = _fetch_archive(url, ref, allowed_hosts=allowed_hosts, timeout_seconds=timeout_seconds)
+    return _read_repository(data, deadline)
+
+
+def _fetch_archive(
     url: str,
     ref: str,
-    subpath: str,
     *,
     allowed_hosts: list[str],
     timeout_seconds: float = 30.0,
-) -> list[dict[str, object]]:
+) -> tuple[bytes, float]:
     """Download a GitHub tarball and return the selected skill files in memory."""
     owner, repository = _validate_repository_url(url, allowed_hosts)
     safe_ref = _validate_ref(ref)
-    selected_path = _validate_subpath(subpath)
     if timeout_seconds <= 0:
         raise SkillImportError("timeout", "Import deadline expired")
     deadline = time.monotonic() + timeout_seconds
@@ -98,7 +115,7 @@ def fetch_skill_bundle(
         _check_deadline(deadline)
         raise SkillImportError("network-error", "Archive download failed") from error
 
-    return _read_bundle(bytes(archive), selected_path, deadline)
+    return bytes(archive), deadline
 
 
 def _resolve_before_deadline(host: str, deadline: float) -> list[str]:
@@ -177,20 +194,47 @@ def _validate_subpath(subpath: str) -> PurePosixPath:
     if subpath.startswith("/") or "//" in subpath:
         raise SkillImportError("invalid-subpath", "Invalid skill subpath")
     parts = subpath.split("/")
-    if any(
-        part in {"", ".", ".."}
-        or not all(character.isascii() and (character.isalnum() or character in "._- ") for character in part)
-        for part in parts
-    ):
+    if any(not _safe_path_component(part) for part in parts):
         raise SkillImportError("invalid-subpath", "Invalid skill subpath")
     return PurePosixPath(*parts)
 
 
 def _read_bundle(data: bytes, selected_path: PurePosixPath, deadline: float) -> list[dict[str, object]]:
-    files: list[dict[str, object]] = []
-    selected_bytes = 0
-    expanded_bytes = 0
-    archive_root: str | None = None
+    with _repository_archive(data, deadline) as (archive, members):
+        return _read_selected_bundle(archive, members, selected_path, deadline)
+
+
+def _read_repository(data: bytes, deadline: float) -> list[dict[str, object]]:
+    with _repository_archive(data, deadline) as (archive, members):
+        candidates = sorted({
+            PurePosixPath(*path.parts[1:]).parent for member, path in members
+            if member.isreg() and path.name == "SKILL.md"
+        }, key=lambda path: (len(path.parts), path.as_posix()))
+        roots: list[PurePosixPath] = []
+        for candidate in candidates:
+            if not any(_is_beneath(candidate, root) for root in roots):
+                roots.append(candidate)
+        if not roots:
+            raise SkillImportError("no-skills-found", "Repository contains no SKILL.md files")
+        if len(roots) > 100:
+            raise SkillImportError("too-many-skills", "Repository exceeds 100 Skill bundles")
+        bundles: list[dict[str, object]] = []
+        for root in sorted(roots, key=lambda path: path.as_posix()):
+            subpath = root.as_posix() if root.parts else ""
+            try:
+                files = _read_selected_bundle(archive, members, root, deadline)
+                bundles.append({"subpath": subpath, "files": files})
+            except SkillImportError as error:
+                if error.code == "timeout":
+                    raise
+                bundles.append({"subpath": subpath, "error": error.code})
+        return bundles
+
+
+@contextmanager
+def _repository_archive(
+    data: bytes, deadline: float,
+) -> Iterator[tuple[tarfile.TarFile, list[tuple[tarfile.TarInfo, PurePosixPath]]]]:
     try:
         expanded = bytearray()
         with gzip.GzipFile(fileobj=io.BytesIO(data)) as compressed:
@@ -200,58 +244,89 @@ def _read_bundle(data: bytes, selected_path: PurePosixPath, deadline: float) -> 
                     raise SkillImportError("archive-too-large", "Expanded archive exceeds the size limit")
                 expanded.extend(chunk)
         with tarfile.open(fileobj=io.BytesIO(expanded), mode="r:") as archive:
-            for entry_count, member in enumerate(archive, start=1):
-                _check_deadline(deadline)
-                if entry_count > MAX_ARCHIVE_ENTRIES:
-                    raise SkillImportError("archive-too-large", "Archive contains too many entries")
-                member_path = _safe_archive_path(member.name)
-                if archive_root is None:
-                    archive_root = member_path.parts[0]
-                elif member_path.parts[0] != archive_root:
-                    raise SkillImportError("unsafe-archive", "Archive contains more than one root")
-                if member.isreg():
-                    expanded_bytes += member.size
-                    if expanded_bytes > MAX_EXPANDED_ARCHIVE_BYTES:
-                        raise SkillImportError("archive-too-large", "Expanded archive exceeds the size limit")
-                relative = PurePosixPath(*member_path.parts[1:])
-                if not _is_beneath(relative, selected_path):
-                    continue
-                # Unrelated repository links are never imported or followed.
-                # Keep rejecting every non-regular file in the selected bundle.
-                if not (member.isdir() or member.isreg()):
-                    raise SkillImportError("unsafe-archive", "Archive contains a link or special file")
-                if member.isdir():
-                    continue
-                output_path = relative.relative_to(selected_path).as_posix()
-                if not output_path or output_path == ".":
-                    continue
-                if member.size > MAX_FILE_BYTES:
-                    raise SkillImportError("file-too-large", f"Imported file exceeds 1 MiB: {output_path}")
-                if len(files) >= MAX_FILES:
-                    raise SkillImportError("too-many-files", "Skill bundle exceeds 300 files")
-                selected_bytes += member.size
-                if selected_bytes > MAX_BUNDLE_BYTES:
-                    raise SkillImportError("bundle-too-large", "Skill bundle exceeds 4 MiB")
-                source = archive.extractfile(member)
-                if source is None:
-                    raise SkillImportError("unsafe-archive", "Could not read archive member")
-                content = source.read(MAX_FILE_BYTES + 1)
-                if len(content) != member.size or len(content) > MAX_FILE_BYTES:
-                    raise SkillImportError("file-too-large", f"Imported file exceeds 1 MiB: {output_path}")
-                files.append({"path": output_path, "content": content})
+            yield archive, _checked_archive_members(archive, deadline)
     except SkillImportError:
         raise
     except (tarfile.TarError, OSError, EOFError) as error:
         raise SkillImportError("invalid-archive", "Downloaded content is not a valid gzip tar archive") from error
+
+
+def _read_selected_bundle(
+    archive: tarfile.TarFile, members: list[tuple[tarfile.TarInfo, PurePosixPath]],
+    selected_path: PurePosixPath, deadline: float,
+) -> list[dict[str, object]]:
+    files: list[dict[str, object]] = []
+    selected_bytes = 0
+    for member, member_path in members:
+        _check_deadline(deadline)
+        relative = PurePosixPath(*member_path.parts[1:])
+        if not _is_beneath(relative, selected_path):
+            continue
+        # Unrelated repository links are never imported or followed.
+        # Keep rejecting every non-regular file in the selected bundle.
+        if not (member.isdir() or member.isreg()):
+            raise SkillImportError("unsafe-archive", "Archive contains a link or special file")
+        if member.isdir():
+            continue
+        output_path = relative.relative_to(selected_path).as_posix()
+        if not output_path or output_path == ".":
+            continue
+        if member.size > MAX_FILE_BYTES:
+            raise SkillImportError("file-too-large", f"Imported file exceeds 1 MiB: {output_path}")
+        if len(files) >= MAX_FILES:
+            raise SkillImportError("too-many-files", "Skill bundle exceeds 300 files")
+        selected_bytes += member.size
+        if selected_bytes > MAX_BUNDLE_BYTES:
+            raise SkillImportError("bundle-too-large", "Skill bundle exceeds 4 MiB")
+        source = archive.extractfile(member)
+        if source is None:
+            raise SkillImportError("unsafe-archive", "Could not read archive member")
+        content = source.read(MAX_FILE_BYTES + 1)
+        if len(content) != member.size or len(content) > MAX_FILE_BYTES:
+            raise SkillImportError("file-too-large", f"Imported file exceeds 1 MiB: {output_path}")
+        files.append({"path": output_path, "content": content})
     files.sort(key=lambda item: str(item["path"]))
     return files
 
 
+def _checked_archive_members(
+    archive: tarfile.TarFile, deadline: float,
+) -> list[tuple[tarfile.TarInfo, PurePosixPath]]:
+    """Bound and validate the whole inventory before identifying a Skill root."""
+    members: list[tuple[tarfile.TarInfo, PurePosixPath]] = []
+    archive_root: str | None = None
+    expanded_bytes = 0
+    for entry_count, member in enumerate(archive, start=1):
+        _check_deadline(deadline)
+        if entry_count > MAX_ARCHIVE_ENTRIES:
+            raise SkillImportError("archive-too-large", "Archive contains too many entries")
+        path = _safe_archive_path(member.name)
+        if archive_root is None:
+            archive_root = path.parts[0]
+        elif path.parts[0] != archive_root:
+            raise SkillImportError("unsafe-archive", "Archive contains more than one root")
+        if member.isreg():
+            expanded_bytes += member.size
+            if expanded_bytes > MAX_EXPANDED_ARCHIVE_BYTES:
+                raise SkillImportError("archive-too-large", "Expanded archive exceeds the size limit")
+        members.append((member, path))
+    return members
+
+
 def _safe_archive_path(name: str) -> PurePosixPath:
     path = PurePosixPath(name)
-    if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+    if path.is_absolute() or not path.parts or any(not _safe_path_component(part) for part in path.parts):
         raise SkillImportError("unsafe-archive", "Archive contains an unsafe path")
     return path
+
+
+def _safe_path_component(part: str) -> bool:
+    # Repository selectors are literal POSIX paths, never shell arguments or
+    # host filesystem paths. Preserve Unicode and punctuation across discovery
+    # and re-import while rejecting traversal and non-portable control bytes.
+    return part not in {"", ".", ".."} and "\\" not in part and all(
+        category(character) not in {"Cc", "Cs"} for character in part
+    )
 
 
 def _is_beneath(path: PurePosixPath, parent: PurePosixPath) -> bool:

@@ -58,11 +58,17 @@ or invalid materialization.
 
 ## Agent Skills specification
 
-Published bundles conform to the Agent Skills specification:
+Published bundles validate the Agent Skills core fields and supported runtime extensions:
 
 - Names are lowercase hyphen-separated identifiers of at most 64 characters.
 - `SKILL.md` requires `name` and `description`; supported optional frontmatter
   is validated by type and length and unknown fields are rejected.
+- Runtime extensions `disable-model-invocation` and `user-invocable` must be
+  booleans; `argument-hint` must be a nonempty string of at most 1024 characters.
+  Metadata values may also be one nested map of strings (for example, credits).
+  Original files are preserved; these runtime hints do not replace Relay's
+  assignment invocation policy. Malformed YAML and unsupported types remain
+  per-Skill import failures.
 - The installed directory leaf always matches the frontmatter name.
 - Catalog collisions add a parent namespace such as `alice/code-review`; they
   never rewrite the leaf into a nonconforming name.
@@ -101,6 +107,13 @@ and manifest frontmatter must agree with the catalog name.
 ## Revisions and portability
 
 Every edit, upload, or re-import creates a new immutable revision.
+
+For GitHub publishing, leaving the directory blank discovers all Skills from
+one repository archive and publishes them as separate catalog entries. The
+result lists created Skills and failures per directory; a rejected Skill does
+not prevent valid siblings from being published. Names come from `SKILL.md`.
+An explicit directory publishes only that Skill. Each entry retains its own
+source directory for re-importing; repository imports are limited to 100 Skills.
 
 - `currentRevisionId` is the newest revision (`latest`).
 - `stableRevisionId` is initialized to revision 1 and changes only through an

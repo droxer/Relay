@@ -40,6 +40,10 @@ export interface SkillDetail extends SkillRecord {
   assignments: SkillAssignment[];
 }
 export interface SkillsResponse { skills: SkillRecord[] }
+export interface SkillRepositoryImportResult {
+  skills: SkillRecord[];
+  failed: Array<{ subpath: string; code: string }>;
+}
 /** One bundle file read back for preview — text only, capped server-side. */
 export interface SkillFilePreview {
   path: string;
