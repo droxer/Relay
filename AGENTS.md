@@ -176,6 +176,12 @@ newer and `uv` are required for the backend.
   `event post failed; retrying` with its status and attempt count, at most
   every 30 s. The backend answers a transient database fault 503 and any
   other ingest failure 500; the daemon retries both.
+- Daemon backend protocol: `RELAY_DAEMON_HTTP_PROTOCOL` (default HTTP/1.1;
+  `http2` opts in) — every daemon call to the backend uses one dedicated
+  dispatcher (`relay-daemon/src/backend-fetch.ts`), never the host's global
+  `fetch` default. With HTTP/2 on, a reset or stalled pool is replaced and
+  three resets in five minutes fall back to HTTP/1.1 until restart. See
+  `docs/guides/node-heartbeats.md`.
 - Stop backend, daemon, and BoxLite processes: `make stop`.
 - Deploy to Railway behind Cloudflare, with the web UI as a Cloudflare Worker:
   `deploy/deploy.sh up` (config in git-ignored `deploy/.env`; see

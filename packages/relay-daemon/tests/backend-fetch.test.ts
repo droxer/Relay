@@ -60,7 +60,7 @@ test('backend tries fresh H2 pools before falling back, preserving TLS, proxy an
       import assert from 'node:assert/strict';
       import { createBackendFetch } from ${JSON.stringify(moduleUrl)};
       const recoveries = [];
-      const backendFetch = createBackendFetch(event => recoveries.push(event));
+      const backendFetch = createBackendFetch(event => recoveries.push(event), { http2: true });
       import { Agent, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
       // Model an H2-enabled host even on Node versions whose default is H1.
       const hostDispatcher = new Agent({ allowH2: true });
@@ -124,7 +124,7 @@ test('backend tries fresh H2 pools before falling back, preserving TLS, proxy an
       await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
         import assert from 'node:assert/strict';
         import { createBackendFetch } from ${JSON.stringify(moduleUrl)};
-        const backendFetch = createBackendFetch();
+        const backendFetch = createBackendFetch(undefined, { http2: true });
         const response = await backendFetch(${JSON.stringify(url)} + '/healthy');
         assert.deepEqual(await response.json(), {ok: true});
       `], { timeout: 10000, env: { ...process.env, NODE_EXTRA_CA_CERTS: `${fixtures}/cert.pem`,
@@ -136,6 +136,21 @@ test('backend tries fresh H2 pools before falling back, preserving TLS, proxy an
       for (const socket of sockets) socket.destroy();
       await new Promise<void>(resolve => proxy.close(() => resolve()));
     }
+    // Without the opt-in the daemon speaks HTTP/1.1, even on a host whose fetch defaults to HTTP/2.
+    const h2Before = h2Requests;
+    await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
+      import assert from 'node:assert/strict';
+      import { createBackendFetch } from ${JSON.stringify(moduleUrl)};
+      import { Agent, setGlobalDispatcher } from 'undici';
+      const hostDispatcher = new Agent({ allowH2: true });
+      setGlobalDispatcher(hostDispatcher);
+      const response = await createBackendFetch()(${JSON.stringify(url)} + '/default');
+      assert.deepEqual(await response.json(), {ok: true});
+      await hostDispatcher.close();
+    `], { timeout: 10000, env: { ...process.env, NODE_EXTRA_CA_CERTS: `${fixtures}/cert.pem`, RELAY_DAEMON_HTTP_PROTOCOL: '',
+      HTTP_PROXY: '', HTTPS_PROXY: '', http_proxy: '', https_proxy: '', NO_PROXY: '*', no_proxy: '*' } });
+    assert.equal(h2Requests, h2Before);
+    assert.ok(requests.includes('GET /default'));
     // Selecting HTTP/1.1 must not bypass certificate validation.
     await promisify(execFile)(process.execPath, ['--input-type=module', '-e', `
       import assert from 'node:assert/strict';
@@ -163,7 +178,7 @@ test('fallback is isolated by origin and does not replay failed requests', async
   const recoveries: Array<{ origin: string; http2Failures: number; protocol: string }> = [];
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async () => { calls++; throw streamFailure(); });
-  const send = createBackendFetch(event => recoveries.push(event));
+  const send = createBackendFetch(event => recoveries.push(event), { http2: true });
   for (let i = 0; i < 4; i++) await assert.rejects(send('https://one.test/reports', { method: 'POST', body: '{}' }));
   await assert.rejects(send('https://two.test/commands'));
   assert.equal(calls, 5);
@@ -178,7 +193,7 @@ test('late failures and successes from retired pools do not change the recovery 
   const pending: Array<{ resolve: (response: Response) => void; reject: (error: Error) => void }> = [];
   const failures: number[] = [];
   t.mock.method(globalThis, 'fetch', () => new Promise<Response>((resolve, reject) => pending.push({ resolve, reject })));
-  const send = createBackendFetch(event => failures.push(event.http2Failures));
+  const send = createBackendFetch(event => failures.push(event.http2Failures), { http2: true });
   const first = assert.rejects(send('https://one.test/commands'));
   const lateFailure = assert.rejects(send('https://one.test/heartbeat'));
   const lateSuccess = send('https://one.test/transport');
@@ -197,7 +212,7 @@ test('caller cancellation and ordinary network errors do not trigger protocol fa
   const failures: number[] = [];
   let error = streamFailure();
   t.mock.method(globalThis, 'fetch', async () => { throw error; });
-  const send = createBackendFetch(event => failures.push(event.http2Failures));
+  const send = createBackendFetch(event => failures.push(event.http2Failures), { http2: true });
   const signal = AbortSignal.abort();
   await assert.rejects(send('https://one.test/commands', { signal }));
   await assert.rejects(send(new Request('https://one.test/commands', { signal })));
@@ -215,7 +230,7 @@ test('recurring H2 pool failures trigger fallback despite successful heartbeats 
   let now = 0, fail = true;
   t.mock.method(performance, 'now', () => now);
   t.mock.method(globalThis, 'fetch', async () => { if (fail) throw streamFailure(); return new Response('{}'); });
-  const send = createBackendFetch(event => recoveries.push(event));
+  const send = createBackendFetch(event => recoveries.push(event), { http2: true });
   for (let i = 0; i < 3; i++) {
     now = i * 100_000;
     fail = true; await assert.rejects(send('https://one.test/reports'));
@@ -230,10 +245,77 @@ test('the H2 failure window expires old failures instead of penalizing isolated 
   let now = 0;
   t.mock.method(performance, 'now', () => now);
   t.mock.method(globalThis, 'fetch', async () => { throw streamFailure(); });
-  const send = createBackendFetch(event => failures.push(event.http2Failures));
+  const send = createBackendFetch(event => failures.push(event.http2Failures), { http2: true });
   for (const timestamp of [0, 100_000, 300_001, 400_001, 400_002]) {
     now = timestamp;
     await assert.rejects(send('https://one.test/reports'));
   }
   assert.deepEqual(failures, [1, 2, 2, 2, 3]);
+});
+
+test('HTTP/2 is opt-in: only RELAY_DAEMON_HTTP_PROTOCOL=http2 enables it', async t => {
+  const { backendHttp2Enabled, createBackendFetch } = await import('../src/backend-fetch.js');
+  assert.equal(backendHttp2Enabled({}), false);
+  assert.equal(backendHttp2Enabled({ RELAY_DAEMON_HTTP_PROTOCOL: 'http1' }), false);
+  assert.equal(backendHttp2Enabled({ RELAY_DAEMON_HTTP_PROTOCOL: 'auto' }), false);
+  assert.equal(backendHttp2Enabled({ RELAY_DAEMON_HTTP_PROTOCOL: ' HTTP2 ' }), true);
+  // On HTTP/1.1 there is no pool to recover: failures pass straight to the caller.
+  const recoveries: unknown[] = [];
+  t.mock.method(globalThis, 'fetch', async () => { throw streamFailure(); });
+  const send = createBackendFetch(event => recoveries.push(event), { http2: false });
+  for (let i = 0; i < 4; i++) await assert.rejects(send('https://one.test/reports'));
+  assert.deepEqual(recoveries, []);
+});
+
+test('connection-level HTTP/2 failures count toward fallback; HTTP/1.1 socket loss does not', async t => {
+  const { createBackendFetch } = await import('../src/backend-fetch.js');
+  const recoveries: Array<{ cause: string; http2Failures: number; protocol: string }> = [];
+  const undiciFailure = (code: string, message: string): Error =>
+    new TypeError('fetch failed', { cause: Object.assign(new Error(message), { code }) });
+  let error = undiciFailure('UND_ERR_SOCKET', 'other side closed');
+  t.mock.method(globalThis, 'fetch', async () => { throw error; });
+  const send = createBackendFetch(event => recoveries.push(event), { http2: true });
+  await assert.rejects(send('https://one.test/commands'));
+  assert.equal(recoveries.length, 0);
+  for (const [code, message] of [
+    ['UND_ERR_SOCKET', 'HTTP/2: "GOAWAY" frame received with code 11'],
+    ['UND_ERR_INFO', 'HTTP/2: "frameError" received - type 1, code 2'],
+    ['UND_ERR_INFO', 'HTTP/2: stream closed before the response was complete'],
+  ]) {
+    error = undiciFailure(code, message);
+    await assert.rejects(send('https://one.test/commands'));
+  }
+  assert.deepEqual(recoveries.map(event => [event.cause, event.http2Failures, event.protocol]),
+    [['reset', 1, 'http/2'], ['reset', 2, 'http/2'], ['reset', 3, 'http/1.1']]);
+});
+
+test('a request deadline replaces a stalled HTTP/2 pool without spending the fallback budget', async t => {
+  const { createBackendFetch } = await import('../src/backend-fetch.js');
+  const recoveries: Array<{ cause: string; http2Failures: number; protocol: string }> = [];
+  const dispatchers = new Set<unknown>();
+  t.mock.method(globalThis, 'fetch', (_input: unknown, init: RequestInit & { dispatcher?: unknown }) => {
+    dispatchers.add(init.dispatcher);
+    return new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+    });
+  });
+  const send = createBackendFetch(event => recoveries.push(event), { http2: true });
+  for (let i = 0; i < 4; i++) {
+    // The daemon combines its runtime signal with a deadline, as requestSignal does.
+    // AbortSignal.timeout's timer is unref'd and cannot hold this test open, so
+    // a held timer stands in for it with the same TimeoutError reason.
+    const deadline = new AbortController();
+    const signal = AbortSignal.any([new AbortController().signal, deadline.signal]);
+    setTimeout(() => deadline.abort(new DOMException('The operation timed out.', 'TimeoutError')), 5);
+    await assert.rejects(send('https://one.test/commands', { signal }), { name: 'TimeoutError' });
+  }
+  assert.deepEqual(recoveries.map(event => [event.cause, event.http2Failures, event.protocol]),
+    Array.from({ length: 4 }, () => ['stall', 0, 'http/2']));
+  assert.equal(dispatchers.size, 4);
+  // A caller that gives up is not evidence about the connection.
+  const controller = new AbortController();
+  const cancelled = assert.rejects(send('https://one.test/commands', { signal: controller.signal }));
+  controller.abort('Transport recovery probe superseded a stalled poll.');
+  await cancelled;
+  assert.equal(recoveries.length, 4);
 });

@@ -231,7 +231,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let rawFetch = options.fetchFn ?? createBackendFetch(recovery => {
     transportLogger?.warn(recovery.protocol === 'http/1.1'
       ? 'Repeated HTTP/2 failures; falling back to HTTP/1.1 until restart'
-      : 'HTTP/2 transport failed; retrying with a fresh connection pool', { sandboxId, ...recovery });
+      : recovery.cause === 'stall'
+        ? 'Backend request timed out over HTTP/2; retrying with a fresh connection pool'
+        : 'HTTP/2 transport failed; retrying with a fresh connection pool', { sandboxId, ...recovery });
   });
   let fetchFn = rawFetch;
   let sandboxId = options.sandboxId ?? process.env.RELAY_SANDBOX_ID;
