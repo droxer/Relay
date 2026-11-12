@@ -41,19 +41,21 @@ it("selects explicit resources and read actions for a work draft", async () => {
   await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([{ connectionId: "github-1", resources: ["octo/hello"], actions: ["github.list_issues"] }]));
 });
 
-function composer() {
-  return <Composer connectionTargetId="thread" logicalAgents={[]} activeLogicalAgentId={null}
+function composer(onSend = vi.fn(async () => true)) {
+  return <Composer logicalAgents={[]} activeLogicalAgentId={null}
     onLogicalAgentPicked={vi.fn()} activeAgentDisplayName="Ada" selectedUser="u1" initializingThread={false}
     runtimeNodes={[]} runtimeNodeId="node" selectedRuntimeNode={null} activeRuntimeNode={null}
-    onRuntimeNodeChange={vi.fn()} running={false} onSend={vi.fn(async () => true)} onCancelRun={vi.fn()} />;
+    onRuntimeNodeChange={vi.fn()} running={false} onSend={onSend} onCancelRun={vi.fn()} />;
 }
 
-it("keeps connections out of the composer until a service is connected", async () => {
-  vi.mocked(connectionsApi.listConnections).mockClear().mockResolvedValueOnce({ connections: [] });
+it("keeps Connections out of the composer even when GitHub is connected", async () => {
+  vi.mocked(connectionsApi.listConnections).mockClear();
+  vi.mocked(connectionsApi.getConnectionGrants).mockClear();
   render(composer(), { wrapper });
-  await waitFor(() => expect(connectionsApi.listConnections).toHaveBeenCalled());
   await screen.findByRole("textbox");
   expect(screen.queryByText("connections.title")).toBeNull();
+  expect(connectionsApi.listConnections).not.toHaveBeenCalled();
+  expect(connectionsApi.getConnectionGrants).not.toHaveBeenCalled();
 });
 
 it("keeps a draft's grants visible after their connection is gone so they can be removed", async () => {
@@ -62,26 +64,18 @@ it("keeps a draft's grants visible after their connection is gone so they can be
   expect(await screen.findByText("connections.title")).toBeTruthy();
 });
 
-it("does not resave old access when the next ordinary message is sent", async () => {
+it("sends ordinary messages without reading or changing Connection Grants", async () => {
   vi.mocked(connectionsApi.saveConnectionGrants).mockClear();
   const send = vi.fn(async () => true);
-  render(<Composer connectionTargetId="thread" logicalAgents={[]} activeLogicalAgentId={null}
-    onLogicalAgentPicked={vi.fn()} activeAgentDisplayName="Ada" selectedUser="u1" initializingThread={false}
-    runtimeNodes={[]} runtimeNodeId="node" selectedRuntimeNode={null} activeRuntimeNode={null}
-    onRuntimeNodeChange={vi.fn()} running={false} onSend={send} onCancelRun={vi.fn()} />, { wrapper });
-  fireEvent.click(await screen.findByText("connections.title"));
-  // The Thread's saved access keeps the picker read-only until it loads.
-  await waitFor(() => expect(screen.queryByText("connections.loading")).toBeNull());
-  fireEvent.click(await screen.findByRole("checkbox", { name: /Personal/ }));
-  fireEvent.click(await screen.findByRole("checkbox", { name: "octo/hello" }));
+  render(composer(send), { wrapper });
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "First message" } });
   fireEvent.submit(document.querySelector("form.composer")!);
   await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-  expect(connectionsApi.saveConnectionGrants).toHaveBeenCalledTimes(1);
+  expect(send).toHaveBeenLastCalledWith(undefined, undefined, {});
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "Second message" } });
   fireEvent.submit(document.querySelector("form.composer")!);
   await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
-  expect(connectionsApi.saveConnectionGrants).toHaveBeenCalledTimes(1);
+  expect(connectionsApi.saveConnectionGrants).not.toHaveBeenCalled();
 });
 
 it("keeps inherited Automation access read-only in the picker", async () => {
