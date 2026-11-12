@@ -379,6 +379,7 @@ export function ThreadsView({
   const queueEnabled = Boolean(activeSession) && !initializingThread && !projectReadOnly;
   const threadQueue = useThreadQueue({
     queueKey: threadDraftKey(currentUser, activeSession?.id),
+    threadId: queueEnabled ? activeSession?.id : undefined,
     running,
     awaitsPerson: (waiting !== null && !followUpWait) || awaitingDecision
       || openPermissionRequests(activeSession).length > 0,
@@ -754,6 +755,12 @@ export function ThreadsView({
           queue={queueEnabled ? (
             <MessageQueue
               messages={threadQueue.messages}
+              pending={threadQueue.pending}
+              paused={threadQueue.paused}
+              waiting={threadQueue.waiting}
+              sending={threadQueue.sending}
+              error={threadQueue.error}
+              onResume={threadQueue.resume}
               running={running}
               onSteer={threadQueue.steer}
               onEdit={threadQueue.edit}

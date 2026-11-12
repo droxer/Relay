@@ -123,11 +123,11 @@ export function requestThreadRecovery(
   });
 }
 
-export function cancelRun(sessionId: string, token?: string, reason?: string): Promise<RelaySession> {
+export function cancelRun(sessionId: string, token?: string, reason?: string, preserveQueue = false): Promise<RelaySession> {
   return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/cancellations`, {
     method: "POST",
     token,
-    body: { reason: reason ?? "Cancelled from Relay Web UI." },
+    body: { reason: reason ?? "Cancelled from Relay Web UI.", ...(preserveQueue ? { preserveQueue: true } : {}) },
   });
 }
 

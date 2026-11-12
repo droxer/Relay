@@ -23,6 +23,7 @@ from .. import sql
 from .rows import (
     _artifact_field_sql,
     _canonical_database_session_id,
+    session_event_cursor_expression,
     hydrate_session_logs,
 )
 from .state import SessionStoreState
@@ -33,6 +34,23 @@ _POSITION_COLUMN = "_positionUpdatedAt"
 
 
 class SessionReadRows(SessionStoreState):
+    def queue_receipt(self, thread_id: str, message_id: str) -> dict[str, Any] | None:
+        with store_transaction(self.engine) as conn:
+            return conn.scalar(select(self.events.c.payload).where(
+                self.events.c.session_id == thread_id,
+                session_event_cursor_expression(self.events) == f"queue.accepted:{message_id}",
+            ).limit(1))
+
+    def queued_thread_ids(self, limit: int = 100, after: str | None = None) -> list[str]:
+        with store_transaction(self.engine) as conn:
+            statement = select(self.sessions.c.id).where(
+                self.sessions.c.snapshot["messageQueue"]["messages"][0]["id"].as_string().is_not(None),
+                self.sessions.c.snapshot["messageQueue"]["paused"].as_boolean().is_(False),
+            )
+            if after:
+                statement = statement.where(self.sessions.c.id > after)
+            return list(conn.scalars(statement.order_by(self.sessions.c.id).limit(limit)))
+
     def get_session(self, session_id: str) -> dict[str, Any]:
         session_pk = _canonical_database_session_id(session_id)
         with store_transaction(self.engine) as conn:

@@ -8,12 +8,13 @@ from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, HTTPException, Request
 
 from ...core.thread_attachments import attachment_ids
+from ...collaboration.queue import change_queue, queue_state
 from ...collaboration.models import MessageIntent, RecoveryIntent
 from ...collaboration.errors import CollaborationError
 from ...collaboration.service import CollaborationConductor
 from ...collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..deps import AppContextDep
-from ..actors import get_session_for_actor, request_actor
+from ..actors import get_session_for_actor, get_session_header_for_actor, request_actor
 from ..bodies import json_body, string_field
 from ..schemas import ThreadMessageBody, openapi_body, parse_request_body
 
@@ -208,3 +209,37 @@ async def request_thread_recovery(
         raise HTTPException(
             error.status, {"code": error.code, "message": str(error)}
         ) from error
+
+
+@router.get("/threads/{thread_id}/queue")
+def read_thread_queue(thread_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    session = get_session_header_for_actor(ctx.session_store, thread_id, actor)
+    return queue_state(session)
+
+
+@router.post("/threads/{thread_id}/queue")
+async def update_thread_queue(thread_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    session = await run_in_threadpool(get_session_header_for_actor, ctx.session_store, thread_id, actor)
+    if session.get("ownerUserId") != actor["userId"]:
+        raise HTTPException(403, "Only the thread owner may change its queue.")
+    body = await json_body(request)
+    action = string_field(body, "action")
+    message_id = string_field(body, "id")
+    message: dict[str, Any] | None = None
+    if action in ("enqueue", "import", "remove", "edit", "promote") and (not message_id or len(message_id) > 100):
+        raise HTTPException(400, "A message ID of at most 100 characters is required.")
+    if action in ("enqueue", "import"):
+        text = string_field(body, "text").strip()
+        if not text or len(text) > 100_000:
+            raise HTTPException(400, "Message text must contain 1–100,000 characters.")
+        agents = await run_in_threadpool(ctx.agent_store.list_agents, supervisor_user_id=actor["userId"])
+        addressed = _leading_mention_agent_ids(text, agents)
+        message = {"id": message_id, "text": text}
+        if addressed:
+            message["addressAgentIds"] = list(addressed)
+    try:
+        return await run_in_threadpool(change_queue, ctx.session_store, thread_id, action, message=message, message_id=message_id)
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error

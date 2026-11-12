@@ -75,3 +75,18 @@
 @media (max-width: 640px) {
   .message-queue { --queue-inset: var(--sp-3); }
 }
+
+.message-queue-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-1);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+.message-queue-error { margin: var(--sp-2); color: var(--ink-1); font: var(--type-body-sm); }
+@media (pointer: coarse) {
+  .message-queue-actions button, .message-queue-text { min-height: 44px; }
+  .message-queue-actions button { min-width: 44px; }
+}

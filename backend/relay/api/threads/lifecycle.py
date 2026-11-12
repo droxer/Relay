@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 
 from fastapi import APIRouter, HTTPException, Request, Response
+
+from ...collaboration.queue import change_queue
 from loguru import logger
 
 from ...core.computer_identity import computer_id as resolve_computer_id
@@ -294,6 +296,8 @@ def cancel_session_run(
     session = get_session_for_actor(ctx.session_store, session_id, actor)
     body = _request_body
     reason = string_field(body, "reason") or "Cancelled by user."
+    if body.get("preserveQueue") is not True and session.get("messageQueue"):
+        change_queue(ctx.session_store, session_id, "pause")
     node = next(
         (
             item

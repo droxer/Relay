@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 import { Composer } from "../src/components/composer/Composer";
-import { useThreadQueueStore } from "../src/lib/threadQueueStore";
+import { MAX_QUEUED_MESSAGES } from "../src/lib/threadQueue";
 import { RecordResultLine } from "../src/components/task-record/RecordResultLine";
 import { useAuthSession } from "../src/hooks/useAuthSession";
 import { apiJson } from "../src/api-client/client";
@@ -15,17 +15,19 @@ function setup() {
   return { client, wrapper };
 }
 it.each([0, 20])("only clears a draft that the queue accepts (existing: %s)", async (count) => {
-  useThreadQueueStore.setState({ queues: {} }); sessionStorage.clear();
-  for (let i = 0; i < count; i++) useThreadQueueStore.getState().enqueue("t", `queued ${i}`);
-  const enqueue = vi.fn((text: string) => useThreadQueueStore.getState().enqueue("t", text));
+  const queue = Array.from({ length: count }, (_, i) => `queued ${i}`);
+  const enqueue = vi.fn(async (text: string) => {
+    if (queue.length >= MAX_QUEUED_MESSAGES) return false;
+    queue.push(text);
+    return true;
+  });
   const view = render(<Composer logicalAgents={[]} activeLogicalAgentId={null} onLogicalAgentPicked={vi.fn()} activeAgentDisplayName="Codex" selectedUser="user" initializingThread={false} runtimeNodes={[]} runtimeNodeId="n" selectedRuntimeNode={null} activeRuntimeNode={null} onRuntimeNodeChange={vi.fn()} running onSend={vi.fn()} onCancelRun={vi.fn()} onQueue={enqueue} />);
   const field = view.getByRole("textbox") as HTMLTextAreaElement;
   fireEvent.change(field, { target: { value: "Keep this draft" } });
   fireEvent.submit(view.container.querySelector("form")!);
   await waitFor(() => expect(enqueue).toHaveBeenCalled());
   expect(field.value).toBe(count === 20 ? "Keep this draft" : "");
-  if (count === 20) expect(view.getByRole("alert").textContent).toContain("composer.queue_full");
-  expect(useThreadQueueStore.getState().queues.t).toHaveLength(count === 20 ? 20 : 1);
+  expect(queue).toHaveLength(count === 20 ? 20 : 1);
   view.unmount();
 });
 it.each(["running:1", "done:2"])("reuses matching panel revisions and refreshes a changed revision after remount: %s", async (revision) => {

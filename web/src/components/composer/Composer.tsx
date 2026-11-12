@@ -105,7 +105,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   onCancelRun: () => void;
   /** Takes a draft written while the run is going. Without it, the box
    *  cannot send until the run ends. */
-  onQueue?: (text: string) => boolean | void;
+  onQueue?: (text: string) => boolean | void | Promise<boolean>;
   /** Docked on the card's top edge — what the thread is waiting to hear. */
   prompt?: ReactNode;
   /** Docked under `prompt` — the messages waiting for the next round. */
@@ -120,6 +120,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     return () => { mounted.current = false; };
   }, []);
   const composer = useComposer(draftKey);
+  const currentDraft = useRef({ key: draftKey, text: "" });
   const imageInput = useComposerImages(draftKey);
   const [connectionDrafts, setConnectionDrafts] = useState<Record<string, ConnectionGrant[]>>({});
   const [connectionError, setConnectionError] = useState(false);
@@ -135,6 +136,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   const {
     composerText, setComposerText, textareaRef,
   } = composer;
+  currentDraft.current = { key: draftKey, text: composerText };
   // Derived every render rather than stored: the draft text is the only
   // source of truth for who this message addresses.
   const parsed = useMemo(
@@ -218,16 +220,17 @@ const ComposerView = forwardRef<ComposerHandle, {
   const cannotSend = cannotSendAsWritten || parsed.blocked;
   // A draft written mid-run waits in the queue. Text only: an image is an
   // upload bound to this box, so a draft carrying one waits here instead.
-  const [queueFull, setQueueFull] = useState(false);
   const canQueue = running && !!onQueue && !readOnly && !!composerText.trim() && !imageInput.images.length && !imageInput.busy;
   const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false, userMessageId?: string): Promise<boolean> => {
     if (running && !literal && canQueue && onQueue) {
-      if (onQueue(composerText) === false) {
-        setQueueFull(true);
+      if (sendPending) return false;
+      setSendPending(true);
+      let accepted: boolean | void;
+      try { accepted = await onQueue(composerText); } finally { setSendPending(false); }
+      if (accepted === false) {
         return false;
       }
-      setQueueFull(false);
-      setComposerText("");
+      if (currentDraft.current.key === draftKey && currentDraft.current.text === composerText) setComposerText("");
       return true;
     }
     if (running || sendPending) return false;
@@ -384,7 +387,6 @@ const ComposerView = forwardRef<ComposerHandle, {
           {connectionQueryClient && <ConnectionGrantField key={connectionKey} targetId={connectionTargetId} value={connectionGrants}
             disabled={readOnly || running || sendPending}
             onChange={grants => setConnectionDrafts(previous => ({ ...previous, [connectionKey]: grants }))} />}
-          {queueFull && <p role="alert">{t("composer.queue_full")}</p>}
           {connectionError && <p role="alert">{t("connections.action_failed")}</p>}
           <ComposerImagePreviews input={imageInput} />
           <MentionPopup matches={mentions.matches} onPick={mentions.pick}>
@@ -504,7 +506,7 @@ const ComposerView = forwardRef<ComposerHandle, {
             {/* Mid-run, Enter queues the draft; the button says so beside
                 Stop, which keeps its place so focus survives the run. */}
             {canQueue ? (
-              <Button variant="outline" type="submit" size="xs" className="composer-queue-button"
+              <Button variant="outline" type="submit" size="xs" className="composer-queue-button" disabled={sendPending}
                 tooltip={t("composer.queue_shortcut", { shortcut: sendShortcutLabel() })}>
                 {t("composer.queue")}
               </Button>
