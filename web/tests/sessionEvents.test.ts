@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { applySessionEvent, shareSessions } from "../src/lib/sessionEvents.js";
+import { mergeSessionSnapshotIntoSessions, mergeSessionSummaries } from "../src/lib/sessionPollMerge.js";
+import { queuedRun } from "../src/lib/queuedRun.js";
 import type { RelaySession } from "../src/types.js";
 import { materializeEvents, relayEvent } from "../../packages/relay-core/src/index.js";
 
@@ -320,4 +322,75 @@ describe("shareSessions", () => {
     assert.equal(reordered[0], b);
     assert.equal(reordered[1], a);
   });
+});
+
+describe("queued execution follows live progress", () => {
+  const queued: NonNullable<RelaySession["execution"]> = {
+    phase: "queued", executionConfirmed: false, canDelete: false, deletionRequested: false,
+    blockingReason: "awaiting_dispatch", queuedAt: "2026-06-20T00:00:00.000Z",
+    lastConfirmedAt: null, nextRecoveryAt: null,
+  };
+  const started = { ...relayEvent("agent.started", "ses_1", { runId: "run_1", agent: "codex" }), timestamp: "2026-06-20T00:00:01.000Z" };
+  const output = { ...relayEvent("agent.output", "ses_1", { runId: "run_1", agent: "codex", stream: "stdout", text: "Working", sequence: 0 }), timestamp: "2026-06-20T00:00:02.000Z" };
+
+  it("leaves the queue when the active run asks to use a tool", () => {
+    const original = applySessionEvent(session(), started);
+    original.execution = { ...queued, queuedAt: null };
+    const asked = relayEvent("agent.permission_requested", "ses_1", {
+      request: { id: "perm_1", runId: "run_1", agent: "codex", toolName: "Bash", input: "pwd" },
+    });
+    const next = applySessionEvent(original, asked);
+    assert.equal(next.execution?.phase, "running");
+    assert.equal(queuedRun(next), null);
+    assert.equal(next.permissionRequests?.[0]?.id, "perm_1");
+  });
+
+  it("keeps stopping, recovery, and finalization authoritative despite output", () => {
+    for (const phase of ["stopping", "recovery_required", "unresponsive", "finalizing", "terminal", "running"] as const) {
+      const original = applySessionEvent(session(), started);
+      original.execution = { ...queued, phase };
+      assert.equal(applySessionEvent(original, output).execution, original.execution);
+    }
+  });
+
+  it("ignores late output from a completed or unknown run", () => {
+    const original = applySessionEvent(session(), started);
+    original.execution = queued;
+    assert.equal(applySessionEvent(original, { ...output, runId: "older_run" }).execution, queued);
+    original.agentRuns = original.agentRuns.map(run => ({ ...run, status: "completed" }));
+    assert.equal(applySessionEvent(original, output).execution, queued);
+  });
+
+  it("does not use output preceding a newer admission to advance its queue", () => {
+    const original = applySessionEvent(session(), started);
+    original.execution = { ...queued, queuedAt: "2026-06-20T00:00:03.000Z" };
+    assert.equal(applySessionEvent(original, output).execution, original.execution);
+  });
+
+  it("keeps streamed progress when older summary and detail requests return", () => {
+    const original = applySessionEvent(session(), started);
+    original.execution = queued;
+    const live = applySessionEvent(original, output);
+    const { agentRuns, artifacts, decisions, events, participants, ...fields } = original;
+    const summary = { ...fields, eventCount: events.length, runCount: agentRuns.length, artifactCount: artifacts.length };
+    assert.equal(mergeSessionSummaries([live], [summary])[0].execution?.phase, "running");
+    const replayed = mergeSessionSnapshotIntoSessions([live], original, applySessionEvent)[0];
+    assert.equal(replayed.execution?.phase, "running");
+    assert.equal(queuedRun(replayed), null);
+  });
+
+  for (const batched of [false, true]) {
+    it(`stops showing the queue immediately on ${batched ? "batched" : "single"} output`, () => {
+      const original = applySessionEvent(session(), relayEvent("agent.started", "ses_1", { runId: "run_1", agent: "codex" }));
+      original.execution = queued;
+      const payload = { runId: "run_1", agent: "codex" as const };
+      const output = batched
+        ? relayEvent("agent.output.batch", "ses_1", { ...payload, entries: [{ stream: "stdout", text: "Working", sequence: 0 }] })
+        : relayEvent("agent.output", "ses_1", { ...payload, stream: "stdout", text: "Working", sequence: 0 });
+      const next = applySessionEvent(original, output);
+      assert.equal(queuedRun(next), null);
+      assert.equal(next.execution?.phase, "running");
+      assert.equal(original.execution.phase, "queued");
+    });
+  }
 });
