@@ -577,3 +577,52 @@ def test_unaccepted_output_for_missing_thread_is_terminal_conflict(tmp_path, wir
                                json={'reports': [{'id': 'a' * 64, 'digest': digest, 'body': raw}]})
         assert response.json()['receipts'][0]['status'] == 409
     assert not registry.daemon_store.report_was_accepted('node', event['commandId'], 'a' * 64, digest)
+
+
+def _cancelled_with_newer_stop(tmp_path):
+    registry, _, event = fixture(tmp_path)
+    terminal = {key: value for key, value in event.items() if key not in ('stream', 'sequence', 'text', 'replayed')}
+    cancelled = {**terminal, 'type': 'run.cancelled', 'reason': 'Stopped.'}
+    registry.handle_durable_report('node', cancelled, 'secret', '1' * 64, 'c' * 64)
+    stop = {'id': new_database_id(), 'type': 'run.cancel', 'commandId': cancelled['commandId'],
+            'targetLeaseId': cancelled['leaseId'], 'sessionId': cancelled['sessionId'],
+            'runId': cancelled['runId'], 'agent': 'codex', 'reason': 'Stopped.'}
+    registry.daemon_store.enqueue_command('node', stop)
+    return registry, cancelled, stop
+
+
+def test_a_replayed_cancel_report_settles_a_newer_stop_for_the_same_run(tmp_path):
+    # The daemon answers a stop for a run it no longer executes by replaying
+    # the cancellation under its original identity. Without settling the stop
+    # here, it is leased, expires, and is redelivered forever.
+    registry, cancelled, stop = _cancelled_with_newer_stop(tmp_path)
+    registry.handle_durable_report('node', cancelled, 'secret', '1' * 64, 'c' * 64)
+    assert registry.daemon_store.get_command(stop['id'])['status'] == 'completed'
+    assert registry.daemon_store.take_queued_commands('node', lease_seconds=0) == []
+
+
+def test_a_replayed_cancel_in_a_report_batch_settles_a_newer_stop(tmp_path):
+    import json
+    from relay.api.computers.daemon_reports import _accept_batch
+    registry, cancelled, stop = _cancelled_with_newer_stop(tmp_path)
+    body = json.dumps(cancelled)
+    # The receipt check before the per-report scope is the batch's short-cut.
+    registry.daemon_store.report_was_accepted = lambda *_args: True
+    [receipt] = _accept_batch(registry, 'node', 'secret', [
+        {'id': '1' * 64, 'digest': sha256(body.encode()).hexdigest(), 'body': body},
+    ])
+    assert receipt['status'] == 200
+    assert registry.daemon_store.get_command(stop['id'])['status'] == 'completed'
+
+
+def test_stopping_a_run_that_already_ended_sends_no_stop(tmp_path):
+    registry, cancelled, _stop = _cancelled_with_newer_stop(tmp_path)
+    registry.daemon_store.mark_cancel_commands_completed('node', cancelled['commandId'])
+    # A stale in-memory entry is what used to publish a stop for a finished run.
+    registry.active_commands[cancelled['commandId']] = {
+        'sandboxId': 'node', 'commandId': cancelled['commandId'], 'sessionId': cancelled['sessionId'],
+        'runId': cancelled['runId'], 'agent': 'codex',
+    }
+    assert registry.cancel_active_run('node', cancelled['sessionId'], 'Stopped again.') is not None
+    assert registry.daemon_store.pending_commands_of_type('node', 'run.cancel') == []
+    assert cancelled['commandId'] not in registry.active_commands

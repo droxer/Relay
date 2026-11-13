@@ -104,3 +104,28 @@ def test_online_computer_does_not_prove_execution_exit():
     assert status["phase"] == "unresponsive"
     assert status["executionConfirmed"] is False
     assert status["canDelete"] is False
+
+
+def test_a_stop_in_flight_on_an_online_computer_reads_as_stopping():
+    # The daemon stops renewing the lease once it holds the exit report.
+    request = {"status": "running", "state": {
+        "_relay_stop_command_id": "stop", "_relay_stop_requested_at": "2026-09-15T23:59:40Z",
+    }}
+    dead_lease = {"status": "dispatched", "leaseExpiresAt": "2026-09-15T23:59:50Z"}
+    online = execution_status({}, request, dead_lease, now=NOW, computer_online=True)
+    assert (online["phase"], online["blockingReason"]) == ("stopping", "awaiting_termination")
+    assert online["executionConfirmed"] is False
+    assert online["canDelete"] is False
+    offline = execution_status({}, request, dead_lease, now=NOW, computer_online=False)
+    assert (offline["phase"], offline["blockingReason"]) == ("unresponsive", "execution_unconfirmed")
+
+
+def test_a_stop_on_an_online_computer_still_escalates_after_the_grace():
+    request = {"status": "running", "state": {
+        "_relay_stop_command_id": "stop", "_relay_stop_requested_at": "2026-09-15T23:58:00Z",
+    }}
+    status = execution_status({}, request, {
+        "status": "dispatched", "leaseExpiresAt": "2026-09-15T23:59:00Z",
+    }, now=NOW, computer_online=True)
+    assert status["blockingReason"] == "termination_unconfirmed"
+    assert status["canReportGone"] is True
