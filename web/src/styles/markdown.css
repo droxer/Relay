@@ -220,7 +220,8 @@
 /* Han glyphs have no cursive forms — `italic` is synthesized oblique, which
    reads as a rendering bug rather than a quote. The bar and the muted ink
    already carry the quotation signal. */
-html:lang(zh-CN) .md-body blockquote {
+html:lang(zh-CN) .md-body blockquote,
+html:lang(zh-TW) .md-body blockquote {
   font-style: normal;
 }
 

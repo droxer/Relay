@@ -289,4 +289,4 @@ def _validate_user_preferences(
     if theme is not None and theme not in USER_THEMES:
         raise ValueError("theme must be light, dark, or system.")
     if language is not None and language not in USER_LANGUAGES:
-        raise ValueError("language must be en or zh-CN.")
+        raise ValueError("language must be en, zh-CN, or zh-TW.")

@@ -13,7 +13,7 @@ import { Alert } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useOnOpen } from "@/hooks/useKeyChange";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
-import { INVITE_LOCALES, inviteEmailProblem, waitlistLocale, WAITLIST_LIMITS, type InviteLocale } from "../../../lib/waitlist";
+import { INVITE_LOCALE_KEYS, INVITE_LOCALES, inviteEmailProblem, waitlistLocale, WAITLIST_LIMITS, type InviteLocale } from "../../../lib/waitlist";
 import { WAITLIST_QUERY_KEY } from "./useWaitlistQueue";
 
 interface InviteByEmailDrawerProps {
@@ -46,7 +46,7 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
      locale code (`zh-CN`) until the popup has mounted once. */
   const localeItems = INVITE_LOCALES.map((option) => ({
     value: option,
-    label: t(`admin.waitlist.invite_email_language_${option === "zh-CN" ? "zh" : "en"}`),
+    label: t(`admin.waitlist.invite_email_language_${INVITE_LOCALE_KEYS[option]}`),
   }));
   const confirmDiscardChanges = useUnsavedChangesGuard(open && Boolean(email.trim() || name.trim()) && !isBusy);
 

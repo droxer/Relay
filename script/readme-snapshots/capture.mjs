@@ -14,7 +14,7 @@
    --draft        1x pixels, for a quick look while editing fixtures
    --mobile       phone viewport; defaults to Home, Threads, and Tasks
    --theme <t>    dark (default, the README set) or light; light shots are
-                  written as relay-<name>-light[-zh-CN].png */
+                  written as relay-<name>-light[-zh-CN|-zh-TW].png */
 
 import { createServer } from "node:http";
 import { mkdir, readFile } from "node:fs/promises";
@@ -30,7 +30,11 @@ const VIEWPORT = { width: 1440, height: 900 };
 const PHONE_VIEWPORT = { width: 390, height: 844 };
 const PHONE_SHOTS = ["home", "threads", "issues"];
 const THEMES = ["dark", "light"];
-const LANGUAGES = [{ code: "en", suffix: "" }, { code: "zh-CN", suffix: "-zh-CN" }];
+const LANGUAGES = [
+  { code: "en", suffix: "" },
+  { code: "zh-CN", suffix: "-zh-CN" },
+  { code: "zh-TW", suffix: "-zh-TW" },
+];
 const READY_TIMEOUT_MS = 20_000;
 /* Long enough for web fonts, avatars, and the enter transitions to settle. */
 const SETTLE_MS = 900;

@@ -1842,6 +1842,7 @@
       "invite_email_language": "Email language",
       "invite_email_language_en": "English",
       "invite_email_language_zh": "简体中文",
+      "invite_email_language_zh_tw": "繁體中文",
       "invite_email_send": "Send invite",
       "invite_email_create_link": "Create invite link",
       "invite_email_required": "Enter an email address.",

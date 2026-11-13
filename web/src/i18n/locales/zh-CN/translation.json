@@ -1803,6 +1803,7 @@
       "invite_email_language": "邮件语言",
       "invite_email_language_en": "English",
       "invite_email_language_zh": "简体中文",
+      "invite_email_language_zh_tw": "繁體中文",
       "invite_email_send": "发送邀请",
       "invite_email_create_link": "生成邀请链接",
       "invite_email_required": "请输入邮箱地址。",

@@ -510,20 +510,21 @@ demo computer's ready state. Set `RELAY_DEMO_BASE_URL` or
 
 ### README snapshots
 
-The product snapshots in `README.md` and `README.zh-CN.md` are generated, not
-hand-captured. The script loads the static web export and answers every API
-call from the demo data in `script/readme-snapshots/fixtures.mjs`, so it needs
-no backend, database, daemon, or agent credentials — and it can show states a
-seeded backend cannot, such as a run in flight:
+The product snapshots in `README.md`, `README.zh-CN.md`, and
+`README.zh-TW.md` are generated, not hand-captured. The script loads the
+static web export and answers every API call from the demo data in
+`script/readme-snapshots/fixtures.mjs`, so it needs no backend, database,
+daemon, or agent credentials — and it can show states a seeded backend cannot,
+such as a run in flight:
 
 ```bash
 npm run build -w web
 node script/readme-snapshots/capture.mjs
 ```
 
-It writes `docs/images/relay-<surface>.png` and the `-zh-CN` variant of each
-at 2880×1800. Pass `--only <surface>` to refresh one snapshot, or
-`--draft --out <dir>` for a quick 1x pass while editing fixtures. The run
+It writes `docs/images/relay-<surface>.png`, plus the `-zh-CN` and `-zh-TW`
+variants of each at 2880×1800. Pass `--only <surface>` to refresh one snapshot,
+or `--draft --out <dir>` for a quick 1x pass while editing fixtures. The run
 fails if a page throws, renders an error boundary, never reaches its ready
 selector, or requests an API path the fixtures do not answer. It uses the
 Chromium that Playwright installs (`npx playwright install chromium`).

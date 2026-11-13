@@ -59,6 +59,25 @@ _COPY = {
         "changed_body": "@{username} 的密码已于 {time} 更改，所有已登录的会话均已退出。",
         "changed_footer": "如果这不是你本人的操作，请立即联系你的 Relay 管理员。",
     },
+    "zh-TW": {
+        "invite_subject": "你的 Relay 邀請",
+        "invite_greeting": "{name}，你好：",
+        "invite_greeting_anonymous": "你好：",
+        "invite_body": "名額已為你開放，現在就可以開始使用 Relay。",
+        "invite_action": "建立帳號",
+        "invite_expiry": "此連結僅可使用一次，將於 {expires} 失效。",
+        "confirm_subject": "你已加入 Relay 候補名單",
+        "confirm_body": "感謝你對 Relay 的關注。你已在候補名單中，一有名額我們會立即傳送邀請郵件。",
+        "footer": "如果這不是你本人的操作，請忽略此郵件。",
+        "reset_subject": "重置你的 Relay 密碼",
+        "reset_body": "有人請求重置 @{username} 的密碼。",
+        "reset_action": "設定新密碼",
+        "reset_expiry": "此連結僅可使用一次，將在 {minutes} 分鐘後失效。",
+        "reset_footer": "如果這不是你本人的操作，請忽略此郵件，你的密碼不會改變。",
+        "changed_subject": "你的 Relay 密碼已更改",
+        "changed_body": "@{username} 的密碼已於 {time} 更改，所有已登入的會話均已退出。",
+        "changed_footer": "如果這不是你本人的操作，請立即聯絡你的 Relay 管理員。",
+    },
 }
 
 
