@@ -275,9 +275,9 @@
      hit area quietly. That is right for a flat, low-chrome system, and it is
      exactly the cue a user asking for more contrast wants made explicit, so
      raise both the rest fill and the hover step well clear of the 8%/16%
-     default rather than a token step above it. Register-agnostic: --ink-1
-     flips with the theme, so this lightens on dark and darkens on light
-     without a second declaration. */
+     default rather than a token step above it. --ink-1 flips with the theme,
+     so this lightens on dark and darkens on light; the dark hover strength
+     is capped below to preserve label contrast. */
   :root {
     --control-fill: color-mix(in srgb, var(--ink-1) 20%, transparent);
     --control-fill-hover: color-mix(in srgb, var(--ink-1) 36%, transparent);
@@ -285,6 +285,11 @@
 
   html[data-theme="light"] {
     --ink-2: var(--ink-1);
+    /* The 20% fill above darkens every filled control, which pulled the base
+       --ink-3/--ink-4 on it to 4.25:1 — below the default mode. Derived from
+       --ink-1 so the ladder keeps its order and clears AA on that fill. */
+    --ink-3: color-mix(in srgb, var(--ink-1) 90%, var(--surface-0));
+    --ink-4: color-mix(in srgb, var(--ink-1) 84%, var(--surface-0));
     --line-1: color-mix(in srgb, var(--ink-1) 42%, var(--surface-0));
     --line-2: color-mix(in srgb, var(--ink-1) 28%, var(--surface-0));
     --focus-w: 3px;
@@ -292,6 +297,10 @@
   }
 
   html[data-theme="dark"] {
+    /* The shared 36% hover wash lifts dark controls too close to their text
+       (3.91–4.42:1). Keep it above the enhanced 20% rest wash while leaving
+       enough headroom for labels on raised surfaces and hovered rows. */
+    --control-fill-hover: color-mix(in srgb, var(--ink-1) 28%, transparent);
     --ink-2: color-mix(in srgb, var(--dark-ink) 92%, var(--dark-surface));
     --line-1: color-mix(in srgb, var(--dark-ink) 38%, var(--dark-surface));
     --line-2: color-mix(in srgb, var(--dark-ink) 26%, var(--dark-surface));
