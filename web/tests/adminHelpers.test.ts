@@ -167,15 +167,15 @@ describe("runtime status", () => {
     assert.equal(listed("ready"), true);
   });
 
-  it("orders runtimes Codex, Claude, Pi, OpenCode, Kimi", () => {
+  it("orders visible runtimes and hides Kimi", () => {
     const all = node({ id: "a", agents: { claude: "ready", codex: "ready", kimi: "ready", pi: "ready", opencode: "ready" } });
-    assert.deepEqual(visibleNodeAgentNames(all), ["codex", "claude", "pi", "opencode", "kimi"]);
+    assert.deepEqual(visibleNodeAgentNames(all), ["codex", "claude", "pi", "opencode"]);
     const defaults = node({ id: "b", agents: { claude: "ready", codex: "ready", kimi: "ready", pi: "unknown", opencode: "unavailable" } });
-    assert.deepEqual(visibleNodeAgentNames(defaults), ["codex", "claude", "kimi"]);
+    assert.deepEqual(visibleNodeAgentNames(defaults), ["codex", "claude"]);
   });
 
   it("orders any runtime list the same way", () => {
-    assert.deepEqual(orderNodeAgentNames(["kimi", "opencode", "claude", "pi", "codex"]), ["codex", "claude", "pi", "opencode", "kimi"]);
+    assert.deepEqual(orderNodeAgentNames(["kimi", "opencode", "claude", "pi", "codex"]), ["codex", "claude", "pi", "opencode"]);
   });
 
   it("lists opt-in OpenCode only once the computer reports it installed", () => {
@@ -550,7 +550,7 @@ describe("fleetRuntimeSlots", () => {
 
 describe("failedRuntimeCount", () => {
   it("counts shown runtimes that last reported failed", () => {
-    assert.equal(failedRuntimeCount({ agents: { codex: "failed", claude: "ready", kimi: "failed", pi: "unavailable" } } as Pick<ControlPanelDaemonNodeRecord, "agents">), 2);
+    assert.equal(failedRuntimeCount({ agents: { codex: "failed", claude: "ready", kimi: "failed", pi: "unavailable" } } as Pick<ControlPanelDaemonNodeRecord, "agents">), 1);
   });
 
   it("does not count a runtime an admin switched off", () => {

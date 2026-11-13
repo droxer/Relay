@@ -72,6 +72,14 @@ describe("onboarding progress", () => {
     assert.equal(progress.computer?.name, "MacBook Pro");
   });
 
+  it("does not offer Kimi as a ready runtime", () => {
+    const progress = onboardingProgress(inputs({
+      nodes: [node({ agents: { kimi: "ready" } } as Partial<DaemonNodeMonitorRecord>)],
+    }));
+    assert.deepEqual(progress.computer?.readyRuntimes, []);
+    assert.equal(progress.blocked, "no_ready_runtime");
+  });
+
   it("says when the account may not enroll a computer of its own", () => {
     const progress = onboardingProgress(inputs({
       user: { userId: USER, effectiveMaxLocalComputers: 0, onboarding: { introSeenAt: "x" } },

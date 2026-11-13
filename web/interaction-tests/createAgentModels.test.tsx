@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { CreateAgentDialog } from "../src/components/agents/CreateAgentDialog";
 import { agentLabel } from "../src/lib/plan";
+import { AGENT_RUNTIME_DISPLAY_ORDER } from "../src/lib/agentRuntimeOrder";
 import { AGENT_NAMES } from "../src/types";
 
 const api = vi.hoisted(() => ({ listDaemonNodes: vi.fn(), createAgent: vi.fn() }));
@@ -48,7 +49,8 @@ it("shows every reported model after selecting each runtime on a running compute
     fireEvent.change(screen.getByRole("combobox", { name: "agents_page.create_computer_label" }), {
       target: { value: "device:alice:mac" },
     });
-    for (const kind of AGENT_NAMES) {
+    expect(screen.queryByRole("radio", { name: "Kimi" })).toBeNull();
+    for (const kind of AGENT_RUNTIME_DISPLAY_ORDER) {
       await user.click(screen.getByRole("radio", { name: agentLabel(kind) }));
       const input = screen.getByRole("combobox", { name: "agents_page.model_label" }) as HTMLInputElement;
       expect(input.value).toBe("");

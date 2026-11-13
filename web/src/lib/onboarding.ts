@@ -6,6 +6,7 @@ import type {
   RelaySession,
   UserAgent,
 } from "../types.js";
+import { isVisibleAgentRuntime } from "./agentRuntimeOrder.ts";
 import { agentsForThreadNode } from "./threadRuntime.ts";
 import { dispatchReadyAgents } from "./agentReadiness.ts";
 import { countUserDeviceComputers, nodesAssignedToUser } from "./computerNodes.ts";
@@ -62,7 +63,7 @@ export type OnboardingProgress = {
 };
 
 function readyRuntimes(node: DaemonNodeMonitorRecord): AgentName[] {
-  return dispatchReadyAgents(node, Object.keys(node.agents ?? {}) as AgentName[]);
+  return dispatchReadyAgents(node, Object.keys(node.agents ?? {}).filter(isVisibleAgentRuntime));
 }
 
 function onlineComputer(nodes: readonly DaemonNodeMonitorRecord[]): OnboardingComputer | undefined {

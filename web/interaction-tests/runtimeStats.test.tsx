@@ -12,18 +12,20 @@ it("counts installations, excludes offline and disabled readiness, and separates
     node({ agents: { codex: "failed", kimi: "unresponsive", claude: "unavailable" } }),
   ]);
   expect(rows.find(row => row.agent === "codex")).toEqual({ agent: "codex", installed: 4, ready: 1, failed: 1 });
-  expect(rows.find(row => row.agent === "kimi")?.failed).toBe(1);
+  expect(rows.find(row => row.agent === "kimi")).toBeUndefined();
   expect(rows.find(row => row.agent === "claude")?.installed).toBe(0);
 });
 it("shows missing token reporting as unknown, including partial coverage", () => {
   render(<RuntimeUsage snapshot={{ runtimes: [
     { agent: "codex", runs: 4, reportedRuns: 3, fresh: 123, cacheRead: 45 },
-    { agent: "kimi", runs: 2, reportedRuns: 0, fresh: 0, cacheRead: 0 },
+    { agent: "pi", runs: 2, reportedRuns: 0, fresh: 0, cacheRead: 0 },
+    { agent: "kimi", runs: 9, reportedRuns: 0, fresh: 0, cacheRead: 0 },
   ] } as TokenUsageState} />);
+  expect(screen.queryByRole("row", { name: /Kimi/ })).toBeNull();
   const codex = screen.getByRole("row", { name: /Codex/ });
   expect(within(codex).getByText("123")).toBeTruthy();
   expect(within(codex).getByText("admin.v2.dash_runtime_coverage")).toBeTruthy();
-  expect(within(screen.getByRole("row", { name: /Kimi/ })).getAllByText("—")).toHaveLength(2);
+  expect(within(screen.getByRole("row", { name: /Pi/ })).getAllByText("—")).toHaveLength(2);
 });
 it("handles loading, errors and no runtime history", () => {
   const { rerender } = render(<RuntimeUsage snapshot={{ isLoading: true } as TokenUsageState} />);
@@ -36,7 +38,8 @@ it("handles loading, errors and no runtime history", () => {
 it("labels inventory as current, independent of the historical range", () => {
   render(<RuntimeInventory nodes={[]} />);
   expect(screen.getByText("admin.v2.dash_runtime_inventory_hint")).toBeTruthy();
-  expect(screen.getAllByRole("row")).toHaveLength(6);
+  expect(screen.getAllByRole("row")).toHaveLength(5);
+  expect(screen.queryByRole("row", { name: /Kimi/ })).toBeNull();
 });
 it("does not claim zero installations while the inventory is loading or failed", () => {
   const { rerender } = render(<RuntimeInventory nodes={[]} loading />);

@@ -18,14 +18,14 @@ describe("nextDefaultAgentOffer", () => {
     assert.equal(nextDefaultAgentOffer(offers, new Set(["a", "b"])), null);
   });
 
-  it("keeps only runtimes this build can name, in registry order", () => {
+  it("hides Kimi and unknown runtimes", () => {
     const next = nextDefaultAgentOffer([offer("a", ["kimi", "future", "claude"])], new Set());
 
-    assert.deepEqual(next?.executorKinds, ["claude", "kimi"]);
+    assert.deepEqual(next?.executorKinds, ["claude"]);
   });
 
   it("skips a computer that offers nothing nameable", () => {
-    const next = nextDefaultAgentOffer([offer("a", ["future"]), offer("b", ["pi"])], new Set());
+    const next = nextDefaultAgentOffer([offer("a", ["kimi", "future"]), offer("b", ["pi"])], new Set());
 
     assert.equal(next?.computerId, "b");
   });
@@ -36,6 +36,13 @@ describe("splitDefaultAgentAnswer", () => {
     const answer = splitDefaultAgentAnswer(offer("a", ["claude", "codex", "kimi"]), new Set<AgentName>(["codex"]));
 
     assert.deepEqual(answer, { accept: ["codex"], decline: ["claude", "kimi"] });
+  });
+
+  it("never accepts a hidden runtime even if selected", () => {
+    assert.deepEqual(
+      splitDefaultAgentAnswer(offer("a", ["kimi", "codex"]), new Set<AgentName>(["kimi", "codex"])),
+      { accept: ["codex"], decline: ["kimi"] },
+    );
   });
 
   it("declines everything when nothing is checked", () => {

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TokenUsageState } from "../../../hooks/useTokenUsage";
 import type { ControlPanelDaemonNodeRecord } from "../../../types";
+import { isVisibleAgentRuntime } from "../../../lib/agentRuntimeOrder";
 import { runtimeInventory } from "../../../lib/runtimeInventory";
 import { formatCompact } from "../../../lib/compactNumber";
 
@@ -15,7 +16,7 @@ function runtimeName(agent: string | null, unknown: string) {
 
 export function RuntimeUsage({ snapshot }: { snapshot: TokenUsageState }) {
   const { t, i18n } = useTranslation();
-  const rows = snapshot.runtimes ?? [];
+  const rows = (snapshot.runtimes ?? []).filter((row) => row.agent === null || isVisibleAgentRuntime(row.agent));
   const format = (value: number) => formatCompact(value, i18n.language);
   return (
     <Card render={<section />}>
