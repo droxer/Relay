@@ -8,7 +8,6 @@ import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentsEligibleForProject } from "../lib/projectPage";
 import {
-  PROJECT_ROLE_OPTIONS,
   type ProjectRole,
   type DaemonNodeMonitorRecord,
   type UserAgent,
@@ -20,7 +19,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RoleSelectItems } from "./agents/RoleSelectItems";
 import { Textarea } from "@/components/ui/textarea";
 import { RosterAgentItem, RosterTriggerValue } from "./roster/RosterOption";
 import { rosterLabel, useRosterTabs, type RosterTab } from "./roster/RosterTabs";
@@ -284,9 +284,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
                   <SelectValue>{(value: ProjectRole) => t(`project.roles.${value}`)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {PROJECT_ROLE_OPTIONS.map((role) => (
-                    <SelectItem key={role} value={role}>{t(`project.roles.${role}`)}</SelectItem>
-                  ))}
+                  <RoleSelectItems label={(role) => t(`project.roles.${role}`)} />
                 </SelectContent>
               </Select>
             </Field>

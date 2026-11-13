@@ -17,12 +17,13 @@ import {
   type SetupMemberDraft,
   type SetupTaskDraft,
 } from "../lib/projectSetup";
-import { PROJECT_ROLE_OPTIONS, type ProjectRole, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
+import { type ProjectRole, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RoleSelectItems } from "./agents/RoleSelectItems";
 import { Textarea } from "@/components/ui/textarea";
 import { RosterAgentMark } from "./roster/RosterOption";
 import { ProjectContextField, ProjectDescriptionField, ProjectGoalField } from "./ProjectFormFields";
@@ -429,9 +430,7 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
             <SelectValue>{(value: ProjectRole) => t(`project.roles.${value}`)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {PROJECT_ROLE_OPTIONS.map((role) => (
-              <SelectItem key={role} value={role}>{t(`project.roles.${role}`)}</SelectItem>
-            ))}
+            <RoleSelectItems label={(role) => t(`project.roles.${role}`)} />
           </SelectContent>
         </Select>
         <label className="project-member-flag">

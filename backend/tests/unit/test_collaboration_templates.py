@@ -111,7 +111,7 @@ def test_a_round_records_the_template_policy() -> None:
 
 
 def _preview_cases() -> list[dict[str, Any]]:
-    roles = [None, "planner", "implementer", "tester", "reviewer"]
+    roles = [None, "researcher", "planner", "designer", "implementer", "tester", "reviewer"]
     cases: list[dict[str, Any]] = []
     for size in (1, 2, 3):
         for member_roles in itertools.product(roles, repeat=size):

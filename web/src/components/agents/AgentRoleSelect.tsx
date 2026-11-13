@@ -2,15 +2,14 @@
 
 import type { Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { AGENT_ROLE_OPTIONS } from "../../types";
 import type { AgentRole } from "../../types";
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RoleSelectItems } from "./RoleSelectItems";
 
 interface AgentRoleSelectProps {
   value: AgentRole | "";
@@ -57,9 +56,7 @@ export function AgentRoleSelect({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {AGENT_ROLE_OPTIONS.map((role) => (
-          <SelectItem key={role} value={role}>{label(role)}</SelectItem>
-        ))}
+        <RoleSelectItems label={label} />
       </SelectContent>
     </Select>
   );

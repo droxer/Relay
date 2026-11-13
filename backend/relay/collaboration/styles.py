@@ -13,25 +13,28 @@ COLLABORATION_STYLES: tuple[str, ...] = ("build_review", "pipeline", "lead_led")
 DEFAULT_COLLABORATION_STYLE = "build_review"
 LEAD_LED = "lead_led"
 BUILDER_ROLES = frozenset({"implementer", "fixer"})
-# Investigation and planning come first, then design, then the writers, then
-# verification and delivery work, and review last. Lead planning, the lead-led
-# member order and Pipeline all sort by this.
+# Research answers questions before planning commits to them, then design,
+# then the builders, then verification and delivery work, and review last.
+# Lead planning, the lead-led member order and Pipeline all sort by this.
 ROLE_STAGE: dict[str, int] = {
     "researcher": 0,
-    "planner": 0,
-    "designer": 1,
-    "implementer": 2,
-    "fixer": 2,
-    "tester": 3,
-    "writer": 3,
-    "devops": 3,
-    "reviewer": 4,
+    "planner": 1,
+    "designer": 2,
+    "implementer": 3,
+    "fixer": 3,
+    "tester": 4,
+    "writer": 4,
+    "devops": 4,
+    "reviewer": 5,
 }
+# Specialists hand their work to the builders; Build and review never casts
+# one as the reviewer, and a team of them is better served by Pipeline.
+SPECIALIST_ROLES = frozenset({"researcher", "designer", "writer", "devops"})
 
 
 def role_stage(role: str | None) -> int:
     """Pipeline stage for a role; a missing or unknown role sits with the implementers."""
-    return 2 if role is None else ROLE_STAGE.get(role, 2)
+    return ROLE_STAGE.get(role or "", ROLE_STAGE["implementer"])
 
 
 class CollaborationStyleError(ValueError):
@@ -87,7 +90,11 @@ def fill_build_review_slots(
             (agent for agent in agents if _role(agent) in BUILDER_ROLES), None
         )
         builder = first_builder or lead or agents[0]
-    others = [agent for agent in agents if agent["id"] != builder["id"]]
+    others = [
+        agent
+        for agent in agents
+        if agent["id"] != builder["id"] and _role(agent) not in SPECIALIST_ROLES
+    ]
     reviewer = (
         next((agent for agent in others if _role(agent) == "reviewer"), None)
         or next((agent for agent in others if _role(agent) == "tester"), None)

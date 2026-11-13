@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import type { CollaborationStyle } from "relay-core";
-import { approvalSlotIndex, previewSlots, type SlotMember } from "../src/lib/collaborationStyle.js";
+import { approvalSlotIndex, previewGaps, previewSlots, type SlotMember } from "../src/lib/collaborationStyle.js";
 
 // Written by backend/tests/unit/test_collaboration_templates.py from what team
 // dispatch really fills, so the preview cannot drift from the backend alone.
@@ -42,5 +42,22 @@ describe("collaboration style preview", () => {
     // Lead-led and a one-step round hold nothing.
     assert.equal(approvalSlotIndex(previewSlots(pair, "b", "lead_led"), true), null);
     assert.equal(approvalSlotIndex(previewSlots([pair[0]], "b", "build_review"), true), null);
+  });
+
+  it("names the members Build and review leaves without a turn", () => {
+    const members: SlotMember[] = [
+      { id: "res", role: "researcher" }, { id: "dev", role: "implementer" },
+      { id: "rev", role: "reviewer" }, { id: "ask", role: "writer", onRequest: true },
+    ];
+    const preview = previewSlots(members, "dev", "build_review");
+    assert.deepEqual(previewGaps(members, preview), { skipped: ["res"] });
+    assert.deepEqual(previewGaps(members, previewSlots(members, "dev", "pipeline")), { skipped: [] });
+  });
+
+  it("says when a specialist has to build and none may review", () => {
+    const members: SlotMember[] = [{ id: "ux", role: "designer" }, { id: "doc", role: "writer" }];
+    const preview = previewSlots(members, "ux", "build_review");
+    assert.equal(preview.fallbackFrom, "build_review");
+    assert.deepEqual(previewGaps(members, preview), { skipped: ["doc"], specialistBuilder: "ux" });
   });
 });

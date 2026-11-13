@@ -28,9 +28,9 @@ vi.mock("@/components/ui/select", () => {
       return <span>{typeof children === "function" ? children(value) : String(value)}</span>;
     },
     SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-    SelectItem: ({ value, children }: { value: unknown; children: ReactNode }) => {
+    SelectItem: ({ value, children, "aria-label": label }: { value: unknown; children: ReactNode; "aria-label"?: string }) => {
       const choice = useContext(SelectContext);
-      return <button type="button" role="option" aria-selected={choice.value === value}
+      return <button type="button" role="option" aria-label={label} aria-selected={choice.value === value}
         onClick={() => choice.onValueChange?.(value)}>{children}</button>;
     },
   };

@@ -84,10 +84,13 @@ _Avoid_: Executor, CLI
 
 **Agent Role**:
 The part a Logical Agent plays in a shared round. Stored and sent by id
-(`planner`, `implementer`, `reviewer`, `tester`, `fixer`, `researcher`,
-`designer`, `writer`, `devops`), shown to people and agents by title:
-Architect, Software Engineer, Code Reviewer, QA Engineer, Bug Fixer, Research
-Analyst, Interaction Designer, Technical Writer, DevOps Engineer. Each role carries
+(`researcher`, `planner`, `designer`, `implementer`, `fixer`, `tester`,
+`writer`, `devops`, `reviewer` — the order a Pipeline round takes them, and the
+order every picker offers), shown to people and agents by title: Research
+Analyst, Architect, Interaction Designer, Software Engineer, Bug Fixer, QA
+Engineer, Technical Writer, DevOps Engineer, Code Reviewer. Research, design,
+writing, and DevOps are specialists: Build and review never casts one as its
+reviewer, so a team of them is better served by Pipeline. Each role carries
 a charter (`backend/relay/core/role_charters.py`)
 saying what it delivers and what it leaves to the others. A round's lead is a
 coordinator, not a role. An agent has its own role, chosen at setup and

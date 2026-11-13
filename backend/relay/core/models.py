@@ -15,16 +15,18 @@ TaskStatus = Literal[
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
 
 AGENT_NAMES: tuple[str, ...] = ("claude", "pi", "codex", "kimi", "opencode")
+# Offered in stage order (`ROLE_STAGE` in collaboration/styles.py), the order a
+# Pipeline round takes them in.
 AGENT_ROLES: tuple[str, ...] = (
-    "implementer",
-    "reviewer",
-    "planner",
-    "tester",
-    "fixer",
     "researcher",
+    "planner",
     "designer",
+    "implementer",
+    "fixer",
+    "tester",
     "writer",
     "devops",
+    "reviewer",
 )
 # Version 2 adds ordered run.output.batch delivery. Keep version 1 accepted so
 # existing daemons can finish upgrading with their legacy run.output events.
