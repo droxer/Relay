@@ -36,3 +36,18 @@ retain their existing scope rules.
 
 No deployed data was accessed; this reproduces the screenshot's state from
 the real summary merge path using local fixtures.
+
+## Python CI extension race
+
+The initial push's Python job failed with one failure and one setup error:
+parallel migrations raced to create the database-wide `pgcrypto` extension
+inside disposable schemas (`pg_extension_name_index` unique violation).
+CI now provisions it in `public` before starting pytest workers, so schema
+teardown cannot remove it and workers only observe the existing extension.
+
+- A disposable PostgreSQL reproducer running the migration's extension DDL
+  on four concurrent connections failed on three connections before setup.
+  After executing the new workflow step, all four passed.
+- `pytest tests/unit/test_background_worker_postgres.py tests/unit/test_automation_discovery_migration.py tests/unit/test_schema_drift.py -q -n 4`
+  against the disposable PostgreSQL cluster: **26 passed in 97.54s**.
+- Dependency audit: zero vulnerabilities. No migration files were changed.
