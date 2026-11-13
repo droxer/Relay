@@ -122,13 +122,13 @@ export function EditUserDrawer({
       const result = await updateControlPanelUser({
         userId: user.id,
         displayName: trimmedName,
-        email: email.trim(),
+        ...(email !== initialEmail ? { email: email.trim() } : {}),
         maxLocalComputers: parsedLimit,
         ...(taskCapacity !== initialCapacity ? { maxConcurrentTasks: capacity } : {}),
       });
       onSuccess(result.user);
     } catch (err) {
-      setError(t("admin.v2.edit_user_error", { message: err instanceof Error ? err.message : String(err) }));
+      setError(t("admin.v2.edit_user_error", { message: err instanceof Error && err.message === "An account with this email already exists." ? t("admin.v2.email_taken") : err instanceof Error ? err.message : String(err) }));
     } finally {
       setIsBusy(false);
     }

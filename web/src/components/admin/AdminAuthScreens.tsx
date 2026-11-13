@@ -51,7 +51,8 @@ export function AdminLoginScreen({ onLogin, needsBootstrap, onSwitchToBootstrap 
       await login({ username: username.trim(), password });
       onLogin();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "";
+      const message = err instanceof Error && err.message === "An account with this email already exists."
+        ? t("admin.v2.email_taken") : err instanceof Error ? err.message : "";
       setError(message ? t("admin.v2.action_failed", { message }) : t("admin.error_generic"));
     } finally {
       setIsLoading(false);
@@ -67,7 +68,7 @@ export function AdminLoginScreen({ onLogin, needsBootstrap, onSwitchToBootstrap 
         </p>
       </header>
       <form className="adm-form" onSubmit={(event) => void handleSubmit(event)}>
-        <Field label={t("admin.username")}>
+        <Field label={t("admin.username_or_email")}>
           <Input
             name="username"
             className="code"
@@ -112,6 +113,7 @@ export function FirstAdminSetupScreen({ onBootstrapped, onSwitchToLogin }: First
   const { t } = useTranslation();
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -121,10 +123,16 @@ export function FirstAdminSetupScreen({ onBootstrapped, onSwitchToLogin }: First
     setError(null);
     setIsLoading(true);
     try {
-      await bootstrapUser({ token: token.trim(), username: username.trim(), password });
+      await bootstrapUser({
+        token: token.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        password,
+      });
       onBootstrapped();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "";
+      const message = err instanceof Error && err.message === "An account with this email already exists."
+        ? t("admin.v2.email_taken") : err instanceof Error ? err.message : "";
       setError(message ? t("admin.v2.action_failed", { message }) : t("admin.error_generic"));
     } finally {
       setIsLoading(false);
@@ -157,6 +165,18 @@ export function FirstAdminSetupScreen({ onBootstrapped, onSwitchToLogin }: First
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             autoComplete="username"
+            spellCheck={false}
+            required
+          />
+        </Field>
+        <Field label={t("admin.email")} required>
+          <Input
+            name="email"
+            className="code"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
             spellCheck={false}
             required
           />

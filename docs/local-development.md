@@ -477,14 +477,15 @@ The administration API (`/api/v1/admin/*`) requires an admin session. For local
 development, initialize the first admin explicitly with the helper script:
 
 ```bash
-script/init_users.sh --password 'choose-a-strong-password'
+script/init_users.sh --email 'admin@example.com' --password 'choose-a-strong-password'
 ```
 
 By default this creates user `admin` with the `admin` role and binds it to
-user `admin` in department `administration`. A password must be supplied
-with `--password` or `RELAY_INITIAL_ADMIN_PASSWORD`; there is no built-in
-password. Pass `--username`, `--role`, `--email`, `--user-id`,
-`--department-id`, or `--department-name` to customize the initial user.
+user `admin` in department `administration`. A password and an email must be
+supplied with `--password` (or `RELAY_INITIAL_ADMIN_PASSWORD`) and `--email`
+(or `RELAY_INITIAL_ADMIN_EMAIL`); there is no built-in password. Pass
+`--username`, `--role`, `--user-id`, `--department-id`, or `--department-name`
+to customize the initial user.
 
 ### Demo data for UI snapshots
 
@@ -494,6 +495,7 @@ isolated from administrator data:
 ```bash
 script/init_users.sh \
   --username demo \
+  --email 'demo@example.com' \
   --password 'choose-a-local-test-password' \
   --role user \
   --user-id demo \

@@ -1,3 +1,4 @@
+import { isValidEmailAddress } from "./email.ts";
 /** Pure rules for the waitlist: the public form's limits and context, the
     invite token's one trip through the URL fragment, and the admin queue's
     grouping. The backend (`backend/relay/accounts/waitlist.py`) stays the
@@ -44,11 +45,8 @@ const DELIVERY_TONE: Record<WaitlistDeliveryStatus, Tone> = {
 
 /** Shape only — one `@`, something on both sides, a dot in the domain. The
     server normalizes and is the real check. */
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export function isWaitlistEmail(raw: string): boolean {
-  const email = raw.trim();
-  return email.length <= WAITLIST_LIMITS.email && EMAIL_SHAPE.test(email);
+  return isValidEmailAddress(raw);
 }
 
 export type WaitlistField = "email" | "name" | "company" | "role" | "useCase";

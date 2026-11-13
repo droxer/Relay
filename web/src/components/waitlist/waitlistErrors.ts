@@ -7,6 +7,7 @@ import { RelayApiError } from "../../api";
     stack trace or proxy page never reaches a visitor. */
 export function publicRequestError(err: unknown, t: TFunction): string {
   if (!(err instanceof RelayApiError)) return t("login.error_generic");
+  if (err.status === 409 && err.message === "An account with this email already exists.") return t("waitlist.error_email_taken");
   if ((err.status === 400 || err.status === 409) && err.message) return err.message;
   if (err.status === 429) return t("waitlist.error_rate_limited");
   if (err.status === 503) return t("waitlist.error_closed");
