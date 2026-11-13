@@ -221,7 +221,11 @@ This is the better steady state once you have a domain. Requires DNS.
      builds the Dockerfile when present; no agent CLIs or BoxLite);
    - start command `relay serve-with-worker`;
    - pre-deploy commands `alembic -c backend/alembic.ini upgrade head`, then
-     `relay worker-schema`, so domain and queue schemas are ready before startup;
+     `relay worker-schema`, so domain and queue schemas are ready before startup.
+     Each step announces itself (`relay pre-deploy: <step>`), and a failing step
+     prints its name and exit code before the command exits, because Railway can
+     keep no deployment logs for a failed pre-deploy. The release script also
+     names the likely phase and a dashboard link when Railway returns no logs;
    - health check `/healthz`, timeout 120 seconds;
    - one replica, sleeping disabled, restart on failure (10 retries).
 

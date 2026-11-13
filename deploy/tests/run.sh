@@ -5,6 +5,7 @@
 set -euo pipefail
 
 TESTS_DIR=$(cd "$(dirname "$0")" && pwd)
+BACKEND_PREDEPLOY=$(jq -c .preDeployCommand "$TESTS_DIR/../services/backend.json")
 bash "$TESTS_DIR/transport.sh"
 python3 "$TESTS_DIR/dockerfile.py"
 python3 "$TESTS_DIR/source.py"
@@ -136,9 +137,11 @@ check() {
 }
 
 expect_failure() {
-  local label=$1 pattern=$2 output
+  local label=$1 pattern=$2 output status
   shift 2
-  if output=$("$@" 2>&1); then
+  output=$("$@" 2>&1) && status=0 || status=$?
+  LAST_FAILURE_OUTPUT=$output
+  if [ "$status" -eq 0 ]; then
     echo "FAIL  $label: the run succeeded"
     FAILURES=$((FAILURES + 1))
   elif grep -q -- "$pattern" <<<"$output"; then
@@ -171,7 +174,7 @@ WEB=$(svc relay-web)
 check "one project named relay" '.projects | length == 1 and ([.[] | .name] == ["relay"])'
 check "no Railway web service" '[.projects[] | .services[] | .name] | sort == ["Postgres", "relay-backend", "relay-worker"]'
 
-check "backend Dockerfile, migrations, queue schema, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay serve\" and .preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"] and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
+check "backend Dockerfile, migrations, queue schema, healthcheck and one replica in the region" "$BACKEND | .config | .builder == \"RAILPACK\" and .dockerfilePath == \"backend/Dockerfile\" and .startCommand == \"relay serve\" and .preDeployCommand == $BACKEND_PREDEPLOY and .healthcheckPath == \"/healthz\" and .multiRegionConfig == {\"asia-southeast1-eqsg3a\": {\"numReplicas\": 1}} and (has(\"numReplicas\") | not) and .sleepApplication == false"
 check "backend uses manual releases from droxer/Relay" "$BACKEND | .repo == \"droxer/Relay\" and .triggers == []"
 check "backend deployment pins the requested commit" "$BACKEND | .deployments[0].commitSha == \"$SOURCE_COMMIT\""
 check "backend deployed once" "$BACKEND | .deployments | length == 1"
@@ -256,6 +259,13 @@ STATE=$(state)
 check "API failure leaves the previous worker deployment running" "$WORKER | .deployments == $BEFORE_WORKER_DEPLOYMENTS"
 curl -fsS -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/__scenario" -d '{"relay-worker":"CRASHED"}' >/dev/null
 expect_failure "worker failure stops the release" "worker deployment failed" deploy release
+if grep -q "Railway returned no build or deployment logs" <<<"$LAST_FAILURE_OUTPUT" \
+  && grep -q "railway.com/project/.*&id=" <<<"$LAST_FAILURE_OUTPUT"; then
+  echo "ok    a failure without Railway logs says where to look"
+else
+  echo "FAIL  a failure without Railway logs says where to look: $LAST_FAILURE_OUTPUT"
+  FAILURES=$((FAILURES + 1))
+fi
 STATE=$(jq -nc --argjson before "$BEFORE" --argjson after "$(state | jq '.calls["cf.workers.script"]')" '{before: $before, after: $after}')
 check "no UI publish after a failed worker" '.before == .after'
 
@@ -279,7 +289,7 @@ curl -fsS -X POST -H 'Content-Type: application/json' -H 'Authorization: Bearer 
   '{query: "mutation VariablesUpsert { variableCollectionUpsert }", variables: {input: {serviceId: $id, variables: {RELAY_BACKGROUND_MODE: "embedded", CUSTOM_RUNTIME_SETTING: "keep-me", RELAY_TASK_SCHEDULER_INTERVAL_SECONDS: "30", PORT: "9000", RAILWAY_RUN_UID: "0", RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "90"}, skipDeploys: true}}}')" >/dev/null
 deploy release 2>"$WORK/legacy-release.log" || { cat "$WORK/legacy-release.log"; exit 1; }
 STATE=$(state)
-check "release installs API-only startup and queue setup" "$BACKEND | .config.startCommand == \"relay serve\" and .config.preDeployCommand == [\"/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'\"]"
+check "release installs API-only startup and queue setup" "$BACKEND | .config.startCommand == \"relay serve\" and .config.preDeployCommand == $BACKEND_PREDEPLOY"
 check "release enables external mode without replacing custom variables" "$BACKEND | .variables.RELAY_BACKGROUND_MODE == \"external\" and .variables.CUSTOM_RUNTIME_SETTING == \"keep-me\""
 check "release preserves a longer configured drain period" "$BACKEND | .variables.RAILWAY_DEPLOYMENT_DRAINING_SECONDS == \"90\""
 check "release disables legacy autodeploy and pins the selected commit" "$BACKEND | .triggers == [] and .deployments[0].commitSha == \"$SOURCE_COMMIT\""

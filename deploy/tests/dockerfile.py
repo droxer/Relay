@@ -37,9 +37,8 @@ assert worker["startCommand"] == "relay worker"
 assert worker["preDeployCommand"] == []
 assert worker["healthcheckPath"] is None
 assert worker["sleepApplication"] is False
-assert profile["preDeployCommand"] == [
-    "/bin/sh -c 'alembic -c backend/alembic.ini upgrade head && relay worker-schema'",
-]
+assert len(profile["preDeployCommand"]) == 1
+assert profile["preDeployCommand"][0].startswith("/bin/sh -c ")
 # Exercise the exact configured command without a database: both commands
 # must run in order, and a migration failure must prevent queue schema setup.
 with tempfile.TemporaryDirectory() as directory:
@@ -59,9 +58,17 @@ with tempfile.TemporaryDirectory() as directory:
             env={**os.environ, "PATH": f"{work}:{os.environ['PATH']}",
                  "COMMAND_LOG": str(log), "MIGRATION_EXIT": str(migration_exit),
                  "SCHEMA_EXIT": str(schema_exit)},
-            check=False,
+            check=False, capture_output=True, text=True,
         )
         assert result.returncode == (migration_exit or schema_exit)
+        # Railway may keep no deployment logs for a failed pre-deploy; each
+        # step names itself, and a failure names the step and its exit code.
+        if migration_exit:
+            assert f"relay pre-deploy: migrations failed (exit {migration_exit})" in result.stderr
+        elif schema_exit:
+            assert f"relay pre-deploy: queue-schema failed (exit {schema_exit})" in result.stderr
+        else:
+            assert "relay pre-deploy: done" in result.stdout
         expected = ["alembic -c backend/alembic.ini upgrade head"]
         if not migration_exit:
             expected.append("relay worker-schema")
