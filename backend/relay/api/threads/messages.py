@@ -8,7 +8,7 @@ from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, HTTPException, Request
 
 from ...core.thread_attachments import attachment_ids
-from ...collaboration.queue import change_queue, queue_state
+from ...collaboration.queue import ThreadQueueDispatcher, change_queue, queue_state
 from ...collaboration.models import MessageIntent, RecoveryIntent
 from ...collaboration.errors import CollaborationError
 from ...collaboration.service import CollaborationConductor
@@ -236,10 +236,24 @@ async def update_thread_queue(thread_id: str, request: Request, ctx: AppContextD
             raise HTTPException(400, "Message text must contain 1–100,000 characters.")
         agents = await run_in_threadpool(ctx.agent_store.list_agents, supervisor_user_id=actor["userId"])
         addressed = _leading_mention_agent_ids(text, agents)
+        supplied = body.get("addressAgentIds", [])
+        if not isinstance(supplied, list) or not all(isinstance(item, str) and item.strip() for item in supplied):
+            raise HTTPException(400, "addressAgentIds must be a list of agent ids.")
+        addressed = addressed or tuple(dict.fromkeys(supplied))
+        team_id = body.get("addressTeamId")
+        if team_id is not None and (not isinstance(team_id, str) or not team_id.strip()):
+            raise HTTPException(400, "addressTeamId must be a team id.")
+        if team_id and addressed:
+            raise HTTPException(400, "A message addresses either a team or agents, not both.")
         message = {"id": message_id, "text": text}
         if addressed:
             message["addressAgentIds"] = list(addressed)
+        if team_id:
+            message["addressTeamId"] = team_id
     try:
-        return await run_in_threadpool(change_queue, ctx.session_store, thread_id, action, message=message, message_id=message_id)
+        state = await run_in_threadpool(change_queue, ctx.session_store, thread_id, action, message=message, message_id=message_id)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
+    if action == "promote" and state.get("sendRequested"):
+        ThreadQueueDispatcher(ctx).follow_requested_send(thread_id)
+    return state

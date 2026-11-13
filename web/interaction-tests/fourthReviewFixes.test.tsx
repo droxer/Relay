@@ -21,7 +21,7 @@ it.each([0, 20])("only clears a draft that the queue accepts (existing: %s)", as
     queue.push(text);
     return true;
   });
-  const view = render(<Composer logicalAgents={[]} activeLogicalAgentId={null} onLogicalAgentPicked={vi.fn()} activeAgentDisplayName="Codex" selectedUser="user" initializingThread={false} runtimeNodes={[]} runtimeNodeId="n" selectedRuntimeNode={null} activeRuntimeNode={null} onRuntimeNodeChange={vi.fn()} running onSend={vi.fn()} onCancelRun={vi.fn()} onQueue={enqueue} />);
+  const view = render(<Composer logicalAgents={[]} activeLogicalAgentId="a1" mentionCandidates={[{ id: "a1", displayName: "Codex", eligible: true }]} onLogicalAgentPicked={vi.fn()} activeAgentDisplayName="Codex" selectedUser="user" initializingThread={false} runtimeNodes={[]} runtimeNodeId="n" selectedRuntimeNode={null} activeRuntimeNode={null} onRuntimeNodeChange={vi.fn()} running onSend={vi.fn()} onCancelRun={vi.fn()} onQueue={enqueue} />);
   const field = view.getByRole("textbox") as HTMLTextAreaElement;
   fireEvent.change(field, { target: { value: "Keep this draft" } });
   fireEvent.submit(view.container.querySelector("form")!);

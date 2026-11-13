@@ -27,8 +27,11 @@ for (const theme of ["light", "dark"] as const) {
         if (path.endsWith("/queue")) {
           if (route.request().method() === "POST") {
             if (fail) { await route.fulfill({ status: 503, json: { detail: "Connection unavailable. Try again." } }); return; }
-            const { action, id, text } = route.request().postDataJSON();
-            if (action === "enqueue") queue.messages.push({ id, text });
+            const { action, id, text, addressAgentIds } = route.request().postDataJSON();
+            if (action === "enqueue") {
+              expect(addressAgentIds).toEqual([agent.id]);
+              queue.messages.push({ id, text });
+            }
             if (action === "remove" || action === "edit") queue.messages = queue.messages.filter(m => m.id !== id);
             if (action === "pause") queue.paused = true;
             if (action === "resume") queue.paused = false;

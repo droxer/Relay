@@ -21,7 +21,7 @@ const AGENTS = [
   { id: "a2", displayName: "Alan", executorKind: "claude", availability: "ready", placements: [], enabled: true },
 ] as unknown as UserAgent[];
 
-function setup() {
+function setup(overrides: Partial<React.ComponentProps<typeof Composer>> = {}) {
   render(
     <Composer
       ref={createRef()}
@@ -40,10 +40,24 @@ function setup() {
       mentionCandidates={CANDIDATES}
       onSend={vi.fn()}
       onCancelRun={vi.fn()}
+      {...overrides}
     />,
   );
   return { field: screen.getByRole("textbox") as HTMLTextAreaElement };
 }
+
+it.each([
+  { text: "Continue", expected: { addressAgentIds: ["a1"] } },
+  { text: "@Alan Continue", expected: { addressAgentIds: ["a2"] } },
+])("queues the selected target for $text", async ({ text, expected }) => {
+  const onQueue = vi.fn(async () => true);
+  const user = userEvent.setup();
+  const { field } = setup({ running: true, onQueue });
+  await user.type(field, text);
+  await user.keyboard("{Escape}");
+  await user.click(screen.getByRole("button", { name: /queue/i }));
+  expect(onQueue).toHaveBeenCalledWith(text, expected);
+});
 
 /** Option rows of the mention list alone — the agent picker also renders options. */
 function mentionRows(): string[] {
@@ -103,4 +117,20 @@ it("opens again for a fresh @ typed where a dismissed one was", async () => {
   expect(field.value).toBe("");
   await user.keyboard("@");
   expect(mentionRows()).toEqual(["Ada", "Alan"]);
+});
+
+it.each([
+  { addressTeamId: "crew" },
+  {},
+])("keeps the selected team or Project room when queueing: %j", async (expected) => {
+  const onQueue = vi.fn(async () => true);
+  const team = "addressTeamId" in expected;
+  const user = userEvent.setup();
+  const { field } = setup({ running: true, onQueue,
+    ...(team ? { activeTeamId: "crew", teams: [{ id: "crew", name: "Crew", enabled: true, members: AGENTS, leadAgentId: "a1" } as any] }
+      : { projectName: "Project", projectRoomSelected: true, projectRoom: { agentIds: ["a1", "a2"], crewAgentIds: ["a1", "a2"] } as any }),
+  });
+  await user.type(field, "Continue");
+  await user.click(screen.getByRole("button", { name: /queue/i }));
+  expect(onQueue).toHaveBeenCalledWith("Continue", expected);
 });

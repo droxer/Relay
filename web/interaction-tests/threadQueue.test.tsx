@@ -66,3 +66,23 @@ it("migrates legacy messages and clears local storage only after acknowledgment"
   await waitFor(() => expect(saved.messages).toEqual([{ id: "legacy", text: "Old draft" }]));
   await waitFor(() => expect(sessionStorage.getItem("relay-web.queue:owner:thread")).toBeNull());
 });
+
+it("persists the selected Agents and treats a changed target as a new retry intent", async () => {
+  const hook = open();
+  await waitFor(() => expect(apiJson).toHaveBeenCalled());
+  const posts: any[] = [];
+  vi.mocked(apiJson).mockImplementation(async (_path, options: any) => {
+    if (options?.method === "POST") {
+      posts.push(options.body);
+      throw new Error("Offline");
+    }
+    return saved as any;
+  });
+  await act(async () => { await hook.result.current.enqueue("Continue", { addressAgentIds: ["selected"] }); });
+  await act(async () => { await hook.result.current.enqueue("Continue", { addressAgentIds: ["selected"] }); });
+  await act(async () => { await hook.result.current.enqueue("Continue", { addressTeamId: "crew" }); });
+  expect(posts[0]).toMatchObject({ text: "Continue", addressAgentIds: ["selected"] });
+  expect(posts[0].id).toBe(posts[1].id);
+  expect(posts[2]).toMatchObject({ text: "Continue", addressTeamId: "crew" });
+  expect(posts[2].id).not.toBe(posts[1].id);
+});

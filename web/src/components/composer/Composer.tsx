@@ -22,6 +22,8 @@ import { MentionPopup } from "./MentionPopup";
 import { CommandInput } from "@/components/ui/command";
 import { ThreadRuntimeReadout, ThreadRuntimeSelect } from "./ThreadRuntimeSelect";
 import { Textarea } from "@/components/ui/textarea";
+import { resolveThreadMessageAddress } from "../../lib/messageRouting";
+import type { QueueAddress } from "../../lib/threadQueue";
 
 
 export type ComposerHandle = {
@@ -101,7 +103,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   onCancelRun: () => void;
   /** Takes a draft written while the run is going. Without it, the box
    *  cannot send until the run ends. */
-  onQueue?: (text: string) => boolean | void | Promise<boolean>;
+  onQueue?: (text: string, address: QueueAddress) => boolean | void | Promise<boolean>;
   /** Docked on the card's top edge — what the thread is waiting to hear. */
   prompt?: ReactNode;
   /** Docked under `prompt` — the messages waiting for the next round. */
@@ -214,9 +216,18 @@ const ComposerView = forwardRef<ComposerHandle, {
   const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false, userMessageId?: string): Promise<boolean> => {
     if (running && !literal && canQueue && onQueue) {
       if (sendPending) return false;
+      const address = resolveThreadMessageAddress({
+        text: composerText,
+        candidates: mentionCandidates,
+        defaultAgentId: roomSelected || targetTeam ? undefined : activeLogicalAgentId,
+      });
+      if (address.blocked) return false;
+      const queuedAddress: QueueAddress = address.addressAgentIds.length
+        ? { addressAgentIds: address.addressAgentIds }
+        : targetTeam ? { addressTeamId: targetTeam.id } : {};
       setSendPending(true);
       let accepted: boolean | void;
-      try { accepted = await onQueue(composerText); } finally { setSendPending(false); }
+      try { accepted = await onQueue(composerText, queuedAddress); } finally { setSendPending(false); }
       if (accepted === false) {
         return false;
       }

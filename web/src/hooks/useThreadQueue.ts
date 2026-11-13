@@ -4,7 +4,7 @@ import type { ComposerHandle } from "../components/composer/Composer";
 import { restoreComposerDraft } from "./useComposer";
 import { cancelRun } from "../api-client/sessions";
 import { apiJson } from "../api-client/client";
-import type { QueuedMessage } from "../lib/threadQueue";
+import type { QueuedMessage, QueueAddress } from "../lib/threadQueue";
 
 type QueueState = { messages: QueuedMessage[]; paused: boolean; sending?: string; error?: string };
 const EMPTY: QueueState = { messages: [], paused: false };
@@ -24,7 +24,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const setError = useCallback((message: string | null) => setErrorState({ key: queueKey, message }), [queueKey]);
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
-  const unsaved = useRef(new Map<string, { text: string; id: string }>());
+  const unsaved = useRef(new Map<string, QueuedMessage>());
   const key = ["thread-queue", queueKey];
   const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue`;
   const query = useQuery({ queryKey: key, queryFn: () => apiJson<QueueState>(path), enabled: !!threadId,
@@ -32,12 +32,12 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const state = query.data?.messages ? query.data : EMPTY;
   const activeKey = useRef(queueKey);
   useLayoutEffect(() => { activeKey.current = queueKey; }, [queueKey]);
-  const change = useCallback(async (action: string, id?: string, text?: string) => {
+  const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress) => {
     if (!threadId || busy.current) return false;
     busy.current = true;
     setPending(true);
     try {
-      await apiJson<QueueState>(path, { method: "POST", body: { action, id, text } });
+      await apiJson<QueueState>(path, { method: "POST", body: { action, id, text, ...address } });
       await client.invalidateQueries({ queryKey: ["thread-queue", queueKey] });
       if (activeKey.current === queueKey) setError(null);
       return true;
@@ -67,11 +67,13 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     return () => { stopped = true; };
   }, [threadId, queueKey, change]);
 
-  const enqueue = useCallback(async (text: string) => {
+  const enqueue = useCallback(async (text: string, address: QueueAddress = {}) => {
     const previous = unsaved.current.get(queueKey);
-    const message = previous?.text === text ? previous : { text, id: `q_${crypto.randomUUID()}` };
+    const sameAddress = JSON.stringify([previous?.addressAgentIds, previous?.addressTeamId])
+      === JSON.stringify([address.addressAgentIds, address.addressTeamId]);
+    const message = previous?.text === text && sameAddress ? previous : { text, ...address, id: `q_${crypto.randomUUID()}` };
     unsaved.current.set(queueKey, message);
-    const accepted = await change("enqueue", message.id, text);
+    const accepted = await change("enqueue", message.id, text, address);
     if (accepted) unsaved.current.delete(queueKey);
     return accepted;
   }, [change, queueKey]);

@@ -15,6 +15,14 @@ from .models import MessageIntent
 from .service import CollaborationConductor
 
 
+# A steered message is followed from the request that promoted it, so it goes
+# out as soon as the stopped run settles instead of on the next scheduler
+# sweep. The sweep still covers anything a follower gives up on.
+STEER_FOLLOW_SECONDS = 180.0
+STEER_POLL_SECONDS = 1.0
+_followers: dict[str, asyncio.Task[None]] = {}
+
+
 def queue_state(session: dict[str, Any]) -> dict[str, Any]:
     return deepcopy(session.get("messageQueue") or {"messages": [], "paused": False})
 
@@ -87,6 +95,38 @@ class ThreadQueueDispatcher:
         if len(candidates) < 100:
             self._cursor = None
 
+    def follow_requested_send(self, thread_id: str) -> None:
+        """Start (once per thread in this process) following a steered message."""
+        if thread_id in _followers:
+            return
+        task = asyncio.create_task(self._follow(thread_id), name=f"relay-steer-{thread_id}")
+        _followers[thread_id] = task
+        task.add_done_callback(lambda _task: _followers.pop(thread_id, None))
+
+    async def _follow(self, thread_id: str) -> None:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + STEER_FOLLOW_SECONDS
+        try:
+            while loop.time() < deadline:
+                pending = await asyncio.to_thread(self._requested_send, thread_id)
+                if pending is None:
+                    return  # Sent, withdrawn, paused, or another dispatcher holds it.
+                if pending:
+                    await self.dispatch(thread_id)
+                await asyncio.sleep(STEER_POLL_SECONDS)
+        except Exception:  # noqa: BLE001 - the scheduler sweep remains the fallback
+            logger.exception("Steered message follow-up failed", thread_id=thread_id)
+
+    def _requested_send(self, thread_id: str) -> bool | None:
+        """None once there is nothing left to follow; otherwise whether the
+        thread is free, read without the mutation lock the claim takes."""
+        session = self.ctx.session_store.get_session_header(thread_id)
+        state = queue_state(session)
+        if (not state["messages"] or state["paused"] or not state.get("sendRequested")
+                or state.get("sending")):
+            return None
+        return self.ctx.execution_lifecycle.status(session)["phase"] == "terminal"
+
     def _claim(self, thread_id: str) -> dict[str, Any] | None:
         store = self.ctx.session_store
         with store.mutation_scope(thread_id):
@@ -136,6 +176,7 @@ class ThreadQueueDispatcher:
                     thread_id=thread_id,
                     text=message["text"],
                     address_agent_ids=tuple(message.get("addressAgentIds", [])),
+                    address_team_id=message.get("addressTeamId"),
                     idempotency_key=f"queue:{message['id']}",
                     user_message_id=f"evt_{message['id']}",
                 ),

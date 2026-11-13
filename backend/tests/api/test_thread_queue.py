@@ -233,3 +233,95 @@ def test_stop_between_claim_and_admission_cancels_the_new_run(monkeypatch):
         asyncio.run(ThreadQueueDispatcher(app.state.context).dispatch(tid))
         assert store.get_session(tid)["messageQueue"]["paused"]
         assert app.state.registry.daemon_store.active_run_request_for_session_any_node(tid) is None
+
+
+def test_a_steered_message_is_sent_as_soon_as_the_stopped_run_settles(tmp_path, monkeypatch):
+    import asyncio
+    from relay.collaboration import queue as thread_queue
+    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.service import CollaborationConductor
+
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
+    monkeypatch.setattr(thread_queue, "STEER_POLL_SECONDS", 0.01)
+    app = create_app(tmp_path)
+    store = app.state.session_store
+    tid = store.create_session({"workspacePath": str(tmp_path), "taskGoal": "queue", "ownerUserId": "owner"})["id"]
+    change_queue(store, tid, "enqueue", message={"id": "q1", "text": "later"})
+    change_queue(store, tid, "enqueue", message={"id": "q2", "text": "steer"})
+    change_queue(store, tid, "promote", message_id="q2")
+    # The stopped run takes a few polls to settle; nothing may go out before.
+    phases = iter(["stopping", "stopping", "finalizing"])
+    lifecycle = app.state.context.execution_lifecycle
+    monkeypatch.setattr(lifecycle, "status", lambda _session: {"phase": next(phases, "terminal")})
+    sent = []
+
+    async def submit(self, intent, actor):
+        sent.append(intent.text)
+        return {}
+
+    monkeypatch.setattr(CollaborationConductor, "submit", submit)
+
+    async def follow():
+        ThreadQueueDispatcher(app.state.context).follow_requested_send(tid)
+        ThreadQueueDispatcher(app.state.context).follow_requested_send(tid)  # one follower per thread
+        await asyncio.wait_for(next(iter(thread_queue._followers.values())), timeout=5)
+
+    asyncio.run(follow())
+    assert sent == ["steer"]
+    assert [m["id"] for m in store.get_session(tid)["messageQueue"]["messages"]] == ["q1"]
+    assert thread_queue._followers == {}
+
+
+def test_steer_keeps_the_selected_agent_instead_of_the_whole_room(monkeypatch):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.persistence.events import relay_event
+
+    with _world(monkeypatch) as (app, client, here, there):
+        solo = _agent(app, here, "Solo", "codex")
+        selected = _agent(app, here, "Selected", "claude")
+        _sync(app, here)
+        tid = _thread(app, here, solo, participantAgentIds=[solo["id"], selected["id"]])["id"]
+        store = app.state.session_store
+        response = client.post(
+            f"/api/v1/threads/{tid}/queue",
+            json={"action": "enqueue", "id": "q_selected", "text": "Continue",
+                  "addressAgentIds": [selected["id"]]},
+        )
+        assert response.status_code == 200, response.text
+        change_queue(store, tid, "promote", message_id="q_selected")
+        store.append_event(tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"}))
+        asyncio.run(ThreadQueueDispatcher(app.state.context).dispatch(tid))
+        after = store.get_session(tid)
+        assert after["messageQueue"]["messages"] == [], after["messageQueue"]
+        assert [a["agentId"] for a in after["collaborationRounds"][-1]["assignments"]] == [selected["id"]]
+
+
+def test_queue_preserves_selected_team_and_rejects_invalid_addressing(monkeypatch):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread, _team
+    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.persistence.events import relay_event
+
+    with _world(monkeypatch) as (app, client, here, there):
+        solo = _agent(app, here, "Solo", "codex")
+        selected = _agent(app, here, "Selected", "claude")
+        _sync(app, here)
+        team = _team(app, "Selected crew", selected)
+        tid = _thread(app, here, solo)["id"]
+        path = f"/api/v1/threads/{tid}/queue"
+        for invalid in ({"addressAgentIds": "bad"}, {"addressAgentIds": [None]},
+                        {"addressTeamId": []}, {"addressTeamId": " "},
+                        {"addressTeamId": team["id"], "addressAgentIds": [solo["id"]]}):
+            response = client.post(path, json={"action": "enqueue", "id": "q_invalid", "text": "Continue", **invalid})
+            assert response.status_code == 400, response.text
+        response = client.post(path, json={"action": "enqueue", "id": "q_team", "text": "Continue",
+                                         "addressTeamId": team["id"]})
+        assert response.status_code == 200, response.text
+        assert response.json()["messages"][0]["addressTeamId"] == team["id"]
+        app.state.session_store.append_event(tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"}))
+        asyncio.run(ThreadQueueDispatcher(app.state.context).dispatch(tid))
+        after = app.state.session_store.get_session(tid)
+        assert after["messageQueue"]["messages"] == [], after["messageQueue"]
+        assert [a["agentId"] for a in after["collaborationRounds"][-1]["assignments"]] == [selected["id"]]
