@@ -1,6 +1,6 @@
 # Relay documentation
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
 ## Start here
 
@@ -29,7 +29,7 @@
 
 - [Architecture decisions](adr/README.md) preserve durable rationale and each decision's status.
 - [Proposals](proposals/README.md) collect unfinished designs. Read their status before treating them as implemented behavior.
-- [Product screenshots](images/) support the English and Chinese project READMEs.
+- [Product screenshots](images/) support the English, Simplified Chinese, and Traditional Chinese project READMEs.
 
 ## Keeping this small
 

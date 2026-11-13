@@ -868,7 +868,8 @@ html[data-theme="light"] {
    stack as English, with Latin set in the platform UI face and Han falling
    through to its Simplified Chinese companion. Technical text keeps the mono
    with Simplified Chinese glyph fallback. */
-html:lang(zh-CN) {
+html:lang(zh-CN),
+html:lang(zh-TW) {
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "Microsoft YaHei", "Noto Sans Mono CJK SC", "Noto Sans SC", monospace;
   /* Han glyphs are square and must never be tightened. The root tracks are
      solid today; they stay pinned here so a future Latin tightening cannot
@@ -903,13 +904,21 @@ html:lang(zh-CN) {
   --card-h-tile: 116px;
 }
 
+/* Traditional Chinese reaches for the TC faces first, so a Han glyph shared
+   with Simplified takes its Traditional form in agent-authored text. */
+html:lang(zh-TW) {
+  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang TC", "Microsoft JhengHei", "Noto Sans Mono CJK TC", "Noto Sans TC", monospace;
+}
+
 /* CJK reading roles are looser; the compact scope must restate them too or a
    dense Han list silently takes the Latin compact line box. The compound
    selector outranks both the compact block and the zh-CN block, so it is
    also where the Han tile height and loose leading win back from compact —
    otherwise compact's 116px tile clips a two-line Han title. */
 html:lang(zh-CN) [data-density="compact"],
-html:lang(zh-CN)[data-density="compact"] {
+html:lang(zh-CN)[data-density="compact"],
+html:lang(zh-TW) [data-density="compact"],
+html:lang(zh-TW)[data-density="compact"] {
   --leading-loose: 1.8;
   --type-body: 400 var(--fs-4)/var(--leading-normal) var(--font-sans);
   --type-name: 500 var(--fs-4)/var(--leading-normal) var(--font-sans);

@@ -65,8 +65,10 @@ describe("invite by email", () => {
   });
 
   it("offers exactly the languages the backend writes invites in", () => {
-    assert.deepEqual([...INVITE_LOCALES], ["en", "zh-CN"]);
-    assert.equal(waitlistLocale("zh-TW"), "zh-CN");
+    assert.deepEqual([...INVITE_LOCALES], ["en", "zh-CN", "zh-TW"]);
+    assert.equal(waitlistLocale("zh-TW"), "zh-TW");
+    assert.equal(waitlistLocale("zh-Hant-HK"), "zh-TW");
+    assert.equal(waitlistLocale("zh-CN"), "zh-CN");
   });
 });
 

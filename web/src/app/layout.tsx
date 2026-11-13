@@ -61,7 +61,7 @@ export const metadata: Metadata = {
           title: pageTitle,
           description: pageDescription,
           locale: "en_US",
-          alternateLocale: ["zh_CN"],
+          alternateLocale: ["zh_CN", "zh_TW"],
           images: [shareImage],
         },
         twitter: {
@@ -99,8 +99,7 @@ const heroCuts = JSON.stringify({
 const themeScript = `(function(){try{
   var root=document.documentElement;
   var l=localStorage.getItem("relay-web.language");
-  if(l==="zh-TW")l="zh-CN";
-  if(l==="en"||l==="zh-CN")root.setAttribute("lang",l);
+  if(l==="en"||l==="zh-CN"||l==="zh-TW")root.setAttribute("lang",l);
   var t=localStorage.getItem("relay-web.theme")||"system";
   if(t==="contrast"||t==="contrast-dark"){t="system";localStorage.setItem("relay-web.theme","system");}
   var d=matchMedia("(prefers-color-scheme: dark)").matches;
@@ -108,7 +107,7 @@ const themeScript = `(function(){try{
   root.setAttribute("data-theme",r);
   var p=location.pathname;
   if((p==="/"||p==="")&&localStorage.getItem(${JSON.stringify(SIGNED_IN_HINT_KEY)})!=="1"){
-    var h=${heroCuts}[r][l==="zh-CN"?"zh-CN":"en"];
+    var h=${heroCuts}[r][l==="zh-CN"||l==="zh-TW"?"zh-CN":"en"];
     var k=document.createElement("link");
     k.rel="preload";k.as="image";k.href=h[0];
     k.setAttribute("imagesrcset",h[1]);

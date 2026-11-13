@@ -10,11 +10,12 @@ import publicEn from "./locales/en/public.json";
    tests/i18nPublicBundle.test.ts). English is the default and the fallback,
    so it must be there before the first paint; the rest of the catalogue
    (~35 KB gzipped) rides the app chunk instead (./app.ts), where it is
-   registered before any signed-in surface renders. The Chinese catalogue
-   loads when a user switches to it — callers already await changeLanguage,
+   registered before any signed-in surface renders. The Chinese catalogues
+   load when a user switches to it — callers already await changeLanguage,
    which resolves once the catalogue arrives. */
 const LAZY_CATALOGUES: Record<string, () => Promise<{ default: Record<string, unknown> }>> = {
   "zh-CN": () => import("./locales/zh-CN/translation.json"),
+  "zh-TW": () => import("./locales/zh-TW/translation.json"),
 };
 
 void i18n
@@ -28,7 +29,7 @@ void i18n
   .init({
     lng: "en",
     fallbackLng: "en",
-    supportedLngs: ["en", "zh-CN"],
+    supportedLngs: ["en", "zh-CN", "zh-TW"],
     resources: { en: { translation: publicEn } },
     // Keep the bundled English while still loading other languages lazily.
     partialBundledLanguages: true,

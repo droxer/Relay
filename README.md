@@ -12,7 +12,8 @@
 
 <p align="center">
   <a href="README.md">English</a> ·
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
 Run AI agents on your own computers, coordinate them as teams, and follow their work from your desktop or phone. Relay supports Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, OpenCode, and Kimi.

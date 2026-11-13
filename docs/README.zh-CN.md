@@ -1,6 +1,6 @@
 # Relay 文档
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
 ## 从这里开始
 
@@ -31,7 +31,7 @@
 
 - [架构决策](adr/README.md)保留长期有效的理由及各项决策的状态。
 - [设计提案](proposals/README.md)集中未完成的设计；阅读状态说明后再判断哪些行为已经实现。
-- [产品截图](images/)供中英文项目概览使用。
+- [产品截图](images/)供英文、简体中文和繁体中文项目概览使用。
 
 ## 保持精简
 

@@ -337,7 +337,7 @@ describe("application typography roles", () => {
     // locale block restates no reading family — it neutralises the tracking so
     // Han titles do not crush, opens the leading, and narrows the mono's Han
     // fallback to the Simplified Chinese faces.
-    const localeBlock = palette.match(/html:lang\(zh-CN\)\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const localeBlock = palette.match(/html:lang\(zh-CN\),\s*html:lang\(zh-TW\)\s*\{([^}]*)\}/s)?.[1] ?? "";
     assert.notEqual(localeBlock.trim(), "", "the zh-CN metrics block went missing");
     assert.doesNotMatch(localeBlock, /--font-(?:sans|display):/, "zh-CN must not fork the reading stack");
     assert.match(localeBlock, /--font-mono:\s*var\(--font-app-mono\),\s*"JetBrains Mono"[^;]*"Noto Sans Mono CJK SC"/);
@@ -345,6 +345,9 @@ describe("application typography roles", () => {
     assert.match(localeBlock, /--track-title:\s*0;/);
     assert.match(localeBlock, /--track-body:\s*0;/);
     assert.match(localeBlock, /--leading-normal:\s*1\.7;/);
+    // Traditional Chinese narrows the mono's Han fallback to the TC faces.
+    const traditionalBlock = palette.match(/\}\s*html:lang\(zh-TW\)\s*\{([^}]*)\}/s)?.[1] ?? "";
+    assert.match(traditionalBlock, /--font-mono:[^;]*"Noto Sans Mono CJK TC"/);
 
     const eyebrowRule = base.match(/\.eyebrow\s*\{([^}]*)\}/)?.[1] ?? "";
     const headerKickerRule = atelier.match(/\.page-header-kicker,[^{]+\{([^}]*)\}/s)?.[1] ?? "";
@@ -376,23 +379,11 @@ describe("application typography roles", () => {
     assert.match(layout, /localStorage\.getItem\(["']relay-web\.language["']\)/);
     assert.match(layout, /(?:l|language)===["']zh-CN["']/);
     assert.match(layout, /setAttribute\(["']lang["'],\s*(?:l|language)\)/);
-    // A preference saved while Traditional Chinese existed paints as
-    // Simplified Chinese, matching normalizeLanguage in lib/appStorage.ts.
-    assert.match(layout, /if\((?:l|language)===["']zh-TW["']\)(?:l|language)=["']zh-CN["'];/);
+    assert.match(layout, /(?:l|language)===["']zh-TW["']/);
   });
 
-  it("styles and ships only English and Simplified Chinese", () => {
-    const stylesDir = path.join(repoRoot, "web", "src", "styles");
-    const sheets = [
-      ...readdirSync(stylesDir).filter((f) => f.endsWith(".css")).map((f) => path.join(stylesDir, f)),
-      ...readdirSync(path.join(stylesDir, "tokens")).filter((f) => f.endsWith(".css")).map((f) => path.join(stylesDir, "tokens", f)),
-    ];
-    const stragglers = sheets
-      .filter((file) => /:lang\(zh-(?:TW|HK|Hant)\)/.test(readFileSync(file, "utf8")))
-      .map((file) => path.relative(repoRoot, file));
-    assert.deepEqual(stragglers, [], "these still style a retired locale");
-
+  it("ships English, Simplified Chinese, and Traditional Chinese", () => {
     const locales = readdirSync(path.join(repoRoot, "web", "src", "i18n", "locales")).sort();
-    assert.deepEqual(locales, ["en", "zh-CN"]);
+    assert.deepEqual(locales, ["en", "zh-CN", "zh-TW"]);
   });
 });

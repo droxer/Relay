@@ -41,7 +41,7 @@ export function landingShotSrc(
   width: number = LANDING_SHOT_SIZE.width,
 ): string {
   const themeSuffix = theme === "light" ? "-light" : "";
-  const languageSuffix = language === "zh-CN" ? "-zh-CN" : "";
+  const languageSuffix = language === "zh-CN" || language === "zh-TW" ? "-zh-CN" : "";
   const widthSuffix = width === LANDING_SHOT_SIZE.width ? "" : `-${width}w`;
   return `/landing/${shot}${themeSuffix}${languageSuffix}${widthSuffix}.webp`;
 }

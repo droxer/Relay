@@ -8,7 +8,8 @@
 
 <p align="center">
   <a href="README.md">English</a> ·
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
 在自己的计算机上运行 AI 智能体，将它们组织为团队，并随时通过桌面或手机跟进工作。Relay 支持 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi、OpenCode 和 Kimi。

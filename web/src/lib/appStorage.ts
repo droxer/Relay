@@ -3,19 +3,14 @@ type ResolvedTheme = Exclude<Theme, "system">;
 
 export const SUPPORTED_THEMES = ["light", "dark", "system"] as const;
 
-export const SUPPORTED_LANGUAGES = ["en", "zh-CN"] as const;
+export const SUPPORTED_LANGUAGES = ["en", "zh-CN", "zh-TW"] as const;
 
 export type Language = (typeof SUPPORTED_LANGUAGES)[number];
-
-/** Traditional Chinese was retired; a preference saved while it existed reads
- *  as Simplified Chinese rather than dropping the reader back to English. */
-const RETIRED_LANGUAGES: Record<string, Language> = { "zh-TW": "zh-CN" };
 
 /** Any stored or server-sent language value → one this build ships. */
 export function normalizeLanguage(value: unknown): Language {
   if (typeof value !== "string") return "en";
-  const language = RETIRED_LANGUAGES[value] ?? value;
-  return SUPPORTED_LANGUAGES.includes(language as Language) ? language as Language : "en";
+  return SUPPORTED_LANGUAGES.includes(value as Language) ? value as Language : "en";
 }
 
 export type TokenMap = Record<string, string>;

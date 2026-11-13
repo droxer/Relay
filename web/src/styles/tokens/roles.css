@@ -301,7 +301,8 @@
 }
 
 /* CJK — reading roles want looser leading. */
-html:lang(zh-CN) {
+html:lang(zh-CN),
+html:lang(zh-TW) {
   --type-body:   400 var(--fs-4)/var(--leading-normal) var(--font-sans);
   --type-body-sm: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
 }

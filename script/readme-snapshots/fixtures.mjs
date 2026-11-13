@@ -687,6 +687,7 @@ export function routeBody(pathname, params, language, theme = "dark") {
 
   if (path === "/threads") return { sessions };
   if (head === "threads" && id && !tail) return id === HERO_ID ? hero : byId(sessions, id);
+  if (head === "threads" && tail === "queue") return { messages: [], paused: false };
 
   if (path === "/tasks") return { flowPolicy: { wipLimit: 5, scope: "user" }, tasks };
   if (head === "tasks" && id && !tail) return { ...byId(tasks, id), events: [], activity: [] };

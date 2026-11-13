@@ -110,7 +110,9 @@ export function waitlistSource(
 
 /** The UI language as the backend's locale enum. */
 export function waitlistLocale(language: string | undefined): InviteLocale {
-  return language?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+  const code = language?.toLowerCase() ?? "";
+  if (/^zh-(tw|hk|mo|hant)/.test(code)) return "zh-TW";
+  return code.startsWith("zh") ? "zh-CN" : "en";
 }
 
 /** URL-safe characters only; anything else is not a token this backend minted. */
@@ -168,8 +170,11 @@ export function parseInviteBatch(raw: string): number | null {
 
 /** The languages an invite email is written in, mirroring the backend's
     `SUPPORTED_LOCALES`. */
-export const INVITE_LOCALES = ["en", "zh-CN"] as const;
+export const INVITE_LOCALES = ["en", "zh-CN", "zh-TW"] as const;
 export type InviteLocale = (typeof INVITE_LOCALES)[number];
+
+/** The `admin.waitlist.invite_email_language_*` key suffix for each locale. */
+export const INVITE_LOCALE_KEYS: Record<InviteLocale, string> = { en: "en", "zh-CN": "zh", "zh-TW": "zh_tw" };
 
 /** The `source` the backend stamps on an entry an admin invited by email
     (`ADMIN_INVITE_SOURCE`), so the queue can tell it from a request. */

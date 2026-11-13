@@ -394,15 +394,16 @@ the sweep requires exactly one correct declaration per display-tier rule,
 and a role rule must name its *own* paired token (`--type-title-track`, not
 `--track-display`).
 
-**CJK:** Relay ships English and Simplified Chinese. `html:lang(zh-CN)` does
+**CJK:** Relay ships English, Simplified Chinese, and Traditional Chinese. `html:lang(zh-CN)` and `html:lang(zh-TW)` do
 not fork the sans stack — Latin sets in the platform UI face and Han falls
 through to the Simplified Chinese faces named in the root stack, which also
 covers agent-authored Chinese inside an English UI. The locale block changes
 metrics: every track is pinned to 0 because Han glyphs are square and must
-never be tightened, and reading leading loosens to 1.7/1.8/1.9. A language
-preference saved as `zh-TW` while Traditional Chinese was offered reads as
-`zh-CN` (`normalizeLanguage` in `web/src/lib/appStorage.ts`,
-`normalize_user_language` in `backend/relay/security/auth_rows.py`).
+never be tightened, and reading leading loosens to 1.7/1.8/1.9. Only the mono
+stack differs: `zh-TW` falls back to the TC faces. The `zh-TW` catalogue is
+generated from `zh-CN` (OpenCC `cn`→`twp`) and kept key-for-key equal by
+`web/tests/zhTwCatalogue.test.ts`; the landing screenshots reuse the `-zh-CN`
+cuts until Traditional ones are shot.
 
 JetBrains Mono is vendored as a **latin** variable subset
 (`web/src/app/fonts/JetBrainsMono-Variable.woff2` with its OFL licence, wght

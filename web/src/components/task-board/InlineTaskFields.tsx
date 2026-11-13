@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { enUS, zhCN } from "react-day-picker/locale";
+import { enUS, zhCN, zhTW } from "react-day-picker/locale";
 import { cn } from "@/lib/utils";
 import { dateFromKey } from "@/lib/dateKey";
 import { isoToday } from "@/lib/routine";
@@ -40,7 +40,7 @@ import type { AgentTeam, UserAgent, ProjectRecord, RelayTaskListItem, TaskPriori
  * with nothing to press.
  */
 
-const DAY_PICKER_LOCALES = { en: enUS, "zh-CN": zhCN } as const;
+const DAY_PICKER_LOCALES = { en: enUS, "zh-CN": zhCN, "zh-TW": zhTW } as const;
 
 /**
  * A task's status, read and changed the same way on every surface: the list

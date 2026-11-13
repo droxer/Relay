@@ -16,15 +16,10 @@ from ..core.user_preferences import (
     UserLanguage,
 )
 
-# Traditional Chinese was retired. A preference stored while it existed reads
-# back as Simplified Chinese instead of dropping the reader to English.
-_RETIRED_USER_LANGUAGES: dict[str, UserLanguage] = {"zh-TW": "zh-CN"}
-
 
 def normalize_user_language(value: Any) -> UserLanguage:
     """Map any stored language value onto one the product still ships."""
-    language = _RETIRED_USER_LANGUAGES.get(value, value) if isinstance(value, str) else value
-    return language if language in USER_LANGUAGES else DEFAULT_USER_LANGUAGE
+    return value if value in USER_LANGUAGES else DEFAULT_USER_LANGUAGE
 
 
 def public_account(account: dict[str, Any]) -> dict[str, Any]:
