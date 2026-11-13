@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import pytest
-from postgres_backend import database_url_for, postgres_backend_requested, postgres_test_databases
+from postgres_backend import (
+    database_url_for,
+    ensure_database_extensions,
+    postgres_backend_requested,
+    postgres_test_databases,
+)
 from relay.security import admin_token as admin_token_module
 from relay.security import credentials
 from store_fixtures import isolated_store_engines
+
+
+def pytest_sessionstart(session):
+    # Runs in every xdist worker before its first test.
+    ensure_database_extensions()
 
 
 def pytest_addoption(parser):

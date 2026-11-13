@@ -149,6 +149,25 @@ def _admin() -> Any:
     return _admin_engine
 
 
+# Any lock key works so long as every worker uses the same one.
+_EXTENSION_LOCK_KEY = 0x52454C4159  # "RELAY"
+# Extensions the migrations create. They are database-wide, not per schema,
+# so parallel workers migrating their own schemas would race on
+# `create extension if not exists` (a unique violation in pg_extension).
+_DATABASE_EXTENSIONS = ("pgcrypto",)
+
+
+def ensure_database_extensions() -> None:
+    """Create the migrations' extensions once, serialized across workers, so
+    every later `create extension if not exists` is a no-op."""
+    if not os.environ.get(TEST_DATABASE_URL_ENV, "").strip():
+        return
+    with _admin().begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _EXTENSION_LOCK_KEY})
+        for extension in _DATABASE_EXTENSIONS:
+            conn.execute(text(f'CREATE EXTENSION IF NOT EXISTS "{extension}"'))
+
+
 def _alembic_head() -> str:
     global _head_revision
     if _head_revision is None:
