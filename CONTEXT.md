@@ -87,7 +87,7 @@ The part a Logical Agent plays in a shared round. Stored and sent by id
 (`planner`, `implementer`, `reviewer`, `tester`, `fixer`, `researcher`,
 `designer`, `writer`, `devops`), shown to people and agents by title:
 Architect, Software Engineer, Code Reviewer, QA Engineer, Bug Fixer, Research
-Analyst, Product Designer, Technical Writer, DevOps Engineer. Each role carries
+Analyst, Interaction Designer, Technical Writer, DevOps Engineer. Each role carries
 a charter (`backend/relay/core/role_charters.py`)
 saying what it delivers and what it leaves to the others. A round's lead is a
 coordinator, not a role. An agent has its own role, chosen at setup and

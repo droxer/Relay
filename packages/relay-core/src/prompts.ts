@@ -11,7 +11,7 @@ const ROLE_TITLES: Record<string, string> = {
   tester: "QA Engineer",
   fixer: "Bug Fixer",
   researcher: "Research Analyst",
-  designer: "Product Designer",
+  designer: "Interaction Designer",
   writer: "Technical Writer",
   devops: "DevOps Engineer",
 };
