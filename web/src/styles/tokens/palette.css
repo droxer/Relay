@@ -17,9 +17,11 @@
              run ledger narrows its day column
      640px   compact — dashboard, admin shell, composer, workspace panes;
              also a CONTAINER tier, where the `artifact-preview` header
-             wraps a file's actions under its name
+             wraps a file's actions under its name, and where the
+             `task-table` drops its Assignee column and row tags
      768px   CONTAINER tier, not a viewport one — the `computer` and `record`
-             containers widen here. Container queries are breakpoints too and
+             containers widen here, and the `task-table` drops its Due and
+             Priority columns so the title track keeps a readable share. Container queries are breakpoints too and
              belong in this list; leaving them out is what made this row look
              dead when it is not.
      820px   MOBILE — the app-wide PHONE tier, and the only one. Default to it.

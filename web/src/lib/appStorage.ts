@@ -137,11 +137,21 @@ function writeLayoutFlag(key: string, value: boolean): void {
   writeLayoutValue(key, value ? "true" : "false");
 }
 
-/** Whether the side rail was left expanded. Defaults to expanded: a new
- *  person reads the destinations by name until they choose the icon rail,
- *  and that first collapse is remembered like any other. */
+/** Below this window width a never-touched rail starts as the icon rail: on a
+ *  tablet the expanded labels beside a list rail leave the work column too
+ *  narrow for a task table or a thread header. */
+export const SIDENAV_EXPANDED_DEFAULT_MIN_WIDTH = 1100;
+
+/** Whether the side rail was left expanded. Defaults to expanded on a wide
+ *  window — a new person reads the destinations by name until they choose the
+ *  icon rail — and to the icon rail on a narrower one. A stored choice always
+ *  wins, so a collapse or an expand is remembered like any other. */
 export function readSidenavExpanded(): boolean {
-  return readLayoutValue(sidenavExpandedKey) !== "false";
+  const stored = readLayoutValue(sidenavExpandedKey);
+  if (stored === "true") return true;
+  if (stored === "false") return false;
+  const width = typeof window === "undefined" ? undefined : window.innerWidth;
+  return typeof width !== "number" || width >= SIDENAV_EXPANDED_DEFAULT_MIN_WIDTH;
 }
 
 export function writeSidenavExpanded(expanded: boolean): void {

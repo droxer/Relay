@@ -209,6 +209,17 @@ describe("Relay web layout storage", () => {
     assert.equal(readSidenavExpanded(), true);
   });
 
+  it("defaults the side nav to the icon rail on a tablet-width window", () => {
+    (globalThis as { window?: { innerWidth: number } }).window = { innerWidth: 834 };
+    assert.equal(readSidenavExpanded(), false);
+  });
+
+  it("keeps an expanded side nav the person chose on a tablet-width window", () => {
+    (globalThis as { window?: { innerWidth: number } }).window = { innerWidth: 834 };
+    writeSidenavExpanded(true);
+    assert.equal(readSidenavExpanded(), true);
+  });
+
   it("keeps the side nav collapsed once the person collapses it", () => {
     writeSidenavExpanded(false);
     assert.equal(readSidenavExpanded(), false);

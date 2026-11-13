@@ -519,7 +519,7 @@ export const dashboardTokens = {
 /* Skills                                                              */
 /* ------------------------------------------------------------------ */
 
-function skill({ id, name, displayName, description, visibility = "org", revision, files, grantedAgentIds, days }) {
+function skill({ id, name, displayName, description, visibility = "public", revision, files, grantedAgentIds, days }) {
   const revisions = Array.from({ length: revision }, (_, index) => ({
     id: `${id}_rev_${revision - index}`, revision: revision - index, bytes: 4_200 + (revision - index) * 380,
     manifestSha256: `${(revision - index).toString(16).padStart(2, "0")}c4e1a97b3d5f08`.padEnd(64, "a"),

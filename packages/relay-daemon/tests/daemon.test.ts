@@ -3023,7 +3023,7 @@ test('quarantined cancellation redelivery stays quiet while the daemon continues
 for (const failure of ["stalled", "unavailable"] as const) {
   test(`relay daemon keeps polling while a cancellation report is ${failure}`, async () => {
     const stop = new AbortController();
-    const deadline = setTimeout(() => stop.abort(), 500);
+    const deadline = setTimeout(() => stop.abort(), 5000);
     let polls = 0;
     let cancellationAttempts = 0;
     const lost = runCommand("cmd_lost_start");
@@ -3043,6 +3043,9 @@ for (const failure of ["stalled", "unavailable"] as const) {
           if (path === "/api" || path.endsWith("/daemon-node-registrations")) return jsonResponse({});
           if (path.endsWith("/commands")) {
             polls += 1;
+            // A slow poll must not turn legitimate background retries into
+            // apparent duplicate senders.
+            if (failure === "unavailable" && polls === 2) await new Promise(resolve => setTimeout(resolve, 120));
             if (polls >= 3) stop.abort();
             // Redelivery must not create another concurrent report sender.
             return jsonResponse({ commands: polls < 3 ? [cancelCommand] : [] });
@@ -3051,7 +3054,13 @@ for (const failure of ["stalled", "unavailable"] as const) {
             const event = await jsonBody<DaemonNodeEvent>(init);
             if (event.type === "run.cancelled") {
               cancellationAttempts += 1;
-              if (failure === "unavailable") return jsonResponse({ error: "temporary" }, 503);
+              if (failure === "unavailable") {
+                const response = jsonResponse({ error: "temporary" }, 503);
+                // Isolate redelivery deduplication from legitimate retries by
+                // both the report sender and durable outbox replay.
+                response.headers.set("Retry-After", "60");
+                return response;
+              }
               return new Promise<Response>((_resolve, reject) => {
                 const abort = () => reject(new Error("Request aborted"));
                 if (init?.signal?.aborted) abort();

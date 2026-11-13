@@ -106,6 +106,30 @@ tr[data-slot="table-row"]:not([data-selected="true"]):hover {
 
 .backlog-row-lead-main > .tag-list { min-width: min-content; }
 
+/* A tablet, or a desktop with both rails open, gives the table too little
+   width for its fixed tracks: the title track starved to nothing and the tag
+   chips spilled over the Status column. The table's own width decides —
+   not the viewport, which says nothing about the rails — and the
+   least-read tracks drop first, so the title always keeps a readable share.
+   Phones (max-width: 820px, below) restack rows as cards instead. */
+[data-slot="table-container"]:has(> .task-table) {
+  container: task-table / inline-size;
+}
+
+@container task-table (max-width: 768px) {
+  .task-table .task-col-due,
+  .task-table .task-col-priority {
+    display: none;
+  }
+}
+
+@container task-table (max-width: 640px) {
+  .task-table .task-col-assignee,
+  .task-table .backlog-row-lead-main > .tag-list {
+    display: none;
+  }
+}
+
 /* Past due carries a mark beside the red date, so it is not colour alone. */
 .due-value,
 .inline-field:has(> .due-overdue-mark) {
@@ -437,6 +461,12 @@ button.inline-field[aria-expanded="true"] {
   .backlog-filter-bar button[data-slot="select-trigger"] {
     border-color: transparent;
     background: var(--control-fill);
+  }
+
+  /* --ink-4 clears AA on the canvas but not on the fill (4.26:1 in light);
+     one step up keeps the placeholder legible on the soft chip. */
+  .backlog-filter-search::placeholder {
+    color: var(--ink-3);
   }
 
   .backlog-page {
