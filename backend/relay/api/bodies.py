@@ -10,6 +10,7 @@ from typing import Annotated, Any
 from fastapi import Depends, HTTPException, Request
 from starlette.requests import ClientDisconnect
 from ..core.legacy_names import upgrade_legacy_names
+from ..core.models import AGENT_ROLES
 from ..core.token_usage import build_token_usage
 from ..core.validation import valid_agent
 from .deps import app_context
@@ -173,8 +174,4 @@ def participants_for_assignments(
 
 
 def role_name(value: Any) -> str | None:
-    return (
-        value
-        if value in ("implementer", "reviewer", "planner", "tester", "fixer")
-        else None
-    )
+    return value if value in AGENT_ROLES else None

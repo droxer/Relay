@@ -3,7 +3,7 @@ import type { PermissionAnswers, PermissionQuestionItem } from "./daemon-node-pr
 import { mergeTokenUsage, type TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 
-export type AgentRole = "implementer" | "reviewer" | "planner" | "tester" | "fixer";
+export type AgentRole = "implementer" | "reviewer" | "planner" | "tester" | "fixer" | "researcher" | "designer" | "writer" | "devops";
 export type SessionStatus = "running" | "waiting_for_human" | "completed" | "failed" | "cancelled";
 
 /** Goal outcome, independent of whether the execution process has ended.

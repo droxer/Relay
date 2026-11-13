@@ -15,7 +15,17 @@ TaskStatus = Literal[
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
 
 AGENT_NAMES: tuple[str, ...] = ("claude", "pi", "codex", "kimi", "opencode")
-AGENT_ROLES: tuple[str, ...] = ("implementer", "reviewer", "planner", "tester", "fixer")
+AGENT_ROLES: tuple[str, ...] = (
+    "implementer",
+    "reviewer",
+    "planner",
+    "tester",
+    "fixer",
+    "researcher",
+    "designer",
+    "writer",
+    "devops",
+)
 # Version 2 adds ordered run.output.batch delivery. Keep version 1 accepted so
 # existing daemons can finish upgrading with their legacy run.output events.
 DAEMON_NODE_PROTOCOL_VERSION = 2

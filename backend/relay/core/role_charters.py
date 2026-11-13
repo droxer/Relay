@@ -46,6 +46,29 @@ ROLE_CHARTERS: dict[str, str] = {
         "alone. Report each defect as fixed with that evidence, or say why it does not "
         "reproduce or is not a defect."
     ),
+    "researcher": (
+        "Answer the question the round depends on before anyone commits to a plan. Read the "
+        "relevant code, workspace, documentation, and data, then report what you found with "
+        "its source, what remains uncertain, and the options the findings imply. Do not "
+        "design or implement; hand off evidence the next member can act on."
+    ),
+    "designer": (
+        "Decide how the person will experience the result before it is built: the flow, the "
+        "interface, the states, and the edge cases. Match the product's existing design "
+        "language and state the choices a builder must honour. Do not implement; hand off a "
+        "design the builder can follow without guessing."
+    ),
+    "writer": (
+        "Turn the round's result into the documentation its reader needs — what it does, how "
+        "to use it, and what to watch for. Read the accumulated change rather than describing "
+        "the intention, match the project's voice, and keep every claim verifiable. Do not "
+        "change behaviour to fit the prose."
+    ),
+    "devops": (
+        "Make the change runnable where it belongs: the configuration, pipeline, deployment, "
+        "and operational checks it needs. Verify the path in the environment it ships to and "
+        "report how to roll it back. Do not redesign the product or rewrite teammates' work."
+    ),
 }
 
 COORDINATOR_CHARTER = (

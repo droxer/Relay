@@ -36,6 +36,10 @@ export const AGENT_ROLE_OPTIONS: readonly AgentRole[] = [
   "planner",
   "tester",
   "fixer",
+  "researcher",
+  "designer",
+  "writer",
+  "devops",
 ];
 
 /** Why an agent cannot currently run, derived live on every read — never
@@ -120,7 +124,7 @@ export interface TeamMemberSummary {
 }
 
 export interface TeamMemberConfig {
-  role?: "planner" | "implementer" | "tester" | "reviewer" | "fixer";
+  role?: AgentRole;
   responsibility?: string;
   required?: boolean;
   participation?: "always" | "on_request";

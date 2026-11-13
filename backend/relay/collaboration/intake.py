@@ -11,12 +11,13 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ..core.models import AGENT_ROLES
 from ..sessions.bridge import latest_user_turn_text
 from .errors import CollaborationError
 from .models import MessageIntent, RecoveryIntent, RunIntent
 
 VALID_MODES = frozenset({"action", "ask", "review"})
-VALID_ROLES = frozenset({"implementer", "reviewer", "planner", "tester", "fixer"})
+VALID_ROLES = frozenset(AGENT_ROLES)
 
 
 @dataclass(frozen=True)

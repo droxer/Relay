@@ -5,7 +5,17 @@ import type { AgentRun, CollaborationRoundManifest, CollaborationStyle, RelaySes
 // previewSlots against what backend dispatch fills.
 export const COLLABORATION_STYLES: readonly CollaborationStyle[] = ["build_review", "pipeline", "lead_led"];
 const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
-const STAGE: Record<string, number> = { planner: 0, implementer: 1, fixer: 1, tester: 2, reviewer: 3 };
+const STAGE: Record<string, number> = {
+  researcher: 0,
+  planner: 0,
+  designer: 1,
+  implementer: 2,
+  fixer: 2,
+  tester: 3,
+  writer: 3,
+  devops: 3,
+  reviewer: 4,
+};
 export interface SlotMember { id: string; role?: string; onRequest?: boolean }
 type Slot = { slot: "builder" | "reviewer" | "member" | "lead"; memberId: string };
 
@@ -18,7 +28,7 @@ export function previewSlots(all: SlotMember[], leadId: string | undefined, styl
   // Dispatch takes the roster lead first, so the lead wins a stage tie.
   const members = [...all.filter((m) => m.id === leadId), ...all.filter((m) => m.id !== leadId && !m.onRequest)];
   if (!members.length) return { style, slots: [] };
-  const ordered = [...members].sort((a, b) => (STAGE[a.role ?? ""] ?? 1) - (STAGE[b.role ?? ""] ?? 1));
+  const ordered = [...members].sort((a, b) => (STAGE[a.role ?? ""] ?? 2) - (STAGE[b.role ?? ""] ?? 2));
   const lead = members.find((m) => m.id === leadId);
   if (style === "pipeline") return { style, slots: ordered.map((m) => ({ slot: "member", memberId: m.id })) };
   if (style === "lead_led") {
@@ -53,6 +63,8 @@ export function styleForRun(run: Pick<AgentRun, "assignmentId" | "teamSnapshot">
   return round?.style ?? (round?.teamSnapshot || run.teamSnapshot ? "lead_led" : undefined);
 }
 
+const TURN_ROLES = new Set(["planner", "tester", "researcher", "designer", "writer", "devops"]);
+
 export function turnSlot(run: { role?: string; coordinator?: boolean; synthesizer?: boolean; workResult?: { status?: string; findings?: unknown[] } }, style?: CollaborationStyle): string | null {
   if (!style) return null;
   if (style === "lead_led" && run.coordinator) return "lead";
@@ -63,7 +75,8 @@ export function turnSlot(run: { role?: string; coordinator?: boolean; synthesize
     return "reviewer";
   }
   if (run.role === "implementer" || run.role === "fixer") return "builder";
-  return run.role === "planner" || run.role === "tester" ? run.role : null;
+  if (run.role && TURN_ROLES.has(run.role)) return run.role;
+  return null;
 }
 
 export function reviewCycle(session: RelaySession): { cycle: number; max: number } | null {

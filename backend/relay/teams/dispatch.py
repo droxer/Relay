@@ -323,10 +323,10 @@ def _ordered_accomplish_agents(
 ) -> list[dict[str, Any]]:
     """Produce a stable topological order for delegated team work.
 
-    The lead establishes the boundary first. Implementers then create the
-    change, testers validate that accumulated work, and reviewers inspect the
-    completed result. Stable sorting preserves the team's chosen order inside
-    each phase.
+    The lead establishes the boundary first. Research and planning go first,
+    design settles the shape, implementers then create the change, testers,
+    writers, and DevOps finish it, and reviewers inspect the completed result.
+    Stable sorting preserves the team's chosen order inside each phase.
     """
     if not lead_agent_id:
         return agents

@@ -10,6 +10,10 @@ const ROLE_TITLES: Record<string, string> = {
   reviewer: "Code Reviewer",
   tester: "QA Engineer",
   fixer: "Bug Fixer",
+  researcher: "Research Analyst",
+  designer: "Interaction Designer",
+  writer: "Technical Writer",
+  devops: "DevOps Engineer",
 };
 
 export function roleTitle(role: string): string {
