@@ -38,11 +38,11 @@ def client(monkeypatch, tmp_path):
     app = create_app(tmp_path)
     with TestClient(app) as client:
         assert client.post("/api/v1/auth/bootstrap", json={
-            "token": "admin_token", "username": "admin", "password": "kestrel-vault-7719",
+            "token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719",
         }).status_code == 200
         for name in ("alice", "bob"):
             assert client.post("/api/v1/admin/users", json={
-                "userId": name, "username": name, "password": "userpass", "displayName": name,
+                "userId": name, "username": name, "email": f"{name}@example.com", "password": "userpass", "displayName": name,
             }).status_code == 201
         login(client, "alice")
         yield client

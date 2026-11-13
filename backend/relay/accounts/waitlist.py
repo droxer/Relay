@@ -27,6 +27,7 @@ from typing import Any
 
 from loguru import logger
 
+from ..core.email_address import MAX_EMAIL_LENGTH as MAX_EMAIL_LENGTH, normalize_email_address
 from ..notifications.mailer import DeliveryResult, Mailer, NullMailer
 from ..notifications.templates import confirmation_email, invite_email
 from ..persistence.db_time import parse_db_time
@@ -36,7 +37,6 @@ from ..persistence.account.waitlist import (
     WaitlistFullError as WaitlistFullError,
 )
 
-MAX_EMAIL_LENGTH = 254
 FIELD_LIMITS = {"name": 120, "company": 120, "role": 80, "useCase": 1000}
 MAX_SOURCE_LENGTH = 120
 MAX_NOTE_LENGTH = 1000
@@ -45,11 +45,6 @@ SUPPORTED_LOCALES = ("en", "zh-CN", "zh-TW")
 DEFAULT_INVITE_TTL_DAYS = 14
 DEFAULT_MAX_WAITING = 10_000
 _TOKEN_BYTES = 32
-# Each part excludes whitespace, control characters, and the characters that
-# would let one "address" smuggle a display name or a second recipient into
-# the provider's `to` field.
-_EMAIL_PART = r'[^@\s,;<>()"\\\x00-\x1f\x7f]+'
-_EMAIL_PATTERN = re.compile(rf"^{_EMAIL_PART}@{_EMAIL_PART}\.{_EMAIL_PART}$")
 # Postgres text cannot hold NUL, and no field here needs a control character
 # beyond the line breaks a multi-line answer may carry.
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -123,10 +118,10 @@ def hash_invite_token(token: str) -> str:
 
 
 def normalize_email(value: Any) -> str:
-    email = value.strip().lower() if isinstance(value, str) else ""
-    if not email or len(email) > MAX_EMAIL_LENGTH or not _EMAIL_PATTERN.match(email):
-        raise WaitlistValidationError("Enter a valid email address.")
-    return email
+    try:
+        return normalize_email_address(value)
+    except ValueError as error:
+        raise WaitlistValidationError(str(error)) from error
 
 
 def join_fields(body: dict[str, Any]) -> dict[str, Any]:

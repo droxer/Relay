@@ -21,6 +21,7 @@ from ...core.deploy_config import trusted_web_origin
 from ...persistence.account.waitlist import WAITLIST_STATUSES, WaitlistConflictError
 from ...security.request_auth import require_admin_session, user_session_cookie_attrs_for_request
 from ...security.edge import client_ip
+from ...security.account_identity import AccountIdentityConflict
 from ...security.passwords import validate_password
 from ...computer.limits import decorate_account_limits
 from ...accounts.waitlist import (
@@ -179,11 +180,12 @@ def accept_invite(
         account = service.accept(token, create_account)
     except InviteNotLiveError as error:
         raise HTTPException(404, _INVITE_NOT_LIVE) from error
+    except AccountIdentityConflict as error:
+        if error.field == "email":
+            raise HTTPException(409, str(error)) from error
+        raise HTTPException(409, f"The handle @{handle} is taken.") from error
     except ValueError as error:
-        message = str(error)
-        if "already exists" in message:
-            raise HTTPException(409, f"The handle @{handle} is taken.") from error
-        raise HTTPException(400, message) from error
+        raise HTTPException(400, str(error)) from error
     session = ctx.auth_store.create_session(account["id"])
     attrs = user_session_cookie_attrs_for_request(
         request, max_age_seconds=ctx.auth_store.session_ttl_seconds

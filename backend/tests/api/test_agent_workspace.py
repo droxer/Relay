@@ -14,7 +14,7 @@ def _bootstrap(client: TestClient) -> None:
     assert (
         client.post(
             "/api/v1/auth/bootstrap",
-            json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+            json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
         ).status_code
         == 200
     )
@@ -24,7 +24,7 @@ def _agent(client: TestClient) -> dict:
     assert (
         client.post(
             "/api/v1/admin/accounts",
-            json={"username": "alice", "password": "userpass", "userId": "alice"},
+            json={"username": "alice", "email": "alice@example.com", "password": "userpass", "userId": "alice"},
         ).status_code
         == 201
     )
@@ -154,7 +154,7 @@ def test_agent_workspace_brief_uses_authorized_placements_for_user(
     assert (
         admin.post(
             "/api/v1/admin/accounts",
-            json={"username": "bob", "password": "userpass", "userId": "bob"},
+            json={"username": "bob", "email": "bob@example.com", "password": "userpass", "userId": "bob"},
         ).status_code
         == 201
     )

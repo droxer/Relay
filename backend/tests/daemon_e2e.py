@@ -70,8 +70,8 @@ class DaemonE2E:
         self.start_server(self.port)
 
     def setup(self):
-        self.post("/auth/bootstrap", {"token": "e2e-admin-token", "username": "admin", "password": "e2e-test-password-123"}, 200)
-        self.post("/admin/users", {"userId": "alice", "username": "alice", "password": "userpass", "displayName": "Alice"}, 201)
+        self.post("/auth/bootstrap", {"token": "e2e-admin-token", "username": "admin", "email": "admin@example.com", "password": "e2e-test-password-123"}, 200)
+        self.post("/admin/users", {"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "userpass", "displayName": "Alice"}, 201)
         owner = user_id("alice")
         self.node_id = str(uuid4())
         workspace = self.root / "workspace"

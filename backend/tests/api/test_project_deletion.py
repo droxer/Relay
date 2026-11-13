@@ -157,7 +157,7 @@ def test_delete_project_cannot_be_used_by_another_user(project_env):
     client.post("/api/v1/auth/logout")
     assert client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1").status_code == 401
     client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"})
-    client.post("/api/v1/admin/users", json={"userId": "bob", "username": "bob", "password": "userpass", "displayName": "Bob"})
+    client.post("/api/v1/admin/users", json={"userId": "bob", "username": "bob", "email": "bob@example.com", "password": "userpass", "displayName": "Bob"})
     client.post("/api/v1/auth/logout")
     client.post("/api/v1/auth/login", json={"username": "bob", "password": "userpass"})
     assert client.delete(f"/api/v1/projects/{project['id']}?expectedVersion=1").status_code == 403

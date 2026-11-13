@@ -17,7 +17,7 @@ def _bootstrap(client: TestClient) -> None:
     assert client.post("/api/v1/auth/bootstrap", json={
         "token": "admin_token",
         "username": "admin",
-        "password": "kestrel-vault-7719",
+        "email": "admin@example.com", "password": "kestrel-vault-7719",
     }).status_code == 200
     assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"}).status_code == 200
 
@@ -173,7 +173,7 @@ def test_task_artifacts_denied_for_other_user(monkeypatch) -> None:
 
         assert client.post("/api/v1/admin/accounts", json={
             "username": "worker",
-            "password": "kestrel-vault-7719",
+            "email": "worker@example.com", "password": "kestrel-vault-7719",
             "userId": "emp_worker",
         }).status_code == 201
         worker = TestClient(app)

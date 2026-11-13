@@ -25,7 +25,7 @@ def _bootstrap_admin(client: TestClient) -> str:
     """Bootstrap the admin account and return its user id."""
     response = client.post(
         "/api/v1/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
     )
     assert response.status_code == 200
     return response.json()["user"]["userId"]
@@ -45,7 +45,7 @@ def _register_alice_client(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code
@@ -162,7 +162,7 @@ def test_admin_manages_agents_and_user_lists_own_agents(
             json={
                 "userId": "alice",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "displayName": "Alice",
             },
         )
@@ -247,7 +247,7 @@ def test_unprovisioned_daemon_registration_cannot_mint_logical_agents(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -323,7 +323,7 @@ def test_control_plane_provisioned_node_registration_does_not_materialize_agents
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -368,7 +368,7 @@ def test_agent_policies_are_rejected_until_runtime_enforcement_exists(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -419,7 +419,7 @@ def test_legacy_sandbox_run_blocks_unenforced_agent_policy(monkeypatch, database
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -477,7 +477,7 @@ def test_user_updates_own_agent_meta(monkeypatch) -> None:
             json={
                 "userId": "alice",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "displayName": "Alice",
             },
         )
@@ -532,7 +532,7 @@ def test_user_updates_own_agent_meta(monkeypatch) -> None:
             json={
                 "userId": "bob",
                 "username": "bob",
-                "password": "userpass",
+                "email": "bob@example.com", "password": "userpass",
             },
         )
         assert bob.status_code == 201
@@ -562,7 +562,7 @@ def test_admin_places_agents_on_different_runtime_nodes(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -622,7 +622,7 @@ def test_agent_placements_describe_managed_and_local_runtime_nodes(monkeypatch) 
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -768,7 +768,7 @@ def test_user_dispatches_work_by_logical_agent_id(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -1566,7 +1566,7 @@ def test_owner_can_replay_a_scoped_message_for_their_thread(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -1742,7 +1742,7 @@ def test_existing_session_dispatch_normalizes_legacy_agent_supervisor(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -1815,7 +1815,7 @@ def test_logical_agent_handoff_records_the_target_agent_id(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -1888,7 +1888,7 @@ def test_user_cannot_dispatch_a_team_across_shared_workspace_nodes(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -1978,7 +1978,7 @@ def test_new_thread_runs_on_the_selected_computer(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2058,7 +2058,7 @@ def test_new_thread_rejects_an_agent_outside_the_selected_computer(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2119,7 +2119,7 @@ def test_user_cannot_list_or_dispatch_another_users_agent(monkeypatch) -> None:
                     json={
                         "userId": handle,
                         "username": handle,
-                        "password": "userpass",
+                        "email": f"{handle}@example.com", "password": "userpass",
                     },
                 ).status_code
                 == 201
@@ -2182,7 +2182,7 @@ def test_legacy_sandbox_run_cannot_move_a_thread_to_another_computer(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2246,7 +2246,7 @@ def test_legacy_run_reuses_compatibility_agent_after_device_reregistration(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2309,7 +2309,7 @@ def test_agent_stays_on_roster_when_its_computer_is_gone(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2411,7 +2411,7 @@ def test_agent_stays_on_roster_when_its_computer_is_deregistered(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2477,7 +2477,7 @@ def test_task_persists_and_dispatches_a_logical_agent_assignment(monkeypatch) ->
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2562,7 +2562,7 @@ def test_task_owner_cannot_be_reassigned_to_another_users_agent(
                     json={
                         "userId": handle,
                         "username": handle,
-                        "password": "userpass",
+                        "email": f"{handle}@example.com", "password": "userpass",
                     },
                 ).status_code
                 == 201
@@ -2617,7 +2617,7 @@ def test_user_task_writes_require_named_agents_and_preserve_status(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2697,7 +2697,7 @@ def test_manual_start_materializes_a_legacy_task_assignment(monkeypatch) -> None
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2770,7 +2770,7 @@ def test_failed_agent_first_run_finalizes_instead_of_wedging(monkeypatch) -> Non
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2856,7 +2856,7 @@ def test_agent_role_is_visible_and_patchable(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code
@@ -3067,7 +3067,7 @@ def test_creation_does_not_place_on_an_online_node_that_lacks_the_runtime(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code
@@ -3152,7 +3152,7 @@ def test_creation_rejects_a_real_computer_belonging_to_another_user(
                     json={
                         "userId": handle,
                         "username": handle,
-                        "password": "userpass",
+                        "email": f"{handle}@example.com", "password": "userpass",
                         "displayName": handle.title(),
                     },
                 ).status_code
@@ -3241,7 +3241,7 @@ def test_agent_view_lists_skills_installed_for_its_runtime(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code
@@ -3325,7 +3325,7 @@ def test_agent_without_placement_reports_no_skills(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code
@@ -3374,7 +3374,7 @@ def test_admin_placement_on_another_computer_moves_the_agent(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code
@@ -3438,7 +3438,7 @@ def test_admin_placement_refuses_to_move_an_agent_off_its_team_computer(
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code

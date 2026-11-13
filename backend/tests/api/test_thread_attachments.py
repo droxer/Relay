@@ -130,7 +130,7 @@ def test_staged_image_cannot_be_read_or_attached_by_another_user(monkeypatch):
         attachment = client.post(
             "/api/v1/thread-attachments", content=PNG, headers={"Content-Type": "image/png"}
         ).json()
-        app.state.auth_store.create_account("alice", "kestrel-vault-7720")
+        app.state.auth_store.create_account("alice", "kestrel-vault-7720", email="alice@example.com")
         client.cookies.clear()
         assert (
             client.post("/api/v1/auth/login", json={"username": "alice", "password": "kestrel-vault-7720"}).status_code

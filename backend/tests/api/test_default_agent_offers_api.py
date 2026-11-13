@@ -25,14 +25,14 @@ def alice(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[TestClient, str]]:
         assert (
             client.post(
                 "/api/v1/auth/bootstrap",
-                json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+                json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
             ).status_code
             == 200
         )
         assert (
             client.post(
                 "/api/v1/admin/users",
-                json={"userId": "alice", "username": "alice", "password": "userpass", "displayName": "Alice"},
+                json={"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "userpass", "displayName": "Alice"},
             ).status_code
             == 201
         )

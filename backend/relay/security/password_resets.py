@@ -90,11 +90,11 @@ def _throttled(created: list[datetime], now: datetime, throttle: ResetThrottle |
 
 
 def _matches(identifier: str, account: ResetAccount) -> bool:
-    if "@" in identifier:
-        if not account.email:
-            return False
-        return account.email.lower() == identifier
-    return account.username == identifier
+    # Login takes a username or an email in one field, so does reset; a
+    # legacy username may itself contain "@".
+    if account.username == identifier:
+        return True
+    return "@" in identifier and account.email is not None and account.email.lower() == identifier
 
 
 class DatabasePasswordResetStore:
@@ -111,6 +111,7 @@ class DatabasePasswordResetStore:
     def accounts_for(self, identifier: str) -> list[ResetAccount]:
         if "@" in identifier:
             condition = or_(
+                self.accounts.c.username == identifier,
                 func.lower(self.accounts.c.email) == identifier,
                 func.lower(self.users.c.email) == identifier,
             )

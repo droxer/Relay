@@ -13,7 +13,7 @@ def test_account_settings_are_self_scoped_and_persist(monkeypatch, tmp_path):
     client = TestClient(app)
     assert client.patch("/api/v1/auth/profile", json={"displayName": "Ada"}).status_code == 401
     assert client.post("/api/v1/auth/password", json={"currentPassword": OLD, "newPassword": NEW}).status_code == 401
-    client.post("/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "password": OLD})
+    client.post("/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": OLD})
     other = TestClient(app)
     other.post("/api/v1/auth/login", json={"username": "admin", "password": OLD})
     assert other.get("/api/v1/auth/me").status_code == 200  # Prime the session cache.
@@ -40,8 +40,8 @@ def test_normal_user_cannot_edit_another_account(monkeypatch, tmp_path):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(str(tmp_path))
     admin = TestClient(app)
-    admin.post("/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "password": OLD})
-    created = admin.post("/api/v1/admin/accounts", json={"username": "grace", "password": NEW, "displayName": "Grace Hopper", "role": "user"})
+    admin.post("/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": OLD})
+    created = admin.post("/api/v1/admin/accounts", json={"username": "grace", "email": "grace@example.com", "password": NEW, "displayName": "Grace Hopper", "role": "user"})
     assert created.status_code == 201
     normal = TestClient(app)
     login = normal.post("/api/v1/auth/login", json={"username": "grace", "password": NEW})

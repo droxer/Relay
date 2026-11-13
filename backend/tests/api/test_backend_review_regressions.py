@@ -44,7 +44,7 @@ def review_client(review_app):
             json={
                 "token": "admin_token",
                 "username": "admin",
-                "password": "kestrel-vault-7719",
+                "email": "admin@example.com", "password": "kestrel-vault-7719",
             },
         ).status_code
         == 200
@@ -142,7 +142,7 @@ def test_sandbox_provision_checks_existing_owner(review_app, review_client):
                 json={
                     "userId": user,
                     "username": user,
-                    "password": "userpass",
+                    "email": f"{user}@example.com", "password": "userpass",
                 },
             ).status_code
             == 201

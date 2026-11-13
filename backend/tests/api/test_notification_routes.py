@@ -22,11 +22,11 @@ def admin(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
     client = TestClient(create_app(tmp_path / "state"))
     response = client.post(
         f"{API}/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": ADMIN_PASSWORD},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": ADMIN_PASSWORD},
     )
     assert response.status_code == 200, response.text
     response = client.post(f"{API}/admin/accounts", json={
-        "username": "ada", "password": USER_PASSWORD, "role": "user", "userId": "ada",
+        "username": "ada", "email": "ada@example.com", "password": USER_PASSWORD, "role": "user", "userId": "ada",
     })
     assert response.status_code == 201, response.text
     return client

@@ -24,7 +24,7 @@ def _bootstrap(client: TestClient) -> None:
     assert (
         client.post(
             "/api/v1/auth/bootstrap",
-            json={"token": "admin_token", "username": "admin", "password": ADMIN_PASSWORD},
+            json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": ADMIN_PASSWORD},
         ).status_code
         == 200
     )
@@ -34,7 +34,7 @@ def _bootstrap(client: TestClient) -> None:
             json={
                 "userId": "alice",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "displayName": "Alice",
             },
         ).status_code
@@ -126,7 +126,7 @@ def other_user(client: TestClient):
             "/api/v1/admin/accounts",
             json={
                 "username": "worker",
-                "password": "userpass",
+                "email": "worker@example.com", "password": "userpass",
                 "role": "user",
                 "userId": "worker",
             },

@@ -20,7 +20,7 @@ def _traffic(engine):
 @pytest.mark.parametrize("state", ["active", "deleted", "detached", "missing"])
 def test_account_lookup_joins_the_user_in_one_query(tmp_path, state):
     store = make_auth_store(tmp_path)
-    created = store.create_account("alice", "kestrel-vault-7719", display_name="Alice")
+    created = store.create_account("alice", "kestrel-vault-7719", display_name="Alice", email="alice@example.com")
     if state == "deleted":
         with store.engine.begin() as conn:
             conn.execute(update(store.users).where(store.users.c.id == created["userId"]).values(
@@ -40,7 +40,7 @@ def test_account_lookup_joins_the_user_in_one_query(tmp_path, state):
 
 
 def test_agent_batch_preserves_order_and_omits_deleted_and_missing(tmp_path):
-    owner = make_auth_store(tmp_path).create_account("alice", "kestrel-vault-7719")["userId"]
+    owner = make_auth_store(tmp_path).create_account("alice", "kestrel-vault-7719", email="alice@example.com")["userId"]
     store = make_agent_store(tmp_path)
     agents = [store.create_agent(owner, {
         "displayName": f"Agent {i}", "executorKind": "claude", "defaultRole": "implementer",

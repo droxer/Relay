@@ -11,8 +11,16 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.exc import IntegrityError
 
+from ..core.email_address import normalize_email_address
 from ..core.task_capacity import normalize_task_capacity
+from .account_identity import (
+    AccountIdentityConflict,
+    conflict_from_integrity_error,
+    identity_conflict,
+    lock_account_identities,
+)
 from .auth_cache import SESSION_ACCOUNTS
 from .auth_rows import row_to_department, row_to_user, user_to_row, user_with_department
 from .auth_state import AuthStoreState
@@ -118,39 +126,71 @@ class AuthUsers(AuthStoreState):
             if not display_name:
                 raise ValueError("displayName cannot be empty.")
             patch["display_name"] = display_name
-        if email is not None:
-            patch["email"] = email.strip() or None
         if clear_max_local_computers:
             patch["max_local_computers"] = None
         elif max_local_computers is not None:
             patch["max_local_computers"] = max_local_computers
-        with store_transaction(self.engine) as conn:
-            row = (
-                conn.execute(
-                    select(self.users).where(self.users.c.id == user_id)
+        try:
+            with store_transaction(self.engine) as conn:
+                row = (
+                    conn.execute(
+                        select(self.users).where(self.users.c.id == user_id)
+                    )
+                    .mappings()
+                    .first()
                 )
-                .mappings()
-                .first()
-            )
-            if not row or row.get("deleted_at"):
-                raise KeyError(user_id)
-            if not patch:
-                return row_to_user(row)
-            conn.execute(
-                update(self.users)
-                .where(self.users.c.id == row["id"])
-                .values(**patch, updated_at=now)
-            )
-            updated = (
+                if not row or row.get("deleted_at"):
+                    raise KeyError(user_id)
+                if email is not None:
+                    patch["email"] = self._move_sign_in_email(conn, row["id"], email)
+                if not patch:
+                    return row_to_user(row)
                 conn.execute(
-                    select(self.users).where(self.users.c.id == row["id"])
+                    update(self.users)
+                    .where(self.users.c.id == row["id"])
+                    .values(**patch, updated_at=now)
                 )
-                .mappings()
-                .first()
-            )
+                updated = (
+                    conn.execute(
+                        select(self.users).where(self.users.c.id == row["id"])
+                    )
+                    .mappings()
+                    .first()
+                )
+        except IntegrityError as error:
+            raise conflict_from_integrity_error(error) from error
         logger.info("User updated", user_id=user_id)
         SESSION_ACCOUNTS.invalidate_all()
         return row_to_user(updated)
+
+    def _move_sign_in_email(self, conn: Any, user_pk: Any, email: str) -> str | None:
+        """The User's new email, written to its Accounts in the same transaction.
+
+        A User who signs in keeps one valid, unique address — the Account's
+        login email and its reset recipient — so the two never diverge. A User
+        without an Account keeps the older free-form contact field."""
+        account_ids = [
+            str(account_id)
+            for account_id in conn.execute(
+                select(self.accounts.c.id).where(self.accounts.c.user_id == user_pk)
+            ).scalars()
+        ]
+        if not account_ids:
+            return email.strip() or None
+        if not email.strip():
+            raise ValueError("A user who signs in needs an email address.")
+        normalized = normalize_email_address(email)
+        lock_account_identities(conn)
+        if identity_conflict(
+            conn, self.accounts, email=normalized, exclude_account_ids=account_ids
+        ):
+            raise AccountIdentityConflict("email")
+        conn.execute(
+            update(self.accounts)
+            .where(self.accounts.c.user_id == user_pk)
+            .values(email=normalized, updated_at=datetime.now(UTC))
+        )
+        return normalized
 
     def list_users(self, *, user_ids: list[str] | None = None) -> list[dict[str, Any]]:
         statement = select(self.users).where(self.users.c.deleted_at.is_(None))

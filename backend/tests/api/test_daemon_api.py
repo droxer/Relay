@@ -44,7 +44,7 @@ def _bootstrap_admin(client: TestClient) -> str:
         json={
             "token": "admin_token",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         },
     )
     assert response.status_code == 200
@@ -78,7 +78,7 @@ def _create_account(client: TestClient, username: str, *, user_id: str) -> None:
         "/api/v1/admin/accounts",
         json={
             "username": username,
-            "password": "userpass",
+            "email": f"{username}@example.com", "password": "userpass",
             "role": "user",
             "userId": user_id,
         },
@@ -1895,7 +1895,7 @@ def test_admin_assigns_unassigned_node_to_existing_user(monkeypatch) -> None:
             "/api/v1/admin/accounts",
             json={
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "role": "user",
                 "userId": "alice",
             },
@@ -1967,7 +1967,7 @@ def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
             json={
                 "userId": "nodeless",
                 "username": "nodeless",
-                "password": "userpass",
+                "email": "nodeless@example.com", "password": "userpass",
             },
         )
         assert without_node.status_code == 201
@@ -1980,7 +1980,7 @@ def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
             json={
                 "userId": "alice",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "nodeId": "sbx_missing",
             },
         )
@@ -2002,7 +2002,7 @@ def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
             json={
                 "userId": "alice",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "nodeId": "sbx_unassigned",
             },
         )
@@ -2024,7 +2024,7 @@ def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
             json={
                 "userId": "bob",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "nodeId": "sbx_second",
             },
         )
@@ -2035,7 +2035,7 @@ def test_create_user_rejects_invalid_node_assignment(monkeypatch) -> None:
             json={
                 "userId": "carol",
                 "username": "carol",
-                "password": "userpass",
+                "email": "carol@example.com", "password": "userpass",
                 "nodeId": "sbx_unassigned",
             },
         )
@@ -2082,7 +2082,7 @@ def test_control_panel_accepts_admin_bearer_token_for_supervisor(monkeypatch) ->
             "/api/v1/admin/accounts",
             json={
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "role": "user",
                 "userId": "alice",
             },
@@ -2363,7 +2363,7 @@ def test_user_can_create_own_device_enrollment(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2405,7 +2405,7 @@ def _enroll_user(client: TestClient, user_id: str) -> None:
             json={
                 "userId": user_id,
                 "username": user_id,
-                "password": "userpass",
+                "email": f"{user_id}@example.com", "password": "userpass",
             },
         ).status_code
         == 201
@@ -2839,7 +2839,7 @@ def test_user_can_manage_own_computer_executors(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -2882,7 +2882,7 @@ def test_user_cannot_manage_another_users_computer_executors(
                     json={
                         "userId": user_id,
                         "username": user_id,
-                        "password": "userpass",
+                        "email": f"{user_id}@example.com", "password": "userpass",
                     },
                 ).status_code
                 == 201
@@ -2928,7 +2928,7 @@ def test_admin_cannot_change_a_users_own_computer(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -3009,7 +3009,7 @@ def test_disabled_agents_endpoint_rejects_invalid_payload(monkeypatch) -> None:
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                 },
             ).status_code
             == 201
@@ -3840,7 +3840,7 @@ def test_admin_can_soft_delete_user_and_unassign_nodes(monkeypatch) -> None:
             "/api/v1/admin/accounts",
             json={
                 "username": "alice",
-                "password": "harbor-quartz-8830",
+                "email": "alice@example.com", "password": "harbor-quartz-8830",
                 "userId": "alice",
                 "displayName": "Alice",
             },
@@ -4655,7 +4655,7 @@ def test_a_supervisor_that_predates_the_user_rename_still_reconciles(monkeypatch
         admin = {"Authorization": "Bearer admin_token"}
         created = client.post(
             "/api/v1/admin/accounts",
-            json={"username": "alice", "password": "userpass", "role": "user", "userId": "alice"},
+            json={"username": "alice", "email": "alice@example.com", "password": "userpass", "role": "user", "userId": "alice"},
             headers=admin,
         )
         assert created.status_code == 201, created.text

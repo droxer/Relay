@@ -25,7 +25,7 @@ def _bootstrap(client: TestClient) -> None:
             json={
                 "token": "admin_token",
                 "username": "admin",
-                "password": "kestrel-vault-7719",
+                "email": "admin@example.com", "password": "kestrel-vault-7719",
             },
         ).status_code
         == 200

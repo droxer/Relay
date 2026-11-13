@@ -396,7 +396,7 @@ async def dataset(url, *, scale: int, requests: int, pool_size: int, overflow: i
                 password = secrets.token_urlsafe(24)
                 response = await client.post(
                     "/api/v1/auth/bootstrap",
-                    json={"token": overrides["RELAY_ADMIN_TOKEN"], "username": "probe", "password": password},
+                    json={"token": overrides["RELAY_ADMIN_TOKEN"], "username": "probe", "email": "probe@example.com", "password": password},
                 )
                 response.raise_for_status()
                 response = await client.post("/api/v1/auth/login", json={"username": "probe", "password": password})

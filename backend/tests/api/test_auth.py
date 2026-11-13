@@ -24,7 +24,7 @@ def _bootstrap_admin(client: TestClient, token: str = "admin_token") -> None:
     response = client.post("/api/v1/auth/bootstrap", json={
         "token": token,
         "username": "admin",
-        "password": "kestrel-vault-7719",
+        "email": "admin@example.com", "password": "kestrel-vault-7719",
     })
     assert response.status_code == 200
 
@@ -40,7 +40,7 @@ def _login(client: TestClient, username: str, password: str) -> None:
 def _create_account(client: TestClient, username: str, *, user_id: str | None = None) -> None:
     response = client.post("/api/v1/admin/accounts", json={
         "username": username,
-        "password": "userpass",
+        "email": f"{username}@example.com", "password": "userpass",
         "role": "user",
         **({"userId": user_id} if user_id else {}),
     })
@@ -90,7 +90,7 @@ def test_bootstrap_creates_first_admin(monkeypatch) -> None:
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "admin_token",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         })
         assert response.status_code == 200
         body = response.json()
@@ -108,7 +108,7 @@ def test_bootstrap_requires_bootstrap_token(monkeypatch) -> None:
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "wrong",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         })
         assert response.status_code == 401
 
@@ -122,7 +122,7 @@ def test_bootstrap_only_once(monkeypatch) -> None:
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "admin_token",
             "username": "admin2",
-            "password": "kestrel-vault-7719",
+            "email": "admin2@example.com", "password": "kestrel-vault-7719",
         })
         assert response.status_code == 409
 
@@ -270,7 +270,7 @@ def test_bootstrap_without_an_admin_token_is_unavailable(monkeypatch) -> None:
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "anything",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         })
         # Nothing is generated: a token only its hash remembers would be lost.
         assert response.status_code == 503
@@ -286,7 +286,7 @@ def test_user_creation_validation_returns_client_errors(monkeypatch) -> None:
 
         response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
-            "password": "userpass",
+            "email": "alice@example.com", "password": "userpass",
             "role": "manager",
         })
         assert response.status_code == 400
@@ -294,7 +294,7 @@ def test_user_creation_validation_returns_client_errors(monkeypatch) -> None:
 
         response = client.post("/api/v1/admin/accounts", json={
             "username": " ",
-            "password": "userpass",
+            "email": "blank@example.com", "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 400
@@ -302,7 +302,7 @@ def test_user_creation_validation_returns_client_errors(monkeypatch) -> None:
 
         response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
-            "password": "",
+            "email": "alice@example.com", "password": "",
             "role": "user",
         })
         assert response.status_code == 400
@@ -318,7 +318,7 @@ def test_duplicate_username_validation_normalizes_case_and_spacing(monkeypatch) 
 
         response = client.post("/api/v1/admin/accounts", json={
             "username": " Alice ",
-            "password": "userpass",
+            "email": "alice@example.com", "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 201
@@ -326,10 +326,10 @@ def test_duplicate_username_validation_normalizes_case_and_spacing(monkeypatch) 
 
         response = client.post("/api/v1/admin/accounts", json={
             "username": "ALICE",
-            "password": "userpass",
+            "email": "alice2@example.com", "password": "userpass",
             "role": "user",
         })
-        assert response.status_code == 400
+        assert response.status_code == 409
         assert response.json()["detail"] == "username already exists."
 
 
@@ -341,7 +341,7 @@ def test_bootstrap_validation_returns_client_errors(monkeypatch) -> None:
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "admin_token",
             "username": "",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         })
         assert response.status_code == 400
         assert response.json()["detail"] == "username is required."
@@ -349,7 +349,7 @@ def test_bootstrap_validation_returns_client_errors(monkeypatch) -> None:
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "admin_token",
             "username": "admin",
-            "password": "",
+            "email": "admin@example.com", "password": "",
         })
         assert response.status_code == 400
         assert response.json()["detail"] == "password is required."
@@ -364,7 +364,7 @@ def test_regular_user_can_access_sessions_and_tasks_but_not_admin_panel(monkeypa
 
         response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
-            "password": "userpass",
+            "email": "alice@example.com", "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 201
@@ -401,7 +401,7 @@ def test_regular_user_can_access_sessions_and_tasks_but_not_admin_panel(monkeypa
 
         response = account_client.post("/api/v1/admin/accounts", json={
             "username": "bob",
-            "password": "userpass",
+            "email": "bob@example.com", "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 403
@@ -415,7 +415,7 @@ def test_regular_user_can_access_sessions_and_tasks_but_not_admin_panel(monkeypa
         response = account_client.post("/api/v1/admin/users", json={
             "userId": "alice-2",
             "username": "alice2",
-            "password": "userpass",
+            "email": "alice2@example.com", "password": "userpass",
             "nodeId": "sbx_unassigned",
         })
         assert response.status_code == 403
@@ -442,7 +442,7 @@ def test_unauthenticated_user_cannot_access_sessions_or_admin_panel(monkeypatch)
         response = client.post("/api/v1/admin/users", json={
             "userId": "alice",
             "username": "alice",
-            "password": "userpass",
+            "email": "alice@example.com", "password": "userpass",
             "nodeId": "sbx_unassigned",
         })
         assert response.status_code == 401
@@ -805,7 +805,7 @@ def test_auth_responses_do_not_expose_secret_fields(monkeypatch) -> None:
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "admin_token",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         })
         assert response.status_code == 200
         _assert_no_secret_fields(response.json())
@@ -823,7 +823,7 @@ def test_auth_responses_do_not_expose_secret_fields(monkeypatch) -> None:
 
         response = client.post("/api/v1/admin/accounts", json={
             "username": "alice",
-            "password": "userpass",
+            "email": "alice@example.com", "password": "userpass",
             "role": "user",
         })
         assert response.status_code == 201
@@ -1087,7 +1087,7 @@ def test_app_keeps_accounts_users_and_departments_in_the_database(monkeypatch) -
         response = client.post("/api/v1/auth/bootstrap", json={
             "token": "admin_token",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         })
         assert response.status_code == 200
         admin_user_id = response.json()["user"]["userId"]
@@ -1121,7 +1121,7 @@ def test_app_keeps_accounts_users_and_departments_in_the_database(monkeypatch) -
 
         response = second_client.post("/api/v1/admin/accounts", json={
             "username": "eng-user",
-            "password": "kestrel-vault-7719",
+            "email": "eng-user@example.com", "password": "kestrel-vault-7719",
             "role": "user",
             "userId": "eng-user",
             "departmentId": engineering_id,
@@ -1197,7 +1197,7 @@ def test_backend_stores_share_the_configured_database(monkeypatch) -> None:
         response = client.post("/api/v1/admin/users", json={
             "userId": "db-user",
             "username": "db-user",
-            "password": "kestrel-vault-7719",
+            "email": "db-user@example.com", "password": "kestrel-vault-7719",
             "nodeId": "sbx_unassigned",
         })
         assert response.status_code == 201

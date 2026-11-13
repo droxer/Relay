@@ -114,7 +114,7 @@ def test_database_store_round_trips_onboarding() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
         store = DatabaseAccountAuthStore(database_url, create_schema=True)
-        account = store.create_account("alice", "kestrel-vault-7719")
+        account = store.create_account("alice", "kestrel-vault-7719", email="alice@example.com")
         assert account["onboarding"] == {}
 
         store.update_user_preferences(account["id"], onboarding={"introSeen": True})
@@ -131,7 +131,7 @@ def test_database_store_round_trips_onboarding() -> None:
 def test_database_store_rejects_a_bad_patch_without_writing() -> None:
     with TemporaryDirectory() as root:
         store = DatabaseAccountAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
-        account = store.create_account("alice", "kestrel-vault-7719")
+        account = store.create_account("alice", "kestrel-vault-7719", email="alice@example.com")
 
         with pytest.raises(ValueError):
             store.update_user_preferences(
@@ -154,7 +154,7 @@ def test_concurrent_preference_intents_preserve_both_choices(tmp_path, monkeypat
         return DatabaseAccountAuthStore(f"sqlite:///{tmp_path}/auth.db", create_schema=True)
 
     first, second = make_store(), make_store()
-    account = first.create_account("alice", "kestrel-vault-7719")
+    account = first.create_account("alice", "kestrel-vault-7719", email="alice@example.com")
     rendezvous = Barrier(2)
     original = auth_accounts.apply_onboarding_patch
 

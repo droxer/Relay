@@ -7,6 +7,7 @@ from loguru import logger
 
 from ...accounts.user_lifecycle import soft_delete_user as soft_delete_user_cascade
 from ...computer.limits import decorate_user_limits
+from ...core.email_address import normalize_email_address
 from ...core.task_capacity import normalize_task_capacity
 from ...tasks.flow import wip_limit
 from ...computer.node_agents import sync_node_agents
@@ -14,6 +15,7 @@ from ...persistence.org.settings import (
     OrgSettingsValidationError,
     normalize_max_local_computers,
 )
+from ...security.account_identity import AccountIdentityConflict
 from ...security.passwords import validate_password
 from ...security.request_auth import require_admin_session
 from ...security.user_handles import normalize_user_handle, resolve_user_id, user_record
@@ -47,6 +49,8 @@ def create_account(
             department_id=string_field(body, "departmentId") or None,
             department_name=string_field(body, "departmentName") or None,
         )
+    except AccountIdentityConflict as error:
+        raise HTTPException(409, str(error)) from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     return {"account": account}
@@ -148,6 +152,8 @@ def update_user(
         user = ctx.auth_store.update_user(user_id, **patch)
     except KeyError as error:
         raise HTTPException(404, "User not found.") from error
+    except AccountIdentityConflict as error:
+        raise HTTPException(409, str(error)) from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     return {"user": _with_task_capacity(ctx, [user])[0]}
@@ -163,7 +169,6 @@ def create_user(
     username = string_field(body, "username")
     password = string_field(body, "password")
     node_id = string_field(body, "nodeId") or None
-    email = string_field(body, "email") or None
     display_name = string_field(body, "displayName") or username or user_id
     max_concurrent_tasks = None
     if body.get("maxConcurrentTasks") is not None:
@@ -179,6 +184,10 @@ def create_user(
             raise HTTPException(400, str(error)) from error
     if not username:
         raise HTTPException(400, "username is required.")
+    try:
+        email = normalize_email_address(string_field(body, "email"))
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     # Up front, so a rejected password is answered before anything else is
     # looked up or created. The account's own names go in: they are the first
     # guesses anyone makes, so a password built from them is refused.
@@ -216,10 +225,10 @@ def create_user(
             user_id=user_id,
             display_name=display_name,
         )
+    except AccountIdentityConflict as error:
+        raise HTTPException(409, str(error)) from error
     except ValueError as error:
-        message = str(error)
-        status = 409 if "already exists" in message else 400
-        raise HTTPException(status, message) from error
+        raise HTTPException(400, str(error)) from error
     user = ctx.auth_store.ensure_user(
         account.get("userId") or user_id,
         display_name=display_name,

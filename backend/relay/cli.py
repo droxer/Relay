@@ -18,6 +18,7 @@ from .core import deploy_config
 from .core.environment import load_backend_env
 from .core.logging_config import setup_logging
 from .core.storage_config import database_url_from_env
+from .ops.account_email_audit import audit_account_emails
 from .ops.blob_migration import migrate_blobs
 from .persistence.blob.store import blob_store_from_env
 from .ops.backup import backup_database, backup_target_from_env
@@ -56,6 +57,18 @@ def rehearse_user_handles(database_url: str) -> dict:
     return {"plan": plan, **summarize(plan)}
 
 
+def audit_account_email_identities(database_url: str) -> dict:
+    """The Account email conflicts migration 20261113_0126 checks, without writing."""
+    from sqlalchemy import create_engine
+
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            return audit_account_emails(connection).as_report()
+    finally:
+        engine.dispose()
+
+
 def check_agent_computer_ids(database_url: str) -> dict:
     """Which agents and placements the startup migration would still rewrite."""
     return pending_agent_computer_id_migrations(
@@ -79,6 +92,7 @@ def main(argv: list[str] | None = None) -> None:
             "migrate-blobs-to-r2",
             "backup-database",
             "rehearse-user-handles",
+            "audit-account-emails",
             "storage-report",
             "check-agent-computer-ids",
         ],
@@ -127,6 +141,15 @@ def main(argv: list[str] | None = None) -> None:
         # suffixed — the questions a backfill can only answer against real data.
         report = rehearse_user_handles(
             database_url_from_env(setting="rehearse-user-handles")
+        )
+        print(json.dumps(report, indent=2))
+        return
+    if args.command == "audit-account-emails":
+        # Reads only. Run it before migration 20261113_0126: `blocking` is
+        # true while two Accounts share an email, which the migration refuses
+        # until an operator gives each its own address.
+        report = audit_account_email_identities(
+            database_url_from_env(setting="audit-account-emails")
         )
         print(json.dumps(report, indent=2))
         return

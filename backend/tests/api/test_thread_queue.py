@@ -11,7 +11,7 @@ def test_queue_is_shared_and_owner_scoped(tmp_path, monkeypatch):
     with TestClient(app) as laptop:
         login = laptop.post(
             "/api/v1/auth/bootstrap",
-            json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+            json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
         )
         assert login.status_code == 200
         owner = app.state.auth_store.resolve_user_id("admin")
@@ -39,7 +39,7 @@ def test_queue_dispatch_without_browser(tmp_path, monkeypatch):
     app = create_app(tmp_path)
     client = TestClient(app)
     client.post(
-        "/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"}
+        "/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"}
     )
     store = app.state.session_store
     thread = store.create_session(
@@ -153,7 +153,7 @@ def test_queue_rejects_non_owner_and_invalid_payloads(tmp_path, monkeypatch):
     app = create_app(tmp_path)
     client = TestClient(app)
     client.post(
-        "/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"}
+        "/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"}
     )
     thread = app.state.session_store.create_session(
         {
@@ -165,7 +165,7 @@ def test_queue_rejects_non_owner_and_invalid_payloads(tmp_path, monkeypatch):
     path = f"/api/v1/threads/{thread['id']}/queue"
     assert client.post(path, json={"action": "enqueue", "id": "q1", "text": " "}).status_code == 400
     assert client.post(path, json={"action": "enqueue", "id": "q1", "text": "@Missing do work"}).status_code == 400
-    app.state.auth_store.create_account("other", "kestrel-vault-7719")
+    app.state.auth_store.create_account("other", "kestrel-vault-7719", email="other@example.com")
     other = TestClient(app)
     assert (
         other.post("/api/v1/auth/login", json={"username": "other", "password": "kestrel-vault-7719"}).status_code
