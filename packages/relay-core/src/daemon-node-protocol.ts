@@ -1,7 +1,7 @@
 import type { AgentName, AgentState } from "./state.js";
 import type { TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
-import type { WorkspaceLayout } from "./session-store.js";
+import type { AgentRole, WorkspaceLayout } from "./session-store.js";
 
 export type DaemonNodeStatus = "ready" | "busy" | "stopped";
 export type DaemonNodeSandboxMode = "none" | "boxlite";
@@ -362,7 +362,7 @@ export interface DaemonNodeRunCommand {
   agentVersion?: number;
   assignmentId?: string;
   phase?: "discussion" | "execution" | "review";
-  role?: "implementer" | "reviewer" | "planner" | "tester" | "fixer";
+  role?: AgentRole;
   delivery?: {
     type: "assignment-attempt";
     attemptId: string;

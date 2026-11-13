@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-ROLES = frozenset({"planner", "implementer", "tester", "reviewer", "fixer"})
+from ..core.models import AGENT_ROLES
+
+ROLES = frozenset(AGENT_ROLES)
 
 
 def text_list(value: Any, name: str, *, limit: int = 20) -> list[str]:

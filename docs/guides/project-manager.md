@@ -1,9 +1,9 @@
 # Project Lead Agent and Relay MCP
 
 The Project Lead is the ordinary Logical Agent selected by `leadAgentId`.
-It coordinates the roster and manages the Project beside its execution role
-(planner, implementer, reviewer, tester or fixer). Changing the lead transfers
-management without changing any Agent's role or identity. Only the owner
+It coordinates the roster and manages the Project beside its execution role.
+Changing the lead transfers management without changing any Agent's role or
+identity. Only the owner
 assigns it, and it must be an enabled member on the Project's Computer.
 
 The lead is the only source of management authority. Historical

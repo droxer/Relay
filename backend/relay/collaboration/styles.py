@@ -13,20 +13,25 @@ COLLABORATION_STYLES: tuple[str, ...] = ("build_review", "pipeline", "lead_led")
 DEFAULT_COLLABORATION_STYLE = "build_review"
 LEAD_LED = "lead_led"
 BUILDER_ROLES = frozenset({"implementer", "fixer"})
-# Writes come before verification, and verification before review. Lead
-# planning, the lead-led member order and Pipeline all sort by this.
+# Investigation and planning come first, then design, then the writers, then
+# verification and delivery work, and review last. Lead planning, the lead-led
+# member order and Pipeline all sort by this.
 ROLE_STAGE: dict[str, int] = {
+    "researcher": 0,
     "planner": 0,
-    "implementer": 1,
-    "fixer": 1,
-    "tester": 2,
-    "reviewer": 3,
+    "designer": 1,
+    "implementer": 2,
+    "fixer": 2,
+    "tester": 3,
+    "writer": 3,
+    "devops": 3,
+    "reviewer": 4,
 }
 
 
 def role_stage(role: str | None) -> int:
-    """Pipeline stage for a role; a missing or unknown role sits with the writers."""
-    return 1 if role is None else ROLE_STAGE.get(role, 1)
+    """Pipeline stage for a role; a missing or unknown role sits with the implementers."""
+    return 2 if role is None else ROLE_STAGE.get(role, 2)
 
 
 class CollaborationStyleError(ValueError):
