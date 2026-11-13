@@ -2,7 +2,7 @@
 name = "relay"
 version = "0.1.0"
 description = "Relay backend control plane in Python"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 requires-python = ">=3.12"
 dependencies = [
   "croniter>=6.0.0",

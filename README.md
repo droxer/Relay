@@ -103,4 +103,4 @@ Tests, database migrations, the supervisor, pre-commit hooks, and shutdown comma
 
 ## License
 
-[MIT](LICENSE). Third-party components and assets retain their own licenses.
+[Apache-2.0](LICENSE). Third-party components and assets retain their own licenses.

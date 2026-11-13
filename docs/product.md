@@ -110,7 +110,7 @@ identity or replace the existing interface system.
 - [Product screenshots](images/): demonstrations generated from screenshot
   fixtures, available in English and Simplified Chinese. They are not customer
   results or testimonials.
-- [LICENSE](../LICENSE): MIT license terms. Do not invent other licensing or
+- [LICENSE](../LICENSE): Apache-2.0 license terms. Do not invent other licensing or
   purchasing commitments from the strategic business-model proposals below.
 
 The illustrative ROI and proposed metrics in the original plan are not measured
