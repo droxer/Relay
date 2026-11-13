@@ -517,7 +517,7 @@ const ComposerView = forwardRef<ComposerHandle, {
               aria-busy={sendPending || undefined}
               aria-label={running ? undefined : sendPending ? t("composer.sending") : t("composer.send")}
               tooltip={running
-                ? t("composer.cancel_run")
+                ? t(onQueue ? "queue.stop_hint" : "composer.cancel_run")
                 : parsed.blocked
                   ? t("composer.mention_blocked")
                   : sendShortcutTitle}

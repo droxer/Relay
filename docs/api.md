@@ -354,10 +354,19 @@ Full `GET /api/v1/threads` responses remain complete for the authenticated owner
 
 Queue `enqueue` and `import` actions retain `addressAgentIds` or
 `addressTeamId` until dispatch, including when a message is promoted with
-Steer. A leading `@Agent` mention takes precedence over supplied Agent ids.
+“Stop & send next”. A leading `@Agent` mention takes precedence over supplied Agent ids.
 Omitting both targets addresses the room, as for legacy queued messages.
 Targets are checked against current ownership, membership, and Placement at
 dispatch; an unavailable target pauses the queue rather than selecting another.
+
+Queue `remove` retains the most recently removed message and its next-message
+anchor in `removed: { message, beforeId }`. `undo_remove` with that message's
+`id` restores its text and recipient before the surviving anchor (or at the
+end when that anchor is gone), then clears `removed`. Repeated undo requests
+are harmless. The usual owner, active-thread, and 20-message limits apply;
+a full queue keeps the undo record so it can be retried. Queue conflicts carry
+stable `queue_full`, `queue_sending`, `queue_changed`, or `queue_thread_closed`
+codes for localized client recovery messages.
 
 The chat-service conversation list likewise returns the resolved owner's full
 open threads. Ownership and archive filtering occur in storage before event

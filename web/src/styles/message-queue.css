@@ -27,6 +27,8 @@
   list-style: none;
 }
 
+.message-queue-list:has(.message-queue-item[data-expanded]) { max-block-size: min(40vh, 18rem); }
+
 .message-queue-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -42,7 +44,8 @@
 .message-queue-glyph { color: var(--ink-4); }
 
 .message-queue-text {
-  align-self: stretch;
+  display: block;
+  width: 100%;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -50,11 +53,11 @@
   border: 0;
   background: none;
   color: var(--ink-2);
-  font: var(--type-body-sm);
+  font: var(--type-body);
   text-align: start;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: text;
+  cursor: pointer;
 }
 
 .message-queue-text:hover { color: var(--ink-1); }
@@ -69,7 +72,8 @@
   .message-queue-actions { opacity: 0; transition: opacity var(--t-fast) var(--ease); }
 
   .message-queue-item:hover .message-queue-actions,
-  .message-queue-item:focus-within .message-queue-actions { opacity: 1; }
+  .message-queue-item:focus-within .message-queue-actions,
+  .message-queue-item[data-expanded] .message-queue-actions { opacity: 1; }
 }
 
 @media (max-width: 640px) {
@@ -83,10 +87,35 @@
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-1);
   color: var(--ink-2);
-  font: var(--type-body-sm);
+  font: var(--type-body);
 }
-.message-queue-error { margin: var(--sp-2); color: var(--ink-1); font: var(--type-body-sm); }
+.message-queue-error { margin: var(--sp-2); color: var(--ink-1); font: var(--type-body); }
 @media (pointer: coarse) {
   .message-queue-actions button, .message-queue-text { min-height: 44px; }
   .message-queue-actions button { min-width: 44px; }
+}
+
+.message-queue-content { min-width: 0; }
+.message-queue-recipient {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-queue-preview { grid-column: 2 / -1; min-width: 0; padding-block: var(--sp-2); }
+.message-queue-preview p {
+  margin: 0 0 var(--sp-2);
+  color: var(--ink-2);
+  font: var(--type-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.message-queue-status > span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .message-queue-item { grid-template-columns: auto minmax(0, 1fr); padding-block: var(--sp-1); }
+  .message-queue-actions { grid-column: 2; justify-self: end; flex-wrap: wrap; }
+  .message-queue-item[data-expanded] .message-queue-actions { grid-row: 3; }
+  .message-queue-preview { grid-row: 2; }
 }

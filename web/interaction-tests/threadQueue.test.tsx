@@ -43,7 +43,7 @@ it("failed saving returns false and exposes a recoverable error", async () => {
   await waitFor(() => expect(apiJson).toHaveBeenCalled());
   vi.mocked(apiJson).mockRejectedValueOnce(new Error("Offline"));
   await act(async () => { expect(await hook.result.current.enqueue("Keep this draft")).toBe(false); });
-  expect(hook.result.current.error).toBe("Offline");
+  expect(hook.result.current.error).toBe("queue.errors.change_failed");
 });
 it("pauses durably before requesting Stop", async () => {
   const hook = open();
@@ -85,4 +85,47 @@ it("persists the selected Agents and treats a changed target as a new retry inte
   expect(posts[0].id).toBe(posts[1].id);
   expect(posts[2]).toMatchObject({ text: "Continue", addressTeamId: "crew" });
   expect(posts[2].id).not.toBe(posts[1].id);
+});
+
+it.each([
+  [{ code: "queue_full" }, "queue.errors.full"],
+  [{ code: "queue_sending" }, "queue.errors.sending"],
+  [{ code: "queue_changed" }, "queue.errors.changed"],
+  [{ code: "queue_thread_closed" }, "queue.errors.closed"],
+  [{ status: 401 }, "queue.errors.sign_in"],
+  [{ status: 403 }, "queue.errors.forbidden"],
+  [{ status: 404 }, "queue.errors.closed"],
+])("localizes queue failure %j without exposing transport text", async (cause, key) => {
+  const hook = open();
+  await waitFor(() => expect(apiJson).toHaveBeenCalled());
+  vi.mocked(apiJson).mockRejectedValueOnce(cause);
+  await act(async () => { await hook.result.current.enqueue("Keep draft"); });
+  expect(hook.result.current.error).toBe(key);
+});
+
+it("promotes explicitly before cancelling the running turn and localizes cancellation failures", async () => {
+  const hook = open();
+  await waitFor(() => expect(apiJson).toHaveBeenCalled());
+  const { cancelRun } = await import("../src/api-client/sessions");
+  await act(async () => { await hook.result.current.steer("q1"); });
+  expect(cancelRun).toHaveBeenCalledWith("thread", undefined, "Send queued message first.", true);
+  vi.mocked(cancelRun).mockRejectedValueOnce(new Error("Private server error"));
+  await act(async () => { await hook.result.current.steer("q1"); });
+  expect(hook.result.current.error).toBe("queue.errors.change_failed");
+});
+
+it("offers persisted undo and resumes through the same server queue", async () => {
+  vi.mocked(apiJson).mockResolvedValue({ messages: [], paused: true, removed: { message: { id: "old", text: "Saved" }, beforeId: null } });
+  const hook = open();
+  await waitFor(() => expect(hook.result.current.undoAvailable).toBe(true));
+  await act(async () => { hook.result.current.undoRemove(); });
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({ body: expect.objectContaining({ action: "undo_remove", id: "old" }) }));
+  await act(async () => { hook.result.current.resume(); });
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({ body: expect.objectContaining({ action: "resume" }) }));
+});
+
+it("localizes failed loading without exposing server details", async () => {
+  vi.mocked(apiJson).mockRejectedValue(new Error("Private error"));
+  const hook = open();
+  await waitFor(() => expect(hook.result.current.error).toBe("queue.errors.unavailable"));
 });

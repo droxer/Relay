@@ -26,6 +26,7 @@ def test_queue_is_shared_and_owner_scoped(tmp_path, monkeypatch):
             assert phone.get(path).json()["messages"] == [{"id": "q_test", "text": "Next step"}]
             assert phone.post(path, json={"action": "remove", "id": "q_test"}).status_code == 200
         assert laptop.get(path).json()["messages"] == []
+        assert laptop.post(path, json={"action": "undo_remove", "id": "q_test"}).json()["messages"] == [{"id": "q_test", "text": "Next step"}]
 
 
 def test_queue_dispatch_without_browser(tmp_path, monkeypatch):
@@ -325,3 +326,41 @@ def test_queue_preserves_selected_team_and_rejects_invalid_addressing(monkeypatc
         after = app.state.session_store.get_session(tid)
         assert after["messageQueue"]["messages"] == [], after["messageQueue"]
         assert [a["agentId"] for a in after["collaborationRounds"][-1]["assignments"]] == [selected["id"]]
+
+
+def test_remove_undo_restores_recipient_and_order_without_duplicate(tmp_path):
+    from store_fixtures import make_session_store
+    from relay.collaboration.queue import change_queue
+
+    store = make_session_store(tmp_path)
+    tid = store.create_session({"workspacePath": str(tmp_path), "taskGoal": "queue", "ownerUserId": "owner"})["id"]
+    message = {"id": "q1", "text": "Review", "addressAgentIds": ["reviewer"]}
+    change_queue(store, tid, "enqueue", message=message)
+    change_queue(store, tid, "enqueue", message={"id": "q2", "text": "Next"})
+    removed = change_queue(store, tid, "remove", message_id="q1")
+    assert removed["removed"]["message"] == message
+    restored = change_queue(store, tid, "undo_remove", message_id="q1")
+    assert restored["messages"] == [message, {"id": "q2", "text": "Next"}]
+    assert "removed" not in restored
+    assert change_queue(store, tid, "undo_remove", message_id="q1")["messages"] == restored["messages"]
+
+
+def test_undo_preserves_receipt_and_cannot_exceed_queue_limit(tmp_path):
+    import pytest
+    from store_fixtures import make_session_store
+    from relay.collaboration.queue import change_queue
+
+    store = make_session_store(tmp_path)
+    tid = store.create_session({"workspacePath": str(tmp_path), "taskGoal": "queue", "ownerUserId": "owner"})["id"]
+    original = {"id": "original", "text": "Restore team", "addressTeamId": "team"}
+    change_queue(store, tid, "enqueue", message=original)
+    change_queue(store, tid, "remove", message_id="original")
+    for index in range(20):
+        change_queue(store, tid, "enqueue", message={"id": f"q{index}", "text": "Queued"})
+    with pytest.raises(ValueError, match="full"):
+        change_queue(store, tid, "undo_remove", message_id="original")
+    # Editing frees space without replacing the last removal record.
+    change_queue(store, tid, "edit", message_id="q0")
+    state = change_queue(store, tid, "undo_remove", message_id="original")
+    assert state["messages"][-1] == original
+    assert len(state["messages"]) == 20

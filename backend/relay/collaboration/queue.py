@@ -50,6 +50,16 @@ def change_queue(
             messages.append(message)
             if action == "import":
                 state["paused"] = True
+        elif action == "undo_remove":
+            removed = state.get("removed")
+            if not removed or removed["message"]["id"] != message_id:
+                return state
+            if len(messages) >= 20:
+                raise ValueError("The queue is full (20 messages).")
+            if not any(item["id"] == message_id for item in messages):
+                index = next((i for i, item in enumerate(messages) if item["id"] == removed.get("beforeId")), len(messages))
+                messages.insert(index, removed["message"])
+            state.pop("removed", None)
         elif action in ("remove", "edit", "promote"):
             if state.get("sending") == message_id:
                 raise ValueError("This message is being sent. Wait for it to finish.")
@@ -58,6 +68,9 @@ def change_queue(
                 if action == "edit":
                     raise ValueError("This message was already changed on another device.")
                 return state
+            if action == "remove":
+                index = messages.index(picked)
+                state["removed"] = {"message": picked, "beforeId": messages[index + 1]["id"] if index + 1 < len(messages) else None}
             state["messages"] = [m for m in messages if m["id"] != message_id]
             if action == "promote":
                 state["messages"].insert(0, picked)
