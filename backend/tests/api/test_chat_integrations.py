@@ -131,7 +131,7 @@ def _bootstrap_admin(client: TestClient) -> None:
         json={
             "token": "admin_token",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         },
     )
     assert response.status_code == 200
@@ -162,7 +162,7 @@ def test_chat_integration_setup_flow_redacts_secrets(monkeypatch) -> None:
                 "/api/v1/admin/accounts",
                 json={
                     "username": "alice",
-                    "password": "harbor-quartz-8830",
+                    "email": "alice@example.com", "password": "harbor-quartz-8830",
                     "userId": "alice",
                     "displayName": "Alice",
                 },
@@ -325,7 +325,7 @@ def test_chat_integration_check_rejects_invalid_provider_credentials(
                 "/api/v1/admin/accounts",
                 json={
                     "username": "alice",
-                    "password": "harbor-quartz-8830",
+                    "email": "alice@example.com", "password": "harbor-quartz-8830",
                     "userId": "alice",
                 },
             ).status_code
@@ -388,7 +388,7 @@ def test_chat_integration_activation_requires_ui_callback_url(monkeypatch) -> No
                 "/api/v1/admin/accounts",
                 json={
                     "username": "alice",
-                    "password": "harbor-quartz-8830",
+                    "email": "alice@example.com", "password": "harbor-quartz-8830",
                     "userId": "alice",
                 },
             ).status_code
@@ -528,7 +528,7 @@ def test_chat_integrations_require_admin(monkeypatch) -> None:
             "/api/v1/admin/accounts",
             json={
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "role": "user",
             },
         )

@@ -14,7 +14,7 @@ def _store() -> DatabaseAccountAuthStore:
 
 
 def test_init_users_script_creates_database_admin(capsys) -> None:
-    result = main(["--password", "kestrel-vault-7719"])
+    result = main(["--password", "kestrel-vault-7719", "--email", "admin@example.com"])
 
     assert result == 0
     assert "Created admin user admin." in capsys.readouterr().out
@@ -34,7 +34,7 @@ def test_init_users_script_creates_database_admin(capsys) -> None:
 
 
 def test_init_users_script_can_skip_when_users_exist(capsys) -> None:
-    args = ["--password", "kestrel-vault-7719"]
+    args = ["--password", "kestrel-vault-7719", "--email", "admin@example.com"]
     assert main(args) == 0
     assert main([*args, "--only-if-empty"]) == 0
     assert "Users already exist; skipped." in capsys.readouterr().out
@@ -43,6 +43,13 @@ def test_init_users_script_can_skip_when_users_exist(capsys) -> None:
 def test_init_users_requires_an_explicit_password() -> None:
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_init_users_requires_an_email(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("RELAY_INITIAL_ADMIN_EMAIL", raising=False)
+    with pytest.raises(SystemExit):
+        main(["--password", "kestrel-vault-7719"])
+    assert not _store().has_accounts()
 
 
 def test_shell_initializer_targets_the_backend_project_and_module() -> None:
@@ -56,7 +63,7 @@ def test_shell_initializer_targets_the_backend_project_and_module() -> None:
 
 def test_init_users_script_accepts_the_pre_rename_employee_id_flag() -> None:
     result = main(
-        ["--password", "kestrel-vault-7719", "--employee-id", "ops"]
+        ["--password", "kestrel-vault-7719", "--email", "ops@example.com", "--employee-id", "ops"]
     )
 
     assert result == 0

@@ -14,13 +14,13 @@ ALICE = user_id("alice")
 def _bootstrap(client: TestClient) -> None:
     response = client.post(
         "/api/v1/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
     )
     assert response.status_code == 200
     assert (
         client.post(
             "/api/v1/admin/users",
-            json={"userId": "alice", "username": "alice", "password": "userpass"},
+            json={"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "userpass"},
         ).status_code
         == 201
     )

@@ -13,8 +13,11 @@ from pathlib import Path
 
 import pytest
 from loguru import logger
+from relay.core.ids import new_database_id
 from relay.notifications.mailer import DeliveryResult, EmailMessage, NullMailer
 from relay.security.auth import DatabaseAccountAuthStore
+from relay.security.credentials import hash_password
+from sqlalchemy import insert
 from store_fixtures import make_auth_store
 from relay.security.password_resets import ResetThrottle, password_reset_store_for
 from relay.accounts.password_reset import (
@@ -72,10 +75,23 @@ def service(auth_store, mailer: FakeMailer, clock: Clock) -> PasswordResetServic
     return PasswordResetService(password_reset_store_for(auth_store), mailer, clock=clock)
 
 
-def _account(auth_store, username: str = "ada", email: str | None = "Ada@Example.com", **extra):
+def _account(auth_store, username: str = "ada", email: str = "Ada@Example.com", **extra):
     return auth_store.create_account(
         username, OLD_PASSWORD, email=email, user_id=extra.pop("user_id", username), **extra
     )
+
+
+def _legacy_account(auth_store, username: str = "ada", *, user_email: str | None = None) -> str:
+    """An Account an older release made: no Account email, maybe a User email."""
+    user = auth_store.ensure_user(username, email=user_email)
+    now = datetime.now(UTC)
+    account_id = new_database_id()
+    with auth_store.engine.begin() as conn:
+        conn.execute(insert(auth_store.accounts).values(
+            id=account_id, username=username, email=None, role="user", user_id=user["id"],
+            password_hash=hash_password(OLD_PASSWORD), created_at=now, updated_at=now,
+        ))
+    return account_id
 
 
 def _token(message: EmailMessage) -> str:
@@ -92,7 +108,7 @@ def test_a_username_request_emails_a_link_that_resets_the_password(
 
     service.request("ada", locale=None, web_origin=WEB)
 
-    assert [message.to for message in mailer.sent] == ["Ada@Example.com"]
+    assert [message.to for message in mailer.sent] == ["ada@example.com"]
     message = mailer.sent[0]
     assert "@ada" in message.text
     assert f"{WEB}/reset-password#token=" in message.text
@@ -133,7 +149,7 @@ def test_unknown_identifiers_send_nothing(
 def test_an_account_without_an_address_gets_nothing(
     service: PasswordResetService, auth_store, mailer: FakeMailer
 ) -> None:
-    _account(auth_store, email=None)
+    _legacy_account(auth_store)
 
     service.request("ada", locale=None, web_origin=WEB)
 
@@ -161,7 +177,9 @@ def test_a_shared_address_reaches_each_account_by_name(
     service: PasswordResetService, auth_store, mailer: FakeMailer
 ) -> None:
     _account(auth_store, "ada")
-    _account(auth_store, "ada-ops", email="ada@example.com", user_id="ada-ops")
+    # Only legacy data can share an address now: an Account without its own
+    # email reaches its User's.
+    _legacy_account(auth_store, "ada-ops", user_email="ada@example.com")
 
     service.request("ada@example.com", locale=None, web_origin=WEB)
 
@@ -255,7 +273,7 @@ def test_the_change_notice_goes_to_the_owner_without_a_link(
     service.send_changed_notice(account)
 
     notice = mailer.sent[-1]
-    assert notice.to == "Ada@Example.com"
+    assert notice.to == "ada@example.com"
     assert notice.subject == "Your Relay password was changed"
     assert "http" not in notice.text and "<a " not in notice.html
 
@@ -273,7 +291,7 @@ def test_the_account_language_picks_the_copy(
 
 def test_admin_links_work_without_mail_or_an_address(auth_store, clock: Clock) -> None:
     service = PasswordResetService(password_reset_store_for(auth_store), NullMailer(), clock=clock)
-    _account(auth_store, email=None)
+    _legacy_account(auth_store)
 
     first = service.admin_issue("ada", web_origin=WEB)
     second = service.admin_issue("ada", web_origin=WEB)
@@ -362,7 +380,7 @@ def test_one_request_reaches_at_most_three_accounts(
     service: PasswordResetService, auth_store, mailer: FakeMailer
 ) -> None:
     for index in range(5):
-        _account(auth_store, f"ada-{index}", email="ada@example.com", user_id=f"ada-{index}")
+        _legacy_account(auth_store, f"ada-{index}", user_email="ada@example.com")
 
     service.request("ada@example.com", locale=None, web_origin=WEB)
 

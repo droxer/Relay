@@ -33,7 +33,7 @@ def _bootstrap_admin(client: TestClient) -> None:
         json={
             "token": "admin_token",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         },
     )
     assert response.status_code == 200
@@ -45,7 +45,7 @@ def _create_account(client: TestClient, username: str, *, user_id: str) -> None:
         "/api/v1/admin/accounts",
         json={
             "username": username,
-            "password": "userpass",
+            "email": f"{username}@example.com", "password": "userpass",
             "role": "user",
             "userId": user_id,
         },

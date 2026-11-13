@@ -20,7 +20,7 @@ def client(monkeypatch, tmp_path):
                 json={
                     "token": "admin_token",
                     "username": "admin",
-                    "password": "kestrel-vault-7719",
+                    "email": "admin@example.com", "password": "kestrel-vault-7719",
                 },
             ).status_code
             == 200
@@ -31,7 +31,7 @@ def client(monkeypatch, tmp_path):
                 json={
                     "userId": "alice",
                     "username": "alice",
-                    "password": "userpass",
+                    "email": "alice@example.com", "password": "userpass",
                     "displayName": "Alice",
                 },
             ).status_code

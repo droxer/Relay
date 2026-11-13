@@ -11,7 +11,7 @@ def test_startup_uses_database_and_leaves_retired_files_untouched(
 ) -> None:
     monkeypatch.setenv("RELAY_STARTUP_REPAIRS", repairs_enabled)
     app = create_app(tmp_path)
-    account = app.state.auth_store.create_account("admin", "kestrel-vault-7719", role="admin")
+    account = app.state.auth_store.create_account("admin", "kestrel-vault-7719", role="admin", email="admin@example.com")
     # Corrupt files must neither block startup nor replace database records.
     retired_files = [
         tmp_path / "auth/users.json",

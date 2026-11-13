@@ -1,5 +1,19 @@
 # Accounts and first run
 
+## Sign-in and email
+
+Every new Account needs an email address: the first-run bootstrap, accounts an
+administrator creates, and accounts created from an invitation (which use the
+invited address). The sign-in form's single field accepts either the username
+or that email. One address belongs to one Account, compared without regard to
+letter case. Accounts created before email was required keep working with their
+username; an administrator can give them an address by editing the User's email,
+which also becomes where their reset links go. An identifier that two older
+Accounts both answer to (a username equal to another Account's email) signs in
+neither until an administrator resolves it — `relay audit-account-emails`
+lists such conflicts, and the upgrade that adds email uniqueness stops with
+the affected Account ids if two Accounts share one address.
+
 ## Invitations and waitlist
 
 An administrator can invite an address from the Admin console on every install.

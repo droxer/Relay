@@ -199,7 +199,7 @@ def test_seed_honors_declines(tmp_path: Path) -> None:
     agents = make_agent_store(tmp_path)
     placements = make_agent_placement_store(tmp_path)
     auth = make_auth_store(tmp_path)
-    account = auth.create_account("alice", "kestrel-vault-7719", user_id="alice")
+    account = auth.create_account("alice", "kestrel-vault-7719", user_id="alice", email="alice@example.com")
     node = _node(userId=account["userId"])
     auth.update_user_preferences(
         account["id"],

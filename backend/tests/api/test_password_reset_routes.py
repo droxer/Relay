@@ -46,7 +46,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mailer: FakeMailer) 
 def _bootstrap_admin(client: TestClient) -> None:
     response = client.post(
         f"{API}/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": ADMIN_PASSWORD},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": ADMIN_PASSWORD},
     )
     assert response.status_code == 200, response.text
 
@@ -166,7 +166,7 @@ def test_admin_link_redeems_without_mail(
 ) -> None:
     client = TestClient(_app(monkeypatch, tmp_path))
     _bootstrap_admin(client)
-    _create_user(client, email=None)
+    _create_user(client)
 
     response = client.post(f"{API}/admin/users/ada/password-reset")
 

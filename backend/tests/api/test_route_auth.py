@@ -114,14 +114,14 @@ def test_every_admin_route_refuses_a_signed_in_non_admin(monkeypatch, tmp_path: 
     client = _client(monkeypatch, tmp_path)
     assert client.post(
         f"{API_PREFIX}/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
     ).status_code == 200
     assert client.post(
         f"{API_PREFIX}/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"}
     ).status_code == 200
     assert client.post(
         f"{API_PREFIX}/admin/accounts",
-        json={"username": "alice", "password": "userpass", "role": "user"},
+        json={"username": "alice", "email": "alice@example.com", "password": "userpass", "role": "user"},
     ).status_code == 201
     client.cookies.clear()
     assert client.post(

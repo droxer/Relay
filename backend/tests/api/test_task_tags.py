@@ -23,7 +23,7 @@ def client(monkeypatch):
         client = TestClient(create_app(root))
         assert client.post(
             "/api/v1/auth/bootstrap",
-            json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+            json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
         ).status_code == 200
         yield client
 

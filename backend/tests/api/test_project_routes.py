@@ -18,7 +18,7 @@ def _bootstrap(client: TestClient) -> None:
     assert (
         client.post(
             "/api/v1/auth/bootstrap",
-            json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+            json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
         ).status_code
         == 200
     )
@@ -28,7 +28,7 @@ def _bootstrap(client: TestClient) -> None:
             json={
                 "userId": "alice",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
                 "displayName": "Alice",
             },
         ).status_code
@@ -580,7 +580,7 @@ def test_project_routes_are_owner_scoped(monkeypatch) -> None:
                 json={
                     "userId": "bob",
                     "username": "bob",
-                    "password": "userpass",
+                    "email": "bob@example.com", "password": "userpass",
                     "displayName": "Bob",
                 },
             ).status_code
@@ -600,7 +600,7 @@ def test_project_routes_are_owner_scoped(monkeypatch) -> None:
                 json={
                     "userId": "bob",
                     "username": "bob",
-                    "password": "userpass",
+                    "email": "bob@example.com", "password": "userpass",
                     "displayName": "Bob",
                 },
             ).status_code

@@ -24,7 +24,7 @@ def _bootstrap(client: TestClient) -> None:
     response = client.post("/api/v1/auth/bootstrap", json={
         "token": "admin_token",
         "username": "admin",
-        "password": "kestrel-vault-7719",
+        "email": "admin@example.com", "password": "kestrel-vault-7719",
     })
     assert response.status_code == 200
     assert client.post("/api/v1/auth/login", json={
@@ -402,7 +402,7 @@ def test_reconcile_denies_an_user_who_does_not_own_the_thread(monkeypatch) -> No
             "runId": "run_orphaned", "agent": "claude",
         })
         assert client.post("/api/v1/admin/accounts", json={
-            "username": "mallory", "password": "harbour-kestrel-8823",
+            "username": "mallory", "email": "mallory@example.com", "password": "harbour-kestrel-8823",
             "userId": "mallory", "displayName": "Mallory",
         }).status_code == 201
         other = TestClient(app)

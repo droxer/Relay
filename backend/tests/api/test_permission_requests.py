@@ -23,7 +23,7 @@ def _bootstrap(client: TestClient) -> None:
     response = client.post("/api/v1/auth/bootstrap", json={
         "token": "admin_token",
         "username": "admin",
-        "password": "kestrel-vault-7719",
+        "email": "admin@example.com", "password": "kestrel-vault-7719",
     })
     assert response.status_code == 200
     assert client.post("/api/v1/auth/login", json={

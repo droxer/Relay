@@ -24,7 +24,7 @@ def test_database_auth_store_preserves_utc_timestamps_outside_utc() -> None:
             store = DatabaseAccountAuthStore(
                 f"sqlite:///{root}/auth.db", create_schema=True
             )
-            created = store.create_account("alice", "kestrel-vault-7719")
+            created = store.create_account("alice", "kestrel-vault-7719", email="alice@example.com")
             persisted = store.get_account_by_id(created["id"])
 
             assert persisted is not None
@@ -93,10 +93,10 @@ def test_database_auth_store_maps_human_handles_independently_and_stably() -> No
         store = DatabaseAccountAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
 
         alice = store.create_account(
-            "alice", "kestrel-vault-7719", user_id="alice", display_name="Same"
+            "alice", "kestrel-vault-7719", user_id="alice", display_name="Same", email="alice@example.com"
         )
         bob = store.create_account(
-            "bob", "kestrel-vault-7719", user_id="bob", display_name="Same"
+            "bob", "kestrel-vault-7719", user_id="bob", display_name="Same", email="bob@example.com"
         )
         alice_again = store.ensure_user("alice", display_name="Renamed Alice")
 
@@ -115,7 +115,7 @@ def test_bootstrap_allows_exactly_one_concurrent_first_admin() -> None:
 
         def bootstrap(index: int) -> str:
             try:
-                store.bootstrap_with_token(token, f"admin-{index}", "kestrel-vault-7719")
+                store.bootstrap_with_token(token, f"admin-{index}", "kestrel-vault-7719", email=f"admin-{index}@example.com")
             except HTTPException as error:
                 return f"http-{error.status_code}"
             return "created"
@@ -130,10 +130,10 @@ def test_bootstrap_allows_exactly_one_concurrent_first_admin() -> None:
 def test_database_auth_store_enforces_unique_normalized_usernames() -> None:
     with TemporaryDirectory() as root:
         store = DatabaseAccountAuthStore(f"sqlite:///{root}/auth.db", create_schema=True)
-        store.create_account("Alice", "kestrel-vault-7719")
+        store.create_account("Alice", "kestrel-vault-7719", email="alice@example.com")
 
         try:
-            store.create_account(" alice ", "kestrel-vault-7719")
+            store.create_account(" alice ", "kestrel-vault-7719", email="alice@example.com")
         except ValueError as error:
             assert str(error) == "username already exists."
         else:
@@ -146,7 +146,7 @@ def test_database_auth_store_persists_user_preferences() -> None:
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
         store = DatabaseAccountAuthStore(database_url, create_schema=True)
-        account = store.create_account("alice", "kestrel-vault-7719")
+        account = store.create_account("alice", "kestrel-vault-7719", email="alice@example.com")
 
         updated = store.update_user_preferences(
             account["id"],
@@ -168,7 +168,7 @@ def test_traditional_chinese_preference_persists_and_unknown_languages_are_rejec
     with TemporaryDirectory() as root:
         database_url = f"sqlite:///{root}/auth.db"
         store = DatabaseAccountAuthStore(database_url, create_schema=True)
-        account = store.create_account("alice", "kestrel-vault-7719")
+        account = store.create_account("alice", "kestrel-vault-7719", email="alice@example.com")
 
         with pytest.raises(ValueError, match="language must be en, zh-CN, or zh-TW"):
             store.update_user_preferences(account["id"], language="fr")  # type: ignore[arg-type]

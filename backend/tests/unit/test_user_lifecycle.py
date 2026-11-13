@@ -60,7 +60,7 @@ def build_context(tmp_path: Path, managed_node_store: object) -> SimpleNamespace
 
 def seed_user(ctx: SimpleNamespace) -> tuple[str, str]:
     account = ctx.auth_store.create_account(
-        "alice", "userpass", user_id="alice", display_name="Alice"
+        "alice", "userpass", user_id="alice", display_name="Alice", email="alice@example.com"
     )
     user_id = account["userId"]
     agent = ctx.agent_store.create_agent(

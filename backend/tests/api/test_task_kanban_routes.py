@@ -12,7 +12,7 @@ def client(tmp_path, monkeypatch):
         json={
             "token": "test-kanban-token",
             "username": "admin",
-            "password": "test-kanban-password",
+            "email": "admin@example.com", "password": "test-kanban-password",
         },
     )
     assert response.status_code == 200

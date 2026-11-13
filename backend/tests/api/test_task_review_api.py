@@ -12,7 +12,7 @@ def review_app(monkeypatch, tmp_path):
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(str(tmp_path))
     client = TestClient(app)
-    assert client.post("/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"}).status_code == 200
+    assert client.post("/api/v1/auth/bootstrap", json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"}).status_code == 200
     assert client.post("/api/v1/auth/login", json={"username": "admin", "password": "kestrel-vault-7719"}).status_code == 200
     owner = app.state.auth_store.resolve_user_id("admin")
     task = app.state.task_store.create_task({"title": "Fix export", "ownerUserId": owner, "status": "review"})
@@ -67,7 +67,7 @@ def test_invalid_review_revision_is_not_silently_ignored(review_app):
 
 def test_another_user_cannot_read_or_accept_the_review(review_app):
     app, _, task_id, _ = review_app
-    app.state.auth_store.create_account("other", "kestrel-vault-7719")
+    app.state.auth_store.create_account("other", "kestrel-vault-7719", email="other@example.com")
     other = TestClient(app)
     assert other.post("/api/v1/auth/login", json={"username": "other", "password": "kestrel-vault-7719"}).status_code == 200
     assert other.get(f"/api/v1/tasks/{task_id}/review").status_code == 403

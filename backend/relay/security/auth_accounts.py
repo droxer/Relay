@@ -16,6 +16,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
+from .account_identity import (
+    AccountIdentityConflict,
+    accounts_answering_to,
+    conflict_from_integrity_error,
+    identity_conflict,
+    lock_account_identities,
+)
 from .admin_token import admin_token_configured, verify_admin_token
 from .auth_cache import SESSION_ACCOUNTS
 from .auth_rows import database_account_to_row, public_account, row_to_database_account
@@ -25,6 +32,7 @@ from .entity_ids import USER_ENTITY_KIND, database_id_for_reference, normalize_d
 from .home_snoozes import apply_home_snoozes_patch
 from .onboarding import apply_onboarding_patch
 from .passwords import validate_password
+from ..core.email_address import normalize_email_address
 from ..core.ids import new_database_id
 from ..persistence.db_time import format_db_time
 from ..persistence.engine import store_transaction
@@ -61,6 +69,8 @@ class AuthAccounts(AuthStoreState):
         username = username.strip().lower()
         if not username:
             raise ValueError("username is required.")
+        # Every new Account signs in by email too; only legacy rows lack one.
+        email = normalize_email_address(email)
         validate_password(
             password, identifiers=(username, user_id, display_name, email)
         )
@@ -79,7 +89,6 @@ class AuthAccounts(AuthStoreState):
         display_name = display_name.strip() if display_name else username
         department_id = department_id.strip() if department_id else None
         department_name = department_name.strip() if department_name else None
-        email = email.strip() if email else None
 
         now = datetime.now(UTC)
         account = {
@@ -96,6 +105,12 @@ class AuthAccounts(AuthStoreState):
         }
         try:
             with store_transaction(self.engine) as conn:
+                lock_account_identities(conn)
+                conflict = identity_conflict(
+                    conn, self.accounts, username=username, email=email
+                )
+                if conflict:
+                    raise AccountIdentityConflict(conflict)
                 user = self._ensure_user(
                     conn,
                     user_id,
@@ -113,7 +128,7 @@ class AuthAccounts(AuthStoreState):
                     )
                 )
         except IntegrityError as error:
-            raise ValueError("username already exists.") from error
+            raise conflict_from_integrity_error(error) from error
         logger.info("Account created", account_id=account["id"], username=username, role=role)
         return public_account({**account, "displayName": display_name})
 
@@ -195,17 +210,21 @@ class AuthAccounts(AuthStoreState):
             conn.execute(delete(self.password_resets).where(self.password_resets.c.account_id == account_id))
         SESSION_ACCOUNTS.invalidate_all()
 
-    def authenticate(self, username: str, password: str) -> dict[str, Any] | None:
-        username = username.strip().lower()
+    def authenticate(self, identifier: str, password: str) -> dict[str, Any] | None:
+        """The Account ``identifier`` (a username or an email) and ``password`` open.
+
+        An identifier two Accounts answer to — a legacy username equal to
+        another Account's email — opens neither: choosing one would be a guess.
+        """
         with store_transaction(self.engine) as conn:
-            row = (
-                conn.execute(
-                    select(self.accounts).where(self.accounts.c.username == username)
+            rows = accounts_answering_to(conn, self.accounts, identifier)
+            if len(rows) > 1:
+                logger.warning(
+                    "Sign-in identifier matches more than one account",
+                    account_ids=sorted(str(row["id"]) for row in rows),
                 )
-                .mappings()
-                .first()
-            )
-            account = row_to_database_account(row) if row else None
+                return None
+            account = row_to_database_account(rows[0]) if rows else None
             if account and verify_password(password, account["passwordHash"]):
                 user_id = account.get("userId")
                 user = (
@@ -222,7 +241,7 @@ class AuthAccounts(AuthStoreState):
         return None
 
     def bootstrap_with_token(
-        self, token: str, username: str, password: str
+        self, token: str, username: str, password: str, email: str | None = None
     ) -> dict[str, Any]:
         if not admin_token_configured():
             raise HTTPException(503, "Admin token is not configured.")
@@ -238,7 +257,7 @@ class AuthAccounts(AuthStoreState):
                 raise HTTPException(
                     409, "Bootstrap is only allowed before the first user is created."
                 )
-            return self.create_account(username, password, role="admin")
+            return self.create_account(username, password, role="admin", email=email)
 
     def get_account_by_id(self, account_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:

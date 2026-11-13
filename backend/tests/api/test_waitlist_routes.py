@@ -42,7 +42,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mailer: FakeMailer) 
 def _bootstrap_admin(client: TestClient) -> None:
     response = client.post(
         f"{API}/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": ADMIN_PASSWORD},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": ADMIN_PASSWORD},
     )
     assert response.status_code == 200, response.text
 
@@ -202,7 +202,7 @@ def test_admin_routes_require_an_admin(client: TestClient) -> None:
     _bootstrap_admin(client)
     client.post(
         f"{API}/admin/users",
-        json={"userId": "plain", "username": "plain", "password": USER_PASSWORD},
+        json={"userId": "plain", "username": "plain", "email": "plain@example.com", "password": USER_PASSWORD},
     )
     client.cookies.clear()
     client.post(f"{API}/auth/login", json={"username": "plain", "password": USER_PASSWORD})
@@ -247,7 +247,7 @@ def test_rejected_accepts_leave_the_invite_live(client: TestClient) -> None:
     _bootstrap_admin(client)
     client.post(
         f"{API}/admin/users",
-        json={"userId": "taken", "username": "taken", "password": USER_PASSWORD},
+        json={"userId": "taken", "username": "taken", "email": "taken@example.com", "password": USER_PASSWORD},
     )
     token = _invite(client)
     client.cookies.clear()

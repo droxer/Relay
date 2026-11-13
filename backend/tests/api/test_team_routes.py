@@ -36,7 +36,7 @@ def _bootstrap(client: TestClient) -> None:
     assert (
         client.post(
             "/api/v1/auth/bootstrap",
-            json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+            json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
         ).status_code
         == 200
     )
@@ -49,7 +49,7 @@ def _user(client: TestClient, user_id: str) -> None:
             json={
                 "userId": user_id,
                 "username": user_id,
-                "password": "userpass",
+                "email": f"{user_id}@example.com", "password": "userpass",
                 "displayName": user_id.title(),
             },
         ).status_code

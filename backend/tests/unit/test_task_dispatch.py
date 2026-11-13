@@ -42,7 +42,7 @@ def _bootstrap_admin(client: TestClient) -> None:
         json={
             "token": "admin_token",
             "username": "admin",
-            "password": "kestrel-vault-7719",
+            "email": "admin@example.com", "password": "kestrel-vault-7719",
         },
     )
     assert response.status_code == 200
@@ -54,7 +54,7 @@ def _bootstrap_user(client: TestClient, user_id: str = "alice") -> None:
         json={
             "userId": user_id,
             "username": user_id,
-            "password": "userpass",
+            "email": f"{user_id}@example.com", "password": "userpass",
             "displayName": user_id.title(),
         },
     )

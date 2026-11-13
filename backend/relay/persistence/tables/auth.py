@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     Table,
     Text,
+    func,
 )
 from ..sql import database_id_column, entity_uuid_type, json_type, metadata
 from ...core.user_preferences import DEFAULT_USER_LANGUAGE, DEFAULT_USER_THEME
@@ -89,6 +90,11 @@ accounts = Table(
     Index("ix_auth_accounts_role", "role"),
     Index("ix_auth_accounts_user_id", "user_id"),
 )
+
+# An Account's email is a sign-in identifier, so no two Accounts share one in
+# any letter case. NULL (legacy Accounts made before email was required)
+# never collides. Migration 20261113_0126 adds it.
+Index("uq_auth_accounts_email_lower", func.lower(accounts.c.email), unique=True)
 
 sessions = Table(
     "auth_sessions",

@@ -25,7 +25,7 @@ from sqlalchemy import update
 def _bootstrap_admin(client: TestClient) -> None:
     response = client.post(
         "/api/v1/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": "kestrel-vault-7719"},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
     )
     assert response.status_code == 200
 
@@ -47,7 +47,7 @@ def _create_user(client: TestClient, user_id: str, **extra: object) -> dict:
         json={
             "userId": user_id,
             "username": user_id,
-            "password": "userpass",
+            "email": f"{user_id}@example.com", "password": "userpass",
             **extra,
         },
     )
@@ -568,7 +568,7 @@ def test_user_id_collision_is_rejected_not_merged(
             json={
                 "userId": "alice",
                 "username": "alice2",
-                "password": "userpass",
+                "email": "alice2@example.com", "password": "userpass",
                 "displayName": "Someone Else",
                 "maxLocalComputers": 9,
             },
@@ -596,7 +596,7 @@ def test_user_id_is_normalized_and_validated(
                 json={
                     "userId": bad,
                     "username": f"user-{abs(hash(bad))}",
-                    "password": "userpass",
+                    "email": f"user-{abs(hash(bad))}@example.com", "password": "userpass",
                 },
             )
             assert response.status_code == 400, f"{bad}: {response.text}"
@@ -608,14 +608,14 @@ def test_user_id_is_normalized_and_validated(
             json={
                 "userId": "  @Alice  ",
                 "username": "alice",
-                "password": "userpass",
+                "email": "alice@example.com", "password": "userpass",
             },
         )
         assert created.status_code == 201, created.text
         # ...and the canonical form now collides with the decorated one.
         again = client.post(
             "/api/v1/admin/users",
-            json={"userId": "alice", "username": "alice3", "password": "userpass"},
+            json={"userId": "alice", "username": "alice3", "email": "alice3@example.com", "password": "userpass"},
         )
         assert again.status_code == 409, again.text
 
@@ -653,7 +653,7 @@ def test_user_survives_a_computer_claimed_mid_create(
             json={
                 "userId": "bob",
                 "username": "bob",
-                "password": "userpass",
+                "email": "bob@example.com", "password": "userpass",
                 "nodeId": node_id,
             },
         )
@@ -684,7 +684,7 @@ def test_unknown_computer_is_still_refused_before_the_user_exists(
             json={
                 "userId": "carol",
                 "username": "carol",
-                "password": "userpass",
+                "email": "carol@example.com", "password": "userpass",
                 "nodeId": "computer-that-does-not-exist",
             },
         )
@@ -703,20 +703,20 @@ def test_password_policy_is_enforced_wherever_a_password_is_set(
         _login_admin(client)
         short = client.post(
             "/api/v1/admin/users",
-            json={"userId": "dave", "username": "dave", "password": "short"},
+            json={"userId": "dave", "username": "dave", "email": "dave@example.com", "password": "short"},
         )
         assert short.status_code == 400, short.text
         assert "8 characters" in short.json()["detail"]
 
         long = client.post(
             "/api/v1/admin/users",
-            json={"userId": "erin", "username": "erin", "password": "x" * 257},
+            json={"userId": "erin", "username": "erin", "email": "erin@example.com", "password": "x" * 257},
         )
         assert long.status_code == 400, long.text
 
         ok = client.post(
             "/api/v1/admin/users",
-            json={"userId": "dave", "username": "dave", "password": "userpass"},
+            json={"userId": "dave", "username": "dave", "email": "dave@example.com", "password": "userpass"},
         )
         assert ok.status_code == 201, ok.text
 
@@ -756,6 +756,6 @@ def test_handle_lookup_catches_a_collision_the_uuid_mapping_would_miss(
         assert store.resolve_user_id("ally") == alice["id"]
         clash = client.post(
             "/api/v1/admin/users",
-            json={"userId": "ally", "username": "ally", "password": "userpass"},
+            json={"userId": "ally", "username": "ally", "email": "ally@example.com", "password": "userpass"},
         )
         assert clash.status_code == 409, clash.text

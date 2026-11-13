@@ -1483,6 +1483,32 @@ in place of the Project directory. Existing nested Task conversation links
 resolve to the conversation's Project or Computer workspace and share the same
 conversation and access to its owning Task.
 
+## Sign-in and account email
+
+Every new Account carries a sign-in email: bootstrap, admin creation
+(`POST /admin/accounts`, `POST /admin/users`), invite acceptance (the invite's
+own address), and `python -m relay.init_users` (`--email` or
+`RELAY_INITIAL_ADMIN_EMAIL`). An address is trimmed and lowercased, must look
+like `local@domain.tld`, and belongs to one Account in any letter case (the
+`uq_auth_accounts_email_lower` index). Accounts created before email was
+required may have none and keep signing in by username. Rules:
+`backend/relay/core/email_address.py`, `backend/relay/security/account_identity.py`.
+
+| Method and path | Auth | Answer |
+| :- | :- | :- |
+| `POST /auth/bootstrap` | admin token in body | Body `{token, username, email, password}`. Creates the first admin and signs in. `400` missing/invalid email or weak password, `409` accounts already exist |
+| `POST /auth/login` | none | Body `{username, password}`; `username` takes a username **or** an email (case and surrounding spaces ignored). An identifier two Accounts answer to (a legacy username equal to another Account's email) signs in neither. `401 "Invalid username or password."` for every failure, `429` rate limited |
+| `POST /admin/accounts` | admin | Body `{username, email, password, role?, …}`. `400` invalid input, `409` `"username already exists."` or `"An account with this email already exists."` |
+| `POST /admin/users` | admin | Body `{userId, username, email, password, …}`. `400` missing/invalid email, `409` handle, username, or email taken |
+| `PATCH /admin/users/{id}` | admin | `email` on a User who signs in must be a valid, unused address and moves the Account's sign-in email and reset recipient with it; it cannot be cleared. `409` email taken |
+
+A username may not equal another Account's email and vice versa, so one
+identifier never names two Accounts. Before migrating, run
+`relay audit-account-emails` (read-only): migration `20261113_0126` refuses to
+add the index while two Accounts share an address and names their ids, and
+logs the non-blocking findings (ambiguous identifiers, malformed or
+unnormalized emails, Account/User email differences, Accounts without email).
+
 ## Waitlist
 
 Only the public join is gated: `POST /waitlist` is mounted when
@@ -1500,7 +1526,7 @@ Rules and rationale: `docs/guides/accounts.md`.
 | :- | :- | :- |
 | `POST /waitlist` | none | `202 {"ok": true}` for every valid body — new, known, declined, or honeypot (`website` non-empty). `400` malformed, `429` rate limited, `503` queue full |
 | `POST /waitlist/invites/lookup` | none | Body `{token}`. `{invite: {email, name, suggestedHandle, expiresAt}}`; every dead token is one `404` |
-| `POST /waitlist/invites/accept` | none | Body `{token, handle, password}`. Creates the account, sets the session cookie, returns `{user}`. `400` weak password or bad handle, `409` handle taken, `404` dead invite; a refused accept leaves the invite live |
+| `POST /waitlist/invites/accept` | none | Body `{token, handle, password}`. Creates the account, sets the session cookie, returns `{user}`. `400` weak password or bad handle, `409` handle taken or `"An account with this email already exists."` (the invited address is now used by another Account), `404` dead invite; a refused accept leaves the invite live |
 | `GET /admin/waitlist?status=&q=&limit=&offset=` | admin | `{entries, total, counts}`, oldest first |
 | `POST /admin/waitlist/{id}/invite` | admin | Rotates the token and returns its link. `{entry, inviteUrl, delivery: null \| {status, error}}`; `inviteUrl` is the only time the token appears |
 | `POST /admin/waitlist/invitations` | admin | Body `{email, name?, locale?}` (`en`/`zh-CN`/`zh-TW`). Invites an address directly, reusing its entry if it asked (source `admin-invite` otherwise) and ignoring the queue cap; emailed now only when invite email is enabled. `{entry, inviteUrl, delivery}`. `400` malformed, `409` a live account already uses the email, or the entry joined and its account still exists (a deleted user's entry is reopened and re-invited) |

@@ -13,9 +13,9 @@ def accounts(tmp_path, monkeypatch):
     app = create_app(tmp_path / "state")
     admin = TestClient(app)
     assert admin.post("/api/v1/auth/bootstrap", json={
-        "token": "admin_token", "username": "admin", "password": "kestrel-vault-7719",
+        "token": "admin_token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719",
     }).status_code == 200
-    account = app.state.auth_store.create_account("alice", "kestrel-vault-7720", user_id="alice")
+    account = app.state.auth_store.create_account("alice", "kestrel-vault-7720", user_id="alice", email="alice@example.com")
     owner = TestClient(app)
     assert owner.post("/api/v1/auth/login", json={
         "username": "alice", "password": "kestrel-vault-7720",

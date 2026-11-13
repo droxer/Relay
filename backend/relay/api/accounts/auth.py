@@ -146,6 +146,7 @@ def auth_bootstrap(
             string_field(body, "token"),
             string_field(body, "username"),
             string_field(body, "password"),
+            string_field(body, "email"),
         )
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
@@ -167,10 +168,11 @@ def auth_login(
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
     body = _request_body
-    username = string_field(body, "username")
-    rate_key = _auth_rate_key(request, "login", username)
+    # `username` keeps its wire name but takes a username or an email.
+    identifier = string_field(body, "username")
+    rate_key = _auth_rate_key(request, "login", identifier)
     _consume_auth_attempt(request, rate_key)
-    account = ctx.auth_store.authenticate(username, string_field(body, "password"))
+    account = ctx.auth_store.authenticate(identifier, string_field(body, "password"))
     if not account:
         raise HTTPException(401, "Invalid username or password.")
     app_context(request).auth_rate_limiter.reset(rate_key)

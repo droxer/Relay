@@ -20,7 +20,7 @@ PASSWORD = "kestrel-vault-7719"
 def _bootstrap(client: TestClient) -> None:
     response = client.post(
         "/api/v1/auth/bootstrap",
-        json={"token": "admin_token", "username": "admin", "password": PASSWORD},
+        json={"token": "admin_token", "username": "admin", "email": "admin@example.com", "password": PASSWORD},
     )
     assert response.status_code == 200
 
@@ -63,7 +63,7 @@ def roster(monkeypatch):
         _bootstrap(client)
         assert client.post(
             "/api/v1/admin/users",
-            json={"userId": "alice", "username": "alice", "password": "userpass", "displayName": "Alice"},
+            json={"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "userpass", "displayName": "Alice"},
         ).status_code == 201
         node = _register_node(app, "node_a")
         agent_ids = []

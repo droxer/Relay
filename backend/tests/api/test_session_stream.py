@@ -12,7 +12,7 @@ from relay.persistence.events import relay_event
 def _bootstrap_admin(client: TestClient, token: str = "admin_token") -> None:
     response = client.post(
         "/api/v1/auth/bootstrap",
-        json={"token": token, "username": "admin", "password": "kestrel-vault-7719"},
+        json={"token": token, "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
     )
     assert response.status_code == 200
 

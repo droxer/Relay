@@ -143,7 +143,7 @@ def test_empty_project_migration_preserves_data_and_guards_downgrade(
 
     url, _schema = migrated_schema
     owner = DatabaseAccountAuthStore(url).create_account(
-        "project-owner", "kestrel-vault-7719", user_id="project-owner"
+        "project-owner", "kestrel-vault-7719", user_id="project-owner", email="project-owner@example.com"
     )["userId"]
     store = DatabaseProjectStore(url)
     project = store.create_project(owner, {
@@ -182,7 +182,7 @@ def test_postgres_wip_admission_is_atomic_across_store_instances(migrated_schema
     monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
     url, _schema = migrated_schema
     owner = DatabaseAccountAuthStore(url).create_account(
-        'wip-owner', 'test-wip-password', user_id='wip-owner',
+        'wip-owner', 'test-wip-password', user_id='wip-owner', email=f"{'wip-owner'}@example.com",
     )['userId']
     store = DatabaseTaskStore(url)
     tasks = [store.create_task({'title': str(i), 'ownerUserId': owner}) for i in range(4)]
@@ -543,7 +543,7 @@ def test_password_reset_redemption_waits_for_account_before_claiming_link(migrat
 
     url, _ = migrated_schema
     auth = DatabaseAccountAuthStore(url)
-    account = auth.create_account("ada", "kestrel-vault-7719", user_id="ada")
+    account = auth.create_account("ada", "kestrel-vault-7719", user_id="ada", email="ada@example.com")
     service = PasswordResetService(password_reset_store_for(auth), NullMailer())
     token = service.admin_issue("ada", web_origin="https://relay.test").url.split("#token=", 1)[1]
     waiting_for_account = Event()
@@ -578,3 +578,43 @@ def test_password_reset_redemption_waits_for_account_before_claiming_link(migrat
         finally:
             event.remove(auth.engine, "before_execute", observe_lock)
     assert auth.authenticate("ada", "kestrel-vault-7719") is not None
+
+
+def test_account_email_index_is_case_insensitive_and_reversible(
+    migrated_schema: tuple[str, str],
+) -> None:
+    """Alembic's comparison skips expression indexes, so check 0126 directly."""
+    url, schema = migrated_schema
+    config = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    engine = create_engine(url)
+    index_sql = text(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = :schema "
+        "AND indexname = 'uq_auth_accounts_email_lower'"
+    )
+    insert_account = text(
+        "INSERT INTO auth_accounts (id, username, email, role, password_hash, created_at, updated_at) "
+        "VALUES (gen_random_uuid(), :username, :email, 'user', 'x', now(), now())"
+    )
+    try:
+        with engine.connect() as connection:
+            definition = connection.execute(index_sql, {"schema": schema}).scalar_one()
+        assert "UNIQUE" in definition and "lower(email)" in definition
+        with engine.begin() as connection:
+            connection.execute(insert_account, {"username": "one", "email": "dup@example.com"})
+            connection.execute(insert_account, {"username": "legacy-a", "email": None})
+            connection.execute(insert_account, {"username": "legacy-b", "email": None})
+        with pytest.raises(SQLAlchemyError), engine.begin() as connection:
+            connection.execute(insert_account, {"username": "two", "email": "DUP@example.com"})
+
+        command.downgrade(config, "20261112_0125")
+        with engine.begin() as connection:
+            assert connection.execute(index_sql, {"schema": schema}).first() is None
+            connection.execute(insert_account, {"username": "two", "email": "DUP@example.com"})
+        with pytest.raises(RuntimeError, match="audit-account-emails"):
+            command.upgrade(config, "head")
+        with engine.connect() as connection:
+            assert connection.execute(index_sql, {"schema": schema}).first() is None
+            assert connection.execute(text("SELECT count(*) FROM auth_accounts")).scalar() == 4
+    finally:
+        engine.dispose()

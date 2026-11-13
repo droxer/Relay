@@ -20,7 +20,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Initial password (or set RELAY_INITIAL_ADMIN_PASSWORD).",
     )
     parser.add_argument("--role", choices=["admin", "user"], default="admin")
-    parser.add_argument("--email", default=None)
+    parser.add_argument(
+        "--email",
+        default=os.environ.get("RELAY_INITIAL_ADMIN_EMAIL"),
+        help="Sign-in email, required for every new account (or set RELAY_INITIAL_ADMIN_EMAIL).",
+    )
     # --employee-id is the pre-rename spelling of the same flag.
     parser.add_argument("--user-id", "--employee-id", dest="user_id", default=None)
     parser.add_argument("--department-id", default="administration")
@@ -33,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if not args.password:
         parser.error("--password is required (or set RELAY_INITIAL_ADMIN_PASSWORD).")
+    if not args.email:
+        parser.error("--email is required (or set RELAY_INITIAL_ADMIN_EMAIL).")
 
     store = auth_store_from_env()
     if args.only_if_empty and store.has_accounts():

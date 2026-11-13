@@ -13,7 +13,7 @@ def client(tmp_path, monkeypatch):
     assert (
         client.post(
             "/api/v1/auth/bootstrap",
-            json={"token": "capacity-admin-token", "username": "admin", "password": "kestrel-vault-7719"},
+            json={"token": "capacity-admin-token", "username": "admin", "email": "admin@example.com", "password": "kestrel-vault-7719"},
         ).status_code
         == 200
     )
@@ -23,7 +23,7 @@ def client(tmp_path, monkeypatch):
 def create_user(client, **fields):
     response = client.post(
         "/api/v1/admin/users",
-        json={"userId": "alice", "username": "alice", "password": "a-strong-capacity-password", **fields},
+        json={"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "a-strong-capacity-password", **fields},
     )
     assert response.status_code == 201, response.text
     return response.json()["user"]
@@ -89,7 +89,7 @@ def test_capacity_validation_rejects_invalid_values_without_creating_users(clien
         json={
             "userId": "bad-limit",
             "username": "bad-limit",
-            "password": "a-strong-capacity-password",
+            "email": "bad-limit@example.com", "password": "a-strong-capacity-password",
             "maxConcurrentTasks": value,
         },
     )
