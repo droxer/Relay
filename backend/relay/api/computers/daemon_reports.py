@@ -41,6 +41,7 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
             receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 409, 'detail': str(error)})
             continue
         if accepted:
+            registry.settle_acknowledged_stop(sandbox_id, event)
             receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 200})
             continue
         streamed = event['type'] in {'run.output', 'run.output.batch', 'run.collaboration'}

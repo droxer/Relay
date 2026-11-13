@@ -18,6 +18,7 @@ from ...collaboration.models import (
 from ...collaboration.work import (
     WORK_PROTOCOL,
 )
+from ...core.daemon_records import TERMINAL_DAEMON_STATUSES
 from ...core.ids import new_database_id
 from ...core.daemon_capabilities import (
     has_capability,
@@ -392,6 +393,16 @@ class RunAdmissionMixin(RegistryState):
                 "No active run to cancel", sandbox_id=sandbox_id, session_id=session_id
             )
             return None
+        target = self.daemon_store.get_command(active["commandId"]) or {}
+        if target.get("status") in TERMINAL_DAEMON_STATUSES:
+            # The exit is already recorded; a stop would only be acknowledged
+            # and redelivered. Finalization settles the run on its own.
+            self.active_commands.pop(active["commandId"], None)
+            logger.info(
+                "Run already ended; no stop sent",
+                sandbox_id=sandbox_id, session_id=session_id, run_id=active["runId"],
+            )
+            return active
         logger.info(
             "Cancelling active run",
             sandbox_id=sandbox_id,
@@ -416,7 +427,7 @@ class RunAdmissionMixin(RegistryState):
             {
                 "id": cancel_id,
                 "type": "run.cancel",
-                "targetLeaseId": (self.daemon_store.get_command(active["commandId"]) or {}).get("leaseId"),
+                "targetLeaseId": target.get("leaseId"),
                 "commandId": active["commandId"],
                 "sessionId": active["sessionId"],
                 "runId": active["runId"],

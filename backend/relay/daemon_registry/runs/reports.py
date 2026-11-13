@@ -26,7 +26,18 @@ class DurableReportMixin(RegistryState):
             # Do not translate KeyErrors from processing: those remain retryable.
             yield
 
-    def handle_durable_report(self, sandbox_id: str, event: dict[str, Any], token: str | None, report_id: str, digest: str) -> None:
+    def settle_acknowledged_stop(self, sandbox_id: str, event: dict[str, Any]) -> None:
+        """Close stops aimed at a run whose cancellation Relay already holds.
+
+        A daemon answers a stop for a run it no longer executes by reporting it
+        cancelled again, under the original report identity. That replay is
+        acknowledged from its receipt, so without this the newer stop stays
+        leased and is redelivered every lease period for as long as it exists.
+        """
+        if event['type'] == 'run.cancelled':
+            self.daemon_store.mark_cancel_commands_completed(sandbox_id, event['commandId'])
+
+    def handle_durable_report(self,sandbox_id: str, event: dict[str, Any], token: str | None, report_id: str, digest: str) -> None:
         self._hydrate_node(sandbox_id)
         streamed = event['type'] in {'run.output', 'run.output.batch', 'run.collaboration'}
         try:
@@ -42,6 +53,7 @@ class DurableReportMixin(RegistryState):
                 # accepted identity needs no command or session history, but
                 # must still match this authenticated node and exact payload.
                 if self.daemon_store.report_was_accepted(sandbox_id, event['commandId'], report_id, digest):
+                    self.settle_acknowledged_stop(sandbox_id, event)
                     return
                 record = self.daemon_store.get_command(event['commandId'])
                 if not record:

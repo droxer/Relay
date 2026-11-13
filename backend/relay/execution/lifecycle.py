@@ -75,10 +75,15 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                 # The daemon itself says it cannot verify the stopped process
                 # exited; waiting longer will not produce that evidence.
                 phase, reason = "recovery_required", "termination_unconfirmed"
+            elif (state.get("_relay_stop_command_id") or session.get("deletionRequestedAt")) and (
+                live or computer_online is True
+            ):
+                # A daemon stops renewing a run's lease once it holds the
+                # exit report, so a stop in flight on a reachable computer is
+                # still stopping. The stop grace below bounds that wait.
+                phase, reason = "stopping", "awaiting_termination"
             elif not live:
                 phase, reason = "unresponsive", "execution_unconfirmed"
-            elif state.get("_relay_stop_command_id") or session.get("deletionRequestedAt"):
-                phase, reason = "stopping", "awaiting_termination"
             else:
                 phase, reason = "running", "execution_active"
         else:
