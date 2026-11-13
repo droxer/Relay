@@ -539,6 +539,72 @@ write_config
 deploy railway 2>/dev/null
 expect_failure "agent-ids requires a successful deployment" 'no successful deployment' deploy agent-ids
 
+echo "--- status and restart judge a service by its hostname, not its deployment"
+# Probes of the live hostnames answer $TEST_PROBE_CODE; every other request
+# reaches the mock API. Railway calls a hung process SUCCESS, so only the
+# probe can tell it is down.
+REAL_CURL=$(command -v curl)
+export REAL_CURL
+cat > "$WORK/bin/curl" <<'CURL_STUB'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  case $arg in https://*get-relay.cc*) printf '%s' "${TEST_PROBE_CODE:-200}"; exit 0 ;; esac
+done
+exec "$REAL_CURL" "$@"
+CURL_STUB
+chmod +x "$WORK/bin/curl"
+mock_post() { curl -fsS --max-time 5 -X POST -H 'Content-Type: application/json' "http://127.0.0.1:$PORT/$1" -d "$2" >/dev/null; }
+start_mock
+write_config RESTART_HEALTH_SECONDS=2
+run_phases 2>/dev/null || { echo "FAIL  provisioning for status and restart"; exit 1; }
+export TEST_PROBE_CODE=200
+if output=$(deploy status 2>&1) && grep -q 'ok    relay-backend SUCCESS' <<<"$output" \
+  && grep -q 'ok    relay-worker SUCCESS' <<<"$output" && grep -q 'ok    Postgres SUCCESS' <<<"$output" \
+  && grep -q 'relay-backend answers https://api.get-relay.cc/api/v1/auth/status (200)' <<<"$output"; then
+  echo "ok    status reports every running service"
+else
+  echo "FAIL  status reports every running service: $output"
+  FAILURES=$((FAILURES + 1))
+fi
+TEST_PROBE_CODE=502
+expect_failure "status fails a SUCCESS deployment whose hostname answers 502" 'relay-backend answers .* with 502' deploy status
+TEST_PROBE_CODE=200
+mock_post __crash '{"name": "relay-worker"}'
+expect_failure "status fails a crashed service" 'FAIL  relay-worker CRASHED' deploy status
+
+BEFORE=$(state)
+deploy restart 2>"$WORK/restart.log" || { cat "$WORK/restart.log"; FAILURES=$((FAILURES + 1)); }
+STATE=$(state)
+check "restart restarts the API and the worker in place" '.calls["railway.restart.relay-backend"] == 1 and .calls["railway.restart.relay-worker"] == 1'
+check "restart leaves Postgres alone unless named" '.calls["railway.restart.Postgres"] == null'
+check "an accepted restart creates no deployment" "($(svc relay-backend) | .deployments | length) == ($(jq "$(svc relay-backend) | .deployments | length" <<<"$BEFORE"))"
+check "restart brings a crashed worker back" "$(svc relay-worker) | .deployments[0].status == \"SUCCESS\""
+
+mock_post __refuse_restart '["relay-backend"]'
+deploy restart backend 2>"$WORK/refused.log" || { cat "$WORK/refused.log"; FAILURES=$((FAILURES + 1)); }
+STATE=$(state)
+check "a refused restart redeploys the same build" "(.calls[\"railway.redeploy.relay-backend\"] == 1) and ($(svc relay-backend) | .deployments[0].commitSha == .deployments[1].commitSha)"
+check "naming a service restarts only that service" '.calls["railway.restart.relay-worker"] == 1'
+if grep -q 'redeploying the same build' "$WORK/refused.log"; then
+  echo "ok    a refused restart says it is redeploying"
+else
+  echo "FAIL  a refused restart says it is redeploying: $(cat "$WORK/refused.log")"
+  FAILURES=$((FAILURES + 1))
+fi
+
+mock_post __refuse_restart '[]'
+TEST_PROBE_CODE=502
+expect_failure "a service that never answers fails the restart" 'restart did not recover: relay-backend' deploy restart backend
+STATE=$(state)
+check "an unanswered restart falls back to a redeploy" '.calls["railway.redeploy.relay-backend"] == 2'
+TEST_PROBE_CODE=200
+deploy restart postgres 2>/dev/null || { echo "FAIL  restart postgres"; FAILURES=$((FAILURES + 1)); }
+STATE=$(state)
+check "postgres restarts only when named" '.calls["railway.restart.Postgres"] == 1'
+expect_failure "restart rejects an unknown service" 'unknown service: cache' deploy restart cache
+rm "$WORK/bin/curl"
+unset TEST_PROBE_CODE
+
 echo "--- branch resolution without a network connection"
 resolved=$(
   . "$TESTS_DIR/../lib/common.sh"

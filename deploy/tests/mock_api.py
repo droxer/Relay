@@ -3,7 +3,9 @@
 Serves Railway at /graphql/v2 and Cloudflare at /client/v4, keyed on the
 operation names deploy/lib/railway.sh sends. GET /__state dumps everything,
 including per-operation call counts, for tests/run.sh to assert on; POST
-/__seed_route adds a Worker route someone else owns.
+/__seed_route adds a Worker route someone else owns; /__refuse_restart makes
+deploymentRestart fail for the named services, and /__crash marks a service's
+newest deployment CRASHED.
 
     python3 mock_api.py <port>
 """
@@ -273,6 +275,23 @@ def railway(op, v):
                     if v.get("filter", "") in m
                 ]}
         raise ValueError("unknown deployment")
+    if op == "DeploymentRestart":
+        svc = next(s for s in project()["services"].values()
+                   if any(dep["id"] == v["id"] for dep in s["deployments"]))
+        dep = next(dep for dep in svc["deployments"] if dep["id"] == v["id"])
+        assert dep["status"] in {"SUCCESS", "CRASHED"}, "restart of a deployment that is not running"
+        count("railway.restart." + svc["name"])
+        if svc["name"] in STATE.get("refuse_restart", []):
+            raise ValueError("Problem processing request")
+        dep["status"] = "SUCCESS"
+        return {"deploymentRestart": True}
+    if op == "DeploymentRedeploy":
+        svc = next(s for s in project()["services"].values()
+                   if any(dep["id"] == v["id"] for dep in s["deployments"]))
+        source = next(dep for dep in svc["deployments"] if dep["id"] == v["id"])
+        count("railway.redeploy." + svc["name"])
+        dep = add_deployment(svc, commitSha=source.get("commitSha"))
+        return {"deploymentRedeploy": {"id": dep["id"]}}
     if op == "Deployments":
         deployments = service(v["input"]["serviceId"])["deployments"]
         STATE["observed_successful_deployments"].extend(d["id"] for d in deployments if d["status"] == "SUCCESS")
@@ -409,6 +428,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {})
         if url.path == "/__logs" and method == "POST":
             STATE["deployment_logs"] = self.body()
+            return self.send(200, {})
+        if url.path == "/__refuse_restart" and method == "POST":
+            STATE["refuse_restart"] = self.body()
+            return self.send(200, {})
+        if url.path == "/__crash" and method == "POST":
+            name = self.body()["name"]
+            svc = next(s for s in project()["services"].values() if s["name"] == name)
+            svc["deployments"][0]["status"] = "CRASHED"
             return self.send(200, {})
         if url.path == "/__seed_route" and method == "POST":
             STATE["routes"].append({"id": new_id("route"), **self.body()})

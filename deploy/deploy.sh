@@ -8,6 +8,11 @@
 #   deploy/deploy.sh verify      check the live hostnames (and email, as `mail` does)
 #   deploy/deploy.sh mail        check the invite email settings against Cloudflare
 #   deploy/deploy.sh agent-ids   inspect the backend's startup Computer ID migration status
+#   deploy/deploy.sh status      check every service's deployment and probe the hostnames
+#   deploy/deploy.sh restart [service ...]
+#                                restart the app services (or the named ones:
+#                                backend, worker, web, postgres); redeploy the
+#                                same build if a restart is refused or does not recover
 #   deploy/deploy.sh region      move Postgres and the services to RAILWAY_REGION
 #                                (offline for minutes; back up first)
 #
@@ -27,6 +32,8 @@ DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$DEPLOY_DIR/lib/workers.sh"
 # shellcheck source=lib/verify.sh
 . "$DEPLOY_DIR/lib/verify.sh"
+# shellcheck source=lib/health.sh
+. "$DEPLOY_DIR/lib/health.sh"
 
 usage() {
   sed -n '2,/^set -/p' "$0" | sed '$d; s/^# \{0,1\}//'
@@ -365,7 +372,7 @@ phase_agent_ids() {
 main() {
   local command=${1:-}
   case $command in
-    up | railway | cloudflare | release | verify | mail | region | agent-ids) ;;
+    up | railway | cloudflare | release | verify | mail | region | agent-ids | status | restart) ;;
     -h | --help | help | "")
       usage
       [ -n "$command" ] || exit 2
@@ -394,6 +401,8 @@ main() {
     mail) phase_mail ;;
     region) phase_region ;;
     agent-ids) phase_agent_ids ;;
+    status) phase_status ;;
+    restart) phase_restart "${@:2}" ;;
   esac
 }
 
