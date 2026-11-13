@@ -1,21 +1,12 @@
 import type { AgentRole } from "relay-core";
+import { AGENT_ROLE_OPTIONS } from "./agents.ts";
 
 /** What a member does in the Project's rounds; the Project Lead manages it.
-    The Project offers the same Agent-role vocabulary as a Team and an Agent's
-    own default, so one role means the same thing everywhere; web/tests/
-    agentRoles.test.ts keeps this list in step with AGENT_ROLE_OPTIONS. */
+    The Project offers the same Agent-role vocabulary, in the same order, as a
+    Team and an Agent's own default, so one role means the same thing
+    everywhere. */
 export type ProjectRole = AgentRole;
-export const PROJECT_ROLE_OPTIONS: readonly ProjectRole[] = [
-  "planner",
-  "implementer",
-  "reviewer",
-  "tester",
-  "fixer",
-  "researcher",
-  "designer",
-  "writer",
-  "devops",
-];
+export const PROJECT_ROLE_OPTIONS: readonly ProjectRole[] = AGENT_ROLE_OPTIONS;
 
 export interface ProjectMember {
   agentId: string;

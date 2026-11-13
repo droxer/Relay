@@ -27,19 +27,20 @@ export interface AgentPlacement {
   updatedAt: string;
 }
 
-/** The roles an agent may hold on a team, in the order they are offered.
-    Mirrors AGENT_ROLES in relay/core/models.py; the AgentRole type that
-    relay-core already owns keeps this list honest. */
+/** The roles an agent may hold, in the order a Pipeline round takes them —
+    the order every role picker offers. Mirrors AGENT_ROLES in
+    relay/core/models.py; the AgentRole type that relay-core already owns
+    keeps this list honest. */
 export const AGENT_ROLE_OPTIONS: readonly AgentRole[] = [
-  "implementer",
-  "reviewer",
-  "planner",
-  "tester",
-  "fixer",
   "researcher",
+  "planner",
   "designer",
+  "implementer",
+  "fixer",
+  "tester",
   "writer",
   "devops",
+  "reviewer",
 ];
 
 /** Why an agent cannot currently run, derived live on every read — never

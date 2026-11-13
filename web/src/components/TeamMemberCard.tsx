@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RoleSelectItems } from "./agents/RoleSelectItems";
 
 type TeamCardMember = {
   id: string;
@@ -114,9 +115,7 @@ function TeamMemberContractFields({ config, lead, idBase, disabled, onChange }: 
             <SelectValue>{(value: string) => t(`team_work.role_${value}`)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {AGENT_ROLE_OPTIONS.map((role) => (
-              <SelectItem key={role} value={role}>{t(`team_work.role_${role}`)}</SelectItem>
-            ))}
+            <RoleSelectItems label={(role) => t(`team_work.role_${role}`)} />
           </SelectContent>
         </Select>
       </Field>

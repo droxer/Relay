@@ -92,6 +92,29 @@ def test_single_member_has_no_reviewer() -> None:
     assert slots.reviewer is None
 
 
+def test_a_specialist_never_reviews() -> None:
+    agents = [_agent("lead", "designer"), _agent("doc", "writer"), _agent("ops", "devops")]
+    slots = fill_build_review_slots(agents, "lead")
+    assert slots.builder["id"] == "lead"
+    assert slots.reviewer is None
+
+
+def test_a_specialist_lead_hands_review_to_a_non_specialist() -> None:
+    agents = [_agent("lead", "writer"), _agent("dev", "implementer"), _agent("p", "planner")]
+    slots = fill_build_review_slots(agents, "lead")
+    assert (slots.builder["id"], slots.reviewer["id"]) == ("dev", "p")
+
+
+def test_pipeline_researches_before_planning_and_designs_before_building() -> None:
+    agents = [
+        _agent("dev", "implementer"), _agent("plan", "planner"), _agent("doc", "writer"),
+        _agent("ux", "designer"), _agent("rev", "reviewer"), _agent("res", "researcher"),
+    ]
+    assert [agent["id"] for agent in pipeline_order(agents)] == [
+        "res", "plan", "ux", "dev", "doc", "rev",
+    ]
+
+
 def test_pipeline_orders_by_role_and_keeps_roster_order_within_a_role() -> None:
     agents = [
         _agent("r1", "reviewer"), _agent("i1", "implementer"), _agent("t1", "tester"),

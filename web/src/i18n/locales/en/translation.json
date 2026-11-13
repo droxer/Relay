@@ -15,6 +15,9 @@
     "slot_lead": "Lead",
     "slot_member": "Member",
     "fallback_solo": "Add a second member to enable review.",
+    "members_skipped_one": "{{names}} won't take a turn in Build and review. Pipeline gives every member a turn.",
+    "members_skipped_other": "{{names}} won't take a turn in Build and review. Pipeline gives every member a turn.",
+    "specialist_builds": "No Software Engineer or Bug Fixer here, so {{name}} builds. Pipeline lets each member do their own part.",
     "task_label": "Collaboration style",
     "composer_label": "Collaboration style",
     "turn_builder": "Builder",
@@ -2552,6 +2555,17 @@
     "sort_option_ascending": "{{column}} ↑",
     "sort_option_descending": "{{column}} ↓",
     "pagination_range_compact": "Page {{page}} of {{pageCount}} · {{total}}"
+  },
+  "role_hints": {
+    "researcher": "Finds the facts and options before anyone plans.",
+    "planner": "Plans the approach and sets the boundaries.",
+    "designer": "Shapes the flow, interface, and states before building.",
+    "implementer": "Builds the change.",
+    "fixer": "Reproduces and fixes defects.",
+    "tester": "Verifies the work and reports what fails.",
+    "writer": "Documents the result for its readers.",
+    "devops": "Ships it: config, pipeline, deployment, rollback.",
+    "reviewer": "Reviews the finished work and approves or asks for changes."
   },
   "team_work": {
     "responsibilities": "Roles and responsibilities",

@@ -46,6 +46,13 @@ def test_pipeline_puts_review_last_and_an_unknown_role_with_the_implementers() -
     assert role_stage("unknown") == ROLE_STAGE["implementer"]
 
 
+def test_roles_are_offered_in_the_order_a_pipeline_takes_them() -> None:
+    from relay.collaboration.styles import role_stage
+
+    stages = [role_stage(role) for role in AGENT_ROLES]
+    assert stages == sorted(stages)
+
+
 def test_a_member_without_a_role_gets_the_neutral_brief() -> None:
     assert role_charter(None) == UNASSIGNED_CHARTER
     assert role_charter("unknown") == UNASSIGNED_CHARTER

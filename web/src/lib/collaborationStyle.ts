@@ -5,17 +5,20 @@ import type { AgentRun, CollaborationRoundManifest, CollaborationStyle, RelaySes
 // previewSlots against what backend dispatch fills.
 export const COLLABORATION_STYLES: readonly CollaborationStyle[] = ["build_review", "pipeline", "lead_led"];
 const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
+// Mirrors ROLE_STAGE and SPECIALIST_ROLES in backend/relay/collaboration/styles.py.
 const STAGE: Record<string, number> = {
   researcher: 0,
-  planner: 0,
-  designer: 1,
-  implementer: 2,
-  fixer: 2,
-  tester: 3,
-  writer: 3,
-  devops: 3,
-  reviewer: 4,
+  planner: 1,
+  designer: 2,
+  implementer: 3,
+  fixer: 3,
+  tester: 4,
+  writer: 4,
+  devops: 4,
+  reviewer: 5,
 };
+const SPECIALIST_ROLES = new Set(["researcher", "designer", "writer", "devops"]);
+const stageOf = (role: string | undefined) => STAGE[role ?? ""] ?? STAGE.implementer;
 export interface SlotMember { id: string; role?: string; onRequest?: boolean }
 type Slot = { slot: "builder" | "reviewer" | "member" | "lead"; memberId: string };
 
@@ -28,7 +31,7 @@ export function previewSlots(all: SlotMember[], leadId: string | undefined, styl
   // Dispatch takes the roster lead first, so the lead wins a stage tie.
   const members = [...all.filter((m) => m.id === leadId), ...all.filter((m) => m.id !== leadId && !m.onRequest)];
   if (!members.length) return { style, slots: [] };
-  const ordered = [...members].sort((a, b) => (STAGE[a.role ?? ""] ?? 2) - (STAGE[b.role ?? ""] ?? 2));
+  const ordered = [...members].sort((a, b) => stageOf(a.role) - stageOf(b.role));
   const lead = members.find((m) => m.id === leadId);
   if (style === "pipeline") return { style, slots: ordered.map((m) => ({ slot: "member", memberId: m.id })) };
   if (style === "lead_led") {
@@ -38,13 +41,26 @@ export function previewSlots(all: SlotMember[], leadId: string | undefined, styl
   }
   const builds = (m: SlotMember) => m.role === "implementer" || m.role === "fixer";
   const builder = (lead && builds(lead) ? lead : undefined) ?? members.find(builds) ?? lead ?? members[0];
-  const others = members.filter((m) => m.id !== builder.id);
+  const others = members.filter((m) => m.id !== builder.id && !SPECIALIST_ROLES.has(m.role ?? ""));
   const reviewer = others.find((m) => m.role === "reviewer") ?? others.find((m) => m.role === "tester") ?? others.find((m) => m.id === leadId) ?? others[0];
   if (style === "solo" || !reviewer) return {
     style: "solo", ...(style === "build_review" ? { fallbackFrom: "build_review" as const } : {}),
     slots: [{ slot: "builder", memberId: builder.id }],
   };
   return { style, slots: [{ slot: "builder", memberId: builder.id }, { slot: "reviewer", memberId: reviewer.id }] };
+}
+
+/** Who a Build and review preview leaves without a turn, and whether a
+ *  specialist has to build because the team has no builder — both read as
+ *  a nudge toward Pipeline, which gives every member a turn. */
+export function previewGaps(all: SlotMember[], preview: ReturnType<typeof previewSlots>): { skipped: string[]; specialistBuilder?: string } {
+  if (preview.style === "pipeline" || preview.style === "lead_led") return { skipped: [] };
+  const seated = new Set(preview.slots.map((slot) => slot.memberId));
+  const skipped = all.filter((m) => !m.onRequest && !seated.has(m.id)).map((m) => m.id);
+  const builderId = preview.slots.find((slot) => slot.slot === "builder")?.memberId;
+  const builder = all.find((m) => m.id === builderId);
+  const specialistBuilder = builder && SPECIALIST_ROLES.has(builder.role ?? "") && all.length > 1 ? builder.id : undefined;
+  return { skipped, ...(specialistBuilder ? { specialistBuilder } : {}) };
 }
 
 /**

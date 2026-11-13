@@ -3,7 +3,7 @@
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import type { CollaborationStyle } from "../types";
-import { COLLABORATION_STYLES, approvalSlotIndex, effectiveStyle, previewSlots, type SlotMember } from "../lib/collaborationStyle";
+import { COLLABORATION_STYLES, approvalSlotIndex, effectiveStyle, previewGaps, previewSlots, type SlotMember } from "../lib/collaborationStyle";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./ui/select";
 import { CollaborationStyleIcon } from "./CollaborationStyleBadge";
 import { CollaborationStyleDiagram } from "./CollaborationStyleDiagram";
@@ -108,9 +108,11 @@ export function CollaborationSlotPreview({ members, leadId, style, nameOf, appro
   /** The team's person approves the work before the final step. */
   approval?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const preview = previewSlots(members, leadId, style);
   const approvalAt = approvalSlotIndex(preview, approval);
+  const gaps = previewGaps(members, preview);
+  const skippedNames = new Intl.ListFormat(i18n.language, { type: "conjunction" }).format(gaps.skipped.map(nameOf));
   // Lead-led closes on the lead again; name that step for what it does.
   // A pipeline step is "a member"; its role is what tells the steps apart.
   const roleOf = (id: string) => members.find((member) => member.id === id)?.role;
@@ -153,6 +155,8 @@ export function CollaborationSlotPreview({ members, leadId, style, nameOf, appro
     {approvalAt !== null ? <p className="collab-style-loop">
       {t("collab_style.approval_loop", { next: nameOf(preview.slots[approvalAt].memberId) })}
     </p> : null}
-    {preview.fallbackFrom ? <p className="collab-style-loop">{t("collab_style.fallback_solo")}</p> : null}
+    {gaps.specialistBuilder ? <p className="collab-style-loop">{t("collab_style.specialist_builds", { name: nameOf(gaps.specialistBuilder) })}</p> : null}
+    {gaps.skipped.length ? <p className="collab-style-loop">{t("collab_style.members_skipped", { count: gaps.skipped.length, names: skippedNames })}</p>
+      : preview.fallbackFrom ? <p className="collab-style-loop">{t("collab_style.fallback_solo")}</p> : null}
   </div>;
 }

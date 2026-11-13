@@ -15,6 +15,9 @@
     "slot_lead": "负责人",
     "slot_member": "成员",
     "fallback_solo": "添加第二名成员以启用评审。",
+    "members_skipped_one": "{{names}} 在「构建与评审」中不会轮到。流水线会让每位成员都轮到一次。",
+    "members_skipped_other": "{{names}} 在「构建与评审」中不会轮到。流水线会让每位成员都轮到一次。",
+    "specialist_builds": "团队里没有软件工程师或缺陷修复工程师，因此由 {{name}} 负责构建。流水线能让每位成员各司其职。",
     "task_label": "协作方式",
     "composer_label": "协作方式",
     "turn_builder": "构建者",
@@ -26,7 +29,7 @@
     "turn_researcher": "调研分析师",
     "turn_designer": "交互设计师",
     "turn_writer": "技术文档工程师",
-    "turn_devops": "运维工程师",
+    "turn_devops": "DevOps 工程师",
     "turn_lead": "负责人",
     "turn_lead_summary": "负责人 · 汇总",
     "review_cycle": "评审第 {{cycle}} 轮，共 {{max}} 轮",
@@ -211,7 +214,7 @@
       "researcher": "调研分析师",
       "designer": "交互设计师",
       "writer": "技术文档工程师",
-      "devops": "运维工程师",
+      "devops": "DevOps 工程师",
       "project_manager": "项目负责人"
     },
     "unclassified": "未分类",
@@ -1442,7 +1445,7 @@
         "researcher": "调研分析师",
         "designer": "交互设计师",
         "writer": "技术文档工程师",
-        "devops": "运维工程师"
+        "devops": "DevOps 工程师"
       },
       "section_runtime": "运行时",
       "runtime_placement": "部署",
@@ -2497,6 +2500,17 @@
     "sort_option_descending": "{{column}} ↓",
     "pagination_range_compact": "第 {{page}}/{{pageCount}} 页 · 共 {{total}} 项"
   },
+  "role_hints": {
+    "researcher": "在规划之前查清事实，给出可选方案。",
+    "planner": "规划做法，划定边界。",
+    "designer": "在构建之前确定流程、界面和各种状态。",
+    "implementer": "实现改动。",
+    "fixer": "复现并修复缺陷。",
+    "tester": "验证成果，报告失败项。",
+    "writer": "为读者写好结果的文档。",
+    "devops": "让改动上线：配置、流水线、部署与回滚。",
+    "reviewer": "评审完成的工作，通过或要求修改。"
+  },
   "team_work": {
     "responsibilities": "角色与职责",
     "help": "明确工作归属。团队完成前，所有必需贡献都必须通过验收。",
@@ -2509,7 +2523,7 @@
     "role_researcher": "调研分析师",
     "role_designer": "交互设计师",
     "role_writer": "技术文档工程师",
-    "role_devops": "运维工程师",
+    "role_devops": "DevOps 工程师",
     "responsibility": "职责范围",
     "scope_example": "负责 API 及其测试",
     "outputs": "预期产出",
