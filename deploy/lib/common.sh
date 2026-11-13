@@ -44,6 +44,7 @@ load_config() {
   : "${COOKIE_DOMAIN:=.${CLOUDFLARE_ZONE}}"
   : "${DEPLOY_TIMEOUT_SECONDS:=1200}"
   : "${DEPLOY_POLL_SECONDS:=10}"
+  : "${RESTART_HEALTH_SECONDS:=120}"
   WEB_ORIGIN="https://${WEB_DOMAIN}"
   API_ORIGIN="https://${API_DOMAIN}"
 }

@@ -60,6 +60,8 @@ deploy/deploy.sh release     # deploy the API, then the background worker, then 
 deploy/deploy.sh verify      # probe the live hostnames
 deploy/deploy.sh mail        # check the invite email token and sender (also run by verify)
 deploy/deploy.sh agent-ids   # read Computer ID migration status from backend startup logs
+deploy/deploy.sh status      # check every service's deployment and probe the hostnames
+deploy/deploy.sh restart     # restart the API, worker, and Railway web UI (see below)
 deploy/deploy.sh region      # move Postgres and the services to RAILWAY_REGION (see below)
 ```
 
@@ -98,6 +100,27 @@ pending records, missing status logs, or no recent successful deployment.
 The result is a startup snapshot; daemon registration may repair records
 afterward. For a current read against an accessible database, run
 `relay check-agent-computer-ids` with that database's `DATABASE_URL`.
+
+### Status and restarts
+
+Railway calls a hung process `SUCCESS`: its `ON_FAILURE` restart policy only
+fires when the process exits, and the health check runs only during a deploy.
+So `deploy.sh status` does not trust deployment status alone. For each service
+— Postgres, the API, the worker, and a Railway-hosted web UI — it shows the
+serving deployment and how long ago it last logged, and it probes the API at
+`/api/v1/auth/status` (and the Railway web UI at `/`). It exits nonzero when a
+service has no running deployment, has crashed, or its hostname does not
+answer 200. A hung API looks like a 502 here, with Railway's HTTP logs
+reporting `connection dial timeout` to the instance.
+
+`deploy.sh restart` restarts the API, then the worker, then a Railway-hosted
+web UI, waiting for each to come back. Name services to restart only those:
+`deploy.sh restart backend`, `worker`, `web`, or `postgres` (Postgres is
+restarted only when named, since the API is offline while it comes back). A
+restart keeps the same instance; if Railway refuses it, or the API still does
+not answer within `RESTART_HEALTH_SECONDS` (default 120), the script redeploys
+the same build, which starts a fresh instance and reruns the pre-deploy
+migrations. It never deploys a new commit — that is `release`.
 
 ## The web UI Worker
 
