@@ -16,6 +16,7 @@ from ...computer.transport import record_transport, transport_diagnostics
 from ...core.computer_identity import computer_id
 from ...computer.access import actor_may_manage_computer
 from ...core.models import DaemonNodeRegistration
+from ...core.repeat_log import RepeatedFailureLog
 from ...daemon_registry.runs.reports import ReportPredecessorMissing
 from ...daemon_registry.records import (
     CommandEventMismatchError,
@@ -58,6 +59,9 @@ MAX_ACTIVE_COMMAND_IDS = 50
 # notification), so this bounds the recovery wait for that case; the
 # recovery read revalidates liveness and checks the durable queue.
 COMMAND_NOTIFICATION_RECOVERY_SECONDS = 2.0
+# A daemon replays a failed event from its outbox until it lands: log the
+# first failure per (node, run, event type) in full and the rest as counts.
+_event_failures = RepeatedFailureLog()
 # Notifications deliver commands immediately. With a healthy bridge, reserve
 # periodic reads for missed wakes; liveness and lease bounds still cap the wait.
 COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS = 6.0
@@ -541,11 +545,15 @@ async def daemon_events(
         raise HTTPException(404, "Daemon node not found.") from error
     except Exception as error:  # noqa: BLE001 - any 5xx is retried from the daemon's durable outbox, so no event is lost
         transient = is_transient_store_fault(error)
-        logger.exception(
+        _event_failures.failure(
             "Daemon node event failed",
+            (sandbox_id, event.get("runId"), event.get("type"), type(error).__name__),
+            error,
             sandbox_id=sandbox_id,
             event_type=event.get("type"),
             run_id=event.get("runId"),
+            session_id=event.get("sessionId"),
+            command_id=event.get("commandId"),
             transient=transient,
         )
         # 503 says "try again soon"; 500 says the backend has a bug. Both stay

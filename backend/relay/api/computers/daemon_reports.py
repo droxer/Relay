@@ -7,8 +7,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
-from loguru import logger
 
+from ...core.repeat_log import RepeatedFailureLog
 from ...daemon_registry.records import CommandEventMismatchError, DeletedDaemonNodeError, UnknownDaemonNodeError
 from ...daemon_registry.runs.reports import ReportPredecessorMissing
 from ...persistence.daemon.reports import ReportReceiptConflict
@@ -18,6 +18,8 @@ from ..deps import AppContextDep
 from .daemon_events import daemon_node_event
 
 router = APIRouter()
+# A failed group is retried from the daemon's outbox until it lands.
+_group_failures = RepeatedFailureLog()
 
 
 def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: list[dict[str, str]]) -> list[dict[str, Any]]:
@@ -72,8 +74,15 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
         except CommandEventMismatchError as error:
             group_receipts = [{'id': report['id'], 'digest': report['digest'], 'status': 409,
                                'detail': str(error)} for report, _event in group]
-        except Exception:  # noqa: BLE001 - a failed transaction rolls back this stream; unrelated report groups must still progress
-            logger.exception('Durable report group failed', node_id=sandbox_id, session_id=session_id)
+        except Exception as error:  # noqa: BLE001 - a failed transaction rolls back this stream; unrelated report groups must still progress
+            first = group[0][1]
+            _group_failures.failure(
+                'Durable report group failed',
+                (sandbox_id, first.get('runId'), first['type'], type(error).__name__),
+                error,
+                node_id=sandbox_id, session_id=session_id, run_id=first.get('runId'),
+                command_id=first.get('commandId'), event_type=first['type'],
+            )
             for _report, event in group:
                 registry.output_sequences.pop(event['runId'], None)
                 registry.output_sequences_hydrated.discard(event['runId'])

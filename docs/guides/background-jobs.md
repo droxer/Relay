@@ -135,8 +135,12 @@ do not reapply the initial schema over an existing installation. Vendor SQL
 is available under the installed `procrastinate/sql/migrations/` directory.
 
 Procrastinate writes worker/job logs through Relay's standard logging setup
-and maintains worker heartbeats in `procrastinate_workers`. Useful read-only
-operator queries (using the same search path) are:
+and maintains worker heartbeats in `procrastinate_workers`. The per-tick lines
+of a periodic job — deferred, loaded, started, succeeded — render at `DEBUG`
+so a busy worker does not drown the platform's log pipeline; worker start,
+stop, and job failures keep their own level. Set `RELAY_LOG_LEVEL=DEBUG` when
+you need a tick-by-tick trace. Useful read-only operator queries (using the
+same search path) are:
 
 ```sql
 SELECT id, last_heartbeat FROM procrastinate_workers;
