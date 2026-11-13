@@ -1,8 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { ThreadRow } from "../src/components/ThreadRow";
-import type { RelaySession } from "../src/types";
+import type { RelaySession, RelayTaskListItem, SessionSummary } from "../src/types";
 import type { ThreadItem } from "../src/lib/threads";
+import { groupThreads } from "../src/lib/threadGroups";
+import { mergeSessionSummaries } from "../src/lib/sessionPollMerge";
 
 // The shared setup's `t` drops interpolation; this file asserts the name that
 // fills `{{agent}}`, so its `t` keeps it.
@@ -39,6 +41,22 @@ function renderRow(item: ThreadItem, tone: "attn" | "run" | "idle", layout: "ful
   );
   return container;
 }
+
+it("keeps a done task's summary row out of needsYou with no waiting subline", () => {
+  const [thread] = mergeSessionSummaries([], [{
+    ...session("done-task", "completed"), workOutcome: "blocked",
+    eventCount: 10, runCount: 1, artifactCount: 0,
+  } as SessionSummary]);
+  const tasks = [{ id: "task", status: "done", linkedSessionIds: [thread.id] }] as RelayTaskListItem[];
+  const item: ThreadItem = { session: thread, origin: { kind: "backlog", taskId: "task", title: "Task", status: "done" } };
+  const groups = groupThreads([item], tasks);
+  expect(groups.needsYou).toHaveLength(0);
+  expect(groups.idle).toEqual([item]);
+  const container = renderRow(groups.idle[0], "idle");
+  expect(container.querySelector(".task-status-icon")?.getAttribute("data-status")).toBe("done");
+  expect(container.querySelector(".conversation-status")).toBeNull();
+  expect(container.textContent).not.toContain("thread.statuses.waiting_for_human");
+});
 
 it("marks a task thread's state, including when it is settled", () => {
   for (const [status, iconStatus] of [
