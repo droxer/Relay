@@ -753,6 +753,9 @@ export function ThreadsView({
           queue={queueEnabled ? (
             <MessageQueue
               messages={threadQueue.messages}
+              recipientNames={Object.fromEntries([...logicalAgents.map(agent => [agent.id, agent.displayName]), ...composerTeams.map(team => [team.id, team.name])])}
+              undoAvailable={threadQueue.undoAvailable}
+              onUndo={threadQueue.undoRemove}
               pending={threadQueue.pending}
               paused={threadQueue.paused}
               waiting={threadQueue.waiting}

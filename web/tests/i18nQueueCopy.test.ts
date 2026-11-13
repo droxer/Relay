@@ -22,21 +22,21 @@ function queue(locale: string): Array<[string, string]> {
 
 /* The queue dock labels its rows in both languages, so an English-only key
    showed "Steer" in the Chinese dock. Every action here must be translated. */
-describe("Queue copy", () => {
+for (const locale of ["zh-CN", "zh-TW"]) describe(`Queue copy (${locale})`, () => {
   const english = queue("en");
-  const chinese = queue("zh-CN");
+  const chinese = queue(locale);
   const chineseKeys = new Set(chinese.map(([key]) => key));
 
-  it("gives every English label a Simplified Chinese counterpart", () => {
+  it("gives every English label a counterpart in the selected Chinese locale", () => {
     const missing = english
       .filter(([key]) => !PLURAL_SUFFIX.test(key) && !chineseKeys.has(key))
       .map(([key]) => key);
     assert.deepEqual(missing, []);
   });
 
-  it("leaves no English-only label in Simplified Chinese", () => {
+  it("leaves no English-only label in the selected Chinese locale", () => {
     const untranslated = chinese
-      .filter(([, value]) => !HAN.test(value) || ENGLISH_WORD.test(value.replace(/\{\{[^}]*\}\}/g, "")))
+      .filter(([, value]) => (/\p{Letter}/u.test(value) && !HAN.test(value)) || ENGLISH_WORD.test(value.replace(/\{\{[^}]*\}\}/g, "")))
       .map(([key, value]) => `${key}: ${value}`);
     assert.deepEqual(untranslated, []);
   });

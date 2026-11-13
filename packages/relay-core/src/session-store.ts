@@ -299,7 +299,8 @@ export interface ExecutionStatus {
 }
 
 export interface ThreadMessageQueue {
-  messages: { id: string; text: string; addressAgentIds?: string[] }[];
+  messages: { id: string; text: string; addressAgentIds?: string[]; addressTeamId?: string }[];
+  removed?: { message: ThreadMessageQueue["messages"][number]; beforeId: string | null };
   paused: boolean;
   sending?: string;
   leaseUntil?: string;
