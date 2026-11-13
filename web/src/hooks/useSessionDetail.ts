@@ -17,6 +17,9 @@ const SESSIONS_KEY = ["relay", "sessions"] as const;
  * not runs or rounds, so they would otherwise read stale until the stream
  * returns. A disconnected live thread also reconciles every 15 seconds,
  * and a settled thread every minute, since older pages are not polled.
+ * Queued and unsettled execution notices also reconcile while SSE is connected:
+ * command pickup, lease renewal, and finalization can change execution truth
+ * without changing session status or emitting a new conversation event.
  */
 export function useSessionDetail(sessionId: string | undefined, enabled: boolean) {
   const queryClient = useQueryClient();
@@ -46,7 +49,11 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
       const fallbackDue = !isSessionStreamConnected()
         && Date.now() - hydratedAt >= (isTerminalSessionStatus(cached?.status)
           ? 60_000 : RELAY_POLL_INTERVALS_MS.sessionsWhileStreaming);
-      if (hydratedStatus !== undefined && cached?.status === hydratedStatus && !trails && !fallbackDue) return;
+      const executionPhase = cached?.execution?.phase;
+      const executionDue = executionPhase !== undefined
+        && executionPhase !== "running" && executionPhase !== "terminal"
+        && Date.now() - hydratedAt >= RELAY_POLL_INTERVALS_MS.sessions;
+      if (hydratedStatus !== undefined && cached?.status === hydratedStatus && !trails && !fallbackDue && !executionDue) return;
       pending = true;
       try {
         const snapshot = await getSession(sessionId, controller.signal);

@@ -37,6 +37,24 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
     delete next.execution;
   }
 
+  // agent.started can precede command delivery. Actual output or a permission
+  // prompt proves this run has left the queue, even if a polled lifecycle
+  // summary still says queued. Do not override stop/recovery state or let
+  // replayed output from an older run advance a newly admitted request.
+  const progressRunId = event.type === "agent.output" || event.type === "agent.output.batch"
+    ? event.runId
+    : event.type === "agent.permission_requested" ? event.request.runId : undefined;
+  if (next.execution?.phase === "queued" && progressRunId
+    && next.agentRuns.some(run => run.id === progressRunId && run.status === "running")
+    && (!next.execution.queuedAt || Date.parse(event.timestamp) >= Date.parse(next.execution.queuedAt))) {
+    next.execution = {
+      ...next.execution,
+      phase: "running",
+      blockingReason: "execution_active",
+      queuedAt: null,
+    };
+  }
+
   switch (event.type) {
     case "session.queue": return { ...next, messageQueue: event.queue };
     case "collaboration.round.started": {
