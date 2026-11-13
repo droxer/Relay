@@ -76,7 +76,7 @@ make backend-migrate
 创建第一个管理员账户（没有默认密码）：
 
 ```bash
-script/init_users.sh --password 'choose-a-strong-password'
+script/init_users.sh --email 'admin@example.com' --password 'choose-a-strong-password'
 ```
 
 ### 3. 启动服务

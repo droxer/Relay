@@ -64,7 +64,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
         aria-labelledby="login-form-title"
         onSubmit={(event) => void handleLogin(event)}
       >
-        <Field className="login-field" label={t("login.username")}>
+        <Field className="login-field" label={t("login.username_or_email")}>
           <Input
             className="login-input"
             name="username"

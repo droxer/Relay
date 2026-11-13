@@ -80,7 +80,7 @@ make backend-migrate
 Create the first admin account (there is no default password):
 
 ```bash
-script/init_users.sh --password 'choose-a-strong-password'
+script/init_users.sh --email 'admin@example.com' --password 'choose-a-strong-password'
 ```
 
 ### 3. Start the services

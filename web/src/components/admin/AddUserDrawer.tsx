@@ -19,6 +19,7 @@ import {
 } from "../../lib/computerLimits";
 import { isValidUserHandle, normalizeUserHandle } from "../../lib/userHandle";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, passwordProblem } from "../../lib/passwordPolicy";
+import { emailProblem } from "../../lib/email";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import {
   Select,
@@ -67,6 +68,7 @@ export function AddUserDrawer({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{
     userId?: string;
+    email?: string;
     username?: string;
     password?: string;
     maxLocalComputers?: string;
@@ -74,6 +76,7 @@ export function AddUserDrawer({
   }>({});
   const [isBusy, setIsBusy] = useState(false);
   const userIdRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const limitRef = useRef<HTMLInputElement>(null);
@@ -108,7 +111,7 @@ export function AddUserDrawer({
     setIsBusy(false);
   });
 
-  function clearFieldError(field: "userId" | "username" | "password" | "maxLocalComputers" | "taskCapacity") {
+  function clearFieldError(field: "userId" | "email" | "username" | "password" | "maxLocalComputers" | "taskCapacity") {
     setFieldErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
   }
 
@@ -120,6 +123,8 @@ export function AddUserDrawer({
     else if (!isValidUserHandle(nextUserId)) {
       nextFieldErrors.userId = t("admin.v2.user_id_invalid");
     }
+    const emailErr = emailProblem(email);
+    if (emailErr) nextFieldErrors.email = t(`admin.v2.email_${emailErr}`);
     if (!username.trim()) nextFieldErrors.username = t("admin.username_required");
     if (!password) nextFieldErrors.password = t("admin.password_required");
     else {
@@ -155,13 +160,15 @@ export function AddUserDrawer({
     // returned early with focus parked on Submit and the message off-screen.
     const firstInvalid = nextFieldErrors.userId
       ? userIdRef
-      : nextFieldErrors.username
-        ? usernameRef
-        : nextFieldErrors.password
-          ? passwordRef
-          : nextFieldErrors.maxLocalComputers
-            ? limitRef
-            : nextFieldErrors.taskCapacity ? taskCapacityRef : null;
+      : nextFieldErrors.email
+        ? emailRef
+        : nextFieldErrors.username
+          ? usernameRef
+          : nextFieldErrors.password
+            ? passwordRef
+            : nextFieldErrors.maxLocalComputers
+              ? limitRef
+              : nextFieldErrors.taskCapacity ? taskCapacityRef : null;
     if (firstInvalid) {
       firstInvalid.current?.focus();
       return;
@@ -175,14 +182,14 @@ export function AddUserDrawer({
         username: username.trim(),
         password,
         nodeId: selectedNodeId || undefined,
-        email: email.trim() || undefined,
+        email: email.trim(),
         displayName: displayName.trim() || undefined,
         ...(parsedLimit !== null ? { maxLocalComputers: parsedLimit } : {}),
         ...(capacity != null ? { maxConcurrentTasks: capacity } : {}),
       });
       onSuccess(result);
     } catch (err) {
-      setError(t("admin.v2.add_user_error", { message: err instanceof Error ? err.message : String(err) }));
+      setError(t("admin.v2.add_user_error", { message: err instanceof Error && err.message === "An account with this email already exists." ? t("admin.v2.email_taken") : err instanceof Error ? err.message : String(err) }));
     } finally {
       setIsBusy(false);
     }
@@ -251,16 +258,27 @@ export function AddUserDrawer({
               />
             </Field>
 
-            <Field label={t("admin.email")} optional={t("admin.v2.optional")}>
+            <Field
+              label={t("admin.email")}
+              required
+              error={fieldErrors.email}
+              errorId="add-user-email-error"
+            >
               <Input
+                ref={emailRef}
                 name="email"
                 className="code"
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  clearFieldError("email");
+                }}
                 autoComplete="off"
                 spellCheck={false}
                 placeholder={t("admin.v2.placeholder_email")}
+                aria-invalid={Boolean(fieldErrors.email) || undefined}
+                aria-describedby={fieldErrors.email ? "add-user-email-error" : undefined}
               />
             </Field>
           </div>

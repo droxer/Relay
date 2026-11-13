@@ -43,7 +43,7 @@ export function updateUserPreferences(input: { theme?: Theme; language?: Languag
   });
 }
 
-export function bootstrapUser(input: { token: string; username: string; password: string }): Promise<{ user: CurrentUser }> {
+export function bootstrapUser(input: { token: string; username: string; password: string; email: string }): Promise<{ user: CurrentUser }> {
   return apiJson<{ user: CurrentUser }>("/auth/bootstrap", {
     method: "POST",
     body: input,
