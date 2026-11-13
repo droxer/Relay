@@ -412,8 +412,8 @@
   flex-shrink: 0;
 }
 
-/* Task and automation rows retain a lifecycle pip. Standalone chats show
-   one only for live activity or something that needs attention. */
+/* Task and automation rows retain a lifecycle pip. Standalone conversations
+   use their own labelled activity badge. */
 
 /* The live pip breathes in place instead of wearing the shared halo, which
    rides 5px proud of the dot and has no room on a title line. Drawing in and

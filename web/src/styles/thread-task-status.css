@@ -1,3 +1,14 @@
+/* Conversations use a chat silhouette and a text badge; task threads keep
+   their workflow rings. Fixed chrome leaves long titles room to ellipsize. */
+.thread-status-badge {
+  flex: none;
+  max-width: 12rem;
+}
+
+.conversation-topline > .thread-status-badge {
+  max-width: 8rem;
+}
+
 /* ===================== thread task status ==========================
    A task thread's status lives off the transcript: the header chip opens a
    popover (where it stands, its next move, its history here), and while the

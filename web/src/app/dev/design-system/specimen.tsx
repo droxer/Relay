@@ -37,6 +37,8 @@ import {
 import { SearchInput } from "@/components/ui/search-input";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { Markdown } from "@/components/Markdown";
+import { ThreadStatusBadge } from "@/components/ThreadStatusBadge";
+import type { RelaySession } from "@/types";
 import { StatusPill } from "@/components/StatusPill";
 import { paginate } from "@/lib/pagination";
 import { ActionRemove, ICON, NavPreferences } from "@/components/icons";
@@ -180,6 +182,16 @@ export function DesignSystemSpecimen() {
       <Badge variant="danger">Danger</Badge>
       <StatusPill value="running" />
       <StatusPill value="offline" />
+    </Section>
+
+    <Section title="Conversation status">
+      {(["ready", "queued", "running", "waiting_for_human", "stopping", "finalizing", "unresponsive", "recovery_required", "failed", "cancelled"] as const).map((state) => {
+        const session = {
+          status: ["waiting_for_human", "failed", "cancelled"].includes(state) ? state : "completed",
+          execution: { phase: ["ready", "waiting_for_human", "failed", "cancelled"].includes(state) ? "terminal" : state },
+        } as RelaySession;
+        return <ThreadStatusBadge key={state} session={session} compact />;
+      })}
     </Section>
 
     {/* ---- Consolidated chips ----
