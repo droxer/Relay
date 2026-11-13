@@ -99,6 +99,16 @@ describe("model selection on a computer", () => {
     assert.equal(computerCanSelectModel([{ ...live, id: "n1", status: "stopped" }], "device:alice:mac", "claude"), true);
   });
 
+  it("applies model capability and endpoint checks to running computers", () => {
+    const target = "device:alice:mac";
+    const running = { ...live, id: "n1", status: "running", customModelEndpoints: ["claude"] };
+    assert.equal(computerCanSelectModel([running], target, "claude"), false);
+    assert.equal(computerUsesCustomModelEndpoint([running], target, "claude"), true);
+    const capable = { ...running, capabilities: ["agent-model", "endpoint-models"] };
+    assert.equal(computerCanSelectModel([capable], target, "claude"), true);
+    assert.equal(computerUsesCustomModelEndpoint([capable], target, "claude"), false);
+  });
+
   it("flags a runtime its live node routes to a custom model endpoint", () => {
     const target = "device:alice:mac";
     const proxied = { ...live, id: "n1", customModelEndpoints: ["claude"] };

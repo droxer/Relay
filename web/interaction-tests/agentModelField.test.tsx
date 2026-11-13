@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
 import { AgentModelField } from "../src/components/agents/AgentModelField";
+import { computerReportedModels } from "../src/lib/createAgent";
 
 // A floating base-ui popup never settles under jsdom (see the popover/menu
 // stubs elsewhere), so only the floating layer is flattened; the root, input,
@@ -51,6 +52,22 @@ function renderField(initial: string, models?: readonly string[], customEndpoint
 function optionNames() {
   return screen.queryAllByRole("option").map((option) => option.textContent);
 }
+
+it.each(["ready", "running", "busy"])("offers a %s computer's reported models when browsing an empty field", async (status) => {
+  const user = userEvent.setup();
+  const models = computerReportedModels([{
+    id: "node-1", userId: "alice", workspaceId: "mac", status,
+    supportedAgents: ["codex"], capabilities: ["agent-model"],
+    agentModels: { codex: RUNTIME_MODELS },
+  }], "device:alice:mac", "codex");
+  renderField("", models);
+
+  await user.click(screen.getByRole("button", { name: "agents_page.model_browse" }));
+
+  await waitFor(() => expect(optionNames()).toEqual(RUNTIME_MODELS));
+  await user.click(screen.getByRole("option", { name: "gpt-5.6-terra" }));
+  expect((screen.getByRole("combobox") as HTMLInputElement).value).toBe("gpt-5.6-terra");
+});
 
 it("is one typeable field that holds the pinned id", () => {
   const input = renderField("gpt-6-luna", RUNTIME_MODELS);
