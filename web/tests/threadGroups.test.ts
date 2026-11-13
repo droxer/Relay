@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { groupThreads } from "../src/lib/threadGroups.js";
+import { mergeSessionSummaries } from "../src/lib/sessionPollMerge.js";
 import type { ThreadItem } from "../src/lib/threads.js";
-import type { AgentName, RelaySession, RelayTaskListItem } from "../src/types.js";
+import type { AgentName, RelaySession, RelayTaskListItem, SessionSummary } from "../src/types.js";
 
 function item(
   id: string,
@@ -66,6 +67,19 @@ describe("groupThreads", () => {
 });
 
 describe("groupThreads awaiting an answer", () => {
+  it("does not file a completed task's summary-only thread under needsYou", () => {
+    // The list omits collaboration rounds. Its old blocked result must not
+    // override the linked task's current lifecycle before detail is loaded.
+    const [session] = mergeSessionSummaries([], [{
+      ...item("a", "completed").session,
+      workOutcome: "blocked", eventCount: 10, runCount: 1, artifactCount: 0,
+    } as SessionSummary]);
+    const tasks = [{ id: "task_a", status: "done", isRoutine: false, linkedSessionIds: ["a"] }] as RelayTaskListItem[];
+    const groups = groupThreads([{ session }], tasks);
+    assert.deepEqual(groups.needsYou, []);
+    assert.deepEqual(groups.idle.map((entry) => entry.session.id), ["a"]);
+  });
+
   function settled(id: string, status: RelaySession["status"]): ThreadItem {
     const base = item(id, status);
     return { ...base, session: { ...base.session, workOutcome: "blocked" } };

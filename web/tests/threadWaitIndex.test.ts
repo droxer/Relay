@@ -8,7 +8,8 @@ import {
   threadWaitIndex,
 } from "../src/lib/awaitingInput.js";
 import { groupThreads } from "../src/lib/threadGroups.js";
-import type { RelaySession, RelayTaskListItem } from "../src/types.js";
+import { mergeSessionSummaries } from "../src/lib/sessionPollMerge.js";
+import type { RelaySession, RelayTaskListItem, SessionSummary } from "../src/types.js";
 
 type Awaiting = NonNullable<RelayTaskListItem["awaiting"]>;
 
@@ -86,6 +87,31 @@ describe("buildThreadWaitIndex", () => {
 });
 
 describe("threadWaitIndex", () => {
+  function summaryThread(): RelaySession {
+    return mergeSessionSummaries([], [{ ...session(), workOutcome: "blocked", eventCount: 10, runCount: 1, artifactCount: 0 } as SessionSummary])[0];
+  }
+  for (const status of ["done", "review", "running", "cancelled"] as const) {
+    it(`ignores a summary's historical blocked outcome when its linked task is ${status}`, () => {
+      const thread = summaryThread();
+      const tasks = [task({ status, awaiting: undefined })];
+      assert.equal(threadAwaitsHuman(thread, tasks), false);
+      assert.equal(awaitingInput(thread, tasks), null);
+    });
+  }
+
+  it("keeps summary-only threads waiting only in the room named by the task", () => {
+    const thread = summaryThread();
+    assert.equal(threadAwaitsHuman(thread, [task()]), true);
+    assert.equal(threadAwaitsHuman(thread, [task({ awaiting: wait({ sessionId: "other" }) })]), false);
+    assert.equal(threadAwaitsHuman(thread, [task({ awaiting: wait({ sessionId: undefined }) })]), true);
+  });
+
+  it("prefers the active round's task over another task linking the same thread", () => {
+    const thread = session({ workOutcome: "blocked" });
+    const tasks = [task({ id: "other", status: "done", awaiting: undefined }), task({ awaiting: wait({ sessionId: undefined }) })];
+    assert.equal(threadAwaitsHuman(thread, tasks), true);
+  });
+
   it("returns an index unchanged and remembers the one built for a list", () => {
     const tasks = [task()];
     const built = threadWaitIndex(tasks);
