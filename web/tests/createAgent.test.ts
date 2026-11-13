@@ -19,6 +19,10 @@ describe("create agent options", () => {
     );
   });
 
+  it("hides Kimi even when it is the only supported runtime", () => {
+    assert.deepEqual(runtimesForComputer([{ id: "n1", supportedAgents: ["kimi"] }], "node:n1"), []);
+  });
+
   it("shows the computer name and never substitutes its workspace path", () => {
     const named = { id: "node-1", displayName: "Build Cloud", workspacePath: "/workspace/build" };
     const unnamed = { id: "node-2", workspacePath: "/Users/alice/private-project" };

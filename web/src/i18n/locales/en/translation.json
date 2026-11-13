@@ -1962,7 +1962,7 @@
     "request_access": "Request access",
     "theme_to_light": "Switch to light theme",
     "theme_to_dark": "Switch to dark theme",
-    "runtimes": "Open source under Apache 2.0. Works with Codex, Claude Code, Pi, OpenCode, and Kimi.",
+    "runtimes": "Open source under Apache 2.0. Works with Codex, Claude Code, Pi, and OpenCode.",
     "page_title": "Relay — Put AI agents to work on your own computers",
     "headline": "Put AI agents to work on your own computers",
     "lede": "Install Relay on a laptop or a server, then hand work to agents and teams that run there. Follow their work and review results from your desktop or phone.",
@@ -2000,7 +2000,7 @@
     "principle_record_title": "One shared record",
     "principle_record_body": "Review requests, runs, generated files, and token usage together in the thread history. Give work scoped access to GitHub issue reads through Connections.",
     "principle_runtime_title": "Bring your runtimes",
-    "principle_runtime_body": "Codex, Claude Code, Pi, OpenCode, and Kimi run side by side. Relay MCP lets agents manage standalone tasks and automations; Project Leads can manage project work.",
+    "principle_runtime_body": "Codex, Claude Code, Pi, and OpenCode run side by side. Relay MCP lets agents manage standalone tasks and automations; Project Leads can manage project work.",
     "github": "GitHub",
     "oss_title": "Apache-2.0 licensed and self-hostable",
     "oss_body": "Relay is open source under Apache-2.0. Self-host the backend, connect your own computers, and follow development on GitHub.",
@@ -3161,13 +3161,13 @@
       "connected": "{{name}} is connected. Ready to run: {{runtimes}}.",
       "waiting": "Waiting for your computer to connect…",
       "limit": "Your organization manages computers. Ask an admin to assign you one, and this step completes automatically.",
-      "no_runtime": "{{name}} is connected but has no agent CLI ready. Install Codex, Claude Code, Pi, OpenCode, or Kimi, then refresh its runtimes.",
+      "no_runtime": "{{name}} is connected but has no agent CLI ready. Install Codex, Claude Code, Pi, or OpenCode, then refresh its runtimes.",
       "open_settings": "Open Computers"
     },
     "agent": {
       "label": "Create an agent",
       "title": "Create your first agent",
-      "body": "An agent is a named identity with its own role and instructions. It uses one runtime (Codex, Claude Code, Pi, OpenCode, or Kimi) on one of your computers.",
+      "body": "An agent is a named identity with its own role and instructions. It uses one runtime (Codex, Claude Code, Pi, or OpenCode) on one of your computers.",
       "create": "Create agent"
     },
     "thread": {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { isVisibleAgentRuntime } from "../../lib/agentRuntimeOrder";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -340,7 +341,7 @@ export function NodesView({ nodes, users, layout, onLayoutChange, onRevealCreden
         // Only runtimes the computer has: a search for "codex" should not
         // match a machine where Codex is not installed.
         ...Object.entries(node.agents)
-          .filter(([, status]) => status !== "unknown" && status !== "unavailable")
+          .filter(([agent, status]) => isVisibleAgentRuntime(agent) && status !== "unknown" && status !== "unavailable")
           .map(([agent]) => agent),
         userName,
       ]

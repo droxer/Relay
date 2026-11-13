@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { TokenUsageState } from "../../../hooks/useTokenUsage";
+import { isVisibleAgentRuntime } from "../../../lib/agentRuntimeOrder";
 import { formatChartDate } from "../../../lib/chartDate";
 import { formatCompact } from "../../../lib/compactNumber";
 import { ChartLegend, StackedBarChart, type ChartColumn } from "./StackedBarChart";
@@ -72,9 +73,9 @@ interface TokenUsageChartProps {
 export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChartProps) {
   const { t, i18n } = useTranslation();
   const numberFormat = new Intl.NumberFormat(i18n.language || undefined);
-  // Measured, not assumed: runtimes whose runs completed this week without
-  // reporting counts (Kimi; Pi in its text fallback).
+  // Runtimes whose runs completed this week without reporting counts.
   const unreported = (snapshot.unreportedRuns ?? [])
+    .filter(({ agent }) => isVisibleAgentRuntime(agent))
     .map(({ agent, runs }) => t("admin.v2.dash_tokens_unreported_item", {
       agent: agent.charAt(0).toUpperCase() + agent.slice(1),
       count: runs,

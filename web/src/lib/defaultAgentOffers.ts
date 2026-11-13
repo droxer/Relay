@@ -1,9 +1,10 @@
 import type { DefaultAgentOffer } from "../api-client/agents.ts";
 import { AGENT_NAMES, type AgentName } from "../types.ts";
+import { isVisibleAgentRuntime } from "./agentRuntimeOrder.ts";
 
 /**
  * The offer to ask about now: the first computer the person has not set
- * aside this session, keeping only runtimes this build can name. Setting an
+ * aside this session, keeping only runtimes offered by this UI. Setting an
  * offer aside (closing the dialog) is not an answer — it comes back on the
  * next load; only Create and Skip are remembered, server-side.
  */
@@ -13,7 +14,7 @@ export function nextDefaultAgentOffer(
 ): DefaultAgentOffer | null {
   for (const offer of offers) {
     if (setAside.has(offer.computerId)) continue;
-    const executorKinds = AGENT_NAMES.filter((kind) => offer.executorKinds.includes(kind));
+    const executorKinds = AGENT_NAMES.filter((kind) => isVisibleAgentRuntime(kind) && offer.executorKinds.includes(kind));
     if (executorKinds.length > 0) return { ...offer, executorKinds };
   }
   return null;
@@ -26,7 +27,7 @@ export function splitDefaultAgentAnswer(
   selected: ReadonlySet<AgentName>,
 ): { accept: AgentName[]; decline: AgentName[] } {
   return {
-    accept: offer.executorKinds.filter((kind) => selected.has(kind)),
-    decline: offer.executorKinds.filter((kind) => !selected.has(kind)),
+    accept: offer.executorKinds.filter((kind) => isVisibleAgentRuntime(kind) && selected.has(kind)),
+    decline: offer.executorKinds.filter((kind) => !isVisibleAgentRuntime(kind) || !selected.has(kind)),
   };
 }

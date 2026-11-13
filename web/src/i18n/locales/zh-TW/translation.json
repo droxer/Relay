@@ -1923,7 +1923,7 @@
     "request_access": "申請訪問",
     "theme_to_light": "切換到淺色主題",
     "theme_to_dark": "切換到深色主題",
-    "runtimes": "基於 Apache 2.0 開源，支援 Codex、Claude Code、Pi、OpenCode 和 Kimi。",
+    "runtimes": "基於 Apache 2.0 開源，支援 Codex、Claude Code、Pi 和 OpenCode。",
     "page_title": "Relay — 讓 AI 智慧體在你自己的電腦上工作",
     "headline": "讓 AI 智慧體在你自己的電腦上工作",
     "lede": "在筆記本或伺服器上安裝 Relay，將工作交給執行在那裡的智慧體或團隊。隨時通過桌面或手機跟進工作、審閱結果。",
@@ -1961,7 +1961,7 @@
     "principle_record_title": "一份共享記錄",
     "principle_record_body": "在對話歷史中集中檢視請求、執行過程、產出檔案和令牌用量。通過連線，為工作授予限定範圍的 GitHub 議題讀取許可權。",
     "principle_runtime_title": "沿用你的執行時",
-    "principle_runtime_body": "Codex、Claude Code、Pi、OpenCode 和 Kimi 可同時使用。智慧體可通過 Relay MCP 管理獨立任務和自動化，專案負責人可管理專案工作。",
+    "principle_runtime_body": "Codex、Claude Code、Pi 和 OpenCode 可同時使用。智慧體可通過 Relay MCP 管理獨立任務和自動化，專案負責人可管理專案工作。",
     "github": "GitHub",
     "oss_title": "Apache-2.0 許可，可自行部署",
     "oss_body": "Relay 基於 Apache-2.0 開源。自託管後端，接入你自己的電腦，並在 GitHub 上關注開發進展。",
@@ -3095,13 +3095,13 @@
       "connected": "{{name}} 已連線。可執行：{{runtimes}}。",
       "waiting": "正在等待你的電腦連線…",
       "limit": "你的組織統一管理電腦。請聯絡管理員為你分配一臺，此步驟會自動完成。",
-      "no_runtime": "{{name}} 已連線，但沒有就緒的智慧體 CLI。請安裝 Codex、Claude Code、Pi、OpenCode 或 Kimi，然後重新整理執行時。",
+      "no_runtime": "{{name}} 已連線，但沒有就緒的智慧體 CLI。請安裝 Codex、Claude Code、Pi 或 OpenCode，然後重新整理執行時。",
       "open_settings": "開啟電腦設定"
     },
     "agent": {
       "label": "建立智慧體",
       "title": "建立你的第一個智慧體",
-      "body": "智慧體有自己的名稱、角色和指令。它使用你的一臺電腦上的一個執行時（Codex、Claude Code、Pi、OpenCode 或 Kimi）來工作。",
+      "body": "智慧體有自己的名稱、角色和指令。它使用你的一臺電腦上的一個執行時（Codex、Claude Code、Pi 或 OpenCode）來工作。",
       "create": "建立智慧體"
     },
     "thread": {

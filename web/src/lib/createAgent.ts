@@ -1,4 +1,4 @@
-import { AGENT_RUNTIME_DISPLAY_ORDER } from "./agentRuntimeOrder.ts";
+import { AGENT_RUNTIME_DISPLAY_ORDER, isVisibleAgentRuntime } from "./agentRuntimeOrder.ts";
 
 /**
  * Pure option-derivation helpers for the create-agent form: grouping a
@@ -68,7 +68,7 @@ export function runtimesForComputer(nodes: NodeLike[], target: string): string[]
     for (const kind of node.supportedAgents ?? []) supported.add(kind);
     for (const kind of node.disabledAgents ?? []) disabled.add(kind);
   }
-  const available = [...supported].filter((kind) => !disabled.has(kind));
+  const available = [...supported].filter((kind) => isVisibleAgentRuntime(kind) && !disabled.has(kind));
   const displayOrder: readonly string[] = AGENT_RUNTIME_DISPLAY_ORDER;
   const rank = (kind: string) => {
     const index = displayOrder.indexOf(kind);
