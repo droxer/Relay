@@ -163,7 +163,11 @@ npm run test:py
 ```
 
 `test:py` uses `UV_CACHE_DIR=.uv-cache` so dependency downloads and builds stay
-inside the repository workspace.
+inside the repository workspace. The backend suite runs in parallel through
+pytest-xdist — `-n auto --dist loadfile` from `backend/pyproject.toml`, one
+worker per CPU with each file's tests kept on one worker. Add `-n0` for a serial
+run when debugging a failure that only reproduces under load, for example
+`npm run test:py -- -n0 backend/tests/api/test_auth.py`.
 
 Backend tests use real password hashing with 1,000 PBKDF2 rounds to avoid
 repeating the production CPU cost for every account fixture. Tests marked

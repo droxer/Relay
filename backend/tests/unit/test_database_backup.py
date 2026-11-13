@@ -180,6 +180,13 @@ LOCAL_POSTGRES = os.environ.get("RELAY_TEST_DATABASE_URL") or "postgresql+psycop
 
 @pytest.mark.postgres
 def test_real_pg_dump_produces_a_restorable_archive(tmp_path) -> None:
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        # The production backup dumps the whole server database. Other workers
+        # create and drop their own schemas in that same database (the Postgres
+        # stand-in and migration-drift tests), and a schema that vanishes
+        # mid-dump fails pg_dump, so this one needs the server to itself: run it
+        # with `-n0`.
+        pytest.skip("dumps the whole server database; rerun with -n0")
     if not shutil.which("pg_dump") or not shutil.which("pg_restore"):
         pytest.skip("pg_dump/pg_restore not installed")
     probe = subprocess.run(

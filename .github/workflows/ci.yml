@@ -177,4 +177,7 @@ jobs:
         working-directory: backend
         env:
           RELAY_TEST_STORE_BACKEND: postgres
-        run: uv run pytest tests/api/test_daemon_connection_e2e.py tests/api/test_daemon_report_e2e.py -q
+        run: |
+          uv run pytest tests/api/test_daemon_connection_e2e.py tests/api/test_daemon_report_e2e.py -q
+          # Dumps the whole server database, so it needs the server to itself.
+          uv run pytest tests/unit/test_database_backup.py -q -n0

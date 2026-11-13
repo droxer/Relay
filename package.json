@@ -16,8 +16,8 @@
     "test": "npm run test:security-dependencies && npm run test:ts && npm run test:py",
     "test:security-dependencies": "node --test tools/vendor/braces/test/*.cjs tools/vendor/deepmerge/test/*.cjs",
     "test:ts": "npm run build && node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js dist/web/tests/*.test.js && npm run test:react -w web",
-    "test:py": "UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest",
-    "test:integration": "npm run build && UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest -m integration",
+    "test:py": "UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest -c backend/pyproject.toml",
+    "test:integration": "npm run build && UV_CACHE_DIR=.uv-cache uv run --project backend --extra dev pytest -c backend/pyproject.toml -m integration",
     "web": "npm run dev -w web"
   },
   "overrides": {

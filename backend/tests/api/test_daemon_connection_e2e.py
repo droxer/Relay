@@ -43,8 +43,11 @@ def test_blackholed_poll_does_not_block_heartbeats_or_recovery(connection, monke
     h = connection
     # Shorten only the server's observation windows to test stale admission
     # without spending a minute idle. Requests and timestamps remain real.
+    # The window stays wide enough for the daemon's 1/5-of-it heartbeat when
+    # parallel workers compete for CPU; a 2s window made a scheduling stall of
+    # the daemon subprocess look like a dead computer.
     monkeypatch.setattr(config, "COMMAND_POLL_MAX_WAIT_SECONDS", 1)
-    monkeypatch.setattr(h.ctx.registry, "liveness_timeout_ms", 2000)
+    monkeypatch.setattr(h.ctx.registry, "liveness_timeout_ms", 6000)
     h.gate.fault = {"suffix": "/commands", "kind": "hold", "remaining": 100}
     eventually(lambda: any(entry.get("fault") == "hold" for entry in h.gate.requests))
     beats = len([entry for entry in h.gate.requests if entry["path"].endswith("/heartbeat")])
