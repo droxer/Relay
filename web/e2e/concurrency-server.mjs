@@ -59,7 +59,7 @@ try {
   if (!ready) throw new Error("Concurrency backend did not start");
   const bootstrap = await fetch(`${backendUrl}/api/v1/auth/bootstrap`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: "concurrency-e2e-bootstrap", username: "concurrency", password: "kestrel-vault-7719" }),
+    body: JSON.stringify({ token: "concurrency-e2e-bootstrap", username: "concurrency", email: "concurrency@example.com", password: "kestrel-vault-7719" }),
   });
   if (!bootstrap.ok) throw new Error(`Bootstrap failed: ${await bootstrap.text()}`);
   const cookie = bootstrap.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
