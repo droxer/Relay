@@ -322,6 +322,16 @@ class RunReaperMixin(RegistryState):
             raise
 
     def _recover_prepared_request(self, request: dict[str, Any]) -> None:
+        # Admission stages a follow-up before reopening its terminal Thread.
+        # Do not mistake that previous turn's status for this request's result.
+        # Reload after waiting: admission may already have linked a command.
+        with self.dispatch_lock, self.dispatch_scope([request["nodeId"]]):
+            current = self.daemon_store.get_run_request(request["id"])
+            if not current or current.get("status") != "prepared":
+                return
+            self._recover_prepared_request_unlocked(current)
+
+    def _recover_prepared_request_unlocked(self, request: dict[str, Any]) -> None:
         try:
             session = self.store.get_session_header(request["sessionId"])
         except KeyError:
