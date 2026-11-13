@@ -336,7 +336,7 @@ shows the reason and offers Resume to the owner.
 PATCH  /api/v1/threads/{id}                         { title } or { archived: true }
 POST   /api/v1/threads/{id}/cancellations
 GET    /api/v1/threads/{id}/queue                  durable follow-up queue
-POST   /api/v1/threads/{id}/queue                  { action, id?, text? }
+POST   /api/v1/threads/{id}/queue                  { action, id?, text?, addressAgentIds?, addressTeamId? }
 POST   /api/v1/threads/{id}/messages               { text, intent, addressAgentIds?, addressTeamId?, style?, userMessageId?, idempotencyKey? }
 POST   /api/v1/threads/{id}/recoveries             { kind, targetAgentId, mode, note?, idempotencyKey?, resume? }
 PUT    /api/v1/tasks/{id}/assignment
@@ -351,6 +351,14 @@ DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
 Full `GET /api/v1/threads` responses remain complete for the authenticated owner.
+
+Queue `enqueue` and `import` actions retain `addressAgentIds` or
+`addressTeamId` until dispatch, including when a message is promoted with
+Steer. A leading `@Agent` mention takes precedence over supplied Agent ids.
+Omitting both targets addresses the room, as for legacy queued messages.
+Targets are checked against current ownership, membership, and Placement at
+dispatch; an unavailable target pauses the queue rather than selecting another.
+
 The chat-service conversation list likewise returns the resolved owner's full
 open threads. Ownership and archive filtering occur in storage before event
 histories are loaded; neither list silently truncates records or replaces them
