@@ -138,7 +138,12 @@ class DeletedDaemonNodeError(Exception):
 class CommandEventMismatchError(PermissionError):
     """An authenticated daemon's event names a command, lease, or run that
     is not the one it holds. The node's credential is fine, so the wire
-    answers 409, never the 401 a daemon reads as revocation."""
+    answers 409 (503 for recoverable late output), never the 401 a daemon
+    reads as revocation."""
+
+
+class LateOutputLeaseMismatchError(CommandEventMismatchError):
+    """Retain late output for recovery without accepting an unverified lease."""
 
 
 def public_sandbox_record(sandbox: dict[str, Any]) -> dict[str, Any]:

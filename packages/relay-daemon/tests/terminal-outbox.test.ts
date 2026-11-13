@@ -205,6 +205,7 @@ for (const status of [400, 401, 403, 404, 409, 410, 422, 408, 429, 503]) {
         else { outbox.retain(event); await outbox.replay(send, "http://backend/events", "token"); }
         const retryable = [408, 429, 503].includes(status);
         assert.equal(outbox.pending().length, 1);
+        if (retryable) assert.equal(outbox.status().quarantined, 0, 'transient refusals must remain replayable');
         if (!retryable) {
           await outbox.flush();
           assert.equal(new TerminalOutbox(root).pending().length, 1);
@@ -215,6 +216,28 @@ for (const status of [400, 401, 403, 404, 409, 410, 422, 408, 429, 503]) {
     });
   }
 }
+
+test('retryable late-output lease refusal survives restart and replays without quarantine', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-late-lease-retry-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const event = { type: 'run.output', commandId: 'cmd', leaseId: 'original-lease', sequence: 0, text: 'late output' };
+  const outbox = new TerminalOutbox(root);
+  const response = await outbox.wrapFetch(async () => Response.json({
+    detail: 'Late output must match the completed command lease; retained for recovery.',
+  }, { status: 503, headers: { 'Retry-After': '1' } }))('http://backend/events', {
+    method: 'POST', body: JSON.stringify(event),
+  });
+  assert.equal(response.status, 503);
+  await outbox.flush();
+  const recovered = new TerminalOutbox(root);
+  assert.equal(recovered.status().quarantined, 0);
+  assert.equal(recovered.pending().length, 1);
+  await recovered.replay(async (_url, init) => {
+    assert.deepEqual(JSON.parse(String(init?.body)), { ...event, replayed: true });
+    return new Response('{}');
+  }, 'http://backend/events', 'token');
+  assert.equal(recovered.pending().length, 0);
+});
 
 test("output exposes durable completion while terminal retention is synchronous", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-write-behind-"));

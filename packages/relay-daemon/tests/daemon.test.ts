@@ -1922,6 +1922,64 @@ test("relay daemon completes a successful run whose output batch the backend rej
   assert.equal(existsSync(controlPath), false);
 });
 
+for (const batching of [false, true]) test(`cloud-latency output is acknowledged before completion (batching=${batching})`, { timeout: 8000 }, async t => {
+  const previousDrain = process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS;
+  delete process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS;
+  t.after(() => restoreEnv('RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS', previousDrain));
+  const root = mkdtempSync(join(tmpdir(), 'relay-cloud-drain-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  t.after(() => stop.abort());
+  const command = { ...runCommand('cloud-drain'), leaseId: 'cloud-lease', workspacePath: root };
+  let served = false;
+  let accepted = false;
+  let acceptedAtCompletion = false;
+  let completed: Extract<DaemonNodeEvent, { type: 'run.completed' }> | undefined;
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'cloud-drain', userId: 'alice', token: 'node_token',
+    workspacePath: root, stateDir: join(root, 'state'), logger: testLogger(), signal: stop.signal,
+    pollIntervalMs: 5, shutdownGraceMs: 50,
+    environment: { ...fakeEnvironment({ exec: async (_cmd, args, options) => {
+      if (!isInventoryProbe(args)) options?.stdoutRenderer?.('cloud output\n');
+      return { exit_code: 0, stdout: 'cloud output\n', stderr: '' };
+    } }), sandboxMode: 'boxlite' },
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/daemon-node-registrations')) return jsonResponse(batching ? {
+        heartbeat: { intervalMs: 6000, timeoutMs: 30000, features: ['durable-reports', 'report-batches'] },
+      } : {});
+      if (path.endsWith('/commands')) { const commands = served ? [] : [command]; served = true; return jsonResponse({ commands }); }
+      if (path.endsWith('/reports')) {
+        const { reports } = await jsonBody<{ reports: Array<{ id: string; digest: string; body: string }> }>(init);
+        await new Promise(resolve => setTimeout(resolve, 600));
+        if (reports.some(report => JSON.parse(report.body).type === 'run.output.batch')) accepted = true;
+        return jsonResponse({ receipts: reports.map(report => ({ id: report.id, digest: report.digest, status: 200 })) });
+      }
+      if (path.endsWith('/events')) {
+        const event = await jsonBody<DaemonNodeEvent>(init);
+        if (event.type === 'run.output.batch') {
+          await new Promise(resolve => setTimeout(resolve, 600));
+          accepted = true;
+        }
+        if (event.type === 'run.completed') {
+          completed = event;
+          acceptedAtCompletion = accepted;
+          setTimeout(() => stop.abort(), 0);
+        }
+        const headers = new Headers(init?.headers);
+        return new Response('{}', { headers: {
+          'X-Relay-Report-Id': headers.get('X-Relay-Report-Id') ?? '',
+          'X-Relay-Report-Digest': headers.get('X-Relay-Report-Digest') ?? '',
+        } });
+      }
+      return jsonResponse({});
+    },
+  });
+  assert.ok(completed, 'the successful agent must complete');
+  assert.equal(acceptedAtCompletion, true, 'completion must wait for backend acknowledgement');
+  assert.equal(completed.outputTruncated, undefined, 'ordinary cloud latency must not mark output truncated');
+});
+
 test("relay daemon completes a run whose output the backend keeps failing, and says so", async (t) => {
   // Incident 2026-10-23: the backend answered a run's first output batch with
   // 503 forever. The daemon retried silently and held the terminal event
@@ -6455,6 +6513,9 @@ for (const { batching, slowCapture } of [
   { batching: true, slowCapture: false },
   { batching: true, slowCapture: true },
 ]) test(`production output capture coalesces behind unacknowledged durable reports (batching=${batching}${slowCapture ? ', slow capture' : ''})`, async t => {
+  const previousDrain = process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS;
+  process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS = '250';
+  t.after(() => restoreEnv('RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS', previousDrain));
   if (slowCapture) {
     const retain = TerminalOutbox.prototype.retain;
     let delayedKey: string | undefined;

@@ -169,7 +169,7 @@ newer and `uv` are required for the backend.
   answers in time is withdrawn and the tool use denied, so a run never
   blocks a computer indefinitely.
 - Daemon output drain deadline: `RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS`
-  (default `30000`) — how long a finished run waits for its streamed output
+  (default `60000`) — how long a finished run waits for its streamed output
   to reach the backend before it reports its outcome anyway (flagged
   `outputTruncated`); undelivered output stays in the durable outbox and is
   replayed late. An event post the backend keeps failing logs

@@ -11,6 +11,7 @@ import { retryAfterMs } from "./transport-retry.js";
 import { durableWorkspaceLayout, requiredWorkspaceSubpath } from "./run-workspace.js";
 import { responseErrorDetail, transportErrorDetail } from "./http-error-detail.js";
 import { join, resolve, sep } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { DaemonNodeEvent, DaemonNodeRunCommand, AgentName, AgentState, CodexCollaborationEvent } from "relay-core";
 import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js";
 import { consumeRoundResult, readRoundResult } from "./round-result.js";
@@ -37,7 +38,7 @@ import { permissionPromptsApply, startPermissionBroker } from "./permission-brok
 import { permissionAdapterLaunch } from "./permission-adapters/index.js";
 import type { DaemonLogFields, DaemonLogger, DaemonExecutionEnvironment, WorkspaceExecution } from './index.js';
 import { commandLogFields, commandLeaseEventFields, runCancelledEvent } from './run-events.js';
-const DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS = 250;
+const DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS = 60_000;
 
 export async function executeCommand(
   backendUrl: string,
@@ -289,12 +290,21 @@ export async function executeCommand(
     // A finished run must not wait forever on a backend that keeps failing
     // its output: the terminal event, not the transcript, releases the run.
     const settleOutputPosts = async (): Promise<void> => {
-      if (!outputPostDrain) return;
+      if (!outputPostDrain && !hasPendingOutput(fetchFn, command.id)) return;
+      const waitForAcceptance = async (): Promise<void> => {
+        while (!outputDeliveryDeferred && !outputPostFailure && !outputBatchesRejected && !outputSignal.aborted) {
+          if (outputPostDrain) await outputPostDrain;
+          if (!hasPendingOutput(fetchFn, command.id)) return;
+          // Batched posts finish after local capture. Only outbox receipts
+          // prove that the backend accepted them, including on a slow link.
+          try { await delay(25, undefined, { signal: outputSignal }); } catch { return; }
+        }
+      };
       let timer: ReturnType<typeof setTimeout> | undefined;
       const deadline = new Promise<"timeout">((resolve) => {
         timer = setTimeout(() => resolve("timeout"), outputDrainTimeoutMs);
       });
-      const outcome = await Promise.race([waitForOutputPosts().then(() => "drained" as const), deadline]);
+      const outcome = await Promise.race([waitForAcceptance().then(() => "drained" as const), deadline]);
       clearTimeout(timer);
       if (outcome === "drained") return;
       outputDeliveryDeferred = true;
