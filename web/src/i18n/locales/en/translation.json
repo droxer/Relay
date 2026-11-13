@@ -479,6 +479,7 @@
     "delete_confirm": "Delete thread “{{name}}”?",
     "stop_and_delete": "Stop and delete",
     "delete_message": "Permanently deletes the thread, its history, and any task with no other thread. Automations are kept. Active work is stopped first, and deletion finishes once the computer confirms. This cannot be undone.",
+    "status_ready": "Ready",
     "execution_queued": "Queued",
     "execution_running": "Running",
     "execution_stopping": "Stopping agent",

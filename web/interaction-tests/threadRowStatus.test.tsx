@@ -77,13 +77,13 @@ it("marks a task thread's state, including when it is settled", () => {
   }
 });
 
-it("shows a blocked icon when the thread computer is unresponsive", () => {
+it("shows a conversation recovery badge when the computer is unresponsive", () => {
   const container = renderRow(
     { session: session("x", "running", { execution: { phase: "unresponsive" } as never }) },
     "run",
   );
-  const mark = container.querySelector(".task-status-icon");
-  expect(mark?.getAttribute("data-status")).toBe("blocked");
+  expect(container.querySelector(".task-status-icon")).toBeNull();
+  expect(container.querySelector(".thread-status-badge")?.getAttribute("data-state")).toBe("unresponsive");
 });
 
 it("keeps failure and cancellation status for task threads", () => {
@@ -101,7 +101,8 @@ it("never draws the state twice on one row", () => {
     { session: session("r", "running"), runningAgent: "claude" } as ThreadItem,
     "run",
   );
-  expect(container.querySelectorAll(".task-status-icon").length).toBe(1);
+  expect(container.querySelectorAll(".thread-status-badge").length).toBe(1);
+  expect(container.querySelector(".task-status-icon")).toBeNull();
   expect(container.querySelector(".conversation-subline")).toBeTruthy();
 });
 
@@ -118,17 +119,19 @@ it("names the running agent, never its executor kind", () => {
   expect(unnamed.querySelector(".conversation-status")?.textContent).toBe("thread.group_running");
 });
 
-it.each(["completed", "cancelled", "failed"])("shows a settled standalone %s thread as a chat without lifecycle status", (status) => {
+it.each(["completed", "cancelled", "failed"])("gives a settled standalone %s conversation its own badge", (status) => {
   const container = renderRow({ session: session("chat", status, { execution: { phase: "terminal" } as never }) }, "idle");
   expect(container.querySelector(".task-status-icon")).toBeNull();
+  expect(container.querySelector(".thread-status-badge")?.getAttribute("data-state")).toBe(status === "completed" ? "ready" : status);
   expect(container.querySelector(".conversation-status")).toBeNull();
   expect(container.querySelector(".conversation-subline")).toBeNull();
   expect(screen.getByRole("button", { name: /Thread chat/ }).getAttribute("aria-label")).not.toContain("thread.group_idle");
 });
 
-it("keeps project context without giving a standalone project chat a status", () => {
+it("keeps a conversation badge distinct from task status in nested project rows", () => {
   const container = renderRow({ session: session("project-chat", "cancelled", { projectId: "project" }), projectName: "Website" }, "idle", "nested");
   expect(container.querySelector(".task-status-icon")).toBeNull();
+  expect(container.querySelector(".thread-status-badge")?.getAttribute("data-state")).toBe("cancelled");
   expect(screen.getByRole("button", { name: /Thread project-chat/ }).getAttribute("aria-label")).not.toContain("thread.group_idle");
 });
 

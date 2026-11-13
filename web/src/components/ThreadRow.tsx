@@ -7,6 +7,7 @@ import {
 } from "./icons";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
+import { ThreadStatusBadge, threadStatusLabelKey } from "./ThreadStatusBadge";
 import { TaskStatusIcon } from "./TaskStatusIcon";
 import { OfflineBadge } from "./OfflineBadge";
 import type { RelaySession, TaskStatus } from "../types";
@@ -62,15 +63,12 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const tone = executionPhase === "unresponsive" || executionPhase === "recovery_required" ? "err"
     : queued ? "queued"
     : executionPhase && ["stopping", "finalizing"].includes(executionPhase) ? "attn" : suppliedTone;
-  // A standalone thread is an ongoing chat. Only linked work has a
-  // persistent lifecycle; chats show a signal while something is happening.
+  // Linked tasks retain their workflow icons; conversations have their own badge.
   const hasLifecycle = Boolean(item.origin);
-  const showState = hasLifecycle || tone !== "idle";
   const label = threadLabel(session);
   const stamp = formatThreadStamp(session.updatedAt, i18n.language, now);
   const offlineLabel = item.nodeOffline ? t("thread.node_offline") : "";
-  // Linked work uses the task lifecycle, which can remain in Review after
-  // its execution has finished. Chats use the same glyphs for live activity.
+  // Task lifecycle can remain in Review after execution has finished.
   const iconStatus: TaskStatus = item.origin?.status ?? (
     tone === "err" || session.status === "failed" ? "blocked"
       : queued ? "queued"
@@ -78,12 +76,11 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       : tone === "run" ? "running"
       : session.status === "cancelled" ? "cancelled" : "done"
   );
-  const stateLabel = item.origin?.status ? t(`backlog.statuses.${item.origin.status}`) :
-    executionPhase && executionPhase !== "terminal" ? t(`thread.execution_${executionPhase}`) : tone === "attn"
-      ? t("thread.group_needs_you")
-      : tone === "run"
-        ? t("thread.group_running")
-        : hasLifecycle ? t("thread.group_idle") : "";
+  const stateLabel = item.origin?.status ? t(`backlog.statuses.${item.origin.status}`)
+    : !hasLifecycle ? t(threadStatusLabelKey(session))
+    : executionPhase && executionPhase !== "terminal" ? t(`thread.execution_${executionPhase}`)
+    : tone === "attn" ? t("thread.group_needs_you")
+    : tone === "run" ? t("thread.group_running") : t("thread.group_idle");
   const projectName = item.projectName ?? session.projectId;
   const projectLabel = projectName ? t("thread.project_indicator", { name: projectName }) : "";
   // A backlog task's thread inside a project already carries the project
@@ -166,7 +163,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       >
         <span className="conversation-copy">
           <span className="conversation-topline">
-            {showState ? <TaskStatusIcon status={iconStatus} /> : null}
+            {hasLifecycle ? <TaskStatusIcon status={iconStatus} /> : <ThreadStatusBadge session={session} compact />}
             <span className="conversation-name">
               <strong title={label}>{label}</strong>
               {/* A property of the thread itself, so it rides the title and

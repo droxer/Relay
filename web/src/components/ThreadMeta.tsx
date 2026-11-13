@@ -12,6 +12,7 @@ import type { DaemonNodeMonitorRecord, UserAgent, RelaySession, TaskStatus } fro
 import { AvatarStack } from "./AvatarStack";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
+import { ThreadStatusBadge } from "./ThreadStatusBadge";
 import { TaskStatusIcon } from "./TaskStatusIcon";
 import { ICON, NavProjects, NodeOwnershipIcon } from "./icons";
 
@@ -78,7 +79,7 @@ export function ThreadMeta({
 
   return (
     <div className="thread-meta" aria-label={t("thread.band_label")}>
-      {task ? <TaskChip task={task}>{taskStatus}</TaskChip> : null}
+      {task ? <TaskChip task={task}>{taskStatus}</TaskChip> : <ThreadStatusBadge session={session} />}
       {project ? (
         <ProjectChip project={project} onOpen={onOpenProject} />
       ) : null}
