@@ -22,10 +22,10 @@ from user_ids import user_id
 from datetime import UTC
 
 ALICE = user_id("alice")
-# The default lease policy: a 30 s window, beats every fifth of it.
+# The default lease policy: a 60 s window, beats every fifth of it.
 HEARTBEAT_POLICY = {
-    "intervalMs": 6_000,
-    "timeoutMs": 30_000,
+    "intervalMs": 12_000,
+    "timeoutMs": 60_000,
     "features": ["poll-liveness", "state", "durable-reports", "transport-status", "report-batches", "admission-retry"],
 }
 BOB = user_id("bob")
@@ -236,8 +236,8 @@ def test_daemon_heartbeat_is_authenticated_and_returns_lease_policy(
 
         assert response.status_code == 200
         heartbeat = response.json()["heartbeat"]
-        assert heartbeat["intervalMs"] == 6_000
-        assert heartbeat["timeoutMs"] == 30_000
+        assert heartbeat["intervalMs"] == 12_000
+        assert heartbeat["timeoutMs"] == 60_000
         assert heartbeat["features"] == ["poll-liveness", "state", "durable-reports", "transport-status", "report-batches", "admission-retry"]
         assert heartbeat["observedAt"]
         assert (
