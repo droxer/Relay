@@ -163,8 +163,11 @@ def next_fire_after(schedule: dict[str, Any], after: datetime) -> datetime | Non
         return moment if moment > after else None
     if repeat.get("every") == "month" and repeat["day"] > 28:
         return _next_clamped_month_day(repeat, after, zone)
+    expression = to_cron(repeat)
+    if expression is None:
+        return None
     try:
-        iterator = croniter(to_cron(repeat), after.astimezone(zone).replace(tzinfo=None))
+        iterator = croniter(expression, after.astimezone(zone).replace(tzinfo=None))
         # Iterating in naive local time can step back across a fall-back hour;
         # skip candidates that are not strictly later in real time.
         for _ in range(FLOOR_SAMPLES):

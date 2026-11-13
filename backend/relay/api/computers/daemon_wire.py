@@ -71,7 +71,7 @@ COMMAND_NOTIFICATION_CONNECTED_RECOVERY_SECONDS = 6.0
 def bounded_float(
     value: str | None, *, default: float, minimum: float, maximum: float, field: str
 ) -> float:
-    if value in (None, ""):
+    if value is None or value == "":
         return default
     if isinstance(value, bool):
         raise HTTPException(400, f"{field} must be a number.")
@@ -91,7 +91,7 @@ def bounded_float(
 def bounded_int(
     value: str | None, *, default: int, minimum: int, maximum: int, field: str
 ) -> int:
-    if value in (None, ""):
+    if value is None or value == "":
         return default
     try:
         parsed = int(value)
