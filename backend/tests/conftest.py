@@ -1,20 +1,30 @@
 from __future__ import annotations
 
+import os
+
 import pytest
-from postgres_backend import (
-    database_url_for,
-    ensure_database_extensions,
-    postgres_backend_requested,
-    postgres_test_databases,
-)
+from sqlalchemy import create_engine, text
+from postgres_backend import database_url_for, postgres_backend_requested, postgres_test_databases
 from relay.security import admin_token as admin_token_module
 from relay.security import credentials
 from store_fixtures import isolated_store_engines
 
 
-def pytest_sessionstart(session):
-    # Runs in every xdist worker before its first test.
-    ensure_database_extensions()
+@pytest.fixture(scope="session", autouse=True)
+def postgres_extensions():
+    """Keep database-wide extensions outside workers' disposable schemas."""
+    url = os.environ.get("RELAY_TEST_DATABASE_URL")
+    if not url:
+        return
+    engine = create_engine(url)
+    try:
+        with engine.begin() as connection:
+            # IF NOT EXISTS alone races between xdist workers. Commit setup
+            # before releasing the lock or allowing any schema migration.
+            connection.execute(text("SELECT pg_advisory_xact_lock(hashtext('relay.tests.extensions'))"))
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"))
+    finally:
+        engine.dispose()
 
 
 def pytest_addoption(parser):

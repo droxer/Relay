@@ -22,7 +22,9 @@ export interface NodeLike {
   status?: string;
 }
 
-const LIVE_NODE_STATUSES = new Set(["ready", "busy"]);
+// The backend reports active computers as `running`; daemon heartbeat payloads
+// also use `busy`. Both can carry the runtime's current model inventory.
+const LIVE_NODE_STATUSES = new Set(["ready", "running", "busy"]);
 
 export type ComputerOwnership = "local" | "managed";
 

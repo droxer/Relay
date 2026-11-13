@@ -1,6 +1,7 @@
 import type { TaskAwaiting } from "relay-core";
 import type { RelaySession, RelayTaskListItem } from "../types.js";
 import { isAwaitingFeedbackDecision } from "./workflow.ts";
+import { sessionTrailsSummary } from "./sessionPollMerge.ts";
 
 /**
  * The preamble the backend puts before a blocked round's own note
@@ -115,6 +116,8 @@ export type ThreadWaitIndex = {
   readonly waitsBySession: ReadonlyMap<string, TaskWait>;
   /** taskId → the first listed task with that id. */
   readonly tasksById: ReadonlyMap<string, RelayTaskListItem>;
+  /** sessionId → linked task, including for summaries that omit rounds. */
+  readonly tasksBySession: ReadonlyMap<string, RelayTaskListItem>;
 };
 
 /** Either the raw task list or its index. Callers that render per frame
@@ -125,17 +128,21 @@ export type ThreadWaitSource = readonly RelayTaskListItem[] | ThreadWaitIndex;
 export function buildThreadWaitIndex(tasks: readonly RelayTaskListItem[]): ThreadWaitIndex {
   const waitsBySession = new Map<string, TaskWait>();
   const tasksById = new Map<string, RelayTaskListItem>();
+  const tasksBySession = new Map<string, RelayTaskListItem>();
   for (const task of tasks) {
     if (!tasksById.has(task.id)) tasksById.set(task.id, task);
+    for (const sessionId of task.linkedSessionIds) {
+      if (!tasksBySession.has(sessionId)) tasksBySession.set(sessionId, task);
+    }
     const awaiting = resumableWait(task);
     if (awaiting?.sessionId && !waitsBySession.has(awaiting.sessionId)) {
       waitsBySession.set(awaiting.sessionId, { task, awaiting });
     }
   }
-  return { waitsBySession, tasksById };
+  return { waitsBySession, tasksById, tasksBySession };
 }
 
-const EMPTY_WAIT_INDEX: ThreadWaitIndex = { waitsBySession: new Map(), tasksById: new Map() };
+const EMPTY_WAIT_INDEX: ThreadWaitIndex = { waitsBySession: new Map(), tasksById: new Map(), tasksBySession: new Map() };
 /** Index per task-list identity. The list is a query result that keeps its
  *  identity until the poll changes it, so a frame that re-reads the same
  *  list never re-indexes it. */
@@ -160,7 +167,8 @@ export function threadWaitIndex(source: ThreadWaitSource): ThreadWaitIndex {
  * What a settled thread waits on, or null when it does not. A task whose wait
  * names this thread is the answer — the backend's `_awaiting_task` rule. A
  * wait recorded before waits named their thread falls back to the active
- * round's task. Otherwise a task the list holds for the active round has moved
+ * round's task (or its linked task when a summary omits rounds). Otherwise
+ * a task the list holds for the active round has moved
  * on, so the old blocked outcome is history; a task the list does not hold
  * (not loaded yet, or not the viewer's) proves nothing, and a thread with no
  * task speaks for itself.
@@ -170,7 +178,12 @@ function threadWait(session: RelaySession, tasks: ThreadWaitSource): ThreadWait 
   const named = index.waitsBySession.get(session.id);
   if (named) return named;
   const scope = session.collaborationRounds?.find((round) => round.roundId === session.activeRoundId)?.workScope;
-  const scoped = scope?.kind === "task" ? index.tasksById.get(scope.taskId) : undefined;
+  // Only summaries lack the round context. A fully loaded standalone turn
+  // still speaks for itself, even if a task links to its conversation.
+  const linked = !scope && sessionTrailsSummary(session) ? index.tasksBySession.get(session.id) : undefined;
+  const scoped = scope?.kind === "task"
+    ? index.tasksById.get(scope.taskId)
+    : linked;
   if (!scoped) return session.workOutcome === "blocked" ? {} : null;
   const legacy = resumableWait(scoped);
   return legacy && !legacy.sessionId ? { task: scoped, awaiting: legacy } : null;

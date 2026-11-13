@@ -170,6 +170,21 @@ jobs:
           npm ci
           npm run build -w relay-core
           npm run build -w relay-daemon
+      - name: Provision database extensions before parallel migrations
+        working-directory: backend
+        run: |
+          uv run python - <<'PY'
+          import os
+          from sqlalchemy import create_engine, text
+
+          # Extensions belong to the database, not each test's scratch schema.
+          # Concurrent CREATE EXTENSION IF NOT EXISTS can still race, and an
+          # extension installed in a scratch schema disappears on its teardown.
+          engine = create_engine(os.environ["RELAY_TEST_DATABASE_URL"])
+          with engine.begin() as connection:
+              connection.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"))
+          engine.dispose()
+          PY
       - name: Run Python tests including PostgreSQL migrations
         working-directory: backend
         run: uv run pytest
