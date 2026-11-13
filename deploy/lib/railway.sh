@@ -294,16 +294,24 @@ railway_validate_release() (
 )
 
 railway_failure_logs() {
-  local deployment_id=$1 data
+  local deployment_id=$1 service_id=${2:-} data
   [ -n "$deployment_id" ] || return 0
-  if data=$(gql 'query FailureLogs($id: String!) {
+  if ! data=$(gql 'query FailureLogs($id: String!) {
       buildLogs(deploymentId: $id, limit: 80) { message }
       deploymentLogs(deploymentId: $id, limit: 40) { message }
     }' "$(jq -nc --arg id "$deployment_id" '{id: $id}')"); then
-    jq -r '(.buildLogs // []) + (.deploymentLogs // []) | .[] | "    " + .message' <<<"$data" >&2
-  else
     warn "could not retrieve logs for deployment $deployment_id"
+    return 0
   fi
+  if jq -e '((.buildLogs // []) + (.deploymentLogs // [])) | length > 0' >/dev/null <<<"$data"; then
+    jq -r '(.buildLogs // []) + (.deploymentLogs // []) | .[] | "    " + .message' <<<"$data" >&2
+    return 0
+  fi
+  # An empty answer is itself a clue: the image built, then the pre-deploy
+  # command or the health check failed before the service printed anything.
+  warn "Railway returned no build or deployment logs for $deployment_id."
+  warn "  The failure is likely in the pre-deploy command (each step prints 'relay pre-deploy: <step> failed') or the health check (healthcheckPath/healthcheckTimeout in deploy/services/)."
+  warn "  Open https://railway.com/project/$PROJECT_ID/service/${service_id:-<service>}?environmentId=$ENVIRONMENT_ID&id=$deployment_id for the pre-deploy and health-check output."
 }
 
 # Remove every automatic deployment trigger in this service/environment before
@@ -399,7 +407,7 @@ railway_wait_deployment() {
         ;;
       FAILED | CRASHED | REMOVED | SKIPPED)
         warn "$name deployment $observed_id ended $status (commit ${RELEASE_COMMIT:-unknown})"
-        railway_failure_logs "$observed_id"
+        railway_failure_logs "$observed_id" "$service_id"
         return 1
         ;;
     esac
@@ -408,7 +416,7 @@ railway_wait_deployment() {
       if [ "$status" = QUEUED ]; then
         warn "Railway has not started the build; no build logs are available yet. Check the deployment in Railway and https://status.railway.com for queue delays."
       else
-        railway_failure_logs "$observed_id"
+        railway_failure_logs "$observed_id" "$service_id"
       fi
       warn "Stopped waiting locally; deployment $observed_id was not cancelled and may still proceed. Check its status before starting another release."
       return 1

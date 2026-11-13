@@ -253,6 +253,9 @@ def railway(op, v):
     if op == "FailureLogs":
         for svc in project()["services"].values():
             if any(dep["id"] == v["id"] for dep in svc["deployments"]):
+                if svc["name"] == "relay-worker":
+                    # A pre-deploy or health-check failure leaves Railway no logs.
+                    return {"buildLogs": [], "deploymentLogs": []}
                 return {"buildLogs": [{"message": svc["name"] + " build failure detail"}], "deploymentLogs": []}
         raise ValueError("unknown deployment")
     if op == "DeploymentLogs":

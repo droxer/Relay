@@ -11,6 +11,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 from loguru import logger
 from ...core.ids import now_iso
+from ...core.repeat_log import RepeatedFailureLog
 from ...persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from ...tasks.execution import request_execution_owner
 from ...persistence.events import relay_event
@@ -21,6 +22,10 @@ from ..records import CommandEventMismatchError
 from ..state import RegistryState
 from .finalization import session_already_terminal
 from .reports import ReportPredecessorMissing
+
+
+# A finalization that failed is retried by the reaper until it lands.
+_finalization_failures = RepeatedFailureLog()
 
 
 class EventIngestMixin(RegistryState):
@@ -496,8 +501,14 @@ class EventIngestMixin(RegistryState):
             try:
                 if not self._claim_and_advance_run_request(event):
                     self.clear_run_output(event['runId'])
-            except Exception:  # noqa: BLE001 - committed exit evidence remains available to the reaper's finalization retry
-                logger.exception('Accepted terminal report awaits workflow finalization', command_id=event['commandId'])
+            except Exception as error:  # noqa: BLE001 - committed exit evidence remains available to the reaper's finalization retry
+                _finalization_failures.failure(
+                    'Accepted terminal report awaits workflow finalization',
+                    (event['commandId'], event['type'], type(error).__name__),
+                    error,
+                    command_id=event['commandId'], run_id=event.get('runId'),
+                    session_id=event.get('sessionId'), event_type=event['type'],
+                )
 
     def _mark_command_terminal(self, sandbox_id: str, event: dict[str, Any]) -> bool:
         """Log and persist a terminal event; any non-completed/cancelled type fails."""

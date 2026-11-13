@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from loguru import logger
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -1209,6 +1210,8 @@ def test_explicit_run_lease_expiry_retains_ownership_until_exit(
         assert second.json()["heartbeat"]["commandLeases"] == []
         second_command = first_command
 
+        rejections: list[str] = []
+        sink_id = logger.add(rejections.append, level="DEBUG", format="{level}|{message}|{extra}")
         stale_output = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
             json={
@@ -1227,6 +1230,10 @@ def test_explicit_run_lease_expiry_retains_ownership_until_exit(
         # The credential is good and only the lease is wrong: 409, because a
         # 401 would make the daemon stop and ask its owner to run setup again.
         assert stale_output.status_code == 409
+        logger.remove(sink_id)
+        rejected = next(line for line in rejections if "Daemon node event rejected" in line)
+        assert rejected.startswith("WARNING|")
+        assert first_command["id"] in rejected and "run.output" in rejected
 
         current_output = client.post(
             "/api/v1/daemon-nodes/sbx_alice/events",
