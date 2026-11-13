@@ -38,7 +38,7 @@ export function executionRecoveryGuide(execution?: RelaySession["execution"]): R
   const recovering = execution.phase === "recovery_required";
   return {
     ...guide,
-    ...(execution.computerOnline && ["execution_unconfirmed", "termination_unconfirmed"].includes(reason) ? { key: "online_exit_unconfirmed" } : {}),
+    ...(execution.computerOnline && ["execution_unconfirmed", "termination_unconfirmed", "execution_lost"].includes(reason) ? { key: "online_exit_unconfirmed" } : {}),
     ...(recovering && (execution.canReportGone ?? Boolean(reportGone)) ? { reportGone: true as const } : {}),
     ...(recovering && (execution.canRetrySave ?? reason === "finalization_failed") ? { retrySave: true as const } : {}),
   };

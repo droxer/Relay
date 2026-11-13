@@ -27,6 +27,11 @@ EXECUTION_INTERRUPTED_STATE_KEY = "_relay_execution_interrupted_at"
 # The run stays reserved; a person may now report it gone.
 EXIT_UNCONFIRMED_STATE_KEY = "_relay_exit_unconfirmed_at"
 
+# A backend stop timed out without exit evidence. This opens human recovery;
+# unlike a terminal event it never releases the delivered reservation.
+STOP_ACK_LOST_STATE_KEY = "_relay_stop_ack_lost_at"
+STOP_ACK_GRACE_SECONDS = 60
+
 TERMINAL_CLAIM_EXPIRES_STATE_KEY = "_relay_terminal_claim_expires_at"
 
 

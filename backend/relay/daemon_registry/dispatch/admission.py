@@ -6,6 +6,7 @@ A mixin of ``DaemonNodeRegistry``: it shares the registry's state and locks
 
 from __future__ import annotations
 
+from datetime import datetime, UTC
 from typing import Any
 from loguru import logger
 from ...collaboration.models import (
@@ -18,7 +19,9 @@ from ...collaboration.models import (
 from ...collaboration.work import (
     WORK_PROTOCOL,
 )
-from ...core.daemon_records import TERMINAL_DAEMON_STATUSES
+from ...core.daemon_records import (
+    TERMINAL_DAEMON_STATUSES, STOP_ACK_GRACE_SECONDS, STOP_ACK_LOST_STATE_KEY,
+)
 from ...core.ids import new_database_id
 from ...core.daemon_capabilities import (
     has_capability,
@@ -403,13 +406,6 @@ class RunAdmissionMixin(RegistryState):
                 sandbox_id=sandbox_id, session_id=session_id, run_id=active["runId"],
             )
             return active
-        logger.info(
-            "Cancelling active run",
-            sandbox_id=sandbox_id,
-            session_id=session_id,
-            run_id=active["runId"],
-            reason=reason,
-        )
         cancel_id = new_database_id()
         request = self.daemon_store.run_request_for_command(active["commandId"])
         if request:
@@ -419,8 +415,10 @@ class RunAdmissionMixin(RegistryState):
             )
             if not stopping:
                 return active
+            self._escalate_unacknowledged_stop(stopping, active)
             cancel_id = stopping["state"]["_relay_stop_command_id"]
             if self.daemon_store.get_command(cancel_id):
+                self._log_run_stop_once(stopping, active, reason)
                 return active
         self.enqueue(
             sandbox_id,
@@ -435,4 +433,42 @@ class RunAdmissionMixin(RegistryState):
                 "reason": reason,
             },
         )
+        self._log_run_stop_once(stopping if request else None, active, reason)
         return active
+
+    def _log_run_stop_once(
+        self, request: dict[str, Any] | None, active: dict[str, Any], reason: str,
+    ) -> None:
+        # The row-locked marker deduplicates recovery ticks and replicas. Claim
+        # only after publication so a crash before enqueue remains recoverable.
+        if request and (request.get("state") or {}).get("_relay_stop_logged_at"):
+            return
+        if request and not self.daemon_store.mark_run_request_state(
+            request["id"], "_relay_stop_logged_at",
+        ):
+            return
+        logger.info(
+            "Cancelling active run", sandbox_id=active["sandboxId"],
+            session_id=active["sessionId"], run_id=active["runId"], reason=reason,
+        )
+
+    def _escalate_unacknowledged_stop(
+        self, request: dict[str, Any], active: dict[str, Any],
+    ) -> None:
+        state = request.get("state") or {}
+        if state.get(STOP_ACK_LOST_STATE_KEY):
+            return
+        try:
+            asked_at = datetime.fromisoformat(state["_relay_stop_requested_at"].replace("Z", "+00:00"))
+            elapsed = (datetime.now(UTC) - asked_at).total_seconds()
+        except (KeyError, ValueError, TypeError):
+            elapsed = STOP_ACK_GRACE_SECONDS
+        if elapsed < STOP_ACK_GRACE_SECONDS:
+            return
+        if self.daemon_store.mark_run_request_state(request["id"], STOP_ACK_LOST_STATE_KEY):
+            logger.warning(
+                "Run stop unacknowledged; execution lost, operator recovery required",
+                sandbox_id=active["sandboxId"], session_id=active["sessionId"],
+                run_id=active["runId"], recovery_reason="execution_lost",
+                stop_wait_seconds=elapsed,
+            )

@@ -19,6 +19,12 @@ test("a run Relay gave up on after its computer died offers report gone",()=>{
  }
 });
 
+test("a stop acknowledgement lost on an online computer offers process inspection",()=>{
+ const guide=executionRecoveryGuide({phase:"recovery_required",executionConfirmed:false,deletionRequested:false,canDelete:false,blockingReason:"execution_lost",lastConfirmedAt:null,nextRecoveryAt:null,computerOnline:true,canReportGone:true});
+ assert.equal(guide?.key,"online_exit_unconfirmed");
+ assert.equal(guide?.reportGone,true);
+});
+
 test("lost exit evidence offers report-gone, not a retry that can only re-mark it",()=>{
  const execution={phase:"recovery_required" as const,executionConfirmed:false,deletionRequested:true,canDelete:false,blockingReason:"missing_terminal_evidence",lastConfirmedAt:null,nextRecoveryAt:null,computerOnline:false,canReportGone:true,canRetrySave:false};
  const guide=executionRecoveryGuide(execution);
