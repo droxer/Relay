@@ -25,14 +25,22 @@ effect of command polling.
    even while a poll is open, to detect a blackholed connection. An older backend
    sends no list and gets the old traffic.
 
-The default policy expires after 30 seconds and renews every fifth of that
-(6 seconds), so a daemon may miss four beats. The daemon beats at a fixed rate
+The default policy expires after 60 seconds and renews every fifth of that
+(12 seconds), so a daemon may miss four beats. The daemon beats at a fixed rate
 with ±10 % jitter, gives each beat its own request timeout of one period (a
 request that black-holes cannot eat the window), and never retries inside a
 tick: the next tick is the retry. The backend timestamps accepted observations,
 so daemon clock skew cannot extend a lease. Durable `lastSeenAt` writes remain
 throttled and are not appended to the event log, and the fleet-wide read that
 merges other replicas' observations runs at most once per persist interval.
+
+`RELAY_DAEMON_NODE_LIVENESS_TIMEOUT_MS` overrides the backend's expiry window
+and advertised renewal interval together. An explicit daemon-side
+`RELAY_DAEMON_LIVENESS_HEARTBEAT_MS` overrides that interval. Daemons connecting
+to an older backend that advertises no heartbeat policy retain the 6-second
+fallback. Compared with a 6-second interval, the new default halves scheduled
+heartbeat requests; detecting an abrupt disconnect can now take up to 60 seconds
+after the last accepted observation.
 
 Routine heartbeats read only current credential, lifecycle, and observation
 fields. They do not load runtime inventory. A Computer first discovered on
@@ -46,7 +54,7 @@ only after storage commits, so failed writes remain eligible for retry.
 
 ## Background load
 
-The daemon honors the backend's advertised heartbeat interval (6 seconds by
+The daemon honors the backend's advertised heartbeat interval (12 seconds by
 default), capped at a third of its requested command lease. Durable-report
 peers keep those probes independent of long polls. Normal command delivery
 wakes a poll through notifications; a missed notification is recovered within
