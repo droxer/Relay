@@ -40,7 +40,7 @@ repos:
 
       - id: mypy-backend
         name: mypy (backend)
-        entry: bash -c 'cd backend && uv run mypy'
+        entry: bash -c 'cd backend && uv run --extra dev mypy'
         language: system
         types: [python]
         files: ^backend/relay/

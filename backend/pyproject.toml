@@ -36,6 +36,8 @@ dev = [
   "pytest>=9.0.0",
   "pytest-xdist>=3.8.0",
   "ruff>=0.16.0",
+  "types-croniter>=6.0.0",
+  "types-PyYAML>=6.0.12",
 ]
 
 [project.scripts]

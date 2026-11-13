@@ -189,7 +189,7 @@ newer and `uv` are required for the backend.
 - Install pre-commit hooks: `make pre-commit-install`.
 - Run pre-commit hooks on all files: `make pre-commit-run`.
 - Lint the backend: `ruff check backend` (config in `backend/pyproject.toml`; also a pre-commit hook). Every blind `except Exception` carries a `noqa: BLE001` reason.
-- Type-check the backend: `cd backend && uv run mypy` (config in `backend/pyproject.toml`; also a pre-commit hook). It must stay at zero errors.
+- Type-check the backend: `cd backend && uv run --extra dev mypy` (config in `backend/pyproject.toml`; also a pre-commit hook). It must stay at zero errors.
 - Rebuild/export the devbox image only when the image changes: `make run-fresh`.
 - Build/check/export devbox pieces manually: `make devbox-image`,
   `make devbox-check`, `make devbox-oci`.
