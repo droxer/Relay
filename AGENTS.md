@@ -516,6 +516,14 @@ For phone layout or touch changes also run `npm run test:phone -w web`: the
 same layout contracts (`web/e2e/surfaceLayout.spec.ts`) on WebKit as an iPhone
 and Chromium as an Android phone, against the already-built export.
 
+The backend suite runs under pytest-xdist by default (`addopts` in
+`backend/pyproject.toml`: `-n auto --dist loadfile`, one worker per CPU, a
+file's tests kept together). Every test owns its `tmp_path`, its SQLite file,
+or its own Postgres schema, so parallel workers do not collide. Run it with
+`make backend-test` or `uv run --project backend --extra dev pytest backend/tests`;
+add `-n0` for a serial run when debugging a failure that only appears under
+load.
+
 Before handing off, check:
 
 1. TypeScript compiles.

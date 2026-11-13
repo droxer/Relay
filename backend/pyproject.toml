@@ -34,6 +34,7 @@ dev = [
   "mypy>=1.18.0",
   "pre-commit>=4.0.0",
   "pytest>=9.0.0",
+  "pytest-xdist>=3.8.0",
   "ruff>=0.16.0",
 ]
 
@@ -49,6 +50,11 @@ packages = ["relay"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Every test owns its tmp_path, its SQLite file, or its own Postgres schema, so
+# the suite runs one worker per CPU. `--dist loadfile` keeps a file's tests on
+# one worker, which preserves any module-level state or ordering they share.
+# Pass `-n0` to run serially when debugging.
+addopts = "-n auto --dist loadfile"
 markers = [
   "postgres: requires a live Postgres database",
   "integration: starts backend, daemon, or client processes",
