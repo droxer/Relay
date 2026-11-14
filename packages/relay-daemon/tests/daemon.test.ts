@@ -3103,7 +3103,7 @@ for (const failure of ["stalled", "unavailable"] as const) {
             polls += 1;
             // A slow poll must not turn legitimate background retries into
             // apparent duplicate senders.
-            if (failure === "unavailable" && polls === 2) await new Promise(resolve => setTimeout(resolve, 120));
+            if (polls === 2) await new Promise(resolve => setTimeout(resolve, 120));
             if (polls >= 3) stop.abort();
             // Redelivery must not create another concurrent report sender.
             return jsonResponse({ commands: polls < 3 ? [cancelCommand] : [] });
@@ -6245,12 +6245,12 @@ test("an environment-configured zero outage grace stops execution", async () => 
   }
 });
 
-test("outage recovery applies one completion when live delivery races durable replay", async () => {
+test("outage recovery coalesces a pending completion when live delivery races durable replay", async () => {
   const { events, aborted, terminalUploads } = await runThroughOutage({
     graceMs: 5000, runMs: 50, outageMs: 100, outageStatus: 503, terminalResponseDelayMs: 250,
   });
   assert.equal(aborted, false);
-  assert.ok(terminalUploads >= 2, "the delayed acknowledgement must exercise duplicate uploads");
+  assert.equal(terminalUploads, 1, "replay must not duplicate a completion awaiting acknowledgement");
   assert.equal(events.filter(event => event.type === "run.completed").length, 1);
 });
 

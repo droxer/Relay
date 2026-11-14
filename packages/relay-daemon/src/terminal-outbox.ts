@@ -59,6 +59,7 @@ export class TerminalOutbox {
   private replaying = false;
   private replayAfter = 0;
   private readonly retryAt = new Map<string, number>();
+  private readonly deliveries = new Set<string>();
   private batching = false;
   private accepted = 0;
   private bytes = 0;
@@ -284,6 +285,15 @@ export class TerminalOutbox {
     return !!current && !this.order.ready(record.key, current);
   }
   private async deliver(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
+    if (!terminalTypes.has(String(record.event.type))) return this.sendRecord(send, input, init, record);
+    // Let duplicate callers retry under their own deadline rather than wait
+    // on a request whose signal may outlive theirs during shutdown.
+    if (this.deliveries.has(record.key)) return new Response('Report delivery already in progress.', { status: 503 });
+    this.deliveries.add(record.key);
+    try { return await this.sendRecord(send, input, init, record); }
+    finally { this.deliveries.delete(record.key); }
+  }
+  private async sendRecord(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
     await this.stored(record.key);
     const rejection = this.rejected.get(record.key);
     if (rejection) return new Response(`Report quarantined; automatic retries paused. Original HTTP ${rejection.status}: ${rejection.detail} Report ID: ${record.key}. Use relay reports and relay retry-report after stopping the daemon.`, { status: 409 });
@@ -345,7 +355,7 @@ export class TerminalOutbox {
     let bytes = 0;
     for (const [key, current] of ordered) {
       if (reports.length >= 50 || signal?.aborted) break;
-      if (!this.index.has(key) || this.rejected.has(key) || Date.now() < (this.retryAt.get(key) ?? 0)) continue;
+      if (!this.index.has(key) || this.rejected.has(key) || this.deliveries.has(key) || Date.now() < (this.retryAt.get(key) ?? 0)) continue;
       if (!this.order.ready(key, current, selected)) continue;
       let record: TerminalRecord;
       try { await this.stored(key); if (!this.index.has(key)) continue; record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
@@ -410,6 +420,7 @@ export class TerminalOutbox {
       // Terminal evidence goes first. Round-robin streams prevent one backlog
       // monopolizing replay; only read a payload when it is actually attempted.
       const ordered = this.order.candidates(key => !this.rejected.has(key)
+        && !this.deliveries.has(key)
         && Date.now() >= (this.retryAt.get(key) ?? 0))
         .map(key => [key, this.index.get(key)!] as [string, RecordIndex]);
       if (this.batching) {

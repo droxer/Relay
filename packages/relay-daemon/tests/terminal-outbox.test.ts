@@ -6,6 +6,54 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { TerminalOutbox } from "../src/terminal-outbox.js";
 
+for (const batching of [false, true]) {
+  test(`replay skips a live report in flight (batching=${batching})`, async t => {
+    const root = mkdtempSync(join(tmpdir(), 'relay-outbox-inflight-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const outbox = new TerminalOutbox(root);
+    outbox.negotiate(batching, batching);
+    const event = { type: 'run.cancelled', commandId: 'cmd', leaseId: 'lease' };
+    let started!: () => void;
+    const sending = new Promise<void>(resolve => { started = resolve; });
+    let finish!: () => void;
+    const gate = new Promise<void>(resolve => { finish = resolve; });
+    let sends = 0;
+    const live = outbox.wrapFetch(async () => {
+      sends++;
+      started();
+      await gate;
+      return Response.json({ error: 'temporary' }, { status: 503 });
+    });
+    const request = { method: 'POST', body: JSON.stringify(event) };
+    const first = live('http://backend/events', request);
+    await sending;
+    try {
+      await outbox.replay(async () => {
+        sends++;
+        return Response.json({}, { status: 503 });
+      }, 'http://backend/events', 'token');
+      assert.equal(sends, 1, 'replay must not overlap the live sender');
+      const duplicate = await live('http://backend/events', request);
+      assert.equal(duplicate.status, 503, 'redelivery can retry without waiting on another request');
+      finish();
+      const response = await first;
+      assert.equal(sends, 1, 'live redelivery must share the same sender');
+      assert.deepEqual(await response.json(), { error: 'temporary' });
+      assert.equal(new TerminalOutbox(root).status().pending, 1, 'failed delivery remains durable');
+      await assert.rejects(outbox.wrapFetch(async () => { throw new Error('offline'); })(
+        'http://backend/events', request), /offline/);
+      const accepted = await outbox.wrapFetch(async (_url, init) => new Response('{}', {
+        headers: new Headers(init?.headers),
+      }))('http://backend/events', request);
+      assert.equal(accepted.status, 200, 'a failed sender must release the record for retry');
+      assert.equal(outbox.status().pending, 0);
+    } finally {
+      finish();
+      await first;
+    }
+  });
+}
+
 for (const delivery of ['live', 'batch'] as const) {
   test(`${delivery} quarantine preserves the original rejection across restart and explicit retry`, async t => {
     const root = mkdtempSync(join(tmpdir(), 'relay-rejection-detail-'));
