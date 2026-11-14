@@ -70,7 +70,8 @@ def change_queue(
                 return state
             if action == "remove":
                 index = messages.index(picked)
-                state["removed"] = {"message": picked, "beforeId": messages[index + 1]["id"] if index + 1 < len(messages) else None}
+                state["removed"] = {"message": picked, "beforeId": messages[index + 1]["id"] if index + 1 < len(messages) else None,
+                                    "removedAt": datetime.now(UTC).isoformat()}
             state["messages"] = [m for m in messages if m["id"] != message_id]
             if action == "promote":
                 state["messages"].insert(0, picked)

@@ -1,11 +1,11 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { QueuedMessage } from "../../lib/threadQueue";
 import { Button } from "@/components/ui/button";
 import { ActionFollowUp, ActionRemove, ICON } from "../icons";
 
 /** Future instructions stay on the composer; inspecting them never changes their schedule. */
-export function MessageQueue({ messages, running, pending, paused, waiting, sending, error, recipientNames = {}, undoAvailable, onUndo, onResume, onSteer, onEdit, onRemove }: {
+export function MessageQueue({ messages, running, pending, paused, waiting, sending, error, recipientNames = {}, removedAt, onUndo, onResume, onSteer, onEdit, onRemove }: {
   messages: readonly QueuedMessage[];
   running: boolean;
   pending?: boolean;
@@ -14,7 +14,7 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
   sending?: string;
   error?: string | null;
   recipientNames?: Record<string, string>;
-  undoAvailable?: boolean;
+  removedAt?: string;
   onUndo?: () => void;
   onResume?: () => void;
   onSteer: (id: string) => void;
@@ -23,7 +23,15 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [expiredRemoval, setExpiredRemoval] = useState<string | undefined>();
   const regionId = useId();
+  const deadline = removedAt ? Date.parse(removedAt) + 5000 : 0;
+  const undoAvailable = !!removedAt && Number.isFinite(deadline) && expiredRemoval !== removedAt;
+  useEffect(() => {
+    if (!removedAt || !Number.isFinite(deadline)) return;
+    const timer = setTimeout(() => setExpiredRemoval(removedAt), Math.max(0, deadline - Date.now()));
+    return () => clearTimeout(timer);
+  }, [removedAt, deadline]);
   if (messages.length === 0 && !error && !undoAvailable) return null;
   return (
     <section className="message-queue" aria-label={t("queue.title", { count: messages.length })}>
