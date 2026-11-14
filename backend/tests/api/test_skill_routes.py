@@ -274,6 +274,89 @@ def test_grant_codex_and_merged_agent_view_then_revoke(client):
     assert all(item["source"] != "catalog" for item in detail["skills"])
 
 
+@pytest.mark.parametrize("scope", ["user", "agent"])
+def test_scoped_assignment_is_visible_on_agent_skills_page(client, scope):
+    agent, _ = create_agent(client)
+    skill = publish(client)
+    response = client.post(f"/api/v1/skills/{skill['id']}/assignments", json={
+        "targetType": scope, "targetId": ALICE if scope == "user" else agent["id"],
+        "mode": "optional", "pin": "stable", "invocation": "implicit",
+    })
+    assert response.status_code == 201, response.text
+    assignment = response.json()
+
+    def catalog():
+        agents = client.get("/api/v1/agents").json()["agents"]
+        detail = next(item for item in agents if item["id"] == agent["id"])
+        return [item for item in detail["skills"] if item["source"] == "catalog"]
+
+    entries = catalog()
+    assert [entry["skillId"] for entry in entries] == [skill["id"]]
+    assert entries[0]["available"] is True
+    assert entries[0]["pin"] == "stable"
+    assert entries[0]["assignmentId"] == assignment["id"]
+    assert entries[0]["inherited"] is (scope != "agent")
+    # The legacy direct grant wins without duplicating the scoped assignment.
+    assert client.post(f"/api/v1/skills/{skill['id']}/grants", json={
+        "agentIds": [agent["id"]], "pin": "latest",
+    }).status_code == 200
+    assert len(catalog()) == 1
+    assert catalog()[0]["pin"] == "latest"
+    assert "assignmentId" not in catalog()[0]
+    assert client.delete(f"/api/v1/skills/{skill['id']}/grants/{agent['id']}").status_code == 204
+    assert catalog()[0]["pin"] == "stable"
+    assert client.delete(f"/api/v1/skills/{skill['id']}").status_code == 204
+    assert catalog()[0]["available"] is False
+    assert catalog()[0]["reason"] == "deleted"
+
+
+@pytest.mark.parametrize("scope", ["org", "agent"])
+@pytest.mark.parametrize("initial_visibility", ["private", "public"])
+def test_agent_skills_redact_other_owners_private_publication(client, scope, initial_visibility):
+    agent, _ = create_agent(client)
+    client.post("/api/v1/auth/logout")
+    assert client.post("/api/v1/auth/login", json={
+        "username": "admin", "password": "kestrel-vault-7719",
+    }).status_code == 200
+    response = client.post("/api/v1/skills", json={
+        **bundle("admin-secret", visibility=initial_visibility), "namespace": "confidential",
+    })
+    assert response.status_code == 201, response.text
+    skill = response.json()
+    url = f"/api/v1/skills/{skill['id']}"
+    response = client.post(f"{url}/assignments", json={
+        "targetType": scope,
+        "targetId": "org" if scope == "org" else agent["id"],
+    })
+    assert response.status_code == 201, response.text
+    assignment = response.json()
+
+    def catalog():
+        agents = client.get("/api/v1/agents").json()["agents"]
+        detail = next(item for item in agents if item["id"] == agent["id"])
+        return next(item for item in detail["skills"] if item.get("skillId") == skill["id"])
+
+    if initial_visibility == "public":
+        login(client, "alice")
+        assert catalog()["name"] == "admin-secret"
+        assert catalog()["available"] is True
+        client.post("/api/v1/auth/logout")
+        assert client.post("/api/v1/auth/login", json={
+            "username": "admin", "password": "kestrel-vault-7719",
+        }).status_code == 200
+        assert client.patch(url, json={"visibility": "private"}).status_code == 200
+
+    login(client, "alice")
+    assert client.get(url).status_code == 404
+    assert client.get("/api/v1/skills").json()["skills"] == []
+    assert catalog() == {
+        "source": "catalog", "skillId": skill["id"], "name": skill["id"],
+        "namespace": None, "description": "", "slug": skill["id"],
+        "available": False, "pin": "stable", "reason": "visibility-revoked",
+        "assignmentId": assignment["id"], "inherited": scope != "agent",
+    }
+
+
 def test_grant_fanout_checks_all_owners_before_writing(client):
     own, _ = create_agent(client)
     other, _ = create_agent(client, owner="bob")

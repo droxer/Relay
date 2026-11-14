@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -11,10 +12,11 @@ from relay.skills.rules import (
     MAX_FILES,
     SkillValidationError,
 )
+from relay.skills.bundle import resolve_bundle
 from relay.persistence.skill.store import DatabaseSkillStore
 from relay.persistence.skill.objects import LocalSkillObjectStore
 from relay.persistence.db_time import parse_db_time
-from sqlalchemy import func, insert, select
+from sqlalchemy import event, func, insert, select
 
 
 def _store(tmp_path) -> tuple[DatabaseSkillStore, str, str]:
@@ -174,6 +176,54 @@ def test_manifest_order_independent_and_blob_deduplicated(tmp_path):
         store.get_revision(a["currentRevisionId"])["manifestSha256"]
         != store.get_revision(b["currentRevisionId"])["manifestSha256"]
     )
+
+
+def test_delivery_manifest_matches_published_digest_under_database_collation(tmp_path):
+    store, alice, _ = _store(tmp_path)
+    if store.engine.dialect.name != "sqlite":
+        pytest.skip("Uses SQLite NOCASE to reproduce locale-dependent database ordering")
+    skill = _create(
+        store, alice, "grilling", namespace="matt-pocock-skills",
+        files=_files("grilling", extra=[
+            {"path": "agents/openai.yaml", "content": b"interface: {}"},
+        ]),
+    )
+    order_by = f"ORDER BY {store.files.name}.path"
+
+    @event.listens_for(store.engine, "before_cursor_execute", retval=True)
+    def locale_order(conn, cursor, statement, parameters, context, executemany):
+        # Emulate a database locale that sorts lowercase agents/ before SKILL.md.
+        # Keep returning that order even if the reader stops ordering in SQL.
+        if f"FROM {store.files.name}" in statement:
+            statement = (
+                statement.replace(order_by, f"{order_by} COLLATE NOCASE")
+                if order_by in statement else f"{statement} {order_by} COLLATE NOCASE"
+            )
+        return statement, parameters
+
+    try:
+        with store.engine.connect() as conn:
+            observed_paths = list(conn.scalars(
+                select(store.files.c.path)
+                .where(store.files.c.revision_id == skill["currentRevisionId"])
+                .order_by(store.files.c.path)
+            ))
+        bundle, skipped = resolve_bundle(SimpleNamespace(skill_store=store), {
+            "id": "agent", "supervisorUserId": alice,
+            "skillPolicy": {"version": 1, "grants": [
+                {"skillId": skill["id"], "pin": "latest"},
+            ]},
+        })
+    finally:
+        event.remove(store.engine, "before_cursor_execute", locale_order)
+
+    assert observed_paths == ["agents/openai.yaml", "SKILL.md"]
+    assert skipped == []
+    delivered = bundle["skills"][0]
+    digest = hashlib.sha256()
+    for file in delivered["files"]:
+        digest.update(f"{file['path']}\0{file['sha256']}\n".encode())
+    assert digest.hexdigest() == delivered["manifestSha256"], "manifest-digest-mismatch"
 
 
 def test_live_name_uniqueness_normalizes_absent_namespace(tmp_path):

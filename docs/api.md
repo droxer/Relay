@@ -1024,6 +1024,17 @@ the node bearer token and an active dispatched command containing that digest.
 Skipped skills produce a persisted `system.notice` in the thread, including
 when an older daemon cannot deliver them.
 
+Agent responses merge node inventory with effective managed assignments outside
+a Project and legacy direct grants in `skills`. Catalog entries include
+`skillId`, `pin`, `available`, and an optional failure `reason`. Scoped entries
+also include `assignmentId` and `inherited`; `inherited: true` means the
+assignment belongs to a broader scope and must be managed there. Direct Agent
+assignments use the assignment revoke endpoint; legacy grants use the grant
+revoke endpoint. Direct grants override scoped assignments for the same skill.
+Assignments referencing another User's private publication retain only opaque
+identifiers and an unavailable reason; the publication's name, namespace,
+description, and slug are redacted.
+
 ## Cutover Policy
 
 Only the canonical paths documented here are mounted. Relay is under active

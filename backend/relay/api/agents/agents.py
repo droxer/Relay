@@ -33,6 +33,7 @@ from ..deps import AppContextDep
 from ..actors import request_actor
 from ..bodies import JsonBodyDep, json_body, string_field
 from ...skills.bundle import resolve_bundle
+from ...skills.assignments import effective_assignments
 from ...skills.grants import read_grants
 
 router = APIRouter()
@@ -570,11 +571,10 @@ def _available_models(
 def _agent_skills(
     ctx: AppContextDep, agent: dict[str, Any], runtime_nodes: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """The skills this agent's runtime actually has on the computers it runs on.
+    """Node inventory and managed skills effective for this agent outside Projects.
 
-    Skills are node-reported inventory rather than a stored agent field, so they
-    are resolved on read from each placement's live node and deduped across
-    placements by namespace/name.
+    Node inventory is resolved from live placements and deduped by namespace/name.
+    Catalog entries follow dispatch's scoped assignments and direct-grant overrides.
     """
     executor_kind = agent.get("executorKind")
     if not executor_kind:
@@ -597,9 +597,24 @@ def _agent_skills(
     bundle, skipped = resolve_bundle(ctx, agent)
     available = {entry["skillId"] for entry in (bundle or {}).get("skills", [])}
     reasons = {entry["skillId"]: entry["reason"] for entry in skipped}
-    for grant in read_grants(agent):
+    grants = {
+        item["skillId"]: {
+            **item, "assignmentId": item["id"], "inherited": item["targetType"] != "agent",
+        }
+        for item in effective_assignments(ctx, agent)
+    }
+    # Match dispatch: legacy direct grants override inherited assignments.
+    grants.update({item["skillId"]: item for item in read_grants(agent)})
+    for grant in grants.values():
         skill_id = grant["skillId"]
         skill = ctx.skill_store.get_skill(skill_id)
+        # Assignment scopes never grant visibility into another User's private
+        # publication. Keep the unavailable assignment without its metadata.
+        if (
+            skill and skill.get("visibility") != "public"
+            and skill.get("ownerUserId") != agent.get("supervisorUserId")
+        ):
+            skill = None
         skills.append({
             "source": "catalog", "skillId": skill_id,
             "name": skill["name"] if skill else skill_id,
@@ -608,6 +623,10 @@ def _agent_skills(
             "slug": (skill or {}).get("slug", skill_id),
             "available": skill_id in available,
             "pin": grant.get("pin"),
+            **(
+                {key: grant[key] for key in ("assignmentId", "inherited")}
+                if "assignmentId" in grant else {}
+            ),
             **({"reason": reasons[skill_id]} if skill_id in reasons else {}),
         })
     return sorted(skills, key=lambda skill: (skill.get("namespace") or "", skill["name"]))

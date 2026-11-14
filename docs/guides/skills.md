@@ -44,6 +44,12 @@ dispatch; Relay does not fan them out into per-agent grants.
 An explicit or suggested assignment at a more specific scope suppresses
 automatic delivery from a less specific scope for that publication.
 
+The Agent's Skills tab lists node-local inventory alongside managed skills
+effective outside a Project, including user, team, organization, and Agent
+assignments. Project-only assignments apply within that Project's runs. A direct
+Agent assignment can be revoked from the tab; inherited assignments are managed
+at their original scope in the skill catalog.
+
 ### Assignment policy
 
 - `mode`: `optional`, `required`, or `suggested`.

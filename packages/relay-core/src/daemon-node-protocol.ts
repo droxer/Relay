@@ -43,10 +43,13 @@ export type DaemonMcpTransport = "stdio" | "sse" | "http";
 export interface DaemonAgentSkill {
   source?: "node" | "catalog";
   skillId?: string;
+  /** Effective managed assignment; inherited scopes are managed at their source. */
+  assignmentId?: string;
+  inherited?: boolean;
   slug?: string;
   available?: boolean;
   reason?: string;
-  pin?: "latest" | { revisionId: string };
+  pin?: "latest" | "stable" | { revisionId: string };
   name: string;
   namespace?: string;
   description?: string;

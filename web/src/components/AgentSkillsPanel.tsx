@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { revokeSkill } from "../api";
+import { revokeSkill, revokeSkillAssignment } from "../api";
 import type { UserAgent } from "../types";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -37,11 +37,12 @@ export function AgentSkillsPanel({ agent, canEdit = false }: AgentSkillsPanelPro
   const grantedSkills = skills.filter((skill) => skill.source === "catalog");
   const installedSkills = skills.filter((skill) => skill.source !== "catalog");
 
-  async function handleRevokeSkill(skillId: string) {
+  async function handleRevokeSkill(skillId: string, assignmentId?: string) {
     setPending(true);
     setError(null);
     try {
-      await revokeSkill(skillId, agent.id);
+      if (assignmentId) await revokeSkillAssignment(skillId, assignmentId);
+      else await revokeSkill(skillId, agent.id);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] }),
         queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] }),
@@ -106,13 +107,13 @@ export function AgentSkillsPanel({ agent, canEdit = false }: AgentSkillsPanelPro
                           : t("skills.not_supported")}
                       </span>
                     ) : null}
-                    {canEdit && skill.skillId ? (
+                    {canEdit && skill.skillId && !skill.inherited ? (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="agent-skill-action"
                         disabled={pending}
-                        onClick={() => void handleRevokeSkill(skill.skillId!)}
+                        onClick={() => void handleRevokeSkill(skill.skillId!, skill.assignmentId)}
                       >
                         {t("skills.revoke")}
                       </Button>
