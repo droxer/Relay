@@ -15,7 +15,9 @@ const request: PermissionRequest = {
 it("shows what the run wants to do and sends the person's answer with a note", async () => {
   const onAnswer = vi.fn().mockResolvedValue(undefined);
   render(<PermissionPrompts requests={[request]} agentLabel={() => "Builder"} onAnswer={onAnswer} />);
-  expect(screen.getByText(/make clean/)).toBeTruthy();
+  // The command itself is the thing at stake; the raw JSON stays folded.
+  expect(screen.getByLabelText("permission.input_label").textContent).toBe("make clean");
+  expect(screen.getByText("permission.full_input").closest("details")?.open).toBe(false);
   const allow = screen.getByRole("button", { name: "permission.allow" });
   expect(document.activeElement).toBe(allow);
 

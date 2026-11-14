@@ -731,10 +731,6 @@
     padding: var(--sp-5) var(--sp-4) var(--sp-6);
   }
 
-  .handoff-row {
-    grid-template-columns: 1fr;
-  }
-
   /* Bottom tab bar already owns safe-area-inset-bottom. Composer sits above
      it, so a second inset here creates a dead band on notched phones. */
   .composer {

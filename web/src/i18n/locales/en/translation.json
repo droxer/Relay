@@ -632,34 +632,35 @@
   },
   "decision": {
     "title": "You sent this turn back",
-    "hint": "Say what to change in the reply below, run the turn again, or accept it after all.",
     "request_changes": "Request changes",
     "accept": "Accept",
     "more": "More decisions",
     "mark_done": "Mark the work done",
     "handoff": "Hand off to another agent…",
     "rerun": "Rerun",
-    "pending": "Working…"
+    "pending": "Working…",
+    "rerun_effect": "Same request, a fresh run",
+    "accept_effect": "Keeps this turn as it is"
   },
   "permission": {
     "title": "{{agent}} wants to use {{tool}}",
-    "summary": "The run is paused until you answer.",
     "input_label": "Requested input",
     "allow": "Allow once",
     "allow_always": "Always allow",
     "allow_always_hint": "Always allow {{tool}} for {{agent}} in this thread",
     "deny": "Deny",
     "note_label": "Reason (optional)",
-    "note_placeholder": "Tell the agent what to do instead",
-    "region": "Permission requests",
+    "note_placeholder": "If you deny, tell {{agent}} why (optional)",
     "question_title": "{{agent}} has a question",
-    "question_summary": "The run is paused until you answer.",
     "answer": "Answer",
     "skip": "Skip",
     "options_label": "Offered answers",
     "other_label": "Or write your own",
     "answer_label": "Your answer",
-    "other_placeholder": "Type an answer"
+    "other_placeholder": "Type an answer",
+    "paused": "Run paused",
+    "position": "1 of {{count}}",
+    "full_input": "Full input"
   },
   "handoff": {
     "status_accepted": "Handoff to {{agent}} accepted",

@@ -126,21 +126,13 @@
 
 /* ---- composer bar ---------------------------------------------------- */
 
-/* Docks on the composer card's top edge the way the awaiting-input prompt
-   does — same inset, same rise — but stays one line. */
+/* A composer slip (composer-slip.css) that stays one line: status, the ask,
+   and its button at the trailing edge. */
 .task-action-bar {
-  --bar-inset: var(--composer-radius, var(--sp-5));
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  width: min(100% - var(--bar-inset) * 2, var(--thread-measure) - var(--bar-inset) * 2);
-  margin: 0 auto -1px;
-  padding: var(--sp-2) var(--sp-2) calc(var(--sp-2) + 1px) var(--sp-4);
-  border: 0.5px solid var(--line-1);
-  border-bottom: 0;
-  border-radius: var(--r-3) var(--r-3) 0 0;
-  background: var(--surface-2);
-  animation: rise var(--t-slow) var(--ease) both;
+  padding-block: var(--sp-2) calc(var(--sp-2) + 1px);
+  padding-inline-end: var(--sp-2);
 }
 
 .task-action-bar-icon {
@@ -169,11 +161,4 @@
   display: flex;
   flex: none;
   gap: var(--sp-1);
-}
-
-@media (max-width: 820px) {
-  .task-action-bar {
-    --bar-inset: var(--sp-3);
-    padding-left: var(--sp-3);
-  }
 }

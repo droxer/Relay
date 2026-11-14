@@ -67,15 +67,15 @@
 .task-review-actions { justify-content: flex-end; }
 .task-review-error { color: var(--warn); }
 
-.task-review--compact {
+/* Docked on the composer as a slip (composer-slip.css) that stays one line
+   until its evidence is opened. */
+.composer-slip.task-review--compact {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2) var(--sp-3);
-  width: min(100% - var(--sp-4), var(--thread-measure));
-  margin-inline: auto;
-  padding: var(--sp-2) var(--sp-3);
-  border: 0;
+  padding-block: var(--sp-2) calc(var(--sp-2) + 1px);
+  padding-inline-end: var(--sp-2);
 }
 
 .task-review--compact details {

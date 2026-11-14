@@ -173,13 +173,13 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
     ? t("awaiting.unreported_title", { agent: agentName })
     : t(TITLE_KEYS[waiting.kind], { agent: agentName });
   return (
-    <section ref={sectionRef} className="awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
+    <section ref={sectionRef} className="composer-slip awaiting-input" data-kind={waiting.kind} aria-labelledby={headingId}>
       <p role="status" className="sr-only">{announced ? title : ""}</p>
-      <div className="awaiting-input-head">
-        <h2 id={headingId} className="awaiting-input-title">{title}</h2>
+      <div className="composer-slip-head">
+        <h2 id={headingId} className="composer-slip-title">{title}</h2>
         {task && taskHref ? (
           <a
-            className="awaiting-input-task"
+            className="composer-slip-meta"
             href={taskHref}
             translate="no"
             aria-label={t("awaiting.open_task", { ref })}
@@ -233,8 +233,8 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
           ))}
         </ul>
       ) : null}
-      {sent ? null : <div className="awaiting-input-foot">
-        {hint ? <p className="awaiting-input-hint">{hint}</p> : null}
+      {sent ? null : <div className="composer-slip-foot">
+        {hint ? <p className="composer-slip-hint">{hint}</p> : null}
         <Button type="button" variant="ghost" size="dense" disabled={chosen !== null} onClick={onReply}>
           {t(approval ? "awaiting.request_changes" : choices.length ? "awaiting.write_own" : "awaiting.reply")}
         </Button>

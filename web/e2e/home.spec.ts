@@ -271,7 +271,8 @@ test("a first-run account is pointed at setup, not told it is caught up", async 
  await expect(page.locator(".home-brief")).not.toContainText("caught up");
  await expect(queue(page)).not.toContainText("Nothing needs attention");
  await focus.getByRole("button",{name:/Get started|Continue/}).click();
- await expect(page).toHaveURL(/\/computers$/);
+ // The wizard lives in a fresh thread's empty transcript, on the one global thread list.
+ await expect(page).toHaveURL(/\/threads\/new$/);
 });
 
 for (const width of [1440, 375]) {

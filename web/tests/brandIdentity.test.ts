@@ -233,7 +233,8 @@ describe("one meaning per colour", () => {
 
   it("asks for a person in the waiting gold, question or gate stop alike", () => {
     const css = readStyle("awaiting-input.css");
-    assert.match(rule("awaiting-input.css", /\.awaiting-input \{([^}]*)\}/), /--awaiting-rail: var\(--warn\);/);
+    // The quote draws the rail in every composer slip that asks something.
+    assert.match(rule("awaiting-input.css", /\.awaiting-input-quote \{([^}]*)\}/), /--awaiting-rail: var\(--warn\);/);
     assert.doesNotMatch(css, /--awaiting-rail: var\(--action\)/);
   });
 

@@ -20,12 +20,9 @@ export function taskNeedsAction(status: ThreadTaskFact["status"] | undefined): b
  * click from where you just read it. "Request changes" is the composer
  * itself: it puts the caret there, because asking for changes is a message.
  */
-export function TaskActionBar({ task, busy, deferPrimary = false, onAccept, onUnblock, onReply }: {
+export function TaskActionBar({ task, busy, onAccept, onUnblock, onReply }: {
   task: ThreadTaskFact;
   busy: TaskStatusAction | null;
-  /** Set while the transcript's DecisionBar holds the view's one filled
-   *  primary; Accept then steps down to the outline tier. */
-  deferPrimary?: boolean;
   onAccept: () => void;
   onUnblock: () => void;
   /** Put the caret in the composer. */
@@ -34,7 +31,7 @@ export function TaskActionBar({ task, busy, deferPrimary = false, onAccept, onUn
   const { t } = useTranslation();
   const review = task.status === "review";
   return (
-    <section className="task-action-bar" data-status={task.status} aria-label={t("thread.lifecycle.action_label")}>
+    <section className="composer-slip task-action-bar" data-status={task.status} aria-label={t("thread.lifecycle.action_label")}>
       <TaskStatusIcon status={task.status} className="task-action-bar-icon" />
       <p className="task-action-bar-text">
         <span translate="no">{task.ref}</span>{" "}
@@ -49,7 +46,7 @@ export function TaskActionBar({ task, busy, deferPrimary = false, onAccept, onUn
             <Button type="button" variant="ghost" size="dense" disabled={busy !== null} onClick={onReply}>
               {t("thread.lifecycle.request_changes")}
             </Button>
-            <Button type="button" variant={deferPrimary ? "outline" : "default"} size="dense" disabled={busy !== null} loading={busy === "accept"} onClick={onAccept}>
+            <Button type="button" variant="default" size="dense" disabled={busy !== null} loading={busy === "accept"} onClick={onAccept}>
               {t("thread.lifecycle.accept")}
             </Button>
           </>
