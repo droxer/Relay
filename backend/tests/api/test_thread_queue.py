@@ -1,5 +1,7 @@
 """Queues survive independent clients and are advanced without a browser."""
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 from relay.app import create_app
 
@@ -24,8 +26,13 @@ def test_queue_is_shared_and_owner_scoped(tmp_path, monkeypatch):
         with TestClient(create_app(tmp_path)) as phone:
             phone.cookies.update(laptop.cookies)
             assert phone.get(path).json()["messages"] == [{"id": "q_test", "text": "Next step"}]
-            assert phone.post(path, json={"action": "remove", "id": "q_test"}).status_code == 200
-        assert laptop.get(path).json()["messages"] == []
+            before = datetime.now(UTC)
+            removed = phone.post(path, json={"action": "remove", "id": "q_test"})
+            assert removed.status_code == 200
+            assert before <= datetime.fromisoformat(removed.json()["removed"]["removedAt"]) <= datetime.now(UTC)
+        shared = laptop.get(path).json()
+        assert shared["messages"] == []
+        assert shared["removed"]["removedAt"] == removed.json()["removed"]["removedAt"]
         assert laptop.post(path, json={"action": "undo_remove", "id": "q_test"}).json()["messages"] == [{"id": "q_test", "text": "Next step"}]
 
 

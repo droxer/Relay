@@ -7,7 +7,7 @@ import { cancelRun } from "../api-client/sessions";
 import { apiJson } from "../api-client/client";
 import type { QueuedMessage, QueueAddress } from "../lib/threadQueue";
 
-type QueueState = { messages: QueuedMessage[]; paused: boolean; sending?: string; error?: string; removed?: { message: QueuedMessage; beforeId: string | null } };
+type QueueState = { messages: QueuedMessage[]; paused: boolean; sending?: string; error?: string; removed?: { message: QueuedMessage; beforeId: string | null; removedAt?: string } };
 const EMPTY: QueueState = { messages: [], paused: false };
 
 /** The server owns ordering and dispatch; no open browser is required. */
@@ -108,7 +108,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     await client.invalidateQueries();
   }, [change, onCancelRun, threadId, client, setError]);
   return { messages: state.messages, enqueue, steer, edit, remove, stop,
-    undoAvailable: !!state.removed, undoRemove,
+    removedAt: state.removed?.removedAt, undoRemove,
     pending, paused: state.paused, sending: state.sending, waiting: awaitsPerson && !running,
     error: error ? t(error) : state.error ? t("queue.errors.dispatch") : query.isError ? t("queue.errors.unavailable") : null,
     resume: () => { void change("resume"); } };
