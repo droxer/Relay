@@ -6,6 +6,24 @@ Historical migration numbers below identify the changes that introduced each
 contract; use [the migration guide](../../backend/migrations/README.md) to apply
 all current migrations before starting the matching backend and worker release.
 
+## Unacknowledged run cancellation
+
+`Cancelling active run` is recorded once after a durable stop command is
+published. Repeated recovery and backend restarts retain that log marker and
+the same stop command ID. A stop without exit evidence for 60 seconds (about
+12 five-second recovery intervals) emits one WARNING with
+`recovery_reason=execution_lost`; the Thread then offers the existing report-gone
+recovery action. The reservation remains held until a daemon terminal report
+or an operator's recorded assertion settles it. Late exit reports still finalize
+normally. No schema migration is needed.
+
+After rollout, compare a full 24-hour worker log window against the November 13
+incident: count `Cancelling active run` (target below 50) and group by run ID
+(one entry per stopped run), checking the warning and subsequent reconciliation
+or exit evidence for unresolved stops. The total also depends on the number of
+distinct runs stopped; local regression tests cannot establish that production
+metric.
+
 ## Implementation
 
 - Task start/pickup preparation, dispatch preparation and result persistence, routine promotion, and task-file database reads run in worker threads. Each synchronous transaction stays on one thread; HTTP body reads and daemon transport waits stay asynchronous.

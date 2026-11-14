@@ -9071,3 +9071,69 @@ def test_replica_merge_compares_timestamps_by_instant_not_by_string() -> None:
         registry._refresh_persisted_liveness()
 
         assert registry.sandboxes["sbx_poll"]["lastSeenAt"] == "2030-01-01T00:00:01Z"
+
+
+@pytest.mark.parametrize("settlement", ["reconcile", "late_ack"])
+def test_unacknowledged_stop_logs_once_and_converges_to_recovery(monkeypatch, settlement):
+    from loguru import logger
+    from relay.execution.lifecycle import ExecutionLifecycleService
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            sessions, tasks, registry = _round_result_registry(root)
+            task = tasks.create_task({"title": "Unacknowledged stop"})
+            command = await _run_task_round(registry, ServerDaemonNodeBackend(registry), task["id"])
+            request = registry.daemon_store.run_request_for_command(command["id"])
+            registry.daemon_store.update_run_request(request["id"], {
+                "currentStartedAt": "2020-01-01T00:00:00Z",
+                "currentProgressAt": "2020-01-01T00:00:00Z",
+            })
+            monkeypatch.setattr("relay.daemon_registry.config.DAEMON_RUN_TIMEOUT_MS", 1)
+            records = []
+            sink = logger.add(lambda message: records.append(message.record))
+            try:
+                for _ in range(15):
+                    registry.reap_stale_runs()
+                cancellations = [r for r in records if r["message"] == "Cancelling active run"]
+                assert len(cancellations) == 1
+                current = registry.daemon_store.get_run_request(request["id"])
+                assert current["status"] == "running"
+                assert not any(r["extra"].get("recovery_reason") == "execution_lost" for r in records)
+                # Repeated stop intent does not rewrite the request every tick.
+                registry.reap_stale_runs()
+                assert registry.daemon_store.get_run_request(request["id"])["updatedAt"] == current["updatedAt"]
+                registry.daemon_store.update_run_request(request["id"], {
+                    "state": {**current["state"], "_relay_stop_requested_at": "2020-01-01T00:00:00Z"},
+                })
+                # A fresh registry must honor the durable log/escalation markers.
+                registry2 = DaemonNodeRegistry(sessions, registry.daemon_store, task_store=tasks)
+                for _ in range(15):
+                    registry2.reap_stale_runs()
+                registry2 = DaemonNodeRegistry(sessions, registry.daemon_store, task_store=tasks)
+                registry2.reap_stale_runs()
+                assert len([r for r in records if r["message"] == "Cancelling active run"]) == 1
+                warnings = [r for r in records if r["level"].name == "WARNING"
+                            and r["extra"].get("run_id") == command["runId"]
+                            and r["extra"].get("recovery_reason") == "execution_lost"]
+                assert len(warnings) == 1
+                lifecycle = ExecutionLifecycleService(registry2, None)
+                status = lifecycle.status(sessions.get_session(command["sessionId"]))
+                assert status["blockingReason"] == "execution_lost"
+                assert status["canReportGone"] is True
+                assert registry2.daemon_store.get_command(command["id"])["status"] == "dispatched"
+                if settlement == "reconcile":
+                    assert lifecycle.reconcile(command["sessionId"], "alice") is not None
+                    assert any(e["type"] == "session.execution_reconciled"
+                               for e in sessions.get_session(command["sessionId"])["events"])
+                else:
+                    registry2.handle_event("sbx_alice", {
+                        "type": "run.cancelled", "commandId": command["id"],
+                        "leaseId": command["leaseId"], "sessionId": command["sessionId"],
+                        "runId": command["runId"], "agent": "codex", "reason": "finally exited",
+                    }, "node_token")
+                assert registry2.daemon_store.active_run_request_for_task(task["id"]) is None
+                assert registry2.daemon_store.get_command(command["id"])["status"] == "cancelled"
+            finally:
+                logger.remove(sink)
+
+    asyncio.run(run_flow())

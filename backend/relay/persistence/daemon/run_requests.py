@@ -533,6 +533,8 @@ class RunRequestRows(DaemonStoreState):
             state.setdefault("_relay_stop_requested_at", now_iso())
             if actor_user_id:
                 state.setdefault("_relay_stop_actor_user_id", actor_user_id)
+            if state == current.get("state"):
+                return current
             return self.update_run_request(request_id, {"state": state, "error": reason})
 
     def update_run_request_if_claimed(

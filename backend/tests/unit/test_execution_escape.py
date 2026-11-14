@@ -17,6 +17,7 @@ import pytest
 from relay.core.daemon_records import (
     EXECUTION_INTERRUPTED_STATE_KEY,
     EXIT_UNCONFIRMED_STATE_KEY,
+    STOP_ACK_LOST_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
 from relay.execution.lifecycle import STOP_GRACE_SECONDS, execution_status
@@ -30,7 +31,7 @@ EXPIRED = (NOW - timedelta(seconds=30)).isoformat()
 REQUEST_STATUSES = (None, "prepared", "dispatching", "running", "finalizing")
 COMMAND_STATUSES = (None, "pending", "queued", "dispatched", "completed", "failed", "cancelled")
 LEASES = (None, LIVE, EXPIRED, (NOW - timedelta(seconds=601)).isoformat())
-EXECUTION_STATES = (None, EXECUTION_INTERRUPTED_STATE_KEY, EXIT_UNCONFIRMED_STATE_KEY)
+EXECUTION_STATES = (None, EXECUTION_INTERRUPTED_STATE_KEY, EXIT_UNCONFIRMED_STATE_KEY, STOP_ACK_LOST_STATE_KEY)
 STOPS = (None, JUST_NOW, LONG_AGO)
 RECOVERY = (None, "finalization_failed", "missing_terminal_evidence", "unset_reason")
 CLAIMS = (False, True)

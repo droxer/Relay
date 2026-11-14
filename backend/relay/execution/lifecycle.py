@@ -16,6 +16,8 @@ from loguru import logger
 from ..core.daemon_records import (
     EXECUTION_INTERRUPTED_STATE_KEY,
     EXIT_UNCONFIRMED_STATE_KEY,
+    STOP_ACK_LOST_STATE_KEY,
+    STOP_ACK_GRACE_SECONDS,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
     TERMINAL_EVENT_STATE_KEY,
@@ -26,7 +28,7 @@ from ..sessions.task_scope import thread_task_scope
 
 TERMINAL = {"completed", "failed", "cancelled"}
 # How long a requested stop may go unconfirmed before Relay gives up on it.
-STOP_GRACE_SECONDS = 60
+STOP_GRACE_SECONDS = STOP_ACK_GRACE_SECONDS
 RECONCILED_ERROR = (
     "Execution reported gone by an operator; the computer never sent exit evidence."
 )
@@ -75,6 +77,8 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                 # The daemon itself says it cannot verify the stopped process
                 # exited; waiting longer will not produce that evidence.
                 phase, reason = "recovery_required", "termination_unconfirmed"
+            elif state.get(STOP_ACK_LOST_STATE_KEY):
+                phase, reason = "recovery_required", "execution_lost"
             elif (state.get("_relay_stop_command_id") or session.get("deletionRequestedAt")) and (
                 live or computer_online is True
             ):
