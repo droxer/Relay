@@ -123,7 +123,11 @@ class DaemonE2E:
 
     def traces(self):
         path = self.root / "trace.jsonl"
-        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+        if not path.exists():
+            return []
+        # Polling races with the daemon's append: only newline-terminated
+        # records are committed, and the unfinished tail may split UTF-8.
+        return [json.loads(line) for line in path.read_bytes().split(b"\n")[:-1]]
 
     def start_task(self):
         task = self.post("/tasks", {"title": "Report lifecycle E2E", "assignedAgentId": self.agent["id"], "projectId": self.project["id"],

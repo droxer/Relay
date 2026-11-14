@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
 from ...core.repeat_log import RepeatedFailureLog
-from ...daemon_registry.records import CommandEventMismatchError, DeletedDaemonNodeError, UnknownDaemonNodeError
+from ...daemon_registry.records import CommandEventMismatchError, DeletedDaemonNodeError, LateOutputLeaseMismatchError, UnknownDaemonNodeError
 from ...daemon_registry.runs.reports import ReportPredecessorMissing
 from ...persistence.daemon.reports import ReportReceiptConflict
 from ..actors import bearer_token
@@ -61,7 +61,7 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
                     detail: str | None = None
                     try:
                         registry.handle_durable_report(sandbox_id, event, token, report['id'], report['digest'])
-                    except ReportPredecessorMissing as error:
+                    except (ReportPredecessorMissing, LateOutputLeaseMismatchError) as error:
                         status = 503
                         detail = str(error)
                     except CommandEventMismatchError as error:

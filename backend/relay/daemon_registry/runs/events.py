@@ -18,7 +18,7 @@ from ...persistence.events import relay_event
 from ...persistence.events import relay_task_event
 from ...persistence.engine import after_store_commit
 from .. import config
-from ..records import CommandEventMismatchError
+from ..records import CommandEventMismatchError, LateOutputLeaseMismatchError
 from ..state import RegistryState
 from .finalization import session_already_terminal
 from .reports import ReportPredecessorMissing
@@ -144,18 +144,21 @@ class EventIngestMixin(RegistryState):
                 sandbox_id=sandbox_id, command_id=event["commandId"], run_id=event["runId"],
             )
         late_output = (
-            event.get("replayed") is True
-            and event["type"] in self._STREAMED_EVENT_TYPES
+            event["type"] in self._STREAMED_EVENT_TYPES
             and record.get("status") in {"completed", "failed", "cancelled"}
         )
+        command = record["command"]
+        if late_output and (record.get("nodeId") != sandbox_id or any(
+            command.get(key) != event.get(key) for key in ("sessionId", "runId", "agent")
+        )):
+            raise CommandEventMismatchError("Late output does not match its command ownership.")
         if late_output and (not event.get("leaseId") or event["leaseId"] != record.get("leaseId")):
-            raise CommandEventMismatchError(
-                "Replayed output must match the completed command lease."
+            raise LateOutputLeaseMismatchError(
+                "Late output must match the completed command lease; retained for recovery."
             )
         if record.get("status") != "dispatched" and not late_output:
             self._handle_undispatched_command_event(sandbox_id, event, record)
             return
-        command = record["command"]
         active = self._active_command_entry(record)
         if not late_output:
             self.active_commands[event["commandId"]] = active

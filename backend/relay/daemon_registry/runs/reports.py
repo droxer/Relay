@@ -3,7 +3,7 @@ from typing import Any, TYPE_CHECKING
 from contextlib import ExitStack, nullcontext, contextmanager
 from collections.abc import Iterator
 from ...persistence.daemon.reports import ReportReceiptConflict
-from ..records import CommandEventMismatchError
+from ..records import CommandEventMismatchError, LateOutputLeaseMismatchError
 from ..state import RegistryState
 
 
@@ -61,7 +61,11 @@ class DurableReportMixin(RegistryState):
                         return
                     raise CommandEventMismatchError('Report names an unknown command.')
                 command = record['command']
-                if record['nodeId'] != sandbox_id or any(command.get(key) != event.get(key) for key in ('sessionId', 'runId', 'agent')) or record.get('leaseId') != event.get('leaseId'):
+                if record['nodeId'] != sandbox_id or any(command.get(key) != event.get(key) for key in ('sessionId', 'runId', 'agent')):
+                    raise CommandEventMismatchError('Report does not match its command ownership.')
+                if record.get('leaseId') != event.get('leaseId'):
+                    if streamed and record['status'] in {'completed', 'failed', 'cancelled'}:
+                        raise LateOutputLeaseMismatchError('Late output must match the completed command lease; retained for recovery.')
                     raise CommandEventMismatchError('Report does not match its command ownership.')
                 # A redundant stop for an already-finished run only settles
                 # the stop command. Its thread may have been deleted meanwhile;

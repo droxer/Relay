@@ -20,6 +20,7 @@ from ...core.repeat_log import RepeatedFailureLog, RepeatGate
 from ...daemon_registry.runs.reports import ReportPredecessorMissing
 from ...daemon_registry.records import (
     CommandEventMismatchError,
+    LateOutputLeaseMismatchError,
     DeletedDaemonNodeError,
     UnknownDaemonNodeError,
 )
@@ -539,9 +540,12 @@ async def daemon_events(
             run_id=event.get("runId"),
             session_id=event.get("sessionId"),
             command_id=event.get("commandId"),
+            reason="late_output_lease_mismatch" if isinstance(error, LateOutputLeaseMismatchError) else "command_event_mismatch",
             repeat_count=occurrence.count,
             error=str(error),
         )
+        if isinstance(error, LateOutputLeaseMismatchError):
+            raise HTTPException(503, str(error), headers={"Retry-After": "1"}) from error
         raise HTTPException(409, str(error)) from error
     except PermissionError as error:
         logger.warning(

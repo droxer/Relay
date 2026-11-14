@@ -189,6 +189,22 @@ per-stream high-water deduplication then suppresses those duplicates. A failed
 output upload does not prevent terminal evidence from releasing the run;
 retained output can be replayed after completion.
 
+After agent exit, output delivery has a 60-second default drain budget
+(`RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS` overrides it). Both live uploads and
+negotiated report batches wait for backend acceptance, rather than just local
+capture. If the budget expires, terminal evidence still proceeds with
+`outputTruncated`, which the thread displays as an incomplete-output notice;
+retained reports continue replaying independently.
+
+Late live copies and replayed output both require the original command's node,
+thread, run, agent, and exact lease. They append output idempotently without
+reopening execution. A late report with matching ownership but a missing or
+different lease gets retryable HTTP 503 (or a 503 batch receipt), preserving
+the report outside quarantine for recovery. This does not accept a mismatched
+lease: a persistent mismatch needs investigation using the retained report and
+command history. Other ownership conflicts remain HTTP 409. Single-event
+rejection logs include `event_type`, `command_id`, `reason`, and `error`.
+
 ## Repeated HTTP/2 stream failures
 
 Every daemon call to the backend — the daemon loop, `relay doctor`, computer

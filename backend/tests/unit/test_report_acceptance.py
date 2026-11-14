@@ -40,6 +40,44 @@ def test_report_receipt_is_durable_idempotent_and_payload_bound(tmp_path):
         registry.handle_durable_report("node", event, "wrong", report_id, digest)
 
 
+@pytest.mark.parametrize("replayed", [False, True])
+def test_late_output_keeps_exact_lease_and_is_persisted_once(tmp_path, replayed):
+    registry, sessions, event = fixture(tmp_path)
+    terminal = {key: value for key, value in event.items()
+                if key not in ("stream", "sequence", "text", "replayed")}
+    registry.handle_event("node", {**terminal, "type": "run.completed", "exitCode": 0}, "secret")
+    late = {**event, "replayed": replayed}
+    registry.handle_event("node", late, "secret")
+    registry.handle_event("node", late, "secret")
+    output = [item for item in sessions.get_session(event["sessionId"])["events"]
+              if item["type"] == "agent.output"]
+    assert [item["text"] for item in output] == ["hello"]
+    assert registry.daemon_store.get_command(event["commandId"])["status"] == "completed"
+    assert event["commandId"] not in registry.active_commands
+    for lease in (None, "wrong-lease"):
+        with pytest.raises(CommandEventMismatchError):
+            registry.handle_event("node", {**late, "leaseId": lease}, "secret")
+
+
+@pytest.mark.parametrize("lease", [None, "wrong-lease"])
+def test_late_output_lease_mismatch_is_retryable_without_acceptance(tmp_path, lease):
+    import json
+    from relay.api.computers.daemon_reports import _accept_batch
+
+    registry, sessions, event = fixture(tmp_path)
+    terminal = {key: value for key, value in event.items()
+                if key not in ("stream", "sequence", "text", "replayed")}
+    registry.handle_event("node", {**terminal, "type": "run.completed", "exitCode": 0}, "secret")
+    late = {**event, "leaseId": lease}
+    body = json.dumps(late)
+    report = {"id": "a" * 64, "digest": sha256(body.encode()).hexdigest(), "body": body}
+    [receipt] = _accept_batch(registry, "node", "secret", [report])
+    assert receipt["status"] == 503
+    assert not registry.daemon_store.report_was_accepted("node", event["commandId"], report["id"], report["digest"])
+    assert not any(item["type"] == "agent.output"
+                   for item in sessions.get_session(event["sessionId"])["events"])
+
+
 def test_two_registry_replicas_accept_one_effect_for_concurrent_copies(tmp_path):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
@@ -144,6 +182,46 @@ def test_wire_requires_digest_and_returns_receipt_only_after_acceptance(tmp_path
     assert result.status_code == 200, result.text
     assert result.headers['X-Relay-Report-Id'] == headers['X-Relay-Report-Id']
     assert result.headers['X-Relay-Report-Digest'] == headers['X-Relay-Report-Digest']
+
+
+@pytest.mark.parametrize("durable", [False, True])
+def test_wire_late_output_retries_lease_conflicts_but_rejects_wrong_ownership(tmp_path, durable):
+    from dataclasses import replace
+    import json
+    from fastapi.testclient import TestClient
+    from loguru import logger
+    from relay.app import create_app
+
+    registry, _, event = fixture(tmp_path)
+    terminal = {key: value for key, value in event.items()
+                if key not in ("stream", "sequence", "text", "replayed")}
+    registry.handle_event("node", {**terminal, "type": "run.completed", "exitCode": 0}, "secret")
+    app = create_app(str(tmp_path / "app"))
+    app.state.context = replace(app.state.context, registry=registry)
+    client = TestClient(app)
+
+    def post(payload):
+        raw = json.dumps(payload)
+        headers = {"Authorization": "Bearer secret", "Content-Type": "application/json"}
+        if durable:
+            headers.update({"X-Relay-Report-Id": "a" * 64,
+                            "X-Relay-Report-Digest": sha256(raw.encode()).hexdigest()})
+        return client.post("/api/v1/daemon-nodes/node/events", content=raw, headers=headers)
+
+    logs = []
+    sink = logger.add(lambda message: logs.append(message.record), level="DEBUG")
+    try:
+        result = post({**event, "leaseId": "wrong-lease"})
+    finally:
+        logger.remove(sink)
+    assert result.status_code == 503, result.text
+    assert result.headers["Retry-After"] == "1"
+    rejected = next(record["extra"] for record in logs if record["message"] == "Daemon node event rejected")
+    assert rejected["event_type"] == "run.output"
+    assert rejected["command_id"] == event["commandId"]
+    assert rejected["reason"] == "late_output_lease_mismatch"
+    assert post({**event, "runId": new_database_id()}).status_code == 409
+    assert post(event).status_code == 200
 
 
 def test_transport_incident_updates_preserve_read_state_and_do_not_duplicate(tmp_path):
