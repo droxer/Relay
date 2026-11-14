@@ -33,6 +33,7 @@ import { QueuedRunCard } from "./QueuedRunCard";
 import { queuedRun } from "../lib/queuedRun";
 import { AwaitingInputPrompt } from "./AwaitingInputPrompt";
 import { NextSteps } from "./NextSteps";
+import { useNextStepAdoption } from "../hooks/useNextStepAdoption";
 import { awaitingInput } from "../lib/awaitingInput";
 import { threadNextSteps } from "../lib/nextSteps";
 import { ThreadHeader } from "./ThreadHeader";
@@ -448,6 +449,15 @@ export function ThreadsView({
     () => (activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null),
     [projects, activeProjectId],
   );
+  // Adopting a suggestion files it where the thread's work lives: the
+  // project's tasks for a project thread, intake otherwise.
+  const nextStepAdoption = useNextStepAdoption({
+    projectId: activeProjectId,
+    projectName: activeThreadProject?.name ?? null,
+    readOnly: Boolean(projectReadOnly),
+    tasks,
+    onOpenTaskRecord,
+  });
   const projectOverviewState = resolveProjectOverviewState({
     showProjectOverview,
     project: selectedProject,
@@ -693,6 +703,7 @@ export function ThreadsView({
                   key={JSON.stringify([activeSession?.id, activeSession?.activeRoundId, waitingQuestionId, followUpWait])}
                   steps={nextSteps}
                   onSend={(text) => composerRef.current?.send(text) ?? Promise.resolve(false)}
+                  adoption={nextStepAdoption}
                 />
               </>
             ) : (

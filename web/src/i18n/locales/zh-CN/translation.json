@@ -2568,7 +2568,22 @@
     "no_responsibility": "尚未设置职责范围。"
   },
   "next_steps": {
-    "title": "建议的下一步"
+    "title": "建议的下一步",
+    "hint": "点击建议直接发送；点“采纳”可将其保存为 {{destination}} 中的任务。",
+    "no_project": "议题（无项目）",
+    "adopt": "采纳",
+    "adopt_label": "采纳为任务：{{step}}",
+    "confirm_label": "根据此建议新建任务",
+    "confirm": "在 {{destination}} 中新建一个待办任务？分配后才会开始执行。",
+    "create": "新建任务",
+    "creating": "正在创建…",
+    "cancel": "取消",
+    "retry": "重试",
+    "adopt_failed": "任务未创建，请检查网络后重试。",
+    "adopted": "已添加为 {{ref}}",
+    "open_task": "打开任务 {{ref}}",
+    "adopted_announce": "已在 {{destination}} 中创建任务 {{ref}}。",
+    "this_project": "当前项目"
   },
   "awaiting": {
     "question_title": "{{agent}} 需要你的回答",

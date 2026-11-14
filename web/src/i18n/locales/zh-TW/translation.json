@@ -2568,7 +2568,22 @@
     "no_responsibility": "尚未設定職責範圍。"
   },
   "next_steps": {
-    "title": "建議的下一步"
+    "title": "建議的下一步",
+    "hint": "點擊建議直接傳送；點「採納」可將其儲存為 {{destination}} 中的任務。",
+    "no_project": "議題（無專案）",
+    "adopt": "採納",
+    "adopt_label": "採納為任務：{{step}}",
+    "confirm_label": "根據此建議新建任務",
+    "confirm": "在 {{destination}} 中新建一個待辦任務？指派後才會開始執行。",
+    "create": "新建任務",
+    "creating": "正在建立…",
+    "cancel": "取消",
+    "retry": "重試",
+    "adopt_failed": "任務未建立，請檢查網路後重試。",
+    "adopted": "已新增為 {{ref}}",
+    "open_task": "開啟任務 {{ref}}",
+    "adopted_announce": "已在 {{destination}} 中建立任務 {{ref}}。",
+    "this_project": "目前專案"
   },
   "awaiting": {
     "question_title": "{{agent}} 需要你的回答",
