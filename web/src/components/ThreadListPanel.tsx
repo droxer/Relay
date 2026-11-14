@@ -33,6 +33,8 @@ import { useKeyChange } from "../hooks/useKeyChange";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { ListSkeleton } from "./ListSkeleton";
 import { FilterSelect } from "./FiltersBar";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { THREAD_KIND_FILTER_ALL, THREAD_KIND_FILTERS, type ThreadKindFilter } from "../lib/threadKindFilter";
 import {
   THREAD_PROJECT_FILTER_ALL,
   type ThreadProjectFilter,
@@ -64,6 +66,8 @@ export function ThreadListPanel({
   projectFilter,
   projectFilterOptions,
   onProjectFilterChange,
+  kindFilter,
+  onKindFilterChange,
   selectedSessionId,
   selectedProjectId,
   listOnScreen,
@@ -97,6 +101,9 @@ export function ThreadListPanel({
   projectFilter: ThreadProjectFilter;
   projectFilterOptions: readonly ThreadProjectOption[];
   onProjectFilterChange: (filter: ThreadProjectFilter) => void;
+  /** The threads rail's task/chat quick filter; the projects rail ignores it. */
+  kindFilter: ThreadKindFilter;
+  onKindFilterChange: (filter: ThreadKindFilter) => void;
   selectedSessionId: string | undefined;
   selectedProjectId: string | null;
   /** On a phone, whether this pane is the one showing. A selection outlives
@@ -148,7 +155,7 @@ export function ThreadListPanel({
   });
 
   const projectFiltered = directoryMode === "threads" && projectFilter !== THREAD_PROJECT_FILTER_ALL;
-  const railWindow = useRailWindow(threads, tasks, selectedSessionId, `${projectFilter}\n${query}`);
+  const railWindow = useRailWindow(threads, tasks, selectedSessionId, `${projectFilter}\n${kindFilter}\n${query}`);
   const projectFilterChoices = useMemo(() => [
     { value: THREAD_PROJECT_FILTER_ALL, label: t("thread.project_filter_all") },
     ...projectFilterOptions.map((option) => ({
@@ -263,6 +270,25 @@ export function ThreadListPanel({
             className={`list-filter-select${projectFiltered ? " list-filter-select--active" : ""}`}
           />
         ) : null}
+        {directoryMode === "threads" ? (
+          /* A view switch over the one list, not tabs: nothing navigates. It
+             takes its own line so the search keeps its width at any rail size. */
+          <ToggleGroup
+            className="thread-kind-filter"
+            aria-label={t("thread.kind_filter_label")}
+            value={[kindFilter]}
+            onValueChange={(next) => {
+              const picked = next[0];
+              if (picked) onKindFilterChange(picked as ThreadKindFilter);
+            }}
+          >
+            {THREAD_KIND_FILTERS.map((kind) => (
+              <ToggleGroupItem key={kind} value={kind} className="thread-kind-filter-item">
+                {t(`thread.kind_filter_${kind}`)}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        ) : null}
       </div>
       {/* A plain scroller, not a second landmark: the enclosing <aside> already
           carries this exact name, and two landmarks with one name are ones a
@@ -349,6 +375,16 @@ export function ThreadListPanel({
               )}
             />
           ) : null
+        ) : threads.length === 0 && kindFilter !== THREAD_KIND_FILTER_ALL && !projectFiltered ? (
+          <RelayEmptyState feature="threads"
+            className="conversation-empty"
+            title={query.trim() ? t("thread.no_matches") : t(`thread.kind_filter_empty_${kindFilter}`)}
+            actions={(
+              <Button type="button" variant="outline" onClick={() => onKindFilterChange(THREAD_KIND_FILTER_ALL)}>
+                {t("thread.kind_filter_clear")}
+              </Button>
+            )}
+          />
         ) : threads.length === 0 && projectFiltered ? (
           // The filter, not the account, emptied the list: offer the way back
           // rather than a create that would not land under this filter.
