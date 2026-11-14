@@ -2,6 +2,8 @@
 
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useTagCatalog } from "../../hooks/useTagCatalog";
+import { mergeTagNames } from "../../lib/tagCatalog";
 import { Field } from "@/components/ui/field";
 import { ActionRemove, ICON } from "../icons";
 import { TagBadge } from "../TaskTags";
@@ -36,7 +38,8 @@ export function TaskTagsField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
   const full = tags.length >= MAX_TAGS;
-  const offered = suggestions.filter((tag) => !hasTag(tags, tag));
+  const catalog = useTagCatalog();
+  const offered = mergeTagNames(suggestions, (catalog.data?.tags ?? []).map(entry => entry.name)).filter((tag) => !hasTag(tags, tag));
 
   function commit(value: string): void {
     const next = addTags(tags, value);

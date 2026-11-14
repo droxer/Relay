@@ -1589,6 +1589,81 @@ other login sessions while keeping the calling session. Attempts are rate
 limited. Both endpoints require a session cookie; invalid values return 400.
 The browser exposes both forms at `/settings/account`.
 
+### Personal tag catalog
+
+A person's tags are the names they saved plus every tag on the live Tasks and
+Automations they own — the records `GET /api/v1/tasks` lists, counted in full,
+never one page. Names follow the per-record rules (`core/task_tags.py`: trimmed,
+inner whitespace collapsed, 1–32 characters, no comma; identity is
+case-insensitive). Saved names live in `user_tags`; tags on work stay in the
+task snapshots and change only through new `task.updated` events carrying
+`tags`, `actorUserId`, and `tagOperation` (`rename` / `merge` / `delete`).
+Earlier events are never rewritten. Status, assignment, and schedules do not
+change, and nothing is dispatched. Only a sign-in session may call these routes
+(no node or chat-service token); anonymous calls answer 401. Errors are
+`{ "detail": "<code>" }`. Rules: `backend/relay/tags/catalog.py`.
+
+```ts
+type TagEntry = { name: string; taskCount: number; automationCount: number; saved: boolean };
+type TagOperation =
+  | { operation: "rename"; name: string; newName: string }
+  | { operation: "merge"; sources: string[]; target: string } // 1–20 sources
+  | { operation: "delete"; name: string };
+type TagRecord = {
+  id: string; number: number | null; title: string; isRoutine: boolean;
+  tagsBefore: string[]; tagsAfter: string[];
+};
+type TagRecordGroup<T> = {
+  taskCount: number; automationCount: number; // complete counts
+  items: T[]; itemsTruncated: boolean;        // at most 50 items
+};
+type ExcludedReason = "project_unavailable" | "project_not_owned" | "project_disabled";
+```
+
+- `GET /account/tags?query=` → `{ tags: TagEntry[], total }`, sorted by name,
+  `Cache-Control: no-store`. `query` keeps names containing it,
+  case-insensitively. A tag shows its saved spelling, else the spelling its
+  records use most. `saved: false` means the tag exists only on work.
+- `POST /account/tags` `{ name }` → 201 `{ tag: TagEntry }`. 400 `tag_invalid`;
+  409 `tag_exists` (saved, or already on any of your work, in any case); 409
+  `tag_catalog_full` (500 saved names).
+- `POST /account/tags/preview` `TagOperation` → `{ operation, previewToken,
+  affected: TagRecordGroup<TagRecord>, excluded: TagRecordGroup<TagRecord &
+  { reason: ExcludedReason }>, catalog: { removes: string[], saves: string |
+  null } }`. 400 `tag_invalid` / `tag_operation_invalid` / `tag_unchanged`; 404
+  `tag_not_found` (the source is in neither your saved names nor your work);
+  409 `tag_exists` (a rename onto a different existing tag — offer merge
+  instead; renaming only the letter case is allowed).
+- `POST /account/tags/apply` `TagOperation & { previewToken }` → `{ operation,
+  updated: { taskCount, automationCount }, excluded: { taskCount,
+  automationCount }, tags: TagEntry[] }`. 400 `tag_preview_required` or a
+  validation code; 409 `tag_preview_stale`. Re-preview and confirm again.
+
+Scope and exclusions: a record in a project is changed only while the project
+is yours, unarchived, and enabled (the task PATCH rule). Other records are
+listed under `excluded` with a reason and left unchanged. The reason carries no
+project details, and the tag stays listed through those records. Delete removes
+the tag from affected records and drops the saved name; it never deletes a Task
+or Automation. Merge replaces every source with the target at the first
+position any of them held, removing duplicates. Rename and merge also save the
+new name. An Automation's next occurrences inherit its updated tags; earlier
+occurrences are ordinary Tasks and are covered by the same operation.
+
+Concurrency: `previewToken` fingerprints the affected records (id, version,
+outcome), the excluded ones, and your saved names. Apply takes a per-user lock,
+holds the matching rows for update, recomputes the preview, and answers 409
+`tag_preview_stale` on any difference. That covers a new or edited record, a
+project change, a concurrent apply (exactly one wins), and a reused token. So a
+preview never authorizes records it did not show. All record events and the
+catalog change commit in one transaction or none do. A task saved afterwards
+from a client that still holds the old tags writes them back; the tag then
+reappears as an unsaved tag.
+
+Cache: after create, invalidate the catalog query (or insert the returned
+`tag`). After apply, replace the catalog with the returned `tags`, and
+invalidate task and automation lists and any open task detail or tag picker
+caches, because record versions and tags changed.
+
 ### Thread image attachments
 
 - `POST /api/v1/thread-attachments`: authenticated raw image upload, with

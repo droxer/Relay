@@ -16,6 +16,8 @@ from .routines import TaskRoutineRows
 from .links import TaskLinkRows
 from .prerequisites import TaskPrerequisiteRows
 from .reads import TaskReadRows
+from .tags import TaskTagRows
+from ..tables import tags as tags_tables
 
 
 
@@ -26,6 +28,7 @@ class DatabaseTaskStore(
     TaskLinkRows,
     TaskPrerequisiteRows,
     TaskReadRows,
+    TaskTagRows,
 ):
 
     metadata = shared_metadata
@@ -35,6 +38,7 @@ class DatabaseTaskStore(
     number_counters = tasks_tables.number_counters
     task_sessions = tasks_tables.task_sessions
     task_prerequisites = tasks_tables.task_prerequisites
+    user_tags = tags_tables.user_tags
 
     def __init__(self, database_url: str, *, create_schema: bool = False):
         self.engine = shared_engine(database_url)
@@ -57,6 +61,7 @@ class DatabaseTaskStore(
             "task_sessions",
             "task_number_counters",
             "task_prerequisites",
+            "user_tags",
         }
         missing = required_tables.difference(schema.get_table_names())
         if missing:
@@ -71,6 +76,7 @@ class DatabaseTaskStore(
                 self.task_sessions,
                 self.number_counters,
                 self.task_prerequisites,
+                self.user_tags,
             )
         }
         for table_name, expected in required_columns.items():

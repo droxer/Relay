@@ -59,6 +59,10 @@ describe("app pathname routes", () => {
     assert.deepEqual(parseAppPath("/settings/appearance"), {
       route: "settings", mobileView: "chat", sessionId: null, settingsSection: "appearance",
     });
+    assert.deepEqual(parseAppPath("/settings/tags"), {
+      route: "settings", mobileView: "chat", sessionId: null, settingsSection: "tags",
+    });
+    assert.equal(hrefForSettingsSection("tags"), "/settings/tags");
     // An unknown section is a bad link, not the default section.
     assert.equal(parseAppPath("/settings/nope").notFound, true);
   });

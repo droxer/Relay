@@ -49,6 +49,8 @@ it("follows growing output only while the reader is pinned", () => {
   const node = screen.getByTestId("transcript");
   Object.defineProperties(node, { scrollHeight: { value: 500 }, clientHeight: { value: 100 } });
   node.scrollTop = 0;
+  // A reader's input ends the opening-layout grace period before scrolling.
+  fireEvent.wheel(node, { deltaY: -100 });
   fireEvent.scroll(node);
   act(() => resize());
   expect(node.scrollTop).toBe(0);

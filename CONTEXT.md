@@ -304,7 +304,10 @@ _Avoid_: Project Agent, lead Agent
 **Tag**:
 A free-form label a person files a Task or Automation under, to group and
 filter them. Tags are compared case-insensitively and carry no behaviour of
-their own; an Automation's tags are copied onto every Task it fires.
+their own; an Automation's tags are copied onto every Task it fires. A
+person's tag catalog is the tags they saved (kept even when nothing uses them)
+plus every tag on their own work; renaming, merging, or deleting a tag there
+edits that work through ordinary task events.
 _Avoid_: Label, category
 
 **Issue Import**:

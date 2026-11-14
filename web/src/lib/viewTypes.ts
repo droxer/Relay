@@ -6,12 +6,13 @@ export type AppRoute = "home" | "main" | "projects" | "backlog" | "routine" | "a
    Computers and Skills are not here: they are the Infra a person runs agents
    on, so they are top-level routes of their own (`/computers`, `/skills`).
    Adding a section = one entry here plus its case in SettingsPage. */
-export type SettingsSection = "account" | "connections" | "notifications" | "appearance" | "language";
+export type SettingsSection = "account" | "connections" | "notifications" | "tags" | "appearance" | "language";
 
 const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   "connections",
   "account",
   "notifications",
+  "tags",
   "appearance",
   "language",
 ];

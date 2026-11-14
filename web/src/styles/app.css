@@ -45,6 +45,7 @@
 @import "./roster-select.css" layer(relay);
 @import "./task-drawer.css" layer(relay);
 @import "./task-tags.css" layer(relay);
+@import "./tag-manager.css" layer(relay);
 @import "./task-record.css" layer(relay);
 @import "./task-review.css" layer(relay);
 @import "./record-panels.css" layer(relay);

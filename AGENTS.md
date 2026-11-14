@@ -344,6 +344,8 @@ migration.
     `tasks/` (`assignment`, `creation`, `deletion`, `dispatch`, `placement`,
     `requests`, `rounds`, `start`, `update`, `workspace`, `issue_triage`, …),
     `skills/` (`assignments`, `bundle`, `grants`, `git_import`),
+    `tags/` (`catalog` — the personal tag catalog; pure rules in
+    `core/tag_operations.py`, rows in `persistence/task/tags.py`),
     `computer/` (`limits`, `names`, `node_agents`, `workspace_query`, beside
     the installer assets), `execution/` (`lifecycle`, `session_deletion`),
     and `realtime/` (`event_notifier`). There is no generic `services`

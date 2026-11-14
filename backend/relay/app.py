@@ -16,6 +16,7 @@ from .api.accounts import (
     notifications as notification_routes,
     password_reset as password_reset_routes,
     profile_images as profile_image_routes,
+    tags as tag_catalog_routes,
     users as admin_user_routes,
     waitlist as waitlist_routes,
 )
@@ -415,6 +416,7 @@ API_ROUTERS = (
     notification_routes.router,
     password_reset_routes.router,
     github_connection_routes.router,
+    tag_catalog_routes.router,
     waitlist_routes.router,
 )
 
