@@ -48,7 +48,7 @@ it("keeps a done task's summary row out of needsYou with no waiting subline", ()
     eventCount: 10, runCount: 1, artifactCount: 0,
   } as SessionSummary]);
   const tasks = [{ id: "task", status: "done", linkedSessionIds: [thread.id] }] as RelayTaskListItem[];
-  const item: ThreadItem = { session: thread, origin: { kind: "backlog", taskId: "task", title: "Task", status: "done" } };
+  const item: ThreadItem = { session: thread, origin: { kind: "backlog", taskId: "task", ref: "#1", title: "Task", status: "done" } };
   const groups = groupThreads([item], tasks);
   expect(groups.needsYou).toHaveLength(0);
   expect(groups.idle).toEqual([item]);
@@ -56,6 +56,12 @@ it("keeps a done task's summary row out of needsYou with no waiting subline", ()
   expect(container.querySelector(".task-status-icon")?.getAttribute("data-status")).toBe("done");
   expect(container.querySelector(".conversation-status")).toBeNull();
   expect(container.textContent).not.toContain("thread.statuses.waiting_for_human");
+  expect(container.querySelector(".conversation-ref")?.textContent).toBe("#1");
+});
+
+it("shows no task number on a plain chat row", () => {
+  const container = renderRow({ session: session("chat", "completed") }, "idle");
+  expect(container.querySelector(".conversation-ref")).toBeNull();
 });
 
 it("marks a task thread's state, including when it is settled", () => {
@@ -65,7 +71,7 @@ it("marks a task thread's state, including when it is settled", () => {
     ["completed", "done"],
   ] as const) {
     const container = renderRow(
-      { session: session(status, status), origin: { kind: "backlog", taskId: "task", title: "Task" } },
+      { session: session(status, status), origin: { kind: "backlog", taskId: "task", ref: "#1", title: "Task" } },
       status === "waiting_for_human" ? "attn" : status === "running" ? "run" : "idle",
     );
     const marks = container.querySelectorAll(".task-status-icon");
@@ -87,11 +93,11 @@ it("shows a conversation recovery badge when the computer is unresponsive", () =
 });
 
 it("keeps failure and cancellation status for task threads", () => {
-  const failed = renderRow({ session: session("f", "failed"), origin: { kind: "backlog", taskId: "task", title: "Task" } }, "idle").querySelector(".task-status-icon");
+  const failed = renderRow({ session: session("f", "failed"), origin: { kind: "backlog", taskId: "task", ref: "#1", title: "Task" } }, "idle").querySelector(".task-status-icon");
   expect(failed?.getAttribute("data-status")).toBe("blocked");
 
   // Cancellation uses the same slashed ring as the task board.
-  const cancelled = renderRow({ session: session("c", "cancelled"), origin: { kind: "routine", taskId: "auto", title: "Automation" } }, "idle").querySelector(".task-status-icon");
+  const cancelled = renderRow({ session: session("c", "cancelled"), origin: { kind: "routine", taskId: "auto", ref: "#1", title: "Automation" } }, "idle").querySelector(".task-status-icon");
   expect(cancelled?.getAttribute("data-status")).toBe("cancelled");
 });
 
@@ -141,7 +147,7 @@ it.each(["backlog", "assigned", "queued", "running", "waiting_for_human", "revie
     for (const layout of ["full", "nested"] as const) {
       const container = renderRow({
         session: session(`task-${status}-${layout}`, "completed"),
-        origin: { kind: "backlog", taskId: "task", title: "Task", status },
+        origin: { kind: "backlog", taskId: "task", ref: "#1", title: "Task", status },
       }, "idle", layout);
       expect(container.querySelector(".task-status-icon")?.getAttribute("data-status")).toBe(status);
       expect(container.querySelector(".state-mark")).toBeNull();

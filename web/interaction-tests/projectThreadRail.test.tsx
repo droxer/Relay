@@ -1,4 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { threadDirectoryMode } from '../src/lib/threads';
 import { parseAppPath } from '../src/lib/appRoute';
@@ -11,11 +12,12 @@ const sessions = ['Conversation', 'Task run', 'Automation run'].map((title, inde
   updatedAt: '2026-11-11T00:00:00Z', agentRuns: [],
 }) as unknown as RelaySession);
 
-function panel(path: string, selectedSessionId: string | undefined = 's1') {
+function panel(path: string, selectedSessionId: string | undefined = 's1', overrides: Partial<ComponentProps<typeof ThreadListPanel>> = {}) {
   const location = parseAppPath(path);
   return <ThreadListPanel directoryMode={threadDirectoryMode(location.route, location.sessionId, location.composingNew)} threads={sessions.map(session => ({ session }))}
     tasks={[]} projects={[project]} projectsStatus="ready" projectsError="" onRetryProjects={vi.fn()}
     query="" setQuery={vi.fn()} projectFilter="all" projectFilterOptions={[]} onProjectFilterChange={vi.fn()} kindFilter="all" onKindFilterChange={vi.fn()}
+    {...overrides}
     selectedSessionId={selectedSessionId} selectedProjectId={location.projectId ?? null} listOnScreen={false}
     onSelectThread={vi.fn()} onSelectProject={vi.fn()} onCreateProject={vi.fn()} onNewThread={vi.fn()}
     onRenameThread={vi.fn()} onCloseThread={vi.fn()} width={300} onResize={vi.fn()} onResizeActive={vi.fn()} />;
@@ -61,4 +63,17 @@ it('offers the task/chat switch on the Threads rail only', () => {
   expect(within(group).getByRole('button', { name: 'thread.kind_filter_all' }).getAttribute('aria-pressed')).toBe('true');
   view.rerender(panel('/projects', undefined));
   expect(screen.queryByRole('group', { name: 'thread.kind_filter_label' })).toBeNull();
+});
+
+it('answers a project plus kind filter that empties the list with one message and one clearing button', () => {
+  const onProjectFilterChange = vi.fn();
+  const onKindFilterChange = vi.fn();
+  render(panel('/threads', undefined, {
+    threads: [], projectFilter: 'p', kindFilter: 'tasks', onProjectFilterChange, onKindFilterChange,
+  }));
+  expect(screen.getByText('thread.project_kind_filter_empty_tasks')).toBeTruthy();
+  expect(screen.queryByText('thread.project_filter_empty')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'thread.kind_filter_clear' }));
+  expect(onProjectFilterChange).toHaveBeenCalledWith('all');
+  expect(onKindFilterChange).toHaveBeenCalledWith('all');
 });

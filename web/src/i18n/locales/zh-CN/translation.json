@@ -428,6 +428,8 @@
     "kind_filter_empty_tasks": "还没有任务对话。",
     "kind_filter_empty_chats": "还没有普通会话。",
     "kind_filter_clear": "显示全部对话",
+    "project_kind_filter_empty_tasks": "该项目还没有任务对话。",
+    "project_kind_filter_empty_chats": "该项目还没有普通会话。",
     "resize_label": "调整对话列表宽度",
     "new_thread": "新对话",
     "count_other": "{{count}} 个对话",

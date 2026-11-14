@@ -127,11 +127,11 @@ test("a gate stop offers the agent's own next steps below the response with a fr
   await expect(page.getByText("A required step ended without reporting what it did.", { exact: true })).toHaveCount(0);
   await expect(page.getByPlaceholder("Answer Reviewer…")).toHaveCount(0);
   const prompt = page.getByRole("region", { name: "Suggested next" });
-  await expect(prompt.getByRole("list").getByRole("button")).toHaveText(steps);
+  await expect(prompt.locator(".next-steps-item")).toHaveText(steps);
   await prompt.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
   await prompt.screenshot({ path: testInfo.outputPath("awaiting-check.png") });
   const message = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith(`/threads/${session.id}/messages`));
-  await prompt.getByRole("button", { name: steps[0] }).click();
+  await prompt.getByRole("button", { name: steps[0], exact: true }).click();
   expect((await message).postDataJSON().questionId).toBe("wait-1");
   await expect.poll(() => sent).toEqual([steps[0]]);
 });
@@ -241,10 +241,10 @@ test("a finished turn offers its suggested next steps, one click each", async ({
   await page.goto(`/threads/${session.id}`);
   await expect(page.getByRole("region", { name: "Reviewer needs your answer" })).toHaveCount(0);
   const offers = page.getByRole("region", { name: "Suggested next" });
-  await expect(offers.getByRole("list").getByRole("button")).toHaveText(steps);
+  await expect(offers.locator(".next-steps-item")).toHaveText(steps);
   await offers.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
-  await offers.getByRole("button", { name: steps[1] }).hover();
+  await offers.getByRole("button", { name: steps[1], exact: true }).hover();
   await page.screenshot({ path: testInfo.outputPath("next-steps.png") });
-  await offers.getByRole("button", { name: steps[0] }).click();
+  await offers.getByRole("button", { name: steps[0], exact: true }).click();
   await expect.poll(() => sent).toEqual([steps[0]]);
 });

@@ -22,8 +22,8 @@ describe("reuseThreadItems", () => {
   it("keeps the previous object for an item whose fields are unchanged", () => {
     const a = session("a");
     const b = session("b");
-    const previous: ThreadItem[] = [{ session: a }, { session: b, origin: { kind: "backlog", taskId: "t", title: "T" } }];
-    const next: ThreadItem[] = [{ session: a }, { session: b, origin: { kind: "backlog", taskId: "t", title: "T" } }];
+    const previous: ThreadItem[] = [{ session: a }, { session: b, origin: { kind: "backlog", taskId: "t", ref: "#1", title: "T" } }];
+    const next: ThreadItem[] = [{ session: a }, { session: b, origin: { kind: "backlog", taskId: "t", ref: "#1", title: "T" } }];
     const reused = reuseThreadItems(previous, next);
     assert.equal(reused[0], previous[0]);
     assert.equal(reused[1], previous[1]);
@@ -31,7 +31,7 @@ describe("reuseThreadItems", () => {
 
   it("refreshes a row when only its linked task status changes", () => {
     const a = session("a");
-    const origin = { kind: "backlog" as const, taskId: "t", title: "T", status: "review" as const };
+    const origin = { kind: "backlog" as const, taskId: "t", ref: "#1", title: "T", status: "review" as const };
     const previous: ThreadItem[] = [{ session: a, origin }];
     const next: ThreadItem[] = [{ session: a, origin: { ...origin, status: "done" } }];
     assert.equal(reuseThreadItems(previous, next)[0], next[0]);
