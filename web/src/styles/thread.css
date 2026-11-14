@@ -393,6 +393,11 @@
   text-overflow: ellipsis;
 }
 
+.conversation-ref {
+  flex: none;
+  color: var(--ink-3);
+}
+
 .conversation-topline {
   min-width: 0;
   display: flex;

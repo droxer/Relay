@@ -1,5 +1,6 @@
 import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary, TaskStatus } from "../types.js";
 import type { ThreadGroups } from "./threadGroups.js";
+import { taskRef } from "./taskRef.js";
 
 // A thread is one owner-scoped session. The row binds to the session
 // itself (not a user), so the logged-in user can hold several in
@@ -33,6 +34,8 @@ export type ThreadParticipant = {
 export type ThreadOrigin = {
   kind: "backlog" | "routine";
   taskId: string;
+  /** The task's number as people read it (`#12`, `AUTO-3`); its id until numbered. */
+  ref: string;
   /** Current lifecycle of the linked task or automation occurrence. */
   status?: TaskStatus;
   /** The backlog task's title, or the parent routine's for an occurrence. */
@@ -41,7 +44,7 @@ export type ThreadOrigin = {
 
 type OriginTask = Pick<
   RelayTaskSummary,
-  "id" | "title" | "isRoutine" | "sourceRoutineId" | "linkedSessionIds" | "deletedAt" | "status"
+  "id" | "number" | "title" | "isRoutine" | "sourceRoutineId" | "linkedSessionIds" | "deletedAt" | "status"
 >;
 
 /**
@@ -58,6 +61,7 @@ export function threadOriginIndex(tasks: readonly OriginTask[]): Map<string, Thr
     const origin: ThreadOrigin = {
       kind: isRoutine ? "routine" : "backlog",
       taskId: task.id,
+      ref: taskRef(task),
       status: task.status,
       title: (task.sourceRoutineId && titles.get(task.sourceRoutineId)) || task.title,
     };

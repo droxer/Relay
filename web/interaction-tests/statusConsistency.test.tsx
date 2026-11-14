@@ -14,7 +14,7 @@ const statuses: TaskStatus[] = ["backlog", "assigned", "queued", "running", "rev
 it.each(statuses)("keeps the task row and linked thread's %s icon identical", (status) => {
   const task = { id: "task", status, workflowStage: status === "blocked" || status === "waiting_for_human" ? "running" : status } as RelayTaskListItem;
   const session = { id: "thread", taskGoal: "Task thread", status: "completed", updatedAt: "2026-11-10T12:00:00Z", agentRuns: [] } as unknown as RelaySession;
-  const thread = render(<ul><ThreadRow item={{ session, origin: { kind: "backlog", taskId: "task", title: "Task", status } }} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} /></ul>);
+  const thread = render(<ul><ThreadRow item={{ session, origin: { kind: "backlog", taskId: "task", ref: "#1", title: "Task", status } }} selected={false} onSelect={vi.fn()} tone="idle" now={Date.parse(session.updatedAt)} /></ul>);
   const row = render(<InlineStatus task={task} onChange={vi.fn()} readOnly />);
   const threadIcon = thread.container.querySelector(".task-status-icon")!;
   const rowIcon = row.container.querySelector(".task-status-icon")!;

@@ -433,6 +433,8 @@
     "kind_filter_empty_tasks": "No task threads yet.",
     "kind_filter_empty_chats": "No chat threads yet.",
     "kind_filter_clear": "Show all threads",
+    "project_kind_filter_empty_tasks": "No task threads in this project yet.",
+    "project_kind_filter_empty_chats": "No chat threads in this project yet.",
     "resize_label": "Resize thread list",
     "new_thread": "New thread",
     "count_one": "{{count}} thread",

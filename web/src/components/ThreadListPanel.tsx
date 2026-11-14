@@ -385,6 +385,25 @@ export function ThreadListPanel({
               </Button>
             )}
           />
+        ) : threads.length === 0 && projectFiltered && kindFilter !== THREAD_KIND_FILTER_ALL ? (
+          // Both filters are active: name the combination and clear both in
+          // one step, so the person never lands on a second empty state.
+          <RelayEmptyState feature="threads"
+            className="conversation-empty"
+            title={query.trim() ? t("thread.no_matches") : t(`thread.project_kind_filter_empty_${kindFilter}`)}
+            actions={(
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  onProjectFilterChange(THREAD_PROJECT_FILTER_ALL);
+                  onKindFilterChange(THREAD_KIND_FILTER_ALL);
+                }}
+              >
+                {t("thread.kind_filter_clear")}
+              </Button>
+            )}
+          />
         ) : threads.length === 0 && projectFiltered ? (
           // The filter, not the account, emptied the list: offer the way back
           // rather than a create that would not land under this filter.

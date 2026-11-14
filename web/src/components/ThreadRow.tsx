@@ -165,6 +165,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
           <span className="conversation-topline">
             {hasLifecycle ? <TaskStatusIcon status={iconStatus} /> : <ThreadStatusBadge session={session} compact />}
             <span className="conversation-name">
+              {item.origin ? <span className="conversation-ref tnum">{item.origin.ref}</span> : null}
               <strong title={label}>{label}</strong>
               {/* A property of the thread itself, so it rides the title and
                   survives the hover swap that hides the timestamp. */}
