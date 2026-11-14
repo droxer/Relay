@@ -7,6 +7,7 @@
 .message-queue {
   --queue-inset: var(--composer-radius, var(--sp-5));
   width: min(100% - var(--queue-inset) * 2, var(--thread-measure) - var(--queue-inset) * 2);
+  min-width: 0;
   margin: 0 auto -1px;
   padding: var(--sp-1) var(--sp-2) calc(var(--sp-1) + 1px);
   border: 0.5px solid var(--line-1);
@@ -55,9 +56,14 @@
   color: var(--ink-2);
   font: var(--type-body);
   text-align: start;
+  cursor: pointer;
+}
+
+.message-queue-summary {
+  display: block;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
 }
 
 .message-queue-text:hover { color: var(--ink-1); }
@@ -89,10 +95,10 @@
   color: var(--ink-2);
   font: var(--type-body);
 }
-.message-queue-error { margin: var(--sp-2); color: var(--ink-1); font: var(--type-body); }
+.message-queue-error { margin: var(--sp-2); color: var(--ink-1); font: var(--type-body); overflow-wrap: anywhere; }
 @media (pointer: coarse) {
-  .message-queue-actions button, .message-queue-text { min-height: 44px; }
-  .message-queue-actions button { min-width: 44px; }
+  .message-queue button { min-height: 44px; }
+  .message-queue button:not(.message-queue-text) { min-width: 44px; }
 }
 
 .message-queue-content { min-width: 0; }
@@ -113,8 +119,9 @@
   overflow-wrap: anywhere;
 }
 .message-queue-status > span { min-width: 0; overflow-wrap: anywhere; }
+.message-queue-status > button { flex-shrink: 0; }
 @media (max-width: 640px) {
-  .message-queue-item { grid-template-columns: auto minmax(0, 1fr); padding-block: var(--sp-1); }
+  .message-queue-item { grid-template-columns: auto minmax(0, 1fr); row-gap: var(--sp-1); padding-block: var(--sp-1); }
   .message-queue-actions { grid-column: 2; justify-self: end; flex-wrap: wrap; }
   .message-queue-item[data-expanded] .message-queue-actions { grid-row: 3; }
   .message-queue-preview { grid-row: 2; }

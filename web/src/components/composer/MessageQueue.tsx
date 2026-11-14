@@ -46,12 +46,12 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
             <li key={message.id} className="message-queue-item" data-expanded={open || undefined}>
               <ActionFollowUp size={ICON.sm} className="message-queue-glyph" aria-hidden="true" />
               <div className="message-queue-content">
-                {recipients ? <span className="message-queue-recipient">{recipients}</span> : null}
                 <button type="button" className="message-queue-text" aria-expanded={open}
                   aria-controls={open ? previewId : undefined}
                   aria-label={`${t(open ? "queue.collapse_item" : "queue.preview_item", { number: index + 1 })}: ${message.text}`}
                   onClick={() => setExpanded(open ? null : message.id)}>
-                  {open ? t("queue.collapse_item", { number: index + 1 }) : message.text}
+                  {recipients ? <span className="message-queue-recipient">{recipients}</span> : null}
+                  <span className="message-queue-summary">{open ? t("queue.collapse_item", { number: index + 1 }) : message.text}</span>
                 </button>
               </div>
               <div className="message-queue-actions">
