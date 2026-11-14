@@ -230,6 +230,17 @@
   white-space: nowrap;
 }
 
+/* The model id is the only part of the meta line allowed to shrink: it
+   truncates with an ellipsis on a narrow rail or phone, but keeps a floor so
+   it never collapses to a bare "…". Colour and face are inherited from
+   .agent-meta, so both themes and density rungs follow the shared tokens. */
+.agent-meta-model {
+  min-width: 4ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .agent-meta-separator {
   color: var(--ink-4);
 }
