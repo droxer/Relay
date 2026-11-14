@@ -74,3 +74,9 @@ with tempfile.TemporaryDirectory() as directory:
             expected.append("relay worker-schema")
         assert log.read_text().splitlines() == expected
 print("ok    API deploy prepares the database; the separate worker binds no HTTP port")
+
+web = (root / "web/Dockerfile").read_text()
+assert "ARG RELAY_BUILD_ID" in web, "web build must accept the pinned release id"
+assert "RELAY_BUILD_ID=$RELAY_BUILD_ID" in web, "Next build must inherit the release id"
+assert web.index("ARG RELAY_BUILD_ID") < web.index("RUN npm run build -w web")
+print("ok    web Docker build forwards the release id to Next")

@@ -126,7 +126,11 @@ migrations. It never deploys a new commit — that is `release`.
 
 `release` first builds the export of the release commit in Docker (`web/Dockerfile`'s
 `build` stage, fed by `git archive`, so nothing from the working tree is used
-and the remote source never runs on this machine). A failed local build starts
+and the remote source never runs on this machine). The Docker build sets
+`RELAY_BUILD_ID` to the full release commit SHA, so `/version.json` and the
+client identify that release even when web sources have not changed. Compare
+`buildId` with the release SHA; it is not a base36 timestamp for these releases.
+A failed local build starts
 no API deployment. It then deploys the API and background worker. Once both
 deployments succeed, it uploads the export through
 the Workers direct-upload API (`workers_deploy.py`; files Cloudflare already
