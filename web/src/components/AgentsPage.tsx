@@ -9,6 +9,7 @@ import { agentMatchesQuery } from "../lib/agentSearch";
 import { groupAgentsByComputer } from "../lib/agentGroups";
 import type { CurrentUser, UserAgent } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
+import { agentModel } from "../lib/agentModels";
 import { AgentStateBadge } from "./AgentStateBadge";
 import {
   ActionAdd,
@@ -89,6 +90,7 @@ function RosterRow({
             <AgentMetaLine
               executorKind={agent.executorKind}
               placements={agent.placements}
+              model={agentModel(agent)}
               className="agents-roster-row-meta"
               showComputers={false}
             />

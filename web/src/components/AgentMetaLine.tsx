@@ -33,9 +33,13 @@ export function AgentMetaLine({
   placements,
   className,
   showComputers = true,
+  model,
 }: {
   executorKind: AgentName;
   placements: readonly AgentPlacement[];
+  /** The agent's pinned model id; "" is the runtime default. Omit on
+      surfaces that do not carry the agent's model policy. */
+  model?: string;
   className?: string;
   /** Pass `false` where the surface already bands rows by computer — the
       band names it, so the row would only restate it. The tooltip keeps the
@@ -45,6 +49,8 @@ export function AgentMetaLine({
   const { t } = useTranslation();
   const descriptions = describeAgentPlacements(activePlacements(placements));
   const runtime = agentLabel(executorKind);
+  const modelLabel = model === undefined ? null : model || t("agents_page.model_default");
+  const modelTitle = modelLabel ? ` · ${t("agents_page.model_label")}: ${modelLabel}` : "";
   const computerNames = descriptions.map(({ nodeName }) => nodeName).join(", ");
 
   return (
@@ -52,14 +58,23 @@ export function AgentMetaLine({
       className={`agent-meta${className ? ` ${className}` : ""}`}
       title={
         descriptions.length
-          ? `${t("agents_page.runtime")}: ${runtime} · ${t("agents_page.computers")}: ${computerNames}`
-          : `${t("agents_page.runtime")}: ${runtime} · ${t("agents_page.no_placements")}`
+          ? `${t("agents_page.runtime")}: ${runtime}${modelTitle} · ${t("agents_page.computers")}: ${computerNames}`
+          : `${t("agents_page.runtime")}: ${runtime}${modelTitle} · ${t("agents_page.no_placements")}`
       }
     >
       <span className="agent-meta-runtime">
         <span className="sr-only">{t("agents_page.runtime")}: </span>
         <span className="agent-meta-runtime-label" translate="no">{runtime}</span>
       </span>
+      {modelLabel ? (
+        <>
+          <span className="agent-meta-separator" aria-hidden="true">·</span>
+          <span className="agent-meta-model" translate={model ? "no" : undefined}>
+            <span className="sr-only">{t("agents_page.model_label")}: </span>
+            {modelLabel}
+          </span>
+        </>
+      ) : null}
       {showComputers ? (
         <>
           <span className="agent-meta-separator" aria-hidden="true">·</span>
