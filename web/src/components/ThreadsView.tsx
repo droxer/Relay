@@ -28,6 +28,7 @@ import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel, type ThreadListPaging } from "./ThreadListPanel";
 import type { ThreadProjectFilter, ThreadProjectOption } from "../lib/threadProjectFilter";
+import type { ThreadKindFilter } from "../lib/threadKindFilter";
 import { ExecutionRecoveryPanel } from "./ExecutionRecoveryPanel";
 import { QueuedRunCard } from "./QueuedRunCard";
 import { queuedRun } from "../lib/queuedRun";
@@ -119,6 +120,8 @@ type ThreadsViewProps = {
   threadProjectFilter: ThreadProjectFilter;
   threadProjectOptions: readonly ThreadProjectOption[];
   onThreadProjectFilterChange: (filter: ThreadProjectFilter) => void;
+  threadKindFilter: ThreadKindFilter;
+  onThreadKindFilterChange: (filter: ThreadKindFilter) => void;
   activeSession: RelaySession | undefined;
   pendingUserMessage: { id: string; text: string } | null;
   displayMessages: DerivedMessage[];
@@ -223,6 +226,8 @@ export function ThreadsView({
   threadProjectFilter,
   threadProjectOptions,
   onThreadProjectFilterChange,
+  threadKindFilter,
+  onThreadKindFilterChange,
   activeSession,
   pendingUserMessage,
   displayMessages,
@@ -480,6 +485,8 @@ export function ThreadsView({
         projectFilter={threadProjectFilter}
         projectFilterOptions={threadProjectOptions}
         onProjectFilterChange={onThreadProjectFilterChange}
+        kindFilter={threadKindFilter}
+        onKindFilterChange={onThreadKindFilterChange}
         /* No thread is on screen while a project overview or a route state
            occupies the pane, so no thread row may claim selection — the
            active session outlives the route that opened it. */

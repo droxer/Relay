@@ -15,7 +15,7 @@ function panel(path: string, selectedSessionId: string | undefined = 's1') {
   const location = parseAppPath(path);
   return <ThreadListPanel directoryMode={threadDirectoryMode(location.route, location.sessionId, location.composingNew)} threads={sessions.map(session => ({ session }))}
     tasks={[]} projects={[project]} projectsStatus="ready" projectsError="" onRetryProjects={vi.fn()}
-    query="" setQuery={vi.fn()} projectFilter="all" projectFilterOptions={[]} onProjectFilterChange={vi.fn()}
+    query="" setQuery={vi.fn()} projectFilter="all" projectFilterOptions={[]} onProjectFilterChange={vi.fn()} kindFilter="all" onKindFilterChange={vi.fn()}
     selectedSessionId={selectedSessionId} selectedProjectId={location.projectId ?? null} listOnScreen={false}
     onSelectThread={vi.fn()} onSelectProject={vi.fn()} onCreateProject={vi.fn()} onNewThread={vi.fn()}
     onRenameThread={vi.fn()} onCloseThread={vi.fn()} width={300} onResize={vi.fn()} onResizeActive={vi.fn()} />;
@@ -50,4 +50,15 @@ it('keeps project conversation creation in the Threads list', () => {
   const rail = screen.getByRole('complementary', { name: 'nav.threads' });
   expect(within(rail).getByRole('button', { name: 'thread.new_thread' })).toBeTruthy();
   expect(rail.querySelector('.project-folder')).toBeNull();
+});
+
+it('offers the task/chat switch on the Threads rail only', () => {
+  const view = render(panel('/projects/p/threads/s1'));
+  const group = screen.getByRole('group', { name: 'thread.kind_filter_label' });
+  expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual([
+    'thread.kind_filter_all', 'thread.kind_filter_tasks', 'thread.kind_filter_chats',
+  ]);
+  expect(within(group).getByRole('button', { name: 'thread.kind_filter_all' }).getAttribute('aria-pressed')).toBe('true');
+  view.rerender(panel('/projects', undefined));
+  expect(screen.queryByRole('group', { name: 'thread.kind_filter_label' })).toBeNull();
 });

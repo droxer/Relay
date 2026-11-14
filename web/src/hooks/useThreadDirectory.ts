@@ -11,6 +11,7 @@ import {
   type ThreadProjectFilter,
   type ThreadProjectOption,
 } from "../lib/threadProjectFilter";
+import { applyThreadKindFilter, THREAD_KIND_FILTER_ALL, type ThreadKindFilter } from "../lib/threadKindFilter";
 
 /**
  * What the thread rail shows: the user's threads decorated with live state,
@@ -58,6 +59,8 @@ interface ThreadDirectoryInput {
   threadQuery: string;
   /** The threads rail's project quick filter; every thread when omitted. */
   threadProjectFilter?: ThreadProjectFilter;
+  /** The threads rail's task/chat quick filter; every thread when omitted. */
+  threadKindFilter?: ThreadKindFilter;
   /** Tasks whose linked sessions mark a thread as backlog- or routine-driven. */
   tasks: Parameters<typeof threadOriginIndex>[0];
   visibleNodes: readonly DirectoryNode[];
@@ -73,6 +76,7 @@ export function useThreadDirectory({
   routedProjectId,
   threadQuery,
   threadProjectFilter = THREAD_PROJECT_FILTER_ALL,
+  threadKindFilter = THREAD_KIND_FILTER_ALL,
   tasks,
   visibleNodes,
   runtimeNodes,
@@ -168,11 +172,11 @@ export function useThreadDirectory({
 
   const directoryThreads = useMemo(() => {
     if (route !== "projects") {
-      return applyThreadProjectFilter(
+      return applyThreadKindFilter(threadKindFilter, applyThreadProjectFilter(
         projectFilter,
         threadsForDirectory(filteredThreads, projects, "threads"),
         filteredThreads,
-      );
+      ));
     }
     const query = threadQuery.trim().toLowerCase();
     const matchingProjectIds = new Set(
@@ -182,7 +186,7 @@ export function useThreadDirectory({
       if (!item.session.projectId || (routedProjectId && item.session.projectId !== routedProjectId) || !projects.some((project) => project.id === item.session.projectId)) return false;
       return !query || matchingProjectIds.has(item.session.projectId) || matchesThreadQuery(item.session, threadQuery);
     });
-  }, [filteredThreads, projectFilter, projects, route, routedProjectId, threadItems, threadQuery]);
+  }, [filteredThreads, projectFilter, threadKindFilter, projects, route, routedProjectId, threadItems, threadQuery]);
 
   return { threadItems, filteredThreads, directoryProjects, directoryThreads, projectFilterOptions, projectFilter };
 }

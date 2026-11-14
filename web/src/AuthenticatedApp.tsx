@@ -34,6 +34,7 @@ import { useClientMounted } from "./hooks/useClientMounted";
 import { useActiveSession } from "./hooks/useActiveSession";
 import { useThreadDirectory } from "./hooks/useThreadDirectory";
 import { THREAD_PROJECT_FILTER_ALL, type ThreadProjectFilter } from "./lib/threadProjectFilter";
+import { THREAD_KIND_FILTER_ALL, type ThreadKindFilter } from "./lib/threadKindFilter";
 import { sessionTrailsSummary } from "./lib/sessionPollMerge";
 import { useThreadComposerSelection } from "./hooks/useThreadComposerSelection";
 import { useThreadTargets } from "./hooks/useThreadTargets";
@@ -125,6 +126,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const clearPendingTeam = useComposerTargetStore((s) => s.clearPendingTeam);
   const [threadQuery, setThreadQuery] = useState("");
   const [threadProjectFilter, setThreadProjectFilter] = useState<ThreadProjectFilter>(THREAD_PROJECT_FILTER_ALL);
+  const [threadKindFilter, setThreadKindFilter] = useState<ThreadKindFilter>(THREAD_KIND_FILTER_ALL);
   const mounted = useClientMounted();
   const panels = usePanelLayout(mounted);
   const { agents: logicalAgents, isSuccess: agentsReady } = useUserAgents(user.userId);
@@ -469,6 +471,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     routedProjectId,
     threadQuery,
     threadProjectFilter,
+    threadKindFilter,
     tasks,
     visibleNodes,
     runtimeNodes,
@@ -784,6 +787,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             threadProjectFilter={projectFilter}
             threadProjectOptions={projectFilterOptions}
             onThreadProjectFilterChange={setThreadProjectFilter}
+            threadKindFilter={threadKindFilter}
+            onThreadKindFilterChange={setThreadKindFilter}
             activeSession={activeSession}
             threadLoadError={!activeSession ? threadDetail.error : null}
             onRetryThread={threadDetail.retry}
