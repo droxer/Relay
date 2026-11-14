@@ -3179,6 +3179,8 @@
       "approval_requested_sub": "团队在下一步开始前等待你批准时。",
       "computer_status": "电脑状态",
       "computer_status_sub": "你的电脑离线或恢复在线时。",
+      "computer_transport": "电脑通信",
+      "computer_transport_sub": "电脑向 Relay 发送报告遇到问题或通信恢复时。",
       "client_outdated": "Relay 客户端更新",
       "client_outdated_sub": "电脑运行的 Relay 客户端版本低于服务器时。",
       "permission_requested": "权限请求",

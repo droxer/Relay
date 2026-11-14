@@ -3245,6 +3245,8 @@
       "approval_requested_sub": "When a team waits for your approval before its next step.",
       "computer_status": "Computer status",
       "computer_status_sub": "When one of your computers goes offline or comes back online.",
+      "computer_transport": "Computer communication",
+      "computer_transport_sub": "When a computer has trouble sending reports to Relay or its communication recovers.",
       "client_outdated": "Relay client updates",
       "client_outdated_sub": "When a computer runs an older Relay client than the server.",
       "permission_requested": "Permission prompts",
