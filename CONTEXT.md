@@ -148,8 +148,10 @@ _Avoid_: Per-turn computer, movable thread
 
 **Thread**:
 The activity and conversation record for work, including Task and Automation
-runs. Deleting a Thread removes its history and links; its Tasks, Automation
-runs, and Automations keep their own lifecycle and are preserved. Deleting a
+runs. The UI collection is **Activity** (活动); its types are **Chat** (会话),
+**Task run** (任务运行), and **Automation run** (自动化运行). Deleting a Thread
+removes its history and links; its Tasks, Automation runs, and Automations keep
+their own lifecycle and are preserved. Deleting a
 Task deletes its linked Threads; deleting an Automation also deletes its runs
 and their Threads. Other Tasks linked to those Threads survive and lose the links.
 

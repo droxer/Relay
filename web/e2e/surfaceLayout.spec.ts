@@ -215,14 +215,19 @@ test("the shared thread rail keeps its Project filter and search inside a 240px 
     const page = await openPage(browser, "/computers/node%3Alayout/threads", touch,
       { "relay-web.threadListWidth": "240" }, undefined, { projects: [project], sessions: [session, waiting, room] });
     const rail = page.locator("#thread-panel");
-    const search = rail.getByRole("searchbox", { name: "Search threads" });
-    const filter = rail.getByRole("combobox", { name: "Filter threads by project" });
+    const search = rail.getByRole("searchbox", { name: "Search activities" });
+    const filter = rail.getByRole("combobox", { name: "Filter activities by project" });
     await expect(search).toBeVisible();
     // One global list on every conversation route: project rooms included,
     // and the filter is how a person narrows it.
     await expect(filter).toBeVisible();
     await expect(rail.getByRole("button", { name: /^Launch room · Project: Autumn launch/ })).toHaveCount(1);
     await expect(rail.getByText("Approve the pricing copy", { exact: true })).toBeVisible();
+    const kinds = rail.getByRole("group", { name: "Activity type" });
+    await expect(kinds).toBeVisible();
+    for (const button of await kinds.getByRole("button").all()) {
+      expect(await button.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    }
     const [searchBox, filterBox, railBox] = await Promise.all([search.boundingBox(), filter.boundingBox(), rail.boundingBox()]);
     // Neither control crushes the other: they share no pixels, and both end
     // inside the rail.

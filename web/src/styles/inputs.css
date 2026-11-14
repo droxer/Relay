@@ -192,7 +192,8 @@
 }
 
 .thread-kind-filter-item {
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  white-space: normal;
   min-width: 0;
   min-height: var(--control-h-2xs);
   padding: 0 var(--sp-2);
