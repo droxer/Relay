@@ -7,7 +7,7 @@ it("expands a message without changing the queue and moves it only on explicit e
   render(<MessageQueue messages={[{ id: "q1", text: "Read this long instruction", addressAgentIds: ["a"] }]} running
     recipientNames={{ a: "Reviewer" }} onSteer={vi.fn()} onEdit={onEdit} onRemove={vi.fn()} />);
   const preview = screen.getByRole("button", { name: /Read this long instruction/ });
-  fireEvent.click(preview);
+  fireEvent.click(screen.getByText("Reviewer"));
   expect(preview.getAttribute("aria-expanded")).toBe("true");
   expect(onEdit).not.toHaveBeenCalled();
   expect(screen.getByText("Reviewer")).toBeTruthy();
