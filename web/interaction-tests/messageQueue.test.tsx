@@ -17,7 +17,7 @@ it("expands a message without changing the queue and moves it only on explicit e
 
 it("offers undo even when the last queued message was removed", () => {
   const undo = vi.fn();
-  render(<MessageQueue messages={[]} running={false} undoAvailable onUndo={undo}
+  render(<MessageQueue messages={[]} running={false} removedAt={new Date().toISOString()} onUndo={undo}
     onSteer={vi.fn()} onEdit={vi.fn()} onRemove={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "queue.undo" }));
   expect(undo).toHaveBeenCalledOnce();

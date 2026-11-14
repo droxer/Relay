@@ -115,9 +115,10 @@ it("promotes explicitly before cancelling the running turn and localizes cancell
 });
 
 it("offers persisted undo and resumes through the same server queue", async () => {
-  vi.mocked(apiJson).mockResolvedValue({ messages: [], paused: true, removed: { message: { id: "old", text: "Saved" }, beforeId: null } });
+  const removedAt = new Date().toISOString();
+  vi.mocked(apiJson).mockResolvedValue({ messages: [], paused: true, removed: { message: { id: "old", text: "Saved" }, beforeId: null, removedAt } });
   const hook = open();
-  await waitFor(() => expect(hook.result.current.undoAvailable).toBe(true));
+  await waitFor(() => expect(hook.result.current.removedAt).toBe(removedAt));
   await act(async () => { hook.result.current.undoRemove(); });
   expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({ body: expect.objectContaining({ action: "undo_remove", id: "old" }) }));
   await act(async () => { hook.result.current.resume(); });
