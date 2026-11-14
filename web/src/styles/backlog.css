@@ -388,29 +388,59 @@
 
 /* On a tile the rank is named, not only drawn: the bars carry it at a glance
    and the word carries it for anyone who does not read bars (the table keeps
-   the bare glyph, where a column header names it). Rank is told by ink
-   brightness and shape, never hue — gold is "waiting on a person" — so high
-   steps up to --ink-1 and takes a hairline frame; low and normal stay quiet
-   and are told apart by their bars and word. The frame is an inset shadow so
-   high-priority tiles keep the same eyebrow height as their peers. */
+   the bare glyph, where a column header names it). Rank is told by weight,
+   never hue — gold is "waiting on a person" and red is failure. The three
+   levels step in fill, not just brightness: high is a solid action-ink chip,
+   normal an outlined chip, low bare dimmed text with no frame, so a lane
+   scans by them. Every chip has the same inset frame, so tiles keep one
+   eyebrow height. */
 .backlog-card-eyebrow .priority-badge {
   flex: none;
-  gap: var(--sp-1);
-  color: var(--ink-3);
+  gap: var(--sp-1-5);
+  padding: 0 var(--sp-1-5);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
   font: var(--type-meta);
+  font-weight: 600;
   letter-spacing: var(--type-meta-track);
   white-space: nowrap;
+  box-shadow: inset 0 0 0 0.5px var(--line-strong);
 }
 
 .backlog-card-eyebrow .priority-label {
   display: inline;
 }
 
+.backlog-card-eyebrow .priority-glyph { --prio-accent: var(--ink-2); }
+
 .backlog-card-eyebrow .priority-badge[data-priority="high"] {
-  padding: 0 var(--sp-1-5);
-  border-radius: var(--r-1);
-  box-shadow: inset 0 0 0 0.5px var(--line-strong);
-  color: var(--ink-1);
+  background: var(--action);
+  box-shadow: none;
+  color: var(--on-action);
+}
+
+.backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-glyph { --prio-accent: var(--on-action); }
+
+.backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-bars > i {
+  background: var(--on-action);
+}
+
+.backlog-card-eyebrow .priority-badge[data-priority="low"] {
+  box-shadow: none;
+  color: var(--ink-4);
+  font-weight: 500;
+}
+
+.backlog-card-eyebrow .priority-badge[data-priority="low"] .priority-glyph { --prio-accent: var(--ink-4); }
+
+/* A high-priority tile also takes the stronger hairline, so the rank reads
+   from the frame as well as from the chip. */
+.backlog-task[data-priority="high"] { border-color: var(--line-strong); }
+
+@media (forced-colors: active) {
+  .backlog-card-eyebrow .priority-badge { box-shadow: none; border: 1px solid CanvasText; }
+  .backlog-card-eyebrow .priority-badge[data-priority="high"] { background: Highlight; color: HighlightText; }
+  .backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-bars > i { background: HighlightText; }
 }
 
 .backlog-card-head .backlog-select-box {
