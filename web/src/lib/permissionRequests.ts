@@ -54,7 +54,7 @@ export function openPermissionRequests(session: Pick<RelaySession, "permissionRe
 /**
  * Whether a denial's note reaches the agent. Claude's permission-prompt tool
  * returns it as the denial message and Pi's extension hook blocks with it as
- * the reason; Codex's decline and Kimi's ACP reject carry no text, so asking
+ * the reason; Codex's decline carry no text, so asking
  * for one there would promise what it cannot do.
  */
 export function permissionNoteReachesAgent(request: Pick<PermissionRequest, "agent">): boolean {

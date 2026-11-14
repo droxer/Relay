@@ -26,8 +26,8 @@ test('installation preserves settings/comments, is idempotent and refuses user-o
  try{
   mkdirSync(join(home,'.codex'));writeFileSync(join(home,'.codex','config.toml'),'# personal\nmodel = "test"\n');
   writeFileSync(join(home,'.claude.json'),'{\n// personal\n"theme":"dark", "mcpServers":{"other":{"command":"test"}},\n}\n');
-  const options={home,runtimes:['codex','claude','opencode','kimi'] as const,configFile:join(home,'private config.json'),serverName:'relay-projects-test'};
-  assert.equal(installRelayMcp(options).length,4);
+  const options={home,runtimes:['codex','claude','opencode'] as const,configFile:join(home,'private config.json'),serverName:'relay-projects-test'};
+  assert.equal(installRelayMcp(options).length,3);
   const before=readFileSync(join(home,'.claude.json'),'utf8');assert.match(before,/\/\/ personal/);assert.match(before,/other/);
   installRelayMcp(options);assert.equal(readFileSync(join(home,'.claude.json'),'utf8'),before);
   assert.equal(readFileSync(join(home,'.codex','config.toml'),'utf8').match(/BEGIN RELAY MCP/g)?.length,1);

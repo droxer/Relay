@@ -7,7 +7,6 @@ import type { PermissionPromptAdapter, PermissionPromptLaunch } from "relay-core
 const ADAPTER_SCRIPTS: Record<PermissionPromptAdapter, string> = {
   "claude-mcp": "./claude-mcp.js",
   "codex-app-server": "./codex-app-server.js",
-  "kimi-acp": "./kimi-acp.js",
   "opencode-acp": "./opencode-acp.js",
   "pi-extension": "./pi-extension.js",
 };

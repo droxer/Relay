@@ -11,7 +11,7 @@ import {
 import type { AgentName } from "../src/types.js";
 
 // Every runtime in both of its launch modes: the plain headless CLI, and the
-// permission-bridged launch (claude-mcp, codex-app-server, kimi-acp,
+// permission-bridged launch (claude-mcp, codex-app-server, opencode-acp,
 // pi-extension) a `native`-policy local run uses. The fixtures are trimmed
 // from real daemon run logs (`~/.relay/daemon-nodes/<id>/logs/<runId>.jsonl`,
 // the "agent output" stdout entries in sequence order), keeping each frame's
@@ -175,61 +175,6 @@ describe("runtime transcripts: codex", () => {
       assert.ok(hasTerminalOutcome(segments));
     });
   }
-});
-
-// ---------------------------------------------------------------- Kimi
-
-// `kimi -p --output-format stream-json` prints one assistant message per
-// flush (text plus the calls it made), each call's result as a `tool` line,
-// and meta lines; the kimi-acp adapter's StreamJsonWriter re-emits exactly
-// that from ACP `session/update`s, naming each call by its first ACP title.
-function kimiRun({ bridged }: { bridged: boolean }): string {
-  const searchArgs = JSON.stringify({ query: "Open Maic 介绍" });
-  const writeArgs = JSON.stringify({ content: "{\"status\":\"done\"}\n", path: ".relay/round-result.json" });
-  return jsonl([
-    { role: "meta", type: "system.version", version: "2.0.2" },
-    {
-      role: "assistant",
-      content: "I'll look this up to make sure I give you accurate information.",
-      tool_calls: [{ type: "function", id: "tool_Q", function: { name: "WebSearch", arguments: searchArgs } }],
-    },
-    { role: "tool", tool_call_id: "tool_Q", content: "Title: OpenMAIC/README-zh.md\nURL: https://github.com/THU-MAIC/OpenMAIC" },
-    ...(bridged
-      ? [
-          // A shell call the person approved through the broker; the adapter
-          // prints it with its result only once the call completes.
-          { role: "assistant", tool_calls: [{ type: "function", id: "tool_S", function: { name: "Shell", arguments: JSON.stringify({ command: "ls -la" }) } }] },
-          { role: "tool", tool_call_id: "tool_S", content: "total 0\n" },
-        ]
-      : []),
-    { role: "assistant", content: "**OpenMAIC** 是清华大学开源的多智能体互动课堂平台。", tool_calls: [{ type: "function", id: "tool_W", function: { name: "Write", arguments: writeArgs } }] },
-    { role: "tool", tool_call_id: "tool_W", content: "Wrote 18 bytes" },
-    { role: "assistant", content: "以上即对 OpenMAIC 的介绍。" },
-    { role: "meta", type: "session.resume_hint", session_id: "session_1", command: "kimi -r session_1" },
-  ]);
-}
-
-describe("runtime transcripts: kimi", () => {
-  for (const bridged of [false, true]) {
-    it(`renders a ${bridged ? "kimi-acp bridged" : "plain"} run's tool calls and replies`, () => {
-      const segments = assertRendersTranscript("kimi", kimiRun({ bridged }));
-      const expectedTools = ["WebSearch Open Maic 介绍"];
-      if (bridged) expectedTools.push("Shell ls -la");
-      expectedTools.push("Write .relay/round-result.json");
-      assert.deepEqual(tools(segments), expectedTools);
-      assert.deepEqual(texts(segments), [
-        "I'll look this up to make sure I give you accurate information.",
-        "**OpenMAIC** 是清华大学开源的多智能体互动课堂平台。",
-        "以上即对 OpenMAIC 的介绍。",
-      ]);
-    });
-  }
-
-  it("shows nothing but stays parseable when a run fails before its first message", () => {
-    // Today's bridged capture: the version line, then the auth failure on stderr.
-    const raw = jsonl([{ role: "meta", type: "system.version", version: "2.0.2" }]);
-    assert.deepEqual(parseAgentStream("kimi", raw), []);
-  });
 });
 
 // ---------------------------------------------------------------- Pi

@@ -2,7 +2,6 @@ import { nativeWindowsExecution } from "./command-execution.js";
 import {
   buildClaudeCommand,
   buildCodexCommand,
-  buildKimiCommand,
   buildOpenCodeCommand,
   buildPiCommand,
   buildPiPreflightCommand,
@@ -11,7 +10,6 @@ import { runAsAgent } from "./guest.js";
 import {
   ClaudeStreamRenderer,
   CodexStreamRenderer,
-  KimiStreamRenderer,
   OpenCodeStreamRenderer,
   PiStreamRenderer,
 } from "./renderers.js";
@@ -31,11 +29,11 @@ export type SkillDelivery =
 /**
  * The translator between a runtime's own approval protocol and Relay's
  * permission broker. Claude mounts its adapter as an MCP server, Codex and
- * Kimi run theirs in place of their CLI, and Pi loads its adapter as an
+ * OpenCode run theirs in place of their CLI, and Pi loads its adapter as an
  * extension (`--extension <script>`): the launch's script is handed to `pi`
  * rather than run by node.
  */
-export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "kimi-acp" | "opencode-acp" | "pi-extension";
+export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "opencode-acp" | "pi-extension";
 
 /** Whether a local, native-policy run of this runtime can ask a person before a tool use. */
 export type PermissionPromptSupport = { kind: "none" } | { kind: "adapter"; adapter: PermissionPromptAdapter };
@@ -137,21 +135,6 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
       ),
     },
   },
-  kimi: {
-    name: "kimi",
-    displayName: "Kimi",
-    initial: "K",
-    maxFailures: 2,
-    buildCommand: buildKimiCommand,
-    createRenderer: () => new KimiStreamRenderer(),
-    label: "Kimi",
-    needsGuestAuth: true,
-    // Each path is a container whose direct children are skill directories.
-    skillDelivery: { kind: "skills-dir-flag", flag: "--skills-dir" },
-    // Kimi asks over ACP `session/request_permission`.
-    permissionPrompts: { kind: "adapter", adapter: "kimi-acp" },
-    preflight: { label: "Kimi", command: () => runAsAgent(nativeWindowsExecution() ? 'await relayRun(["kimi", "--version"]); await relayRun(["kimi", "doctor"]); await relayRun(["kimi", "provider", "list", "--json"], { capture: true, discardStdout: true });' : "kimi --version && kimi doctor && kimi provider list --json > /dev/null") },
-  },
   opencode: {
     name: "opencode",
     displayName: "OpenCode",
@@ -181,7 +164,7 @@ export function getAgent(name: AgentName): AgentDefinition {
   return AGENT_REGISTRY[name];
 }
 
-/** Comma-separated agent list for user-facing prompts, e.g. "claude, pi, codex, kimi". */
+/** Comma-separated agent list for user-facing prompts, e.g. "claude, pi, codex, opencode". */
 export function agentNameList(): string {
   return AGENT_NAMES.join(", ");
 }

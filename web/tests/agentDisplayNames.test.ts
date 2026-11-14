@@ -84,7 +84,7 @@ describe("agentDisplayNames", () => {
   });
 
   it("falls back to capitalized executor labels when no logical agent exists", () => {
-    assert.equal(displayNameForExecutor("kimi", []), "Kimi");
+    assert.equal(displayNameForExecutor("opencode", []), "Opencode");
     assert.equal(labelForExecutor("pi", undefined), "Pi");
     assert.equal(labelForExecutor("pi", { pi: "Planner" }), "Planner");
   });

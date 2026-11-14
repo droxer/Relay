@@ -162,7 +162,7 @@ export async function executeCommand(
         logger,
       });
     } catch (error) {
-      // Never fall back to the runtime's headless command: Pi and Kimi there
+      // Never fall back to the runtime's headless command: Pi there
       // run every tool without asking anyone, which a native policy forbids.
       const message = transportErrorDetail(error);
       logger.warn("permission broker unavailable; the run cannot ask a person", {

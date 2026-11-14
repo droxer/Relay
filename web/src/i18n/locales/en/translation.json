@@ -2237,9 +2237,6 @@
     "codex": {
       "blurb": "Runs via the Codex CLI."
     },
-    "kimi": {
-      "blurb": "Runs via the Kimi CLI."
-    },
     "opencode": {
       "blurb": "Runs via the OpenCode CLI."
     }

@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { parse as parseToml } from 'smol-toml';
 import { parse, modify, applyEdits, type ParseError } from 'jsonc-parser';
 
-type Runtime = 'codex' | 'claude' | 'kimi' | 'opencode' | 'pi';
+type Runtime = 'codex' | 'claude' | 'opencode' | 'pi';
 export class McpInstallError extends Error {
   constructor(readonly code: string, message: string, readonly blocked = true) { super(message); }
 }
@@ -89,7 +89,6 @@ function install(options: InstallOptions): string[] {
       privateWrite(path, next); manifest[key] = digest(updated.mcp_servers[serverName]);
     } else {
       if (runtime === 'claude') { path = join(home, '.claude.json'); keys = ['mcpServers', serverName]; entry = { type: 'stdio', command: process.execPath, args, env: {RELAY_MCP_RUN_CONTEXT:'${RELAY_MCP_RUN_CONTEXT:-}'} }; }
-      else if (runtime === 'kimi') { path = join(env.KIMI_CODE_HOME ?? join(home, '.kimi-code'), 'mcp.json'); keys = ['mcpServers', serverName]; entry = { command: process.execPath, args }; }
       else if (runtime === 'opencode') {
         const root = join(env.XDG_CONFIG_HOME ?? join(home, '.config'), 'opencode');
         path = existsSync(join(root, 'opencode.jsonc')) ? join(root, 'opencode.jsonc') : join(root, 'opencode.json');

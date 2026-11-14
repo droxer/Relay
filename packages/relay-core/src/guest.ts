@@ -6,9 +6,6 @@ import {
   anthropicBaseUrl,
   anthropicModel,
   hostWorkspaceOwner,
-  kimiApiKey,
-  kimiBaseUrl,
-  kimiModel,
   localRuntimeEnvironment,
   openaiBaseUrl,
   openaiApiKey,
@@ -64,14 +61,6 @@ const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"],
   pi: ["PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "PI_PROVIDER", "PI_API"],
   opencode: [],
-  kimi: [
-    "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL",
-    "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
-    "KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL",
-    "KIMI_MODEL_PROVIDER_TYPE", "KIMI_MODEL_MAX_CONTEXT_SIZE", "KIMI_MODEL_CAPABILITIES",
-    "KIMI_MODEL_DISPLAY_NAME", "KIMI_MODEL_MAX_OUTPUT_SIZE", "KIMI_MODEL_REASONING_KEY",
-    "KIMI_MODEL_THINKING_EFFORT", "KIMI_MODEL_ADAPTIVE_THINKING",
-  ],
 };
 
 // Local CLIs consume their native environment and saved login, never Relay aliases.
@@ -79,7 +68,6 @@ const NATIVE_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   claude: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL"],
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"],
   pi: ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "MINIMAX_API_KEY", "MINIMAX_CN_API_KEY", "KIMI_API_KEY"],
-  kimi: AGENT_CREDENTIAL_ENV_NAMES.kimi.filter((key) => key.startsWith("KIMI_MODEL_") && key !== "KIMI_MODEL"),
   opencode: [],
 };
 
@@ -115,20 +103,6 @@ const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
     if (!process.env.PI_API_KEY) {
       const value = piApiKey();
       if (value) env.push(["PI_API_KEY", value]);
-    }
-    return env;
-  },
-  kimi: () => {
-    const env: Array<[string, string]> = [];
-    for (const key of AGENT_CREDENTIAL_ENV_NAMES.kimi) {
-      if (["KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL"].includes(key)) continue;
-      const value = process.env[key];
-      if (value) env.push([key, value]);
-    }
-    if (kimiApiKey() || process.env.KIMI_MODEL_NAME) {
-      pushEnv(env, "KIMI_MODEL_NAME", kimiModel());
-      pushEnv(env, "KIMI_MODEL_API_KEY", kimiApiKey());
-      pushEnv(env, "KIMI_MODEL_BASE_URL", kimiBaseUrl());
     }
     return env;
   },
@@ -191,6 +165,8 @@ export function allAgentCredentialEnvNames(): string[] {
     ...Object.values(NATIVE_CREDENTIAL_ENV_NAMES).flat(),
     "CLAUDE_API_KEY", "CLAUDE_BASE_URL", "CLAUDE_MODEL",
     "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
+    "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL", "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
+    "KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL",
   ])];
 }
 
@@ -360,7 +336,6 @@ export function runAsAgent(command: string, workspacePath?: string): string {
     "export HOME=/home/agent",
     "export CODEX_HOME=/home/agent/.codex",
     "export PI_CODING_AGENT_DIR=/home/agent/.pi/agent",
-    "export KIMI_CODE_HOME=/home/agent/.kimi-code",
     "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     "umask 002",
     infrastructureExports,

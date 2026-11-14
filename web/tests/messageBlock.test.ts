@@ -458,9 +458,9 @@ describe("projectMessages artifact projection", () => {
 
   it("marks every finished turn without counts as unreported and preserves reported usage", () => {
     const run = (runId: string, status: "completed" | "failed" | "cancelled", tokenUsage?: { input: number; output: number; cache: number; total: number }) => [
-      { id: `ev_start_${runId}`, type: "agent.started", sessionId: "ses_1", timestamp, runId, agent: "kimi", role: "fixer" },
+      { id: `ev_start_${runId}`, type: "agent.started", sessionId: "ses_1", timestamp, runId, agent: "opencode", role: "fixer" },
       {
-        id: `ev_done_${runId}`, type: "agent.completed", sessionId: "ses_1", timestamp, runId, agent: "kimi",
+        id: `ev_done_${runId}`, type: "agent.completed", sessionId: "ses_1", timestamp, runId, agent: "opencode",
         status, exitCode: status === "completed" ? 0 : 1, agentLog: "",
         ...(tokenUsage ? { tokenUsage } : {}),
       },
@@ -470,7 +470,7 @@ describe("projectMessages artifact projection", () => {
         ...run(`run_${status}`, status),
         ...run(`run_counted_${status}`, status, { input: 3, output: 2, cache: 0, total: 5 }),
       ]),
-      { id: "ev_running", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_running", agent: "kimi", role: "fixer" },
+      { id: "ev_running", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_running", agent: "opencode", role: "fixer" },
     ] as RelaySession["events"]), t);
     const turns = new Map(messages.flatMap((message) => message.kind === "agent" ? [[message.runId, message] as const] : []));
 
@@ -966,7 +966,6 @@ describe("logical agent identity in the transcript", () => {
     assert.deepEqual(rerun, { agent: "claude", agentId: "agt_zoe" });
   });
 });
-
 
 describe("isolated incremental projections", () => {
   it("does not let a discarded projection contaminate the committed transcript", () => {

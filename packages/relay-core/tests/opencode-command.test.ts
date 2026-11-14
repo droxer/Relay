@@ -37,7 +37,7 @@ describe("buildOpenCodeCommand", () => {
     assert.throws(() => buildOpenCodeCommand(plain(), "/work/space"), /permission adapter is not attached/);
     // Another runtime's adapter does not count.
     assert.throws(
-      () => buildOpenCodeCommand({ ...plain(), permission_prompt: { ...openCodeLaunch, adapter: "kimi-acp" as const } }, "/work/space"),
+      () => buildOpenCodeCommand({ ...plain(), permission_prompt: { ...openCodeLaunch, adapter: "codex-app-server" as const } }, "/work/space"),
       /permission adapter is not attached/,
     );
   }));

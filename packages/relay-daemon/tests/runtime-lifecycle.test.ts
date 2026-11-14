@@ -248,7 +248,7 @@ test("a cloud computer's probes tell not installed, check failed, not responding
     runShell: async (_shell: string, signal?: AbortSignal) => {
       const answer = preflight[probing];
       if (answer) return answer();
-      // Kimi hangs until the deadline aborts it.
+      // OpenCode hangs until the deadline aborts it.
       return new Promise((resolve) => signal?.addEventListener("abort", () => resolve({ exit_code: 143, stdout: "", stderr: "" })));
     },
   } as ExecutionManager;
@@ -264,7 +264,7 @@ test("a cloud computer's probes tell not installed, check failed, not responding
   });
   t.after(() => environment.close());
 
-  const probe = (agent: "claude" | "codex" | "kimi" | "pi") => {
+  const probe = (agent: "claude" | "codex" | "opencode" | "pi") => {
     probing = agent;
     return environment.ensureAgentReady(agent);
   };
@@ -273,5 +273,5 @@ test("a cloud computer's probes tell not installed, check failed, not responding
   await probe("pi");
   await assert.rejects(probe("claude"), (error) => agentHealthStatusFor(error) === "failed");
   await assert.rejects(probe("codex"), (error) => agentHealthStatusFor(error) === "unavailable");
-  await assert.rejects(probe("kimi"), (error) => agentHealthStatusFor(error) === "unresponsive");
+  await assert.rejects(probe("opencode"), (error) => agentHealthStatusFor(error) === "unresponsive");
 });

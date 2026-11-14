@@ -4,7 +4,7 @@ import type { AgentName } from "./state.js";
  * A runtime CLI's own conversation id, read from its stream, so an interrupted
  * run can later be resumed inside the same conversation (`--resume`).
  *
- * Only Claude and Codex resume today; Pi and Kimi report nothing until their
+ * Only Claude and Codex resume today; Pi report nothing until their
  * resume flags are confirmed. The id is later passed back on a command line,
  * so anything but a plain id is refused.
  */

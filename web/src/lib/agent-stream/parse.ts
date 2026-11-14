@@ -1,7 +1,6 @@
 import type { AgentName } from "../../types.ts";
 import { claudeAssistantFrameId, parseClaude } from "./claude.ts";
 import { parseCodex } from "./codex.ts";
-import { parseKimi } from "./kimi.ts";
 import { parseOpenCode } from "./opencode.ts";
 import { parsePi, piStreamRecords } from "./pi.ts";
 import {
@@ -18,7 +17,6 @@ export function parseAgentStream(agent: AgentName, raw: string): AgentSegment[] 
   if (agent === "claude") return parseClaude(raw);
   if (agent === "codex") return parseCodex(raw);
   if (agent === "pi") return parsePi(raw);
-  if (agent === "kimi") return parseKimi(raw);
   if (agent === "opencode") return parseOpenCode(raw);
   return parsePlain(raw);
 }
@@ -55,7 +53,6 @@ const AGENT_CHECKPOINT_TYPES: Record<AgentName, "each" | ReadonlySet<unknown>> =
   claude: new Set(["assistant", "result"]),
   codex: new Set(["turn.completed", "turn.failed"]),
   pi: new Set(["turn_end"]),
-  kimi: "each",
   // `opencode run --format json` prints one whole event per line.
   opencode: "each",
 };
@@ -68,7 +65,7 @@ export function agentCheckpoints(agent: AgentName, raw: string, offset: number):
   const records = agent === "pi" ? piStreamRecords(raw.slice(offset)) : streamRecords(raw.slice(offset));
   for (const record of records) {
     if (record.kind !== "json") continue;
-    if (policy === "each" || policy.has(record.value.type)) {
+    if (policy === "each" || policy?.has(record.value.type)) {
       checkpoints.push({ end: offset + record.end, value: record.value });
     }
   }

@@ -14,7 +14,7 @@ function node(overrides: Partial<DaemonNodeMonitorRecord> = {}): DaemonNodeMonit
     nodeLocation: "user-device",
     online: true,
     stale: false,
-    agents: { claude: "ready", codex: "unknown", pi: "unknown", kimi: "unknown" },
+    agents: { claude: "ready", codex: "unknown", pi: "unknown" },
     disabledAgents: [],
     activeRuns: [],
     queuedCommandCount: 0,
@@ -65,19 +65,11 @@ describe("onboarding progress", () => {
 
   it("holds the computer step while no runtime is ready", () => {
     const progress = onboardingProgress(inputs({
-      nodes: [node({ agents: { claude: "failed", codex: "unknown", pi: "unknown", kimi: "ready", opencode: "unknown" }, disabledAgents: ["kimi"] })],
+      nodes: [node({ agents: { claude: "failed", codex: "unknown", pi: "unknown", opencode: "unknown" }, disabledAgents: ["opencode"] })],
     }));
     assert.equal(progress.step, "computer");
     assert.equal(progress.blocked, "no_ready_runtime");
     assert.equal(progress.computer?.name, "MacBook Pro");
-  });
-
-  it("does not offer Kimi as a ready runtime", () => {
-    const progress = onboardingProgress(inputs({
-      nodes: [node({ agents: { kimi: "ready" } } as Partial<DaemonNodeMonitorRecord>)],
-    }));
-    assert.deepEqual(progress.computer?.readyRuntimes, []);
-    assert.equal(progress.blocked, "no_ready_runtime");
   });
 
   it("says when the account may not enroll a computer of its own", () => {

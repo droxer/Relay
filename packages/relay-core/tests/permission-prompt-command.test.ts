@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AGENT_NAMES, buildClaudeCommand, buildCodexCommand, buildKimiCommand, buildPiCommand, getAgent, initialAgentState } from "../src/index.js";
+import { AGENT_NAMES, buildClaudeCommand, buildCodexCommand, buildPiCommand, getAgent, initialAgentState } from "../src/index.js";
 
 function withEnv(env: Record<string, string>, action: () => void): void {
   const previous = process.env;
@@ -69,7 +69,7 @@ test("trusted local and BoxLite Claude runs never add a permission prompt", () =
 });
 
 test("other runtimes ignore another adapter's launch", () => withEnv(LOCAL, () => {
-  for (const build of [buildCodexCommand, buildPiCommand, buildKimiCommand]) {
+  for (const build of [buildCodexCommand, buildPiCommand]) {
     assert.equal(build(prompted), build(initialAgentState("task")));
   }
   const codexLaunch = { ...launch, adapter: "codex-app-server" as const, args: ["/opt/relay/dist/codex-app-server.js"] };
@@ -112,7 +112,7 @@ test("every runtime declares a permission prompt adapter", () => {
   for (const name of AGENT_NAMES) assert.equal(getAgent(name).permissionPrompts.kind, "adapter", name);
   assert.deepEqual(getAgent("claude").permissionPrompts, { kind: "adapter", adapter: "claude-mcp" });
   assert.deepEqual(getAgent("codex").permissionPrompts, { kind: "adapter", adapter: "codex-app-server" });
-  assert.deepEqual(getAgent("kimi").permissionPrompts, { kind: "adapter", adapter: "kimi-acp" });
+  assert.deepEqual(getAgent("opencode").permissionPrompts, { kind: "adapter", adapter: "opencode-acp" });
   assert.deepEqual(getAgent("pi").permissionPrompts, { kind: "adapter", adapter: "pi-extension" });
 });
 

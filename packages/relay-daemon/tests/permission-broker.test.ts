@@ -346,7 +346,7 @@ describe("permission adapter launch", () => {
       assert.equal(support.kind, "adapter", `${name} declares an adapter`);
       if (support.kind === "adapter") adapters.add(support.adapter);
     }
-    assert.deepEqual([...adapters].sort(), ["claude-mcp", "codex-app-server", "kimi-acp", "opencode-acp", "pi-extension"]);
+    assert.deepEqual([...adapters].sort(), ["claude-mcp", "codex-app-server", "opencode-acp", "pi-extension"]);
     for (const adapter of adapters) {
       const launch = permissionAdapterLaunch(adapter, { env });
       assert.equal(launch.adapter, adapter);
@@ -366,7 +366,7 @@ describe("permissionPromptsApply", () => {
     assert.equal(permissionPromptsApply("claude", "none", { RELAY_LOCAL_PERMISSION_POLICY: "trusted" }), false);
     assert.equal(permissionPromptsApply("claude", "boxlite", {}), false);
     assert.equal(permissionPromptsApply("codex", "none", {}), true);
-    assert.equal(permissionPromptsApply("kimi", "none", {}), true);
+    assert.equal(permissionPromptsApply("opencode", "none", {}), true);
     assert.equal(permissionPromptsApply("pi", "none", {}), true);
     assert.equal(permissionPromptsApply("pi", "boxlite", {}), false);
   });

@@ -732,7 +732,7 @@ describe("agent stream parsing", () => {
       ["claude", JSON.stringify({ type: "result", is_error: true, result: "API error: 529 overloaded" })],
       ["codex", JSON.stringify({ type: "turn.failed", error: { message: "sandbox denied write" } })],
       ["pi", JSON.stringify({ type: "error", message: "model unavailable" })],
-      ["kimi", JSON.stringify({ type: "error", message: "context length exceeded" })],
+      ["opencode", JSON.stringify({ type: "error", message: "context length exceeded" })],
     ];
     for (const [agent, raw] of failures) {
       assert.equal(hasTerminalOutcome(parseAgentStream(agent, raw)), true, `${agent} failed`);
@@ -760,62 +760,6 @@ describe("agent stream parsing", () => {
     ];
 
     assert.equal(hasTerminalOutcome(segments), true);
-  });
-
-  it("renders Kimi assistant text without raw JSON", () => {
-    const raw = JSON.stringify({ role: "assistant", content: "Loop engineering is the latest paradigm." });
-
-    const segments = parseAgentStream("kimi", raw);
-
-    assert.deepEqual(segments, [
-      { kind: "text", text: "Loop engineering is the latest paradigm." },
-    ]);
-    assert.equal(JSON.stringify(segments).includes("\"role\":\"assistant\""), false);
-  });
-
-  it("renders Kimi content arrays and tool calls", () => {
-    const raw = JSON.stringify({
-      role: "assistant",
-      content: [{ type: "text", text: "Searching the web." }],
-      tool_calls: [{ id: "call_1", function: { name: "web_search" } }],
-    });
-
-    assert.deepEqual(parseAgentStream("kimi", raw), [
-      { kind: "text", text: "Searching the web." },
-      { kind: "tool", name: "web_search" },
-    ]);
-  });
-
-  it("renders a Kimi tool target from JSON-string function arguments", () => {
-    const raw = JSON.stringify({
-      role: "assistant",
-      content: [],
-      tool_calls: [{
-        id: "call_1",
-        function: { name: "web_search", arguments: JSON.stringify({ query: "Relay SSE rendering" }) },
-      }],
-    });
-
-    assert.deepEqual(parseAgentStream("kimi", raw), [
-      { kind: "tool", name: "web_search", target: "Relay SSE rendering" },
-    ]);
-  });
-
-  it("drops Kimi tool-result and non-assistant messages", () => {
-    const raw = [
-      JSON.stringify({ role: "user", content: "最新的 loop engineering 是？" }),
-      JSON.stringify({ role: "tool", tool_call_id: "call_1", content: "raw tool output" }),
-    ].join("\n");
-
-    assert.deepEqual(parseAgentStream("kimi", raw), []);
-  });
-
-  it("renders Kimi error events as bad status", () => {
-    const raw = JSON.stringify({ type: "error", message: "auth required" });
-
-    assert.deepEqual(parseAgentStream("kimi", raw), [
-      { kind: "status", tone: "bad", text: "Kimi error: auth required" },
-    ]);
   });
 
   it("carries the file/command target on Claude tool_use lines", () => {
@@ -1289,17 +1233,6 @@ describe("agent stream parsing", () => {
     });
 
     assert.deepEqual(parseAgentStream("pi", raw), [
-      { kind: "text", text: "  indented first line" },
-    ]);
-  });
-
-  it("preserves leading whitespace in Kimi assistant messages", () => {
-    const raw = JSON.stringify({
-      role: "assistant",
-      content: [{ type: "text", text: "  indented first line" }],
-    });
-
-    assert.deepEqual(parseAgentStream("kimi", raw), [
       { kind: "text", text: "  indented first line" },
     ]);
   });

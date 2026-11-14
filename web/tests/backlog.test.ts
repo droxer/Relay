@@ -50,7 +50,7 @@ function node(input: Partial<DaemonNodeMonitorRecord> & { id: string }): DaemonN
     userId: input.userId ?? "alice",
     status: input.status ?? "ready",
     online: input.online ?? true,
-    agents: input.agents ?? { claude: "ready", pi: "ready", codex: "ready", kimi: "ready" },
+    agents: input.agents ?? { claude: "ready", pi: "ready", codex: "ready" },
     disabledAgents: input.disabledAgents,
     maxConcurrentRuns: input.maxConcurrentRuns,
     activeRuns: input.activeRuns ?? [],
@@ -195,7 +195,7 @@ describe("discussionAgentsForTask", () => {
 
     assert.deepEqual(discussionAgentsForTask(backlogTask, [
       node({ id: "n1", userId: "bob" }),
-      node({ id: "n2", userId: "alice", agents: { claude: "ready", pi: "failed", codex: "ready", kimi: "unknown", opencode: "unknown" }, disabledAgents: ["codex"] }),
+      node({ id: "n2", userId: "alice", agents: { claude: "ready", pi: "failed", codex: "ready", opencode: "unknown" }, disabledAgents: ["codex"] }),
     ]), []);
   });
 });

@@ -296,10 +296,6 @@ export function codexTaskPrompt(state: AgentState): string {
   return agentTaskPrompt(state);
 }
 
-export function kimiTaskPrompt(state: AgentState): string {
-  return agentTaskPrompt(state);
-}
-
 export function opencodeTaskPrompt(state: AgentState): string {
   return agentTaskPrompt(state);
 }

@@ -72,3 +72,19 @@ test('background service preserves independent guest and boot limits', () => {
   const environment = { RELAY_DAEMON_MAX_GUESTS: '3', RELAY_DAEMON_MAX_CONCURRENT_BOOTS: '1' };
   assert.deepEqual(captureRuntimeProfile(environment).environment, environment);
 });
+
+test("saved profiles ignore retired Kimi settings and preserve live credential references", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-retired-runtime-"));
+  try {
+    const credentials = join(root, "runtime-env.json");
+    const source = JSON.stringify({ OPENAI_API_KEY: "codex-key", KIMI_API_KEY: "pi-provider-key", KIMI_MODEL_API_KEY: "retired-key", MOONSHOT_MODEL: "retired-model" });
+    writeFileSync(credentials, source, { mode: 0o600 });
+    const path = writeRuntimeProfile(root, { version: 1, environment: { HOME: root, CODEX_HOME: join(root, "codex"), KIMI_CODE_HOME: join(root, "kimi") }, environmentFile: credentials });
+    assert.deepEqual(loadRuntimeProfile(path), { HOME: root, CODEX_HOME: join(root, "codex"), OPENAI_API_KEY: "codex-key", KIMI_API_KEY: "pi-provider-key" });
+    assert.equal(readFileSync(credentials, "utf8"), source);
+    writeFileSync(credentials, JSON.stringify({ OPENAI_API_KEY: "rotated", KIMI_MODEL_API_KEY: "retired-key" }));
+    assert.equal(loadRuntimeProfile(path).OPENAI_API_KEY, "rotated");
+    writeFileSync(credentials, JSON.stringify({ NODE_OPTIONS: "--import=/untrusted.js", KIMI_MODEL_API_KEY: "retired-key" }));
+    assert.throws(() => loadRuntimeProfile(path), /unsupported.*NODE_OPTIONS/i);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

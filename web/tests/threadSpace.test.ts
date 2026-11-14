@@ -104,7 +104,7 @@ describe("buildSpaceItems", () => {
       run({ id: "run_named", agent: "claude", logicalAgentId: "agent_ops" }),
       run({ id: "run_legacy", agent: "claude" }),
       run({ id: "run_missing", agent: "claude", logicalAgentId: "agent_deleted" }),
-      run({ id: "run_unmapped", agent: "kimi" }),
+      run({ id: "run_unmapped", agent: "opencode" }),
     ];
     const artifacts = runs.map((r) =>
       artifact({ id: `art_${r.id}`, createdAt: "2026-08-08T10:01:00.000Z", agentRunId: r.id })

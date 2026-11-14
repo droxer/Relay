@@ -4,7 +4,6 @@ import {
   agentTaskPrompt,
   claudeTaskPrompt,
   piTaskPrompt,
-  kimiTaskPrompt,
   codexTaskPrompt,
   prependPriorAgentBridge,
 } from "../src/prompts.js";
@@ -13,7 +12,7 @@ import { initialAgentState } from "../src/state.js";
 describe("prior agent bridge in prompts", () => {
   it("asks all executors for an attributed checkpoint without granting completion authority", () => {
     const state = { ...initialAgentState("continue"), progress_file: "HANDOFF.md", assignment_id: "assignment-1" };
-    for (const build of [claudeTaskPrompt, piTaskPrompt, kimiTaskPrompt, codexTaskPrompt]) {
+    for (const build of [claudeTaskPrompt, piTaskPrompt, codexTaskPrompt]) {
       const prompt = build(state);
       assert.match(prompt, /write `HANDOFF\.json` before finishing/);
       assert.match(prompt, /"assignmentId": "assignment-1"/);
@@ -26,7 +25,6 @@ describe("prior agent bridge in prompts", () => {
     for (const prompt of [
       claudeTaskPrompt(state),
       piTaskPrompt(state),
-      kimiTaskPrompt(state),
       codexTaskPrompt(state),
     ]) {
       assert.match(prompt, /\[Execution policy\]/);
@@ -39,7 +37,6 @@ describe("prior agent bridge in prompts", () => {
     for (const prompt of [
       claudeTaskPrompt(state),
       piTaskPrompt(state),
-      kimiTaskPrompt(state),
       codexTaskPrompt(state),
     ]) {
       assert.match(prompt, /\[Previous from @codex\]\nreview note\n\n\[User\]\ndo thing$/);

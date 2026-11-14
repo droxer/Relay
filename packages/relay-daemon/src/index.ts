@@ -82,7 +82,7 @@ import { GuestPool, type GuestLease } from "./guest-pool.js";
 import { discoverAgentInventory } from "./agent-inventory.js";
 import { discoverAgentModels, type ProviderListMemory } from "./agent-models.js";
 import { BoxLiteExecutionManager, type ExecutionManager } from "./execution.js";
-import { ensureLocalDevboxOci, hasHostKimiCodeAuth, prepareHostAgentSkills, prepareHostKimiCodeHome } from "./box.js";
+import { ensureLocalDevboxOci, prepareHostAgentSkills } from "./box.js";
 
 async function verifyBoxlitePrerequisites(sandboxId: string): Promise<void> {
   try {
@@ -1569,9 +1569,6 @@ function boxNameForSandbox(sandboxId: string, slot = 0): string {
   return slot === 0 ? base : `${base}-${slot}`;
 }
 
-
-
-
 /** Seconds from the environment as milliseconds; 0 is a valid "off". */
 function nonNegativeSecondsEnv(name: string): number | undefined {
   const raw = process.env[name]?.trim();
@@ -1693,8 +1690,6 @@ function safeLogFileName(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]+/g, "_") || "daemon-node";
 }
 
-
-
 /** Room for one round trip on a slow link; well inside launchd's 20 s exit timeout. */
 const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 2_500;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
@@ -1772,14 +1767,11 @@ export {
   ensureLocalDevboxOci,
   ensureSingleOrchestrator,
   execStream,
-  hasHostKimiCodeAuth,
   importBoxLite,
-  hostKimiCodeHomePath,
   hostAgentSkillsDir,
   prepareGuestAgentAuth,
   prepareGuestAgentSkills,
   prepareHostAgentSkills,
-  prepareHostKimiCodeHome,
   prepareGuestWorkspace,
   setSessionBox,
   stopSessionBox,

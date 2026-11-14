@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentCredentialEnv, canonicalPathKey, buildClaudeCommand, buildCodexCommand, buildKimiCommand, buildPiCommand, buildPiPreflightCommand, initialAgentState } from "../src/index.js";
+import { agentCredentialEnv, canonicalPathKey, buildClaudeCommand, buildCodexCommand, buildPiCommand, buildPiPreflightCommand, initialAgentState } from "../src/index.js";
 
 function local(action: () => void): void {
   const previous = process.env;
@@ -20,7 +20,7 @@ function local(action: () => void): void {
 }
 
 test("local commands leave provider and model selection to installed runtimes", () => local(() => {
-  for (const build of [buildClaudeCommand, buildCodexCommand, buildPiCommand, buildKimiCommand]) {
+  for (const build of [buildClaudeCommand, buildCodexCommand, buildPiCommand]) {
     const command = build(initialAgentState("task"));
     assert.doesNotMatch(command, /relay-model|relay-pi-model|relay-claude-model|relay-kimi-model|relay-provider|model_provider|features\.multi_agent/);
     assert.doesNotMatch(command, /stdbuf/);
@@ -32,10 +32,6 @@ test("local commands leave provider and model selection to installed runtimes", 
 test("local credential resolution uses native variables without translating Relay aliases", () => local(() => {
   assert.deepEqual(agentCredentialEnv("claude"), [["ANTHROPIC_MODEL", "relay-claude-model"]]);
   assert.equal(Object.fromEntries(agentCredentialEnv("codex")).OPENAI_API_KEY, undefined);
-  assert.equal(Object.fromEntries(agentCredentialEnv("kimi")).KIMI_MODEL_NAME, undefined);
-  process.env.KIMI_MODEL_NAME = "user-model";
-  process.env.KIMI_MODEL_API_KEY = "user-key";
-  assert.equal(Object.fromEntries(agentCredentialEnv("kimi")).KIMI_MODEL_API_KEY, "user-key");
   process.env.ANTHROPIC_API_KEY = "native-anthropic-key";
   assert.equal(Object.fromEntries(agentCredentialEnv("pi")).ANTHROPIC_API_KEY, "native-anthropic-key");
   assert.equal(Object.fromEntries(agentCredentialEnv("pi")).PI_API_KEY, undefined);
@@ -72,15 +68,13 @@ test("local managed skills do not replace the user's authorization home", () => 
   }
 }));
 
-
 test("local permissions remain native unless trusted execution is explicit", () => local(() => {
-  for (const build of [buildClaudeCommand, buildCodexCommand, buildKimiCommand]) {
+  for (const build of [buildClaudeCommand, buildCodexCommand]) {
     assert.doesNotMatch(build(initialAgentState("task")), /bypassPermissions|dangerously-bypass|--auto/);
   }
   process.env.RELAY_LOCAL_PERMISSION_POLICY = "trusted";
   assert.match(buildCodexCommand(initialAgentState("task")), /dangerously-bypass/);
   assert.match(buildClaudeCommand(initialAgentState("task")), /bypassPermissions/);
-  assert.match(buildKimiCommand(initialAgentState("task")), /--auto/);
   process.env.RELAY_LOCAL_PERMISSION_POLICY = "typo";
   assert.throws(() => buildCodexCommand(initialAgentState("task")), /permission policy/i);
 }));

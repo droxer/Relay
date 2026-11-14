@@ -38,7 +38,7 @@ describe("taskAssigneeName", () => {
   });
 
   it("falls back to the executor CLI label when no roster is provided", () => {
-    assert.equal(taskAssigneeName({ assignedAgent: "kimi" }, undefined), "Kimi");
+    assert.equal(taskAssigneeName({ assignedAgent: "opencode" }, undefined), "Opencode");
   });
 
   it("returns empty when nothing is assigned", () => {

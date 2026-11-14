@@ -13,7 +13,7 @@ import {
   agentNameList,
   buildClaudeCommand,
   buildCodexCommand,
-  buildKimiCommand,
+  buildOpenCodeCommand,
   buildPiCommand,
   buildPiPreflightCommand,
   claudeNode,
@@ -27,10 +27,10 @@ import {
   failureCount,
   formatClaudeJsonLine,
   formatCodexJsonLine,
-  formatKimiJsonLine,
+
   formatPiJsonLine,
   getAgent,
-  KimiStreamRenderer,
+
   agentCredentialEnv,
   agentCredentialEnvNames,
   allAgentCredentialEnvNames,
@@ -205,7 +205,7 @@ describe("adaptive agent execution", () => {
       ["claude", buildClaudeCommand(taskState)],
       ["codex", buildCodexCommand(taskState)],
       ["pi", buildPiCommand(taskState)],
-      ["kimi", buildKimiCommand(taskState)],
+      ["opencode", buildOpenCodeCommand(taskState)],
     ] as Array<[AgentName, string]>) {
       assert.match(command, new RegExp(agent));
       assert.match(command, /Handle auth/);
@@ -225,7 +225,7 @@ describe("prompts", () => {
       ["Claude", buildClaudeCommand],
       ["Codex", buildCodexCommand],
       ["Pi", buildPiCommand],
-      ["Kimi", buildKimiCommand],
+      ["OpenCode", buildOpenCodeCommand],
     ] as const;
 
     for (const [label, buildCommand] of builders) {
@@ -991,60 +991,6 @@ describe("agent stream rendering", () => {
     assert.match(output, /Pi error: Connection error\./);
   });
 
-  it("renders Kimi stream-json assistant messages without raw JSON", () => {
-    const renderer = new KimiStreamRenderer();
-    const output = renderer.feed(
-      JSON.stringify({ role: "assistant", content: "Loop engineering is the latest paradigm." }) + "\n",
-    );
-
-    assert.match(output, /● Loop engineering is the latest paradigm\./);
-    assert.doesNotMatch(output, /"role":"assistant"/);
-  });
-
-  it("renders Kimi assistant content arrays and tool_calls", () => {
-    const output = formatKimiJsonLine(JSON.stringify({
-      role: "assistant",
-      content: [{ type: "text", text: "Searching the web." }],
-      tool_calls: [{ id: "call_1", function: { name: "web_search" } }],
-    }));
-
-    assert.match(output, /● Searching the web\./);
-    assert.match(output, /⏺ .*tool.* web_search/);
-    assert.doesNotMatch(output, /"tool_calls"/);
-  });
-
-  it("drops Kimi tool-result and non-assistant messages", () => {
-    const renderer = new KimiStreamRenderer();
-    const output = [
-      { role: "user", content: "最新的 loop engineering 是？" },
-      { role: "tool", tool_call_id: "call_1", content: "raw tool output" },
-    ].map((event) => renderer.feed(`${JSON.stringify(event)}\n`)).join("");
-
-    assert.equal(output, "");
-  });
-
-  it("falls back to sanitized plain text for non-JSON Kimi lines", () => {
-    const renderer = new KimiStreamRenderer();
-    const output = renderer.feed("plain text leak\n");
-
-    assert.match(output, /● plain text leak/);
-  });
-
-  it("surfaces Kimi error events as visible status", () => {
-    const output = formatKimiJsonLine(JSON.stringify({ type: "error", message: "auth required" }));
-
-    assert.match(output, /Kimi error: auth required/);
-  });
-
-  it("filters the Kimi resume-session notice from stderr", () => {
-    const renderer = new StderrLineRenderer();
-    const output = renderer.feed(
-      "To resume this session: kimi -r session_4df5ca77-7d81-4e28-8bdd-65d31e9b5864\n",
-    );
-
-    assert.equal(output, "");
-  });
-
   it("filters the Claude claude.ai connectors notice from stderr", () => {
     const renderer = new StderrLineRenderer();
     const output = renderer.feed(
@@ -1063,29 +1009,6 @@ describe("agent stream rendering", () => {
     assert.equal(output, "");
   });
 
-  it("never renders a non-message Kimi record as assistant speech", () => {
-    // Kimi's stream-json carries records that are not assistant turns. One
-    // carrying a text/content field must not be spoken as if the agent said
-    // it — an unrecognized record renders as nothing.
-    const renderer = new KimiStreamRenderer();
-
-    const output = renderer.feed([
-      JSON.stringify({ type: "session_start", text: "resuming session abc" }),
-      JSON.stringify({ type: "usage", content: "input=12 output=34" }),
-      "",
-    ].join("\n"));
-
-    assert.equal(output, "");
-    assert.doesNotMatch(output, /resuming session/);
-  });
-
-  it("builds the Kimi action command in stream-json mode", () => {
-    const command = buildKimiCommand(state({ task_goal: "Do the thing" }));
-
-    assert.match(command, /--output-format stream-json/);
-    assert.match(command, /--prompt/);
-  });
-
   it("runs every approval-gated agent without an interactive prompt", () => {
     withEnv({ ...process.env, RELAY_RUN_AS_CURRENT_USER: "0" }, () => {
       // Guest runs are headless: each approval gate must be disabled.
@@ -1093,7 +1016,6 @@ describe("agent stream rendering", () => {
 
       assert.match(buildClaudeCommand(taskState), /--permission-mode bypassPermissions/);
       assert.match(buildCodexCommand(taskState), /--dangerously-bypass-approvals-and-sandbox/);
-      assert.match(buildKimiCommand(taskState), /(^|\s)--auto(\s|$)/);
     });
   });
 
@@ -1370,12 +1292,10 @@ describe("execution manager boundary", () => {
 
     resetAgentReadiness();
     calls.length = 0;
-    await ensureAgentReady("kimi", undefined, undefined, manager);
-
-    assert.equal(calls[0], "auth:kimi");
-    assert.equal(calls[1], "skills");
-    assert.match(calls[2] ?? "", /^shell:su agent .*KIMI_CODE_HOME=.*kimi --version && kimi doctor/);
-    assert.equal(calls.length, 4);
+    await ensureAgentReady("opencode", undefined, undefined, manager);
+    assert.equal(calls[0], "skills");
+    assert.match(calls[1] ?? "", /opencode --version/);
+    assert.equal(calls.length, 3);
 
     resetAgentReadiness();
     calls.length = 0;
@@ -1387,87 +1307,6 @@ describe("execution manager boundary", () => {
     assert.doesNotMatch(calls[1] ?? "", /ANTHROPIC_API_KEY=.*secret/);
     assert.equal(calls.length, 3);
   }
-
-  it("allows Kimi env-key auth without a host Kimi Code home", async () => {
-    const oldEnv = process.env;
-    let execCalled = false;
-    setSessionBox({
-      exec: async () => {
-        execCalled = true;
-        throw new Error("guest auth setup should not copy files when Kimi env auth is available");
-      },
-    });
-    process.env = {
-      KIMI_CODE_HOME: join(tmpdir(), "relay-missing-kimi-code-home"),
-      KIMI_API_KEY: "kimi-key",
-      KIMI_MODEL: "kimi-k2.5",
-    };
-    try {
-      await prepareGuestAgentAuth(["kimi"]);
-    } finally {
-      process.env = oldEnv;
-      setSessionBox(null);
-    }
-
-    assert.equal(execCalled, false);
-  });
-
-  it("requires Kimi login files or env-key auth", async () => {
-    const oldEnv = process.env;
-    process.env = {
-      KIMI_CODE_HOME: join(tmpdir(), "relay-missing-kimi-code-home"),
-    };
-    try {
-      await assert.rejects(
-        () => prepareGuestAgentAuth(["kimi"]),
-        /Kimi requires a valid config.toml/,
-      );
-    } finally {
-      process.env = oldEnv;
-    }
-  });
-
-  it("provisions Kimi config and credentials into the guest without copying host binaries", async () => {
-    const temp = mkdtempSync(join(tmpdir(), "relay-kimi-code-"));
-    const credentials = join(temp, "credentials");
-    const oauth = join(temp, "oauth");
-    const bin = join(temp, "bin");
-    mkdirSync(credentials, { recursive: true });
-    mkdirSync(oauth, { recursive: true });
-    mkdirSync(bin, { recursive: true });
-    writeFileSync(join(temp, "config.toml"), 'default_model = "kimi-test"\n[models.kimi-test]\nprovider = "kimi"\nmodel = "kimi-k2.5"\n[providers.kimi]\ntype = "kimi"\napi_key = "test-key"\n');
-    writeFileSync(join(temp, "tui.toml"), "theme = \"dark\"\n");
-    writeFileSync(join(credentials, "kimi-code.json"), "{\"token\":\"secret\"}\n");
-    writeFileSync(join(oauth, "kimi-code"), "");
-    writeFileSync(join(bin, "kimi"), "mac binary");
-
-    const oldEnv = process.env;
-    let script = "";
-    setSessionBox({
-      exec: async (_cmd: string, args: string[]) => {
-        script = args[1] ?? "";
-        const emptyReader = { next: async () => null };
-        return {
-          stdout: async () => emptyReader,
-          stderr: async () => emptyReader,
-          wait: async () => ({ exitCode: 0 }),
-        };
-      },
-    });
-    process.env = { KIMI_CODE_HOME: temp };
-    try {
-      await prepareGuestAgentAuth(["kimi"]);
-    } finally {
-      process.env = oldEnv;
-      setSessionBox(null);
-    }
-
-    assert.match(script, /\/home\/agent\/\.kimi-code\/config\.toml/);
-    assert.match(script, /\/home\/agent\/\.kimi-code\/tui\.toml/);
-    assert.match(script, /\/home\/agent\/\.kimi-code\/credentials\/kimi-code\.json/);
-    assert.match(script, /\/home\/agent\/\.kimi-code\/oauth\/kimi-code/);
-    assert.doesNotMatch(script, /\/home\/agent\/\.kimi-code\/bin\/kimi/);
-  });
 });
 
 describe("Pi provider config", () => {
@@ -1680,17 +1519,6 @@ describe("Pi provider config", () => {
     });
   });
 
-  it("maps Kimi API credentials to the supported temporary model environment", () => {
-    withEnv({ MOONSHOT_API_KEY: "test-key", MOONSHOT_MODEL: "kimi-k2.5", MOONSHOT_BASE_URL: "https://example.invalid/v1" }, () => {
-      const env = Object.fromEntries(agentCredentialEnv("kimi"));
-      assert.equal(env.KIMI_MODEL_API_KEY, "test-key");
-      assert.equal(env.KIMI_MODEL_NAME, "kimi-k2.5");
-      assert.equal(env.KIMI_MODEL_BASE_URL, "https://example.invalid/v1");
-      assert.doesNotMatch(buildKimiCommand(state()), /--model kimi-k2.5/);
-      assert.doesNotMatch(buildKimiCommand(state()), /test-key/);
-    });
-  });
-
   it("fully defines the dashscope provider so codex config loading does not fail", () => {
     withEnv(
       {
@@ -1756,7 +1584,7 @@ describe("credential scoping", () => {
     withEnv(allProviderEnv, () => {
       const claudeCommand = buildClaudeCommand(state());
       const codexCommand = buildCodexCommand(state());
-      const kimiCommand = buildKimiCommand(state());
+      const kimiCommand = buildOpenCodeCommand(state());
       const piCommand = buildPiCommand(state());
       for (const command of [claudeCommand, codexCommand, piCommand, kimiCommand]) {
         for (const secret of Object.values(allProviderEnv)) {
@@ -1784,14 +1612,11 @@ describe("credential scoping", () => {
       const claudeKeys = agentCredentialEnv("claude").map(([key]) => key);
       const codexKeys = agentCredentialEnv("codex").map(([key]) => key);
       const piKeys = agentCredentialEnv("pi").map(([key]) => key);
-      const kimiKeys = agentCredentialEnv("kimi").map(([key]) => key);
 
       assert.deepEqual(claudeKeys, ["ANTHROPIC_API_KEY"]);
       assert.ok(codexKeys.includes("OPENAI_API_KEY") && codexKeys.includes("CODEX_API_KEY"));
       assert.ok(!codexKeys.includes("ANTHROPIC_API_KEY"));
       assert.ok(piKeys.includes("PI_API_KEY") && !piKeys.includes("OPENAI_API_KEY"));
-      assert.ok(kimiKeys.includes("KIMI_API_KEY") && kimiKeys.includes("MOONSHOT_API_KEY"));
-      assert.ok(!kimiKeys.includes("ANTHROPIC_API_KEY"));
     });
   });
 
@@ -2145,14 +1970,14 @@ describe("token usage accounting", () => {
 describe("agent registry", () => {
   it("validates agent names through the registry", () => {
     assert.equal(isAgentName("claude"), true);
-    assert.equal(isAgentName("kimi"), true);
+    assert.equal(isAgentName("opencode"), true);
     assert.equal(isAgentName("gpt"), false);
     assert.equal(isAgentName(42), false);
   });
 
-  it("includes the five registered agents in a stable order", () => {
-    assert.deepEqual(AGENT_NAMES, ["claude", "pi", "codex", "kimi", "opencode"]);
-    assert.equal(agentNameList(), "claude, pi, codex, kimi, opencode");
+  it("includes the four registered agents in a stable order", () => {
+    assert.deepEqual(AGENT_NAMES, ["claude", "pi", "codex", "opencode"]);
+    assert.equal(agentNameList(), "claude, pi, codex, opencode");
   });
 
   it("exposes one adaptive command for every agent", () => {
@@ -2161,35 +1986,14 @@ describe("agent registry", () => {
     }
   });
 
-  it("embeds the task goal in the Kimi implement command without leaking raw JSONL", () => {
-    withEnv(
-      {
-        RELAY_AGENT_HOME: "/tmp/relay-agent-home",
-        RELAY_AGENT_WORKSPACE: "/tmp/relay-host-workspace",
-        RELAY_RUN_AS_CURRENT_USER: "1",
-        KIMI_MODEL: "kimi-test",
-      },
-      () => {
-        const command = buildKimiCommand(state({ task_goal: "Wire up Kimi" }));
-        assert.match(command, /kimi --output-format stream-json --prompt/);
-        assert.doesNotMatch(command, /--auto/);
-        assert.match(command, /Wire up Kimi/);
-        assert.ok(command.indexOf("--model kimi-test") < command.indexOf("--prompt"));
-        // Local commands preserve the runtime's native permission policy.
-        assert.doesNotMatch(command, /--yolo/);
-        assert.doesNotMatch(command, /stdbuf/);
-      },
-    );
-  });
-
   it("tracks failures per agent and resets on success", () => {
     const base = state();
-    const afterFail = withFailure(base, "kimi", true);
-    assert.equal(afterFail.kimi, 1);
-    const afterSecond = withFailure({ ...base, agent_failures: afterFail }, "kimi", true);
-    assert.equal(afterSecond.kimi, 2);
-    const afterPass = withFailure({ ...base, agent_failures: afterSecond }, "kimi", false);
-    assert.equal(afterPass.kimi, 0);
+    const afterFail = withFailure(base, "opencode", true);
+    assert.equal(afterFail.opencode, 1);
+    const afterSecond = withFailure({ ...base, agent_failures: afterFail }, "opencode", true);
+    assert.equal(afterSecond.opencode, 2);
+    const afterPass = withFailure({ ...base, agent_failures: afterSecond }, "opencode", false);
+    assert.equal(afterPass.opencode, 0);
     assert.equal(failureCount({ ...base, agent_failures: { codex: 3 } }, "codex"), 3);
     assert.equal(failureCount(base, "pi"), 0);
   });

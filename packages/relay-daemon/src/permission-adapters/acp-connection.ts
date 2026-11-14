@@ -1,6 +1,5 @@
 import { nativeCommand } from "../native-command.js";
-// Agent Client Protocol plumbing shared by the runtime ACP adapters (Kimi,
-// OpenCode): JSON-RPC over the child's stdio, child shutdown, and the
+// Agent Client Protocol plumbing shared by the runtime ACP adapters (OpenCode): JSON-RPC over the child's stdio, child shutdown, and the
 // permission option helpers. Nothing here knows a runtime's tool names.
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -14,14 +13,12 @@ export interface JsonRpcMessage {
   error?: { code?: number; message?: string };
 }
 
-
 export interface PermissionOption {
   optionId: string;
   kind: string;
-  /** The label Kimi shows for the option; a question's answers carry theirs here. */
+  /** The label the runtime shows for the option; a question's answers carry theirs here. */
   name?: string;
 }
-
 
 export function permissionOptions(value: unknown): PermissionOption[] {
   if (!Array.isArray(value)) return [];
@@ -33,13 +30,11 @@ export function permissionOptions(value: unknown): PermissionOption[] {
   });
 }
 
-
 /** The first option of the wanted one-shot kind; cancelling when there is none. */
 export function selected(options: PermissionOption[], kind: "allow_once" | "reject_once"): Record<string, unknown> {
   const option = options.find((candidate) => candidate.kind === kind);
   return option ? { outcome: { outcome: "selected", optionId: option.optionId } } : { outcome: { outcome: "cancelled" } };
 }
-
 
 /** JSON-RPC over the child's stdio: our requests, its requests, its notifications. */
 export class AcpConnection {
@@ -126,7 +121,6 @@ export function rpcError(error: unknown): Record<string, unknown> {
   return { code: -32603, message: error instanceof Error ? error.message : String(error) };
 }
 
-
 /** Ends the child once: SIGTERM, then SIGKILL after a grace period. */
 /** How long a child gets to exit after SIGTERM before SIGKILL. */
 const KILL_GRACE_MS = 2_000;
@@ -151,14 +145,12 @@ export function contentText(content: unknown): string {
   return "";
 }
 
-
 export function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-
 export interface AcpChildOptions {
-  /** Names the runtime in error messages, e.g. "kimi acp". */
+  /** Names the runtime in error messages, e.g. "opencode acp". */
   label: string;
   command: string;
   args: string[];

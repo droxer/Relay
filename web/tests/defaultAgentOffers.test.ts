@@ -40,7 +40,7 @@ describe("splitDefaultAgentAnswer", () => {
 
   it("never accepts a hidden runtime even if selected", () => {
     assert.deepEqual(
-      splitDefaultAgentAnswer(offer("a", ["kimi", "codex"]), new Set<AgentName>(["kimi", "codex"])),
+      splitDefaultAgentAnswer(offer("a", ["kimi", "codex"]), new Set(["kimi", "codex"] as AgentName[])),
       { accept: ["codex"], decline: ["kimi"] },
     );
   });

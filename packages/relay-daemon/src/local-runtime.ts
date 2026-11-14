@@ -2,12 +2,11 @@ import { join } from "node:path";
 import { realpathSync, statSync } from "node:fs";
 import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent, localRuntimeEnvironment, commandExecution, type AgentName } from "relay-core";
 import type { DaemonExecutionEnvironment } from "./index.js";
-import { assertKimiConfigured } from "./agent-auth.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
 import { localExitProven, windowsExitProven } from "./exit-proof.js";
 import { listWindowsProcesses } from "./windows-process-tree.js";
 import { runNativeScript, nativeCommand } from "./native-command.js";
-import { AgentNotInstalledError, runBoundedPreflight } from "./agent-preflight.js";
+import { runBoundedPreflight } from "./agent-preflight.js";
 
 /** Local CLI adapter. No registration, scheduling, or backend state lives here. */
 export function createLocalRuntime(): DaemonExecutionEnvironment {
@@ -54,9 +53,6 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
         ensureAgentReady: async (agent, signal) => {
           assertActive();
           if (readyAgents.has(agent)) {
-            // Kimi's config check is a file read, so a run keeps it even when
-            // the CLI probe is skipped: a config removed since still fails fast.
-            assertKimiReady(agent);
             return;
           }
           await probe(agent, signal);
@@ -90,34 +86,13 @@ export const localProcessExecStream: typeof superviseLocalProcess = async (cmd, 
   }
 };
 
-/** Kimi's config check; a no-op for every other agent. */
-function assertKimiReady(agent: AgentName): void {
-  if (agent !== "kimi") return;
-  const env = localRuntimeEnvironment();
-  assertKimiConfigured(env.KIMI_CODE_HOME || join(agentHomePath(), ".kimi-code"), { native: true });
-}
-
 async function ensureLocalAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void> {
   const def = getAgent(agent);
-  // A missing Kimi config only matters once Kimi is installed: run the check
-  // regardless, so an absent CLI reads as unavailable rather than misconfigured.
-  let configError: unknown;
-  try {
-    assertKimiReady(agent);
-  } catch (error) {
-    configError = error;
-  }
-  try {
-    const invocation = commandExecution(def.preflight.command());
-    await runBoundedPreflight(agent, signal, (bounded) => localProcessExecStream(invocation.command, invocation.args, {
-      signal: bounded,
-      env: Object.fromEntries(agentCredentialEnv(agent)),
-    }));
-  } catch (error) {
-    if (configError && !(error instanceof AgentNotInstalledError)) throw configError;
-    throw error;
-  }
-  if (configError) throw configError;
+  const invocation = commandExecution(def.preflight.command());
+  await runBoundedPreflight(agent, signal, (bounded) => localProcessExecStream(invocation.command, invocation.args, {
+    signal: bounded,
+    env: Object.fromEntries(agentCredentialEnv(agent)),
+  }));
 }
 
 const AGENT_SUBPROCESS_ENV_DENY = new Set([
@@ -162,7 +137,6 @@ function localAgentSubprocessEnv(): NodeJS.ProcessEnv {
   env.HOME = home;
   env.CODEX_HOME ??= join(home, ".codex");
   env.PI_CODING_AGENT_DIR ??= join(home, ".pi", "agent");
-  env.KIMI_CODE_HOME ??= join(home, ".kimi-code");
   return env;
 }
 

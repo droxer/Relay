@@ -11,20 +11,20 @@ import {
 
 describe("Relay web agent readiness", () => {
   const node = {
-    agents: { claude: "unknown", pi: "ready", codex: "failed", kimi: "ready", opencode: "unknown" } as const,
-    disabledAgents: ["kimi" as const],
+    agents: { claude: "unknown", pi: "ready", codex: "failed", opencode: "ready" } as const,
+    disabledAgents: ["opencode" as const],
   };
 
   it("treats only ready, enabled agents as dispatchable", () => {
     assert.equal(agentReadiness(node, "claude"), "unknown");
     assert.equal(agentReadiness(node, "pi"), "ready");
     assert.equal(agentReadiness(node, "codex"), "failed");
-    assert.equal(agentReadiness(node, "kimi"), "disabled");
-    assert.deepEqual(dispatchReadyAgents(node, ["claude", "pi", "codex", "kimi"]), ["pi"]);
-    const why = { agents: { claude: "unavailable", pi: "unresponsive", codex: "failed", kimi: "ready", opencode: "unknown" } as const };
+    assert.equal(agentReadiness(node, "opencode"), "disabled");
+    assert.deepEqual(dispatchReadyAgents(node, ["claude", "pi", "codex", "opencode"]), ["pi"]);
+    const why = { agents: { claude: "unavailable", pi: "unresponsive", codex: "failed", opencode: "ready" } as const };
     assert.equal(agentReadiness(why, "claude"), "unavailable");
     assert.equal(agentReadiness(why, "pi"), "unresponsive");
-    assert.deepEqual(dispatchReadyAgents(why, ["claude", "pi", "codex", "kimi"]), ["kimi"]);
+    assert.deepEqual(dispatchReadyAgents(why, ["claude", "pi", "codex", "opencode"]), ["opencode"]);
     assert.equal(isAgentDispatchReady(node, "claude"), false);
     assert.equal(isAgentDispatchReady(node, "pi"), true);
   });
