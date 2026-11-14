@@ -592,7 +592,9 @@ class TaskDispatcher:
         binding = recorded_task_workspace(
             self.task, self.ctx.session_store, self.ctx.registry.monitor_nodes()
         )
-        if binding and layout in ("thread", "node-root"):
+        # A recorded Thread is reusable for every workspace layout, including
+        # a Project Thread opened before the first successful dispatch.
+        if binding and binding.get("sessionId"):
             request["sessionId"] = binding["sessionId"]
         request["workspaceLayout"] = layout
         if subpath:

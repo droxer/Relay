@@ -102,6 +102,7 @@ export function useRelayMutations() {
           : (current ?? []).filter((session) => session.id !== sessionId));
       void invalidateSessions();
       void invalidateTasks();
+      void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY] });
     },
     onError: onRelayError("Failed to delete thread", "errors.delete_thread"),
   });

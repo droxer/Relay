@@ -599,7 +599,7 @@ class TaskScheduler:
             binding = recorded_task_workspace(
                 task, self.registry.store, self.registry.monitor_nodes()
             )
-            if binding and layout in ("thread", "node-root"):
+            if binding and binding.get("sessionId"):
                 session_id = binding["sessionId"]
             workspace_fields: dict[str, Any] = {"workspaceLayout": layout}
             if subpath:
