@@ -303,6 +303,7 @@ export function NodeOwnershipIcon({
 }
 
 // Preferences category glyphs.
+export const PrefTags = withStandardStroke(Hash, "PrefTags");
 export const PrefAppearance = withStandardStroke(Palette, "PrefAppearance");
 export const PrefLanguage = withStandardStroke(Languages, "PrefLanguage");
 

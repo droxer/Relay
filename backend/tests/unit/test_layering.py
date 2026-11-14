@@ -45,6 +45,7 @@ LAYERS = {
     "teams": 5,
     "projects": 5,
     "tasks": 5,
+    "tags": 5,
     "skills": 5,
     "computer": 5,
     "execution": 5,
@@ -124,6 +125,7 @@ EMPTY_PACKAGES = (
     "realtime",
     "sessions",
     "skills",
+    "tags",
     "tasks",
     "teams",
 )

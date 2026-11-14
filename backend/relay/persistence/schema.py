@@ -30,6 +30,7 @@ from .tables import projects as _projects  # noqa: F401
 from .tables import mcp as _mcp  # noqa: F401
 from .tables import sessions as _sessions  # noqa: F401
 from .tables import skills as _skills  # noqa: F401
+from .tables import tags as _tags  # noqa: F401
 from .tables import tasks as _tasks  # noqa: F401
 from .tables import teams as _teams  # noqa: F401
 from .tables import waitlist as _waitlist  # noqa: F401

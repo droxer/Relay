@@ -6,6 +6,7 @@ import { SectionNav, type SectionNavItem } from "./SectionNav";
 import { hrefForSettingsSection } from "../lib/appRoute";
 import { AppearanceSection, LanguageSection } from "./settings/PreferenceSections";
 import type { CurrentUser } from "../types";
+import { TagsSection } from "./settings/TagsSection";
 import { AccountSection } from "./settings/AccountSection";
 import { ConnectionsSection } from "./settings/ConnectionsSection";
 import { NotificationsSection } from "./settings/NotificationsSection";
@@ -15,6 +16,7 @@ import {
   NavNotifications,
   PrefAppearance,
   PrefLanguage,
+  PrefTags,
 } from "./icons";
 import type { Language, Theme } from "../lib/appStorage";
 import type { SettingsSection } from "../lib/viewTypes";
@@ -54,6 +56,7 @@ export function SettingsPage({
     { id: "account", label: t("account.title"), Icon: IdentityUser, href: hrefForSettingsSection("account") },
     { id: "connections", label: t("connections.title"), Icon: AdminConnect, href: hrefForSettingsSection("connections") },
     { id: "notifications", label: t("notifications.title"), Icon: NavNotifications, href: hrefForSettingsSection("notifications") },
+    { id: "tags", label: t("tags.manager.title"), Icon: PrefTags, href: hrefForSettingsSection("tags") },
     { id: "appearance", label: t("pref.appearance"), Icon: PrefAppearance, href: hrefForSettingsSection("appearance") },
     { id: "language", label: t("pref.language"), Icon: PrefLanguage, href: hrefForSettingsSection("language") },
   ];
@@ -93,6 +96,8 @@ export function SettingsPage({
             <ConnectionsSection />
           ) : section === "notifications" ? (
             <NotificationsSection />
+          ) : section === "tags" ? (
+            <TagsSection />
           ) : section === "appearance" ? (
             <AppearanceSection theme={theme} onThemeChange={onThemeChange} />
           ) : (
