@@ -3,6 +3,17 @@ import { agentLabel } from "./plan.ts";
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/** Full native hover date, including year and timezone, in the interface language. */
+export function timestampTitle(value: string | undefined, locale: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(locale || undefined, {
+    dateStyle: "long",
+    timeStyle: "long",
+  }).format(date);
+}
+
 /** Compact "Mon D, HH:MM" timestamp for workspace rows. Shared by the agent
  *  and team workspace surfaces. Returns "" for empty and the raw value for
  *  unparseable input. */

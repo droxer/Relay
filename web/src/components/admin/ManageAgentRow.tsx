@@ -40,7 +40,8 @@ export function ManageAgentRow({ node, agent, savedEnabled, enabled, saving, onT
   const presence = nodeAgentPresence(node, agent);
   const name = labelForExecutor(agent);
   const version = node.agentDetails?.[agent]?.version;
-  const detail = runtimeNotReadyDetail(node, agent, savedDisabled);
+  const detail = runtimeNotReadyDetail(node, agent, savedDisabled, t);
+  const diagnostic = detail ? node.agentDetails?.[agent]?.detail : undefined;
   const pending = enabled !== savedEnabled;
   const stateParts = [
     runtimeStateLabel(node, agent, savedDisabled, t),
@@ -80,6 +81,12 @@ export function ManageAgentRow({ node, agent, savedEnabled, enabled, saving, onT
             ) : null}
           </span>
           {detail ? <span className="adm-agent-toggle-detail" title={detail}>{detail}</span> : null}
+          {diagnostic?.trim() ? (
+            <details className="adm-agent-toggle-diagnostic">
+              <summary>{t("computer.runtime_original_diagnostic")}</summary>
+              <pre translate="no">{diagnostic}</pre>
+            </details>
+          ) : null}
         </div>
         <Switch
           name={`node-${node.id}-${agent}-enabled`}

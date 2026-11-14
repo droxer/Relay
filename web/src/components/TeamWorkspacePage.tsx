@@ -5,6 +5,7 @@ import type { TeamMemberConfig } from "../types";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { timestampTitle } from "../lib/workspaceFormat";
 import { deleteTeamProfileImage, getWorkspaceBrief, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useComputerOptions } from "../hooks/useComputerOptions";
@@ -433,7 +434,7 @@ export function TeamWorkspacePage({
   onOpenThread: (sessionId: string) => void;
   onDeleted: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [pageTab, setPageTab] = useUrlSearchState("tab", "profile" as TeamPageTab, parseTeamTab, (value) => value === "profile" ? null : value, "push");
   const briefQuery = useQuery({
     queryKey: ["team-workspace-brief", team.id],
@@ -466,12 +467,12 @@ export function TeamWorkspacePage({
     {
       key: "created",
       label: t("workspace.band_created"),
-      value: <time dateTime={team.createdAt} title={team.createdAt}>{formatRelativeTime(team.createdAt, t)}</time>,
+      value: <time dateTime={team.createdAt} title={timestampTitle(team.createdAt, i18n.language)}>{formatRelativeTime(team.createdAt, t)}</time>,
     },
     {
       key: "updated",
       label: t("workspace.band_updated"),
-      value: <time dateTime={team.updatedAt} title={team.updatedAt}>{formatRelativeTime(team.updatedAt, t)}</time>,
+      value: <time dateTime={team.updatedAt} title={timestampTitle(team.updatedAt, i18n.language)}>{formatRelativeTime(team.updatedAt, t)}</time>,
     },
     {
       key: "id",

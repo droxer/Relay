@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { timestampTitle } from "../lib/workspaceFormat";
 import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
@@ -55,7 +56,7 @@ export function ProjectSettingsPanel({
   /** Opens a thread a refused delete names — the run blocking it. */
   onOpenThread?: (sessionId: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { confirm } = useDialogs();
   const { updateProjectMutation, archiveProjectMutation, unarchiveProjectMutation, deleteProjectMutation } = useRelayMutations();
   const projectSave = useProjectSave(updateProjectMutation.mutateAsync);
@@ -220,11 +221,11 @@ export function ProjectSettingsPanel({
         <footer className="project-settings-foot" data-dirty={dirty || undefined}>
           {project.createdAt ? (
             <div className="project-settings-stamps">
-              <time dateTime={project.createdAt} title={project.createdAt}>
+              <time dateTime={project.createdAt} title={timestampTitle(project.createdAt, i18n.language)}>
                 <ActionCalendar size={ICON.xs} aria-hidden="true" />
                 {t("admin.v2.agent_meta_created", { time: formatRelativeTime(project.createdAt, t) })}
               </time>
-              <time dateTime={project.updatedAt} title={project.updatedAt}>
+              <time dateTime={project.updatedAt} title={timestampTitle(project.updatedAt, i18n.language)}>
                 <ActionRetry size={ICON.xs} aria-hidden="true" />
                 {t("admin.v2.agent_meta_updated", { time: formatRelativeTime(project.updatedAt, t) })}
               </time>

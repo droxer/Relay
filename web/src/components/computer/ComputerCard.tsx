@@ -274,7 +274,7 @@ function RuntimeRow({
   const tone = agentStatusTone(!isNodeOnline(node) && agentStatus !== "failed" ? "unknown" : agentStatus, { disabled });
   const presence = nodeAgentPresence(node, agent);
   const stateLabel = runtimeStateLabel(node, agent, disabled, t);
-  const detail = runtimeNotReadyDetail(node, agent, disabled);
+  const detail = runtimeNotReadyDetail(node, agent, disabled, t);
 
   const tooltip = [labelForExecutor(agent), stateLabel, version, detail].filter(Boolean).join(" · ");
   // A failed runtime says so in words: a red ring beside a grey one is a
