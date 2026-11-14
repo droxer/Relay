@@ -48,3 +48,7 @@ def test_the_backend_knows_exactly_the_protocol_capabilities() -> None:
 
 def test_a_current_daemon_advertises_every_known_capability() -> None:
     assert _advertised_capabilities() == set(DAEMON_NODE_CAPABILITIES)
+
+
+def test_a_current_daemon_advertises_durable_output_acknowledgement() -> None:
+    assert "durable-output-ack" in _advertised_capabilities()
