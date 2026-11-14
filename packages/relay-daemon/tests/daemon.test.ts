@@ -1186,7 +1186,7 @@ test("relay daemon advertises only agents with passing capability preflight", as
     signal: stop.signal,
     environment: fakeEnvironment({
       ensure: async (agent) => {
-        if (agent === "kimi") throw new Error("Kimi is not logged in.");
+        if (agent === "opencode") throw new Error("OpenCode is not logged in.");
       },
     }),
     fetchFn: async (url, init) => {
@@ -1207,12 +1207,12 @@ test("relay daemon advertises only agents with passing capability preflight", as
   await daemon;
 
   assert.equal(registrations[0].supportedAgents.includes("codex"), true);
-  assert.equal(registrations[0].supportedAgents.includes("kimi"), false);
+  assert.equal(registrations[0].supportedAgents.includes("opencode"), false);
   assert.equal(registrations[0].clientVersion, RELAY_CLIENT_VERSION);
   assert.equal(registrations[0].sandboxMode, "boxlite");
   assert.equal(registrations[0].workspaceId, "repo:relay");
-  assert.equal(registrations[0].agentHealth?.kimi?.status, "failed");
-  assert.match(registrations[0].agentHealth?.kimi?.detail ?? "", /not logged in/);
+  assert.equal(registrations[0].agentHealth?.opencode?.status, "failed");
+  assert.match(registrations[0].agentHealth?.opencode?.detail ?? "", /not logged in/);
 });
 
 test("relay daemon reports why each runtime is not ready", async () => {
@@ -1236,7 +1236,7 @@ test("relay daemon reports why each runtime is not ready", async () => {
     environment: fakeEnvironment({
       ensure: async (agent) => {
         if (agent === "codex") throw new AgentNotInstalledError("Codex is not installed on this computer.");
-        if (agent === "kimi") throw new AgentUnresponsiveError("Kimi is not responding.");
+        if (agent === "pi") throw new AgentUnresponsiveError("Pi is not responding.");
         if (agent === "opencode") throw new AgentNotInstalledError("OpenCode is not installed on this computer.");
         if (agent === "claude") throw new Error("Claude Code is not logged in.");
       },
@@ -1257,21 +1257,20 @@ test("relay daemon reports why each runtime is not ready", async () => {
   });
 
   const [first] = registrations;
-  assert.deepEqual(first.supportedAgents, ["pi"]);
+  assert.deepEqual(first.supportedAgents, []);
   assert.deepEqual(
     Object.fromEntries(Object.entries(first.agentHealth ?? {}).map(([agent, health]) => [agent, health?.status])),
-    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive", opencode: "unavailable" },
+    { claude: "failed", pi: "unresponsive", codex: "unavailable", opencode: "unavailable" },
   );
   assert.deepEqual(
     Object.fromEntries((first.executorCapabilities ?? []).map((item) => [item.executorKind, item.status])),
-    { claude: "failed", pi: "ready", codex: "unavailable", kimi: "unresponsive", opencode: "unavailable" },
+    { claude: "failed", pi: "unresponsive", codex: "unavailable", opencode: "unavailable" },
   );
   assert.deepEqual(logs.sort(), [
     "info codex agent not installed",
     "info opencode agent not installed",
-    "info pi agent capability ready",
     "warn claude agent capability failed",
-    "warn kimi agent not responding",
+    "warn pi agent not responding",
   ]);
 });
 
@@ -1338,7 +1337,7 @@ test("capability refresh logs an agent only when its availability changes", asyn
     environment: fakeEnvironment({
       ensure: async (agent) => {
         if (agent === "codex") throw new AgentNotInstalledError("Codex is not installed on this computer.");
-        if (agent === "kimi") throw new Error("Kimi requires a valid native config.toml.");
+        if (agent === "opencode") throw new Error("OpenCode requires a valid native config.toml.");
         // Claude signs out on the third probe: a real change, so it is logged again.
         if (agent === "claude" && claudeChecks++ === 2) throw new Error("Claude Code is not logged in.");
       },
@@ -1358,7 +1357,7 @@ test("capability refresh logs an agent only when its availability changes", asyn
   const about = (agent: string) => logs.filter((entry) => entry.agent === agent).map(({ level, message }) => `${level} ${message}`);
   assert.deepEqual(about("pi"), ["info agent capability ready"]);
   assert.deepEqual(about("codex"), ["info agent not installed"]);
-  assert.deepEqual(about("kimi"), ["warn agent capability failed"]);
+  assert.deepEqual(about("opencode"), ["warn agent capability failed"]);
   assert.deepEqual(about("claude"), ["info agent capability ready", "warn agent capability failed"]);
 });
 
@@ -3925,48 +3924,8 @@ test("parseInventoryOutput reads skill frontmatter and MCP servers per agent", (
 
 test("BoxLite skills are provisioned for every supported CLI", () => {
   const boxSource = readFileSync(join(process.cwd(), "packages/relay-daemon/src/box.ts"), "utf8");
-  for (const directory of [".claude/skills", ".codex/skills", ".pi/skills", ".kimi-code/skills"]) {
+  for (const directory of [".claude/skills", ".codex/skills", ".pi/skills"]) {
     assert.match(boxSource, new RegExp(directory.replace(".", "\\.")));
-  }
-});
-
-test("discoverAgentInventory scans live Kimi and Codex homes while ignoring legacy Kimi files", async () => {
-  const home = mkdtempSync(join(tmpdir(), "relay-agent-inventory-"));
-  try {
-    const writeFixture = (relativePath: string, content: string): void => {
-      const path = join(home, relativePath);
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, content);
-    };
-    writeFixture(".kimi-code/skills/live/SKILL.md", "---\nname: kimi-live\ndescription: current\n---\n");
-    writeFixture(".kimi-code/mcp.json", JSON.stringify({ mcpServers: { kimiLive: { command: "kimi-mcp" } } }));
-    writeFixture(".kimi/skills/stale/SKILL.md", "---\nname: kimi-stale\n---\n");
-    writeFixture(".kimi/mcp.json", JSON.stringify({ mcpServers: { kimiStale: { command: "stale-mcp" } } }));
-    writeFixture(".codex/skills/review/SKILL.md", "---\nname: codex-review\n---\n");
-
-    const execute = promisify(execFile);
-    const inventory = await discoverAgentInventory(async (cmd, args, options) => {
-      try {
-        const result = await execute(cmd, args ?? [], {
-          env: { ...process.env, HOME: home, KIMI_CODE_HOME: join(home, '.kimi-code'), CODEX_HOME: join(home, '.codex') },
-          signal: options?.signal,
-        });
-        return { exit_code: 0, stdout: result.stdout, stderr: result.stderr };
-      } catch (error) {
-        const failure = error as Error & { code?: number; stdout?: string; stderr?: string };
-        return {
-          exit_code: typeof failure.code === "number" ? failure.code : 1,
-          stdout: failure.stdout ?? "",
-          stderr: failure.stderr ?? failure.message,
-        };
-      }
-    });
-
-    assert.deepEqual(inventory.kimi?.skills.map((skill) => skill.name), ["kimi-live"]);
-    assert.deepEqual(inventory.kimi?.mcpServers.map((server) => server.name), ["kimiLive"]);
-    assert.deepEqual(inventory.codex?.skills.map((skill) => skill.name), ["codex-review"]);
-  } finally {
-    rmSync(home, { recursive: true, force: true });
   }
 });
 
@@ -3976,7 +3935,6 @@ test("devbox pins every installed agent CLI to an exact version", () => {
     "@anthropic-ai/claude-code",
     "@openai/codex",
     "@earendil-works/pi-coding-agent",
-    "@moonshot-ai/kimi-code",
   ]) {
     assert.match(source, new RegExp(`${packageName.replace("/", "\\/")}@[0-9]+\\.[0-9]+\\.[0-9]+`));
   }
@@ -5251,7 +5209,6 @@ for (const source of ["heartbeats", "poll acknowledgements", "long polls", "wron
   });
 }
 
-
 async function runThroughOutage(options: {
   graceMs?: number; runMs: number; outageMs: number; outageStatus: number;
   /** Heartbeat answers during the outage, in order; the last one repeats. */
@@ -5601,7 +5558,6 @@ test("managed daemon reuses durable enrollment after grant expiry", async () => 
     assert.equal(enrollments, 1);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
-
 
 test("daemon restart fences a retained execution instead of running it again", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-restart-fence-"));
@@ -6107,7 +6063,6 @@ for (const outageMs of [1000, 5000, 30_000]) {
     }
   });
 }
-
 
 test('a rejected terminal report cannot make a redelivered start execute twice', { timeout: 5000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'relay-fenced-redelivery-'));

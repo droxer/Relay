@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { TextDecoder } from "node:util";
@@ -9,7 +9,6 @@ import {
   DEVBOX_IMAGE,
   DOCKERFILE,
   OCI_LAYOUT_DIR,
-  kimiApiKey,
   requireOpenaiApiKey,
   requirePiConfig,
 } from "relay-core";
@@ -25,7 +24,6 @@ import {
 import { shellQuote } from "relay-core";
 import { hostWorkspaceOwner } from "relay-core";
 import type { AgentName, AgentOutputSink, StreamExecResult } from "relay-core";
-import { assertKimiConfigured } from "./agent-auth.js";
 import { collectExecution } from "./execution-capture.js";
 export { collectExecution } from "./execution-capture.js";
 import { GUEST_PROCESS_SUPERVISOR } from "./guest-process-supervisor.js";
@@ -34,11 +32,6 @@ export type BoxLiteModule = typeof import("@boxlite-ai/boxlite");
 type StreamRenderer = (chunk: string) => string;
 type CommandRunner = typeof spawnSync;
 const BOXLITE_HOME_LOCK_DIR = ".relay-boxlite.lock";
-
-interface KimiCodeFile {
-  relativePath: string;
-  content: Buffer;
-}
 
 export interface BoxliteHomeLock {
   readonly boxliteHome: string;
@@ -52,8 +45,6 @@ interface BoxliteHomeLockMetadata {
   command?: string;
   createdAt?: string;
 }
-
-const KIMI_CODE_AUTH_ENTRIES = ["config.toml", "tui.toml", "credentials", "oauth"] as const;
 
 export interface DevboxOciOptions {
   dockerfile?: string;
@@ -184,71 +175,6 @@ export async function prepareGuestWorkspace(hostWorkspace: string, box: any = ac
   return [uid, gid];
 }
 
-export function hostKimiCodeHomePath(): string {
-  return resolve(process.env.KIMI_CODE_HOME || join(homedir(), ".kimi-code"));
-}
-
-export function prepareHostKimiCodeHome(targetHome: string): void {
-  for (const file of collectKimiCodeFiles()) {
-    const target = join(targetHome, file.relativePath);
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, file.content, { mode: 0o600 });
-    chmodSync(target, 0o600);
-  }
-}
-
-export function hasHostKimiCodeAuth(sourceHome = hostKimiCodeHomePath()): boolean {
-  return collectKimiCodeFiles(sourceHome, false).length > 0;
-}
-
-function kimiCodeGuestSetupScript(targetHome = "/home/agent/.kimi-code", files = collectKimiCodeFiles()): string[] {
-  const script = [
-    `mkdir -p ${shellQuote(targetHome)}`,
-  ];
-  for (const file of files) {
-    const target = posix.join(targetHome, ...file.relativePath.split(posix.sep));
-    script.push(
-      `mkdir -p ${shellQuote(posix.dirname(target))}`,
-      `printf %s ${shellQuote(file.content.toString("base64"))} | base64 -d > ${shellQuote(target)}`,
-      `chmod 600 ${shellQuote(target)}`,
-    );
-  }
-  script.push(
-    `chown -R agent:agent ${shellQuote(targetHome)}`,
-    `find ${shellQuote(targetHome)} -type d -exec chmod 700 {} +`,
-  );
-  return script;
-}
-
-function collectKimiCodeFiles(sourceHome = hostKimiCodeHomePath(), required = true): KimiCodeFile[] {
-  if (!existsSync(sourceHome)) {
-    if (!required) return [];
-    throw new Error(`Kimi Code home not found at ${sourceHome}. Run kimi login on the host or set KIMI_CODE_HOME.`);
-  }
-  const files: KimiCodeFile[] = [];
-  for (const entry of KIMI_CODE_AUTH_ENTRIES) {
-    const path = join(sourceHome, entry);
-    if (existsSync(path)) collectKimiCodePath(sourceHome, path, files);
-  }
-  if (files.length === 0) {
-    if (!required) return [];
-    throw new Error(`Kimi Code home at ${sourceHome} does not contain config or credential files.`);
-  }
-  return files;
-}
-
-function collectKimiCodePath(sourceHome: string, path: string, files: KimiCodeFile[]): void {
-  const stat = statSync(path);
-  if (stat.isDirectory()) {
-    for (const child of readdirSync(path).sort()) collectKimiCodePath(sourceHome, join(path, child), files);
-    return;
-  }
-  if (!stat.isFile()) return;
-  const relativePath = relative(sourceHome, path).split(sep).join(posix.sep);
-  if (!relativePath || relativePath.startsWith("../") || relativePath === "..") return;
-  files.push({ relativePath, content: readFileSync(path) });
-}
-
 // ── Agent skills (per-CLI SKILL.md directories) ─────────────────────────────
 // Skills are not secret, so they go in with world-readable perms. The source
 // directory on the host is configured via RELAY_AGENT_SKILLS_DIR; every file
@@ -258,7 +184,6 @@ const GUEST_AGENT_SKILLS_DIRS = [
   "/home/agent/.claude/skills",
   "/home/agent/.codex/skills",
   "/home/agent/.pi/skills",
-  "/home/agent/.kimi-code/skills",
 ] as const;
 
 interface SkillFile {
@@ -378,15 +303,6 @@ export async function prepareGuestAgentAuth(
       "chmod 600 /home/agent/.pi/agent/auth.json",
     );
   }
-  if (selectedAgents.has("kimi")) {
-    assertKimiConfigured(hostKimiCodeHomePath());
-    const files = collectKimiCodeFiles(hostKimiCodeHomePath(), false);
-    if (files.length > 0) {
-      script.push(...kimiCodeGuestSetupScript("/home/agent/.kimi-code", files));
-    } else if (!kimiApiKey()) {
-      throw new Error("Kimi requires a host Kimi Code login, KIMI_API_KEY, or MOONSHOT_API_KEY.");
-    }
-  }
   if (script.length === 1) return;
   const command = script.join("; ");
   const result = await collectExecution(await (box ?? activeBox()).exec("bash", ["-c", command]), false, undefined, undefined, undefined, signal);
@@ -423,7 +339,6 @@ export async function supervisedBoxExec(
     terminate: async () => { await execution.signal(15); },
   });
 }
-
 
 export function dockerImageId(image: string, options: DevboxOciOptions = {}): string | undefined {
   const runCommand = options.runCommand ?? spawnSync;

@@ -499,7 +499,7 @@ export const PERMISSION_TEXT_LIMIT = 500;
 
 /**
  * One question a runtime's "ask the user" tool poses mid-run (Claude's
- * AskUserQuestion, Codex's request_user_input, Kimi's AskUserQuestion). The
+ * AskUserQuestion, Codex's request_user_input). The
  * person picks from `options` or writes an answer; `multiSelect` allows
  * several picks.
  */

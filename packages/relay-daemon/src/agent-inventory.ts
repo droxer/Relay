@@ -41,7 +41,6 @@ const AGENT_INVENTORY_SOURCES: Record<AgentName, AgentInventorySource> = {
   claude: { skillsDir: ".claude/skills", mcpJson: [".claude.json", ".mcp.json"] },
   codex: { skillsDir: ".codex/skills", mcpJson: [".codex/mcp.json"], mcpToml: [".codex/config.toml"] },
   pi: { skillsDir: ".pi/skills", mcpJson: [".pi/mcp.json"] },
-  kimi: { skillsDir: ".kimi-code/skills", mcpJson: [".kimi-code/mcp.json"] },
   // OpenCode's skill and MCP locations are not verified yet; none are reported.
   opencode: {},
 };
@@ -81,7 +80,6 @@ const CONFIG_HOMES: Record<AgentName, string> = {
   claude: '${CLAUDE_CONFIG_DIR:-$home/.claude}',
   codex: '${CODEX_HOME:-$home/.codex}',
   pi: '${PI_CODING_AGENT_DIR:-$home/.pi}',
-  kimi: '${KIMI_CODE_HOME:-$home/.kimi-code}',
   opencode: '${XDG_CONFIG_HOME:-$home/.config}/opencode',
 };
 

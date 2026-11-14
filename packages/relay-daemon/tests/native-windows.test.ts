@@ -83,7 +83,6 @@ test('native scripts respect cancellation and skip subsequent commands after fai
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-
 test('Windows model and inventory discovery use native execution', async () => {
   const calls: string[] = [];
   const execute = async (command: string, args: string[] = []) => {
@@ -96,7 +95,6 @@ test('Windows model and inventory discovery use native execution', async () => {
   await local(() => windows(() => discoverAgentInventory(execute)));
   assert.deepEqual(calls, Array(AGENT_NAMES.length + 1).fill('relay-native'));
 });
-
 
 test('Windows resolves npm .cmd files instead of adjacent POSIX shims and preserves argv', () => {
   const entry = 'C:\\npm\\node_modules\\cli\\bin.js';
@@ -115,7 +113,6 @@ test('native model discovery keeps model ids and excludes provider credentials',
   const cases = [
     { agent: 'codex', output: JSON.stringify({ models: [{ slug: 'gpt-test', visibility: 'list', priority: 0 }] }), expected: ['gpt-test'] },
     { agent: 'pi', output: 'provider model context\nopenai gpt-test 100000', expected: ['openai/gpt-test'] },
-    { agent: 'kimi', output: JSON.stringify({ providers: { secret: 'do-not-emit' }, models: { 'kimi-test': {} } }), expected: ['kimi-test'] },
     { agent: 'opencode', output: 'openai/gpt-test\n', expected: ['openai/gpt-test'] },
   ] as const;
   for (const entry of cases) {
@@ -257,7 +254,6 @@ test('agent runs select native execution while retaining the executor output con
   assert.ok(called);
   assert.equal(outcome.last_exit_code, 0);
 });
-
 
 test('native runtime launch streams its private multimodal input file to stdin', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'relay-native-image-'));

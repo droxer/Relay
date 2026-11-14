@@ -27,7 +27,7 @@ import type {
 function daemonNode(input: Partial<DaemonNodeMonitorRecord> & { id: string; userId?: string }): DaemonNodeMonitorRecord {
   return {
     status: "ready",
-    agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown", opencode: "unknown" },
+    agents: { claude: "ready", pi: "ready", codex: "ready", opencode: "unknown" },
     createdAt: "2026-06-12T00:00:00.000Z",
     updatedAt: "2026-06-12T00:00:00.000Z",
     queuedCommandCount: 0,
@@ -64,7 +64,7 @@ describe("Relay web thread status", () => {
         id: "sbx_alice",
         userId: "alice",
         status: "ready",
-        agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown", opencode: "unknown" },
+        agents: { claude: "ready", pi: "ready", codex: "ready", opencode: "unknown" },
         createdAt: "2026-06-12T00:00:00.000Z",
         updatedAt: "2026-06-12T00:00:00.000Z",
         queuedCommandCount: 0,
@@ -82,7 +82,7 @@ describe("Relay web thread status", () => {
         id: "sbx_alice",
         userId: "alice",
         status: "ready",
-        agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "unknown", opencode: "unknown" },
+        agents: { claude: "ready", pi: "ready", codex: "ready", opencode: "unknown" },
         createdAt: "2026-06-12T00:00:00.000Z",
         updatedAt: "2026-06-12T00:00:00.000Z",
         queuedCommandCount: 0,
@@ -108,14 +108,14 @@ describe("Relay web thread status", () => {
       online: true,
       stale: false,
       lastSeenAt: "2026-06-12T00:00:03.000Z",
-      agentDetails: { kimi: { detail: "Kimi is not logged in.", adapter: "cli" } },
+      agentDetails: { opencode: { detail: "OpenCode is not logged in.", adapter: "cli" } },
     });
 
     const [visibleNode] = mergeVisibleDaemonNodes([staleAuthenticatedNode], [liveControlPanelNode]);
 
     assert.equal(visibleNode.id, "sbx_alice_live");
     assert.equal(visibleNode.online, true);
-    assert.equal(visibleNode.agentDetails?.kimi?.detail, "Kimi is not logged in.");
+    assert.equal(visibleNode.agentDetails?.opencode?.detail, "OpenCode is not logged in.");
     assert.equal(threadDaemonStatus({ node: visibleNode }), "ready");
     assert.equal("nodeToken" in visibleNode, false);
   });

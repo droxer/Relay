@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  buildClaudeCommand, buildCodexCommand, buildKimiCommand, buildPiCommand, customModelEndpointAgents, initialAgentState,
+  buildClaudeCommand, buildCodexCommand, buildOpenCodeCommand, buildPiCommand, customModelEndpointAgents, initialAgentState,
 } from "../src/index.js";
 
 function withEnv(env: Record<string, string>, action: () => void): void {
@@ -19,8 +19,7 @@ test("a pinned agent model replaces the daemon's env default on every runtime", 
   assert.match(buildCodexCommand(pinned), /'-m' 'pinned-model'|-m pinned-model/);
   assert.match(buildClaudeCommand(pinned), /--model'? '?pinned-model/);
   assert.match(buildPiCommand(pinned), /--model'? '?pinned-model/);
-  assert.match(buildKimiCommand(pinned), /--model'? '?pinned-model/);
-  for (const build of [buildCodexCommand, buildClaudeCommand, buildPiCommand, buildKimiCommand]) {
+  for (const build of [buildCodexCommand, buildClaudeCommand, buildPiCommand, buildOpenCodeCommand]) {
     assert.doesNotMatch(build(pinned), /env-(openai|claude|pi|kimi)/);
   }
 }));
@@ -40,35 +39,7 @@ test("a local node honors a pinned model but not the daemon's env default", () =
   },
 ));
 
-test("kimi configured through KIMI_MODEL_* takes the pinned model as KIMI_MODEL_NAME", () => withEnv(
-  { KIMI_MODEL_NAME: "env-kimi-name", KIMI_MODEL_API_KEY: "key" },
-  () => {
-    const command = buildKimiCommand(pinned);
-    assert.match(command, /export KIMI_MODEL_NAME='?pinned-model'?/);
-    assert.doesNotMatch(command, /--model/);
-  },
-));
-
 const LOCAL = { RELAY_RUN_AS_CURRENT_USER: "1", RELAY_AGENT_HOME: "/user/home" };
-
-test("a local kimi node passes the pin as --model when only the daemon's shell has KIMI_API_KEY", () => withEnv(
-  { ...LOCAL, KIMI_API_KEY: "daemon-key" },
-  () => {
-    // The run never receives KIMI_API_KEY, so KIMI_MODEL_NAME would be ignored.
-    const command = buildKimiCommand(pinned);
-    assert.match(command, /--model'? '?pinned-model/);
-    assert.doesNotMatch(command, /KIMI_MODEL_NAME/);
-  },
-));
-
-test("a local kimi node configured through KIMI_MODEL_* still pins via KIMI_MODEL_NAME", () => withEnv(
-  { ...LOCAL, KIMI_MODEL_API_KEY: "key", KIMI_MODEL_NAME: "user-model" },
-  () => {
-    const command = buildKimiCommand(pinned);
-    assert.match(command, /export KIMI_MODEL_NAME='?pinned-model'?/);
-    assert.doesNotMatch(command, /--model/);
-  },
-));
 
 test("pi keeps the node's provider for a bare pin but not for a provider-qualified one", () => withEnv(
   { PI_PROVIDER: "anthropic", PI_MODEL: "env-pi", PI_API_KEY: "key" },

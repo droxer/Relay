@@ -7,7 +7,6 @@ import {
   DAEMON_CAPABILITY_AGENT_SKILLS,
   buildClaudeCommand,
   buildCodexCommand,
-  buildKimiCommand,
   buildOpenCodeCommand,
   buildPiCommand,
   type AgentState,
@@ -64,9 +63,8 @@ describe("skill delivery", () => {
       subdir: ".codex",
       skillsSubpath: "skills",
     });
-    assert.deepEqual(AGENT_REGISTRY.kimi.skillDelivery, {
-      kind: "skills-dir-flag",
-      flag: "--skills-dir",
+    assert.deepEqual(AGENT_REGISTRY.opencode.skillDelivery, {
+      kind: "prompt-paths",
     });
   });
 
@@ -84,14 +82,6 @@ describe("skill delivery", () => {
     const managedEmpty = buildPiCommand(state({ skill_paths: [] }));
     assert.match(managedEmpty, /--no-skills/);
     assert.doesNotMatch(managedEmpty, /--skill /);
-  });
-
-  it("repeats Kimi's directory-container flag and quotes each path", () => {
-    const command = asCurrentUser(() =>
-      buildKimiCommand(state({ skill_paths: ["/views/a", "/views/b c"] })),
-    );
-    assert.match(command, /--skills-dir \/views\/a/);
-    assert.match(command, /--skills-dir '\/views\/b c'/);
   });
 
   it("injects only the delivery environment variable inside the guest agent shell", () => {

@@ -12,6 +12,8 @@ export function parseRuntimeLimits(raw: string | undefined): RuntimeLimits {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(message);
   const limits: RuntimeLimits = {};
   for (const [kind, limit] of Object.entries(value)) {
+    // Preserve launchability of profiles saved before Kimi was retired.
+    if (kind === "kimi") continue;
     if (!AGENT_NAMES.includes(kind as AgentName) || !Number.isSafeInteger(limit) || (limit as number) <= 0) {
       throw new Error(message);
     }

@@ -6,7 +6,7 @@ import { visibleNodeAgentNames } from "../src/lib/adminHelpers.js";
 
 describe("create agent options", () => {
   it("orders ready runtimes like Manage Agent Runtimes regardless of API order", () => {
-    const agents = { pi: "ready", kimi: "ready", claude: "ready", codex: "ready", opencode: "ready" } as const;
+    const agents = { pi: "ready", claude: "ready", codex: "ready", opencode: "ready" } as const;
     const nodes = [{ id: "n1", userId: "alice", workspaceId: "mac", supportedAgents: Object.keys(agents) }];
 
     assert.deepEqual(
@@ -14,13 +14,9 @@ describe("create agent options", () => {
       visibleNodeAgentNames({ agents }),
     );
     assert.deepEqual(
-      runtimesForComputer([{ ...nodes[0], disabledAgents: ["claude", "kimi", "opencode"] }], "device:alice:mac"),
+      runtimesForComputer([{ ...nodes[0], disabledAgents: ["claude", "opencode"] }], "device:alice:mac"),
       ["codex", "pi"],
     );
-  });
-
-  it("hides Kimi even when it is the only supported runtime", () => {
-    assert.deepEqual(runtimesForComputer([{ id: "n1", supportedAgents: ["kimi"] }], "node:n1"), []);
   });
 
   it("shows the computer name and never substitutes its workspace path", () => {

@@ -38,10 +38,6 @@ export function defaultModelDiscoveryScript(agent: AgentName): string {
       const config = json(read(path.join(env.PI_CODING_AGENT_DIR || path.join(home, '.pi', 'agent'), 'settings.json')));
       if (config.defaultProvider && config.defaultModel) model = config.defaultProvider + '/' + config.defaultModel;
 `,
-    kimi: String.raw`
-      const config = read(path.join(env.KIMI_CODE_HOME || path.join(home, '.kimi-code'), 'config.toml'));
-      model = env.KIMI_MODEL || scalar(config, 'default_model');
-`,
     opencode: String.raw`
       const dir = path.join(env.XDG_CONFIG_HOME || path.join(home, '.config'), 'opencode');
       const configJson = text => json(text

@@ -27,3 +27,10 @@ test('resource budgets reject invalid values instead of silently reverting to de
     assert.throws(() => resourceLimit('GUESTS', value, 5), /GUESTS/);
   }
 });
+
+test("retired Kimi limits do not prevent supported runtimes from starting", () => {
+  assert.deepEqual(parseRuntimeLimits('{"codex":2,"kimi":1,"claude":3}'), { codex: 2, claude: 3 });
+  assert.deepEqual(parseRuntimeLimits('{"kimi":1}'), {});
+  assert.throws(() => parseRuntimeLimits('{"kimi":1,"unknown":2}'), /RELAY_DAEMON_RUNTIME_LIMITS/);
+  assert.throws(() => parseRuntimeLimits('{"kimi":1,"codex":0}'), /RELAY_DAEMON_RUNTIME_LIMITS/);
+});

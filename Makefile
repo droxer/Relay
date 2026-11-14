@@ -41,7 +41,7 @@ cloud-computer-image:
 	docker build --platform linux/amd64 -t $(CLOUD_COMPUTER_IMAGE) -f deploy/cloud-computer/Dockerfile .
 
 devbox-check: devbox-image
-	docker run --rm $(DEVBOX_IMAGE) bash -lc 'node --version && command -v pi && pi --version && claude --version && codex --version && kimi --version'
+	docker run --rm $(DEVBOX_IMAGE) bash -lc 'node --version && command -v pi && pi --version && claude --version && codex --version'
 
 devbox-oci: devbox-check
 	mkdir -p $(OCI_DIR)

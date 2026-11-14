@@ -2186,9 +2186,6 @@
     "codex": {
       "blurb": "通过 Codex CLI 运行。"
     },
-    "kimi": {
-      "blurb": "通过 Kimi CLI 运行。"
-    },
     "opencode": {
       "blurb": "通过 OpenCode CLI 运行。"
     }

@@ -67,8 +67,8 @@ test("a check that outlives its deadline reads as unresponsive", async (t) => {
   const handle = setInterval(() => {}, 1_000);
   t.after(() => clearInterval(handle));
   await assert.rejects(
-    runBoundedPreflight("kimi", undefined, hangUntilAborted, 20),
-    (error) => error instanceof AgentUnresponsiveError && /Kimi is not responding/.test(error.message),
+    runBoundedPreflight("opencode", undefined, hangUntilAborted, 20),
+    (error) => error instanceof AgentUnresponsiveError && /OpenCode is not responding/.test(error.message),
   );
 });
 
@@ -76,7 +76,7 @@ test("a thrown error after the deadline still reads as unresponsive", async (t) 
   const handle = setInterval(() => {}, 1_000);
   t.after(() => clearInterval(handle));
   await assert.rejects(
-    runBoundedPreflight("kimi", undefined, (signal) => new Promise((_, reject) => {
+    runBoundedPreflight("opencode", undefined, (signal) => new Promise((_, reject) => {
       signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
     }), 20),
     AgentUnresponsiveError,

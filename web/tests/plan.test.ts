@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { agentLabel, parsePlanSteps } from "../src/lib/plan.js";
 
-const AGENTS = ["claude", "pi", "codex", "kimi"] as const;
+const AGENTS = ["claude", "pi", "codex", "opencode"] as const;
 
 describe("parsePlanSteps", () => {
   it("parses a multi-step assignment plan", () => {
@@ -28,10 +28,10 @@ describe("parsePlanSteps", () => {
     const body = JSON.stringify({
       assignments: [
         { agent: "ghost" },
-        { agent: "kimi" },
+        { agent: "opencode" },
       ],
     });
-    assert.deepEqual(parsePlanSteps(body, AGENTS), [{ agent: "kimi" }]);
+    assert.deepEqual(parsePlanSteps(body, AGENTS), [{ agent: "opencode" }]);
   });
 
   it("returns null for non-plan / invalid JSON", () => {

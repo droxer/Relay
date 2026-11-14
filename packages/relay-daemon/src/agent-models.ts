@@ -20,10 +20,6 @@ import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentNa
 //           KB), so the sweep keeps only the slug/visibility/priority keys —
 //           process output is tail-bounded and would lose the head.
 //   pi      `pi --list-models` — only providers it can authenticate.
-//   kimi    `kimi provider list` — its configured models and default; the
-//           `[models."<alias>"]` tables in config.toml only when the CLI is
-//           missing. The JSON form also carries each provider's credentials,
-//           so the sweep keeps only the `models` object that follows them.
 //
 // A runtime behind a custom endpoint (a proxy or a compatible provider such
 // as DeepSeek) reports only the models that endpoint lists: its vendor's ids
@@ -106,13 +102,6 @@ const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
   ],
   // Pi prints its table on stderr.
   pi: ["if command -v pi >/dev/null 2>&1; then pi --list-models 2>&1 | emit list; fi"],
-  kimi: [
-    "if command -v kimi >/dev/null 2>&1; then",
-    `  kimi provider list --json 2>/dev/null | sed -n '/"models"[[:space:]]*:/,$p' | emit models`,
-    "  kimi provider list 2>/dev/null | grep -E '^Default model:' | emit default",
-    'else f="${KIMI_CODE_HOME:-$HOME/.kimi-code}/config.toml"; if [ -f "$f" ]; then emit config < "$f"; fi',
-    "fi",
-  ],
   // `opencode models` prints one `provider/model` id per line.
   opencode: ["if command -v opencode >/dev/null 2>&1; then opencode models 2>/dev/null | emit list; fi"],
 };
@@ -208,8 +197,6 @@ export function parseAgentModels(
       return validModels(texts("catalog").flatMap(codexCatalogModels));
     case "pi":
       return validModels(texts("list").flatMap(piListedModels));
-    case "kimi":
-      return validModels(kimiModels(texts("models"), texts("default"), texts("config")));
     case "opencode":
       return validModels(texts("list").flatMap(openCodeListedModels));
   }
@@ -320,34 +307,6 @@ export function piListedModels(text: string): string[] {
       continue;
     }
     if (provider && model) models.push(`${provider}/${model}`);
-  }
-  return models;
-}
-
-function kimiModels(listed: string[], defaults: string[], configs: string[]): string[] {
-  const models = listed.flatMap(kimiListedModels);
-  if (models.length === 0) return configs.flatMap(kimiConfigModels);
-  const fallback = defaults.flatMap((text) => /^Default model:\s*(\S+)/m.exec(text)?.[1] ?? []);
-  return [...fallback, ...models];
-}
-
-/** The aliases in `kimi provider list --json`, from its `"models": {…}` object on. */
-export function kimiListedModels(text: string): string[] {
-  const models = parseJsonObject(`{${text}`)?.models;
-  return models && typeof models === "object" && !Array.isArray(models) ? Object.keys(models) : [];
-}
-
-/** Kimi's `--model` takes a config alias: `default_model` first, then each `[models.<alias>]`. */
-export function kimiConfigModels(text: string): string[] {
-  const models: string[] = [];
-  let inRoot = true;
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    const section = /^\[models\.(?:"([^"]+)"|([A-Za-z0-9_-]+))\]$/.exec(line);
-    if (section) models.push(section[1] ?? section[2]);
-    if (line.startsWith("[")) inRoot = false;
-    const fallback = inRoot ? /^default_model\s*=\s*"([^"]+)"/.exec(line) : null;
-    if (fallback) models.unshift(fallback[1]);
   }
   return models;
 }

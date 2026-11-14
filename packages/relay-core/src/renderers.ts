@@ -169,7 +169,6 @@ export class StderrLineRenderer {
     if (isCodexStdinNotice(line)) return "";
     if (isCodexModelsCacheWarning(line)) return "";
     if (isCodexLegacyMultiAgentFallback(line)) return "";
-    if (isKimiResumeNotice(line)) return "";
     if (isClaudeConnectorNotice(line)) return "";
     return `${status("warn", line)}\n`;
   }
@@ -191,12 +190,6 @@ function isCodexModelsCacheWarning(line: string): boolean {
 // log, but do not present this internal fallback as a user-facing warning.
 function isCodexLegacyMultiAgentFallback(line: string): boolean {
   return /unsupported call:\s*multi_agent_v1__/.test(line);
-}
-
-// Kimi prints a "To resume this session: kimi -r <id>" footer to stderr after a
-// non-interactive run; it is an interactive-resume hint, not a warning.
-function isKimiResumeNotice(line: string): boolean {
-  return /resume this session\s*:/i.test(line) || /\bkimi\s+-(?:r|S|-session)\b/.test(line);
 }
 
 // Claude prints a claude.ai connectors notice when ANTHROPIC_API_KEY or another
@@ -354,59 +347,6 @@ export class CodexStreamRenderer {
 }
 
 /**
- * Renders Kimi's `--output-format stream-json` stream. Each stdout line is an
- * OpenAI-chat-style message object (`role` + `content`, with `tool_calls` on
- * assistant turns; tool results arrive as `role:"tool"` messages). Kimi keeps
- * thinking content and the "resuming session" notice out of stdout, so we only
- * surface assistant text and tool invocations and drop everything else. Lines
- * that fail to parse (e.g. text-mode leakage) fall back to sanitized plain text.
- */
-export class KimiStreamRenderer {
-  private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
-  private readonly plain = new PlainTextStreamRenderer("Kimi", ansi.live);
-  private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
-
-  feed(chunk: string): string {
-    return this.lines.feed(chunk);
-  }
-
-  private formatLine(line: string): string {
-    const event = parseJsonObject(line);
-    if (!event) return this.plain.feed(`${sanitizeUntrustedText(line)}\n`);
-
-    if (event.type === "error") {
-      return `\n${status("error", `Kimi error: ${String(event.message ?? "unknown error")}`)}\n`;
-    }
-
-    // Accept both the bare message shape ({role,content,...}) and a wrapped
-    // form ({type,message:{...}}) for forward compatibility.
-    const message = asRecord(event.message ?? event);
-    const role = message.role ?? event.role;
-    // Require the assistant role rather than merely tolerating it. A record
-    // with no role is not a turn — rendering its text/content field would put
-    // stream bookkeeping on screen as if the agent had said it.
-    if (role !== "assistant") return "";
-
-    const output: string[] = [];
-    const text = textFromContentRecord(message).trim();
-    if (text) {
-      this.text.resetBlock();
-      output.push(`\n${this.text.feed(`${text}\n`)}`);
-    }
-
-    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
-    for (const call of toolCalls) {
-      const record = asRecord(call);
-      const fn = asRecord(record.function);
-      const name = String(fn.name ?? record.name ?? "tool");
-      output.push(toolLine("tool", name));
-    }
-
-    return output.join("");
-  }
-}
-
-/**
  * Renders `opencode run --format json`, and the ACP adapter that prints the
  * same lines: one NDJSON event per line. A text part is the assistant's
  * words (`delta: true` appends an ACP chunk), a tool_use part a tool call with
@@ -468,10 +408,6 @@ export class OpenCodeStreamRenderer {
 
 export function formatOpenCodeJsonLine(line: string): string {
   return new OpenCodeStreamRenderer().feed(`${line}\n`);
-}
-
-export function formatKimiJsonLine(line: string): string {
-  return new KimiStreamRenderer().feed(`${line}\n`);
 }
 
 function textFromContentRecord(record: Record<string, unknown>): string {

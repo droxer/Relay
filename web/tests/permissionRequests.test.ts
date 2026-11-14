@@ -115,7 +115,7 @@ describe("runtime permission prompts", () => {
 
   it("offers a deny note only where the runtime carries it to the agent", () => {
     assert.deepEqual(
-      (["claude", "pi", "codex", "kimi"] as const).map((agent) => permissionNoteReachesAgent({ agent })),
+      (["claude", "pi", "codex", "opencode"] as const).map((agent) => permissionNoteReachesAgent({ agent })),
       [true, true, false, false],
     );
   });

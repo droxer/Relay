@@ -46,7 +46,7 @@ function node(input: Partial<ControlPanelDaemonNodeRecord> & { id: string }): Co
     nodeToken: input.nodeToken,
     queuedCommandCount: input.queuedCommandCount ?? 0,
     activeRuns: input.activeRuns ?? [],
-    agents: input.agents ?? { claude: "ready", pi: "ready", codex: "ready", kimi: "ready" },
+    agents: input.agents ?? { claude: "ready", pi: "ready", codex: "ready" },
     disabledAgents: input.disabledAgents,
   } as ControlPanelDaemonNodeRecord;
 }
@@ -100,20 +100,20 @@ describe("isStale + visualStatus", () => {
 
 describe("nodeAgentPresence", () => {
   it("is online only when the computer is live and the executor reported ready", () => {
-    const live = node({ id: "a", agents: { claude: "ready", codex: "unknown", pi: "failed", kimi: "ready", opencode: "unknown" } });
+    const live = node({ id: "a", agents: { claude: "ready", codex: "unknown", pi: "failed", opencode: "unknown" } });
     assert.equal(nodeAgentPresence(live, "claude"), "online");
     assert.equal(nodeAgentPresence(live, "codex"), "offline");
     assert.equal(nodeAgentPresence(live, "pi"), "offline");
   });
 
   it("takes every agent offline when the computer is dark, whatever it last reported", () => {
-    const dark = node({ id: "a", online: false, agents: { claude: "ready", codex: "ready", pi: "ready", kimi: "ready", opencode: "unknown" } });
+    const dark = node({ id: "a", online: false, agents: { claude: "ready", codex: "ready", pi: "ready", opencode: "unknown" } });
     assert.equal(nodeAgentPresence(dark, "claude"), "offline");
 
     const stale = node({
       id: "b",
       stale: true,
-      agents: { claude: "ready", codex: "ready", pi: "ready", kimi: "ready", opencode: "unknown" },
+      agents: { claude: "ready", codex: "ready", pi: "ready", opencode: "unknown" },
     });
     assert.equal(nodeAgentPresence(stale, "claude"), "offline");
   });
@@ -159,7 +159,7 @@ describe("runtime status", () => {
 
   it("lists opt-in Pi only once the computer reports it installed", () => {
     const listed = (pi: ControlPanelDaemonNodeRecord["agents"]["pi"]) =>
-      visibleNodeAgentNames(node({ id: "a", agents: { claude: "ready", codex: "ready", kimi: "ready", opencode: "unknown", pi } })).includes("pi");
+      visibleNodeAgentNames(node({ id: "a", agents: { claude: "ready", codex: "ready", opencode: "unknown", pi } })).includes("pi");
     assert.equal(listed("unknown"), false);
     assert.equal(listed("unavailable"), false);
     assert.equal(listed("failed"), true);
@@ -167,20 +167,13 @@ describe("runtime status", () => {
     assert.equal(listed("ready"), true);
   });
 
-  it("orders visible runtimes and hides Kimi", () => {
-    const all = node({ id: "a", agents: { claude: "ready", codex: "ready", kimi: "ready", pi: "ready", opencode: "ready" } });
-    assert.deepEqual(visibleNodeAgentNames(all), ["codex", "claude", "pi", "opencode"]);
-    const defaults = node({ id: "b", agents: { claude: "ready", codex: "ready", kimi: "ready", pi: "unknown", opencode: "unavailable" } });
-    assert.deepEqual(visibleNodeAgentNames(defaults), ["codex", "claude"]);
-  });
-
   it("orders any runtime list the same way", () => {
-    assert.deepEqual(orderNodeAgentNames(["kimi", "opencode", "claude", "pi", "codex"]), ["codex", "claude", "pi", "opencode"]);
+    assert.deepEqual(orderNodeAgentNames(["opencode", "opencode", "claude", "pi", "codex"]), ["codex", "claude", "pi", "opencode"]);
   });
 
   it("lists opt-in OpenCode only once the computer reports it installed", () => {
     const listed = (opencode: ControlPanelDaemonNodeRecord["agents"]["opencode"]) =>
-      visibleNodeAgentNames(node({ id: "a", agents: { claude: "ready", codex: "ready", kimi: "ready", pi: "unknown", opencode } })).includes("opencode");
+      visibleNodeAgentNames(node({ id: "a", agents: { claude: "ready", codex: "ready", pi: "unknown", opencode } })).includes("opencode");
     assert.equal(listed("unknown"), false);
     assert.equal(listed("unavailable"), false);
     assert.equal(listed("failed"), true);
@@ -533,16 +526,16 @@ describe("showsLifecycleStatus", () => {
 describe("fleetRuntimeSlots", () => {
   it("reserves every runtime visible on any computer, in display order", () => {
     const slots = fleetRuntimeSlots([
-      { agents: { codex: "ready", claude: "ready", kimi: "ready", pi: "unavailable" } },
-      { agents: { codex: "ready", claude: "failed", kimi: "ready", pi: "ready" } },
+      { agents: { codex: "ready", claude: "ready", pi: "unavailable" } },
+      { agents: { codex: "ready", claude: "failed", pi: "ready" } },
     ] as Pick<ControlPanelDaemonNodeRecord, "agents">[]);
-    assert.deepEqual(slots, visibleNodeAgentNames({ agents: { codex: "ready", claude: "ready", kimi: "ready", pi: "ready" } } as Pick<ControlPanelDaemonNodeRecord, "agents">));
+    assert.deepEqual(slots, visibleNodeAgentNames({ agents: { codex: "ready", claude: "ready", pi: "ready" } } as Pick<ControlPanelDaemonNodeRecord, "agents">));
     assert.ok(slots.includes("pi"));
   });
 
   it("leaves out an opt-in runtime no computer reports", () => {
     const slots = fleetRuntimeSlots([
-      { agents: { codex: "ready", claude: "ready", kimi: "ready", pi: "unavailable" } },
+      { agents: { codex: "ready", claude: "ready", pi: "unavailable" } },
     ] as Pick<ControlPanelDaemonNodeRecord, "agents">[]);
     assert.equal(slots.includes("pi"), false);
   });
@@ -550,7 +543,7 @@ describe("fleetRuntimeSlots", () => {
 
 describe("failedRuntimeCount", () => {
   it("counts shown runtimes that last reported failed", () => {
-    assert.equal(failedRuntimeCount({ agents: { codex: "failed", claude: "ready", kimi: "failed", pi: "unavailable" } } as Pick<ControlPanelDaemonNodeRecord, "agents">), 1);
+    assert.equal(failedRuntimeCount({ agents: { codex: "failed", claude: "ready", pi: "unavailable" } } as Pick<ControlPanelDaemonNodeRecord, "agents">), 1);
   });
 
   it("does not count a runtime an admin switched off", () => {

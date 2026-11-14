@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import test from "node:test";
 
-import { buildKimiCommand, initialAgentState, type DaemonRunSkillBundle, type SkillDelivery } from "relay-core";
+import { buildOpenCodeCommand, initialAgentState, type DaemonRunSkillBundle, type SkillDelivery } from "relay-core";
 import { materializeSkills, runSkillDelivery } from "../src/agent-skills.js";
 import { localProcessExecStream } from "../src/index.js";
 
@@ -31,28 +31,6 @@ async function withFixture(run: (f: ReturnType<typeof fixture>) => Promise<void>
   const f = fixture();
   try { await run(f); } finally { rmSync(f.root, { recursive: true, force: true }); }
 }
-
-test("native Kimi ACP receives actual instruction files while trusted and cloud runs keep directory delivery", async () => withFixture(async (f) => {
-  const previous = { ...process.env };
-  try {
-    process.env.RELAY_RUN_AS_CURRENT_USER = "1";
-    process.env.RELAY_LOCAL_PERMISSION_POLICY = "native";
-    const result = await materializeSkills({
-      bundle: f.bundle("team/review"), agentId: "agent-kimi", delivery: runSkillDelivery("kimi", "none"),
-      agentHome: f.agentHome, cacheDir: f.cacheDir, execStream: localProcessExecStream,
-      fetchBlob: async (sha) => f.blobs[sha]!,
-    });
-    assert.ok(result.skillPaths.length);
-    for (const path of result.skillPaths) assert.ok(existsSync(join(path, "SKILL.md")));
-    const command = buildKimiCommand({ ...initialAgentState("Review"), skill_paths: result.skillPaths,
-      permission_prompt: { adapter: "kimi-acp", command: "node", args: ["adapter.js"], env: {} } });
-    assert.ok(command.includes(`${result.skillPaths[0]}/SKILL.md`));
-    assert.doesNotMatch(command, /--skills-dir/);
-    assert.equal(runSkillDelivery("kimi", "boxlite").kind, "skills-dir-flag");
-    process.env.RELAY_LOCAL_PERMISSION_POLICY = "trusted";
-    assert.equal(runSkillDelivery("kimi", "none").kind, "skills-dir-flag");
-  } finally { process.env = previous; }
-}));
 
 test("materializes Pi paths in the execution environment and reuses the immutable cache", async () => withFixture(async (f) => {
   let fetches = 0;
@@ -83,7 +61,7 @@ test("creates immutable isolated config views and mirrors credentials by symlink
   assert.ok(existsSync(join(f.agentHome, ".claude", "skills", "node-only")));
 }));
 
-test("keeps concurrent revisions stable and gives Kimi one root containing slug directories", async () => withFixture(async (f) => {
+test("keeps concurrent skill revisions stable", async () => withFixture(async (f) => {
   const common = { agentId: "same-agent", agentHome: f.agentHome, cacheDir: f.cacheDir, execStream: localProcessExecStream, fetchBlob: async (sha: string) => f.blobs[sha]! };
   const [a, b] = await Promise.all([
     materializeSkills({ ...common, bundle: f.bundle("review", "rev-1"), delivery: configDelivery }),
@@ -91,12 +69,6 @@ test("keeps concurrent revisions stable and gives Kimi one root containing slug 
   ]);
   assert.ok(existsSync(join(a.env.CLAUDE_CONFIG_DIR!, "skills", "review", "SKILL.md")));
   assert.ok(existsSync(join(b.env.CLAUDE_CONFIG_DIR!, "skills", "triage", "SKILL.md")));
-  const kimi = await materializeSkills({ ...common, bundle: f.bundle("team/review"), delivery: { kind: "skills-dir-flag", flag: "--skills-dir" } });
-  assert.equal(kimi.skillPaths.length, 1);
-  assert.ok(existsSync(join(kimi.skillPaths[0]!, "review", "SKILL.md")));
-  // Kimi only examines direct child directories of each --skills-dir root.
-  const discovered = kimi.skillPaths.flatMap((root) => readdirSync(root).filter((entry) => existsSync(join(root, entry, "SKILL.md"))));
-  assert.deepEqual(discovered, ["review"]);
 }));
 
 test("distinguishes a legacy missing bundle from an explicitly empty managed set", async () => withFixture(async (f) => {
@@ -126,9 +98,6 @@ test("reports network failures in safe empty views and refuses an unusable envir
   assert.equal(network.skipped[0]?.reason, "blob-fetch-failed");
   assert.deepEqual(readdirSync(join(network.env.CLAUDE_CONFIG_DIR!, "skills")), []);
   assert.ok(lstatSync(join(network.env.CLAUDE_CONFIG_DIR!, "credentials.json")).isSymbolicLink());
-  const kimi = await materializeSkills({ bundle: f.bundle(), agentId: "agent-a", delivery: { kind: "skills-dir-flag", flag: "--skills-dir" }, agentHome: f.agentHome, cacheDir: join(f.root, "kimi-cache"), execStream: localProcessExecStream, fetchBlob: async () => { throw new Error("offline"); } });
-  assert.equal(kimi.skillPaths.length, 1);
-  assert.deepEqual(readdirSync(kimi.skillPaths[0]!), []);
   await assert.rejects(() => materializeSkills({ bundle: f.bundle(), agentId: "agent-a", delivery: configDelivery, agentHome: "/home/agent", cacheDir: "/home/agent/cache", fetchBlob: async (sha) => f.blobs[sha]!, execStream: async () => ({ exit_code: 1, stdout: "", stderr: "denied" }) }), /materialization failed/);
 }));
 

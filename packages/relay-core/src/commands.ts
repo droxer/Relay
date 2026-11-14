@@ -5,11 +5,9 @@ import { agentWorkspacePath, codexCliConfigOverrides, isLocalAgentExecution, run
 import {
   claudeTaskPrompt,
   codexTaskPrompt,
-  kimiTaskPrompt,
   opencodeTaskPrompt,
   piTaskPrompt,
 } from "./prompts.js";
-import { kimiApiKey, kimiModel, localRuntimeEnvironment } from "./env.js";
 import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { PermissionPromptAdapter } from "./agents.js";
 import type { AgentState, PermissionPromptLaunch } from "./state.js";
@@ -239,85 +237,6 @@ function buildPiInvocation(
     launch ? chainCommands([...envExports(launch.env), invocation]) : invocation,
     workspacePath,
   );
-}
-
-// Kimi (Moonshot AI) CLI. Flags verified against kimi-code 2.0; re-check
-// `--auto`/`--output-format` against the installed version when bumping it.
-export function buildKimiCommand(state: AgentState, workspacePath?: string): string {
-  const launch = permissionPromptLaunch(state, "kimi-acp");
-  if (launch) return buildKimiAcpInvocation(launch, nativeSkillPrompt(kimiTaskPrompt(state), state), workspacePath, state.agent_model);
-  return buildKimiInvocation(kimiTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model);
-}
-function buildKimiInvocation(
-  prompt: string,
-  skillPaths: string[] | undefined,
-  workspacePath?: string,
-  pinnedModel?: string,
-): string {
-  // `kimi -p` runs in Kimi's "Never Ask" mode whatever the flags: it never
-  // asks a person, and only static deny rules stop a tool. --auto makes that
-  // explicit where the run is isolated or trusted; a local native run that
-  // asks a person goes through the ACP adapter instead.
-  const argv = ["kimi", ...(trustedExecution() ? ["--auto"] : [])];
-  for (const path of skillPaths ?? []) argv.push("--skills-dir", path);
-  const { model, envModel } = kimiModelSelection(pinnedModel);
-  if (model) argv.push("--model", model);
-  // stream-json emits one JSON message object per stdout line (parsed by
-  // KimiStreamRenderer) and keeps thinking + the resume notice off stdout.
-  argv.push("--output-format", "stream-json", "--prompt", prompt);
-  const command = shellCommand(argv);
-  return runAsAgent(
-    envModel ? chainCommands([environmentCommand("KIMI_MODEL_NAME", envModel, shellQuote), command]) : command,
-    workspacePath,
-  );
-}
-
-/**
- * `kimi -p` never asks, so a run that asks a person drives `kimi acp` through
- * the Kimi ACP adapter, which prints `kimi -p`'s stream-json. ACP takes no
- * --skills-dir, so assigned skills ride the prompt as for Claude and Codex.
- */
-function buildKimiAcpInvocation(
-  launch: PermissionPromptLaunch,
-  prompt: string,
-  workspacePath?: string,
-  pinnedModel?: string,
-): string {
-  const argv = [launch.command, ...launch.args, "--cwd", workspacePath ?? agentWorkspacePath()];
-  const { model, envModel } = kimiModelSelection(pinnedModel);
-  if (model) argv.push("--model", model);
-  argv.push("--prompt", prompt);
-  const exports = [...envExports(launch.env), ...(envModel ? [environmentCommand("KIMI_MODEL_NAME", envModel, shellQuote)] : [])];
-  return runAsAgent(chainCommands([...exports, shellCommand(argv)]), workspacePath);
-}
-
-/**
- * With an API key (or KIMI_MODEL_NAME) the model is configured through the
- * KIMI_MODEL_* environment rather than --model, so a pinned model overrides
- * KIMI_MODEL_NAME there instead of adding a flag Kimi would not resolve.
- */
-function kimiModelSelection(pinnedModel: string | undefined): { model?: string; envModel?: string } {
-  const envConfigured = kimiModelFromEnvironment();
-  const model = runtimeModel(pinnedModel, kimiModel);
-  return {
-    ...(model && !envConfigured ? { model } : {}),
-    ...(pinnedModel && envConfigured ? { envModel: pinnedModel } : {}),
-  };
-}
-
-/**
- * Whether the run's Kimi model comes from the KIMI_MODEL_* environment. It must
- * ask the environment the run actually receives: a local node passes only the
- * native KIMI_MODEL_* keys, so a KIMI_API_KEY in the daemon's own shell does not
- * configure the model there — trusting it would route the pin into an env var
- * Kimi ignores and silently run the user's default.
- */
-function kimiModelFromEnvironment(): boolean {
-  if (isLocalAgentExecution()) {
-    const env = localRuntimeEnvironment();
-    return Boolean(env.KIMI_MODEL_API_KEY || env.KIMI_MODEL_NAME);
-  }
-  return Boolean(kimiApiKey() || process.env.KIMI_MODEL_NAME);
 }
 
 function isProviderQualified(model: string | undefined): boolean {

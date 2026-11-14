@@ -101,7 +101,7 @@ _Avoid_: Tech Lead (for the planner), job, persona
 
 **Agent Runtime**:
 A capability on a Computer that can execute one implementation such as Codex,
-Claude, Pi, OpenCode, or Kimi. `Logical Agent.executorKind` selects the required runtime.
+Claude, Pi, or OpenCode. `Logical Agent.executorKind` selects the required runtime.
 A Computer may bound concurrent runs separately for each Agent Runtime; all
 runtimes also share the Computer’s total run capacity. Logical Agents using the
 same runtime share that runtime’s capacity.

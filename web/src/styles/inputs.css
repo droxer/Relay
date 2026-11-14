@@ -259,18 +259,6 @@
   font-size: var(--fs-3);
 }
 
-/* Ink-on-neutral agent avatars. Colour is reserved for action, live work,
-   and links, so agents are not tinted with vendor brand hues — the
-   AgentMark glyph carries identity. All four render ink-on-neutral on a
-   shared surface chip; differentiation is by glyph shape, not color. */
-.agent-avatar[data-agent="claude"],
-.agent-avatar[data-agent="pi"],
-.agent-avatar[data-agent="codex"],
-.agent-avatar[data-agent="kimi"] {
-  background: var(--surface-2);
-  color: var(--ink-1);
-}
-
 .agent-avatar > svg {
   display: block;
 }

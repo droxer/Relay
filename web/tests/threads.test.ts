@@ -58,8 +58,8 @@ describe("sessionAgents", () => {
 
   it("includes the current agent even without a recorded run", () => {
     assert.deepEqual(
-      sessionAgents(session({ agentRuns: runs("pi"), currentAgent: "kimi" })),
-      ["pi", "kimi"],
+      sessionAgents(session({ agentRuns: runs("pi"), currentAgent: "opencode" })),
+      ["pi", "opencode"],
     );
   });
 

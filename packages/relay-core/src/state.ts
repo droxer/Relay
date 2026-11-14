@@ -3,7 +3,7 @@ import type { AgentOutputSink } from "./format.js";
 import type { TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 
-export type AgentName = "claude" | "pi" | "codex" | "kimi" | "opencode";
+export type AgentName = "claude" | "pi" | "codex" | "opencode";
 export type { AgentOutputSink };
 
 export const AGENT_USER = "agent";
@@ -148,7 +148,7 @@ export interface AgentState {
 /**
  * How a runtime reaches the run's permission broker: one launch for the run's
  * adapter (`command args…` with `env`, the broker socket and secret). Claude
- * mounts it as an MCP server; Codex and Kimi run it in place of their CLI; Pi
+ * mounts it as an MCP server; Codex run it in place of their CLI; Pi
  * loads `args[0]` as an extension and never runs `command`.
  */
 export interface PermissionPromptLaunch {

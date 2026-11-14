@@ -38,7 +38,7 @@
 
 /* Fixed runtime columns in the fleet list (`fleetRuntimeSlots`): every row
    reserves the same slots in the same order, and a slot its computer lacks
-   stays empty, so Kimi never slides into Pi's place on the row above. */
+   stays empty, so a runtime never slides into Pi's place on the row above. */
 .adm-node-runtimes-marks[data-slotted="true"] {
   display: grid;
   grid-auto-columns: minmax(5rem, max-content);

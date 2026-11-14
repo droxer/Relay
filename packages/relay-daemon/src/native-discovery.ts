@@ -56,15 +56,7 @@ switch (agent) {
     break;
   }
   case 'pi': emit('list', await cli(['--list-models'])); break;
-  case 'kimi': {
-    const provider = json(await cli(['provider','list','--json']));
-    // The CLI's JSON includes credentials; emit its models object alone.
-    if (provider.models && typeof provider.models === 'object') emit('models', '"models":' + JSON.stringify(provider.models) + '}');
-    const listed = await cli(['provider','list']);
-    emit('default', listed.split(/\r?\n/).filter(line => /^Default model:/.test(line)).join('\n'));
-    if (!provider.models) emit('config', read(path.join(process.env.KIMI_CODE_HOME || path.join(home,'.kimi-code'), 'config.toml')));
-    break;
-  }
+
   case 'opencode': emit('list', await cli(['models'])); break;
 }
 `;
@@ -77,7 +69,6 @@ const configHomes = {
   claude: process.env.CLAUDE_CONFIG_DIR || path.join(home, '.claude'),
   codex: process.env.CODEX_HOME || path.join(home, '.codex'),
   pi: process.env.PI_CODING_AGENT_DIR || path.join(home, '.pi'),
-  kimi: process.env.KIMI_CODE_HOME || path.join(home, '.kimi-code'),
 };
 for (const [agent, source] of Object.entries(sources)) {
   const config = configHomes[agent];

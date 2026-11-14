@@ -218,7 +218,7 @@
   color: var(--ink-3);
   /* One size and one face for the whole meta line: the runtime rides the
      same 12px compact-metadata rung as the computer names beside it. "Claude"
-     and "Kimi" are product names, not identifiers, so they take the sans;
+     and "OpenCode" are product names, not identifiers, so they take the sans;
      mono stays for code, ids, and measurements. */
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);

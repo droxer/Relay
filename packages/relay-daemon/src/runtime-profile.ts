@@ -5,7 +5,7 @@ import { AGENT_NAMES, agentCredentialEnvNames } from "relay-core";
 
 // Deliberately omit arbitrary shell variables and Node's code-loading settings.
 const SETTING_KEYS = new Set([
-  "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR", "KIMI_CODE_HOME",
+  "HOME", "PATH", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "PI_CODING_AGENT_DIR",
   "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy",
   "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS",
   "ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "OPENAI_BASE_URL",
@@ -14,6 +14,17 @@ const SETTING_KEYS = new Set([
 ]);
 const CREDENTIAL_KEYS = new Set(AGENT_NAMES.flatMap(agent => [...agentCredentialEnvNames(agent)]));
 const ALLOWED_KEYS = new Set([...SETTING_KEYS, ...CREDENTIAL_KEYS]);
+
+// Older service profiles and private environment files may still name Kimi.
+// Ignore only its retired settings; a key still used by Pi remains allowed.
+const RETIRED_ENV_KEYS = new Set([
+  "KIMI_CODE_HOME", "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL",
+  "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
+  "KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL",
+  "KIMI_MODEL_PROVIDER_TYPE", "KIMI_MODEL_MAX_CONTEXT_SIZE", "KIMI_MODEL_CAPABILITIES",
+  "KIMI_MODEL_DISPLAY_NAME", "KIMI_MODEL_MAX_OUTPUT_SIZE", "KIMI_MODEL_REASONING_KEY",
+  "KIMI_MODEL_THINKING_EFFORT", "KIMI_MODEL_ADAPTIVE_THINKING",
+]);
 
 interface RuntimeProfile {
   version: 1;
@@ -25,7 +36,10 @@ function validateEnvironment(value: unknown, allowed = ALLOWED_KEYS): Record<str
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Runtime environment must be a JSON object.");
   const env: Record<string, string> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (!allowed.has(key)) throw new Error(`Unsupported runtime environment variable: ${key}`);
+    if (!allowed.has(key)) {
+      if (RETIRED_ENV_KEYS.has(key)) continue;
+      throw new Error(`Unsupported runtime environment variable: ${key}`);
+    }
     if (typeof item !== "string" || item.includes("\0")) throw new Error(`Invalid runtime environment variable: ${key}`);
     env[key] = item;
   }
