@@ -367,6 +367,22 @@
    narrow rail. */
 .conversation-status {
   flex: none;
+  font-weight: 700;
+}
+
+/* Live states read in their own colour so a rail of muted meta lines still
+   shows which threads are working or waiting. */
+.conversation-status[data-tone="run"] {
+  color: var(--live);
+}
+
+.conversation-status[data-tone="queued"],
+.conversation-status[data-tone="attn"] {
+  color: var(--warn);
+}
+
+.conversation-status[data-tone="err"] {
+  color: var(--err);
 }
 
 .conversation-project,
