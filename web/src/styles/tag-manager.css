@@ -11,7 +11,6 @@
 .tag-manager-identity { display: grid; justify-items: start; gap: var(--sp-2); min-width: 0; }
 .tag-manager-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .tag-manager-editor { display: grid; gap: var(--sp-3); min-width: 0; padding: var(--sp-4); border-radius: var(--r-2); background: var(--surface-2); scroll-margin-block: var(--sp-4); }
-.tag-manager-editor:focus-visible { outline: var(--focus-outline); outline-offset: var(--focus-offset); }
 .tag-manager-editor h3 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font: var(--type-label); }
 .tag-manager-editor form { display: grid; gap: var(--sp-4); }
 .tag-manager-impact { display: grid; gap: var(--sp-2); font: var(--type-body-sm); overflow-wrap: anywhere; }
