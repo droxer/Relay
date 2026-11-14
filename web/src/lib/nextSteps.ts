@@ -1,4 +1,4 @@
-import type { RelaySession } from "../types.js";
+import type { CreateTaskInput, RelaySession, RelayTaskListItem } from "../types.js";
 
 /** Bounds mirrored from relay-core's `next-steps.ts` and the backend's
  *  `core/next_steps.py` (`backend/tests/unit/test_next_steps.py`). */
@@ -25,4 +25,29 @@ export function threadNextSteps(
     if (steps.length === NEXT_STEPS_MAX) break;
   }
   return steps;
+}
+
+/**
+ * The task a suggestion becomes when the person adopts it: a backlog task in
+ * the thread's project, or an issue with no project yet for a thread outside
+ * one. It is left unassigned and unstarted — adopting records the work, the
+ * person decides who does it and when.
+ */
+export function nextStepTaskInput(step: string, projectId: string | null): CreateTaskInput {
+  return { title: step, ...(projectId ? { projectId } : {}) };
+}
+
+/**
+ * The live task an adopted suggestion already became in this scope, so the
+ * row says where it went instead of offering to create it twice.
+ */
+export function adoptedNextStepTask(
+  step: string,
+  tasks: readonly RelayTaskListItem[],
+  projectId: string | null,
+): RelayTaskListItem | undefined {
+  return tasks.find((task) => !task.isRoutine
+    && !task.deletedAt
+    && task.title === step
+    && (task.projectId ?? null) === projectId);
 }

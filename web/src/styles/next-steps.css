@@ -35,6 +35,94 @@
 
 .next-steps-list > li { min-width: 0; max-width: 100%; }
 
+/* One line of copy under the caption that names both actions and where an
+   adopted task lands, so neither click is a guess. */
+.next-steps-hint {
+  margin: calc(-1 * var(--sp-1)) 0 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+/* The suggestion and its Adopt control share a line; the confirm, when open,
+   drops to its own line beneath them so the sentence never gets squeezed. */
+.next-steps-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-1) var(--sp-2);
+  max-width: 100%;
+}
+
+.next-steps-line > .next-steps-item { min-width: 0; }
+
+/* Adopt is the secondary action: plain ink text, no outline, so the row still
+   reads as one offer. It shares the row's height so the two align. */
+.next-steps-adopt,
+.next-steps-adopted {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--control-h-sm);
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--type-label);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+
+.next-steps-adopt:hover:not(:disabled),
+.next-steps-adopt:focus-visible,
+.next-steps-adopt[aria-expanded="true"] {
+  background: var(--control-fill-hover);
+  color: var(--ink-1);
+}
+
+.next-steps-adopt:disabled:not([aria-expanded="true"]) { color: var(--ink-4); cursor: default; }
+
+/* Already a task: the check says done, the ref is the way to it. */
+.next-steps-adopted { color: var(--ok); }
+.next-steps-adopted:hover,
+.next-steps-adopted:focus-visible {
+  background: var(--control-fill-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.next-steps-confirm {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0.5px solid var(--line-2);
+  border-radius: var(--r-2);
+  animation: rise var(--t-fast) var(--ease) both;
+}
+
+.next-steps-confirm-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+
+.next-steps-confirm-text[data-error] { color: var(--err); }
+
+.next-steps-confirm-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--sp-1);
+}
+
 .next-steps-item {
   display: inline-flex;
   /* Glyphs ride the first line, so a wrapped suggestion keeps its hook and
@@ -104,4 +192,7 @@
   }
 
   .next-steps-send { opacity: 1; }
+
+  .next-steps-adopt,
+  .next-steps-adopted { min-height: var(--touch-target); }
 }

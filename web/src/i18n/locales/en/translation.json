@@ -2624,7 +2624,22 @@
     "no_responsibility": "No responsibility set yet."
   },
   "next_steps": {
-    "title": "Suggested next"
+    "title": "Suggested next",
+    "hint": "Click a suggestion to send it, or Adopt to save it as a task in {{destination}}.",
+    "no_project": "Issues (no project)",
+    "adopt": "Adopt",
+    "adopt_label": "Adopt as a task: {{step}}",
+    "confirm_label": "Create a task from this suggestion",
+    "confirm": "Create a backlog task in {{destination}}? It won't start until you assign it.",
+    "create": "Create task",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "adopt_failed": "The task wasn't created. Check your connection and try again.",
+    "adopted": "Added as {{ref}}",
+    "open_task": "Open task {{ref}}",
+    "adopted_announce": "Task {{ref}} created in {{destination}}.",
+    "this_project": "this project"
   },
   "awaiting": {
     "question_title": "{{agent}} needs your answer",
