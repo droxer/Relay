@@ -70,12 +70,14 @@ class SkillReadRows(SkillStoreState):
                     )
                     .join(self.blobs, self.blobs.c.sha256 == self.files.c.sha256)
                     .where(self.files.c.revision_id == revision_id)
-                    .order_by(self.files.c.path)
                 )
                 .mappings()
                 .all()
             )
-        return [dict(row) for row in rows]
+        # Match _validate_files' ordering used to hash the published manifest.
+        # Database collations can put agents/ before SKILL.md, invalidating the
+        # digest even though every path and blob is unchanged.
+        return sorted((dict(row) for row in rows), key=lambda item: item["path"])
 
     def blob(self, sha256: str) -> bytes | None:
         with store_transaction(self.engine) as conn:
