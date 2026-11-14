@@ -624,34 +624,35 @@
   },
   "decision": {
     "title": "你已退回本輪",
-    "hint": "在下方回覆中說明要修改什麼，重新執行本輪，或仍然接受它。",
     "request_changes": "請求修改",
     "accept": "接受",
     "more": "更多決定",
     "mark_done": "將工作標記為完成",
     "handoff": "移交給其他智慧體…",
     "rerun": "重新執行",
-    "pending": "正在處理…"
+    "pending": "正在處理…",
+    "rerun_effect": "相同請求，重新執行",
+    "accept_effect": "保留本輪結果"
   },
   "permission": {
     "title": "{{agent}} 請求使用 {{tool}}",
-    "summary": "執行已暫停，等待你的答覆。",
     "input_label": "請求的輸入",
     "allow": "允許一次",
     "allow_always": "始終允許",
     "allow_always_hint": "始終允許 {{agent}} 在此對話中使用 {{tool}}",
     "deny": "拒絕",
     "note_label": "原因（可選）",
-    "note_placeholder": "告訴智慧體改做什麼",
-    "region": "許可權請求",
+    "note_placeholder": "如果拒絕，告訴 {{agent}} 原因（可選）",
     "question_title": "{{agent}} 有一個問題",
-    "question_summary": "執行已暫停，等待你的回答。",
     "answer": "回答",
     "skip": "跳過",
     "options_label": "可選答案",
     "other_label": "或自行填寫",
     "answer_label": "你的回答",
-    "other_placeholder": "輸入回答"
+    "other_placeholder": "輸入回答",
+    "paused": "執行已暫停",
+    "position": "第 1 個，共 {{count}} 個",
+    "full_input": "完整輸入"
   },
   "handoff": {
     "status_accepted": "已接受移交給 {{agent}}",

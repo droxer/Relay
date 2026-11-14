@@ -101,12 +101,12 @@ it("accepts a reviewed task in one click, and asks for changes through the compo
   expect(onReply).toHaveBeenCalledOnce();
 });
 
-it("steps Accept down to outline while a turn decision holds the view's primary", () => {
-  const { rerender } = render(<TaskActionBar task={task("review")} busy={null} onAccept={() => {}} onUnblock={() => {}} onReply={() => {}} />);
-  const accept = () => screen.getByRole("button", { name: "thread.lifecycle.accept" });
-  expect(accept().getAttribute("data-variant")).toBe("default");
-  rerender(<TaskActionBar task={task("review")} busy={null} deferPrimary onAccept={() => {}} onUnblock={() => {}} onReply={() => {}} />);
-  expect(accept().getAttribute("data-variant")).toBe("outline");
+// The composer docks one wait at a time, so the bar never shares the view
+// with a turn decision: Accept is always the slip's one filled control.
+it("docks as a composer slip with Accept as its primary", () => {
+  render(<TaskActionBar task={task("review")} busy={null} onAccept={() => {}} onUnblock={() => {}} onReply={() => {}} />);
+  expect(screen.getByRole("region").classList.contains("composer-slip")).toBe(true);
+  expect(screen.getByRole("button", { name: "thread.lifecycle.accept" }).getAttribute("data-variant")).toBe("default");
 });
 
 it("offers to lift a block, and holds its controls while a move is in flight", () => {

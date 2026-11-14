@@ -44,12 +44,11 @@ it("keeps the caret where the person is typing", () => {
   input.remove();
 });
 
-it("offers three verbs and folds the rarer moves into a menu, with no second reject", () => {
+it("answers like an approval: two one-click rows, changes in the foot, the rarer moves in a menu, no second reject", () => {
   const props = renderBar();
-  const card = screen.getByRole("region", { name: "decision.title" });
-  const visible = within(card).getAllByRole("button").filter((button) => !button.getAttribute("aria-label"));
-  expect(visible.map((button) => button.textContent?.trim())).toEqual([
-    "decision.request_changes",
+  const slip = screen.getByRole("region", { name: "decision.title" });
+  const rows = within(within(slip).getByRole("list")).getAllByRole("button");
+  expect(rows.map((button) => button.querySelector(".awaiting-input-choice-label")?.textContent)).toEqual([
     "decision.rerun",
     "decision.accept",
   ]);

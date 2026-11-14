@@ -689,30 +689,11 @@ export function ThreadsView({
                     onOpenProject={onSelectProject}
                   />
                 ) : null}
-                <PermissionPrompts
-                  requests={openPermissionRequests(activeSession)}
-                  agentLabel={(request) => labelForAgentRun(
-                    { agent: request.agent, agentId: request.logicalAgentId },
-                    logicalAgentNames,
-                    agentDisplayNames,
-                  )}
-                  onAnswer={onAnswerPermission}
-                />
                 <NextSteps
                   key={JSON.stringify([activeSession?.id, activeSession?.activeRoundId, waitingQuestionId, followUpWait])}
                   steps={nextSteps}
                   onSend={(text) => composerRef.current?.send(text) ?? Promise.resolve(false)}
                 />
-                {awaitingDecision ? (
-                  <DecisionBar
-                    key={`${activeSession?.id}:${activeSession?.activeRoundId}`}
-                    logicalAgents={selectableLogicalAgents}
-                    sendDecision={sendDecision}
-                    sendHandoff={sendHandoff}
-                    onRequestChanges={() => composerRef.current?.focus()}
-                    deferPrimary={openPermissionRequests(activeSession).length > 0}
-                  />
-                ) : null}
               </>
             ) : (
               <TranscriptEmpty selectedUser={selectedUser} greetingName={greetingName(currentUser)} />
@@ -773,7 +754,29 @@ export function ThreadsView({
             : landing && selectedUser && activeAgentDisplayName
               ? t("composer.placeholder_landing", { agent: activeAgentDisplayName })
               : undefined}
-          prompt={followUpWait ? null : waiting ? (
+          // Every wait on a person docks here, one at a time. They rarely
+          // overlap — a permission prompt needs a live run, a question a
+          // settled one, a sent-back turn a parked one — and when they do,
+          // the paused run goes first because it holds a computer.
+          prompt={openPermissionRequests(activeSession).length ? (
+            <PermissionPrompts
+              requests={openPermissionRequests(activeSession)}
+              agentLabel={(request) => labelForAgentRun(
+                { agent: request.agent, agentId: request.logicalAgentId },
+                logicalAgentNames,
+                agentDisplayNames,
+              )}
+              onAnswer={onAnswerPermission}
+            />
+          ) : awaitingDecision ? (
+            <DecisionBar
+              key={`${activeSession?.id}:${activeSession?.activeRoundId}`}
+              logicalAgents={selectableLogicalAgents}
+              sendDecision={sendDecision}
+              sendHandoff={sendHandoff}
+              onRequestChanges={() => composerRef.current?.focus()}
+            />
+          ) : followUpWait ? null : waiting ? (
             <AwaitingInputPrompt
               key={`${activeSession?.id}:${waitingQuestionId ?? waiting.kind}`}
               waiting={waiting}
@@ -783,12 +786,11 @@ export function ThreadsView({
               onReply={() => composerRef.current?.focus()}
               onMarkDone={() => sendDecision("mark_done")}
             />
-          ) : awaitingDecision ? null : actionTask?.status === "review" && !running ? (
+          ) : actionTask?.status === "review" && !running ? (
             <TaskReviewPanel
               key={actionTask.id}
               taskId={actionTask.id}
               compact
-              deferPrimary={awaitingDecision}
               onRequestChanges={() => composerRef.current?.focus()}
             />
           ) : actionTask && !running ? (
@@ -796,7 +798,6 @@ export function ThreadsView({
               key={`${activeSession?.id}:${actionTask.id}:${actionTask.status}`}
               task={actionTask}
               busy={taskStatusActions.busy}
-              deferPrimary={awaitingDecision}
               onAccept={() => void taskStatusActions.accept()}
               onUnblock={() => void taskStatusActions.unblock()}
               onReply={() => composerRef.current?.focus()}

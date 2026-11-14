@@ -624,34 +624,35 @@
   },
   "decision": {
     "title": "你已退回本轮",
-    "hint": "在下方回复中说明要修改什么，重新运行本轮，或仍然接受它。",
     "request_changes": "请求修改",
     "accept": "接受",
     "more": "更多决定",
     "mark_done": "将工作标记为完成",
     "handoff": "移交给其他智能体…",
     "rerun": "重新运行",
-    "pending": "正在处理…"
+    "pending": "正在处理…",
+    "rerun_effect": "相同请求，重新运行",
+    "accept_effect": "保留本轮结果"
   },
   "permission": {
     "title": "{{agent}} 请求使用 {{tool}}",
-    "summary": "运行已暂停，等待你的答复。",
     "input_label": "请求的输入",
     "allow": "允许一次",
     "allow_always": "始终允许",
     "allow_always_hint": "始终允许 {{agent}} 在此对话中使用 {{tool}}",
     "deny": "拒绝",
     "note_label": "原因（可选）",
-    "note_placeholder": "告诉智能体改做什么",
-    "region": "权限请求",
+    "note_placeholder": "如果拒绝，告诉 {{agent}} 原因（可选）",
     "question_title": "{{agent}} 有一个问题",
-    "question_summary": "运行已暂停，等待你的回答。",
     "answer": "回答",
     "skip": "跳过",
     "options_label": "可选答案",
     "other_label": "或自行填写",
     "answer_label": "你的回答",
-    "other_placeholder": "输入回答"
+    "other_placeholder": "输入回答",
+    "paused": "运行已暂停",
+    "position": "第 1 个，共 {{count}} 个",
+    "full_input": "完整输入"
   },
   "handoff": {
     "status_accepted": "已接受移交给 {{agent}}",

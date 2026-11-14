@@ -1,12 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { PermissionAnswers, PermissionQuestionItem, PermissionRequest } from "relay-core";
-import { ActionApprove, ActionSend, ICON } from "../icons";
+import { ActionApprove, ICON } from "../icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  answersComplete, isQuestionPrompt, mayAllowAlways, permissionInputText, permissionNoteReachesAgent,
+  answersComplete, isQuestionPrompt, mayAllowAlways, permissionInputSummary, permissionInputText, permissionNoteReachesAgent,
   type PermissionAnswerInput,
 } from "@/lib/permissionRequests";
 
@@ -25,13 +24,13 @@ const TYPING_TARGET = 'input, textarea, select, [contenteditable=""], [contented
 const ANNOUNCE_DELAY_MS = 150;
 
 /**
- * The prompts a live run is paused on: one card per tool call it asked to
- * make, oldest first, each answered on its own. The run resumes when its
- * prompt is answered, so the card leaves once the thread's stream closes it.
- * A card is either an approval (Allow once / Always allow / Deny) or the
- * agent's question, whose offered answers are one click each. Always allow
- * answers this prompt and every later one from the same agent for the same
- * tool in this thread.
+ * What a live run is paused on, docked on the composer like every other wait
+ * on a person. Prompts are answered oldest first, one at a time: the slip
+ * shows the oldest and counts the rest, and the next takes its place once the
+ * thread's stream closes it. A prompt is either an approval (Allow once /
+ * Always allow / Deny) or the agent's question, whose offered answers are one
+ * click each. Always allow answers this prompt and every later one from the
+ * same agent for the same tool in this thread.
  */
 export function PermissionPrompts({ requests, agentLabel, onAnswer }: {
   requests: PermissionRequest[];
@@ -39,31 +38,34 @@ export function PermissionPrompts({ requests, agentLabel, onAnswer }: {
   agentLabel: (request: PermissionRequest) => string;
   onAnswer: Answer;
 }) {
-  const { t } = useTranslation();
-  if (requests.length === 0) return null;
+  const [request] = requests;
+  if (!request) return null;
   return (
-    <section className="permission-prompts" aria-label={t("permission.region")}>
-      {requests.map((request, index) => (
-        <PermissionPrompt
-          key={request.id}
-          request={request}
-          agent={agentLabel(request)}
-          primary={index === 0}
-          onAnswer={onAnswer}
-        />
-      ))}
-    </section>
+    <PermissionPrompt
+      key={request.id}
+      request={request}
+      agent={agentLabel(request)}
+      waiting={requests.length}
+      onAnswer={onAnswer}
+    />
   );
 }
 
-function PermissionPrompt({ request, agent, primary, onAnswer }: {
+/** The slip sits inside the composer's form: Enter in one of its fields must
+ *  not submit the reply box underneath. */
+function keepEnter(event: KeyboardEvent<HTMLInputElement>) {
+  if (event.key === "Enter" && !event.nativeEvent.isComposing) event.preventDefault();
+}
+
+function PermissionPrompt({ request, agent, waiting, onAnswer }: {
   request: PermissionRequest;
   agent: string;
-  primary: boolean;
+  /** Open prompts in the thread, this one included. */
+  waiting: number;
   onAnswer: Answer;
 }) {
   const { t } = useTranslation();
-  const cardRef = useRef<HTMLDivElement>(null);
+  const slipRef = useRef<HTMLElement>(null);
   const firstControlRef = useRef<HTMLButtonElement>(null);
   const id = useId();
   const [note, setNote] = useState("");
@@ -71,22 +73,21 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
   const [other, setOther] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<Pending | null>(null);
   const question = isQuestionPrompt(request);
-  // A paused run is easy to miss mid-transcript, so the first card announces
-  // itself and scrolls into view. Focus moves to it only when nothing is
-  // being written: a prompt landing mid-sentence must not take the caret.
+  // A paused run is easy to miss, so the prompt announces itself and takes
+  // focus — but only when nothing is being written: a prompt landing
+  // mid-sentence must not take the caret.
   const [announced, setAnnounced] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => setAnnounced(true), ANNOUNCE_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (!primary) return;
     // Optional chaining on the method: jsdom has no scrollIntoView.
-    cardRef.current?.scrollIntoView?.({ block: "nearest" });
+    slipRef.current?.scrollIntoView?.({ block: "nearest" });
     const focused = document.activeElement;
     const typing = focused instanceof Element && focused !== document.body && focused.closest(TYPING_TARGET);
     if (!typing) firstControlRef.current?.focus();
-  }, [primary]);
+  }, []);
 
   const answer = async (choice: Pending, picked?: PermissionAnswers) => {
     if (pending) return;
@@ -109,12 +110,15 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
   const title = question
     ? t("permission.question_title", { agent })
     : t("permission.title", { agent, tool: request.toolName });
+  const complete = withOther(answers, other);
   return (
-    <div ref={cardRef} className="permission-prompt" role="group" aria-labelledby={`${id}-title`} data-question={question || undefined}>
-      <p role="status" className="sr-only">{announced && primary ? title : ""}</p>
-      <div className="permission-prompt-head">
-        <span id={`${id}-title`} className="permission-prompt-title">{title}</span>
-        <span className="permission-prompt-summary">{t(question ? "permission.question_summary" : "permission.summary")}</span>
+    <section ref={slipRef} className="composer-slip permission-prompt" aria-labelledby={`${id}-title`} data-question={question || undefined}>
+      <p role="status" className="sr-only">{announced ? title : ""}</p>
+      <div className="composer-slip-head">
+        <h2 id={`${id}-title`} className="composer-slip-title">{title}</h2>
+        <span className="composer-slip-meta">
+          {waiting > 1 ? t("permission.position", { count: waiting }) : t("permission.paused")}
+        </span>
       </div>
       {question ? (
         <PermissionQuestions
@@ -127,70 +131,93 @@ function PermissionPrompt({ request, agent, primary, onAnswer }: {
           onOther={(questionId, text) => setOther((current) => ({ ...current, [questionId]: text }))}
           onSubmit={(picked) => void answer("allow", picked)}
         />
-      ) : request.input ? (
-        <pre className="permission-prompt-input" aria-label={t("permission.input_label")}>
-          {permissionInputText(request.input)}
-        </pre>
-      ) : null}
-      {!question && permissionNoteReachesAgent(request) ? (
-        <div className="permission-prompt-note">
-          <Label htmlFor={`${id}-note`}>{t("permission.note_label")}</Label>
+      ) : <PermissionInput input={request.input} />}
+      <div className="composer-slip-foot">
+        {!question && permissionNoteReachesAgent(request) ? (
           <Input
-            id={`${id}-note`}
+            className="permission-prompt-note"
             name="permission-note"
             autoComplete="off"
             maxLength={NOTE_MAX_CHARS}
-            placeholder={t("permission.note_placeholder")}
+            aria-label={t("permission.note_label")}
+            placeholder={t("permission.note_placeholder", { agent })}
             value={note}
+            disabled={busy}
             onChange={(event) => setNote(event.target.value)}
+            onKeyDown={keepEnter}
           />
-        </div>
-      ) : null}
-      <div className="decision-bar">
-        {question ? (
-          <>
-            <Button
-              variant={primary ? "default" : "outline"}
-              type="button"
-              disabled={busy || !answersComplete(request, withOther(answers, other))}
-              loading={pending === "allow"}
-              loadingLabel={pendingLabel}
-              onClick={() => void answer("allow", withOther(answers, other))}
-            >
-              <ActionSend size={ICON.sm} /> {t("permission.answer")}
-            </Button>
-            <Button variant="ghost" type="button" disabled={busy} loading={pending === "deny"} loadingLabel={pendingLabel} onClick={() => void answer("deny")}>
-              {t("permission.skip")}
-            </Button>
-          </>
-        ) : (
-          <>
-            {/* One accent fill per view: only the first open prompt's Allow is
-                the primary; the rest wait in the outline tier. */}
-            <Button variant={primary ? "default" : "outline"} type="button" ref={firstControlRef} disabled={busy} loading={pending === "allow"} loadingLabel={pendingLabel} onClick={() => void answer("allow")}>
-              <ActionApprove size={ICON.sm} /> {t("permission.allow")}
-            </Button>
-            {mayAllowAlways(request) ? (
-              <Button
-                variant="outline"
-                type="button"
-                disabled={busy}
-                loading={pending === "always"}
-                loadingLabel={pendingLabel}
-                // Starts with the visible label, so the accessible name still matches it.
-                aria-label={t("permission.allow_always_hint", { agent, tool: request.toolName })}
-                title={t("permission.allow_always_hint", { agent, tool: request.toolName })}
-                onClick={() => void answer("always")}
-              >
-                {t("permission.allow_always")}
+        ) : null}
+        <div className="composer-slip-actions">
+          {question ? (
+            <>
+              <Button variant="ghost" size="dense" type="button" disabled={busy} loading={pending === "deny"} loadingLabel={pendingLabel} onClick={() => void answer("deny")}>
+                {t("permission.skip")}
               </Button>
-            ) : null}
-            <Button variant="destructive" type="button" disabled={busy} loading={pending === "deny"} loadingLabel={pendingLabel} onClick={() => void answer("deny")}>
-              {t("permission.deny")}
-            </Button>
-          </>
-        )}
+              <Button
+                variant="default"
+                size="dense"
+                type="button"
+                disabled={busy || !answersComplete(request, complete)}
+                loading={pending === "allow"}
+                loadingLabel={pendingLabel}
+                onClick={() => void answer("allow", complete)}
+              >
+                {t("permission.answer")}
+              </Button>
+            </>
+          ) : (
+            <>
+              {/* Deny is an ordinary answer, not a hazard: the ghost tier, so
+                  Allow stays the slip's one filled control. */}
+              <Button variant="ghost" size="dense" type="button" disabled={busy} loading={pending === "deny"} loadingLabel={pendingLabel} onClick={() => void answer("deny")}>
+                {t("permission.deny")}
+              </Button>
+              {mayAllowAlways(request) ? (
+                <Button
+                  variant="outline"
+                  size="dense"
+                  type="button"
+                  disabled={busy}
+                  loading={pending === "always"}
+                  loadingLabel={pendingLabel}
+                  // Starts with the visible label, so the accessible name still matches it.
+                  aria-label={t("permission.allow_always_hint", { agent, tool: request.toolName })}
+                  title={t("permission.allow_always_hint", { agent, tool: request.toolName })}
+                  onClick={() => void answer("always")}
+                >
+                  {t("permission.allow_always")}
+                </Button>
+              ) : null}
+              <Button variant="default" size="dense" type="button" ref={firstControlRef} disabled={busy} loading={pending === "allow"} loadingLabel={pendingLabel} onClick={() => void answer("allow")}>
+                <ActionApprove size={ICON.sm} /> {t("permission.allow")}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * What the tool would act on — the command, the file, the URL — set as the
+ * thing at stake. The raw input stays one click away for anything the
+ * summary leaves out.
+ */
+function PermissionInput({ input }: { input: string }) {
+  const { t } = useTranslation();
+  const summary = permissionInputSummary(input);
+  if (!summary) return null;
+  const full = permissionInputText(input);
+  return (
+    <div className="permission-prompt-target">
+      <pre className="permission-prompt-input" aria-label={t("permission.input_label")}>{summary}</pre>
+      {full.trim() !== summary.trim() ? (
+        <details className="permission-prompt-full">
+          <summary>{t("permission.full_input")}</summary>
+          <pre className="permission-prompt-input">{full}</pre>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -206,9 +233,10 @@ function withOther(answers: PermissionAnswers, other: Record<string, string>): P
 }
 
 /**
- * The agent's questions with their offered answers, each a click. A single
- * question with one answer to pick sends on the click, the way the agent's
- * own prompt would; otherwise the picks collect until Answer.
+ * The agent's questions with their offered answers, each a click — the same
+ * quote and rows as an agent's question between rounds. A single question
+ * with one answer to pick sends on the click, the way the agent's own prompt
+ * would; otherwise the picks collect until Answer.
  */
 function PermissionQuestions({ questions, answers, other, busy, firstControlRef, onPick, onOther, onSubmit }: {
   questions: PermissionQuestionItem[];
@@ -238,9 +266,9 @@ function PermissionQuestions({ questions, answers, other, busy, firstControlRef,
         const picked = answers[question.id] ?? [];
         return (
           <div key={question.id} className="permission-question" role="group" aria-labelledby={`${id}-q${questionIndex}`}>
-            <p id={`${id}-q${questionIndex}`} className="permission-question-text">{question.text}</p>
+            <p id={`${id}-q${questionIndex}`} className="awaiting-input-quote">{question.text}</p>
             {question.options.length ? (
-              <ul className="awaiting-input-choices permission-question-options" aria-label={t("permission.options_label")}>
+              <ul className="awaiting-input-choices" aria-label={t("permission.options_label")}>
                 {question.options.map((option, optionIndex) => (
                   <li key={option.label}>
                     <button
@@ -254,28 +282,25 @@ function PermissionQuestions({ questions, answers, other, busy, firstControlRef,
                       onClick={() => pick(question, option.label)}
                     >
                       <kbd className="awaiting-input-choice-key" aria-hidden="true">{optionIndex + 1}</kbd>
-                      <span className="awaiting-input-choice-label">
-                        {option.label}
-                        {option.description ? <span className="permission-option-description">{option.description}</span> : null}
-                      </span>
+                      <span className="awaiting-input-choice-label">{option.label}</span>
+                      {option.description ? <span className="awaiting-input-choice-effect">{option.description}</span> : null}
                     </button>
                   </li>
                 ))}
               </ul>
             ) : null}
-            <div className="permission-prompt-note">
-              <Label htmlFor={`${id}-other${questionIndex}`}>{t(question.options.length ? "permission.other_label" : "permission.answer_label")}</Label>
-              <Input
-                id={`${id}-other${questionIndex}`}
-                name={`permission-answer-${questionIndex}`}
-                autoComplete="off"
-                maxLength={ANSWER_MAX_CHARS}
-                placeholder={t("permission.other_placeholder")}
-                value={other[question.id] ?? ""}
-                disabled={busy}
-                onChange={(event) => onOther(question.id, event.target.value)}
-              />
-            </div>
+            <Input
+              className="permission-question-other"
+              name={`permission-answer-${questionIndex}`}
+              autoComplete="off"
+              maxLength={ANSWER_MAX_CHARS}
+              aria-label={t(question.options.length ? "permission.other_label" : "permission.answer_label")}
+              placeholder={t("permission.other_placeholder")}
+              value={other[question.id] ?? ""}
+              disabled={busy}
+              onChange={(event) => onOther(question.id, event.target.value)}
+              onKeyDown={keepEnter}
+            />
           </div>
         );
       })}

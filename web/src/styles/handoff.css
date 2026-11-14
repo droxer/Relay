@@ -1,207 +1,89 @@
-/* ============================ decision bar / handoff ============================ */
+/* ============================ decision / handoff ============================ */
+/* The sent-back turn's decision and a paused run's permission prompt are
+   composer slips (composer-slip.css); these rules only lay out what is
+   particular to each inside it. */
 
-/* The sent-back turn's decision: a heading that says what is being decided,
-   one line on how, and at most three verbs — the rest live in the menu. */
-.decision-card {
+/* Handing the turn to another agent opens in place of the answers: the same
+   "which agent" picker the composer uses, an optional note, and the send. */
+.handoff-form {
   display: grid;
-  gap: var(--sp-2);
-  padding: var(--sp-4);
-  border-radius: var(--r-3);
-  background: var(--surface-1);
-}
-
-.decision-card-title {
-  margin: 0;
-  color: var(--ink-1);
-  font: var(--type-label-strong);
-  letter-spacing: var(--type-label-strong-track);
-}
-
-.decision-card-hint {
-  margin: 0;
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-.decision-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--sp-2);
   margin-top: var(--sp-1);
 }
 
-.decision-bar button[aria-haspopup] {
-  padding: 0;
-  margin-inline-start: auto;
+.handoff-form .composer-slip-foot { grid-column: 1 / -1; }
+
+@media (max-width: 640px) {
+  .handoff-form { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Layout only — per-button chrome comes from the shadcn <Button> variants
-   (base.css) so the bar uses the same system as the backlog actions:
-   Approve/Send = default (filled), Reject = destructive, the rest = ghost. */
-.decision-bar button,
-.handoff-actions button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-1);
-  min-height: var(--control-h);
-  padding: 0 var(--sp-4);
-  border-radius: var(--r-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
-}
-
-/* Ghost secondaries are left to the ghost variant. This block used to claim it
-   "matched the global ghost grammar" while doing the opposite of it: global
-   ghost washes --control-fill-hover behind the label and draws no border,
-   whereas this forced `background: transparent` on hover and drew a
-   --line-strong border instead — a second, bar-only ghost grammar that
-   outranked the variant by layer order. The filled primary (Approve/Send) is
-   still the only coloured control in the bar; that comes from its own variant,
-   not from suppressing everyone else's hover. */
-
+/* A handoff that is under way, or a project setup draft waiting to be
+   applied: a quiet status line under the last turn, not a card. */
 .handoff-panel {
-  width: min(100%, 560px);
-  margin-top: var(--sp-3);
   display: grid;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-0);
-}
-
-/* Panel header — the routing icon in a quiet surface-2 chip plus a title, so
-   the drawer reads as a deliberate "pass this turn to another agent" affordance
-   rather than a bare stack of selects. */
-.handoff-panel-head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding-bottom: var(--sp-2);
-  border-bottom: 0.5px solid var(--line-2);
-}
-
-.handoff-panel-mark {
-  display: inline-grid;
-  place-items: center;
-  width: var(--avatar-sm);
-  height: var(--avatar-sm);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
+  gap: var(--sp-1);
+  margin-top: var(--sp-4);
   color: var(--ink-3);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
 }
+
+.handoff-panel p { margin: 0; }
 
 .handoff-panel-title {
+  color: var(--ink-2);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
-  color: var(--ink-1);
-}
-
-.handoff-row {
-  display: grid;
-  grid-template-columns: auto 1fr 1fr;
-  align-items: center;
-  gap: var(--sp-2);
-}
-
-/* Label weight, not strong: these sit on a quiet HITL card.
-   Applies to the <Label> primitive here, hence the data-slot hook. */
-.handoff-row [data-slot="label"] {
-  color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-/* The row's own selects/inputs are the <Select> and <Input> primitives,
-   which own their chrome (control border, radius, focus ring); the note
-   field only needs its grid placement. */
-.handoff-row--note [data-slot="input"] {
-  grid-column: 2 / span 2;
-}
-
-.handoff-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--sp-2);
 }
 
 /* ============================ runtime permission prompts ============================ */
 
-/* A live run paused on a tool call: what it wants to run, an optional reason
-   for the agent, and the two answers. The answers reuse the decision bar so
-   Allow is the bar's one filled control, like Approve. */
-.permission-prompts {
-  display: grid;
-  gap: var(--sp-3);
-}
-
-.permission-prompt {
-  width: min(100%, 720px);
-  display: grid;
-  gap: var(--sp-3);
-  padding: var(--sp-4);
-  border: 0.5px solid var(--line-1);
-  border-radius: var(--r-3);
-  background: var(--surface-0);
-}
-
-.permission-prompt-head {
+/* What the tool would act on: one code block at the slip's reading measure,
+   with the raw input folded under it. */
+.permission-prompt-target {
   display: grid;
   gap: var(--sp-1);
-}
-
-.permission-prompt-title {
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  color: var(--ink-1);
-  overflow-wrap: anywhere;
-}
-
-.permission-prompt-summary {
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-  color: var(--ink-3);
+  min-width: 0;
 }
 
 .permission-prompt-input {
   margin: 0;
-  max-height: 240px;
+  max-height: calc(var(--fs-code) * 1.6 * 8);
   overflow: auto;
-  padding: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
   background: var(--surface-1);
-  color: var(--ink-2);
+  color: var(--ink-1);
   font: var(--type-code);
   letter-spacing: var(--type-code-track);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.permission-prompt-note {
-  display: grid;
-  gap: var(--sp-1);
-}
-
-.permission-prompt-note [data-slot="label"] {
+.permission-prompt-full > summary {
+  width: fit-content;
   color: var(--ink-3);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  cursor: pointer;
 }
 
-.permission-prompt .decision-bar {
-  padding: 0;
-  background: none;
+.permission-prompt-full > summary:hover { color: var(--ink-1); }
+.permission-prompt-full > .permission-prompt-input { margin-top: var(--sp-1); color: var(--ink-2); }
+
+/* The reason for a denial shares the foot row with the answers: a field the
+   height of the buttons beside it, filling what they leave. */
+.composer-slip-foot > .permission-prompt-note {
+  flex: 1 1 14rem;
+  height: var(--control-h-xs);
 }
 
-/* The agent's question: each question with its offered answers, reusing the
-   awaiting prompt's choice rows so a pick reads the same everywhere. */
+/* The agent's question: the awaiting prompt's quote and rows. An offered
+   answer's description is a sentence, so it sits under its label. */
 .permission-questions {
   display: grid;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
 }
 
 .permission-question {
@@ -209,21 +91,25 @@
   gap: var(--sp-2);
 }
 
-.permission-question-text {
-  margin: 0;
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-  color: var(--ink-1);
-  overflow-wrap: anywhere;
+.permission-question .awaiting-input-choice {
+  grid-template-columns: auto minmax(0, 1fr);
+  row-gap: 2px;
+  padding-block: var(--sp-2);
 }
 
-.permission-question-options .awaiting-input-choice-label {
-  display: grid;
-  gap: 2px;
+.permission-question .awaiting-input-choice-effect {
+  grid-column: 2;
+  white-space: normal;
 }
 
-.permission-option-description {
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-  color: var(--ink-3);
+/* A sent-back turn's answers carry no number key (no single key may decide
+   it), so the label takes the leading column and the effect the trailing. */
+.decision-slip .awaiting-input-choice { grid-template-columns: minmax(0, 1fr) auto auto; }
+
+@media (max-width: 820px) {
+  .decision-slip .awaiting-input-choice { grid-template-columns: minmax(0, 1fr) auto; }
+  .decision-slip .awaiting-input-choice-effect { grid-column: 1; grid-row: 2; }
+  .decision-slip .awaiting-input-choice-send { grid-column: 2; grid-row: 1; }
 }
+
+.permission-question-other { height: var(--control-h-xs); }

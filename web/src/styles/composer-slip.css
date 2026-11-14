@@ -1,0 +1,131 @@
+/* ============================== composer slip ============================== */
+/* Every wait on a person docks here: an agent's question, an approval, a
+   paused run's permission prompt, a sent-back turn, a task in review or
+   blocked. The reply box is where the person answers, so the ask sits on its
+   top edge rather than in the transcript, where a scrolled-up reader loses it
+   and each kind of wait grew its own card.
+
+   One shape for all of them: a slip inset by the composer card's corner
+   radius so its sides land where the card's straight top edge begins, with
+   no bottom edge of its own — the card's hairline closes it. Inside, the
+   same order every time: a head (what is asked · a quiet trailing fact), the
+   thing at stake, the answers, and a foot for the lesser moves. */
+
+.composer-slip {
+  --slip-inset: var(--composer-radius, var(--sp-5));
+  display: grid;
+  gap: var(--sp-2);
+  width: min(100% - var(--slip-inset) * 2, var(--thread-measure) - var(--slip-inset) * 2);
+  margin: 0 auto -1px;
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + 1px);
+  border: 0.5px solid var(--line-1);
+  border-bottom: 0;
+  border-radius: var(--r-3) var(--r-3) 0 0;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  /* Rises out from behind the card on the shared `rise`: the one motion, and
+     it says where the slip belongs. Reduced motion is handled in a11y.css. */
+  animation: rise var(--t-slow) var(--ease) both;
+}
+
+.composer-slip-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.composer-slip-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The trailing fact: a task ref, "Run paused", "1 of 3". Never a control's
+   weight — a link at most. */
+.composer-slip-meta {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+a.composer-slip-meta:hover {
+  color: var(--ink-1);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The lesser moves, at the trailing edge under the answers; a hint, when it
+   says something the controls do not, takes the leading edge. */
+.composer-slip-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.composer-slip-hint {
+  /* Shares the row with the lesser moves; it wraps its own words before it
+     wraps the row. */
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+}
+
+.composer-slip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+
+@media (max-width: 820px) {
+  .composer-slip {
+    --slip-inset: var(--sp-3);
+    padding-inline: var(--sp-3);
+  }
+}
+
+/* The touch floor (a11y.css) makes a summary or link 44px tall; centre its
+   one line in that height instead of leaving a blank band under it (or, for
+   the trailing link, riding above the title it sits beside). Padding, not
+   flex, so a summary keeps its disclosure marker. */
+@media (pointer: coarse) {
+  .composer-slip summary {
+    padding-block: calc((var(--touch-target) - 1lh) / 2);
+  }
+
+  a.composer-slip-meta {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* A phone has no trailing edge to spare: the answers share one full-width
+   row in equal parts rather than wrapping into a ragged stack. */
+@media (max-width: 640px) {
+  .composer-slip-foot > .composer-slip-actions {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+  }
+
+  .composer-slip-foot > .composer-slip-actions > [data-slot="button"]:not([data-variant="icon"]) {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: var(--sp-2);
+  }
+}

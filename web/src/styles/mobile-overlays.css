@@ -144,23 +144,6 @@
     min-height: var(--touch-target);
   }
 
-  /* ── Inline handoff expando ────────────────────────────────────── */
-  .handoff-panel {
-    width: 100%;
-    margin-top: var(--sp-3);
-    padding: var(--sp-3);
-  }
-
-  .handoff-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .handoff-actions button {
-    width: 100%;
-    min-height: var(--touch-target);
-  }
-
   /* ── Artifact library drawer chrome ────────────────────────────── */
   /* (The drawer head is a sibling of the body in Drawer.tsx markup, so head
      padding comes from the generic .adm-drawer-head rule above.) */
