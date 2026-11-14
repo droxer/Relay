@@ -75,7 +75,9 @@ backend_process_variables() {
 
 configure_web_variables() {
   railway_upsert_variables "$WEB_ID" "$(jq -nc --arg api "$API_ORIGIN" --arg web "$WEB_ORIGIN" \
-    '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api, NEXT_PUBLIC_RELAY_SITE_URL: $web}')"
+    --arg build "${RELEASE_COMMIT:-}" \
+    '{NEXT_PUBLIC_RELAY_API_ORIGIN: $api, NEXT_PUBLIC_RELAY_SITE_URL: $web}
+      + (if $build == "" then {} else {RELAY_BUILD_ID: $build} end)')"
 }
 
 # Reference the API's effective variables so custom scheduler settings, mail,

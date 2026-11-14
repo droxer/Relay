@@ -29,6 +29,7 @@ workers_build_export() (
     | docker build --quiet -f web/Dockerfile --target build \
       --build-arg "NEXT_PUBLIC_RELAY_API_ORIGIN=$API_ORIGIN" \
       --build-arg "NEXT_PUBLIC_RELAY_SITE_URL=$WEB_ORIGIN" \
+      --build-arg "RELAY_BUILD_ID=$RELEASE_COMMIT" \
       --iidfile "$temporary/image" - >&2 \
     || die "web export build failed for $RELEASE_COMMIT"
   image=$(cat "$temporary/image")

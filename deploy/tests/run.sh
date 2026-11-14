@@ -367,6 +367,7 @@ check "web Dockerfile and healthcheck" "$WEB | .config | .builder == \"RAILPACK\
 check "all services use manual releases from droxer/Relay" "[$BACKEND, $WORKER, $WEB] | all(.repo == \"droxer/Relay\" and .triggers == [])"
 check "all deployments pin the requested commit" "[$BACKEND, $WORKER, $WEB] | all(.deployments[0].commitSha == \"$SOURCE_COMMIT\")"
 check "web build points at the API" "$WEB | .variables.NEXT_PUBLIC_RELAY_API_ORIGIN == \"https://api.get-relay.cc\""
+check "Railway web build pins the release commit" "$WEB | .variables.RELAY_BUILD_ID == \"$SOURCE_COMMIT\""
 check "web build declares its public address" "$WEB | .variables.NEXT_PUBLIC_RELAY_SITE_URL == \"https://get-relay.cc\""
 check "apex domain on the web service" "$WEB | [.domains[].domain] == [\"get-relay.cc\"]"
 check "apex CNAME proxied" '[.dns[] | select(.name == "get-relay.cc" and .type == "CNAME" and .proxied)] | length == 1'

@@ -27,6 +27,11 @@ git() {
 docker() {
   case $1 in
     build)
+      local pinned=false arg
+      for arg in "$@"; do
+        [ "$arg" != "RELAY_BUILD_ID=$RELEASE_COMMIT" ] || pinned=true
+      done
+      [ "$pinned" = true ] || { echo 'web build must pin RELAY_BUILD_ID to the release commit' >&2; return 1; }
       tar -tf - >/dev/null
       while [ $# -gt 0 ]; do
         if [ "$1" = --iidfile ]; then printf image > "$2"; fi

@@ -30,10 +30,13 @@ ARG NEXT_PUBLIC_RELAY_API_ORIGIN
 # build that sets it is indexable — it gets canonical links, Open Graph tags,
 # and a robots.txt that admits crawlers. Left unset, robots.txt disallows all.
 ARG NEXT_PUBLIC_RELAY_SITE_URL=""
+# Pin release identity and invalidate the build layer even if web sources match.
+ARG RELAY_BUILD_ID=""
 RUN test -n "$NEXT_PUBLIC_RELAY_API_ORIGIN" \
     || { echo "NEXT_PUBLIC_RELAY_API_ORIGIN is required (e.g. https://api.example.com)" >&2; exit 1; }
 ENV NEXT_PUBLIC_RELAY_API_ORIGIN=$NEXT_PUBLIC_RELAY_API_ORIGIN \
     NEXT_PUBLIC_RELAY_SITE_URL=$NEXT_PUBLIC_RELAY_SITE_URL \
+    RELAY_BUILD_ID=$RELAY_BUILD_ID \
     NEXT_TELEMETRY_DISABLED=1
 RUN npm run build -w web
 
