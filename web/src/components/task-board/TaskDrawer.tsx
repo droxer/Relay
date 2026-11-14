@@ -513,9 +513,11 @@ export function TaskDrawer({
             disabled={busy}
             onChange={(tags) => updateBase({ tags })}
           />
-          <ConnectionGrantField key={form.id ?? "new"} targetType={form.variant === "routine" ? "automation" : "task"}
-            targetId={form.id} value={form.connectionGrants} disabled={saving || Boolean(form.sourceRoutineId)}
-            onChange={connectionGrants => onChange({ ...form, connectionGrants })} />
+          {(form.id || form.variant === "routine") && (
+            <ConnectionGrantField key={form.id ?? "new"} targetType={form.variant === "routine" ? "automation" : "task"}
+              targetId={form.id} value={form.connectionGrants} disabled={saving || Boolean(form.sourceRoutineId)}
+              onChange={connectionGrants => onChange({ ...form, connectionGrants })} />
+          )}
         </fieldset>
         <div className="adm-form-actions">
           {form.id && onDelete ? (

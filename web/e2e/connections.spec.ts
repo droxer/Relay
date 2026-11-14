@@ -73,18 +73,26 @@ test("Connect redirects to provider authentication", async ({ page }) => {
   await expect(page).toHaveURL("https://github.example.test/authorize");
 });
 
-for (const automation of [false, true]) test(`explicit access is submitted with a new ${automation ? "automation" : "task"}`, async ({ page }) => {
+for (const automation of [false, true]) test(`connection access in a new ${automation ? "automation" : "task"}`, async ({ page }) => {
   const saved = await serve(page);
   await page.goto(`/computers/device%3Au1%3Ahost/${automation ? "automations" : "tasks"}`);
   await page.getByRole("button", { name: automation ? "New automation" : "New task", exact: true }).first().click();
   const form = page.getByRole("dialog", { name: automation ? "New automation" : "New task", exact: true });
   await form.getByRole("textbox", { name: "Title", exact: true }).fill("Read connected issues");
-  await form.locator("summary").filter({ hasText: "Connections" }).click();
-  await form.getByRole("checkbox", { name: /Personal GitHub/ }).check();
-  await form.getByRole("checkbox", { name: "octo/hello", exact: true }).check();
+  if (automation) {
+    await form.locator("summary").filter({ hasText: "Connections" }).click();
+    await form.getByRole("checkbox", { name: /Personal GitHub/ }).check();
+    await form.getByRole("checkbox", { name: "octo/hello", exact: true }).check();
+  } else {
+    await expect(form.locator(".connection-grants")).toHaveCount(0);
+  }
   await form.getByRole("button", { name: automation ? "Create automation" : "Create task", exact: true }).click();
   await expect.poll(() => saved.length).toBe(1);
-  expect(saved[0].connectionGrants).toEqual([{ connectionId: "github-1", resources: ["octo/hello"], actions: ["github.list_issues"] }]);
+  if (automation) {
+    expect(saved[0].connectionGrants).toEqual([{ connectionId: "github-1", resources: ["octo/hello"], actions: ["github.list_issues"] }]);
+  } else {
+    expect(saved[0].connectionGrants ?? []).toEqual([]);
+  }
 });
 
 test("new Thread sends selected connection access with its first message", async ({ page }) => {
