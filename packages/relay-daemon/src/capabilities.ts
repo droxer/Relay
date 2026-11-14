@@ -2,6 +2,7 @@
     same list (`tools/build-computer.mjs`) so a backend can tell, before serving
     it, whether its installer would leave every computer reading as outdated. */
 import {
+  DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK,
   DAEMON_CAPABILITY_AGENT_MODEL,
   DAEMON_CAPABILITY_AGENT_RESUME,
   DAEMON_CAPABILITY_AGENT_SKILLS,
@@ -35,6 +36,7 @@ import {
 
 export const DAEMON_ADVERTISED_CAPABILITIES: readonly DaemonNodeCapability[] = [
   "durable-reports",
+  DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK,
   "runtime-refresh",
   "service-connections",
   DAEMON_CAPABILITY_AGENT_SKILLS,

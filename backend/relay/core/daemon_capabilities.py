@@ -60,6 +60,9 @@ DAEMON_CAPABILITY_DOT_THREAD_RECORDS = "dot-thread-records"
 DAEMON_CAPABILITY_RELAY_THREAD_RECORDS = "relay-thread-records"
 
 DAEMON_CAPABILITY_DURABLE_REPORTS = "durable-reports"
+# Wait for backend output receipts before completion, with a 60s default drain
+# budget; keep unacknowledged output in the durable outbox for late replay.
+DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK = "durable-output-ack"
 
 DAEMON_CAPABILITY_SERVICE_CONNECTIONS = "service-connections"
 
@@ -72,6 +75,7 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_WORKSPACE_SCOPE,
         DAEMON_CAPABILITY_PROJECT_WORKSPACE_SCOPE,
         DAEMON_CAPABILITY_DURABLE_REPORTS,
+        DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK,
         DAEMON_CAPABILITY_WORK_RESULTS,
         DAEMON_CAPABILITY_SERVICE_CONNECTIONS,
         DAEMON_CAPABILITY_DIRECT_DELEGATION,

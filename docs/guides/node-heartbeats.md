@@ -196,6 +196,30 @@ capture. If the budget expires, terminal evidence still proceeds with
 `outputTruncated`, which the thread displays as an incomplete-output notice;
 retained reports continue replaying independently.
 
+Daemons with this acknowledgement behavior advertise `durable-output-ack`.
+The backend requires it for a current client: older daemons with the 250 ms
+drain budget appear as `clientOutdated` and generate a `client_outdated`
+notification naming the missing capability. `durable-reports` alone does not
+identify the acknowledgement behavior.
+
+To roll this out, build the installer bundle (`npm run build:computer`) and
+deploy it with the matching backend capability set. For an enrolled personal
+computer, run `relay update --computer <node-id>` on that computer after its
+active runs finish, then check `relay status`. For a supervisor-managed cloud
+computer, roll out the updated daemon image through its supervisor/provider;
+updating the backend alone does not replace a running daemon. Preserve private
+report storage so unacknowledged output can replay.
+
+Record the installation method, installed bundle digest or image identity,
+and UTC restart time in the incident Task. Read back the authenticated
+`GET /api/v1/daemon-nodes` record: `capabilities` must contain
+`durable-output-ack` and `clientOutdated` must be false. Start the observation
+window only after this readback. For each affected computer, report the full
+24-hour UTC interval, the number of completed runs and the number with
+`outputTruncated`; the incident target is zero truncated completed runs.
+An empty workload does not demonstrate recovery, and a passing local test
+does not satisfy this production observation.
+
 Late live copies and replayed output both require the original command's node,
 thread, run, agent, and exact lease. They append output idempotently without
 reopening execution. A late report with matching ownership but a missing or

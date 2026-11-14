@@ -79,7 +79,9 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope";
+export type DaemonNodeCapability = "durable-output-ack" | "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope";
+/** Waits for backend output receipts with a 60s default drain budget and durable replay. */
+export const DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK: DaemonNodeCapability = "durable-output-ack";
 export const DAEMON_CAPABILITY_DURABLE_REPORTS: DaemonNodeCapability = "durable-reports";
 export const DAEMON_CAPABILITY_PROJECT_MANAGER_MCP: DaemonNodeCapability = "project-manager-mcp";
 /** Roster members other than the Project Lead get read-only Relay MCP tools. */
