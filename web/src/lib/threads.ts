@@ -1,6 +1,6 @@
 import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary, TaskStatus } from "../types.js";
 import type { ThreadGroups } from "./threadGroups.js";
-import { taskRef } from "./taskRef.js";
+import { taskRef } from "./taskRef.ts";
 
 // A thread is one owner-scoped session. The row binds to the session
 // itself (not a user), so the logged-in user can hold several in
