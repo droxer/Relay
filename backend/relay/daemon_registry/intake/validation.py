@@ -110,11 +110,11 @@ class RunTargetValidationMixin(NodeBackendState):
             node=node,
             project_snapshot=project,
         )
-        if binding and layout in ("thread", "node-root"):
+        if binding and binding.get("sessionId"):
             requested_session = request.get("sessionId")
             if requested_session and requested_session != binding.get("sessionId"):
                 raise ValueError(
-                    "workspace_unavailable: this legacy task must continue in its original thread."
+                    "workspace_unavailable: this task must continue in its original thread."
                 )
             request = {**request, "sessionId": binding["sessionId"]}
         if request.get("sessionId"):

@@ -110,8 +110,7 @@ def test_precreated_idle_thread_can_start_without_duplicate_execution(setup, sco
     binding = app.state.task_store.get_task(task["id"])["workspaceBinding"]
     assert binding["computerId"] == computer_id(node)
     assert "unbound" not in binding
-    if scope == "agent":
-        assert command["sessionId"] == original_session_id
+    assert command["sessionId"] == original_session_id
     assert app.state.session_store.get_session(original_session_id)
 
 
@@ -170,3 +169,40 @@ def test_explicit_start_does_not_unblock_owned_execution(setup):
     assert result["task"]["blockerReason"] == "Waiting for reconciliation"
     commands = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
     assert len([command for command in commands if command["type"] == "run.start"]) == 1
+
+
+@pytest.mark.parametrize("trigger", ["manual", "scheduler"])
+def test_unblock_reuses_precreated_project_thread(setup, monkeypatch, trigger):
+    app, client, node, agent, project = setup
+    created = client.post("/api/v1/tasks", json={
+        "title": "Unblock without duplicating the thread",
+        "projectId": project["id"],
+        "createSession": True,
+        "assignedAgentId": agent["id"],
+    })
+    assert created.status_code == 201, created.text
+    task = created.json()
+    [session_id] = task["linkedSessionIds"]
+    original_run = app.state.backend.run
+
+    async def unavailable(*args, **kwargs):
+        raise ValueError("capacity_exhausted: fixture computer is full")
+
+    monkeypatch.setattr(app.state.backend, "run", unavailable)
+    failed = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+    assert failed.status_code == 202, failed.text
+    assert failed.json()["task"]["status"] == "blocked"
+    monkeypatch.setattr(app.state.backend, "run", original_run)
+    unblocked = client.patch(f"/api/v1/tasks/{task['id']}", json={"action": "unblock"})
+    assert unblocked.status_code == 200, unblocked.text
+    if trigger == "manual":
+        retried = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        assert retried.status_code == 202, retried.text
+        assert retried.json()["dispatch"]["state"] == "started", retried.json()
+    else:
+        assert asyncio.run(app.state.task_scheduler.tick()).dispatched == 1
+    assert asyncio.run(app.state.task_scheduler.tick()).dispatched == 0
+    commands = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
+    [command] = [command for command in commands if command["type"] == "run.start"]
+    assert command["sessionId"] == session_id
+    assert app.state.task_store.get_task(task["id"])["linkedSessionIds"] == [session_id]
