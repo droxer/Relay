@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { timestampTitle } from "../../lib/workspaceFormat";
 import { handleForUserId } from "../../lib/userHandle";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -26,7 +27,7 @@ interface ManagedNodeHistoryProps {
 type PendingAction = { id: string; kind: "recover" | "delete" } | null;
 
 export function ManagedNodeHistory({ nodes, users, onRecover, onDeletePermanently }: ManagedNodeHistoryProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { confirm } = useDialogs();
   const [pending, setPending] = useState<PendingAction>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +100,7 @@ export function ManagedNodeHistory({ nodes, users, onRecover, onDeletePermanentl
             <span className="adm-node-history-meta">
               {node.userId ? `@${handleForUserId(users, node.userId)} · ` : ""}{node.provider} · {node.profile}
             </span>
-            <time dateTime={node.updatedAt} title={node.updatedAt}>
+            <time dateTime={node.updatedAt} title={timestampTitle(node.updatedAt, i18n.language)}>
               {t("admin.v2.history_deleted", { time: formatRelativeTime(node.updatedAt, t) })}
             </time>
             <Button

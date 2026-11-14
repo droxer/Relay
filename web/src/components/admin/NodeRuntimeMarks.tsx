@@ -28,7 +28,7 @@ function agentTitle(node: ControlPanelDaemonNodeRecord, agent: AgentName, t: TFu
     t("nodes.agent_presence_title", { agent, presence: state }),
     !disabled && state !== reported ? t("nodes.agent_status_title", { agent, status: reported }) : null,
     node.agentDetails?.[agent]?.version,
-    runtimeNotReadyDetail(node, agent, disabled),
+    runtimeNotReadyDetail(node, agent, disabled, t),
   ].filter(Boolean);
   return parts.join(" · ");
 }

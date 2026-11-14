@@ -249,8 +249,7 @@
   color: var(--ink-3);
 }
 
-/* Why the runtime cannot take work, in the daemon's words — the same line
-   the computer card prints under a runtime that is not ready. */
+/* Localized guidance shared with computer and fleet hover text. */
 .adm-agent-toggle-detail {
   display: -webkit-box;
   overflow: hidden;
@@ -327,4 +326,19 @@
   max-width: 100%;
   color: var(--ink-1);
   background: var(--surface-1);
+}
+
+.adm-agent-toggle-diagnostic {
+  min-width: 0;
+  font: var(--type-micro);
+  color: var(--ink-3);
+}
+
+.adm-agent-toggle-diagnostic summary {
+  cursor: pointer;
+}
+
+.adm-agent-toggle-diagnostic pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

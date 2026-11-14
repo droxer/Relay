@@ -31,16 +31,19 @@ export function runtimeStateLabel(
   return runtimeStatusLabel(agentStatus, t);
 }
 
-/**
- * What the daemon said about a runtime that cannot take work — "`codex` was
- * not found on PATH", the sign-in error, the sandbox that did not start. A
- * ready or switched-off runtime has nothing to explain, so it says nothing.
- */
+/** Localized interface guidance; daemon prose belongs in the diagnostics disclosure. */
 export function runtimeNotReadyDetail(
   node: ControlPanelDaemonNodeRecord,
   agent: AgentName,
   disabled: boolean,
+  t: TFunction,
 ): string | undefined {
-  if (disabled || (node.agents[agent] ?? "unknown") === "ready") return undefined;
-  return node.agentDetails?.[agent]?.detail?.trim() || undefined;
+  const status = node.agents[agent] ?? "unknown";
+  if (disabled || status === "ready") return undefined;
+  switch (status) {
+    case "unavailable": return t("computer.runtime_detail_unavailable");
+    case "unresponsive": return t("computer.runtime_detail_unresponsive");
+    case "failed": return t("computer.runtime_detail_failed");
+    default: return t("computer.runtime_detail_unknown");
+  }
 }
