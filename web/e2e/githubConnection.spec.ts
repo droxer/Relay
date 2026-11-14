@@ -19,6 +19,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
       let body: unknown = { tasks: [], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], skills: [], notifications: [] };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user };
       if (path.includes("/account/github")) connectionRequests += 1;
+      if (path.endsWith("/connections")) body = { connections: [] };
       if (path.endsWith("/tasks/github/issues")) {
         const { page: number } = route.request().postDataJSON();
         body = { repository: { owner: "octo", name: "hello", fullName: "octo/hello" }, page: number,
@@ -34,10 +35,13 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     const drawer = page.getByRole("dialog", { name: "Import GitHub issues" });
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveCSS("opacity", "1");
-    await expect(drawer.getByText("Public repositories", { exact: true })).toBeVisible();
+    // With no account picked the import reads public repositories; private
+    // ones go through a Connection chosen here, never a pasted token.
+    await expect(drawer.getByRole("combobox", { name: "GitHub account" })).toContainText("Public repositories (no account)");
     await expect(drawer.getByRole("button", { name: /Connect GitHub|Reconnect GitHub/ })).toHaveCount(0);
     await expect(drawer.locator('input[type="password"]')).toHaveCount(0);
-    await expect(drawer.getByText("Import public issues without authentication. Private repository imports are not available. Use Connections to give your work authenticated service access.")).toBeVisible();
+    await expect(drawer.getByText("Select a connected account to import private repository issues.", { exact: true })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: "Manage connections", exact: true })).toHaveAttribute("href", "/settings/connections");
     await page.screenshot({ path: `/tmp/relay-github-polish-${layout}-initial.png`, fullPage: true, animations: "disabled" });
     await drawer.getByRole("textbox", { name: /^Repository\b/ }).fill("octo/hello");
     await drawer.getByRole("button", { name: "Load issues", exact: true }).click();
@@ -70,6 +74,7 @@ test("GitHub import has clear loading, recovery, empty, and imported states", as
     const path = new URL(route.request().url()).pathname;
     let body: unknown = { tasks: [], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "a1", userId: "u1", username: "ada", role: "user", theme: "light", language: "en" } };
+    if (path.endsWith("/connections")) body = { connections: [] };
     if (path.endsWith("/tasks/github/issues")) {
       if (mode === "error") {
         await pending;

@@ -87,27 +87,19 @@ for (const automation of [false, true]) test(`explicit access is submitted with 
   expect(saved[0].connectionGrants).toEqual([{ connectionId: "github-1", resources: ["octo/hello"], actions: ["github.list_issues"] }]);
 });
 
-test("new Thread sends selected connection access with its first message", async ({ page }) => {
+// Access is granted on tasks and automations, never from the chat composer:
+// a new thread's first message carries no connection grants even with a
+// service connected.
+test("the composer sends a new Thread without connection access", async ({ page }) => {
   const runs: Record<string, unknown>[] = [];
   await serve(page, "light", "en", runs);
   await page.goto("/computers/device%3Au1%3Ahost/threads");
   const composer = page.locator(".composer").last();
-  await composer.locator("summary").filter({ hasText: "Connections" }).click();
-  await composer.getByRole("checkbox", { name: /Personal GitHub/ }).check();
-  await composer.getByRole("checkbox", { name: "octo/hello", exact: true }).check();
-  await composer.getByRole("textbox").fill("Read connected issues");
+  const message = composer.getByRole("textbox", { name: "Message Ada" });
+  await expect(message).toBeVisible();
+  await expect(composer.locator(".connection-grants")).toHaveCount(0);
+  await message.fill("Read connected issues");
   await composer.getByRole("button", { name: "Send", exact: true }).click();
   await expect.poll(() => runs.length).toBe(1);
-  expect(runs[0].connectionGrants).toEqual([{ connectionId: "github-1", resources: ["octo/hello"], actions: ["github.list_issues"] }]);
-});
-
-test("the composer offers no connections until a service is connected", async ({ page }) => {
-  await serve(page);
-  await page.route("**/api/v1/connections", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ connections: [] }) }));
-  const listed = page.waitForResponse(response => response.url().endsWith("/api/v1/connections"));
-  await page.goto("/computers/device%3Au1%3Ahost/threads");
-  await listed;
-  const composer = page.locator(".composer").last();
-  await expect(composer.getByRole("textbox")).toBeVisible();
-  await expect(composer.locator(".connection-grants")).toHaveCount(0);
+  expect(runs[0].connectionGrants).toBeUndefined();
 });

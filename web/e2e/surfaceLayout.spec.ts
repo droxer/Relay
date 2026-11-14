@@ -208,17 +208,28 @@ test(`project directory shows aligned names and Agent counts without Computer id
    search. At the rail's 240px floor the two cannot sit side by side, so the
    select must wrap under the search rather than crush it or bleed past the
    rail; on a phone it is a thumb-height control like the search beside it. */
-test("Computer thread rail excludes Project rooms and needs no Project filter", async ({ browser }, testInfo) => {
+test("the shared thread rail keeps its Project filter and search inside a 240px rail", async ({ browser }, testInfo) => {
   const project = { id: "p-launch", name: "Autumn launch", ownerUserId: USER.id, computerId: "node:layout", enabled: true, members: [], version: 1 };
   const room = { ...waiting, id: "room-thread", title: "Launch room", projectId: project.id };
   for (const touch of [false, true]) {
     const page = await openPage(browser, "/computers/node%3Alayout/threads", touch,
       { "relay-web.threadListWidth": "240" }, undefined, { projects: [project], sessions: [session, waiting, room] });
     const rail = page.locator("#thread-panel");
-    await expect(rail.getByRole("searchbox", { name: "Search threads" })).toBeVisible();
-    await expect(rail.getByRole("combobox", { name: "Filter threads by project" })).toHaveCount(0);
-    await expect(rail.getByText("Launch room")).toHaveCount(0);
+    const search = rail.getByRole("searchbox", { name: "Search threads" });
+    const filter = rail.getByRole("combobox", { name: "Filter threads by project" });
+    await expect(search).toBeVisible();
+    // One global list on every conversation route: project rooms included,
+    // and the filter is how a person narrows it.
+    await expect(filter).toBeVisible();
+    await expect(rail.getByRole("button", { name: /^Launch room · Project: Autumn launch/ })).toHaveCount(1);
     await expect(rail.getByText("Approve the pricing copy", { exact: true })).toBeVisible();
+    const [searchBox, filterBox, railBox] = await Promise.all([search.boundingBox(), filter.boundingBox(), rail.boundingBox()]);
+    // Neither control crushes the other: they share no pixels, and both end
+    // inside the rail.
+    const apart = filterBox!.y >= searchBox!.y + searchBox!.height - 1 || searchBox!.y >= filterBox!.y + filterBox!.height - 1
+      || filterBox!.x >= searchBox!.x + searchBox!.width - 1 || searchBox!.x >= filterBox!.x + filterBox!.width - 1;
+    expect(apart).toBe(true);
+    for (const box of [searchBox!, filterBox!]) expect(box.x + box.width).toBeLessThanOrEqual(railBox!.x + railBox!.width + 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`computer-thread-scope-${touch ? "phone" : "desktop"}.png`) });
     await page.context().close();
@@ -260,6 +271,9 @@ async function collectionHeader(page: Page, rail: string) {
 }
 
 test("collection headers share one recipe across agents, teams, projects, and skills", async ({ browser }, testInfo) => {
+  // Eight cold page loads, each with a screenshot: WebKit needs more than
+  // the default 30 s for that.
+  test.slow();
   const measured = [];
   for (const [path, rail] of COLLECTION_RAILS) {
     const page = await openPage(browser, path, false);
