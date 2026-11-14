@@ -498,8 +498,8 @@ describe("threadOriginIndex", () => {
 
   it("marks a backlog task's threads with the task title", () => {
     const index = threadOriginIndex([task({ id: "t1", title: "Fix login", linkedSessionIds: ["s1", "s2"] })]);
-    assert.deepEqual(index.get("s1"), { kind: "backlog", taskId: "t1", title: "Fix login", status: "review" });
-    assert.deepEqual(index.get("s2"), { kind: "backlog", taskId: "t1", title: "Fix login", status: "review" });
+    assert.deepEqual(index.get("s1"), { kind: "backlog", taskId: "t1", ref: "t1", title: "Fix login", status: "review" });
+    assert.deepEqual(index.get("s2"), { kind: "backlog", taskId: "t1", ref: "t1", title: "Fix login", status: "review" });
   });
 
   it("names a routine occurrence's thread after its parent routine", () => {
@@ -507,14 +507,14 @@ describe("threadOriginIndex", () => {
       task({ id: "r1", title: "Weekly KPIs", isRoutine: true }),
       task({ id: "occ1", title: "Weekly KPIs · 2026-09-14", sourceRoutineId: "r1", linkedSessionIds: ["s1"] }),
     ]);
-    assert.deepEqual(index.get("s1"), { kind: "routine", taskId: "occ1", title: "Weekly KPIs", status: "review" });
+    assert.deepEqual(index.get("s1"), { kind: "routine", taskId: "occ1", ref: "occ1", title: "Weekly KPIs", status: "review" });
   });
 
   it("falls back to the occurrence title when the parent routine is not listed", () => {
     const index = threadOriginIndex([
       task({ id: "occ1", title: "Standup notes", sourceRoutineId: "gone", linkedSessionIds: ["s1"] }),
     ]);
-    assert.deepEqual(index.get("s1"), { kind: "routine", taskId: "occ1", title: "Standup notes", status: "review" });
+    assert.deepEqual(index.get("s1"), { kind: "routine", taskId: "occ1", ref: "occ1", title: "Standup notes", status: "review" });
   });
 
   it("treats a thread linked to the routine itself as a routine thread", () => {
