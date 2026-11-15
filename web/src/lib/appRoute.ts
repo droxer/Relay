@@ -278,7 +278,8 @@ const AGENT_TABS = new Set(["profile", "skills", "activities"]);
 /* The record surface's tabs, by vocabulary. Registered here for the same
    reason the agent's are: a tab id this table does not list is stripped on
    arrival, so the control toggles and lands back where it started. */
-const TASK_RECORD_TABS = new Set(["activity", "definition", "artifacts"]);
+const TASK_RECORD_TABS = new Set(["definition", "activity", "artifacts"]);
+const DEFAULT_TASK_RECORD_TAB = "definition";
 const ROUTINE_RECORD_TABS = new Set(["runs", "definition", "artifacts"]);
 /* Retired record tab ids, rewritten rather than stripped: a task's "files"
    and "workspace" tabs folded into Files (the artifacts tab), and on a
@@ -531,7 +532,7 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
       if (target.has("automation")) {
         copyParam(source, target, "run");
         const tabs = target.has("run") ? TASK_RECORD_TABS : ROUTINE_RECORD_TABS;
-        const fallback = target.has("run") ? "activity" : "runs";
+        const fallback = target.has("run") ? DEFAULT_TASK_RECORD_TAB : "runs";
         const recordTab = recordTabParam(source.get("recordTab"), target.has("run") ? TASK_RECORD_TAB_ALIASES : ROUTINE_RECORD_TAB_ALIASES);
         if (recordTab && recordTab !== fallback && tabs.has(recordTab)) target.set("recordTab", recordTab);
       }
@@ -557,12 +558,12 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
       copyPageParams("backlog", source, target);
       copyParam(source, target, "task");
       const recordTab = recordTabParam(source.get("recordTab"));
-      if (target.has("task") && recordTab && recordTab !== "activity" && TASK_RECORD_TABS.has(recordTab)) {
+      if (target.has("task") && recordTab && recordTab !== DEFAULT_TASK_RECORD_TAB && TASK_RECORD_TABS.has(recordTab)) {
         target.set("recordTab", recordTab);
       }
     }
   } else if (head === "backlog" && entityId && rest.length === 0) {
-    copyRecordTab(source, target, TASK_RECORD_TABS, "activity");
+    copyRecordTab(source, target, TASK_RECORD_TABS, DEFAULT_TASK_RECORD_TAB);
     copySortParams(head, source, target);
     copyPageParams(head, source, target);
     copyFilterParams(head, source, target);
@@ -577,7 +578,7 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
   } else if (head === "routines" && entityId && rest[0] === "runs" && rest[1] && rest.length === 2) {
     // A run is a task record, so it speaks the task vocabulary even though it
     // is addressed under its routine.
-    copyRecordTab(source, target, TASK_RECORD_TABS, "activity");
+    copyRecordTab(source, target, TASK_RECORD_TABS, DEFAULT_TASK_RECORD_TAB);
     // Same drawer-over-board reasoning as the routine record above.
     copySortParams(head, source, target);
     copyPageParams(head, source, target);

@@ -220,7 +220,7 @@ for (const theme of ["light", "dark"] as const) {
   test(`the waiting task quotes the question and leads with reply (${theme})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await serve(page, theme);
-    await page.goto(`/tasks/${task.id}`);
+    await page.goto(`/tasks/${task.id}?tab=activity`);
     const panel = page.getByRole("region", { name: "Next steps" });
     await expect(panel).toContainText("Your input is needed");
     await expect(panel.locator("blockquote")).toHaveText(QUESTION);

@@ -70,6 +70,8 @@ test("task board preserves blocked review and accepts it only after unblocking",
   await expect(card.locator(".task-holdup")).toContainText("Need approval");
   await card.getByRole("link", { name: "Blocked review", exact: true }).click();
   const drawer = page.getByRole("dialog");
+  // The record opens on its definition; why it is held lives under Activity.
+  await drawer.getByRole("tab", { name: "Activity", exact: true }).click();
   const guidance = drawer.getByRole("region", { name: "Next steps" });
   await expect(guidance).toContainText("Need approval");
   await expect(guidance).toContainText("This restores the previous status");

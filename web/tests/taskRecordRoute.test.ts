@@ -62,7 +62,7 @@ describe("task record routes", () => {
      makes the control toggle and land back where it started — a dead control
      that renders correctly. Every tab the record offers must survive here. */
   it("carries every record tab through canonicalization", () => {
-    for (const tab of ["definition", "artifacts"]) {
+    for (const tab of ["activity", "artifacts"]) {
       assert.equal(
         canonicalBrowserUrl("/backlog/T-1001", `?tab=${tab}`),
         `/backlog/T-1001?tab=${tab}`,
@@ -98,7 +98,8 @@ describe("task record routes", () => {
   it("does not advertise a tab the reader did not choose, or one that does not exist", () => {
     // The default tab carries no param.
     assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=runs"), "/automations/R-42");
-    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=activity"), "/backlog/T-1001");
+    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=definition"), "/backlog/T-1001");
+    assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=activity"), "/backlog/T-1001?tab=activity");
     // A routine has no Activity tab and a task has no Runs tab.
     assert.equal(canonicalBrowserUrl("/automations/R-42", "?tab=activity"), "/automations/R-42");
     assert.equal(canonicalBrowserUrl("/backlog/T-1001", "?tab=runs"), "/backlog/T-1001");
@@ -123,17 +124,17 @@ describe("task record routes", () => {
 });
 
 describe("record vocabulary", () => {
-  it("gives a routine runs and a task activity", () => {
+  it("gives a routine runs and a task its definition first", () => {
     assert.equal(recordVariant({ isRoutine: true }), "routine");
     assert.equal(recordVariant({ isRoutine: false }), "task");
     assert.deepEqual(recordTabs("routine"), ["runs", "definition", "artifacts"]);
-    assert.deepEqual(recordTabs("task"), ["activity", "definition", "artifacts"]);
+    assert.deepEqual(recordTabs("task"), ["definition", "activity", "artifacts"]);
     assert.equal(defaultRecordTab("routine"), "runs");
-    assert.equal(defaultRecordTab("task"), "activity");
+    assert.equal(defaultRecordTab("task"), "definition");
   });
 
   it("falls back to the variant's own default rather than the other one's tab", () => {
-    assert.equal(parseRecordTab("runs", "task"), "activity");
+    assert.equal(parseRecordTab("runs", "task"), "definition");
     assert.equal(parseRecordTab("activity", "routine"), "runs");
     assert.equal(parseRecordTab(null, "routine"), "runs");
     assert.equal(parseRecordTab("artifacts", "task"), "artifacts");

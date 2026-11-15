@@ -24,12 +24,12 @@ it("changes a project record tab without changing the project tab or closing the
     onOpenThread={vi.fn()} onOpenRun={vi.fn()} onRun={vi.fn()} onCancel={vi.fn()}
     onDone={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()}
   />);
-  fireEvent.click(screen.getByRole("tab", { name: "record.tab_definition" }));
-  await waitFor(() => expect(window.location.search).toBe("?task=t&recordTab=definition"));
+  fireEvent.click(screen.getByRole("tab", { name: "record.tab_activity" }));
+  await waitFor(() => expect(window.location.search).toBe("?task=t&recordTab=activity"));
   expect(screen.queryByRole("tab", { name: "record.tab_workspace" })).toBeNull();
   fireEvent.click(screen.getByRole("tab", { name: "record.tab_artifacts" }));
   await waitFor(() => expect(window.location.search).toBe("?task=t&recordTab=artifacts"));
-  fireEvent.click(screen.getByRole("tab", { name: "record.tab_activity" }));
+  fireEvent.click(screen.getByRole("tab", { name: "record.tab_definition" }));
   await waitFor(() => expect(window.location.search).toBe("?task=t"));
 });
 

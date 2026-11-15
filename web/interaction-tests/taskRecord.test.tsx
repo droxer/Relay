@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TaskRecordView } from "../src/components/task-record/TaskRecordView";
@@ -37,6 +37,7 @@ vi.mock("../src/hooks/useRelayMutations", () => ({
     cancelRunMutation: { mutateAsync: vi.fn() },
     deleteTaskMutation: { mutateAsync: vi.fn() },
     resumeAutomationMutation: { mutateAsync: resumeAutomation, isPending: false },
+    setTaskPrerequisitesMutation: { mutate: vi.fn(), isPending: false },
   }),
 }));
 vi.mock("@/components/ui/DialogProvider", () => ({
@@ -173,8 +174,10 @@ it("sends editing back to the board's drawer instead of growing a form", async (
 it("links a project task result to Threads and opens the same conversation on click", async () => {
   getTask.mockResolvedValue({ ...ROUTINE, id: "T-2270", isRoutine: false, projectId: "p", status: "done" });
   listTaskRuns.mockResolvedValue({ taskId: "T-2270", runs: [RUNS[1]] });
+  window.history.replaceState({}, "", "/backlog/T-2270");
   const onOpenThread = vi.fn();
   renderRecord({ taskId: "T-2270", onOpenThread });
+  fireEvent.click(await screen.findByRole("tab", { name: "record.tab_activity" }));
   const link = await screen.findByRole("link", { name: "backlog.open_thread" });
   expect(link.getAttribute("href")).toBe("/threads/s-1");
   await userEvent.setup().click(link);
