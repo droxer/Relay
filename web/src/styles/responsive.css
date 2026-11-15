@@ -422,8 +422,12 @@
     border: 0;
   }
 
-  /* Project directory: a readable two-line label and a full-row touch target. */
-  .project-folder-select {
+  /* Project directory: a readable two-line label and a full-row touch target.
+     The row is a Button primitive, so a11y.css's coarse-pointer floor
+     (`[data-slot="button"]`, same specificity, loaded after this file)
+     used to win and cut a one-line row to 72px; the attribute here
+     outranks it. */
+  .project-folder-select[data-slot="button"] {
     height: auto;
     min-height: 76px;
     padding: var(--sp-3) var(--sp-4);
