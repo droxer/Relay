@@ -41,8 +41,10 @@ const taskEvents = [
 
 type Theme = "light" | "dark";
 
-async function serve(page: Page, theme: Theme, status: "done" | "review", staleFirst = false) {
-  const current = { ...task, status };
+async function serve(page: Page, theme: Theme, status: "done" | "review" | "blocked", staleFirst = false) {
+  const current = status === "blocked"
+    ? { ...task, status, blockerReason: "Waiting for the production credentials to be rotated before the deploy can continue" }
+    : { ...task, status };
   const events = status === "done" ? taskEvents : taskEvents.slice(0, 3);
   const patches: unknown[] = [];
   await page.route("**/api/**", async (route) => {
@@ -158,6 +160,23 @@ for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.locator("#task-record-panel").evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)));
     await page.screenshot({ path: testInfo.outputPath(`task-review-${theme}-${width}.png`), fullPage: true });
+  });
+}
+
+for (const status of ["blocked", "review"] as const) {
+  test(`a ${status} task bar on the composer stays inside a phone viewport`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 780 });
+    await serve(page, "dark", status);
+    await page.goto(`/threads/${session.id}`);
+
+    const bar = page.locator(status === "blocked" ? ".task-action-bar" : ".task-review--compact");
+    await expect(bar).toBeVisible();
+    const box = await bar.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+    for (const button of await bar.getByRole("button").all()) {
+      const rect = await button.boundingBox();
+      expect(rect && rect.x >= 0 && rect.x + rect.width <= 390).toBe(true);
+    }
   });
 }
 
