@@ -152,14 +152,7 @@ export function TaskRecordPage({
       task={task}
       labeled
       readOnly={!statusEdits}
-      onChange={(status) => {
-        if (status === "done" && task.status === "review") {
-          const summary = document.querySelector<HTMLDetailsElement>("#task-record-panel .task-review details");
-          if (summary) { summary.open = true; summary.scrollIntoView({ block: "nearest" }); }
-          return;
-        }
-        statusEdits?.changeStatus(task, status);
-      }}
+      onChange={(status) => statusEdits?.changeStatus(task, status)}
       onToggleHold={() => { void statusEdits?.toggleHold(task); }}
     />,
   );

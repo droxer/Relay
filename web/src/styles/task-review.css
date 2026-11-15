@@ -121,3 +121,6 @@
     align-content: center;
   }
 }
+
+.task-review-dialog { width: min(72ch, 100%); }
+.task-review-dialog .task-review { padding: 0; border-bottom: 0; }

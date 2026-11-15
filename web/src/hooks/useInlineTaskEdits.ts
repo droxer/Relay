@@ -1,5 +1,6 @@
 "use client";
 
+import { useTaskReview } from "../components/task-record/TaskReviewProvider";
 import { useTranslation } from "react-i18next";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { useRelayMutations } from "./useRelayMutations";
@@ -26,6 +27,7 @@ export interface InlineTaskEdits {
  */
 export function useInlineTaskEdits({ readOnly = false }: { readOnly?: boolean } = {}): InlineTaskEdits | null {
   const { t } = useTranslation();
+  const openReview = useTaskReview();
   const { announce, prompt } = useDialogs();
   const { startTaskMutation, updateTaskMutation } = useRelayMutations();
   if (readOnly) return null;
@@ -38,6 +40,10 @@ export function useInlineTaskEdits({ readOnly = false }: { readOnly?: boolean } 
         return;
       }
       if (rejection) return;
+      if (status === "done" && task.status === "review") {
+        openReview(task.id);
+        return;
+      }
       if (status === "running") {
         startTaskMutation.mutate(taskStartMutationInput(task));
         return;

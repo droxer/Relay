@@ -2,10 +2,15 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import * as api from "../src/api";
+import { useInlineTaskEdits } from "../src/hooks/useInlineTaskEdits";
+import type { RelayTaskListItem } from "../src/types";
+import { DialogProvider } from "../src/components/ui/DialogProvider";
+import { TaskReviewProvider } from "../src/components/task-record/TaskReviewProvider";
 import { TaskReviewPanel } from "../src/components/task-record/TaskReviewPanel";
 
 const mutateAsync = vi.fn();
-vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({ updateTaskMutation: { mutateAsync, isPending: false } }) }));
+const mutate = vi.fn();
+vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({ updateTaskMutation: { mutate, mutateAsync, isPending: false } }) }));
 
 const brief = {
   taskId: "task", revision: "a".repeat(64), status: "review", canAccept: true,
@@ -125,4 +130,48 @@ it("keeps acceptance disabled when refreshing after a failed decision also fails
   fireEvent.click(screen.getByRole("button", { name: "task_review.refresh" }));
   await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
   expect((screen.getByRole("button", { name: "thread.lifecycle.accept" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+function CompletionEntry({ status = "review", readOnly = false }: { status?: string; readOnly?: boolean }) {
+  const edits = useInlineTaskEdits({ readOnly });
+  const task = { id: "task", title: "Fix export", status, startedAt: "2026-11-02", linkedSessionIds: ["thread"] } as RelayTaskListItem;
+  return <button disabled={!edits} onClick={() => edits?.changeStatus(task, "done")}>Complete task</button>;
+}
+
+function showCompletion(props = {}) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}><DialogProvider><TaskReviewProvider><CompletionEntry {...props} /></TaskReviewProvider></DialogProvider></QueryClientProvider>);
+}
+
+it("opens explicit acceptance from the shared list, board and detail status path without committing on selection", async () => {
+  mutateAsync.mockClear().mockResolvedValue({ status: "done" });
+  vi.spyOn(api, "getTaskReview").mockResolvedValue(brief as Awaited<ReturnType<typeof api.getTaskReview>>);
+  showCompletion();
+  fireEvent.click(screen.getByText("Complete task"));
+  await screen.findByText("Fixed CSV escaping");
+  expect(mutateAsync).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "thread.lifecycle.accept" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ taskId: "task", input: { status: "done", reviewRevision: brief.revision } }));
+  await waitFor(() => expect(screen.queryByText("Fixed CSV escaping")).toBeNull());
+});
+
+it("cancels completion without changing the task", async () => {
+  mutateAsync.mockClear();
+  vi.spyOn(api, "getTaskReview").mockResolvedValue(brief as Awaited<ReturnType<typeof api.getTaskReview>>);
+  showCompletion();
+  fireEvent.click(screen.getByText("Complete task"));
+  await screen.findByText("Fixed CSV escaping");
+  fireEvent.click(screen.getByRole("button", { name: "dialog.cancel" }));
+  expect(screen.queryByText("Fixed CSV escaping")).toBeNull();
+  expect(mutateAsync).not.toHaveBeenCalled();
+});
+
+it("does not offer completion while executing or on a read-only surface", () => {
+  const read = vi.spyOn(api, "getTaskReview");
+  const view = showCompletion({ status: "running" });
+  fireEvent.click(screen.getByText("Complete task"));
+  expect(read).not.toHaveBeenCalled();
+  view.unmount();
+  showCompletion({ readOnly: true });
+  expect((screen.getByText("Complete task") as HTMLButtonElement).disabled).toBe(true);
 });

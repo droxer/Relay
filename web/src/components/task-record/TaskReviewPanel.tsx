@@ -11,9 +11,10 @@ import { Button } from "../ui/button";
 
 /** A deliberate review snapshot: never silently refresh evidence underneath
  * someone making an acceptance decision. A changed revision requires a read. */
-export function TaskReviewPanel({ taskId, onRequestChanges, onOpenThread, readOnly = false, compact = false, deferPrimary = false }: {
+export function TaskReviewPanel({ taskId, onRequestChanges, onAccepted, onOpenThread, readOnly = false, compact = false, deferPrimary = false }: {
   taskId: string;
-  onRequestChanges: () => void;
+  onRequestChanges?: () => void;
+  onAccepted?: () => void;
   onOpenThread?: (sessionId: string) => void;
   readOnly?: boolean;
   compact?: boolean;
@@ -45,6 +46,7 @@ export function TaskReviewPanel({ taskId, onRequestChanges, onOpenThread, readOn
     setBusy(true);
     try {
       await updateTaskMutation.mutateAsync({ taskId, input: { status: "done", reviewRevision: brief.revision } });
+      onAccepted?.();
     } catch (error) {
       setDecisionError(error instanceof RelayApiError && error.code === "task_review_changed"
         ? "task_review.changed" : "task_review.accept_failed");
@@ -103,7 +105,7 @@ export function TaskReviewPanel({ taskId, onRequestChanges, onOpenThread, readOn
         <Button type="button" size="dense" variant="outline" disabled={query.isFetching || busy} onClick={() => void refresh()}>{t("task_review.refresh")}</Button>
       </div> : null}
       {brief && !readOnly ? <div className="task-review-actions">
-        <Button type="button" size="dense" variant="ghost" disabled={busy || !brief.sessionId} onClick={onRequestChanges}>{t("thread.lifecycle.request_changes")}</Button>
+        {onRequestChanges ? <Button type="button" size="dense" variant="ghost" disabled={busy || !brief.sessionId} onClick={onRequestChanges}>{t("thread.lifecycle.request_changes")}</Button> : null}
         <Button type="button" size="dense" variant={deferPrimary ? "outline" : "default"} disabled={!brief.canAccept || busy || query.isFetching || query.isError || Boolean(decisionError)} loading={busy} onClick={() => void accept()}>{t("thread.lifecycle.accept")}</Button>
       </div> : null}
     </section>
