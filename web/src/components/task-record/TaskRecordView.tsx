@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { useTaskReview } from "./TaskReviewProvider";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
@@ -63,7 +64,8 @@ export function TaskRecordView({
 }) {
   const { t, i18n } = useTranslation();
   const { announce, confirm } = useDialogs();
-  const { startTaskMutation, cancelRunMutation, deleteTaskMutation, updateTaskMutation, resumeAutomationMutation } = useRelayMutations();
+  const openReview = useTaskReview();
+  const { startTaskMutation, cancelRunMutation, deleteTaskMutation, resumeAutomationMutation } = useRelayMutations();
   const [busyAction, setBusyAction] = useState<RecordAction | null>(null);
 
   // The record in the path — the run when there is one, otherwise the
@@ -118,14 +120,7 @@ export function TaskRecordView({
 
   async function markDone(): Promise<void> {
     if (busyAction || !task) return;
-    setBusyAction("done");
-    try {
-      await updateTaskMutation.mutateAsync({ taskId: task.id, input: { status: "done" } });
-    } catch {
-      // Same: the toast is the report, the button comes back.
-    } finally {
-      setBusyAction(null);
-    }
+    if (task.status === "review") openReview(task.id);
   }
 
   async function deleteRecord(): Promise<void> {

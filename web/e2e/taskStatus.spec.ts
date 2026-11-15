@@ -28,7 +28,7 @@ const session = {
   eventCount: 3, artifactCount: 0, runCount: 1,
 };
 const task = {
-  id: "harness-task", number: 3, title: "What is harness engineering", description: "", priority: "normal", status: "done",
+  id: "harness-task", number: 3, title: "What is harness engineering", description: "", priority: "normal", status: "done", startedAt: at(54),
   isRoutine: false, linkedSessionIds: [session.id], ownerUserId: "u", assignedAgentId: agent.id, createdAt: at(53), updatedAt: at(55),
   events: [], activity: [],
 };
@@ -65,6 +65,7 @@ async function serve(page: Page, theme: Theme, status: "done" | "review" | "bloc
           return;
         }
       }
+      if (request.method() === "PATCH") Object.assign(current, { status: "done", workflowStage: "done", updatedAt: at(56) });
       body = current;
     }
     if (path.endsWith(`/tasks/${task.id}/review`)) body = {
@@ -176,5 +177,36 @@ for (const status of ["blocked", "review"] as const) {
       const rect = await button.boundingBox();
       expect(rect && rect.x >= 0 && rect.x + rect.width <= 390).toBe(true);
     }
+  });
+}
+
+for (const [surface, path, width] of [["detail", `/tasks/${task.id}`, 390], ["list", "/tasks", 1440]] as const) {
+  test(`completing from the ${surface} status menu requires acceptance and synchronizes the task`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const patches = await serve(page, "light", "review", true);
+    await page.goto(path);
+    await page.getByRole("button", { name: /^Status: In review\./ }).click();
+    await page.getByRole("menuitem", { name: "Completed", exact: true }).click();
+    const dialog = page.getByRole("dialog").filter({ has: page.locator(".task-review") });
+    await expect(dialog.getByText("Delivered the explanation.")).toBeVisible();
+    expect(patches).toEqual([]);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`acceptance-${surface}.png`) });
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    expect(patches).toEqual([]);
+    await page.getByRole("button", { name: /^Status: In review\./ }).click();
+    await page.getByRole("menuitem", { name: "Completed", exact: true }).click();
+    await dialog.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toContainText("The work changed");
+    await expect(dialog.getByRole("button", { name: "Accept", exact: true })).toBeDisabled();
+    await dialog.getByRole("button", { name: "Refresh review" }).click();
+    await dialog.getByRole("button", { name: "Accept", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    if (surface === "list") await page.getByRole("button", { name: "Recently completed 1", exact: true }).click();
+    await expect(page.getByRole("button", { name: /^Status: Completed\./ })).toBeVisible();
+    expect(patches).toEqual([{ status: "done", reviewRevision: "a".repeat(64) }, { status: "done", reviewRevision: "b".repeat(64) }]);
+    await page.reload();
+    if (surface === "list") await page.getByRole("button", { name: "Recently completed 1", exact: true }).click();
+    await expect(page.getByRole("button", { name: /^Status: Completed\./ })).toBeVisible();
   });
 }

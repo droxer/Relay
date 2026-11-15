@@ -206,7 +206,10 @@ export function useRelayMutations() {
     onMutate: async ({ taskId, input }: { taskId: string; input: TaskMutationInput }) => {
       // Keep the reviewed work visible until acceptance actually commits;
       // an optimistic done would unmount the brief before a stale refusal.
-      if (input.reviewRevision) return { previous: undefined };
+      if (input.reviewRevision) {
+        await queryClient.cancelQueries({ queryKey: [TASK_RECORD_QUERY_KEY, taskId] });
+        return { previous: undefined };
+      }
       const { status, priority, dueDate, assignedAgentId, assignedTeamId } = input;
       const assignmentChanged = assignedAgentId !== undefined || assignedTeamId !== undefined;
       if (!status && !priority && dueDate === undefined && !assignmentChanged) return { previous: undefined };
@@ -248,7 +251,10 @@ export function useRelayMutations() {
     },
     // Settled, not success: a rolled-back failure must resync from the server
     // too, otherwise the board keeps showing the pre-mutation snapshot.
-    onSuccess: cacheTask,
+    onSuccess: (task, { input }) => {
+      cacheTask(task);
+      if (input.reviewRevision) queryClient.setQueryData([TASK_RECORD_QUERY_KEY, task.id], task);
+    },
     onSettled: () => void invalidateTasks(),
   });
 
