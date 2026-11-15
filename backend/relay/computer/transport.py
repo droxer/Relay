@@ -15,7 +15,7 @@ def transport_diagnostics(body: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(causes, list) or len(causes) > len(CAUSES) or any(not isinstance(item, str) or item not in CAUSES for item in causes):
         raise ValueError('Invalid transport causes.')
     state = body.get('state')
-    if state not in ('connecting', 'healthy', 'retrying', 'revoked'):
+    if state not in ('connecting', 'healthy', 'retrying', 'attention', 'revoked'):
         raise ValueError('Invalid transport state.')
     result: dict[str, Any] = {'causes': sorted(set(causes)), 'state': state, 'recovered': body.get('recovered') is True}
     incident = body.get('incident')

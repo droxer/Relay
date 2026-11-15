@@ -3,6 +3,7 @@ import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, re
 import { join } from 'node:path';
 import { open, rename } from 'node:fs/promises';
 import { ReportOrder } from './report-order.js';
+import { EVENT_REQUEST_TIMEOUT_MS } from './event-request-policy.js';
 import { retryAfterMs } from './transport-retry.js';
 import { syncDirectory, syncDirectoryAsync } from './sync-directory.js';
 import { sendTerminalEvent, terminalEventPayload } from './terminal-event-payload.js';
@@ -53,11 +54,13 @@ function readRejection(data: string): ReportRejection {
 export class TerminalOutbox {
   private readonly order = new ReportOrder();
   private readonly index = new Map<string, RecordIndex>();
+  private readonly archived = new Set<string>();
   private readonly rejected = new Map<string, ReportRejection>();
   private readonly corrupt = new Set<string>();
   private strictAcknowledgements = false;
   private replaying = false;
   private replayAfter = 0;
+  private attemptCleanupAfter = 0;
   private readonly retryAt = new Map<string, number>();
   private readonly deliveries = new Set<string>();
   private batching = false;
@@ -76,6 +79,11 @@ export class TerminalOutbox {
   constructor(private readonly directory: string, private readonly onTerminal?: (commandId: string) => void,
     private readonly maxOutputBytes = 1024 * 1024 * 1024, private readonly onWriteError?: (error: Error) => void) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
+    for (const name of readdirSync(directory).filter(name => name.endsWith('.archive'))) {
+      const archive = JSON.parse(readFileSync(join(directory, name), 'utf8'));
+      if (archive.reportId !== name.slice(0, -8) || archive.action !== 'archive-undeliverable') throw new Error('Invalid report archive.');
+      this.archived.add(archive.reportId);
+    }
     for (const name of readdirSync(directory)) {
       // Interrupted temporary writes remain evidence and count toward quota.
       this.bytes += statSync(join(directory, name)).size;
@@ -96,6 +104,16 @@ export class TerminalOutbox {
       this.order.add(key, record);
       if (!record.terminal) this.countOutput(record.owner, 1);
     }
+    // Archives are write-ahead decisions: finish interrupted cleanup on restart.
+    for (const key of this.archived) this.acknowledge(key, false);
+    if (this.archived.size) syncDirectory(this.directory);
+    for (const [key, rejection] of this.rejected) {
+      const raw = readFileSync(join(directory, `${key}.rejected`), 'utf8').trim();
+      if (this.deletedThread(rejection) || raw === '400') {
+        this.archive(key, raw === '400' ? 'legacy-reason-unavailable' : 'thread-deleted');
+      }
+    }
+    this.pruneAttemptHistory();
   }
   negotiate(verified: boolean, batching = false): void { this.strictAcknowledgements = verified; this.batching = verified && batching; }
   usesBatching(): boolean { return this.batching; }
@@ -152,9 +170,11 @@ export class TerminalOutbox {
     return [...this.index].sort((a, b) => a[1].owner.localeCompare(b[1].owner) || a[1].sequence - b[1].sequence).map(([key]) => this.read(key));
   }
   retain(event: Record<string, unknown>): TerminalRecord {
+    this.pruneAttemptHistory();
     if (terminalTypes.has(String(event.type))) event = terminalEventPayload(event);
     const output = outputTypes.has(String(event.type));
     const key = digest(JSON.stringify([event.commandId, event.leaseId ?? null, ...(output ? [event.type, sequence(event)] : [])]));
+    if (this.archived.has(key)) return { key, event };
     if (!this.index.has(key)) {
       if (!output && this.strictAcknowledgements) {
         // Include all captured output in the terminal receipt, including
@@ -233,6 +253,8 @@ export class TerminalOutbox {
     this.order.remove(key, record);
     this.index.delete(key);
     this.retryAt.delete(key);
+    const attempts = join(this.directory, `${key}.attempts`);
+    if (!delivered && existsSync(attempts)) { this.bytes -= statSync(attempts).size; rmSync(attempts); }
     const rejection = join(this.directory, `${key}.rejected`);
     if (existsSync(rejection)) { this.bytes -= statSync(rejection).size; rmSync(rejection); syncDirectory(this.directory); }
     this.rejected.delete(key);
@@ -272,6 +294,77 @@ export class TerminalOutbox {
     this.audit('discard-with-output-loss', key, actor);
     this.acknowledge(key, false);
   }
+  private deletedThread(rejection: ReportRejection): boolean {
+    if (rejection.status !== 409) return false;
+    let detail = rejection.detail;
+    try { detail = JSON.parse(detail)?.detail ?? detail; } catch { /* Older markers stored plain text. */ }
+    return detail === 'Report thread no longer exists.';
+  }
+  private archive(key: string, policy: string): void {
+    const data = JSON.stringify({ action: 'archive-undeliverable', reportId: key,
+      actor: `daemon-policy:${policy}`, at: new Date().toISOString(),
+      event: this.read(key).event, rejection: this.rejected.get(key),
+      rejectionRecord: readFileSync(join(this.directory, `${key}.rejected`), 'utf8'),
+      attempts: this.attemptTimes(key) });
+    // Payload and audit commit together before removal from the active queue.
+    this.write(join(this.directory, `${key}.archive`), data);
+    this.bytes += Buffer.byteLength(data);
+    this.archived.add(key);
+    this.acknowledge(key, false);
+    syncDirectory(this.directory);
+  }
+  private attemptTimes(key: string): number[] {
+    const path = join(this.directory, `${key}.attempts`);
+    if (!existsSync(path)) return [];
+    const times: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (!Array.isArray(times) || !times.every(time => typeof time === 'number' && Number.isFinite(time))) {
+      throw new Error(`Invalid report attempt history ${key}; delivery paused.`);
+    }
+    return times.filter(time => time > Date.now() - 86_400_000);
+  }
+  private pruneAttemptHistory(): void {
+    if (Date.now() < this.attemptCleanupAfter) return;
+    this.attemptCleanupAfter = Date.now() + 3_600_000;
+    let removed = false;
+    for (const name of readdirSync(this.directory)) {
+      if (!name.endsWith('.attempts')) continue;
+      const key = name.slice(0, -9);
+      if (this.index.has(key)) continue;
+      try {
+        if (this.attemptTimes(key).length) continue;
+        const path = join(this.directory, name);
+        this.bytes -= statSync(path).size;
+        rmSync(path);
+        removed = true;
+      } catch (error) {
+        this.fail(error instanceof Error ? error : new Error(String(error)));
+      }
+    }
+    if (removed) syncDirectory(this.directory);
+  }
+  private reserveAttempt(key: string): Response | undefined {
+    let times: number[];
+    try { times = this.attemptTimes(key); }
+    catch (error) {
+      this.fail(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
+    if (times.length >= 10) {
+      const retryAt = Math.min(...times) + 86_400_000;
+      this.retryAt.set(key, retryAt);
+      return new Response('Durable report rolling 24-hour attempt budget exhausted; evidence retained.', {
+        status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil((retryAt - Date.now()) / 1000))) },
+      });
+    }
+    const path = join(this.directory, `${key}.attempts`);
+    const previousBytes = existsSync(path) ? statSync(path).size : 0;
+    const data = JSON.stringify([...times, Date.now()]);
+    // Reserve durably before touching the network; crashes may consume an
+    // attempt, but can never reset or exceed the budget.
+    this.write(path, data);
+    this.bytes += Buffer.byteLength(data) - previousBytes;
+    return undefined;
+  }
   private quarantine(key: string, status: number, detail?: unknown): void {
     if (this.rejected.has(key) || !this.index.has(key)) return;
     const rejection = { status, detail: rejectionDetail(detail), at: new Date().toISOString() };
@@ -279,6 +372,7 @@ export class TerminalOutbox {
     this.write(join(this.directory, `${key}.rejected`), data);
     this.bytes += Buffer.byteLength(data);
     this.rejected.set(key, rejection);
+    if (this.deletedThread(rejection)) this.archive(key, 'thread-deleted');
   }
   private blocked(record: TerminalRecord): boolean {
     const current = this.index.get(record.key);
@@ -295,6 +389,7 @@ export class TerminalOutbox {
   }
   private async sendRecord(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
     await this.stored(record.key);
+    if (this.archived.has(record.key)) return new Response('Report archived as undeliverable; evidence retained.', { status: 409 });
     const rejection = this.rejected.get(record.key);
     if (rejection) return new Response(`Report quarantined; automatic retries paused. Original HTTP ${rejection.status}: ${rejection.detail} Report ID: ${record.key}. Use relay reports and relay retry-report after stopping the daemon.`, { status: 409 });
     if (this.blocked(record)) return new Response('Earlier output is awaiting delivery.', { status: 503 });
@@ -304,6 +399,8 @@ export class TerminalOutbox {
     let sentReportId = record.key;
     let payloadBoundIdentity = false;
     const verifiedSend: typeof fetch = async (url, request) => {
+      const deferred = this.reserveAttempt(record.key);
+      if (deferred) return deferred;
       sentDigest = digest(String(request?.body));
       // A compact representation must not reuse an identity already bound
       // to the full payload. Derive it deterministically for crash/retry safety.
@@ -364,21 +461,28 @@ export class TerminalOutbox {
       const size = Buffer.byteLength(JSON.stringify(body)) + 200;
       if (bytes + size > 2 * 1024 * 1024) {
         if (reports.length === 0) {
-          const response = await this.deliver(send, eventUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]) }, record);
+          const response = await this.deliver(send, eventUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(EVENT_REQUEST_TIMEOUT_MS)]) }, record);
           await response.body?.cancel();
           continue;
         }
         break;
       }
+      if (this.deliveries.has(key)) continue;
+      const deferred = this.reserveAttempt(key);
+      if (deferred) { await deferred.body?.cancel(); continue; }
       reports.push({ id: key, digest: digest(body), body });
       selected.add(key);
       bytes += size;
     }
     if (!reports.length) return;
-    const response = await send(eventUrl.replace(/\/events$/, '/reports'), { method: 'POST', headers: {
-      'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ reports }),
-      signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
-    });
+    for (const key of selected) this.deliveries.add(key);
+    let response: Response;
+    try {
+      response = await send(eventUrl.replace(/\/events$/, '/reports'), { method: 'POST', headers: {
+        'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ reports }),
+        signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(EVENT_REQUEST_TIMEOUT_MS)]),
+      });
+    } finally { for (const key of selected) this.deliveries.delete(key); }
     if (response.status === 413) {
       await response.body?.cancel();
       // A proxy may cap batches below our bound. Individual delivery lets
@@ -388,7 +492,7 @@ export class TerminalOutbox {
         if (!this.index.has(key)) continue;
         const single = await this.deliver(send, eventUrl, { method: 'POST', headers: {
           'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+          signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(EVENT_REQUEST_TIMEOUT_MS)]),
         }, this.read(key));
         await single.body?.cancel();
       }
@@ -400,13 +504,14 @@ export class TerminalOutbox {
     for (const receipt of result.receipts ?? []) {
       if (expected.get(receipt.id) !== receipt.digest) continue;
       if (receipt.status === 200) this.acknowledge(receipt.id);
-      else if (receipt.status === 409 && this.index.get(receipt.id)?.terminal) {
-        // Batch receipts carry no rejection detail. Probe individually so only
+      else if (receipt.status === 409 && this.index.get(receipt.id)?.terminal
+        && (!receipt.detail || receipt.detail === 'Report identity already accepted with a different owner or payload.')) {
+        // Older batch receipts carry no rejection detail. Probe individually so only
         // an explicit identity collision can use the payload-bound fallback.
         try {
           const single = await this.deliver(send, eventUrl, { method: 'POST', headers: {
             'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(EVENT_REQUEST_TIMEOUT_MS)]),
           }, this.read(receipt.id));
           await single.body?.cancel();
         } catch { /* Retain the report for the next replay attempt. */ }
@@ -438,7 +543,7 @@ export class TerminalOutbox {
         try {
           const response = await this.deliver(send, eventUrl, { method: 'POST', headers: {
             'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(EVENT_REQUEST_TIMEOUT_MS)]),
           }, record);
           await response.body?.cancel();
         } catch { /* Retained evidence is retried; unrelated streams continue. */ }

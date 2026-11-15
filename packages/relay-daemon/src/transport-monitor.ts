@@ -75,6 +75,6 @@ export class TransportMonitor {
       && this.state.healthySince !== undefined && this.now() - this.state.healthySince >= 10_000;
     if (JSON.stringify(this.state) !== before) this.save();
     return { incident: this.state.incident, startedAt: this.state.startedAt, causes: [...this.state.causes], recovered: this.state.recovered,
-      attempts: this.state.attempts, observedAt: this.now(), state: this.state.causes.includes('revoked') ? 'revoked' : failed.length ? 'retrying' : 'healthy' };
+      attempts: this.state.attempts, observedAt: this.now(), state: this.state.causes.includes('revoked') ? 'revoked' : failed.length ? 'retrying' : this.state.causes.length ? 'attention' : 'healthy' };
   }
 }

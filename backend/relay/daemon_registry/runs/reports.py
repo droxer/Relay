@@ -1,4 +1,6 @@
 """Authenticated, transactional acceptance of write-ahead daemon reports."""
+from time import monotonic
+from loguru import logger
 from typing import Any, TYPE_CHECKING
 from contextlib import ExitStack, nullcontext, contextmanager
 from collections.abc import Iterator
@@ -38,9 +40,13 @@ class DurableReportMixin(RegistryState):
             self.daemon_store.mark_cancel_commands_completed(sandbox_id, event['commandId'])
 
     def handle_durable_report(self,sandbox_id: str, event: dict[str, Any], token: str | None, report_id: str, digest: str) -> None:
+        started = monotonic()
+        lock_wait_ms = 0.0
+        receipt_replay = False
         self._hydrate_node(sandbox_id)
         streamed = event['type'] in {'run.output', 'run.output.batch', 'run.collaboration'}
         try:
+            waiting = monotonic()
             with ExitStack() as stack:
                 if not streamed:
                     stack.enter_context(self.dispatch_lock)
@@ -48,11 +54,13 @@ class DurableReportMixin(RegistryState):
                 # Otherwise a heartbeat can hold it while waiting for our
                 # command row, as our liveness update waits for the local lock.
                 stack.enter_context(self.dispatch_scope([sandbox_id]))
+                lock_wait_ms = (monotonic() - waiting) * 1000
                 self._assert_authorized(sandbox_id, token)
                 # The wire digest binds the original envelope. A previously
                 # accepted identity needs no command or session history, but
                 # must still match this authenticated node and exact payload.
                 if self.daemon_store.report_was_accepted(sandbox_id, event['commandId'], report_id, digest):
+                    receipt_replay = True
                     self.settle_acknowledged_stop(sandbox_id, event)
                     return
                 record = self.daemon_store.get_command(event['commandId'])
@@ -77,3 +85,11 @@ class DurableReportMixin(RegistryState):
                         self._handle_event_unlocked(sandbox_id, {**event, '_durableReport': True}, token)
         except ReportReceiptConflict as error:
             raise CommandEventMismatchError(str(error)) from error
+        finally:
+            if not streamed:
+                logger.info(
+                    'Durable terminal report handling finished', node_id=sandbox_id,
+                    command_id=event['commandId'], report_id=report_id,
+                    receipt_replay=receipt_replay, lock_wait_ms=round(lock_wait_ms, 2),
+                    duration_ms=round((monotonic() - started) * 1000, 2),
+                )

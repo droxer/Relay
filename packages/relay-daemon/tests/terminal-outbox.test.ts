@@ -95,16 +95,18 @@ for (const delivery of ['live', 'batch'] as const) {
   });
 }
 
-test('legacy quarantine markers remain isolated with an honest unknown reason', async t => {
+test('legacy bare 400 archives preserve an honest unknown reason', async t => {
   const root = mkdtempSync(join(tmpdir(), 'relay-legacy-rejection-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const outbox = new TerminalOutbox(root);
   const record = outbox.retain({ type: 'run.cancelled', commandId: 'cmd' });
   writeFileSync(join(root, `${record.key}.rejected`), '400');
   const restarted = new TerminalOutbox(root);
-  assert.equal(restarted.summaries()[0].rejection?.status, 400);
-  assert.match(restarted.summaries()[0].rejection?.detail ?? '', /not recorded/i);
-  assert.equal(JSON.parse(readFileSync(join(root, `${record.key}.json`), 'utf8')).commandId, 'cmd');
+  assert.equal(restarted.status().quarantined, 0);
+  const archive = JSON.parse(readFileSync(join(root, `${record.key}.archive`), 'utf8'));
+  assert.equal(archive.rejection.status, 400);
+  assert.match(archive.rejection.detail, /not recorded/i);
+  assert.equal(archive.event.commandId, 'cmd');
 });
 
 test('rejection diagnostics are bounded and safe to display in a terminal', async t => {
@@ -631,3 +633,99 @@ for (const detail of ['Report names an unknown command.', 'Report does not match
     assert.equal(outbox.status().quarantined, 1);
   });
 }
+
+for (const batching of [false, true]) {
+  test(`rolling wire budget survives restart and shares live/replay attempts (batching=${batching})`, async t => {
+    const root = mkdtempSync(join(tmpdir(), 'relay-budget-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const realNow = Date.now;
+    let now = realNow();
+    Date.now = () => now;
+    t.after(() => { Date.now = realNow; });
+    const event = { type: 'run.cancelled', commandId: 'budget', leaseId: 'lease' };
+    let calls = 0;
+    const raw: typeof fetch = async () => { calls++; throw new Error('response lost'); };
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const outbox = new TerminalOutbox(root);
+      outbox.negotiate(batching, batching);
+      outbox.retain(event);
+      if (attempt % 2) await outbox.replay(raw, 'http://backend/events', 'token');
+      else await outbox.wrapFetch(raw)('http://backend/events', { method: 'POST', body: JSON.stringify(event) }).catch(() => {});
+    }
+    assert.equal(calls, 10);
+    now += 24 * 60 * 60 * 1000 - 1;
+    await new TerminalOutbox(root).replay(raw, 'http://backend/events', 'token');
+    assert.equal(calls, 10);
+    now++;
+    await new TerminalOutbox(root).replay(raw, 'http://backend/events', 'token');
+    assert.equal(calls, 11);
+    assert.equal(new TerminalOutbox(root).status().pending, 1);
+  });
+}
+
+test('deleted thread reports and legacy bare 400 are archived with full evidence across restart', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-archive-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  const deleted = outbox.retain({ type: 'run.completed', commandId: 'deleted', agentLog: 'evidence' });
+  const legacy = outbox.retain({ type: 'run.cancelled', commandId: 'legacy' });
+  writeFileSync(join(root, `${legacy.key}.rejected`), '400');
+  await new TerminalOutbox(root).replay(async () => Response.json({ detail: 'Report thread no longer exists.' }, { status: 409 }), 'http://backend/events', 'token');
+  const restarted = new TerminalOutbox(root);
+  assert.equal(restarted.status().pending, 0);
+  assert.equal(restarted.status().quarantined, 0);
+  assert.equal(restarted.status().accepted, 0, 'archive must never count as acceptance');
+  const archives = readdirSync(root).filter(name => name.endsWith('.archive'));
+  assert.equal(archives.length, 2);
+  const evidence = archives.map(name => JSON.parse(readFileSync(join(root, name), 'utf8')));
+  assert.equal(evidence.find(value => value.reportId === deleted.key).event.agentLog, 'evidence');
+  assert.equal(evidence.find(value => value.reportId === legacy.key).rejection.status, 400);
+  assert.ok(evidence.every(value => value.actor && value.at && value.action === 'archive-undeliverable'));
+  restarted.retain(deleted.event);
+  await restarted.replay(async () => { throw new Error('archive resurrected'); }, 'http://backend/events', 'token');
+  assert.equal(restarted.status().pending, 0);
+});
+
+test('restart completes archive cleanup without losing rejection or payload', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-archive-crash-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  const record = outbox.retain({ type: 'run.completed', commandId: 'crash', exitCode: 0 });
+  await outbox.replay(async () => Response.json({ detail: 'Report thread no longer exists.' }, { status: 409 }), 'http://backend/events', 'token');
+  const archivePath = join(root, `${record.key}.archive`);
+  const archive = readFileSync(archivePath, 'utf8');
+  // Simulate a crash after committing the archive, before deleting active files.
+  writeFileSync(join(root, `${record.key}.json`), JSON.stringify(record.event));
+  writeFileSync(join(root, `${record.key}.rejected`), JSON.parse(archive).rejectionRecord);
+  const restarted = new TerminalOutbox(root);
+  assert.equal(restarted.status().pending, 0);
+  assert.equal(restarted.status().quarantined, 0);
+  assert.equal(readFileSync(archivePath, 'utf8'), archive);
+  assert.ok(!readdirSync(root).some(name => name.endsWith('.json') || name.endsWith('.rejected')));
+});
+
+test('corrupt attempt history pauses delivery with a storage diagnosis', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-budget-corrupt-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  const record = outbox.retain({ type: 'run.cancelled', commandId: 'corrupt' });
+  writeFileSync(join(root, `${record.key}.attempts`), 'not json');
+  let calls = 0;
+  await outbox.replay(async () => { calls++; return Response.json({}); }, 'http://backend/events', 'token');
+  assert.equal(calls, 0);
+  assert.equal(outbox.status().pending, 1);
+  assert.equal(outbox.status().persistenceFault, true);
+  assert.equal(readFileSync(join(root, `${record.key}.attempts`), 'utf8'), 'not json');
+});
+
+test('accepted identity redelivery cannot reset its rolling wire budget', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-accepted-budget-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const event = { type: 'run.cancelled', commandId: 'already-accepted' };
+  let calls = 0;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const outbox = new TerminalOutbox(root);
+    await outbox.wrapFetch(async () => { calls++; return Response.json({}); })('http://backend/events', { method: 'POST', body: JSON.stringify(event) });
+  }
+  assert.equal(calls, 10);
+});

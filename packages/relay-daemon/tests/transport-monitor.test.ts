@@ -42,3 +42,17 @@ test('storage and rejection causes survive communication recovery', t => {
   assert.deepEqual(monitor.snapshot().causes, ['storage']);
   assert.equal(monitor.snapshot().incident, incident);
 });
+
+test('quarantine is attention until archived and recovery settles', t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-archive-monitor-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  let now = 0;
+  const monitor = new TransportMonitor(root, () => now);
+  monitor.cause('quarantine', true);
+  assert.equal(monitor.snapshot().state, 'attention');
+  monitor.cause('quarantine', false);
+  assert.equal(monitor.snapshot().recovered, false);
+  now = 10_000;
+  assert.equal(monitor.snapshot().state, 'healthy');
+  assert.equal(monitor.snapshot().recovered, true);
+});

@@ -367,14 +367,24 @@ workflow finalization then uses its own transactions. A finalization failure
 leaves the committed evidence available for the existing recovery loop, rather
 than retaining locks across unrelated Computers.
 
-Transient failures retry indefinitely with jitter, bounded request deadlines,
-and `Retry-After`. Permanent report rejections are quarantined with their bytes
+Event POSTs have a 60-second deadline, including replay batches and individual
+fallback requests; short control-plane probes retain their separate deadline.
+Each report identity permits at most ten actual wire attempts in a rolling
+24-hour window. Its `.attempts` sidecar is fsynced before each send and survives
+restart and acceptance (until the window expires); live delivery, replay, batches, payload compaction and identity fallback
+share this budget. Exhaustion defers delivery until the oldest attempt expires,
+retaining the report and honoring `Retry-After`. It never discards exit evidence. Permanent report rejections are quarantined
+with their bytes
 and reason intact. Only malformed input is a 400: unexpected processing
 exceptions, including `ValueError`, `TypeError`, and `KeyError` after validation,
 roll back their batch group and return a retryable 500. A thread missing when
 acquiring its mutation lock is a terminal 409 instead: an unaccepted report
-cannot be applied to deleted history. Its bytes remain quarantined, and no
-acceptance receipt or execution-exit evidence is fabricated. Previously accepted
+cannot be applied to deleted history. Its full payload and rejection commit
+together to a private `.archive`
+record with report identity, policy actor, timestamp and original rejection
+record before removal from the active queue. Restart completes interrupted
+cleanup and archived identities cannot re-enter replay. No acceptance receipt
+or execution-exit evidence is fabricated. Previously accepted
 reports still replay from their durable receipts. Unrelated groups can
 still commit. Batch rejection receipts include a bounded reason, without
 returning internal exception details.
@@ -382,7 +392,10 @@ returning internal exception details.
 New quarantine markers retain the original HTTP status, bounded rejection
 detail, and timestamp across daemon restarts. `relay reports` displays that
 reason and the Computer-specific recovery command. Historical status-only
-markers remain quarantined and explicitly say their reason was not recorded.
+bare `400` markers are archived at startup under the owner-approved legacy
+policy, preserving the original marker and explicitly saying the reason was
+not recorded. New 400 responses retain their bounded backend reason and remain
+quarantined; unknown ownership/lease conflicts also require intervention.
 A redelivered cancellation whose terminal report is quarantined neither
 resubmits it nor repeatedly logs that it will retry; polling continues, with
 the normal idle throttle when the batch contains only quarantined stops.
@@ -513,3 +526,25 @@ a separate path. The aggregate daemon log keeps two generations of at most
 10 MiB each. Run logs are capped at 10 MiB per file, 100 MiB total, and 1,000
 files, including cleanup of older logs at startup. Diagnostic-log shutdown
 waits at most one second. Service-manager log rotation remains separate.
+
+### Outbox timeout repair rollout
+
+Upgrade the backend before Computers: transport snapshots now accept `attention`
+when a local cause such as quarantine remains, rather than saying `healthy`.
+The existing cause-based Computer card clears attention only when all its causes
+clear; the incident still requires the ten-second healthy recovery window.
+
+For terminal reports the backend logs report/command ids, `receipt_replay`,
+`duration_ms` and (on single-report handling) `lock_wait_ms`. An accepted receipt
+returns before command lookup and event/artifact processing. A response lost
+after commit therefore replays without indexing artifacts again; dispatch/node
+lock contention can still delay the single-report receipt check. These fields
+help distinguish lock wait from successful processing followed by a lost reply.
+Local tests prove this shortcut, but cannot attribute historical production
+failures to network loss without matching production observations.
+
+After an authorized upgrade, observe the affected Computer for 24 hours: track
+pending/accepted counts, attempts per retained identity and incident recovery.
+Confirm deleted-thread and legacy400 archives retain their evidence, quarantine
+reaches zero, other attention causes are absent, pending does not continually
+grow, and cancellation commands settle. Do not remove quarantine files manually.

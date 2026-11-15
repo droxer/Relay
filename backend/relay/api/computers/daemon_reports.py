@@ -1,5 +1,7 @@
 """Bounded replay batches with an independent durable receipt per report."""
 import json
+from time import monotonic
+from loguru import logger
 from contextlib import ExitStack
 import re
 from hashlib import sha256
@@ -27,6 +29,7 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
     receipts: list[dict[str, Any]] = []
     groups: dict[tuple[str, str], list[tuple[dict[str, str], dict[str, Any]]]] = {}
     for report in reports:
+        started = monotonic()
         try:
             event = daemon_node_event(json.loads(report['body']))
         except (ValueError, TypeError, KeyError) as error:
@@ -42,6 +45,10 @@ def _accept_batch(registry: Any, sandbox_id: str, token: str | None, reports: li
             continue
         if accepted:
             registry.settle_acknowledged_stop(sandbox_id, event)
+            if event['type'] in {'run.completed', 'run.failed', 'run.cancelled'}:
+                logger.info('Durable terminal report replay acknowledged',
+                            node_id=sandbox_id, command_id=event['commandId'], report_id=report['id'],
+                            receipt_replay=True, duration_ms=round((monotonic() - started) * 1000, 2))
             receipts.append({'id': report['id'], 'digest': report['digest'], 'status': 200})
             continue
         streamed = event['type'] in {'run.output', 'run.output.batch', 'run.collaboration'}

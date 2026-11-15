@@ -1,3 +1,4 @@
+import { EVENT_REQUEST_TIMEOUT_MS } from './event-request-policy.js';
 import type { DaemonLogger, DaemonLogFields } from './index.js';
 import { persistTerminalEvent, queuesOutputForReplay } from './terminal-outbox.js';
 import { responseErrorDetail, transportErrorDetail } from './http-error-detail.js';
@@ -176,8 +177,8 @@ export async function withBackendReconnect<T>(
   }
 }
 
-export async function postJson(fetchFn: typeof fetch, url: string, body: unknown, token?: string, signal?: AbortSignal): Promise<void> {
-  await postJsonRequest(fetchFn, url, body, token, signal);
+export async function postJson(fetchFn: typeof fetch, url: string, body: unknown, token?: string, signal?: AbortSignal, timeoutMs?: number): Promise<void> {
+  await postJsonRequest(fetchFn, url, body, token, signal, timeoutMs);
 }
 
 export async function postJsonResponse<T>(
@@ -272,7 +273,7 @@ export async function postJsonWithRetry(
   while (true) {
     if (signal?.aborted) throw new Error("Aborted before event post.");
     try {
-      await postJson(fetchFn, url, body, token, signal);
+      await postJson(fetchFn, url, body, token, signal, EVENT_REQUEST_TIMEOUT_MS);
       return;
     } catch (error) {
       if (error instanceof DaemonHttpError && error.status < 500 && error.status !== 408 && error.status !== 429) throw error;

@@ -704,3 +704,50 @@ def test_stopping_a_run_that_already_ended_sends_no_stop(tmp_path):
     assert registry.cancel_active_run('node', cancelled['sessionId'], 'Stopped again.') is not None
     assert registry.daemon_store.pending_commands_of_type('node', 'run.cancel') == []
     assert cancelled['commandId'] not in registry.active_commands
+
+
+@pytest.mark.parametrize('batch', [False, True])
+def test_accepted_completion_replay_skips_artifact_indexing(tmp_path, monkeypatch, batch):
+    import json
+    from relay.api.computers.daemon_reports import _accept_batch
+
+    registry, sessions, event = fixture(tmp_path)
+    terminal = {key: value for key, value in event.items()
+                if key not in ('stream', 'sequence', 'text', 'replayed')}
+    terminal.update(type='run.completed', exitCode=0, generatedFiles=[
+        {'relativePath': f'file-{index}.md', 'bytes': 1} for index in range(33)
+    ])
+    indexed = []
+    original = sessions.index_workspace_artifact
+    def index_artifact(*args, **kwargs):
+        indexed.append(args[1]['workspaceRelativePath'])
+        return original(*args, **kwargs)
+    monkeypatch.setattr(sessions, 'index_workspace_artifact', index_artifact)
+    original_handler = registry._handle_event_unlocked
+    def handle_with_artifacts(node_id, report_event, token):
+        # This fixture has no dispatched Task; exercise its real artifact
+        # persistence at the same handler boundary as a dispatched completion.
+        registry._record_generated_workspace_artifacts(
+            registry.sandboxes[node_id], {'sessionId': terminal['sessionId']}, report_event, None)
+        original_handler(node_id, report_event, token)
+    monkeypatch.setattr(registry, '_handle_event_unlocked', handle_with_artifacts)
+    body = json.dumps(terminal)
+    report = {'id': 'a' * 64, 'digest': sha256(body.encode()).hexdigest(), 'body': body}
+    registry.handle_durable_report('node', terminal, 'secret', report['id'], report['digest'])
+    assert len(indexed) == 33
+    def unexpected(*_args, **_kwargs):
+        pytest.fail('accepted replay must bypass command lookup and event/artifact processing')
+    monkeypatch.setattr(registry, '_handle_event_unlocked', unexpected)
+    monkeypatch.setattr(registry.daemon_store, 'get_command', unexpected)
+    if batch:
+        assert _accept_batch(registry, 'node', 'secret', [report])[0]['status'] == 200
+    else:
+        registry.handle_durable_report('node', terminal, 'secret', report['id'], report['digest'])
+    assert len(indexed) == 33
+
+
+def test_transport_accepts_attention_without_claiming_healthy():
+    from relay.computer.transport import transport_diagnostics
+    snapshot = transport_diagnostics({'state': 'attention', 'causes': ['quarantine'], 'quarantined': 1})
+    assert snapshot['state'] == 'attention'
+    assert not snapshot['recovered']
