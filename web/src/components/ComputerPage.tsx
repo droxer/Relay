@@ -22,7 +22,7 @@ import { useMutationError } from "../hooks/useMutationError";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { ComputerCard } from "./computer/ComputerCard";
+import { LiveComputerCard } from "./computer/ComputerCard";
 import { ConnectComputerDrawer } from "./computer/ConnectComputerDrawer";
 import { ComputerTokenDrawer } from "./computer/ComputerTokenDrawer";
 import { ManageExecutorsDrawer } from "./admin/ManageExecutorsDrawer";
@@ -265,7 +265,7 @@ export function ComputerPage({
           <ul className="computer-list">
             {pagedNodes.items.map((node) => (
               <li key={node.id}>
-                <ComputerCard
+                <LiveComputerCard
                   node={node}
                   onRename={(target) => void handleRenameNode(target)}
                   onManageExecutors={(target) => setManageExecutorsNodeId(target.id)}

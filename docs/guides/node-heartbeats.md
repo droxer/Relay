@@ -157,9 +157,48 @@ the owner that has authority to act.
   detected by lease expiry.
 - A beat refused with any other 4xx is logged and tried again next tick; only
   401/410 stop the daemon — and only from registration, the heartbeat, and
-  the command poll. An event the backend refuses because it names a command,
+  the command poll. A `410` stops it at once: that is the backend's own
+  tombstone. A `401` must repeat on the next request (about half a second
+  later for registration and the poll, a second later for a beat), because an
+  auth proxy or a lagging replica can answer one, and a daemon that stops on
+  it exits successfully and is never restarted. An event the backend refuses because it names a command,
   lease, or run the node does not hold answers `409`, never `401`: the
   credential is fine, and a daemon must not stop over one run's report.
+
+## Reconnecting
+
+Registration and the command poll share one retry loop
+(`withBackendReconnect`, `relay-daemon/src/backend-transport.ts`). Network
+errors, `5xx`, `408`, and `429` retry forever with equal jitter and honor
+`Retry-After`. The first twenty attempts stay at or under 1.5 seconds, which
+covers a backend restart or deploy; after that the ceiling doubles to 15
+seconds, so a fleet does not hammer a backend that has been down for minutes.
+
+A long wait never delays recovery. A heartbeat that gets through after a
+failure wakes the poll loop's wait at once, so a recovered backend is polled
+within one beat rather than one backoff. The daemon also watches for its own
+timers arriving late (`wake-detector.ts`: a tick more than 20 seconds
+overdue), which is what a laptop waking from sleep looks like. On a resume it
+drops the open poll, whose connection the backend has usually closed without
+this side hearing, beats immediately, and polls without waiting; the log says
+`computer resumed after a pause; reconnecting now`.
+
+Once a daemon has registered, a refusal that is not about its credential (a
+proxy's `403` or `404` while the backend deploys) is retried for two minutes
+before it ends the daemon, because ending it stops every run on the computer.
+One that outlasts the grace still drains the daemon and fails. Before the
+first registration the same answer is fatal at once, so a misconfigured
+foreground start fails with its reason. A poll the backend keeps refusing
+after a clean re-registration backs off the same way instead of asking every
+second.
+
+Registration has a 15-second deadline of its own: it carries the runtime
+inventory, and the 2-second deadline other requests share would fail it
+forever on a slow link.
+
+A retry that keeps failing logs its first failure and then one line per 30
+seconds (`attempt`, `outageMs`), and its recovery once
+(`command poll recovered`, `liveness heartbeat recovered`).
 
 ## Command notification recovery
 

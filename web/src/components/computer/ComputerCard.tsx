@@ -12,6 +12,9 @@ import { StateMark } from "../StateMark";
 import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
 import { ClientOutdatedBadge } from "./ClientOutdatedBadge";
+import { ComputerConnectionNotice } from "./ComputerConnectionNotice";
+import { useComputerConnection } from "../../hooks/useComputerConnection";
+import { computerConnection, connectionNeedsNotice, type ComputerConnection } from "../../lib/computerConnection";
 import { HostOsBadge } from "./HostOsBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,6 +63,7 @@ import {
  */
 export function ComputerCard({
   node,
+  connection = computerConnection(node),
   onRename,
   onManageExecutors,
   onShowToken,
@@ -68,6 +72,8 @@ export function ComputerCard({
   t,
 }: {
   node: ControlPanelDaemonNodeRecord;
+  /** The computer's connection reading; liveness alone when not supplied. */
+  connection?: ComputerConnection;
   onRename: (node: ControlPanelDaemonNodeRecord) => void;
   onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
   onShowToken: (node: ControlPanelDaemonNodeRecord) => void;
@@ -107,7 +113,7 @@ export function ComputerCard({
               inline, so no two cards had the same header shape. */}
           <h2 className="computer-card-name" translate="no" title={title}><a href={computerWorkHref(computerId(node))} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); void navigateToAppPath(computerWorkHref(computerId(node))); } }}>{title}</a></h2>
           <div className="computer-card-state">
-            <NodePresence node={node} t={t} withLabel />
+            <NodePresence node={node} t={t} withLabel unsettled={connection.state === "unsettled"} />
             <HostOsBadge node={node} />
             {showStatus ? (
               <TonePill
@@ -189,6 +195,12 @@ export function ComputerCard({
           </DropdownMenu>
         </div>
       </header>
+
+      {/* Anything short of plainly online gets a sentence: what is happening,
+          whether it fixes itself, and the command to run when it does not. */}
+      {connectionNeedsNotice(connection) ? (
+        <ComputerConnectionNotice node={node} connection={connection} t={t} />
+      ) : null}
 
       {/* Active work only appears while there is some: an idle machine says so
           through its presence pill, not through an empty section. */}
@@ -294,4 +306,13 @@ function RuntimeRow({
       </RuntimeMark>
     </li>
   );
+}
+
+/**
+ * The card with its live connection reading: liveness joined with what the
+ * computer's client last reported about its own transport. Kept apart so the
+ * card itself stays a pure rendering of what it is given.
+ */
+export function LiveComputerCard(props: Omit<Parameters<typeof ComputerCard>[0], "connection">) {
+  return <ComputerCard {...props} connection={useComputerConnection(props.node)} />;
 }

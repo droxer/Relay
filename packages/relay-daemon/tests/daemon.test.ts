@@ -3968,6 +3968,8 @@ test("backend reconnect delay uses capped equal jitter", () => {
   assert.equal(backendReconnectDelayMs(1, () => 1), 200);
   assert.equal(backendReconnectDelayMs(4, () => 0), 750);
   assert.equal(backendReconnectDelayMs(20, () => 1), 1500);
+  // Past a restart-length outage the ceiling widens.
+  assert.equal(backendReconnectDelayMs(40, () => 1), 15000);
 });
 
 test("relay daemon reports generated workspace documents in run.completed", async (t: TestContext) => {
@@ -5522,7 +5524,9 @@ for (const rejectedDuring of ["registration", "poll"]) {
         return jsonResponse({}, 401);
       },
     });
-    assert.equal(registrations, 1);
+    // A rejected registration is asked once more before it counts: a lone 401
+    // can come from a proxy, and stopping on it is permanent.
+    assert.equal(registrations, rejectedDuring === "registration" ? 2 : 1);
   });
 }
 
@@ -6657,7 +6661,7 @@ test('an unexpected fatal poll response drains active execution before rejecting
   environment.close = async () => { closed = true; };
   await assert.rejects(runRelayDaemon({
     backendUrl: 'http://relay.test', sandboxId: 'fatal-poll', userId: 'alice',
-    workspacePath: workspace, token: 'node_token', pollIntervalMs: 1,
+    workspacePath: workspace, token: 'node_token', pollIntervalMs: 1, rejectionGraceMs: 0,
     preflight: false, shutdownGraceMs: 1_000, logger: testLogger(), environment,
     fetchFn: async (url, init) => {
       const path = new URL(String(url)).pathname;
