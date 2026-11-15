@@ -24,6 +24,7 @@ __all__ = [
     "WORKSPACE_LAYOUT_TASK",
     "WORKSPACE_LAYOUT_THREAD",
     "recorded_session_workspace",
+    "recorded_task_session_id",
     "recorded_task_workspace",
     "resolve_task_workspace",
     "task_artifacts_dir",
@@ -124,6 +125,25 @@ def _session_computer_identity(
     if not identity and node_id in nodes_by_id:
         identity = computer_id(nodes_by_id[node_id])
     return identity
+
+
+def recorded_task_session_id(task: dict[str, Any], session_store: Any) -> str | None:
+    """Recover the Thread created after the immutable workspace was bound."""
+    binding = task.get("workspaceBinding") or {}
+    if binding.get("sessionId"):
+        return str(binding["sessionId"])
+    for session_id in reversed(task.get("linkedSessionIds") or []):
+        try:
+            session = session_store.get_session(session_id)
+        except (KeyError, FileNotFoundError):
+            continue
+        if session:
+            return str(session_id)
+    if task.get("linkedSessionIds"):
+        raise ValueError(
+            "workspace_unavailable: this task's original thread cannot be recovered."
+        )
+    return None
 
 
 def recorded_session_workspace(
