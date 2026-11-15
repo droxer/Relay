@@ -157,7 +157,9 @@ test(`project directory shows aligned names and Agent counts without Computer id
       }))).toBe(true);
     }
     if (width <= 820) {
-      await expect(row.locator(".project-folder-name")).toHaveCSS("font-size", "17px");
+      // --fs-title is 16px, written in rem, so it computes to 16.0006px.
+      const nameSize = await row.locator(".project-folder-name").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      expect(nameSize).toBeCloseTo(16, 1);
       await expect(row.locator(".project-folder-meta")).toHaveCSS("font-size", "14px");
       const box = (await row.boundingBox())!;
       expect(box.height).toBeGreaterThanOrEqual(76);
