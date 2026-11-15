@@ -206,3 +206,47 @@ def test_unblock_reuses_precreated_project_thread(setup, monkeypatch, trigger):
     [command] = [command for command in commands if command["type"] == "run.start"]
     assert command["sessionId"] == session_id
     assert app.state.task_store.get_task(task["id"])["linkedSessionIds"] == [session_id]
+
+
+@pytest.mark.parametrize("trigger", ["retry", "retry_executed", "unblock_manual", "unblock_scheduler"])
+def test_failed_admitted_task_reuses_original_thread(setup, trigger):
+    app, client, node, agent, project = setup
+    task = client.post("/api/v1/tasks", json={
+        "title": "Retry the admitted task in its original thread",
+        "projectId": project["id"], "assignedAgentId": agent["id"],
+    }).json()
+    started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+    assert started.status_code == 202, started.text
+    assert started.json()["dispatch"]["state"] == "started", started.text
+    session_id = started.json()["session"]["id"]
+    binding = app.state.task_store.get_task(task["id"])["workspaceBinding"]
+    token = f"token_{node['id']}"
+    [command] = app.state.registry.take_commands(node["id"], token)
+    event_fields = {
+        "commandId": command["id"],
+        "leaseId": command["leaseId"], "sessionId": session_id,
+        "runId": command["runId"], "agent": command["agent"],
+    }
+    if trigger == "retry_executed":
+        app.state.registry.handle_event(node["id"], {
+            "type": "run.executing", **event_fields,
+        }, token)
+    app.state.registry.handle_event(node["id"], {
+        "type": "run.failed", **event_fields,
+        "exitCode": 1, "error": "Agent failed",
+    }, token)
+    assert app.state.task_store.get_task(task["id"])["status"] == "blocked"
+    if trigger.startswith("unblock"):
+        unblocked = client.patch(f"/api/v1/tasks/{task['id']}", json={"action": "unblock"})
+        assert unblocked.status_code == 200, unblocked.text
+    if trigger == "unblock_scheduler":
+        assert asyncio.run(app.state.task_scheduler.tick()).dispatched == 1
+    else:
+        retried = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        assert retried.status_code == 202, retried.text
+        assert retried.json()["dispatch"]["state"] == "started", retried.text
+    [retried_command] = app.state.registry.take_commands(node["id"], token)
+    assert retried_command["sessionId"] == session_id
+    current = app.state.task_store.get_task(task["id"])
+    assert current["linkedSessionIds"] == [session_id]
+    assert current["workspaceBinding"] == binding

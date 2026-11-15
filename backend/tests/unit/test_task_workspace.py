@@ -1,4 +1,5 @@
 from relay.tasks.workspace import (
+    recorded_task_session_id,
     resolve_task_workspace,
     task_artifacts_dir,
     task_workspace_subpath,
@@ -9,6 +10,31 @@ TASK_CAPABLE_NODE = {"capabilities": ["workspace-scope", "thread-workspaces", "t
 LAYOUT_NODE = {"capabilities": [*TASK_CAPABLE_NODE["capabilities"], "artifact-layout"]}
 OLD_NODE = {"capabilities": ["workspace-scope", "thread-workspaces"]}
 OCCURRENCE = {"id": "tsk_run", "sourceRoutineId": "tsk_routine"}
+
+
+def test_task_thread_recovery_preserves_immutable_binding_and_skips_missing_history():
+    from types import SimpleNamespace
+
+    sessions = {"original": {"id": "original"}}
+    store = SimpleNamespace(get_session=lambda key: sessions[key])
+    binding = {"computerId": "node:one", "layout": "task", "subpath": "tasks/one"}
+    task = {"workspaceBinding": binding, "linkedSessionIds": ["original", "deleted"]}
+    assert recorded_task_session_id(task, store) == "original"
+    assert task["workspaceBinding"] == binding
+    assert "sessionId" not in binding
+    assert recorded_task_session_id({"workspaceBinding": {
+        **binding, "sessionId": "pinned",
+    }, "linkedSessionIds": ["original"]}, store) == "pinned"
+    assert recorded_task_session_id({"workspaceBinding": binding}, store) is None
+
+
+def test_missing_task_thread_history_cannot_silently_create_a_replacement():
+    from types import SimpleNamespace
+    import pytest
+
+    store = SimpleNamespace(get_session=lambda key: None)
+    with pytest.raises(ValueError, match="original thread cannot be recovered"):
+        recorded_task_session_id({"linkedSessionIds": ["deleted"]}, store)
 
 
 def test_backlog_task_gets_its_own_directory():

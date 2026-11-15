@@ -18,7 +18,7 @@ from ...agents.routing import (
     AgentRoutingError,
     resolve_legacy_session_computer_id,
 )
-from ...tasks.workspace import recorded_task_workspace, resolve_task_workspace
+from ...tasks.workspace import recorded_task_session_id, recorded_task_workspace, resolve_task_workspace
 from .state import NodeBackendState
 
 
@@ -110,13 +110,14 @@ class RunTargetValidationMixin(NodeBackendState):
             node=node,
             project_snapshot=project,
         )
-        if binding and binding.get("sessionId"):
+        session_id = recorded_task_session_id(task, self.registry.store)
+        if session_id:
             requested_session = request.get("sessionId")
-            if requested_session and requested_session != binding.get("sessionId"):
+            if requested_session and requested_session != session_id:
                 raise ValueError(
                     "workspace_unavailable: this task must continue in its original thread."
                 )
-            request = {**request, "sessionId": binding["sessionId"]}
+            request = {**request, "sessionId": session_id}
         if request.get("sessionId"):
             existing = self.registry.store.get_session(request["sessionId"])
             if layout in ("task", "project") and (
