@@ -16,7 +16,7 @@
   top: var(--list-head-h);
   z-index: 1;
   padding: var(--sp-2) var(--sp-3);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   background: var(--surface-0);
 }
 

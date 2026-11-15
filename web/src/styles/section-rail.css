@@ -38,7 +38,7 @@
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
   /* Shell zone role (see --surface-list in palette.css): every list rail —
      threads, agents, teams — sits on the same elevation step between the nav
      rail and the detail canvas. */

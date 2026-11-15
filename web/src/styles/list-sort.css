@@ -90,13 +90,9 @@ th[data-slot="table-head"] {
    phone. The menu is the same state behind a different control, so it must
    appear exactly where the header vanishes and never alongside it.
 
-   The two tiers below are not a choice, they are the two widths the tables
-   already restack at: the backlog and routine lists at the app-wide 820 tier
-   (backlog-list.css hides `.backlog-rows-head`), and the admin tables at 719
-   (admin-v2-users.css hides `.adm-emp-cols`, admin-v2-nodes.css hides
-   `.adm-node-cols`). Both rules are here rather than in those three
-   stylesheets so the pair can be read — and kept in step — at once. Move a
-   table's restack breakpoint and you have to move its line here too. */
+   The tier below is not a choice: it is the app-wide 820 width the tables
+   already restack at (backlog-list.css hides `.backlog-rows-head` there).
+   Move a table's restack breakpoint and you have to move its line here too. */
 .list-sort-menu { display: none; }
 
 @media (max-width: 820px) {
@@ -124,7 +120,7 @@ th[data-slot="table-head"] {
   justify-content: space-between;
   gap: var(--sp-2) var(--sp-4);
   padding: var(--sp-3) var(--page-gutter);
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 /* The count is the part that earns its place on every page — it is the only

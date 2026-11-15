@@ -34,7 +34,7 @@
   border-radius: var(--r-2);
   background: var(--surface-2);
   color: var(--ink-1);
-  box-shadow: inset 0 0 0 0.5px var(--line-2);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
 }
 
 /* Stacked workspace header stays compact in the agents detail pane. */
@@ -144,7 +144,7 @@
   flex-wrap: wrap;
   gap: 0;
   margin: 0;
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .record-band-cell {
@@ -155,7 +155,7 @@
   justify-content: center;
   gap: var(--sp-1-5);
   padding: var(--sp-3) var(--sp-4);
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
 }
 
 .record-band-cell:last-child {
@@ -185,7 +185,7 @@
      selector out-ranks the panel's `border: 0`, ruling under its first two
      facts on every phone-width record. */
   .record-band:not(.record-band--panel) > .record-band-cell:nth-child(-n + 2):nth-last-child(n + 3) {
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
   }
 }
 
@@ -250,7 +250,7 @@
 .project-workspace-page .record-band--title {
   margin-left: var(--sp-1);
   padding-left: var(--sp-4);
-  border-left: 0.5px solid var(--line-2);
+  border-left: var(--hairline-soft);
 }
 
 .record-band--title .record-band-cell {
@@ -333,7 +333,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
 }
 
 .workspace-pane-preview {
@@ -356,7 +356,7 @@
   align-items: center;
   gap: var(--sp-3);
   min-height: var(--control-h);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   padding: 0 var(--sp-4);
   background: var(--surface-0);
 }
@@ -418,7 +418,7 @@
 }
 
 .workspace-activity-section {
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .workspace-activity-section:last-child {
@@ -430,7 +430,7 @@
   align-items: center;
   gap: var(--sp-3);
   min-height: var(--control-h);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   padding: 0 var(--sp-4);
 }
 
@@ -545,7 +545,7 @@
      hairline is what makes it read as one, so it only appears once the two
      actually sit side by side. */
   .workspace-dossier-rail {
-    border-left: 0.5px solid var(--line-2);
+    border-left: var(--hairline-soft);
     padding-left: var(--sp-6);
   }
 }
@@ -576,7 +576,7 @@
 .workspace-dossier-stamp {
   margin: 0;
   padding-top: var(--sp-4);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
   color: var(--ink-4);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -591,7 +591,7 @@
   align-items: start;
   gap: var(--sp-5);
   padding-top: var(--sp-5);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 /* The band's own rule is the separator. A first child that also draws one
@@ -626,7 +626,7 @@
   align-items: center;
   gap: var(--sp-4);
   padding-bottom: var(--sp-5);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .agent-dossier-identity-meta {
@@ -670,7 +670,7 @@
   gap: var(--sp-3) var(--sp-4);
   align-items: start;
   padding: var(--sp-3) 0;
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .workspace-profile .adm-cred-row:last-of-type {
@@ -692,7 +692,7 @@
 .workspace-profile .adm-cred-note {
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
   color: var(--ink-3);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
@@ -753,7 +753,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--sp-5) var(--sp-4);
-  border-left: 0.5px solid var(--line-1);
+  border-left: var(--hairline);
 }
 
 /* Panel variant: one row per fact, the label in a fixed column so the values
@@ -795,7 +795,7 @@
     order: -1;
     padding: var(--sp-3) var(--page-gutter);
     border-left: 0;
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
   }
 
   /* Folded above the body, the facts stay a left-aligned label/value list —

@@ -9,7 +9,7 @@
   flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-6) clamp(var(--sp-4), 4vw, var(--sp-8));
-  border-bottom: 1px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .detail-skeleton .list-skeleton-bar {

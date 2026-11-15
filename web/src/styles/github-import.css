@@ -22,7 +22,7 @@
   align-items: flex-start;
   gap: var(--sp-3);
   padding-block: var(--sp-5);
-  border-block-end: 1px solid var(--line-1);
+  border-block-end: var(--hairline);
 }
 
 .github-connection-title {
@@ -39,20 +39,6 @@
 .github-connection-title svg { width: 1.125rem; height: 1.125rem; }
 .github-connection p { margin: 0; font: var(--type-body-sm); }
 .github-connection-hint { color: var(--ink-3); }
-
-/* The available task leads; the future connection stays a supporting note. */
-.github-import-connection-note .github-connection {
-  gap: var(--sp-2);
-  padding-block: var(--sp-4) 0;
-  border-block-start: 1px solid var(--line-2);
-  border-block-end: 0;
-}
-
-.github-import-connection-note .github-connection-title {
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  color: var(--ink-2);
-}
 
 /* Settings → Account → Connections: the same connection as one row of a
    framed option list (GitHubConnectionRow), beside the drawer's note. */
@@ -114,7 +100,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding-bottom: var(--sp-2);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .github-import-select-all {
@@ -148,7 +134,7 @@
   align-items: first baseline;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-2);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   border-radius: var(--r-2);
   transition: background-color var(--t-fast) var(--ease);
 }
@@ -224,7 +210,7 @@ a.github-import-row-title:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 var(--sp-1);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-1);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);

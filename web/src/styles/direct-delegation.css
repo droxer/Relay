@@ -5,7 +5,7 @@
   margin: var(--sp-6) 0 0;
   padding: var(--sp-5) 0 0;
   border: 0;
-  border-top: 1px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .direct-delegation h3 {

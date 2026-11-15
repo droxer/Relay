@@ -23,7 +23,7 @@
   align-items: stretch;
   gap: var(--sp-5);
   padding: 0 var(--sp-4);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 /* One toolbar carries scope, location, thread, and source. It replaced four
@@ -35,7 +35,7 @@
   gap: var(--sp-2) var(--sp-3);
   /* One dense control row plus the bar's own block padding. */
   min-height: calc(var(--control-h-xs) + 2 * var(--sp-2));
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
   padding: var(--sp-2) var(--sp-4);
 }
 
@@ -173,7 +173,7 @@
   /* Geometry beats the Button base utilities (h-(--control-h)). */
   height: auto;
   border: 0;
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   background: transparent;
   padding: var(--sp-3) var(--sp-4);
   color: var(--ink-1);
@@ -252,7 +252,7 @@
   width: 100%;
   min-height: var(--control-h-xs);
   border: 0;
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   /* Opaque on purpose: this row is sticky over the scrolling list, so it
      takes a solid surface rung rather than a wash the names show through. */
   background: var(--surface-1);
@@ -367,7 +367,7 @@
 
 .code-view-toolbar {
   display: inline-flex;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   overflow: hidden;
 }
@@ -384,7 +384,7 @@
 }
 
 .code-view-toggle + .code-view-toggle {
-  border-left: 0.5px solid var(--line-1);
+  border-left: var(--hairline);
 }
 
 .code-view-toggle:hover {
@@ -410,7 +410,7 @@
   flex-direction: column;
   min-height: 0;
   margin: 0;
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   /* border-radius owned by atelier.css (--r-2, shared with
      .workspace-code-view / .code-view-scroll). */
   background: var(--surface-2);
@@ -457,7 +457,7 @@
   color: var(--ink-4);
   text-align: right;
   user-select: none;
-  border-right: 0.5px solid var(--line-2);
+  border-right: var(--hairline-soft);
   white-space: pre;
 }
 
@@ -479,7 +479,7 @@
 .html-preview {
   width: 100%;
   min-height: 60vh;
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-3);
   background: var(--dark-ink);
 }

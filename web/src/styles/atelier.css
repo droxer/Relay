@@ -46,7 +46,7 @@
 .chat-header,
 .page-header {
   position: relative;
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
   background: var(--surface-header-bg);
 }
 
@@ -128,7 +128,7 @@ html[data-theme="dark"] .page-header {
 /* Mobile — same header grammar, no extra chrome */
 @media (max-width: 820px) {
   .mobile-topbar {
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
     background: var(--surface-header-bg);
   }
 

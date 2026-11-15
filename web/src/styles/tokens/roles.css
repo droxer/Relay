@@ -26,6 +26,14 @@
      Was hand-mixed identically in backlog.css, teams.css, and admin-v2-views.css. */
   --row-hover: color-mix(in srgb, var(--ink-1) 4%, transparent);
 
+  /* The structural edge — every divider, card frame and panel border. One
+     spelling, so a sheet never has to choose between 0.5px, --sp-hairline and
+     1px again; --hairline-soft is the quieter rule inside a framed group.
+     A deliberate full-pixel edge (the composer card, the markdown table
+     frame) writes `1px solid` and says why beside it. */
+  --hairline: var(--sp-hairline) solid var(--line-1);
+  --hairline-soft: var(--sp-hairline) solid var(--line-2);
+
   /* Hairline under the pointer. Cards and rows that are themselves targets
      strengthen their edge on hover rather than washing their fill, so a hovered
      card never reads as loud as a selected one. */

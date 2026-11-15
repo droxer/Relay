@@ -4,19 +4,6 @@
 
 /* ---- profile dossier (workspace variant) ---------------------------- */
 
-.workspace-dossier-name-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-
-.workspace-dossier-rename {
-  display: flex;
-  max-width: 320px;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-
 /* The profile's durable inner character. Its slightly editorial treatment
    keeps identity separate from runtime configuration. */
 .agent-personality-card {
@@ -26,7 +13,7 @@
   gap: var(--sp-5);
   padding: var(--sp-6);
   overflow: hidden;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: transparent;
   transition:
@@ -109,14 +96,14 @@
   position: relative;
   z-index: 1;
   padding: var(--sp-5) 0 0;
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .agent-personality-empty {
   position: relative;
   z-index: 1;
   padding-top: var(--sp-5);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 /* One line, and it is a sentence rather than a heading: the bold tier used to
@@ -139,7 +126,7 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding-top: var(--sp-5);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .agent-personality-textarea {
@@ -194,57 +181,6 @@
   .agent-profile-fields {
     grid-template-columns: 1fr;
   }
-}
-
-.workspace-dossier-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-1);
-  min-width: 28px;
-  height: var(--control-h-xs);
-  padding: 0 var(--sp-2);
-  border: 0.5px solid var(--line-2);
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition:
-    color var(--t-fast) var(--ease),
-    border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease);
-}
-
-.workspace-dossier-icon-btn:hover {
-  color: var(--ink-1);
-  border-color: var(--line-1);
-  background: var(--surface-1);
-}
-
-.workspace-dossier-icon-btn:disabled {
-  opacity: var(--opacity-disabled);
-  cursor: not-allowed;
-}
-
-/* The name field of the facts rail. It is a rail VALUE, not a title: the page
-   header already prints this name at display scale, so a second display-tier
-   copy one band below would fight it. It therefore rides the same
-   --type-body-sm size as its sibling .workspace-dossier-field-value and marks
-   itself as the identity field with weight alone.
-   The rail is the only place this class renders (verified against the DOM on
-   /teams/<id>); a second display-tier rule for the non-rail case used to
-   sit here describing markup that does not exist. */
-.workspace-dossier-name-value {
-  margin: 0;
-  color: var(--ink-1);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-.workspace-dossier-rename-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--sp-2);
 }
 
 .workspace-dossier-section-title {
@@ -322,7 +258,7 @@
 
   .workspace-pane {
     border-right: 0;
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
     min-height: 240px;
   }
 
@@ -418,7 +354,7 @@
   margin: var(--sp-3) 0 0;
   padding: 0;
   list-style: none;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   overflow: hidden;
 }
@@ -430,7 +366,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--sp-1) var(--sp-4);
   padding: var(--sp-3) var(--sp-4);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .agent-skill:last-child {

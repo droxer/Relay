@@ -14,7 +14,7 @@
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-2) var(--sp-3);
   background: var(--surface-rail);
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
   color: var(--ink-2);
   min-height: 0;
   overflow: hidden;
@@ -60,7 +60,7 @@
   width: calc(var(--control-h) - var(--sp-1));
   height: calc(var(--control-h) - var(--sp-1));
   flex: 0 0 calc(var(--control-h) - var(--sp-1));
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-0);
 }
@@ -163,7 +163,7 @@
   width: 100%;
   padding: var(--sp-2) 0 0;
   /* The footer stays part of the rail instead of reading as a card. */
-  border-width: 0.5px 0 0;
+  border-width: var(--sp-hairline) 0 0;
   border-style: solid;
   border-color: var(--line-1);
   border-radius: 0;
@@ -249,7 +249,7 @@
   border-radius: var(--r-2);
   color: var(--ink-3);
   background: transparent;
-  border: 0.5px solid transparent;
+  border: var(--sp-hairline) solid transparent;
   font: inherit;
   text-decoration: none;
   -webkit-appearance: none;
@@ -314,7 +314,7 @@
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
   background: var(--surface-0);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   color: var(--ink-1);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);

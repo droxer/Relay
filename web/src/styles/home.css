@@ -131,11 +131,11 @@
   padding: 0;
   list-style: none;
   overflow: hidden;
-  border-top: var(--sp-hairline) solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .home-panel > li + li {
-  border-top: var(--sp-hairline) solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 /* ── Up next ─────────────────────────────────────────────────────────── */
@@ -172,7 +172,7 @@
 }
 
 .home-item + .home-item {
-  border-top: var(--sp-hairline) solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .home-item:hover {
@@ -326,7 +326,7 @@
   flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-5);
-  border-top: var(--sp-hairline) solid var(--line-2);
+  border-top: var(--hairline-soft);
   color: var(--ink-3);
   font: var(--type-body-sm);
 }
@@ -413,7 +413,7 @@ a.home-count:hover .home-count-label {
 
 .home-panel.home-setup > li + li {
   border-top: 0;
-  border-left: var(--sp-hairline) solid var(--line-2);
+  border-left: var(--hairline-soft);
 }
 
 .home-setup-total {
@@ -603,7 +603,7 @@ a.home-count:hover .home-count-label {
 /* A quiet frame keeps the recommendation distinct from the open lists. */
 .home-focus {
   margin-bottom: var(--sp-5);
-  border: var(--sp-hairline) solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
   overflow: hidden;
@@ -615,7 +615,7 @@ a.home-count:hover .home-count-label {
   align-items: baseline;
   gap: var(--sp-1) var(--sp-3);
   padding: var(--sp-3) var(--sp-5);
-  border-bottom: var(--sp-hairline) solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   color: var(--ink-2);
   font: var(--type-body-sm);
 }
@@ -634,7 +634,7 @@ a.home-count:hover .home-count-label {
 
 .home-plan-list > li + li,
 .home-ready-row + .home-ready-row {
-  border-top: var(--sp-hairline) solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .home-plan-row,
@@ -673,7 +673,7 @@ a.home-count:hover .home-count-label {
 .home-plan-note {
   margin: 0;
   padding: var(--sp-3) var(--sp-5);
-  border-top: var(--sp-hairline) solid var(--line-2);
+  border-top: var(--hairline-soft);
   color: var(--ink-3);
   font: var(--type-meta);
 }
@@ -723,7 +723,7 @@ a.home-count:hover .home-count-label {
 .home-data-state {
   max-width: 1280px;
   margin-inline: auto;
-  border: var(--sp-hairline) solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
 }

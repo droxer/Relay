@@ -10,7 +10,7 @@
   min-width: 0;
   margin: 0 auto -1px;
   padding: var(--sp-1) var(--sp-2) calc(var(--sp-1) + 1px);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-bottom: 0;
   border-radius: var(--r-3) var(--r-3) 0 0;
   background: var(--surface-1);

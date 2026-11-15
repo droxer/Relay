@@ -15,7 +15,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  border-left: 0.5px solid var(--line-1);
+  border-left: var(--hairline);
   background: var(--surface-0);
   overflow: hidden;
 }
@@ -78,7 +78,7 @@
   gap: var(--sp-2);
   min-height: var(--header-h);
   padding-inline: var(--sp-4);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .thread-space-title {
@@ -196,7 +196,7 @@
   align-items: stretch;
   gap: var(--sp-5);
   padding: 0 var(--sp-3);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 /* ---- project workspace inside the panel ----------------------------- */
@@ -229,7 +229,7 @@
   gap: var(--sp-2);
   min-width: 0;
   padding: var(--sp-2) var(--sp-3);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 /* A file's header IS the panel's header row, so it stands at least the shared

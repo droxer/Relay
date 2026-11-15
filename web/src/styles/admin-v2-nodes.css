@@ -127,7 +127,7 @@
   height: var(--avatar-xs);
   border-radius: var(--r-1);
   background: var(--surface-2);
-  box-shadow: inset 0 0 0 0.5px var(--line-2);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
   color: var(--ink-1);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -165,7 +165,7 @@
   /* The card recipe (ui/card.tsx): --sp-5 padding on the --surface-1 card
      plane — the same as /computers' .computer-card, the same entity. */
   padding: var(--sp-5);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
   transition: border-color var(--t-fast) var(--ease);
@@ -185,7 +185,7 @@
   align-items: center;
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-2);
   background: var(--surface-1);
   font-size: var(--fs-2);
@@ -221,7 +221,7 @@
   gap: var(--sp-1);
   height: 20px;
   padding: 0 var(--sp-2);
-  border: 0.5px solid transparent;
+  border: var(--sp-hairline) solid transparent;
   border-radius: var(--r-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -308,7 +308,7 @@
   border-radius: var(--r-2);
   color: var(--ink-3);
   background: var(--surface-2);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -403,7 +403,7 @@
   position: absolute;
   inset: 0;
   border-radius: var(--r-full);
-  border: 0.5px solid var(--presence);
+  border: var(--sp-hairline) solid var(--presence);
   background: transparent;
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
@@ -520,7 +520,7 @@
      unequal-content cards (stretched to equal height by the grid). */
   margin-top: auto;
   padding-top: var(--sp-3);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }

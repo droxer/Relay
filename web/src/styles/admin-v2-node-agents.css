@@ -104,62 +104,6 @@
   border-radius: var(--r-3);
 }
 
-/* Fill and the identity ink. The rest — the --chip-h height, gap, inline
-   pad, hairline, radius, label type — comes from Badge (variant="state"),
-   which this rule used to restate in full. The fill is the one chip plane,
-   --control-fill. */
-.adm-agent-chip {
-  background: var(--control-fill);
-  color: var(--ink-3);
-  flex: none;
-}
-
-.adm-agents .adm-agent-chip {
-  flex: none;
-}
-
-/* The agent name is identity, not status — it stays the chip's neutral
-   ink/muted color regardless of tone. Only the mark carries the status hue,
-   matching "agents are differentiated by shape, never by status/brand
-   color" everywhere else in the app.
-
-   The mark is a StateMark now, so the shapes this block used to draw by hand
-   come from the shared grammar instead: `bad` is a ring because StateMark
-   makes every bad state a ring, and an agent whose computer is dark asks for
-   `shape="ring"` at the call site. All that is left here is pointing the
-   mark's accent at the chip's tone. */
-.adm-agent-chip .state-mark {
-  --mark-accent: var(--tone);
-}
-
-/* A dark computer reads hollow even though its last report said ready, and
-   in the muted ink rather than the calm --ok green. */
-.adm-agent-chip[data-presence="offline"].tone-good .state-mark {
-  --mark-accent: var(--ink-4);
-}
-
-/* Official vendor glyph — identity, alongside the name label. */
-.adm-agent-chip-mark {
-  flex: 0 0 auto;
-  display: inline-grid;
-  place-items: center;
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-  border-radius: var(--r-full);
-  opacity: var(--opacity-mark);
-}
-
-/* Executor hue tints retired — one neutral plate behind every vendor
-   glyph; the glyph shape alone carries identity. */
-.adm-agent-chip .adm-agent-chip-mark {
-  background: var(--surface-2);
-}
-.adm-agent-chip.is-disabled {
-  opacity: var(--opacity-disabled);
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-}
-
 /* margin-top is 0 in the base rule now; this only adds the trailing space
    before the toggle list. */
 .adm-agent-drawer-note {
@@ -175,7 +119,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   background: var(--surface-0);
   overflow: hidden;
@@ -195,7 +139,7 @@
 }
 
 .adm-agent-toggle-item + .adm-agent-toggle-item {
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 /* A staged change is the row the reader has to remember to save: a stronger

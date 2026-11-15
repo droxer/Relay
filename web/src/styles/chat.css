@@ -25,7 +25,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding: 0 var(--page-gutter);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
   background: var(--surface-0);
 }
 
@@ -302,7 +302,7 @@
 .transcript-phase::after {
   content: "";
   flex: 1;
-  height: 0.5px;
+  height: var(--sp-hairline);
   background: var(--line-1);
 }
 
@@ -425,7 +425,7 @@
   align-self: start;
   color: var(--ink-1);
   background: var(--surface-3);
-  border: 0.5px solid var(--ink-4);
+  border: var(--sp-hairline) solid var(--ink-4);
   /* Agents are squares; the human is a circle. Accent hues are reserved for action
      and live work, so the human-vs-machine tell is the silhouette, not a
      fill. Agent identity is the profile image inside — so every variant below
@@ -632,7 +632,7 @@
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface-1);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-3);
 }
 
@@ -652,7 +652,7 @@
 /* Only a card with a brief above needs the rule between the two. */
 .automation-opening-brief + .automation-opening-events {
   padding-top: var(--sp-3);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .automation-opening-events-head {
@@ -829,7 +829,7 @@
   align-items: center;
   gap: var(--sp-1-5);
   padding: 0 var(--sp-2);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   color: var(--ink-3);
   font: var(--type-label);
@@ -903,7 +903,7 @@
   width: var(--sp-7);
   height: var(--sp-7);
   padding: 0;
-  border: 0.5px solid transparent;
+  border: var(--sp-hairline) solid transparent;
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-3);
