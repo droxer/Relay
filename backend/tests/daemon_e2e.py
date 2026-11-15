@@ -41,7 +41,8 @@ class DaemonE2E:
         self.app = create_app(str(root))
         self.ctx = self.app.state.context
         self.start_server()
-        self.client = httpx.Client(base_url=self.url, timeout=20)
+        # Loopback only: never route the harness through a developer's proxy env.
+        self.client = httpx.Client(base_url=self.url, timeout=20, trust_env=False)
         self.process = None
         self.log = None
 

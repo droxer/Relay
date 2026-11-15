@@ -72,7 +72,9 @@ def test_official_mcp_client_discovers_and_calls_hosted_tools(managed_env):
     with _http_transport(app) as url:
 
         async def call():
-            async with httpx.AsyncClient(headers={"Authorization": f"Bearer {grant['token']}"}) as http:
+            async with httpx.AsyncClient(
+                headers={"Authorization": f"Bearer {grant['token']}"}, trust_env=False
+            ) as http:
                 async with streamable_http_client(url + "/api/v1/mcp", http_client=http) as (read, write, _):
                     async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=10)) as session:
                         initialized = await session.initialize()
