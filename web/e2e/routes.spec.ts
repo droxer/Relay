@@ -116,12 +116,12 @@ async function serveRouteWork(page: import("@playwright/test").Page) {
 const routeSurfaces = [
   { path: "/projects", title: "Projects", selected: "projects", rows: 0, folders: 2 },
   { path: "/projects/launch", title: "Projects", selected: "projects", rows: 0, folders: 2 },
-  { path: "/projects/launch/threads/project-task", title: "Activity", selected: "threads", rows: 7, folders: 0 },
-  { path: "/projects/launch/threads/project-automation", title: "Activity", selected: "threads", rows: 7, folders: 0 },
-  { path: "/projects/launch/new", title: "Activity", selected: "threads", rows: 7, folders: 0 },
-  { path: "/threads", title: "Activity", selected: "threads", rows: 7, folders: 0 },
-  { path: "/computers/route-computer/threads/task", title: "Activity", selected: "threads", rows: 7, folders: 0 },
-  { path: "/computers/route-computer/threads/automation", title: "Activity", selected: "threads", rows: 7, folders: 0 },
+  { path: "/projects/launch/threads/project-task", title: "Activities", selected: "threads", rows: 7, folders: 0 },
+  { path: "/projects/launch/threads/project-automation", title: "Activities", selected: "threads", rows: 7, folders: 0 },
+  { path: "/projects/launch/new", title: "Activities", selected: "threads", rows: 7, folders: 0 },
+  { path: "/threads", title: "Activities", selected: "threads", rows: 7, folders: 0 },
+  { path: "/computers/route-computer/threads/task", title: "Activities", selected: "threads", rows: 7, folders: 0 },
+  { path: "/computers/route-computer/threads/automation", title: "Activities", selected: "threads", rows: 7, folders: 0 },
 ] as const;
 
 for (const mobile of [false, true]) {
@@ -170,7 +170,7 @@ test("project thread, Projects link, and browser history keep their matching lis
   await expect(page.locator('#thread-panel .project-folder')).toHaveCount(2);
   await expect(page.locator('#thread-panel .conversation-row')).toHaveCount(0);
   await page.goBack();
-  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Activity");
+  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Activities");
   await expect(page.locator('.sidenav-nav [data-nav="threads"]')).toHaveAttribute("aria-current", "page");
   await page.goForward();
   await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Projects");
@@ -187,7 +187,7 @@ test("project thread creation and mobile Back stay in Threads", async ({ page, i
   await expect(page.locator("#thread-panel .conversation-row")).toHaveCount(7);
   await page.locator("#thread-panel").getByRole("button", { name: "New chat", exact: true }).click();
   await expect(page).toHaveURL(/\/threads\/new$/);
-  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Activity");
+  await expect(page.locator('#thread-panel h2.page-header-title')).toHaveText("Activities");
   await expect(page.locator('.sidenav-nav [data-nav="threads"]')).toHaveAttribute("aria-current", "page");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/projects/launch/threads/project-automation");
