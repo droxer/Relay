@@ -1,8 +1,7 @@
 import type { AgentName, UserAgent, LogicalAgentAvailability } from "../types.js";
+import { runtimeLabel } from "./runtimeLabel.ts";
 
-function fallbackExecutorLabel(agent: AgentName): string {
-  return agent.charAt(0).toUpperCase() + agent.slice(1);
-}
+const fallbackExecutorLabel = runtimeLabel;
 
 /** Matches backend agent routing: ready and busy placements can take work. */
 export function isLogicalAgentRoutable(

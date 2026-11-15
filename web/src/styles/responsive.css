@@ -537,7 +537,13 @@
     width: auto;
     min-width: 0;
     height: var(--tabbar-h);
-    flex: 1 1 0;
+    /* Content basis, not equal shares: six equal tabs left "Automations"
+       60px of the 72px it needs, while every label together fills under
+       300px of a 390px bar. Each tab now starts from its label and splits
+       what is left, so no label ellipsizes at phone width and the shortest
+       tab still clears the 44px target; the label's ellipsis stays as the
+       floor for a larger text size. */
+    flex: 1 1 auto;
     flex-direction: column;
     justify-content: center;
     gap: var(--sp-0-5);

@@ -22,9 +22,12 @@ export function threadStatusLabelKey(session: RelaySession): string {
       ? `thread.execution_${state}` : `thread.statuses.${state}`;
 }
 
-export function ThreadStatusBadge({ session, compact = false }: {
+export function ThreadStatusBadge({ session, compact = false, iconOnly = false }: {
   session: RelaySession;
   compact?: boolean;
+  /** Draw only the tinted mark, for a row whose own text already states the
+   * status: the label stays as the badge's tooltip and accessible name. */
+  iconOnly?: boolean;
 }) {
   const { t } = useTranslation();
   const state = threadActivityState(session);
@@ -38,10 +41,11 @@ export function ThreadStatusBadge({ session, compact = false }: {
       variant={variant}
       size={compact ? "compact" : "default"}
       data-state={state}
+      data-icon-only={iconOnly ? "true" : undefined}
       title={label}
     >
       <NavThreads aria-hidden="true" />
-      {label}
+      {iconOnly ? <span className="sr-only">{label}</span> : label}
     </Badge>
   );
 }

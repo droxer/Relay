@@ -163,7 +163,10 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       >
         <span className="conversation-copy">
           <span className="conversation-topline">
-            {hasLifecycle ? <TaskStatusIcon status={iconStatus} /> : <ThreadStatusBadge session={session} compact />}
+            {hasLifecycle ? <TaskStatusIcon status={iconStatus} />
+              /* A chat whose subline states its status keeps only the badge's
+                 tinted mark: spelling it twice cost the title its width. */
+              : <ThreadStatusBadge session={session} compact iconOnly={Boolean(subline && status)} />}
             <span className="conversation-name">
               {item.origin ? <span className="conversation-ref tnum">{item.origin.ref}</span> : null}
               <strong title={label}>{label}</strong>

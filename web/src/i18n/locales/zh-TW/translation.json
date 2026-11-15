@@ -1883,9 +1883,9 @@
     "theme": {
       "group": "主題",
       "light": "淺色",
-      "light_sub": "米白畫布",
+      "light_sub": "霧灰畫布",
       "dark": "深色",
-      "dark_sub": "深黑畫布",
+      "dark_sub": "藍炭畫布",
       "system": "系統",
       "system_sub": "跟隨系統外觀"
     }
@@ -3509,7 +3509,8 @@
     "password_mismatch": "兩次輸入的密碼不一致，請重新輸入。",
     "password_same": "新密碼不能與當前密碼相同。",
     "save_error": "儲存失敗，請重試。",
-    "connections": "關聯帳戶"
+    "connections": "關聯帳戶",
+    "manage_connections": "管理連線"
   },
   "github_import": {
     "manage_connections": "管理連線",

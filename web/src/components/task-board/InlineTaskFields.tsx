@@ -198,7 +198,11 @@ export function InlineAssignee({
   const chip = (
     <TaskAssignee task={task} ready={display.ready} agentDisplayName={display.name} agentImageUrl={display.imageUrl} />
   );
-  if (readOnly || !taskAssignmentEditable(task)) return chip;
+  // A read-only chip takes the same inline-field box as the trigger, so a
+  // column mixing editable and read-only rows keeps one left edge.
+  if (readOnly || !taskAssignmentEditable(task)) {
+    return <span className="inline-field inline-field--static inline-field--assignee">{chip}</span>;
+  }
 
   const options = taskAssignmentOptions({
     project,

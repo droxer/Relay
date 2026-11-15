@@ -4,7 +4,8 @@
    The control room, read as one instrument. Chrome stays neutral ink; the
    data carries colour, and each hue keeps one meaning:
 
-     --series-1  lagoon teal   volume, completed threads, output tokens
+     --series-1  lagoon teal   volume, output tokens
+     --ok                      completed threads, ready computers
      --series-2  sky           input tokens
      --series-3  pale lagoon   cache writes — the bulk, kept quiet
      --series-rest  grey       stopped or still-open threads
@@ -691,10 +692,18 @@
   flex-wrap: wrap;
 }
 
+/* A date stays on one line ("Nov 3", never "Nov" over "3"). The charts label
+   at most seven buckets (labelEvery), so a label has the empty columns either
+   side of it to spill into; flex centring keeps the spill even on both sides,
+   where an overflowing centred line would fall back to the start. */
 .adm-dash .adm-chart-x span {
-  white-space: normal;
-  overflow-wrap: anywhere;
+  display: flex;
+  justify-content: center;
+  white-space: nowrap;
 }
+
+.adm-dash .adm-chart-x span:first-child { justify-content: flex-start; }
+.adm-dash .adm-chart-x span:last-child { justify-content: flex-end; }
 
 @media (max-width: 900px) {
   .adm-dash {

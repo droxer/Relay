@@ -1883,9 +1883,9 @@
     "theme": {
       "group": "主题",
       "light": "浅色",
-      "light_sub": "米白画布",
+      "light_sub": "雾灰画布",
       "dark": "深色",
-      "dark_sub": "深黑画布",
+      "dark_sub": "蓝炭画布",
       "system": "系统",
       "system_sub": "跟随系统外观"
     }
@@ -3509,7 +3509,8 @@
     "password_mismatch": "两次输入的密码不一致，请重新输入。",
     "password_same": "新密码不能与当前密码相同。",
     "save_error": "保存失败，请重试。",
-    "connections": "关联账户"
+    "connections": "关联账户",
+    "manage_connections": "管理连接"
   },
   "github_import": {
     "manage_connections": "管理连接",

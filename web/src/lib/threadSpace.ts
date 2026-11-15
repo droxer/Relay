@@ -1,4 +1,5 @@
 import type { AgentName, AgentRun, RelayArtifact } from "relay-core";
+import { runtimeLabel } from "./runtimeLabel.ts";
 
 /** One row of the thread space panel: the artifact plus its derived
  *  producing-agent label (null when the artifact carries no run attribution). */
@@ -56,9 +57,7 @@ export function clampSpaceWidth(width: number, max: number = SPACE_WIDTH_MAX): n
   return Math.min(ceiling, Math.max(SPACE_WIDTH_MIN, Math.round(width)));
 }
 
-function fallbackExecutorLabel(agent: string): string {
-  return agent.charAt(0).toUpperCase() + agent.slice(1);
-}
+const fallbackExecutorLabel = runtimeLabel;
 
 /** Same resolution as labelForAgentRun in ./agentDisplayNames: the run's
  *  logical agent id wins; the per-executor map is the fallback for legacy

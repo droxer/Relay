@@ -212,12 +212,6 @@
   -webkit-line-clamp: 2;
 }
 
-/* Up next rows reserve both lines so a queue of long and short titles stays
-   one rhythm; the Ready and Upcoming lists reuse the title at its own height. */
-.home-item .home-item-title {
-  block-size: 2lh;
-}
-
 .home-item-title:hover {
   text-decoration: underline;
 }
@@ -687,9 +681,13 @@ a.home-count:hover .home-count-label {
   background: var(--row-hover);
 }
 
+/* A floor, not a width: "11月17日周二" is wider than 9ch, and a fixed width
+   broke the weekday onto its own line. One locale's dates share a length, so
+   the titles still line up. */
 .home-agenda-date {
-  width: 9ch;
+  min-width: 9ch;
   flex-shrink: 0;
+  white-space: nowrap;
   color: var(--ink-3);
   font: var(--type-meta);
 }
@@ -841,9 +839,5 @@ a.home-count:hover .home-count-label {
   .home-item-title {
     padding-block: var(--sp-1);
     max-block-size: calc(2lh + var(--sp-1) * 2);
-  }
-
-  .home-item .home-item-title {
-    block-size: calc(2lh + var(--sp-1) * 2);
   }
 }

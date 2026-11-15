@@ -9,6 +9,7 @@ import { teamAvailability } from "../../lib/taskAssignment";
 import { AgentStateBadge } from "../AgentStateBadge";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
+import { runtimeLabel } from "../../lib/runtimeLabel";
 
 /* The rows every roster picker draws: one identity line per agent or team,
    plus the non-entity rows (empty slot, disabled empty roster, nav action)
@@ -74,7 +75,7 @@ export function RosterTeamMark({ team }: { team: TeamView }) {
  *  member-count line and the empty-option label — copy that must NOT be
  *  title-cased, and would be wrong to title-case in German or French. Doing it
  *  here keeps it on the one string that is a proper noun. */
-const executorLabel = (kind: string): string => kind.charAt(0).toUpperCase() + kind.slice(1);
+const executorLabel = runtimeLabel;
 
 /** One roster row: mark, name, and the one-line descriptor under it. */
 export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamView }) {

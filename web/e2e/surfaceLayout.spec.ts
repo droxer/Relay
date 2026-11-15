@@ -790,6 +790,9 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.x + box.width).toBeLessThanOrEqual(390);
   }
+  // Every label reads whole at 390px — "Automations" used to end in an ellipsis.
+  expect(await tabs.locator(".sidenav-label").evaluateAll((labels) => labels
+    .filter((label) => label.scrollWidth > label.clientWidth).map((label) => label.textContent))).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("workspace-tabs.png") });
   await page.getByRole("button", { name: "More pages" }).tap();
   const sheet = page.getByRole("dialog", { name: "More" });

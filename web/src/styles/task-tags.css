@@ -164,11 +164,11 @@
   display: none;
 }
 
-/* The record's settings list: the tags may wrap, and sit on the value
-   column's right edge like every other value in the list. */
+/* The record's settings list: the tags may wrap, and start on the value
+   column's left edge like every other value in the list. */
 .record-facts .tag-list {
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .record-facts .tag-badge {

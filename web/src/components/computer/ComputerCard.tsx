@@ -244,13 +244,18 @@ export function ComputerCard({
       {/* The workspace path is looked up, not read: one quiet footer line.
           The id is copied, never read, so it lives in the overflow menu. */}
       <footer className="computer-card-meta">
-        <span className="code computer-fact-path" title={node.workspacePath}>
-          {node.workspacePath
-            ? pathSegments(node.workspacePath).map((segment, index) => (
-                <span key={`${index}:${segment}`}>{segment}</span>
-              ))
-            : t("computer.fact_unset")}
-        </span>
+        {/* Labelled, so a missing path reads as a fact about the workspace
+            rather than a stray "Not reported"; only a real path is code. */}
+        <span className="computer-fact-label">{t("computer.fact_workspace")}</span>
+        {node.workspacePath ? (
+          <span className="code computer-fact-path" title={node.workspacePath}>
+            {pathSegments(node.workspacePath).map((segment, index) => (
+              <span key={`${index}:${segment}`}>{segment}</span>
+            ))}
+          </span>
+        ) : (
+          <span className="computer-fact-path computer-fact-path--unset">{t("computer.fact_unset")}</span>
+        )}
         {node.queuedCommandCount > 0 ? (
           <span className="tnum">{t("computer.queued_count", { count: node.queuedCommandCount })}</span>
         ) : null}

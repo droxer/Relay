@@ -58,7 +58,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     await drawer.getByRole("button", { name: "Close", exact: true }).click();
     await page.goto("/settings/account");
     const connection = page.getByRole("region", { name: "Connections", exact: true });
-    await expect(connection.getByRole("link", { name: "Connections", exact: true })).toHaveAttribute("href", "/settings/connections");
+    await expect(connection.getByRole("link", { name: /^Manage connections/ })).toHaveAttribute("href", "/settings/connections");
     await expect(connection.getByRole("button")).toHaveCount(0);
     expect(connectionRequests).toBe(0);
   });
