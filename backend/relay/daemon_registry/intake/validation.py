@@ -11,7 +11,7 @@ from typing import Any
 from ...core.computer_identity import computer_id
 from ...core.daemon_records import ComputerRunCapacityError
 from ..scheduling import node_accepts_run, normalize_run_capacity
-from ..workspace_contention import session_workspace_key, workspace_is_contended, workspace_key
+from ...core.workspace_scheduling import session_workspace_key, workspace_is_contended, workspace_key
 from ...core.daemon_capabilities import DAEMON_CAPABILITY_WORK_RESULTS, has_capability
 from ...agents.routing import (
     placement_node,
@@ -269,6 +269,9 @@ class RunTargetValidationMixin(NodeBackendState):
             active_runs=active_runs,
             node_requests=node_requests,
             key_of_session=key_of_session,
+            preferred_session_id=self.registry.daemon_store.preferred_workspace_session(
+                node_id, request,
+            ),
         )
         if contended and len(undelivered) >= normalize_run_capacity(node):
             raise ComputerRunCapacityError(

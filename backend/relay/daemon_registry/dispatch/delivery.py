@@ -29,7 +29,7 @@ from ..scheduling import (
     effective_role_for_assignment,
     node_accepts_run,
 )
-from ..workspace_contention import session_workspace_key, workspace_is_contended
+from ...core.workspace_scheduling import session_workspace_key, workspace_is_contended
 from .. import config
 from ..records import (
     ARTIFACT_SNAPSHOT_STATE_KEY,
@@ -248,6 +248,7 @@ class AssignmentDeliveryMixin(RegistryState):
             active_runs=node_runs,
             node_requests=self.daemon_store.list_active_run_requests(node_id),
             key_of_session=key_of_session,
+            preferred_session_id=self.daemon_store.preferred_workspace_session(node_id, session),
         )
 
     def _prepare_run_start_command(

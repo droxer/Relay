@@ -44,6 +44,21 @@ rather than reopening accepted work with new scope.
 
 ## WIP and scheduling
 
+Tasks sharing a Project workspace execute serially. When the current Thread
+has queued follow-up messages, those messages take priority over other Tasks
+already waiting for that workspace. The workspace remains with that Thread
+through its admitted follow-up rounds until the queue drains. Paused queues,
+archived or deleting Threads, and queues held for human input or approval do
+not reserve this priority (an explicit send overrides the human-wait gate).
+Other workspaces can continue independently. An execution already delivered
+or being dispatched is not interrupted by a later queued message.
+
+The pure policy lives in `backend/relay/core/workspace_scheduling.py`:
+`preferred_thread_id` selects the Thread that retains priority, and
+`workspace_is_contended` applies that priority alongside active execution and
+FIFO waiting order. `persistence/daemon/workspace_queue.py` reads the durable
+facts; admission, delivery, and database dispatch claims use the shared policy.
+
 The Admin control panel sets each user's **Concurrent task limit** (1–100),
 default **5**. It limits started, unfinished work, including review and blocked
 tasks. `maxConcurrentTasks` is a per-user override; clearing it restores the

@@ -1,4 +1,4 @@
-"""Which runs on one node are certain to wait for each other's workspace.
+"""Pure workspace scheduling policy shared by admission, delivery and storage.
 
 The daemon serializes runs on one physical workspace, so a run delivered
 behind another that holds it only occupies a slot it cannot use. The backend
@@ -12,8 +12,24 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from .thread_queue import queue_can_continue
+
 NODE_ROOT_KEY = "node-root"
 IN_FLIGHT_STATUSES = frozenset({"running", "dispatching"})
+
+
+def preferred_thread_id(
+    last_executing_thread: dict[str, Any] | None, *, follow_up_admitted: bool
+) -> str | None:
+    """Keep the current Thread's queue ahead of undelivered workspace waiters.
+
+    Consuming a queued message transfers priority to its admitted execution;
+    an empty queue releases priority only after that execution has settled.
+    """
+    session = last_executing_thread
+    if not session or session.get("archived") or session.get("deletionRequestedAt"):
+        return None
+    return session["id"] if follow_up_admitted or queue_can_continue(session) else None
 
 
 def workspace_key(
@@ -46,14 +62,18 @@ def workspace_is_contended(
     active_runs: list[dict[str, Any]],
     node_requests: list[dict[str, Any]],
     key_of_session: Callable[[str], str | None],
+    preferred_session_id: str | None = None,
 ) -> bool:
     """Whether another session's run holds, is delivering, or is queued ahead
     for this workspace key. ``created_order`` is None for a request not yet
-    created: everything already queued is ahead of it."""
+    created: everything already queued is ahead of it. A preferred Thread may
+    pass undelivered waiters, but never an active run or dispatch claim."""
     for run in active_runs:
         other = run.get("sessionId")
         if other and other != session_id and key_of_session(other) == key:
             return True
+    if preferred_session_id and preferred_session_id != session_id:
+        return True
     for request in node_requests:
         other = request.get("sessionId")
         if (
@@ -64,7 +84,10 @@ def workspace_is_contended(
         ):
             continue
         holds_a_command = bool(request.get("currentCommandId")) or request["status"] == "dispatching"
-        ahead = created_order is None or _order(request) < created_order
+        is_preferred = preferred_session_id is not None and preferred_session_id == session_id
+        ahead = not is_preferred and (
+            created_order is None or _order(request) < created_order
+        )
         if (holds_a_command or ahead) and key_of_session(other) == key:
             return True
     return False
