@@ -22,6 +22,7 @@ from .output import CommandOutputRows
 from .reports import ReportReceiptRows
 from .transport import TransportRows
 from .delivery_recovery import DeliveryRecoveryRows
+from .workspace_queue import WorkspaceQueueRows
 from ..listeners import ChangeListener
 
 
@@ -37,6 +38,7 @@ class DatabaseDaemonStore(
     ReportReceiptRows,
     TransportRows,
     DeliveryRecoveryRows,
+    WorkspaceQueueRows,
 ):
     metadata = shared_metadata
 

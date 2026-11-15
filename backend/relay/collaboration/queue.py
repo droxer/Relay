@@ -10,6 +10,7 @@ from typing import Any
 from loguru import logger
 
 from ..persistence.events import relay_event
+from ..core.thread_queue import queue_can_continue
 from .errors import CollaborationError
 from .models import MessageIntent
 from .service import CollaborationConductor
@@ -161,13 +162,7 @@ class ThreadQueueDispatcher:
             else:
                 if self.ctx.execution_lifecycle.status(session)["phase"] != "terminal":
                     return None
-                if not state.get("sendRequested") and (
-                    session.get("pendingDecision")
-                    or session.get("inputQuestion")
-                    or session.get("permissionRequests")
-                    or session.get("status") == "waiting_for_human"
-                    or session.get("workOutcome") == "blocked"
-                ):
+                if not queue_can_continue(session):
                     return None
                 message = state["messages"][0]
             state["sending"] = message["id"]

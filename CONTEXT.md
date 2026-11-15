@@ -414,5 +414,10 @@ Text follow-ups submitted while a Thread is running belong to its durable,
 owner-managed message queue. The backend dispatches them in order after the
 current execution exits, even when all browsers are closed. This is distinct
 from a composer draft (unsent text local to one browser) and a run waiting for
-Computer capacity (an already accepted execution). Stop pauses follow-ups;
+Computer capacity (an already accepted execution). In a shared Project
+workspace, the current Thread's sendable follow-ups run before other Tasks
+waiting for that workspace, including already accepted executions that have
+not begun dispatch. This priority lasts through each admitted follow-up until
+the queue drains or pauses; human input and approval gates still apply.
+Stop pauses follow-ups;
 resuming or choosing a message to send next is an explicit owner action.

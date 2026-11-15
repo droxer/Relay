@@ -67,6 +67,79 @@ def test_independent_workspace_starts_while_same_workspace_runs_wait(runtime):
     assert a1["id"] != a2["id"]
 
 
+@pytest.mark.parametrize("capacity", [1, 3])
+def test_current_thread_queue_precedes_already_waiting_workspace_runs(runtime, capacity):
+    from relay.collaboration.queue import change_queue
+
+    registry, payload = runtime
+    registry.register({**payload, "maxConcurrentRuns": capacity}, "ui")
+    current = start(registry, "a", "current")
+    [command] = poll(registry)
+    waiting = start(registry, "a", "next task")
+    change_queue(registry.store, current["id"], "enqueue", message={"id": "q1", "text": "follow up"})
+    finish(registry, command)
+    # A daemon poll/recovery can beat the message queue's scheduler tick.
+    assert poll(registry) == []
+    assert registry.daemon_store.claim_run_request_dispatch(
+        registry.daemon_store.active_run_request_for_session_any_node(waiting["id"])["id"],
+        "other-replica", 60,
+    ) is None
+
+    continuation = ServerDaemonNodeBackend(registry)._run_sync("node", {
+        "sessionId": current["id"], "taskGoal": "follow up",
+        "assignments": [{"agent": "codex"}],
+        "workspaceLayout": "project", "workspaceSubpath": "projects/a",
+    })
+    assert continuation["id"] == current["id"]
+    # Queue consumption must not remove priority from an admitted continuation.
+    change_queue(registry.store, current["id"], "remove", message_id="q1")
+    [follow_up] = poll(registry)
+    assert follow_up["sessionId"] == current["id"]
+    finish(registry, follow_up)
+    [next_task] = poll(registry)
+    assert next_task["sessionId"] == waiting["id"]
+
+
+@pytest.mark.parametrize("queue_patch", [
+    {"paused": True},
+    {"messages": []},
+])
+def test_ineligible_queue_does_not_hold_workspace(runtime, queue_patch):
+    from relay.persistence.events import relay_event
+
+    registry, _ = runtime
+    current = start(registry, "a")
+    [command] = poll(registry)
+    waiting = start(registry, "a")
+    queue = {"messages": [{"id": "q1", "text": "later"}], "paused": False, **queue_patch}
+    registry.store.append_event(current["id"], relay_event("session.queue", current["id"], {"queue": queue}))
+    finish(registry, command)
+    [next_task] = poll(registry)
+    assert next_task["sessionId"] == waiting["id"]
+
+
+def test_queue_priority_survives_registry_restart_and_leaves_other_workspaces_free(runtime):
+    from relay.collaboration.queue import change_queue
+
+    registry, payload = runtime
+    current = start(registry, "a")
+    [command] = poll(registry)
+    waiting = start(registry, "a")
+    change_queue(registry.store, current["id"], "enqueue", message={"id": "q1", "text": "next"})
+    finish(registry, command)
+    # Another process has neither the previous active-command cache nor a
+    # message queue dispatcher, but must still preserve this handoff.
+    replica = DaemonNodeRegistry(registry.store, registry.daemon_store, task_store=registry.task_store)
+    replica.register(payload, "ui")
+    independent = start(replica, "b")
+    [other] = poll(replica)
+    assert other["sessionId"] == independent["id"]
+    assert poll(replica) == []
+    change_queue(registry.store, current["id"], "pause")
+    [next_task] = poll(replica)
+    assert next_task["sessionId"] == waiting["id"]
+
+
 def test_waiting_workspace_runs_never_exceed_capacity(runtime):
     registry, _ = runtime
     for name in ("a", "b", "c"):

@@ -39,6 +39,8 @@ from .rows import (
     run_request_to_row,
 )
 from .state import DaemonStoreState
+from .workspace_queue import preferred_workspace_session
+from ..tables.sessions import sessions
 
 
 class RunRequestRows(DaemonStoreState):
@@ -345,6 +347,12 @@ class RunRequestRows(DaemonStoreState):
             node = conn.execute(select(self.nodes).where(
                 self.nodes.c.id == row["node_id"]
             ).with_for_update()).mappings().one()
+            session = conn.scalar(select(sessions.c.snapshot).where(
+                sessions.c.id == request["sessionId"],
+            ))
+            preferred = preferred_workspace_session(conn, row["node_id"], session or {})
+            if preferred and preferred != request["sessionId"]:
+                return None
             # Deduplicate a published run and its still-dispatching request.
             reservations = {str(item["session_id"]): item["agent"] for item in conn.execute(
                 select(self.runs.c.session_id, self.runs.c.agent).where(
