@@ -1,13 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import type { LifecycleMarker } from "../lib/taskThreadLifecycle";
 import type { TaskStatus } from "../types";
 import type { ThreadTaskFact } from "./ThreadMeta";
 import { TaskStatusIcon } from "./TaskStatusIcon";
-import { historyTime } from "./task-record/taskHistoryLabel";
+import { historyTime, lifecycleLabel } from "./task-record/taskHistoryLabel";
 
 /** What a person does next, said only while the task still sits there. A
  *  wait has its own prompt in the composer, and running work needs nobody —
@@ -18,20 +17,6 @@ const NEXT_STEP: Partial<Record<TaskStatus, string>> = {
   assigned: "thread.lifecycle.next_assigned",
   backlog: "thread.lifecycle.next_backlog",
 };
-
-/** The move in words. The same target reads differently by where it came
- *  from: running again after a question is resuming, after review is a
- *  reopen; done straight out of review by a person is their acceptance. */
-export function lifecycleLabel(marker: LifecycleMarker, t: TFunction): string {
-  const { from, to } = marker;
-  if (from === "blocked" && to !== "blocked" && to !== "done") {
-    return `${t("thread.lifecycle.unblocked")} · ${t(`backlog.statuses.${to}`)}`;
-  }
-  if (to === "running" && from === "waiting_for_human") return t("thread.lifecycle.resumed");
-  if (to === "running" && (from === "review" || from === "done")) return t("thread.lifecycle.reopened");
-  if (to === "done" && from === "review" && marker.actor !== "relay") return t("thread.lifecycle.accepted");
-  return t(`thread.lifecycle.to_${to}`);
-}
 
 /**
  * Where the thread's task stands and how it got there — the body of the

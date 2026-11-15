@@ -22,7 +22,7 @@ export type RecordVariant = "task" | "routine";
    owns a folder of its own, browsed run by run in the Runs tab. */
 export type RecordTab = "runs" | "activity" | "definition" | "artifacts";
 
-export const TASK_RECORD_TABS: readonly RecordTab[] = ["activity", "definition", "artifacts"];
+export const TASK_RECORD_TABS: readonly RecordTab[] = ["definition", "activity", "artifacts"];
 export const ROUTINE_RECORD_TABS: readonly RecordTab[] = ["runs", "definition", "artifacts"];
 
 /** Retired tab ids and where a link that still carries one should land. */
@@ -40,7 +40,7 @@ export function recordTabs(variant: RecordVariant): readonly RecordTab[] {
 }
 
 export function defaultRecordTab(variant: RecordVariant): RecordTab {
-  return variant === "routine" ? "runs" : "activity";
+  return variant === "routine" ? "runs" : "definition";
 }
 
 export function parseRecordTab(value: string | null, variant: RecordVariant): RecordTab {

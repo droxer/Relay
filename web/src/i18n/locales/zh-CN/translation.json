@@ -835,7 +835,9 @@
       "dispatch_rejected": "无法启动",
       "activity": "活动",
       "project_set": "已移入项目",
-      "project_set_to": "已移入 {{name}}"
+      "project_set_to": "已移入 {{name}}",
+      "today": "今天",
+      "yesterday": "昨天"
     },
     "col_ref": "编号",
     "add_due": "设置截止日期",

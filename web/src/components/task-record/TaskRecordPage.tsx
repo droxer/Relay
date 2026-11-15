@@ -275,7 +275,7 @@ export function TaskRecordPage({
                 of how it got there. */}
             {task.status !== "review" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}
             <RecordResultLine taskId={task.id} revision={revision} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
-            <RecordHistory taskId={task.id} revision={revision} live={task.status === "running"} names={historyNames} onOpenThread={onOpenThread} />
+            <RecordHistory taskId={task.id} revision={revision} live={task.status === "running"} names={historyNames} currentUserId={currentUser.userId} onOpenThread={onOpenThread} />
           </TabsContent>
         )}
         <TabsContent value="definition">

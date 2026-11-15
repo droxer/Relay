@@ -27,7 +27,21 @@ export type TaskHistoryEntry = {
   /** Project an intake issue was moved into. */
   projectId?: string;
   status?: TaskStatus;
+  /** The status a status move left — "running" after a question reads as a
+      resume, not a start. Derived across the whole log, before the cap. */
+  from?: TaskStatus;
+  /** The person who made the move; absent when Relay made it. */
+  actorUserId?: string;
   message?: string;
+};
+
+/** One local calendar day of history, newest day first. */
+export type TaskHistoryDay = {
+  /** `YYYY-MM-DD` in the reader's time zone — stable, so it keys the group. */
+  key: string;
+  /** Any entry's timestamp, for formatting the day's heading. */
+  timestamp: string;
+  entries: TaskHistoryEntry[];
 };
 
 export type TaskHistoryKind =
@@ -70,7 +84,13 @@ function entryFor(event: RelayTaskEvent, ownerTaskId: string): TaskHistoryEntry 
     case "task.project_set":
       return { ...base, kind: "project_set", projectId: event.projectId };
     case "task.status":
-      return { ...base, kind: "status", status: event.status, message: event.reason };
+      return {
+        ...base,
+        kind: "status",
+        status: event.status,
+        ...(event.reason ? { message: event.reason } : {}),
+        ...(event.actorUserId ? { actorUserId: event.actorUserId } : {}),
+      };
     case "task.session_linked":
       return { ...base, kind: "session_linked", sessionId: event.sessionId };
     case "task.session_unlinked":
@@ -128,9 +148,46 @@ export function taskHistoryEntries(
     const entry = entryFor(event, ownerTaskId);
     if (entry) entries.push(entry);
   }
-  return entries
+  return withPreviousStatus(entries)
     .sort((left, right) => right.timestamp.localeCompare(left.timestamp) || right.id.localeCompare(left.id))
     .slice(0, limit);
+}
+
+/** Stamps each status move with the status it left, walking every task's
+    moves oldest first — before the cap, so the oldest shown move still knows
+    where it came from. A routine's occurrences each keep their own track. */
+function withPreviousStatus(entries: readonly TaskHistoryEntry[]): TaskHistoryEntry[] {
+  const current = new Map<string, TaskStatus>();
+  const ordered = [...entries].sort((left, right) => left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id));
+  return ordered.map((entry) => {
+    if (entry.kind !== "status" || !entry.status) return entry;
+    const from = current.get(entry.taskId) ?? "backlog";
+    current.set(entry.taskId, entry.status);
+    return { ...entry, from };
+  });
+}
+
+function localDayKey(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp.slice(0, 10);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Newest-first entries grouped under the local day they happened, so a line
+ * carries only its clock time and the day is said once above it.
+ */
+export function historyDays(entries: readonly TaskHistoryEntry[]): TaskHistoryDay[] {
+  const days: TaskHistoryDay[] = [];
+  for (const entry of entries) {
+    const key = localDayKey(entry.timestamp);
+    const last = days.at(-1);
+    if (last?.key === key) last.entries.push(entry);
+    else days.push({ key, timestamp: entry.timestamp, entries: [entry] });
+  }
+  return days;
 }
 
 /**

@@ -835,7 +835,9 @@
       "dispatch_rejected": "無法啟動",
       "activity": "活動",
       "project_set": "已移入專案",
-      "project_set_to": "已移入 {{name}}"
+      "project_set_to": "已移入 {{name}}",
+      "today": "今天",
+      "yesterday": "昨天"
     },
     "col_ref": "編號",
     "add_due": "設定截止日期",
