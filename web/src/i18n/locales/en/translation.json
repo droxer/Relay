@@ -850,7 +850,9 @@
       "dispatch_rejected": "Could not start",
       "activity": "Activity",
       "project_set": "Moved into a project",
-      "project_set_to": "Moved into {{name}}"
+      "project_set_to": "Moved into {{name}}",
+      "today": "Today",
+      "yesterday": "Yesterday"
     },
     "col_ref": "No.",
     "add_due": "Set due date",

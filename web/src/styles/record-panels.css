@@ -35,6 +35,20 @@
   color: var(--ink-3);
 }
 
+/* Facts on one line, parted by a middot rather than bare spacing — "29m"
+   next to "2 files" otherwise reads as one figure. */
+.task-result-duration::before,
+.task-result-files::before {
+  content: "·";
+  margin-right: var(--sp-2);
+  color: var(--ink-4);
+}
+
+.task-result-summary > .task-result-files:first-child::before,
+.task-result-summary > .task-result-duration:first-child::before {
+  content: none;
+}
+
 .task-result-reason {
   flex: 1 1 100%;
   min-width: 0;
@@ -297,83 +311,151 @@
   border-top: 0.5px solid var(--line-2);
 }
 
+/* Days, newest first. The list keeps a reading measure so a line's time
+   stays beside its words instead of adrift at the far edge of a wide
+   drawer. */
+.record-timeline-days {
+  display: grid;
+  gap: var(--sp-5);
+  max-width: 44rem;
+}
+
+/* The day is said once, here; the lines under it carry only clock time. */
+.record-timeline-day-label {
+  margin: 0 0 var(--sp-2);
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
 .record-timeline-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
+  display: grid;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* Each entry hangs off a marker on a rail, so the list reads as one timeline
-   rather than a run of plain text lines. The row, marker and rail are ReUI
-   Timeline parts; its Tailwind defaults (a 2rem inset step list with ringed
-   16px indicators) sit in a lower layer, so every property they set is
-   restated here — including `translate`, which is its own property in
-   Tailwind v4, not part of `transform`. */
+/* Marker column, then the line. The marker box is one line of body text
+   tall (1lh), so a glyph or dot centres on the first line however the
+   label wraps. */
 .record-timeline-entry {
   position: relative;
-  display: flex;
-  flex: none;
-  flex-direction: row;
-  align-items: baseline;
-  gap: var(--sp-3);
-  min-width: 0;
-  margin: 0;
-  padding: 0 0 0 var(--sp-5);
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: var(--sp-3);
+  align-items: start;
+  padding-bottom: var(--sp-3);
   color: var(--ink-2);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
 }
 
-/* The marker is the small dot rung; the rail below hangs from its centre.
-   0.42em is optical — it drops the dot onto the first line's x-height, so it
-   scales with the entry's text rather than with the spacing grid. */
-.record-timeline-marker {
+.record-timeline-entry:last-child {
+  padding-bottom: 0;
+}
+
+/* The rail joins one marker to the next within a day, stopping 3px short
+   of each so the glyphs read as stations on it rather than beads on a
+   wire. A day's last line has no rail: days are separate runs of time. */
+.record-timeline-entry:not(:last-child)::before {
+  content: "";
   position: absolute;
-  left: var(--sp-0-5);
-  top: 0.42em;
+  top: calc(0.5lh + 10px);
+  bottom: calc(10px - 0.5lh);
+  left: calc(8px - var(--sp-hairline) / 2);
+  width: var(--sp-hairline);
+  background: var(--line-2);
+}
+
+.record-timeline-marker {
+  display: grid;
+  place-items: center;
+  height: 1lh;
+}
+
+.record-timeline-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* A past move is over: the running glyph does not breathe here. */
+.record-timeline-icon .task-status-fill {
+  animation: none;
+}
+
+.record-timeline-dot {
   width: var(--dot-sm);
   height: var(--dot-sm);
-  border: 0;
   border-radius: 50%;
   background: var(--ink-4);
-  translate: none;
 }
 
-/* The rail runs from under this entry's marker to the next entry's; the last
-   entry's rail is hidden by the component. */
-.record-timeline-rail {
-  position: absolute;
-  left: calc(var(--sp-0-5) + (var(--dot-sm) - var(--sp-hairline)) / 2);
-  top: calc(0.42em + var(--dot-sm) + var(--sp-0-5));
-  bottom: calc(-1 * var(--sp-2));
-  width: 0.5px;
-  height: auto;
-  background: var(--line-2);
-  translate: none;
+.record-timeline-body {
+  display: grid;
+  gap: var(--sp-0-5);
+  min-width: 0;
 }
 
-/* The time column reads vertically down the rail, so it keeps a fixed
-   measure; entries from another day carry their date (see historyTime). */
+/* Label, who did it, and — at the line's end — when. Baseline-aligned, so
+   the smaller time sits on the label's line rather than floating above it. */
+.record-timeline-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-2);
+  margin: 0;
+}
+
+/* A label wraps instead of truncating — a failure message cut at one line
+   is exactly the fact the reader opened the timeline for. */
+.record-timeline-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The moves are what the eye follows; the bookkeeping around them recedes. */
+.record-timeline-entry[data-kind="status"] .record-timeline-label {
+  color: var(--ink-1);
+}
+
+.record-timeline-actor,
 .record-timeline-time {
-  display: block;
-  flex: none;
-  width: 7.5rem;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.record-timeline-time {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Why the line happened: the agent's question, a blocker, a queue note. */
+.record-timeline-detail {
   margin: 0;
   color: var(--ink-3);
-  font: inherit;
-  letter-spacing: inherit;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
 }
 
-/* A label wraps instead of truncating — a blocked reason or failure message
-   cut at one line is exactly the fact the reader opened the timeline for.
-   It does not claim the row's free space: the inline action that follows
-   belongs next to the words it belongs to, not adrift at the page's edge. */
-.record-timeline-label {
-  flex: 0 1 auto;
-  min-width: 0;
+.record-timeline-thread {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-0-5);
+  justify-self: start;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-decoration: none;
+}
+
+.record-timeline-thread:hover {
+  text-decoration: underline;
+}
+
+.record-timeline-thread > svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* ── Workspace tab ─────────────────────────────────────────────────── */

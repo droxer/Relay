@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { taskHistoryEntries, threadLinkEntryIds } from "../src/lib/taskHistory.js";
+import { historyDays, taskHistoryEntries, threadLinkEntryIds } from "../src/lib/taskHistory.js";
 import type { RelayTaskEvent } from "../src/types.js";
 
 function event(input: Partial<RelayTaskEvent> & { id: string; type: RelayTaskEvent["type"]; timestamp: string }): RelayTaskEvent {
@@ -97,6 +97,53 @@ describe("taskHistoryEntries", () => {
     assert.equal(entries[0]?.message, "Picked up by the node");
     // The assignment entry carries its target so the label can print a name.
     assert.equal(entries[2]?.teamId, "team_9");
+  });
+});
+
+describe("status moves", () => {
+  it("says where each move came from, so the label can tell a resume from a start", () => {
+    const entries = taskHistoryEntries([
+      event({ id: "e1", type: "task.status", timestamp: "2026-06-01T00:00:00.000Z", status: "running" } as never),
+      event({ id: "e2", type: "task.status", timestamp: "2026-06-01T01:00:00.000Z", status: "waiting_for_human", reason: "Which release?" } as never),
+      event({ id: "e3", type: "task.status", timestamp: "2026-06-01T02:00:00.000Z", status: "running", actorUserId: "u" } as never),
+    ], "task_1");
+
+    assert.deepEqual(entries.map((entry) => [entry.from, entry.status]), [
+      ["waiting_for_human", "running"],
+      ["running", "waiting_for_human"],
+      ["backlog", "running"],
+    ]);
+    assert.equal(entries[0]?.actorUserId, "u");
+    assert.equal(entries[1]?.actorUserId, undefined);
+    // The reason is the fact the reader opened the history for.
+    assert.equal(entries[1]?.message, "Which release?");
+  });
+
+  it("keeps the previous status right even past the newest-first cap", () => {
+    const events = [
+      event({ id: "s0", type: "task.status", timestamp: "2026-06-01T00:00:00.000Z", status: "review" } as never),
+      ...Array.from({ length: 30 }, (_, index) =>
+        event({ id: `l${index}`, type: "task.session_linked", timestamp: `2026-06-02T00:${String(index).padStart(2, "0")}:00.000Z`, sessionId: `s${index}` } as never)),
+      event({ id: "s1", type: "task.status", timestamp: "2026-06-03T00:00:00.000Z", status: "done" } as never),
+    ];
+    assert.equal(taskHistoryEntries(events, "task_1")[0]?.from, "review");
+  });
+});
+
+describe("historyDays", () => {
+  it("groups newest-first entries under their local day, newest day first", () => {
+    const at = (day: number, hour: number) => new Date(2026, 5, day, hour).toISOString();
+    const entries = taskHistoryEntries([
+      event({ id: "e1", type: "task.created", timestamp: at(1, 9) }),
+      event({ id: "e2", type: "task.status", timestamp: at(1, 10), status: "running" } as never),
+      event({ id: "e3", type: "task.status", timestamp: at(3, 8), status: "done" } as never),
+    ], "task_1");
+
+    const days = historyDays(entries);
+    assert.deepEqual(days.map((day) => [day.key, day.entries.map((entry) => entry.id)]), [
+      ["2026-06-03", ["e3"]],
+      ["2026-06-01", ["e2", "e1"]],
+    ]);
   });
 });
 
