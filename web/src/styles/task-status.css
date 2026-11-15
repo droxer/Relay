@@ -321,6 +321,13 @@
   flex: none;
   overflow: hidden;
   margin-top: auto;
+  /* A rung below the title. --fs-2 and --fs-4 are both 14px, so a facts
+     line in the label role was the title's size and weight in a lighter ink,
+     and "Builder" read as loudly as the task's name. The meta role is the
+     caption rung the eyebrow already speaks, so the tile reads ref/rank,
+     title, facts — one scale step at each boundary. */
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   /* One row of facts, clipped at whole facts. The frame is a fixed height,
      so a line that wrapped used to be sliced through its middle at the
      tile's bottom edge. The row still wraps, but the box is exactly one row
@@ -330,6 +337,17 @@
      the next row starts a whole line plus --sp-3 below, so 1lh + --sp-1-5
      shows the first row entire and none of the second. */
   height: calc(1lh + var(--sp-1-5));
+}
+
+/* The assignee chip names itself in the label role and the title's ink — right
+   in a table cell, too loud on a tile, where it sat at the title's size and
+   colour and competed with it. On the tile's facts line it speaks that
+   line's role, one ink step above the other facts: it is still the fact a
+   lane is most often scanned for after rank. */
+.backlog-task .backlog-meta .task-assignee-name {
+  color: var(--ink-2);
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 .backlog-due {
