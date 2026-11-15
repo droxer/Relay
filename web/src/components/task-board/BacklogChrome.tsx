@@ -28,7 +28,10 @@ import { initialFilters, type BacklogView } from "./backlogVocabulary";
  * Dashboard tab. Split out of a 971-line BacklogPage.tsx.
  */
 
-export function formatDueDate(value: string): string {
+export function formatDueDate(
+  value: string,
+  { omitCurrentYear = false }: { omitCurrentYear?: boolean } = {},
+): string {
   // Date-only values ("2026-07-19") parse as UTC midnight; construct a local
   // date so the rendered day does not shift with the viewer's timezone.
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -36,8 +39,11 @@ export function formatDueDate(value: string): string {
     ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
     : new Date(value);
   if (Number.isNaN(date.getTime())) return value;
+  // A compact surface (the board tile) states the year only when it is not
+  // this one, so a date from another year is never mistaken for this year's.
+  const showYear = !omitCurrentYear || date.getFullYear() !== new Date().getFullYear();
   return new Intl.DateTimeFormat(document.documentElement.lang || undefined, {
-    year: "numeric",
+    year: showYear ? "numeric" : undefined,
     month: "short",
     day: "numeric",
   }).format(date);

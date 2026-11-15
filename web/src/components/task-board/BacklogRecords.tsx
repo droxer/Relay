@@ -128,16 +128,21 @@ export function BacklogTaskCard({
               state: no status word (the lane IS the status) and no "No due
               date" on every undated card. The agent is named — a bare
               executor glyph identified nothing on a card with room to spell
-              it. */}
+              it. The assignee always leads, so every tile in every lane
+              anchors its facts at the same left edge; the age used to lead
+              only on started work, shifting the agent sideways from one
+              lane to the next. The date drops the current year — on a
+              board of this year's work it was the widest, least
+              informative token on the line. */}
           <div className="backlog-meta">
-            {age !== null ? <span className="tnum">{t("backlog.work_age", { count: Number(age.toFixed(1)) })}</span> : null}
             <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
             {task.dueDate ? (
               <span className={cn("backlog-due", tone !== "neutral" && tone)}>
                 <ActionCalendar size={ICON.sm} />
-                {formatDueDate(task.dueDate)}
+                {formatDueDate(task.dueDate, { omitCurrentYear: true })}
               </span>
             ) : null}
+            {age !== null ? <span className="tnum">{t("backlog.work_age", { count: Number(age.toFixed(1)) })}</span> : null}
           </div>
         </div>
       </div>

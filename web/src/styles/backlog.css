@@ -388,47 +388,45 @@
 
 /* On a tile the rank is named, not only drawn: the bars carry it at a glance
    and the word carries it for anyone who does not read bars (the table keeps
-   the bare glyph, where a column header names it). Rank is told by weight,
-   never hue — gold is "waiting on a person" and red is failure. The three
-   levels step in fill, not just brightness: high is a solid action-ink chip,
-   normal an outlined chip, low bare dimmed text with no frame, so a lane
-   scans by them. Every chip has the same inset frame, so tiles keep one
-   eyebrow height. */
+   the bare glyph, where a column header names it). Rank is told by ink and
+   frame, never hue — gold is "waiting on a person" and red is failure.
+
+   The eyebrow is metadata, so no rank may outshout the title under it. High
+   used to be a solid action-ink chip at weight 700: the darkest mark on the
+   board, a blob at the head of every urgent tile, against the flat-chrome
+   rule (badges take a tint, never a solid fill). Normal was an outlined bold
+   chip, stating the default as loudly as a decision. Now only the departure
+   from the default takes a frame: high is a hairline chip on a soft wash in
+   ink-1, normal is bare ink-3, low bare ink-4. Every level keeps the same
+   inline padding, so the eyebrow height and the ref-to-rank gap hold. */
 .backlog-card-eyebrow .priority-badge {
   flex: none;
   gap: var(--sp-1-5);
   padding: 0 var(--sp-1-5);
   border-radius: var(--r-1);
-  color: var(--ink-2);
+  color: var(--ink-3);
   font: var(--type-meta);
-  font-weight: 700;
   letter-spacing: var(--type-meta-track);
   white-space: nowrap;
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
 }
 
 .backlog-card-eyebrow .priority-label {
   display: inline;
 }
 
-.backlog-card-eyebrow .priority-glyph { --prio-accent: var(--ink-2); }
+.backlog-card-eyebrow .priority-glyph { --prio-accent: var(--ink-3); }
 
 .backlog-card-eyebrow .priority-badge[data-priority="high"] {
-  background: var(--action);
-  box-shadow: none;
-  color: var(--on-action);
+  background: var(--action-soft);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
+  color: var(--ink-1);
+  font-weight: 600;
 }
 
-.backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-glyph { --prio-accent: var(--on-action); }
-
-.backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-bars > i {
-  background: var(--on-action);
-}
+.backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-glyph { --prio-accent: var(--ink-1); }
 
 .backlog-card-eyebrow .priority-badge[data-priority="low"] {
-  box-shadow: none;
   color: var(--ink-4);
-  font-weight: 500;
 }
 
 .backlog-card-eyebrow .priority-badge[data-priority="low"] .priority-glyph { --prio-accent: var(--ink-4); }
@@ -438,8 +436,7 @@
 .backlog-task[data-priority="high"] { border-color: var(--line-strong); }
 
 @media (forced-colors: active) {
-  .backlog-card-eyebrow .priority-badge { box-shadow: none; border: 1px solid CanvasText; }
-  .backlog-card-eyebrow .priority-badge[data-priority="high"] { background: Highlight; color: HighlightText; }
+  .backlog-card-eyebrow .priority-badge[data-priority="high"] { box-shadow: none; border: 1px solid CanvasText; background: Highlight; color: HighlightText; }
   .backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-bars > i { background: HighlightText; }
 }
 
