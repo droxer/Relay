@@ -119,12 +119,12 @@
   "skip_to_content": "Skip to content",
   "route_not_found": {
     "title": "Page not found",
-    "body": "This page doesn’t exist. Check the link, or go back to Activity.",
-    "home": "Go to Activity"
+    "body": "This page doesn’t exist. Check the link, or go back to Activities.",
+    "home": "Go to Activities"
   },
   "nav": {
     "brand": "Relay",
-    "threads": "Activity",
+    "threads": "Activities",
     "workspace": "Workspace",
     "workspace_label": "Workspace",
     "manage": "Manage",
@@ -945,7 +945,7 @@
     "tab_profile": "Profile",
     "tab_workspace": "Files",
     "tab_files": "Files",
-    "tab_activities": "Activity",
+    "tab_activities": "Activities",
     "tab_artifacts": "Artifacts",
     "tab_activity": "Activity",
     "files_sections": "Workspace areas",
@@ -2285,7 +2285,7 @@
     "detail_sections": "Agent detail sections",
     "tab_profile": "Profile",
     "tab_skills": "Skills",
-    "tab_activities": "Activity",
+    "tab_activities": "Activities",
     "activities_load_failed": "Could not load agent activity. Refresh to try again.",
     "record_label": "Agent record",
     "runtime_host": "Computer",
