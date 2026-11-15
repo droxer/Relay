@@ -85,7 +85,7 @@ export async function withBackendReconnect<T>(
     shouldStop?: () => boolean;
     onTransientFailure?: () => void;
     onCredentialRejected?: () => void;
-    /** Ends a backoff wait early once something else proves the backend is back. */
+    /** Ends ordinary backoff early; a server's Retry-After remains a minimum. */
     wake?: Wakeup;
     /**
      * How long a refusal that is not about the credential (a proxy's 403/404
@@ -162,6 +162,12 @@ export async function withBackendReconnect<T>(
       try {
         if (control.wake) await control.wake.wait(backoff, control.signal);
         else await delay(backoff, control.signal);
+        // A healthy heartbeat proves reachability, but not that this endpoint
+        // is ready for another request. Honor its minimum even after a wake.
+        const retryAt = now + minimumDelayMs;
+        while (performance.now() < retryAt) {
+          await delay(retryAt - performance.now(), control.signal);
+        }
       } catch (delayError) {
         if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
         throw delayError;

@@ -118,8 +118,7 @@ test('a wake ends the backoff wait and recovery is logged once', async () => {
   const startedAt = performance.now();
   const pending = withBackendReconnect(async () => {
     calls += 1;
-    // Far past the quick attempts the delay would be seconds; Retry-After forces it here.
-    if (calls === 1) throw new DaemonHttpError('unavailable', 503, 60_000);
+    if (calls === 1) throw new Error('network unavailable');
     return 'ok';
   }, logger, context, { wake });
   setTimeout(() => wake.notify(), 20);
@@ -129,6 +128,32 @@ test('a wake ends the backoff wait and recovery is logged once', async () => {
   assert.deepEqual(logger.infos.map(entry => entry.message), ['command poll recovered']);
   assert.equal(logger.infos[0]!.fields.attempts, 1);
 });
+
+for (const status of [429, 503]) {
+  test(`a healthy heartbeat cannot shorten Retry-After for ${status}`, async () => {
+    const wake = new Wakeup();
+    let calls = 0;
+    let failedAt = 0;
+    let retriedAt = 0;
+    const pending = withBackendReconnect(async () => {
+      calls += 1;
+      if (calls === 1) {
+        failedAt = performance.now();
+        throw new DaemonHttpError('retry later', status, 300);
+      }
+      retriedAt = performance.now();
+      return 'ok';
+    }, recordingLogger(), context, { wake });
+    const heartbeat = setInterval(() => wake.notify(), 20);
+    try {
+      assert.equal(await pending, 'ok');
+      assert.equal(calls, 2);
+      assert.ok(retriedAt - failedAt >= 290, `retried after ${retriedAt - failedAt}ms`);
+    } finally {
+      clearInterval(heartbeat);
+    }
+  });
+}
 
 test('a retry that keeps failing warns once per interval, not once per attempt', async () => {
   const logger = recordingLogger();
@@ -142,13 +167,13 @@ test('a retry that keeps failing warns once per interval, not once per attempt',
   assert.equal(logger.warnings[0]!.attempt, 1);
 });
 
-test('stopping during a woken wait ends the retry', async () => {
+test('stopping after a wake interrupts the remaining Retry-After wait', async () => {
   const stop = new AbortController();
   const wake = new Wakeup();
   const pending = withBackendReconnect(async () => {
     throw new DaemonHttpError('unavailable', 503, 60_000);
   }, recordingLogger(), context, { wake, signal: stop.signal });
-  setTimeout(() => stop.abort(), 20);
+  setTimeout(() => { wake.notify(); setTimeout(() => stop.abort(), 20); }, 20);
   await assert.rejects(pending, DaemonStoppedError);
 });
 

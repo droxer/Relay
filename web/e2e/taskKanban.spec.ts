@@ -82,7 +82,13 @@ test("task board preserves blocked review and accepts it only after unblocking",
   const status = drawer.getByRole("button", { name: /^Status: In review · Blocked\./ });
   await status.click();
   await page.getByRole("menuitem", { name: "Unblock", exact: true }).click();
-  await drawer.getByRole("button", { name: "Accept", exact: true }).click();
+  await drawer.getByRole("button", { name: /^Status: In review\./ }).click();
+  await page.getByRole("menuitem", { name: "Completed", exact: true }).click();
+  const acceptance = page.locator(".task-review-dialog");
+  await expect(acceptance).toBeVisible();
+  expect(writes.map((item) => item.body)).toEqual([{ action: "unblock" }]);
+  await acceptance.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(acceptance).toHaveCount(0);
   await expect.poll(() => writes.map((item) => item.body)).toEqual([{ action: "unblock" }, { status: "done", reviewRevision: "a".repeat(64) }]);
   await drawer.getByRole("button", { name: "Close drawer", exact: true }).click();
   await expect(page.locator('.backlog-lane[data-status="done"]')).toContainText("Blocked review");
@@ -256,4 +262,50 @@ test("admin changes a user's task capacity from the default five", async ({ page
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0].maxConcurrentTasks).toBe(2);
   await expect(page.locator('[data-user="capacity-user"]')).toContainText("2");
+});
+
+test("dropping review work into Completed waits for explicit acceptance", async ({ page }) => {
+  let current = task("Review delivery", "review", { startedAt: stamp, events: [], activity: [] });
+  const writes: unknown[] = [];
+  await page.route("**/api/v1/**", async route => {
+    const path = decodeURIComponent(new URL(route.request().url()).pathname);
+    let body: unknown = { tasks: [current], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], flowPolicy: { wipLimit: 5, scope: "user" } };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
+    if (path.endsWith(`/tasks/${current.id}`)) {
+      if (route.request().method() === "PATCH") {
+        writes.push(route.request().postDataJSON());
+        current = { ...current, status: "done", workflowStage: "done", updatedAt: "2026-09-02T00:00:00Z", eventCount: 2 };
+      }
+      body = current;
+    }
+    if (path.endsWith(`/tasks/${current.id}/review`)) body = {
+      taskId: current.id, revision: "a".repeat(64), status: "review", canAccept: true,
+      goal: current.title, description: "Inspect before accepting", sessionId: null, roundId: null,
+      criteria: [], reports: [], artifacts: [], verification: "not_recorded", missing: [],
+    };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await openBoard(page);
+  const review = page.locator('.backlog-lane[data-status="review"] article');
+  const completed = page.locator('.backlog-lane[data-status="done"]');
+  await review.focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator('[id^="DndLiveRegion"]')).toContainText("is over In review");
+  const board = page.locator(".backlog-board");
+  await expect.poll(async () => {
+    const before = await board.evaluate(element => element.scrollLeft);
+    await page.waitForTimeout(150);
+    return before === await board.evaluate(element => element.scrollLeft);
+  }).toBe(true);
+  await page.keyboard.press("ArrowRight");
+  await expect(completed).toHaveAttribute("data-drop", "active");
+  await page.keyboard.press("Space");
+  const acceptance = page.locator(".task-review-dialog");
+  await expect(acceptance).toBeVisible();
+  expect(writes).toEqual([]);
+  await expect(review).toContainText("Review delivery");
+  await acceptance.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(acceptance).toHaveCount(0);
+  await expect(completed).toContainText("Review delivery");
+  expect(writes).toEqual([{ status: "done", reviewRevision: "a".repeat(64) }]);
 });
