@@ -1,4 +1,5 @@
 import { RELAY_CLIENT_VERSION } from "../src/client-version.js";
+import { processRunning } from "./process-state.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -613,7 +614,8 @@ test("cancellation stops children even when the parent exits first", { skip: pro
       },
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.throws(() => process.kill(childPid, 0), /ESRCH/);
+    // Gone, or a zombie its new parent has not reaped yet.
+    assert.equal(processRunning(childPid), false);
   } finally {
     if (childPid > 0) {
       try { process.kill(childPid, "SIGKILL"); } catch { /* Already exited. */ }
@@ -3357,9 +3359,8 @@ test("UI cancellation terminates a live local process tree before acknowledgemen
   let childPid = 0;
   let cancelled = false;
   let aliveAtAcknowledgement = true;
-  const alive = (pid: number): boolean => {
-    try { process.kill(pid, 0); return true; } catch { return false; }
-  };
+  // An unreaped zombie cannot execute, so it does not count as alive.
+  const alive = (pid: number): boolean => processRunning(pid);
   const childScript = 'process.on("SIGTERM",()=>{}); process.send("ready"); setInterval(()=>{},1000)';
   const parentScript = `const {spawn}=require("node:child_process"); process.on("SIGTERM",()=>{}); const child=spawn(process.execPath,["-e",${JSON.stringify(childScript)}],{stdio:["ignore","ignore","ignore","ipc"]}); child.on("message",()=>process.stdout.write(JSON.stringify({parent:process.pid,child:child.pid})+"\\n")); setInterval(()=>{},1000);`;
   const timeout = setTimeout(() => stop.abort("test timed out"), 20_000);
@@ -5857,7 +5858,8 @@ test("local execution cleans up descendants before waiting for inherited pipes",
     await childReady;
     const result = await Promise.race([running, new Promise<null>(resolve => setTimeout(()=>resolve(null),1000))]);
     assert.notEqual(result, null, "parent exit must trigger child cleanup without waiting for pipe EOF");
-    assert.throws(()=>process.kill(childPid,0),/ESRCH/);
+    // Gone, or a zombie nobody reaps (PID 1 in a container without --init).
+    assert.equal(processRunning(childPid), false);
   } finally {
     if(childPid>0) {try {process.kill(childPid,"SIGKILL");} catch {}}
     await running;

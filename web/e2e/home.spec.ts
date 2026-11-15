@@ -293,10 +293,17 @@ for (const width of [1440, 375]) {
     await expect(rows.first().locator(".home-item-title")).toHaveAttribute("title", longPrompt);
     const sizes = await rows.evaluateAll(elements => elements.map(element => {
       const rect = element.getBoundingClientRect();
-      return { height: rect.height, right: rect.right };
+      const title = element.querySelector(".home-item-title")!;
+      const style = getComputedStyle(title);
+      // The content box: a phone pads the title for a larger tap target.
+      const titleHeight = title.getBoundingClientRect().height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      return { height: rect.height, right: rect.right, titleHeight, titleLine: parseFloat(style.lineHeight) };
     }));
-    // The separator border is the only height difference between siblings.
-    expect(Math.abs(sizes[0].height - sizes[1].height)).toBeLessThanOrEqual(1);
+    // Titles take their own height but clamp at two lines: a long title adds at
+    // most one line over a short one (plus the separator border), never more.
+    const line = sizes[0].titleLine;
+    expect(sizes[0].titleHeight).toBeLessThanOrEqual(2 * line + 1);
+    expect(Math.abs(sizes[0].height - sizes[1].height)).toBeLessThanOrEqual(line + 1);
     expect(sizes[0].height).toBeLessThan(160);
     expect(sizes.every(size => size.right <= width)).toBe(true);
     await expect(rows.first().getByRole("button", { name: "Snooze", exact: true })).toBeVisible();

@@ -258,7 +258,7 @@ export function threadRowMeta(
 
 function sameOrigin(a: ThreadOrigin | undefined, b: ThreadOrigin | undefined): boolean {
   if (a === b) return true;
-  return Boolean(a && b && a.kind === b.kind && a.taskId === b.taskId && a.title === b.title && a.status === b.status);
+  return Boolean(a && b && a.kind === b.kind && a.taskId === b.taskId && a.ref === b.ref && a.title === b.title && a.status === b.status);
 }
 
 function sameParticipants(a: readonly ThreadParticipant[] | undefined, b: readonly ThreadParticipant[] | undefined): boolean {
