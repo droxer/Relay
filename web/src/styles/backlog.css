@@ -420,7 +420,6 @@
   background: var(--action-soft);
   box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
   color: var(--ink-1);
-  font-weight: 600;
 }
 
 .backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-glyph { --prio-accent: var(--ink-1); }
