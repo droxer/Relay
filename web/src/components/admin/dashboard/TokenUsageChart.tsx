@@ -13,6 +13,7 @@ import { isVisibleAgentRuntime } from "../../../lib/agentRuntimeOrder";
 import { formatChartDate } from "../../../lib/chartDate";
 import { formatCompact } from "../../../lib/compactNumber";
 import { ChartLegend, StackedBarChart, type ChartColumn } from "./StackedBarChart";
+import { runtimeLabel } from "../../../lib/runtimeLabel";
 
 const WIDTH = 720;
 const HEIGHT = 200;
@@ -77,7 +78,7 @@ export function TokenUsageChart({ snapshot, compact, className }: TokenUsageChar
   const unreported = (snapshot.unreportedRuns ?? [])
     .filter(({ agent }) => isVisibleAgentRuntime(agent))
     .map(({ agent, runs }) => t("admin.v2.dash_tokens_unreported_item", {
-      agent: agent.charAt(0).toUpperCase() + agent.slice(1),
+      agent: runtimeLabel(agent),
       count: runs,
     }))
     .join(", ");

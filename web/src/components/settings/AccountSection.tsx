@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "../UserAvatar";
+import { ICON, RowOpen } from "../icons";
 
 const IDENTITY_AVATAR_SIZE = 48;
 
@@ -151,7 +152,16 @@ export function AccountSection({ user, onUserChange }: {
 
       <section className="account-group" aria-labelledby="account-connections-title">
         <h3 id="account-connections-title" className="pref-group-label">{t("account.connections")}</h3>
-        <a className="pref-option-label" href="/settings/connections">{t("connections.title")}</a>
+        {/* One row that reads as a destination: a name that is not the
+            heading again, what lives there, and the chevron every other row
+            that opens a page carries. */}
+        <a className="account-panel account-link-row" href="/settings/connections">
+          <span className="account-link-row-text">
+            <span className="pref-option-label">{t("account.manage_connections")}</span>
+            <span className="account-panel-note">{t("connections.intro")}</span>
+          </span>
+          <RowOpen className="account-link-row-open" size={ICON.sm} aria-hidden="true" />
+        </a>
       </section>
     </div>
   );

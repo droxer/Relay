@@ -419,6 +419,22 @@ button.computer-run-open:hover {
   line-height: var(--leading-snug);
 }
 
+.computer-fact-label {
+  flex: none;
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+}
+
+/* The label and its value share one gap, tighter than the gap between facts. */
+.computer-fact-label + .computer-fact-path {
+  margin-inline-start: calc(var(--sp-1) - var(--sp-4));
+}
+
+.computer-fact-path--unset {
+  color: var(--ink-4);
+}
+
 .computer-fact-path > span {
   display: inline-block;
   max-width: 100%;

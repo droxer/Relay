@@ -1922,9 +1922,9 @@
     "theme": {
       "group": "Theme",
       "light": "Light",
-      "light_sub": "Off-white canvas",
+      "light_sub": "Mist-grey canvas",
       "dark": "Dark",
-      "dark_sub": "Near-black canvas",
+      "dark_sub": "Blue-charcoal canvas",
       "system": "System",
       "system_sub": "Use system appearance"
     }
@@ -3577,7 +3577,8 @@
     "password_mismatch": "The passwords don’t match. Enter the new password again.",
     "password_same": "Choose a different password from your current password.",
     "save_error": "Couldn’t save your changes. Try again.",
-    "connections": "Connections"
+    "connections": "Connections",
+    "manage_connections": "Manage connections"
   },
   "github_import": {
     "manage_connections": "Manage connections",

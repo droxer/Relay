@@ -7,11 +7,11 @@ import type { ControlPanelDaemonNodeRecord } from "../../../types";
 import { isVisibleAgentRuntime } from "../../../lib/agentRuntimeOrder";
 import { runtimeInventory } from "../../../lib/runtimeInventory";
 import { formatCompact } from "../../../lib/compactNumber";
+import { runtimeLabel } from "../../../lib/runtimeLabel";
 
 function runtimeName(agent: string | null, unknown: string) {
   if (!agent) return unknown;
-  if (agent === "opencode") return "OpenCode";
-  return agent.charAt(0).toUpperCase() + agent.slice(1);
+  return runtimeLabel(agent);
 }
 
 export function RuntimeUsage({ snapshot }: { snapshot: TokenUsageState }) {

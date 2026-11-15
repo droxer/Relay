@@ -71,7 +71,10 @@
 
 /* The series vocabulary — one rule per key, shared by bar, legend swatch,
    and tooltip swatch, so a colour can never mean two things on one page. */
-.adm-series--completed,
+/* Completed runs are an outcome, so they take the outcome tone their failed
+   neighbour already does (--err): beside the fleet card's --ok "ready", a
+   teal "completed" put two greens on one page meaning the same thing. */
+.adm-series--completed { fill: var(--ok); background: var(--ok); }
 .adm-series--output { fill: var(--series-1); background: var(--series-1); }
 .adm-series--input { fill: var(--series-2); background: var(--series-2); }
 .adm-series--cache { fill: var(--series-3); background: var(--series-3); }

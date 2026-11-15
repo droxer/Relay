@@ -302,38 +302,35 @@
   letter-spacing: var(--type-micro-track);
 }
 
+/* The settings list reads like the properties column beside it: one label
+   column sized to the longest label, values on a shared left edge, no rules
+   between rows. Right-aligned values ruled into a table read as a second,
+   unrelated list design in the same drawer. */
 .record-facts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sp-3) var(--sp-4);
   margin: 0;
 }
 
 .record-facts-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding-bottom: var(--sp-2);
-  border-bottom: var(--hairline-soft);
-}
-
-.record-facts-row:last-child {
-  border-bottom: none;
+  display: contents;
 }
 
 .record-facts-row dt {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .record-facts-row dd {
+  min-width: 0;
   margin: 0;
   color: var(--ink-1);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
-  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 /* Prerequisites sit under the definition, full width: a ref and its title

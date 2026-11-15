@@ -1,4 +1,5 @@
 import type { AgentName } from "../types.js";
+import { runtimeLabel } from "./runtimeLabel.ts";
 
 export type PlanStep = { agent: AgentName };
 
@@ -26,5 +27,5 @@ export function parsePlanSteps(text: string, agentNames: readonly string[]): Pla
 }
 
 export function agentLabel(agent: AgentName): string {
-  return agent.charAt(0).toUpperCase() + agent.slice(1);
+  return runtimeLabel(agent);
 }

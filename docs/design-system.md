@@ -614,7 +614,7 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Don't paint shaded section bands over the canvas — the page is one sheet.
 - Don't fill backgrounds with status colours. The documented exceptions are
   the destructive hover inversion (and the destructive menu item's 10% `--err`
-  highlight), the fleet-health bar segments, the 16% diff-row washes, the 8%
+  highlight), the fleet-health bar segments and the dashboard's completed/failed chart series, the 16% diff-row washes, the 8%
   tone tints on `Badge`'s status variants (text stays the AA tone), and the
   composer mention token's `--warn` hatch for an unavailable agent.
 - Don't add elevation: no offset or blurred shadow beyond `--shadow-2`'s
@@ -689,15 +689,18 @@ explicit entry in that file's exceptions block.
 
 ## Data visualization
 
-Charts run on the ink ramp — a brightness ramp, not a hue ramp. The admin
-token-usage chart stacks a three-step ink ramp of fresh tokens, dimmest at the
-base: output = `--ink-2` (brightest — it is the product of the work), input =
-`--ink-3`, cache writes = `--ink-4`. Cache reads are not charted, matching the
-fresh-token headline. **No series may take
-`--action` or `--link-ink`**: an action-ink chart fill reads as "click me". Because the ramp
-deliberately uses neighbouring ink steps, each segment carries a
-`--surface-1` hairline stroke — adjacent steps of a monochrome ramp merge
-into one flat band without it.
+Charts draw volume from the `--tag-*` data palette (`--series-1..3` on
+`.adm-dash`), never `--action`, `--link-ink`, `--live`, or `--brand-lead`:
+an action-ink chart fill reads as "click me". The token-usage chart stacks
+fresh tokens — cache writes at the base (`--series-3`, kept quiet), input
+(`--series-2`), output on top (`--series-1`, the product of the work). Cache
+reads are not charted, matching the fresh-token headline. Each segment carries
+a `--surface-1` hairline stroke so neighbouring segments never merge into one
+band.
+
+Outcomes keep their status tones so one meaning wears one colour per page:
+completed threads `--ok`, failed `--err` — the same green the fleet card's
+"ready" uses, rather than a second, data-palette green beside it.
 
 Fleet-health bars double-encode: the ink ramp alone cannot separate five
 values in an 8px bar, so each segment's fill is its tone — running `--live`,
