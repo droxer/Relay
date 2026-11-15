@@ -9,7 +9,7 @@
   /* The hairline carries the tone: a blocked or failed execution warns, work
      that is waiting on a person uses the task's attention tone. One
      even border, not a thick coloured stripe down the leading edge. */
-  border: 0.5px solid color-mix(in srgb, var(--recovery-rail, var(--warn)) 55%, var(--line-2));
+  border: var(--sp-hairline) solid color-mix(in srgb, var(--recovery-rail, var(--warn)) 55%, var(--line-2));
   border-radius: var(--r-3);
   background: var(--surface-1);
   color: var(--ink-2);
@@ -77,7 +77,7 @@
   display: grid;
   gap: var(--sp-1);
   padding-block-start: var(--sp-3);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
   font: var(--type-body);
 }
 .blocker-resolve-label {

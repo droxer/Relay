@@ -12,7 +12,7 @@
   align-items: center;
   gap: 0;
   padding: var(--sp-0-5);
-  border: var(--sp-hairline) solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   /* Recessed track, raised pick — the segment control's rule. */
   background: var(--surface-2);

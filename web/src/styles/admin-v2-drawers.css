@@ -91,7 +91,7 @@
   justify-content: space-between;
   gap: var(--sp-4);
   padding: var(--sp-6) var(--sp-7);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 /* Optical alignment for the close button. Its box is a 36px control around a
@@ -206,7 +206,7 @@
      .adm-provision-section use. */
   gap: var(--sp-6);
   padding-bottom: var(--sp-6);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .adm-form-section:last-of-type {
@@ -244,7 +244,7 @@
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-2);
   background: var(--surface-1);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
   color: var(--ink-3);
@@ -271,7 +271,7 @@
   margin-left: calc(-1 * var(--sp-7));
   padding: var(--sp-4) var(--sp-7);
   background: var(--surface-3);
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 /* Left-aligned slot inside the pinned footer (e.g. Delete opposite the
@@ -309,7 +309,7 @@
   gap: var(--sp-3);
   padding-top: var(--sp-4);
   margin-top: var(--sp-2);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .adm-drawer-section-title {
@@ -346,7 +346,7 @@
   align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-6);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-0);
 }
@@ -362,7 +362,7 @@
   height: var(--control-h);
   border-radius: var(--r-full);
   background: var(--surface-2);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   color: var(--ink-1);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -404,7 +404,7 @@
   justify-content: space-between;
   gap: var(--sp-4);
   padding-bottom: var(--sp-1);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .adm-assign-nodes-count {
@@ -452,7 +452,7 @@
   width: 100%;
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface-0);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   /* List-row container, not a chip: the 6px container rung, matching
      .team-member-rows / .task-assignment-summary / .pref-option-list. */
   border-radius: var(--r-2);

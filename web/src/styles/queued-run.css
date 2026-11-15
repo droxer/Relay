@@ -67,7 +67,7 @@
   content: "";
   inline-size: var(--sp-5);
   block-size: 0;
-  border-top: 1px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .queued-run-dot {

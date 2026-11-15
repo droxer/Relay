@@ -37,7 +37,7 @@
     max(env(safe-area-inset-right), var(--sp-4))
     max(env(safe-area-inset-bottom), var(--sp-4))
     max(env(safe-area-inset-left), var(--sp-4));
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
   border-radius: var(--r-3) var(--r-3) 0 0;
   /* One step under the cards it holds, so the groups read as raised. */
   background: var(--surface-list);
@@ -69,7 +69,7 @@
 .more-sheet-grabber {
   width: 36px;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--r-full);
   background: var(--line-strong);
 }
 
@@ -169,7 +169,7 @@
   top: 0;
   right: 0;
   left: calc(var(--sp-4) + var(--icon-lg) + var(--sp-3));
-  height: 0.5px;
+  height: var(--sp-hairline);
   background: var(--line-1);
 }
 

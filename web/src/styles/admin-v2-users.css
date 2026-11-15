@@ -13,7 +13,7 @@
   flex: none;
   min-width: 0;
   padding-inline: var(--page-gutter);
-  border-bottom: var(--sp-hairline) solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .adm-users-tabs .sec-nav {
@@ -104,7 +104,6 @@
 
 /* ── Users view ───────────────────────────────────────────────── */
 
-
 /* Column tracks for the user table. Lengths, not scale steps — the design
    grid bans arbitrary bracket values in component classes. The table uses
    fixed layout (list-group.css), so the narrow tracks are WIDTHS — sized for
@@ -137,7 +136,6 @@ tr.is-pulse > td:first-child::after {
   0% { opacity: 1; }
   100% { opacity: 0; }
 }
-
 
 .adm-emp-id-line {
   display: flex;
@@ -232,7 +230,6 @@ tr.is-pulse > td:first-child::after {
   color: var(--ink-2);
 }
 
-
 /* A dark machine recedes, matching the node card's offline treatment. */
 .adm-computer-chip[data-online="false"] {
   color: var(--ink-3);
@@ -242,7 +239,6 @@ tr.is-pulse > td:first-child::after {
   color: var(--ink-4);
 }
 
-
 .adm-emp-metric {
   display: inline-flex;
   flex-direction: column;
@@ -251,40 +247,15 @@ tr.is-pulse > td:first-child::after {
   min-width: 3.5rem;
 }
 
-
 .adm-emp-ratio {
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
 
-
-/* There used to be a `:where(.admin-console) .tone-*` block here that painted
-   `color` for six tone names. It was the second contract on the `.tone-`
-   prefix — base.css defines those classes as setting the `--tone` VARIABLE and
-   nothing else — and it cost more than it bought. Being a bare class name it
-   leaked out of the console by source order, so two further "pin" rules had to
-   be written to shove `.adm-node-chip` and `.adm-agent-chip` back to their
-   identity ink; the pins then had to be specificity-matched and
-   source-ordered against the painter, and one of them needed `:has()` to carve
-   out the single chip that genuinely did want the tone.
-
-   All three rules are gone. The two elements that actually want a tone-colored
-   text fill now ask for it directly and locally, by reading the variable the
-   driver already sets: `.adm-assign-node-status` (admin-v2-drawers.css) and
-   the status-word chip below. Everything else keeps the neutral ink it
-   declares for itself, without a pin, because nothing is fighting it anymore.
-
-   Do not reintroduce a broad `.tone-* { color }` rule. A component that wants
-   the tone as ink writes `color: var(--tone, <its own neutral>)` on its own
-   selector. */
-
-/* ManageExecutorsDrawer reuses .adm-agent-chip for a plain status-word chip
-   (no vendor glyph, no dot) where the tone-colored text IS the content. The
-   marked identity chip keeps the chip's own --ink-3: an agent name
-   (CLAUDE/CODEX/…) is identity, never status. */
-.adm-agent-chip:not(:has(.adm-agent-chip-mark)) {
-  color: var(--tone, var(--ink-3));
-}
+/* `.tone-*` sets only the `--tone` variable (base.css). Do not add a broad
+   `.tone-* { color }` rule: a component that wants the tone as ink writes
+   `color: var(--tone, <its own neutral>)` on its own selector, as
+   `.adm-assign-node-status` (admin-v2-drawers.css) does. */
 
 /* ── Fleet view — filter chips ────────────────────────────────────── */
 .adm-fleet-filters {
@@ -337,7 +308,7 @@ tr.is-pulse > td:first-child::after {
 .adm-node-history {
   margin-top: var(--sp-8);
   padding-top: var(--sp-6);
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .adm-node-history-head {
@@ -367,7 +338,7 @@ tr.is-pulse > td:first-child::after {
 .adm-node-history-count {
   min-width: 2rem;
   padding: var(--sp-1) var(--sp-2);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   color: var(--ink-3);
   font: var(--type-micro);
@@ -401,7 +372,7 @@ tr.is-pulse > td:first-child::after {
   width: 2rem;
   height: 2rem;
   place-items: center;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-1);
   color: var(--ink-3);
   background: var(--surface-2);
@@ -682,7 +653,7 @@ tr.is-pulse > td:first-child::after {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 0.5px var(--ink-3);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--ink-3);
   animation: adm-pulse-fade var(--t-draw) var(--ease) forwards;
   pointer-events: none;
 }

@@ -133,7 +133,7 @@
   flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-5);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   /* The card plane (ui/card.tsx bg-card, --surface-1), shared with the
      admin fleet's .adm-node-card — one computer, one card. */
@@ -320,7 +320,7 @@
   /* Geometry beats the Button base utilities (h-(--control-h)). */
   height: auto;
   padding: var(--sp-1-5) var(--sp-2);
-  border: 0.5px solid transparent;
+  border: var(--sp-hairline) solid transparent;
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-2);
@@ -458,7 +458,7 @@ button.computer-run-open:hover {
   gap: var(--sp-2);
   padding: var(--sp-4);
   background: var(--surface-1);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-3);
 }
 
@@ -513,7 +513,7 @@ button.computer-run-open:hover {
   padding: var(--sp-3) var(--sp-4);
   appearance: none;
   background: var(--surface-0);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   color: inherit;
   transition:
@@ -582,7 +582,7 @@ button.computer-run-open:hover {
 
 .computer-os-tabs {
   gap: var(--sp-5);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .computer-os-tab {

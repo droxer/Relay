@@ -77,7 +77,7 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--page-gutter);
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   min-width: 0;
 }
 
@@ -117,7 +117,7 @@
   padding: var(--sp-3) var(--page-gutter);
   max-height: 35vh;
   overflow: auto;
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .computer-unplaced-work ul {

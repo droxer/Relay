@@ -91,7 +91,7 @@
   gap: var(--sp-2);
   margin: var(--sp-2) 0 0;
   padding: var(--sp-3) 0 0;
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
   list-style: none;
 }
 

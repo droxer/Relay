@@ -37,7 +37,7 @@
   /* --sp-2, not --sp-1-5: the sub-4px rungs are for binding glyph-tight pairs
      (palette.css), and this is a padded surface, not a pairing. */
   padding: var(--sp-2) var(--sp-3);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   background: var(--surface-0);
 }
 

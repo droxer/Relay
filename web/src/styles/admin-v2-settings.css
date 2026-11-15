@@ -15,7 +15,7 @@
      empty panel between rows; the hairline is the only separator. */
   gap: 0;
   max-width: 960px;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
 }
@@ -39,7 +39,7 @@
 }
 
 .adm-settings-item + .adm-settings-item {
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 /* Everything after the description is the control column; the description

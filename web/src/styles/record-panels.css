@@ -20,14 +20,13 @@
   gap: var(--sp-2);
   margin-top: var(--sp-4);
   padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   /* 6px control rung, matching the list rows it sits above. */
   border-radius: var(--r-2);
   color: var(--ink-2);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
 }
-
 
 .task-result-when,
 .task-result-duration,
@@ -51,7 +50,7 @@
 .record-panel {
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 /* A tab that opens on a panel already sits under the band's rule; a second
@@ -61,21 +60,6 @@
   margin-top: 0;
   padding-top: 0;
   border-top: 0;
-}
-
-/* Title on the left, the panel's one action (refresh, versions) at the
-   right on the same line. The action used to be a bare button wedged between
-   the title and the list. */
-.record-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-3);
-}
-
-.record-panel-head > .record-panel-title {
-  margin: 0;
 }
 
 .record-panel-title {
@@ -134,7 +118,7 @@
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
 }
 
 /* The list's own bar: how many files, and whether older versions show. */
@@ -148,7 +132,7 @@
   gap: var(--sp-2);
   min-height: var(--control-h);
   padding: 0 var(--sp-2) 0 var(--sp-4);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
   background: var(--surface-1);
 }
 
@@ -176,7 +160,7 @@
   width: 100%;
   padding: var(--sp-3) var(--sp-4);
   border: 0;
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   background: transparent;
   color: var(--ink-1);
   text-align: left;
@@ -294,7 +278,7 @@
 .record-timeline {
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .record-timeline-list {
@@ -337,7 +321,7 @@
   width: var(--dot-sm);
   height: var(--dot-sm);
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--r-full);
   background: var(--ink-4);
   translate: none;
 }
@@ -349,7 +333,7 @@
   left: calc(var(--sp-0-5) + (var(--dot-sm) - var(--sp-hairline)) / 2);
   top: calc(0.42em + var(--dot-sm) + var(--sp-0-5));
   bottom: calc(-1 * var(--sp-2));
-  width: 0.5px;
+  width: var(--sp-hairline);
   height: auto;
   background: var(--line-2);
   translate: none;
@@ -433,6 +417,6 @@
 
   .record-workspace-files .workspace-pane-browse {
     border-right: 0;
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
   }
 }

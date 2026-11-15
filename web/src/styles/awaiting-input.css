@@ -71,12 +71,12 @@ summary.awaiting-input-notes-title:hover { color: var(--ink-1); }
   display: grid;
   margin: var(--sp-1) 0 0;
   padding: 0;
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-2);
   list-style: none;
 }
 
-.awaiting-input-choices > li + li { border-top: 0.5px solid var(--line-1); }
+.awaiting-input-choices > li + li { border-top: var(--hairline); }
 
 .awaiting-input-choice {
   display: grid;

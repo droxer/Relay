@@ -349,7 +349,7 @@ button.inline-field[aria-expanded="true"] {
   display: flex;
   justify-content: flex-end;
   padding: var(--sp-1);
-  border-top: 1px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -518,7 +518,7 @@ button.inline-field[aria-expanded="true"] {
   gap: var(--sp-3);
   min-height: var(--control-h);
   padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   background: var(--surface-1);
   color: var(--ink-1);
@@ -546,7 +546,7 @@ button.inline-field[aria-expanded="true"] {
   height: auto;
   min-height: var(--control-h-xs);
   padding: var(--sp-1-5) var(--sp-2);
-  border: 0.5px solid transparent;
+  border: var(--sp-hairline) solid transparent;
   border-radius: var(--r-2);
   color: var(--ink-4);
   font: var(--type-label);
@@ -592,7 +592,7 @@ tr[data-selected="true"] > td:first-child {
   background: var(--action-soft);
   --agent-pip-surface: color-mix(in srgb, var(--action) var(--agent-pip-selection-strength, 8%), var(--surface-0));
   border-color: var(--action);
-  box-shadow: inset 0 0 0 0.5px var(--action);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--action);
 }
 
 /* Floating, not docked into the page header: the header keeps its create and
@@ -610,7 +610,7 @@ tr[data-selected="true"] > td:first-child {
   /* Fixed, so 100% is the viewport without its scrollbar; 100vw is not. */
   max-width: calc(100% - var(--sp-8));
   padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-3);
   box-shadow: var(--shadow-2);
@@ -746,7 +746,7 @@ tr[data-selected="true"] > td:first-child {
        and the meta line share one left edge and never compete with it for
        width. */
     padding: var(--sp-3) var(--sp-4) var(--sp-3) calc(var(--sp-4) + var(--row-mark-w));
-    border-bottom: 0.5px solid var(--line-2);
+    border-bottom: var(--hairline-soft);
   }
 
   .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"] {

@@ -123,7 +123,7 @@
     gap: var(--sp-1);
     min-width: 0;
     padding: max(env(safe-area-inset-top), var(--sp-1)) max(env(safe-area-inset-right), var(--sp-2)) var(--sp-1) max(env(safe-area-inset-left), var(--sp-4));
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
     background: var(--surface-0);
     z-index: var(--z-drawer);
     /* Keep the persistent header on its own compositing layer: mobile Safari
@@ -426,7 +426,7 @@
   .project-folder-select {
     height: auto;
     min-height: 76px;
-    padding: 14px 16px;
+    padding: var(--sp-3) var(--sp-4);
   }
 
   .project-folder-select > .project-folder-name {
@@ -436,14 +436,14 @@
     -webkit-line-clamp: 2;
     white-space: normal;
     overflow-wrap: anywhere;
-    font-size: 17px;
-    line-height: 24px;
+    font-size: var(--fs-title);
+    line-height: var(--leading-normal);
   }
 
   .project-folder-meta,
   .project-folder-count {
-    font-size: 14px;
-    line-height: 20px;
+    font-size: var(--fs-2);
+    line-height: var(--leading-snug);
   }
 
   .project-folder-count {
@@ -495,7 +495,7 @@
     gap: 0;
     min-height: 0;
     padding: 0 max(env(safe-area-inset-right), var(--sp-1)) env(safe-area-inset-bottom) max(env(safe-area-inset-left), var(--sp-1));
-    border-top: 0.5px solid var(--line-2);
+    border-top: var(--hairline-soft);
     border-right: 0;
     background: var(--surface-0);
     overflow: hidden;
