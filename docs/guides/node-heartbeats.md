@@ -174,10 +174,11 @@ errors, `5xx`, `408`, and `429` retry forever with equal jitter and honor
 covers a backend restart or deploy; after that the ceiling doubles to 15
 seconds, so a fleet does not hammer a backend that has been down for minutes.
 
-A long wait never delays recovery. A heartbeat that gets through after a
-failure wakes the poll loop's wait at once, so a recovered backend is polled
-within one beat rather than one backoff. The daemon also watches for its own
-timers arriving late (`wake-detector.ts`: a tick more than 20 seconds
+A heartbeat that gets through after a failure ends the poll loop's ordinary
+backoff at once. An explicit `Retry-After` remains a minimum for the failed
+request even when heartbeats succeed; shutdown can still interrupt that wait.
+The daemon also watches for its own timers arriving late
+(`wake-detector.ts`: a tick more than 20 seconds
 overdue), which is what a laptop waking from sleep looks like. On a resume it
 drops the open poll, whose connection the backend has usually closed without
 this side hearing, beats immediately, and polls without waiting; the log says
