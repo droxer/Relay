@@ -21,7 +21,7 @@
   border-radius: var(--r-2);
   background: var(--surface-2);
   color: var(--ink-1);
-  box-shadow: inset 0 0 0 0.5px var(--line-2);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
 }
 
 .agent-state > svg {
@@ -358,7 +358,7 @@
 .backlog-action-group + .backlog-action-group {
   margin-left: var(--sp-1);
   padding-left: calc(var(--sp-2) + var(--sp-1));
-  border-left: 0.5px solid var(--line-1);
+  border-left: var(--hairline);
 }
 
 /* GEOMETRY ONLY — paint belongs to the Button variant the call site picks.

@@ -309,7 +309,7 @@
   width: var(--control-h-sm);
   height: var(--control-h-sm);
   padding: 0;
-  border: 0.5px solid transparent;
+  border: var(--sp-hairline) solid transparent;
   border-radius: var(--r-2);
   color: var(--ink-3);
   background: transparent;

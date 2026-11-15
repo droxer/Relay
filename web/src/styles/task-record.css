@@ -52,7 +52,7 @@
 
 .record-run-head {
   padding-block: 0 var(--sp-2);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
   color: var(--ink-3);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -91,7 +91,7 @@
    its columns. The rule hides beside the selected row so its wash reads as
    one shape. */
 .record-run + .record-run {
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .record-run:has(> .record-run-link[aria-pressed="true"]) + .record-run,
@@ -194,7 +194,7 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .record-run-detail-head {
@@ -266,7 +266,7 @@
 .record-run-more {
   margin-top: var(--sp-3);
   padding: var(--sp-2) var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   background: none;
   color: var(--ink-2);
@@ -315,7 +315,7 @@
   justify-content: space-between;
   gap: var(--sp-3);
   padding-bottom: var(--sp-2);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .record-facts-row:last-child {
@@ -404,7 +404,7 @@
   flex-wrap: wrap;
   gap: var(--sp-3);
   padding: 0 var(--sp-7);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 /* The record's actions as one cluster at the row's end; when the tabs take
@@ -468,7 +468,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--sp-4) var(--sp-3);
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
 }
 
 .record-runs-workspace {
@@ -550,7 +550,7 @@
       max(env(safe-area-inset-right), var(--sp-4))
       max(env(safe-area-inset-bottom), var(--sp-3))
       max(env(safe-area-inset-left), var(--sp-4));
-    border-top: 0.5px solid var(--line-1);
+    border-top: var(--hairline);
     background: var(--surface-0);
   }
 
@@ -589,7 +589,7 @@
   .record-runs-ledger {
     max-height: 40vh;
     border-right: 0;
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
   }
 
   .record-runs-message {
@@ -636,7 +636,7 @@
   flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
   color: var(--ink-2);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);

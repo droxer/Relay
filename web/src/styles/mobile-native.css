@@ -153,7 +153,7 @@
       max(env(safe-area-inset-right), var(--sp-2))
       max(env(safe-area-inset-bottom), var(--sp-2))
       max(env(safe-area-inset-left), var(--sp-2));
-    border-top: 0.5px solid var(--line-1);
+    border-top: var(--hairline);
     border-radius: var(--r-3) var(--r-3) 0 0;
     overscroll-behavior: contain;
     /* The scrim is the sheet's own shadow: it dims the page behind without
@@ -211,7 +211,7 @@
     left: 50%;
     width: 36px;
     height: 4px;
-    border-radius: 2px;
+    border-radius: var(--r-full);
     background: var(--line-strong);
     translate: -50% 0;
   }

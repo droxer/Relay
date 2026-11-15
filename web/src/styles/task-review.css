@@ -1,7 +1,7 @@
 .task-review {
   min-width: 0;
   padding: var(--sp-4);
-  border-bottom: 1px solid var(--line-1);
+  border-bottom: var(--hairline);
   color: var(--ink-2);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
@@ -52,7 +52,7 @@
 .task-review-report + .task-review-report {
   margin-top: var(--sp-4);
   padding-top: var(--sp-3);
-  border-top: 1px solid var(--line-2);
+  border-top: var(--hairline-soft);
 }
 
 .task-review-actions,

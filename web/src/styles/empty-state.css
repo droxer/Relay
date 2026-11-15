@@ -52,7 +52,7 @@
   width: var(--sp-3);
   height: var(--sp-3);
   border: 1px solid var(--line-1);
-  border-radius: 50%;
+  border-radius: var(--r-full);
   background: var(--surface-0);
 }
 

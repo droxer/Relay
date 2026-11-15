@@ -8,7 +8,7 @@
   min-width: 0;
   container-type: inline-size;
   padding-bottom: var(--sp-4);
-  border-bottom: 1px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .project-manager-line-text {
@@ -81,8 +81,8 @@
 
 .manager-proposal h3 { margin: 0; font-size: var(--text-lg); }
 .manager-before { margin: var(--sp-1) 0; color: var(--ink-2); font-size: var(--text-sm); }
-.manager-proposal { min-width: 0; overflow-wrap: anywhere; border-top: 1px solid var(--line-1); padding-block: var(--sp-4); }
-.manager-operation { border: 0; border-top: 1px solid var(--line-1); margin-block: var(--sp-4); padding: var(--sp-3) 0; min-width: 0; }
+.manager-proposal { min-width: 0; overflow-wrap: anywhere; border-top: var(--hairline); padding-block: var(--sp-4); }
+.manager-operation { border: 0; border-top: var(--hairline); margin-block: var(--sp-4); padding: var(--sp-3) 0; min-width: 0; }
 .manager-operation legend { max-width: 100%; }
 .manager-operation legend label { display: flex; align-items: center; gap: var(--sp-2); }
 .manager-operation input[type="checkbox"] { flex: none; accent-color: var(--action); }

@@ -21,7 +21,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
   /* Shell zone role (see --surface-list in palette.css): every list rail —
      threads, agents, teams — sits on the same elevation step between the nav
      rail and the detail canvas. This one sat flat on --surface-0, so the
@@ -367,7 +367,7 @@
 
   .agents-roster {
     border-right: 0;
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
     max-height: 46vh;
   }
 

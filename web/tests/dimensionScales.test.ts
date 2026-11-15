@@ -372,3 +372,39 @@ describe("tabular figures keep the root's feature recipe", () => {
     );
   });
 });
+
+describe("edges and corners", () => {
+  /** The pre-auth screens carry their own register (--lg-*, --ld-*) and stay out. */
+  const appSheets = surfaceSheets.filter((s) => !/^(landing|login)\.css$/.test(s.rel));
+
+  it("rounds every corner from the radius scale", () => {
+    const offenders: string[] = [];
+    for (const sheet of surfaceSheets) {
+      for (const m of stripComments(sheet.text).matchAll(/border(?:-[a-z-]+)?-radius:\s*([^;]+);/g)) {
+        const raw = m[1].replace(/var\([^)]*\)|calc\([^;]*\)/g, "");
+        if (/\d+(?:\.\d+)?(?:px|rem|em|%)/.test(raw)) offenders.push(`${sheet.rel}: ${m[0]}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `use --r-1/2/3/full instead of a raw radius:\n  ${offenders.join("\n  ")}`);
+  });
+
+  it("spells the hairline width with --sp-hairline", () => {
+    const offenders: string[] = [];
+    for (const sheet of appSheets) {
+      for (const m of stripComments(sheet.text).matchAll(/(?:border[a-z-]*|box-shadow|width|height):[^;]*(?<![\w.-])0\.5px[^;]*;/g)) {
+        offenders.push(`${sheet.rel}: ${m[0]}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `raw 0.5px hairlines:\n  ${offenders.join("\n  ")}`);
+  });
+
+  it("draws line-coloured hairlines through the --hairline roles", () => {
+    const offenders: string[] = [];
+    for (const sheet of appSheets) {
+      for (const m of stripComments(sheet.text).matchAll(/border[a-z-]*:\s*var\(--sp-hairline\) solid var\(--line-[12]\)/g)) {
+        offenders.push(`${sheet.rel}: ${m[0]}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `use var(--hairline) / var(--hairline-soft):\n  ${offenders.join("\n  ")}`);
+  });
+});

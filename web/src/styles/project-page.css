@@ -38,13 +38,13 @@
   margin: 0 0 var(--sp-8);
   padding: 0;
   list-style: none;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   overflow: hidden;
 }
 
 .project-member-list > li + li {
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .project-member-row {
@@ -277,7 +277,7 @@ button.project-member-row:hover .project-member-row-open {
   align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-3) var(--page-gutter);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 /* The rail's section list, laid flat: same rows, same selection fill, same
@@ -446,7 +446,7 @@ button.project-member-row:hover .project-member-row-open {
 }
 
 .project-dashboard-suggestion + .project-dashboard-suggestion {
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 /* Why the agent suggested it, then the way to the run that did. */
@@ -590,7 +590,7 @@ button.project-member-row:hover .project-member-row-open {
   }
 
   .project-dashboard .adm-dash-tile:nth-child(-n + 2) {
-    border-bottom: 0.5px solid var(--line-1);
+    border-bottom: var(--hairline);
   }
 }
 
@@ -632,7 +632,7 @@ button.project-member-row:hover .project-member-row-open {
   display: grid;
   width: 100%;
   max-width: 720px;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
 }
 
@@ -648,7 +648,7 @@ button.project-member-row:hover .project-member-row-open {
   display: grid;
   gap: var(--sp-1);
   padding: var(--sp-4) var(--sp-5);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .project-settings-head > .workspace-dossier-section-title {
@@ -723,7 +723,7 @@ button.project-member-row:hover .project-member-row-open {
   flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-5);
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .project-settings-stamps {
@@ -762,7 +762,7 @@ button.project-member-row:hover .project-member-row-open {
 }
 
 .project-settings-danger-row + .project-settings-danger-row {
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .project-settings-danger-copy {
@@ -877,7 +877,7 @@ button.project-member-row:hover .project-member-row-open {
   display: grid;
   gap: var(--sp-2);
   padding: var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
 }
 

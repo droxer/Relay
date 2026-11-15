@@ -149,7 +149,7 @@
   gap: var(--sp-3);
   min-height: 56px;
   padding: var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   background: var(--surface-1);
   color: var(--ink-1);
@@ -185,7 +185,7 @@
   width: var(--avatar-md);
   height: var(--avatar-md);
   place-items: center;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-1);
   background: var(--surface-0);
   color: var(--ink-1);
@@ -210,7 +210,7 @@
 .create-agent-runtime-check {
   width: var(--dot-lg);
   height: var(--dot-lg);
-  border: 0.5px solid var(--ink-4);
+  border: var(--sp-hairline) solid var(--ink-4);
   border-radius: var(--r-full);
 }
 
@@ -225,7 +225,7 @@
   gap: var(--sp-1);
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-2);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   background: var(--surface-1);
 }
 
@@ -260,7 +260,7 @@
      --surface-1 track — #fafafa on #ffffff in light, 1.04:1 — and read as a
      hover rather than a choice. */
   background: var(--surface-2);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
 }
 
 /* The segment IS the radio item — a `<button role="radio">` from the base-ui
@@ -325,7 +325,7 @@
 .adm-profile-segment-btn[data-active="true"] {
   background: var(--surface-3);
   color: var(--ink-1);
-  box-shadow: inset 0 0 0 0.5px var(--line-1);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-1);
 }
 
 .adm-profile-segment-dot {
@@ -361,7 +361,7 @@
   gap: var(--sp-4);
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface-0);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
 }
 
@@ -397,7 +397,7 @@
   width: var(--control-h-xs);
   height: var(--control-h-xs);
   flex-shrink: 0;
-  border: 0.5px solid transparent;
+  border: var(--sp-hairline) solid transparent;
   border-radius: var(--r-2);
   background: transparent;
   color: var(--ink-3);
@@ -421,7 +421,7 @@
 /* ── Credentials drawer rows ──────────────────────────────────────── */
 .adm-cred-row {
   padding: var(--sp-4) 0;
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
@@ -441,7 +441,7 @@
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface-2);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
 }
 
@@ -523,7 +523,7 @@
   width: 100%;
   max-width: 440px;
   background: var(--surface-0);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   padding: var(--sp-8);
   display: flex;

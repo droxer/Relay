@@ -48,7 +48,7 @@
      time · 30 days" — moves every value in its row down with it instead of
      leaving that one number a line lower than its neighbours. */
   grid-auto-rows: auto auto 1fr;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
   overflow: hidden;
@@ -96,7 +96,7 @@
   row-gap: var(--sp-2);
   min-height: var(--card-h-kpi);
   padding: var(--sp-5);
-  border-right: 0.5px solid var(--line-1);
+  border-right: var(--hairline);
   min-width: 0;
   overflow: hidden;
 }
@@ -395,7 +395,7 @@
 .adm-dash-bar-seg {
   display: block;
   height: 100%;
-  border-right: 0.5px solid var(--surface-1);
+  border-right: var(--sp-hairline) solid var(--surface-1);
 }
 
 .adm-dash-bar-seg:last-child { border-right: none; }
@@ -522,8 +522,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1-5);
-  /* The metric-label role, shared with .adm-chat-metric-label and
-     .adm-user-stat-label: a structural label, so --type-micro. */
+  /* The metric-label role, shared with .adm-chat-metric-label: a structural
+     label, so --type-micro. */
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-3);
@@ -666,7 +666,7 @@
   .adm-dash-tile { grid-column: span 1; }
   /* Two columns: divide rows, and let an odd final metric span the rail. */
   .adm-dash-tile:nth-child(2n) { border-right: none; }
-  .adm-dash-tile:not(:last-child):not(:nth-last-child(2):nth-child(odd)) { border-bottom: 0.5px solid var(--line-1); }
+  .adm-dash-tile:not(:last-child):not(:nth-last-child(2):nth-child(odd)) { border-bottom: var(--hairline); }
   .adm-dash-tile:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: none; }
   /* The floor exists so a desktop row holds one height while readings load.
      Stacked, each row is its own height, and the floor only padded the
@@ -706,7 +706,7 @@
   .adm-dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adm-dash-tile { grid-column: span 1; min-height: 0; }
   .adm-dash-tile:nth-child(2n) { border-right: none; }
-  .adm-dash-tile:not(:last-child):not(:nth-last-child(2):nth-child(odd)) { border-bottom: 0.5px solid var(--line-1); }
+  .adm-dash-tile:not(:last-child):not(:nth-last-child(2):nth-child(odd)) { border-bottom: var(--hairline); }
   .adm-dash-tile:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: none; }
 }
 
@@ -789,7 +789,7 @@
   text-align: right;
   vertical-align: top;
   overflow-wrap: anywhere;
-  border-bottom: 1px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .adm-runtime-stats th:first-child { text-align: left; width: 34%; }

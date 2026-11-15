@@ -75,7 +75,7 @@
 }
 
 .account-panel {
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   overflow: hidden;
 }
@@ -109,7 +109,7 @@
   flex-wrap: wrap;
   gap: var(--sp-3) var(--sp-4);
   padding: var(--sp-3) var(--sp-5);
-  border-top: 0.5px solid var(--line-2);
+  border-top: var(--hairline-soft);
   background: var(--surface-1);
 }
 

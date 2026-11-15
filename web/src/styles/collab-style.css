@@ -38,7 +38,7 @@
 /* The inherit row closes the group it heads: a hairline, not a blank gap. */
 .collab-style-option-inherit {
   margin-bottom: var(--sp-1);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
   border-radius: var(--r-2) var(--r-2) 0 0;
 }
 
@@ -92,7 +92,7 @@
 .collab-style-option-art {
   display: block;
   flex-shrink: 0;
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   background: var(--surface-2);
 }
@@ -126,7 +126,7 @@
   gap: var(--sp-2);
   min-width: 0;
   padding: var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
   color: var(--ink-1);
@@ -251,7 +251,7 @@
   min-width: 0;
   max-width: 100%;
   padding: var(--sp-3);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
 }
@@ -286,7 +286,7 @@
   gap: var(--sp-2);
   min-width: 0;
   padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
-  border: 0.5px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-2);
   background: var(--surface-2);
 }
@@ -305,7 +305,7 @@
   flex-shrink: 0;
   width: var(--avatar-md);
   height: var(--avatar-md);
-  border: 0.5px solid var(--ink-4);
+  border: var(--sp-hairline) solid var(--ink-4);
   border-radius: var(--r-full);
   background: var(--surface-1);
   color: var(--ink-2);

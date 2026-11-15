@@ -50,7 +50,7 @@
   flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);
-  border-bottom: 0.5px solid var(--line-1);
+  border-bottom: var(--hairline);
 }
 
 .notif-actions {
@@ -178,7 +178,7 @@
 .notif-foot {
   flex: none;
   padding: var(--sp-2) var(--sp-4);
-  border-top: 0.5px solid var(--line-1);
+  border-top: var(--hairline);
 }
 
 .notif-settings-link {
@@ -200,7 +200,7 @@
   align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-4) var(--sp-5);
-  border-bottom: 0.5px solid var(--line-2);
+  border-bottom: var(--hairline-soft);
 }
 
 .notif-pref-row:last-child {

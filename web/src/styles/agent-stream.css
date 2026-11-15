@@ -10,7 +10,7 @@
 
 .collaboration-tree {
   padding: var(--sp-3) var(--sp-4);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-2);
 }
 
@@ -42,8 +42,8 @@
 .collaboration-branch {
   width: 6px;
   height: 6px;
-  border-right: 0.5px solid var(--ink-3);
-  border-bottom: 0.5px solid var(--ink-3);
+  border-right: var(--sp-hairline) solid var(--ink-3);
+  border-bottom: var(--sp-hairline) solid var(--ink-3);
   transform: rotate(-45deg);
   transition: transform var(--t-fast) var(--ease);
 }
@@ -73,7 +73,7 @@
      so it stays a literal. */
   margin-left: calc(var(--dot) + 3px);
   padding-left: var(--sp-4);
-  border-left: 0.5px solid var(--line-2);
+  border-left: var(--hairline-soft);
 }
 
 .collaboration-node-body > p {
@@ -212,7 +212,7 @@
   min-width: 0;
   margin-left: 6px;
   padding-left: calc(var(--sp-5) - 6px - var(--sp-hairline));
-  border-left: 0.5px solid var(--line-2);
+  border-left: var(--hairline-soft);
   font-family: var(--font-sans);
   font-size: var(--fs-transcript);
   line-height: var(--leading-loose);
@@ -306,7 +306,7 @@
   min-width: 0;
   margin-left: 6px;
   padding-left: calc(var(--sp-5) - 6px - var(--sp-hairline));
-  border-left: 0.5px solid var(--line-2);
+  border-left: var(--hairline-soft);
 }
 
 .agent-activity-body > .agent-tool + .agent-tool,
@@ -482,7 +482,7 @@
 .agent-raw {
   margin: 0;
   padding: var(--sp-3) var(--sp-4);
-  border: 0.5px solid var(--line-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-2);
   background: var(--surface-1);
   color: var(--ink-2);
