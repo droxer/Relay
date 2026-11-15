@@ -35,7 +35,7 @@ export function TaskRecordDefinition({
 }) {
   const { t } = useTranslation();
 
-  const rows: { key: string; label: string; value: ReactNode }[] = [
+  const rows: { key: string; label: string; value: ReactNode; meta?: boolean }[] = [
     {
       key: "priority",
       label: t("backlog.priority"),
@@ -66,8 +66,8 @@ export function TaskRecordDefinition({
       label={task.collaborationStyle ? undefined : t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(team)}`) })} />,
   });
   rows.push(
-    { key: "created", label: t("record.created"), value: recordTimestamp(task.createdAt, locale) },
-    { key: "updated", label: t("record.updated"), value: recordTimestamp(task.updatedAt, locale) },
+    { key: "created", label: t("record.created"), value: recordTimestamp(task.createdAt, locale), meta: true },
+    { key: "updated", label: t("record.updated"), value: recordTimestamp(task.updatedAt, locale), meta: true },
   );
 
   return (
@@ -84,7 +84,7 @@ export function TaskRecordDefinition({
         <h3 className="record-section-title">{t("record.settings")}</h3>
         <dl className="record-facts">
           {rows.map((row) => (
-            <div className="record-facts-row" key={row.key}>
+            <div className={row.meta ? "record-facts-row record-facts-row--meta" : "record-facts-row"} key={row.key}>
               <dt>{row.label}</dt>
               <dd>{row.value}</dd>
             </div>

@@ -281,18 +281,23 @@
 
 /* ── Definition ───────────────────────────────────────────────────── */
 
-/* Document and rail, the same split the agent profile uses: the prose gets
-   the measure, the settings get the column. */
+/* One reading column: description, then settings, then prerequisites. The
+   record's properties already have a column of their own beside the tab
+   (RecordLayout), so a second settings column here made three columns of
+   facts, each cramped enough to wrap a date onto two lines. Sections are
+   divided by a hairline rule and a title, never boxed: a card inside the
+   record reads as a different surface from the rail beside it. */
 .record-definition {
-  display: grid;
-  gap: var(--sp-7);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  max-width: var(--measure-wide);
 }
 
-@container record (min-width: 768px) {
-  .record-definition {
-    grid-template-columns: minmax(0, 1fr) 18rem;
-  }
+.record-definition-facts {
+  max-width: var(--measure-wide);
+  margin-block-start: var(--sp-6);
+  padding-block-start: var(--sp-5);
+  border-top: var(--hairline);
 }
 
 .record-section-title {
@@ -302,13 +307,28 @@
   letter-spacing: var(--type-micro-track);
 }
 
-/* The settings list reads like the properties column beside it: one label
-   column sized to the longest label, values on a shared left edge, no rules
-   between rows. Right-aligned values ruled into a table read as a second,
-   unrelated list design in the same drawer. */
+/* A description's own headings sit under the record title, so they step
+   down to the reading size instead of outranking it at 22–28px. */
+.record-definition-doc .doc-prose :is(h1, h2, h3) {
+  margin-block-start: var(--sp-5);
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: var(--fs-document);
+}
+
+.record-definition-doc .doc-prose > :first-child {
+  margin-block-start: 0;
+}
+
+.record-definition-doc .doc-prose > :last-child {
+  margin-block-end: 0;
+}
+
+/* The same grammar as the properties rail beside it: a fixed label column,
+   values on one left edge, no rules between rows. */
 .record-facts {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: 8rem minmax(0, 1fr);
   align-items: baseline;
   gap: var(--sp-3) var(--sp-4);
   margin: 0;
@@ -333,25 +353,42 @@
   overflow-wrap: anywhere;
 }
 
-/* Prerequisites sit under the definition, full width: a ref and its title
-   need the room the 18rem facts column does not have. */
-.record-definition + .record-definition-facts {
-  margin-block-start: var(--sp-7);
+/* Bookkeeping timestamps recede behind the settings that govern a run. */
+.record-facts-row--meta dd {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
 }
+
+/* An empty value is a value, not a paragraph: no block padding in the list. */
+.record-facts .record-empty {
+  padding: 0;
+}
+
+/* One table of prerequisites: ref, title, state, action each in a column of
+   their own, so the states and Remove line up down the list instead of
+   trailing each title at a different x. */
 .record-prerequisites {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--sp-1);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .record-prerequisite {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
-  min-width: 0;
+  display: contents;
+}
+/* A phone-width record cannot spare the label column a prerequisite row
+   needs for its title: the label goes above the list instead. */
+@container record (max-width: 640px) {
+  [aria-labelledby="record-prerequisites"] .record-facts {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--sp-1);
+  }
+  [aria-labelledby="record-prerequisites"] .record-facts-row + .record-facts-row dt {
+    margin-block-start: var(--sp-3);
+  }
 }
 .record-prerequisite-title {
   min-width: 0;
@@ -359,8 +396,22 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.record-prerequisite-state { color: var(--ink-3); }
-.record-prerequisite-add { margin-block-start: var(--sp-2); margin-inline-start: auto; }
+.record-prerequisite-state {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+/* Remove is a quiet row action at the row's own size, not a body-sized
+   button competing with the title. */
+.record-prerequisite > button {
+  justify-self: end;
+  color: var(--ink-3);
+  font: var(--type-meta);
+}
+.record-prerequisite > button:hover {
+  color: var(--ink-1);
+}
+.record-prerequisite-add { margin-block-start: var(--sp-3); }
 
 /* ── Drawer presentation ──────────────────────────────────────────── */
 
