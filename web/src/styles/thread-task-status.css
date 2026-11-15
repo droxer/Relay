@@ -139,6 +139,9 @@
 .task-action-bar {
   display: flex;
   align-items: center;
+  /* A grid item of the composer form: without this its min-content is the
+     whole nowrap line, which pushes the bar (and its button) off a phone. */
+  min-width: 0;
   padding-block: var(--sp-2) calc(var(--sp-2) + 1px);
   padding-inline-end: var(--sp-2);
 }
