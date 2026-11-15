@@ -235,6 +235,62 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
+/* Why the machine is not simply online, and what to do: a quiet inset under
+   the header, one ink step down from the name. The glyph carries the tone;
+   the text stays ink so a dark computer does not read as an incident. */
+.computer-card-connection {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: var(--hairline);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+}
+
+.computer-card-connection > svg {
+  flex: 0 0 auto;
+  /* Centre the glyph on the first line of text. */
+  margin-top: 0.125em;
+  color: var(--ink-3);
+}
+
+.computer-card-connection[data-tone="warn"] > svg {
+  color: var(--warn);
+}
+
+.computer-card-connection[data-tone="bad"] > svg {
+  color: var(--err);
+}
+
+.computer-card-connection-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.computer-card-connection-title,
+.computer-card-connection-body {
+  margin: 0;
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.computer-card-connection-title {
+  color: var(--ink-1);
+}
+
+.computer-card-connection-body {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.computer-card-connection-count {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
 .computer-card-actions {
   display: flex;
   flex: 0 0 auto;

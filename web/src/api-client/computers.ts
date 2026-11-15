@@ -8,6 +8,7 @@ import type {
   SandboxesResponse,
   SandboxRecord,
 } from "../types.ts";
+import type { ComputerTransportSnapshot } from "../lib/computerConnection.ts";
 import { apiJson } from "./client.ts";
 
 export function listSandboxes(token?: string, signal?: AbortSignal): Promise<SandboxesResponse> {
@@ -16,6 +17,11 @@ export function listSandboxes(token?: string, signal?: AbortSignal): Promise<San
 
 export function listDaemonNodes(token?: string, signal?: AbortSignal): Promise<DaemonNodesResponse> {
   return apiJson<DaemonNodesResponse>("/daemon-nodes", { token, signal });
+}
+
+/** A computer's last self-reported transport diagnostics; its owner only. */
+export function getComputerTransport(nodeId: string, signal?: AbortSignal): Promise<ComputerTransportSnapshot> {
+  return apiJson<ComputerTransportSnapshot>(`/daemon-nodes/${encodeURIComponent(nodeId)}/transport`, { signal });
 }
 
 export function updateComputerDisplayName(

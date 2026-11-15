@@ -82,8 +82,9 @@ const routeThreads = [
   agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [],
   eventCount: 0, artifactCount: 0, runCount: 0,
 }));
-const routeTasks = ["task", "automation", "project-task", "project-automation"].map(id => ({
-  id: `task-${id}`, title: `Origin ${id}`, description: "", priority: "normal", status: "done",
+const routeTasks = ["task", "automation", "project-task", "project-automation"].map((id, index) => ({
+  // The backend numbers every task; a thread row leads with that ref.
+  id: `task-${id}`, number: index + 1, title: `Origin ${id}`, description: "", priority: "normal", status: "done",
   projectId: id.startsWith("project-") ? "launch" : null, computerId: "route-computer",
   isRoutine: false, ...(id.includes("automation") ? { sourceRoutineId: `parent-${id}` } : {}),
   linkedSessionIds: [id], ownerUserId: "routes-user", createdAt: routeStamp, updatedAt: routeStamp,
@@ -140,7 +141,9 @@ for (const mobile of [false, true]) {
         await expect(page.locator(`.sidenav-nav [data-nav="${surface.selected}"]`)).toHaveAttribute("aria-current", "page");
         await expect(page.locator('.sidenav-nav [aria-current="page"]')).toHaveCount(1);
         if (surface.rows === 7) {
-          await expect(rail.locator(".conversation-name")).toHaveText(routeThreads.map(thread => thread.title));
+          await expect(rail.locator(".conversation-name strong")).toHaveText(routeThreads.map(thread => thread.title));
+          // Task threads lead with their task's number, never its raw id.
+          await expect(rail.locator(".conversation-ref")).toHaveText(["#1", "#2", "#3", "#4"]);
         }
         if (surface.selected === "threads") {
           await expect(rail.locator(".computer-workspace-nav")).toHaveCount(0);
@@ -230,7 +233,7 @@ test("all thread routes share list controls, geometry, search and creation", asy
     await expect(rail.locator(".conversation-row")).toHaveCount(7);
     const search = rail.locator('input[name="thread-search"]');
     await search.fill("Route automation");
-    await expect(rail.locator(".conversation-name")).toHaveText(["Route automation"]);
+    await expect(rail.locator(".conversation-name strong")).toHaveText(["Route automation"]);
     await search.fill("");
     await expect(rail.locator(".conversation-row")).toHaveCount(7);
     await rail.getByRole("button", { name: "New chat", exact: true }).click();

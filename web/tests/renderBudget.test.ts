@@ -37,6 +37,14 @@ describe("reuseThreadItems", () => {
     assert.equal(reuseThreadItems(previous, next)[0], next[0]);
   });
 
+  it("refreshes a row when its task gains a number", () => {
+    // An unnumbered task shows its id; once numbered, the row must show #12.
+    const a = session("a");
+    const origin = { kind: "backlog" as const, taskId: "t", ref: "t", title: "T" };
+    const next: ThreadItem[] = [{ session: a, origin: { ...origin, ref: "#12" } }];
+    assert.equal(reuseThreadItems([{ session: a, origin }], next)[0], next[0]);
+  });
+
   it("returns the previous array when every item is reused in the same order", () => {
     const a = session("a");
     const previous: ThreadItem[] = [{ session: a }];

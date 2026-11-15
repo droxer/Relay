@@ -9,6 +9,8 @@ interface NodePresenceProps {
   t: TFunction;
   className?: string;
   withLabel?: boolean;
+  /** Connected, but still reconnecting: the pill says so instead of "Online". */
+  unsettled?: boolean;
 }
 
 /**
@@ -18,19 +20,25 @@ interface NodePresenceProps {
  * The animation is disabled under prefers-reduced-motion. Pass withLabel to
  * wrap the dot in a hairline pill with an explicit Online/Offline readout.
  */
-export function NodePresence({ node, t, className, withLabel = false }: NodePresenceProps) {
+export function NodePresence({ node, t, className, withLabel = false, unsettled = false }: NodePresenceProps) {
   const online = isNodeOnline(node);
-  const label = online
-    ? t("nodes.presence_online")
-    : t("nodes.presence_offline");
-  const title = online
-    ? t("nodes.presence_online_title")
-    : t("nodes.presence_offline_title", { time: formatRelativeTime(node.lastSeenAt, t) });
+  const reconnecting = online && unsettled;
+  const label = reconnecting
+    ? t("nodes.presence_unsettled")
+    : online
+      ? t("nodes.presence_online")
+      : t("nodes.presence_offline");
+  const title = reconnecting
+    ? t("nodes.presence_unsettled_title")
+    : online
+      ? t("nodes.presence_online_title")
+      : t("nodes.presence_offline_title", { time: formatRelativeTime(node.lastSeenAt, t) });
   const dataOnline = online ? "true" : "false";
+  const dataUnsettled = reconnecting ? "true" : undefined;
   if (withLabel) {
     return (
       <Badge className={cn("adm-presence-pill", className)} data-online={dataOnline} title={title}>
-        <span className="adm-presence" data-online={dataOnline} aria-hidden="true" />
+        <span className="adm-presence" data-online={dataOnline} data-unsettled={dataUnsettled} aria-hidden="true" />
         <BadgeLabel className="adm-presence-pill-label">{label}</BadgeLabel>
       </Badge>
     );
@@ -39,6 +47,7 @@ export function NodePresence({ node, t, className, withLabel = false }: NodePres
     <span
       className={`adm-presence${className ? ` ${className}` : ""}`}
       data-online={dataOnline}
+      data-unsettled={dataUnsettled}
       role="img"
       aria-label={label}
       title={title}

@@ -49,6 +49,7 @@ daemon.log
 # Browser test artifacts
 web/test-results/
 web/playwright-report/
+/output/
 
 # Generated downloadable computer client
 backend/relay/computer/daemon.tar.gz*

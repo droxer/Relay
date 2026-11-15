@@ -17,7 +17,7 @@ for (const theme of ["light", "dark"] as const) for (const language of ["en", "z
   test(`queue synchronizes laptop and phone, with recoverable errors (${theme}, ${language})`, async ({ browser }, info) => {
     const laptop = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: "block" });
-    let queue: { messages: { id: string; text: string; addressAgentIds?: string[] }[]; paused: boolean; removed?: { message: { id: string; text: string; addressAgentIds?: string[] }; beforeId: string | null } } = { messages: [], paused: false };
+    let queue: { messages: { id: string; text: string; addressAgentIds?: string[] }[]; paused: boolean; removed?: { message: { id: string; text: string; addressAgentIds?: string[] }; beforeId: string | null; removedAt: string } } = { messages: [], paused: false };
     let fail = false;
     async function serve(page: Page) {
       await page.route("**/api/**", async route => {
@@ -40,7 +40,8 @@ for (const theme of ["light", "dark"] as const) for (const language of ["en", "z
             }
             if (action === "remove") {
               const index = queue.messages.findIndex(m => m.id === id);
-              if (index >= 0) queue.removed = { message: queue.messages[index], beforeId: queue.messages[index + 1]?.id ?? null };
+              // The backend stamps a removal; undo is offered for five seconds after it.
+              if (index >= 0) queue.removed = { message: queue.messages[index], beforeId: queue.messages[index + 1]?.id ?? null, removedAt: new Date().toISOString() };
             }
             if (action === "undo_remove" && queue.removed) {
               const before = queue.messages.findIndex(m => m.id === queue.removed!.beforeId);

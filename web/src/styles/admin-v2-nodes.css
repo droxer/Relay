@@ -423,6 +423,17 @@
   animation: pulse-ring var(--t-pulse-calm) var(--ease) infinite;
 }
 
+/* Connected but still reconnecting (a poll or report channel is retrying):
+   the dot keeps its fill and takes the caution hue, and stops breathing —
+   calm motion would say "all well". */
+.adm-presence[data-online="true"][data-unsettled="true"] {
+  --presence: var(--warn);
+}
+
+.adm-presence[data-online="true"][data-unsettled="true"]::before {
+  animation: none;
+}
+
 /* Labeled presence pill — the explicit online/offline readout on the fleet
    card. The same dot (hue + breathing halo when online) now sits beside a
    sentence-case label on a quiet hairline pill, so liveness is readable at a

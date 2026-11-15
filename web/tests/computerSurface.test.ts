@@ -69,7 +69,8 @@ describe("My Computer record card", () => {
     // here reduced the reader's own machine to a name, a truncated id, and
     // four unlabelled vendor glyphs.
     const page = await read("web/src/components/ComputerPage.tsx");
-    assert.match(page, /<ComputerCard/);
+    // The page renders the record card through its live wrapper (connection reading).
+    assert.match(page, /<LiveComputerCard/);
     assert.doesNotMatch(page, /<NodeCard/);
     assert.doesNotMatch(page, /adm-fleet-grid/);
   });

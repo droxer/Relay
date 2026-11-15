@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { runInNewContext } from "node:vm";
 import test from "node:test";
 import { GUEST_PROCESS_SUPERVISOR } from "../src/guest-process-supervisor.js";
+import { processRunning } from "./process-state.js";
 
 for (const cancel of [false, true]) {
   test(`guest supervisor removes TERM-ignoring descendants when ${cancel ? "cancelled" : "parent exits"}`, {skip: process.platform === "win32", timeout: 5000}, async () => {
@@ -18,7 +19,9 @@ for (const cancel of [false, true]) {
       const code = await new Promise<number | null>((resolve, reject) => { supervisor.once("error",reject); supervisor.once("close",resolve); });
       assert.ok(pid > 0, stderr);
       assert.equal(code, cancel ? 130 : 0, stderr);
-      assert.throws(() => process.kill(pid,0), /ESRCH/);
+      // Gone, or a zombie its new parent has not reaped: either way it cannot
+      // execute. A container whose PID 1 never reaps keeps the zombie.
+      assert.equal(processRunning(pid), false);
     } finally {
       supervisor.kill("SIGKILL");
       if (pid) { try { process.kill(pid,"SIGKILL"); } catch {} }

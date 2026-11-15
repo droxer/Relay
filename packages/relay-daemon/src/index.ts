@@ -13,7 +13,10 @@ import {
   getJson,
   eventPostRetryLogger,
   delay,
+  backendReconnectDelayMs,
+  Wakeup,
 } from './backend-transport.js';
+import { watchForWake } from './wake-detector.js';
 export { DaemonHttpError, backendReconnectDelayMs } from './backend-transport.js';
 import { superviseBackgroundTask } from './background-task.js';
 import { RunSupervisor } from './run-supervisor.js';
@@ -153,6 +156,12 @@ export interface DaemonRuntimeOptions {
    * reached at all (network errors or 5xx). 0 disables the grace.
    */
   unreachableGraceMs?: number;
+  /**
+   * How long a registered daemon retries a poll or re-registration the
+   * backend refuses for a reason other than its credential before it drains
+   * and fails. Defaults to two minutes, the length of a deploy; 0 fails at once.
+   */
+  rejectionGraceMs?: number;
   /** How often the daemon renews its liveness lease. The backend-advertised
    * cadence is used by default. */
   livenessHeartbeatIntervalMs?: number;
@@ -524,8 +533,11 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let registeredComputerId: string | undefined;
   const register = async (): Promise<DaemonNodeHeartbeatSettings | undefined> => {
     const url = relayApiUrl(backendUrl, "/daemon-node-registrations");
+    // Registration carries the whole runtime inventory and the backend
+    // writes it through; the short shared deadline would fail it forever on
+    // a slow link.
     const response = await postJsonResponse<DaemonNodeRegistrationResponse>(
-      fetchFn, url, buildRegistration(), undefined, runtimeSignal,
+      fetchFn, url, buildRegistration(), undefined, runtimeSignal, REGISTRATION_TIMEOUT_MS,
     );
     registeredComputerId = response.computerId;
     for (const id of response.acknowledgedJournalIds ?? []) {
@@ -644,13 +656,31 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     logger.error("background command failed; unacknowledged work will retry", { sandboxId, key, error: String(error) });
   });
   let backgroundRuntimeRefresh: Promise<void> | undefined;
+  // A heartbeat that gets through ends the poll loop's backoff wait, and a
+  // resume from sleep ends both waits, so recovery never sits out a delay.
+  const reconnectWake = new Wakeup();
+  const beatWake = new Wakeup();
+  let stopWakeWatch: (() => void) | undefined;
   try {
     const reconnectControl = {
       signal: runtimeSignal,
       shouldStop: () => stopping,
       onTransientFailure: () => { backendUnreachable = true; if (heartbeatFeatures.has("durable-reports")) pollAbort?.abort("Transport recovery probe superseded a stalled poll."); },
       onCredentialRejected: () => { backendUnreachable = false; },
+      wake: reconnectWake,
+      confirmUnauthorized: true,
     };
+    // Timers stop while the computer sleeps, and the backend has usually
+    // dropped every connection by the time it wakes. Reconnect at once
+    // rather than wait out the open poll's deadline and the next beat.
+    stopWakeWatch = watchForWake((pausedMs) => {
+      if (stopping || runtimeSignal.aborted) return;
+      logger.info("computer resumed after a pause; reconnecting now", { sandboxId, pausedMs });
+      recoveryPollPending = true;
+      pollAbort?.abort("Computer resumed after a pause; reconnecting.");
+      reconnectWake.notify();
+      beatWake.notify();
+    });
     const initialHeartbeatSettings = await withBackendReconnect(
       register, logger, { sandboxId, what: "registration" }, reconnectControl,
     );
@@ -770,6 +800,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           recoveryPollPending = true;
           pollAbort?.abort('Healthy heartbeat requests an immediate recovery poll.');
         }
+        // The backend answered: a poll loop waiting out a long backoff retries now.
+        if (backendUnreachable) reconnectWake.notify();
         backendUnreachable = false;
       } catch (error) {
         // Rolling upgrades may briefly put a new daemon behind an older
@@ -865,19 +897,34 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       // retried inside the tick: the next tick is the retry, so a retry never
       // waits longer than a beat, and a fleet started together drifts apart.
       let nextBeatAt = performance.now() + heartbeatPeriodMs();
+      let unauthorizedBeats = 0;
+      let failedBeats = 0;
       while (!stopping && !runtimeSignal.aborted) {
-        await delay(Math.max(0, nextBeatAt - performance.now()), runtimeSignal);
+        await beatWake.wait(Math.max(0, nextBeatAt - performance.now()), runtimeSignal);
         nextBeatAt = performance.now() + jittered(heartbeatPeriodMs());
         if (stopping || runtimeSignal.aborted) return;
         if (pollRenewsLiveness() && !heartbeatFeatures.has("durable-reports")) continue;
         try {
           await sendHeartbeat();
+          if (failedBeats > 0) logger.info("liveness heartbeat recovered", { sandboxId, missedBeats: failedBeats });
+          unauthorizedBeats = 0;
+          failedBeats = 0;
         } catch (error) {
           if (stopping || runtimeSignal.aborted) return;
+          failedBeats += 1;
           if (error instanceof DaemonHttpError && (error.status === 401 || error.status === 410)) {
+            // Gone is the backend's own tombstone. A lone 401 may be an auth
+            // proxy or a lagging replica, and stopping is permanent: ask again.
+            if (error.status === 401 && unauthorizedBeats === 0) {
+              unauthorizedBeats = 1;
+              nextBeatAt = performance.now() + CREDENTIAL_CONFIRM_BEAT_MS;
+              logger.warn("liveness heartbeat unauthorized; confirming before stopping", { sandboxId });
+              continue;
+            }
             reconnectControl.onCredentialRejected();
             throw error;
           }
+          unauthorizedBeats = 0;
           const transient = !(error instanceof DaemonHttpError)
             || error.status >= 500 || error.status === 408 || error.status === 429;
           // Only an unreachable backend starts an execution grace; a refusal
@@ -947,6 +994,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         exitCode: 1,
       }, "rejected start report capture failed", commandLogFields(sandboxId, command));
     };
+    // This daemon is registered and may be running agents. A refusal that is
+    // not about its credential (a proxy's 403/404 while the backend deploys)
+    // is retried for a deploy's length: failing at once would stop every run
+    // over one answer. One that outlasts the grace is still fatal.
+    const pollControl = { ...reconnectControl, rejectionGraceMs: options.rejectionGraceMs ?? DEFAULT_REJECTION_GRACE_MS };
+    let pollRejections = 0;
+    let pollRejectionLoggedAt: number | undefined;
     while (!stopping) {
       void refreshMcp();
       if (acknowledgeUpdatePause(stateDir)) {
@@ -996,12 +1050,20 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           if (response.status === 410 || response.status === 401) throw new DaemonHttpError(detail, response.status, retryAfterMs(response.headers.get("Retry-After")));
           // The backend may have restarted with fresh state or demoted this node;
           // re-register before treating the rejection as fatal.
-          logger.warn("command poll rejected; re-registering", { sandboxId, error: detail });
+          pollRejections += 1;
+          const logRejection = pollRejectionLoggedAt === undefined
+            || performance.now() - pollRejectionLoggedAt >= POLL_REJECTION_LOG_INTERVAL_MS;
+          if (logRejection) {
+            pollRejectionLoggedAt = performance.now();
+            logger.warn("command poll rejected; re-registering", { sandboxId, error: detail, rejections: pollRejections });
+          }
           await register();
           lastRegisteredAt = Date.now();
-          logger.info("daemon re-registered", { sandboxId });
+          if (logRejection) logger.info("daemon re-registered", { sandboxId });
           return { commands: [] };
         }
+        pollRejections = 0;
+        pollRejectionLoggedAt = undefined;
         const parsed = await response.json() as { commands?: DaemonNodeCommand[]; heartbeat?: DaemonNodeHeartbeatSettings; processingMs?: number };
         // Exclude the backend's long-poll wait from transport latency. Otherwise
         // a new one-second lease returned after a 25-second poll looks expired.
@@ -1019,7 +1081,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           && !pollDeliveredCommands
           && performance.now() - commandPollStartedAt >= commandPollWaitMs;
         return parsed;
-      }, logger, { sandboxId, what: "command poll" }, reconnectControl);
+      }, logger, { sandboxId, what: "command poll" }, pollControl);
       if (stopping) break;
       for (const command of body.commands ?? []) {
         if (command.type === "runtime.refresh") {
@@ -1133,7 +1195,9 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
       // Preserve an explicit caller delay and the default throttle for
       // rejected or failed polls.
       if (options.pollIntervalMs !== undefined || !(completedEmptyLongPoll || pollDeliveredCommands)) {
-        await delay(pollIntervalMs, runtimeSignal);
+        // A poll the backend keeps refusing after a clean re-registration
+        // will not be fixed by asking every second: back off like an outage.
+        await delay(Math.max(pollIntervalMs, pollRejections > 2 ? backendReconnectDelayMs(pollRejections - 2) : 0), runtimeSignal);
       }
     }
     await shutdownPromise;
@@ -1158,6 +1222,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     throw error;
   } finally {
     if (!shutdownController.signal.aborted) shutdownController.abort("Daemon loop ended.");
+    stopWakeWatch?.();
     clearInterval(watchdogTimer);
     clearInterval(storageTimer);
     await heartbeatTask;
@@ -1692,6 +1757,12 @@ function safeLogFileName(value: string): string {
 
 /** Room for one round trip on a slow link; well inside launchd's 20 s exit timeout. */
 const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 2_500;
+const REGISTRATION_TIMEOUT_MS = 15_000;
+const DEFAULT_REJECTION_GRACE_MS = 120_000;
+/** How soon a lone 401 on a heartbeat is checked again before it stops the daemon. */
+const CREDENTIAL_CONFIRM_BEAT_MS = 1_000;
+/** How often a poll the backend keeps refusing repeats its warning. */
+const POLL_REJECTION_LOG_INTERVAL_MS = 30_000;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
 const MAX_COMMAND_POLL_WAIT_MS = 25_000;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 6_000;

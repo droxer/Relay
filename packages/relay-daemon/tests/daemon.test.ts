@@ -1,4 +1,5 @@
 import { RELAY_CLIENT_VERSION } from "../src/client-version.js";
+import { processRunning } from "./process-state.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -613,7 +614,8 @@ test("cancellation stops children even when the parent exits first", { skip: pro
       },
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.throws(() => process.kill(childPid, 0), /ESRCH/);
+    // Gone, or a zombie its new parent has not reaped yet.
+    assert.equal(processRunning(childPid), false);
   } finally {
     if (childPid > 0) {
       try { process.kill(childPid, "SIGKILL"); } catch { /* Already exited. */ }
@@ -3357,9 +3359,8 @@ test("UI cancellation terminates a live local process tree before acknowledgemen
   let childPid = 0;
   let cancelled = false;
   let aliveAtAcknowledgement = true;
-  const alive = (pid: number): boolean => {
-    try { process.kill(pid, 0); return true; } catch { return false; }
-  };
+  // An unreaped zombie cannot execute, so it does not count as alive.
+  const alive = (pid: number): boolean => processRunning(pid);
   const childScript = 'process.on("SIGTERM",()=>{}); process.send("ready"); setInterval(()=>{},1000)';
   const parentScript = `const {spawn}=require("node:child_process"); process.on("SIGTERM",()=>{}); const child=spawn(process.execPath,["-e",${JSON.stringify(childScript)}],{stdio:["ignore","ignore","ignore","ipc"]}); child.on("message",()=>process.stdout.write(JSON.stringify({parent:process.pid,child:child.pid})+"\\n")); setInterval(()=>{},1000);`;
   const timeout = setTimeout(() => stop.abort("test timed out"), 20_000);
@@ -3968,6 +3969,8 @@ test("backend reconnect delay uses capped equal jitter", () => {
   assert.equal(backendReconnectDelayMs(1, () => 1), 200);
   assert.equal(backendReconnectDelayMs(4, () => 0), 750);
   assert.equal(backendReconnectDelayMs(20, () => 1), 1500);
+  // Past a restart-length outage the ceiling widens.
+  assert.equal(backendReconnectDelayMs(40, () => 1), 15000);
 });
 
 test("relay daemon reports generated workspace documents in run.completed", async (t: TestContext) => {
@@ -5522,7 +5525,9 @@ for (const rejectedDuring of ["registration", "poll"]) {
         return jsonResponse({}, 401);
       },
     });
-    assert.equal(registrations, 1);
+    // A rejected registration is asked once more before it counts: a lone 401
+    // can come from a proxy, and stopping on it is permanent.
+    assert.equal(registrations, rejectedDuring === "registration" ? 2 : 1);
   });
 }
 
@@ -5853,7 +5858,8 @@ test("local execution cleans up descendants before waiting for inherited pipes",
     await childReady;
     const result = await Promise.race([running, new Promise<null>(resolve => setTimeout(()=>resolve(null),1000))]);
     assert.notEqual(result, null, "parent exit must trigger child cleanup without waiting for pipe EOF");
-    assert.throws(()=>process.kill(childPid,0),/ESRCH/);
+    // Gone, or a zombie nobody reaps (PID 1 in a container without --init).
+    assert.equal(processRunning(childPid), false);
   } finally {
     if(childPid>0) {try {process.kill(childPid,"SIGKILL");} catch {}}
     await running;
@@ -6657,7 +6663,7 @@ test('an unexpected fatal poll response drains active execution before rejecting
   environment.close = async () => { closed = true; };
   await assert.rejects(runRelayDaemon({
     backendUrl: 'http://relay.test', sandboxId: 'fatal-poll', userId: 'alice',
-    workspacePath: workspace, token: 'node_token', pollIntervalMs: 1,
+    workspacePath: workspace, token: 'node_token', pollIntervalMs: 1, rejectionGraceMs: 0,
     preflight: false, shutdownGraceMs: 1_000, logger: testLogger(), environment,
     fetchFn: async (url, init) => {
       const path = new URL(String(url)).pathname;

@@ -3,6 +3,7 @@ import type { StreamExecResult } from "relay-core";
 import { BoundedTextCapture } from "./bounded-text.js";
 import { RELEASED_EXIT_MESSAGE, exitHooksFor } from "./execution-capture.js";
 import { listWindowsProcesses, taskkillArguments, windowsProcessTree } from "./windows-process-tree.js";
+import { processGroupAlive } from "./process-group.js";
 
 const SIGKILL_DELAY_MS = 5_000;
 /** Between Windows tree sweeps while descendants remain. */
@@ -217,13 +218,15 @@ export async function superviseLocalProcess(
         let warned = false;
         const check = (): void => {
           if (finished) return;
-          try { process.kill(-groupId, 0); } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === "ESRCH") {
-              settle(code ?? -1);
-            } else {
-              if (!warned) { process.stderr.write("[relay] Cannot verify process-group termination; retaining execution.\n"); warned = true; }
-              cleanupTimer = setTimeout(check, 100);
-            }
+          let alive: boolean;
+          try { alive = processGroupAlive(groupId); } catch {
+            if (!warned) { process.stderr.write("[relay] Cannot verify process-group termination; retaining execution.\n"); warned = true; }
+            cleanupTimer = setTimeout(check, 100);
+            return;
+          }
+          // Only zombies left (or nothing): no member can execute any more.
+          if (!alive) {
+            settle(code ?? -1);
             return;
           }
           if (!warned && Date.now() >= cleanupDeadline) {

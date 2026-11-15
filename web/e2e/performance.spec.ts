@@ -154,7 +154,12 @@ async function mockApi(page: Page) {
 /* Production React reports every commit to a DevTools hook when one exists.
    A host element whose props object was replaced in a commit belongs to a
    component that rendered — which is how a row re-render is counted without
-   a profiling build. */
+   a profiling build. A memoized component that bails out does not clone its
+   children: the committed fiber keeps the very child its alternate has, and
+   those children's alternates still hold props from an older render. So a
+   subtree whose child pointer did not move was not touched by this commit
+   and is skipped, as React DevTools does; otherwise a row that re-rendered
+   once for a real reason reads as rendering again on every later commit. */
 function installCommitCounter() {
   const counter = { commits: 0, rowRenders: 0 };
   (window as unknown as { __commits: typeof counter }).__commits = counter;
@@ -174,6 +179,7 @@ function installCommitCounter() {
           const previous = fiber.alternate;
           if (typeof fiber.type === "string" && previous && fiber.memoizedProps !== previous.memoizedProps
             && /\bconversation-name\b/.test(String(fiber.memoizedProps?.className ?? ""))) counter.rowRenders++;
+          if (previous && previous.child === fiber.child) continue;
           walk(fiber.child);
         }
       };

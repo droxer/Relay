@@ -1,5 +1,6 @@
 import { uptime } from "node:os";
 import { windowsProcessTree, type WindowsProcess } from "./windows-process-tree.js";
+import { processGroupAlive } from "./process-group.js";
 
 /**
  * Proving that a run admitted before a daemon restart is no longer executing.
@@ -30,7 +31,7 @@ export function hostBootAt(now = Date.now(), upSeconds = uptime()): number {
  */
 export function localExitProven(
   evidence: ExecutionEvidence,
-  probe: (processGroup: number) => unknown = (group) => process.kill(-group, 0),
+  probe: (processGroup: number) => unknown = zombieAwareProbe,
 ): boolean {
   // Wall-clock changes can move the boot estimate without a reboot. Even
   // after a real reboot, a reused PID requires fresh process evidence.
@@ -41,6 +42,11 @@ export function localExitProven(
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ESRCH";
   }
+}
+
+/** Probes like `kill(-group, 0)`, but a group of only zombies reads as gone (ESRCH). */
+function zombieAwareProbe(group: number): void {
+  if (!processGroupAlive(group)) throw Object.assign(new Error(`Process group ${group} has no running member.`), { code: "ESRCH" });
 }
 
 /**
