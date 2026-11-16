@@ -24,7 +24,11 @@ only to their checkpoint and are superseded by the W2a/W2b adapters below.
 | Themes and device sizes | Built-export mocked-API sweep passes light/dark × all seven sizes. Dedicated progress row and scrollable decision slip fix short-screen overlap. Live light/dark/system switching, save and all decision controls pass clickability checks at 320×568, 844×390 and 640×450/DPR 2. | 640×450/DPR 2 simulates 200% desktop reflow; native browser zoom remains unverified; real browser-to-backend Task start/retry/approval/completion now pass. |
 | Production build | Core/daemon/supervisor compile; web static export passes `npm run build -w web -- --webpack`, and compiled test sources pass TypeScript. | Default full `npm run build` still encounters a Turbopack local process/port EPERM, including escalated retry. Webpack verification does not conceal that limitation. |
 
-Task workflow integration is complete; remaining acceptance is native browser zoom. W2b requester review passed
+Task workflow integration is complete, including scheduler-dispatched Tasks and
+Automation occurrences in the Team's Project (2026-11-16,
+`backend/tests/api/test_scheduled_workflows.py`); remaining acceptance is native
+browser zoom. A gate-parked occurrence (`waiting_for_human`) does not hold back
+the next firing, as for every Automation (`IN_FLIGHT_STATUSES`). W2b requester review passed
 the 12-file focused regression (210 tests), backend Ruff and mypy (486 files).
 No additional product-scope approval is needed. Backend runtime completion does
 not certify the workflow UI or the feature as release-ready.

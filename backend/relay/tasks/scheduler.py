@@ -63,6 +63,11 @@ from ..tasks.placement import (
     task_goal_text,
 )
 from ..tasks.dispatch_results import dispatch_result_scope
+from ..tasks.scheduled_workflow import (
+    ScheduledWorkflowContext,
+    dispatch_scheduled_workflow,
+    workflow_team_for,
+)
 
 PERMANENT_DISPATCH_CODES = {
     "agent_disabled",
@@ -238,6 +243,8 @@ class TaskScheduler:
         unroutable = self._unroutable(task)
         if unroutable is not None:
             return unroutable
+        if workflow_team_for(task, self.team_store):
+            return self._dispatch_workflow(task)
         # A project task's team runs inside the project room, so the thread
         # it creates is the project's, never the team's.
         team_id = None if task.get("projectId") else task.get("assignedTeamId")
@@ -273,6 +280,26 @@ class TaskScheduler:
             session_id=resume_session_id,
         )
         return CandidateOutcome.DISPATCHED if dispatched else CandidateOutcome.ATTEMPTED
+
+    def _dispatch_workflow(self, task: dict[str, Any]) -> CandidateOutcome:
+        """Start a workflow Team's task through the frozen workflow ledger."""
+        result = dispatch_scheduled_workflow(
+            ScheduledWorkflowContext(
+                task_store=self.task_store,
+                team_store=self.team_store,
+                project_store=self.project_store,
+                agent_store=self.backend.agent_store,
+                agent_placement_store=self.backend.agent_placement_store,
+                registry=self.registry,
+            ),
+            task,
+        )
+        state = result["dispatch"]["state"]
+        if state == "started":
+            return CandidateOutcome.DISPATCHED
+        # A waiting computer or an execution already under way retries on a
+        # later tick; anything else was recorded on the task as a failure.
+        return CandidateOutcome.SKIPPED if state == "queued" else CandidateOutcome.ATTEMPTED
 
     def _held_back(self, candidate: dict[str, Any]) -> CandidateOutcome | None:
         """Why an assigned task must not be routed this tick, if it must not."""
