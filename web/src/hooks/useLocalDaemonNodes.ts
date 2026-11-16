@@ -13,7 +13,8 @@ const EMPTY_LOCAL_NODES: ControlPanelDaemonNodeRecord[] = [];
 
 // Admin-only discovery of daemon nodes registered with a co-located control
 // panel. Shares CONTROL_PANEL_NODES_KEY with useAdminNodes so threads + admin do
-// not double-poll /api/v1/admin/daemon-nodes on localhost.
+// reuse cached /api/v1/admin/daemon-nodes on localhost. App disables this
+// reader outside workspace views so Admin owns its own polling cadence.
 export function useLocalDaemonNodes(enabled: boolean): {
   localNodes: ControlPanelDaemonNodeRecord[];
   refreshLocalDaemonNodes: () => Promise<ControlPanelDaemonNodeRecord[]>;
@@ -24,6 +25,7 @@ export function useLocalDaemonNodes(enabled: boolean): {
     queryKey: CONTROL_PANEL_NODES_KEY,
     queryFn: ({ signal }) => fetchControlPanelNodes(signal),
     enabled,
+    staleTime: CONTROL_PANEL_POLL_MS,
     refetchInterval: CONTROL_PANEL_POLL_MS,
   });
 

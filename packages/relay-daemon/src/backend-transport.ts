@@ -1,5 +1,5 @@
 import type { DaemonLogger, DaemonLogFields } from './index.js';
-import { persistTerminalEvent, queuesOutputForReplay } from './terminal-outbox.js';
+import { persistTerminalEvent, queuesOutputForReplay, hasPendingDurableReport } from './terminal-outbox.js';
 import { responseErrorDetail, transportErrorDetail } from './http-error-detail.js';
 import { retryAfterMs } from './transport-retry.js';
 
@@ -271,6 +271,7 @@ export async function postJsonWithRetry(
   let attempt = 0;
   while (true) {
     if (signal?.aborted) throw new Error("Aborted before event post.");
+    if (!hasPendingDurableReport(fetchFn, body)) return;
     try {
       await postJson(fetchFn, url, body, token, signal);
       return;

@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getSession } from "../api";
 import type { RelaySession } from "../types";
 import { mergeSessionSnapshotIntoSessions, sessionTrailsSummary, summaryEventCountOf } from "../lib/sessionPollMerge";
 import { isSessionStreamConnected } from "../lib/sessionStreamStatus";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 import { isTerminalSessionStatus } from "../lib/sessionEventStream";
+import { readSessionDetails, removeSessionDetail, writeSessionDetail } from "../lib/sessionDetailCache";
 import { workflowSnapshotDue } from "../lib/workflowRuns";
+import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
 /**
- * Hydrate selection and reconcile status transitions, including a terminal
+ * Hydrate only the selected thread. Reuse account-scoped browser and memory
+ * caches on return; stale details reconcile without clearing the transcript.
+ * Reconcile status transitions, including a terminal
  * summary arriving before SSE. While the stream is down, a summary that has
  * seen events the cache lacks also refetches: the summary updates status but
  * not runs or rounds, so they would otherwise read stale until the stream
@@ -24,21 +27,45 @@ const SESSIONS_KEY = ["relay", "sessions"] as const;
  * A workflow event the client cannot project (a step result, a retry) marks the
  * session as owing a snapshot, refetched on each tick until one clears it.
  */
-export function useSessionDetail(sessionId: string | undefined, enabled: boolean) {
+export function useSessionDetail(sessionId: string | undefined, enabled: boolean, ownerId?: string) {
   const queryClient = useQueryClient();
+  const forceRetry = useRef(false);
+  const [readySessionId, setReadySessionId] = useState<string | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
   const [failure, setFailure] = useState<{ id: string; message: string } | null>(null);
   const retry = useCallback(() => {
+    forceRetry.current = true;
     setFailure(null);
     setAttempt(value => value + 1);
   }, []);
   useEffect(() => {
     if (!sessionId || !enabled) return;
     const controller = new AbortController();
-    let hydratedStatus: RelaySession["status"] | undefined;
+    const hydrationKey = ["relay", "session-hydration", sessionId] as const;
+    type Hydration = { status: RelaySession["status"]; hydratedAt: number };
+    let initial = queryClient.getQueryData<Hydration>(hydrationKey);
+    let current = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)?.find(s => s.id === sessionId);
+    if (!initial && ownerId) {
+      const saved = readSessionDetails(ownerId).find(row => row.snapshot.id === sessionId);
+      // A fresh list observation takes precedence over an older stored detail.
+      if (saved && (!current || (saved.snapshot.updatedAt >= current.updatedAt
+        && saved.snapshot.events.length >= (summaryEventCountOf(current) ?? 0)))) {
+        queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, rows =>
+          mergeSessionSnapshotIntoSessions(rows ?? [], current && summaryEventCountOf(current) !== undefined
+            ? { ...saved.snapshot, execution: current.execution } : saved.snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
+        initial = { status: saved.snapshot.status, hydratedAt: saved.hydratedAt };
+        queryClient.setQueryData(hydrationKey, initial);
+        current = saved.snapshot;
+      }
+    }
+    // Metadata alone is insufficient if the list evicted the actual detail.
+    if (!current || sessionTrailsSummary(current)) initial = undefined;
+    let hydratedStatus = forceRetry.current ? undefined : initial?.status;
+    forceRetry.current = false;
+    setReadySessionId(hydratedStatus === undefined ? undefined : sessionId);
     let refetchedForCount: number | undefined;
     let pending = false;
-    let hydratedAt = 0;
+    let hydratedAt = initial?.hydratedAt ?? 0;
     let denied = false;
     const hydrate = async () => {
       if (pending || denied || controller.signal.aborted) return;
@@ -61,17 +88,24 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
       if (hydratedStatus !== undefined && cached?.status === hydratedStatus && !trails && !fallbackDue && !executionDue && !workflowStale) return;
       pending = true;
       try {
-        const snapshot = await getSession(sessionId, controller.signal);
+        const snapshot = await fetchSessionSnapshot(queryClient, sessionId);
         if (controller.signal.aborted) return;
         hydratedStatus = snapshot.status;
         hydratedAt = Date.now();
+        queryClient.setQueryData(hydrationKey, { status: snapshot.status, hydratedAt });
         setFailure(null);
+        setReadySessionId(sessionId);
         refetchedForCount = summaryCount;
         queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, current =>
           mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
       } catch (error) {
         if (controller.signal.aborted) return;
         denied = error instanceof Error && "status" in error && [401, 403, 404].includes(Number(error.status));
+        if (denied) {
+          queryClient.removeQueries({ queryKey: hydrationKey, exact: true });
+          if (ownerId) removeSessionDetail(ownerId, sessionId);
+          setReadySessionId(undefined);
+        }
         setFailure({ id: sessionId, message: error instanceof Error ? error.message : String(error) });
         // Transient failures retry on the next tick; access failures wait for
         // an explicit retry or a new selection.
@@ -79,17 +113,25 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
         pending = false;
       }
     };
-    void hydrate();
+    const persist = () => {
+      if (!ownerId || hydratedStatus === undefined || denied) return;
+      const snapshot = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)?.find(s => s.id === sessionId);
+      if (snapshot) writeSessionDetail(ownerId, { snapshot, hydratedAt });
+    };
+    void hydrate().then(persist);
+    window.addEventListener("pagehide", persist);
     // The check is a cache read, but a hidden tab has nothing to reconcile for:
     // skip its ticks and catch up the moment the tab is shown again.
     const tick = () => { if (!document.hidden) void hydrate(); };
     const timer = window.setInterval(tick, RELAY_POLL_INTERVALS_MS.sessions);
     document.addEventListener("visibilitychange", tick);
     return () => {
+      persist();
+      window.removeEventListener("pagehide", persist);
       controller.abort();
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [enabled, queryClient, sessionId, attempt]);
-  return { error: enabled && failure && failure.id === sessionId ? failure.message : null, retry };
+  }, [enabled, queryClient, sessionId, attempt, ownerId]);
+  return { ready: enabled && readySessionId === sessionId && !!sessionId, error: enabled && failure && failure.id === sessionId ? failure.message : null, retry };
 }

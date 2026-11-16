@@ -95,6 +95,12 @@ it("slows task reconciliation off task surfaces and refreshes when they become v
   expect(taskQuery()?.observers[0]?.options.refetchInterval).toBe(60_000);
   const before = vi.mocked(listTasks).mock.calls.length;
   view.rerender({ visible: true });
+  await act(async () => {});
+  expect(listTasks).toHaveBeenCalledTimes(before);
+  view.rerender({ visible: false });
+  // A later visit reconciles stale data without invalidating a fresh cache.
+  act(() => client.setQueryData(["relay", "tasks"], [], { updatedAt: Date.now() - 60_000 }));
+  view.rerender({ visible: true });
   await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(before + 1));
   expect(taskQuery()?.observers[0]?.options.refetchInterval).toBe(RELAY_POLL_INTERVALS_MS.tasks);
   view.unmount(); client.clear();

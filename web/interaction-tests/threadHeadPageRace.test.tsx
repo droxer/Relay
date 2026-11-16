@@ -16,7 +16,7 @@ it.each([null, "older-cursor"])("keeps updates made during a head request (nextC
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const a = { id: "A", updatedAt: "2026-11-09T12:00:00Z", events: [], agentRuns: [], artifacts: [], decisions: [] } as unknown as RelaySession;
-  client.setQueryData(SESSIONS_QUERY_KEY, [a]);
+  client.setQueryData(SESSIONS_QUERY_KEY, [a], { updatedAt: Date.now() - 60_000 });
   let finish!: (page: Awaited<ReturnType<typeof listSessionSummaries>>) => void;
   vi.mocked(listSessionSummaries).mockReturnValue(new Promise(resolve => { finish = resolve; }));
   const hook = renderHook(() => useRelayData(undefined, true), { wrapper });

@@ -9,7 +9,7 @@ import type { UserAgent } from "../types";
 
 export const USER_AGENTS_QUERY_KEY = "user-agents";
 
-export function useUserAgents(userId?: string): {
+export function useUserAgents(userId?: string, poll = false): {
   agents: UserAgent[];
   isFetching: boolean;
   isSuccess: boolean;
@@ -24,7 +24,8 @@ export function useUserAgents(userId?: string): {
     // catch node-reported availability drift; the stale window lets the many
     // pages that mount this hook share one read instead of refetching.
     staleTime: ROSTER_STALE_TIME_MS,
-    refetchInterval: RELAY_POLL_INTERVALS_MS.agents,
+    // AuthenticatedApp owns the timer; page observers reuse the same cache.
+    refetchInterval: poll ? RELAY_POLL_INTERVALS_MS.agents : false,
   });
   const agents = useMemo(() => dedupeAgentsById(query.data?.agents ?? []), [query.data]);
   // Getters, not values: React Query re-renders a component for every result

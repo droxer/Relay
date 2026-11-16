@@ -19,8 +19,8 @@ import {
   createChatIntegration,
   listChatIntegrations,
   listControlPanelAgents,
-  listControlPanelDaemonNodes,
 } from "../../api";
+import { CONTROL_PANEL_NODES_KEY, fetchControlPanelNodes } from "../../lib/controlPanelQueries";
 import { backendPublicOrigin } from "../../lib/apiOrigin";
 import { useUrlSearchState } from "../../hooks/useUrlSearchState";
 import type { ChatIntegration } from "../../types";
@@ -96,8 +96,8 @@ export function ChannelsView({
     queryFn: ({ signal }) => listControlPanelAgents(undefined, signal),
   });
   const nodesQuery = useQuery({
-    queryKey: ["admin", "daemon-nodes"],
-    queryFn: ({ signal }) => listControlPanelDaemonNodes(signal),
+    queryKey: CONTROL_PANEL_NODES_KEY,
+    queryFn: ({ signal }) => fetchControlPanelNodes(signal),
   });
 
   // Agents aren't owned by users — the default agent for a chat identity is
@@ -401,7 +401,7 @@ export function ChannelsView({
         <ChannelDetail
           selected={selected}
           agents={agentsQuery.data?.agents}
-          nodes={nodesQuery.data?.nodes}
+          nodes={nodesQuery.data}
           busy={busy !== null}
           mutate={mutate}
           provision={provision}

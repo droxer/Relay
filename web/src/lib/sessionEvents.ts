@@ -280,6 +280,8 @@ export function shareSessions(
 function sameSessionShape(a: RelaySession, b: RelaySession): boolean {
   return a === b || (
     a.updatedAt === b.updatedAt
+    && (a as RelaySession & { summaryEventCount?: number }).summaryEventCount
+      === (b as RelaySession & { summaryEventCount?: number }).summaryEventCount
     && a.events.length === b.events.length
     && a.status === b.status
     && a.phase === b.phase

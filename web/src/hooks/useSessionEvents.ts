@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getSession, RelayApiError } from "../api";
+import { RelayApiError } from "../api";
 import { mergeSessionSnapshotIntoSessions } from "../lib/sessionPollMerge";
 import type { RelaySession } from "../types";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
@@ -8,6 +8,7 @@ import { mergeSessionEventsIntoSessions, SessionEventIdIndex } from "../lib/sess
 import { isTerminalSessionStatus, lastSessionEventId, sessionEventsUrl } from "../lib/sessionEventStream";
 import { browserFrameSchedulerHost, createFrameScheduler } from "../lib/frameScheduler";
 import { setSessionStreamConnected } from "../lib/sessionStreamStatus";
+import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
@@ -136,7 +137,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       reconnectTimer = setTimeout(() => setConnection(value => value + 1), delay);
       // HTTP remains a fallback when SSE itself is unavailable. Also lets us
       // distinguish a temporary outage from revoked access or a deleted thread.
-      void getSession(sessionId, controller.signal).then(snapshot => {
+      void fetchSessionSnapshot(queryClient, sessionId).then(snapshot => {
         if (controller.signal.aborted) return;
         queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, current =>
           mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
