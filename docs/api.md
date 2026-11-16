@@ -1903,8 +1903,8 @@ these fields. Legacy Teams omit both fields and keep their existing behavior.
 | step `instructions` | Nonempty string, at most 8,000 characters. |
 | step `expectedOutputs` | Required array of 1–32 nonempty strings, each at most 2,000 characters. Describes required recorded outputs, not filesystem paths to execute. |
 | step `acceptanceCriteria` | Required array of 1–32 nonempty strings, each at most 2,000 characters. Instructions, not proof of success. |
-| step `kind` | `work` (default) or `deployment`. Explicit classification; the server does not infer deployment from a localized step name or Agent role. |
-| step `requiresApproval` | Boolean; defaults to `true` for `deployment`, `false` for `work`. An explicit boolean overrides the default. This records future per-attempt gates; W1 cannot approve or execute them. |
+| step `kind` | Deprecated compatibility metadata (`work` or `deployment`); omitted for new steps. Steps have no predefined type. |
+| step `requiresApproval` | Boolean; defaults to `false` for every step, independently of legacy `kind` metadata. This records future per-attempt gates; W1 cannot approve or execute them. |
 
 Text is trimmed before persistence. Unknown step fields and unknown workflow
 Team write fields are rejected. Both fields must be supplied when opting an

@@ -1,4 +1,4 @@
-import type { AgentTeam, ProjectRecord, TeamMutationInput, WorkflowStep } from "../types.ts";
+import type { AgentTeam, ProjectRecord, TeamMutationInput } from "../types.ts";
 
 /**
  * The Project workflow Team editor's draft and its translation to the Team
@@ -24,7 +24,6 @@ export type WorkflowStepDraft = {
   /** One output or criterion per line, as the person types them. */
   expectedOutputs: string;
   acceptanceCriteria: string;
-  kind: WorkflowStep["kind"];
   requiresApproval: boolean;
 };
 
@@ -61,7 +60,6 @@ function randomToken(): string {
 export function emptyWorkflowStep(
   existing: readonly { id: string }[],
   agentId = "",
-  kind: WorkflowStep["kind"] = "work",
 ): WorkflowStepDraft {
   return {
     id: newWorkflowStepId(existing),
@@ -70,15 +68,8 @@ export function emptyWorkflowStep(
     instructions: "",
     expectedOutputs: "",
     acceptanceCriteria: "",
-    kind,
-    // Deployment defaults to an approval gate; the person may change it.
-    requiresApproval: kind === "deployment",
+    requiresApproval: false,
   };
-}
-
-/** Switching kind moves the gate to that kind's default, as on creation. */
-export function withStepKind(step: WorkflowStepDraft, kind: WorkflowStep["kind"]): WorkflowStepDraft {
-  return step.kind === kind ? step : { ...step, kind, requiresApproval: kind === "deployment" };
 }
 
 export function draftFromTeam(team: AgentTeam): WorkflowTeamDraft {
@@ -91,7 +82,6 @@ export function draftFromTeam(team: AgentTeam): WorkflowTeamDraft {
       instructions: step.instructions,
       expectedOutputs: step.expectedOutputs.join("\n"),
       acceptanceCriteria: step.acceptanceCriteria.join("\n"),
-      kind: step.kind,
       requiresApproval: step.requiresApproval,
     })),
   };
@@ -182,7 +172,6 @@ export function workflowTeamInput(
       instructions: step.instructions.trim(),
       expectedOutputs: lines(step.expectedOutputs),
       acceptanceCriteria: lines(step.acceptanceCriteria),
-      kind: step.kind,
       requiresApproval: step.requiresApproval,
     })),
   };

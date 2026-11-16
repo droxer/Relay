@@ -8,7 +8,6 @@ import {
   newWorkflowStepId,
   projectWorkflowTeams,
   validateWorkflowDraft,
-  withStepKind,
   workflowDraftChanged,
   workflowDraftValid,
   workflowTeamInput,
@@ -23,7 +22,7 @@ function step(id: string, agentId: string, patch: Partial<WorkflowStepDraft> = {
   return {
     id, name: id, agentId, instructions: `do ${id}`,
     expectedOutputs: `${id} output`, acceptanceCriteria: `${id} ok`,
-    kind: "work", requiresApproval: false, ...patch,
+    requiresApproval: false, ...patch,
   };
 }
 
@@ -33,7 +32,7 @@ const draft: WorkflowTeamDraft = {
     step("design", "designer"),
     step("build", "builder"),
     step("verify", "designer"),
-    step("deploy", "lead", { kind: "deployment", requiresApproval: true }),
+    step("deploy", "lead", { requiresApproval: true }),
   ],
 };
 
@@ -69,13 +68,13 @@ describe("workflowTeamInput", () => {
 });
 
 describe("workflow draft editing", () => {
-  it("defaults deployment steps to an approval gate and keeps an explicit choice", () => {
-    assert.equal(emptyWorkflowStep([], "", "deployment").requiresApproval, true);
-    assert.equal(emptyWorkflowStep([]).requiresApproval, false);
-    const work = step("a", "lead");
-    assert.equal(withStepKind(work, "deployment").requiresApproval, true);
-    const explicit = { ...withStepKind(work, "deployment"), requiresApproval: false };
-    assert.equal(withStepKind(explicit, "deployment").requiresApproval, false);
+  it("creates untyped steps with approval off and preserves explicit approval", () => {
+    const fresh = emptyWorkflowStep([]);
+    assert.equal(fresh.requiresApproval, false);
+    assert.equal("kind" in fresh, false);
+    const input = workflowTeamInput(draft, project);
+    assert.ok(input.workflowSteps?.every((step) => !("kind" in step)));
+    assert.equal(input.workflowSteps?.[3].requiresApproval, true);
   });
 
   it("allocates step ids that do not collide with existing ones", () => {
@@ -90,9 +89,20 @@ describe("workflow draft editing", () => {
     assert.deepEqual(moveWorkflowStep(draft.steps, 0, -1).map((item) => item.id), draft.steps.map((item) => item.id));
   });
 
+  it("loads legacy deployment metadata without losing an explicit gate", () => {
+    const team = { name: "Ship it", workflowSteps: workflowTeamInput(draft, project).workflowSteps!.map((step) => ({
+      ...step, kind: "deployment" as const,
+    })) } as AgentTeam;
+    const loaded = draftFromTeam(team);
+    assert.ok(loaded.steps.every((step) => !("kind" in step)));
+    assert.equal(loaded.steps[3].requiresApproval, true);
+    assert.equal(loaded.steps[0].requiresApproval, false);
+  });
+
   it("round-trips a saved team and only reports real changes", () => {
     const team = { name: "Ship it", workflowSteps: workflowTeamInput(draft, project).workflowSteps } as AgentTeam;
     const saved = draftFromTeam(team);
+    assert.ok(saved.steps.every((step) => !("kind" in step)));
     assert.equal(workflowDraftChanged(saved, saved), false);
     assert.equal(workflowDraftChanged({ ...saved, name: "Ship it " }, saved), false);
     assert.equal(workflowDraftChanged({ ...saved, steps: moveWorkflowStep(saved.steps, 0, 1) }, saved), true);

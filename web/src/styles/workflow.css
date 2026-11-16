@@ -91,13 +91,6 @@
   background: var(--surface-1);
 }
 
-/* A deployment step carries the gate's tone on its leading edge as well as
-   in words, so it reads as the step that changes something outside. */
-.workflow-step-card[data-kind="deployment"] {
-  --tone: var(--warn);
-  box-shadow: inset var(--sp-0-5) 0 0 var(--tone-line);
-}
-
 .workflow-step-head {
   display: flex;
   align-items: center;
@@ -147,37 +140,6 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2) var(--sp-4);
-}
-
-/* Work | Deployment: a two-choice segment drawn on the radio semantics. */
-.workflow-step-kind {
-  display: inline-flex;
-  gap: 0;
-  padding: var(--sp-0-5);
-  border: var(--hairline);
-  border-radius: var(--r-2);
-}
-
-.workflow-step-kind-choice {
-  min-height: var(--control-h-xs);
-  padding: 0 var(--sp-3);
-  border: 0;
-  border-radius: var(--r-1);
-  background: transparent;
-  color: var(--ink-2);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-}
-
-.workflow-step-kind-choice[data-checked] {
-  background: var(--action-soft);
-  color: var(--ink-1);
-}
-
-.workflow-step-kind-choice[data-disabled] {
-  cursor: not-allowed;
-  opacity: var(--opacity-disabled);
 }
 
 .workflow-step-flag {

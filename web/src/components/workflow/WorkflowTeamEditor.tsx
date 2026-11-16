@@ -85,9 +85,9 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
     });
   }
 
-  function addStep(kind: "work" | "deployment") {
+  function addStep() {
     const previous = draft.steps.at(-1)?.agentId ?? stepAgents[0]?.id ?? "";
-    update({ ...draft, steps: [...draft.steps, emptyWorkflowStep(draft.steps, previous, kind)] });
+    update({ ...draft, steps: [...draft.steps, emptyWorkflowStep(draft.steps, previous)] });
   }
 
   async function requestClose() {
@@ -176,7 +176,6 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
                 errors={shown.fields[step.id]}
                 disabled={busy}
                 onChange={(patch) => update({ ...draft, steps: replaceWorkflowStep(draft.steps, step.id, patch) })}
-                onReplace={(next) => update({ ...draft, steps: draft.steps.map((item) => item.id === step.id ? next : item) })}
                 onMove={(to) => {
                   update({ ...draft, steps: moveWorkflowStep(draft.steps, index, to) });
                   focusStep(to);
@@ -191,13 +190,9 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
             </p>
           ) : null}
           <div className="workflow-editor-add">
-            <Button type="button" variant="outline" size="dense" disabled={busy || atLimit} onClick={() => addStep("work")}>
+            <Button type="button" variant="outline" size="dense" disabled={busy || atLimit} onClick={addStep}>
               <ActionAdd size={ICON.sm} aria-hidden="true" />
               {t("workflow.add_step")}
-            </Button>
-            <Button type="button" variant="ghost" size="dense" disabled={busy || atLimit} onClick={() => addStep("deployment")}>
-              <ActionAdd size={ICON.sm} aria-hidden="true" />
-              {t("workflow.add_deployment_step")}
             </Button>
           </div>
         </section>

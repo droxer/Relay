@@ -23,13 +23,13 @@ vi.mock("@/components/ui/select", () => ({
 
 const step: WorkflowStepDraft = {
   id: "step-a", name: "设计一个很长很长的步骤名称 with a long English tail", agentId: "", instructions: "",
-  expectedOutputs: "", acceptanceCriteria: "", kind: "work", requiresApproval: false,
+  expectedOutputs: "", acceptanceCriteria: "", requiresApproval: false,
 };
 
 function renderCard(overrides: Partial<Parameters<typeof WorkflowStepCard>[0]> = {}) {
   const props = {
     step, index: 1, count: 3, agents: [],
-    onChange: vi.fn(), onReplace: vi.fn(), onMove: vi.fn(), onRemove: vi.fn(),
+    onChange: vi.fn(), onMove: vi.fn(), onRemove: vi.fn(),
     ...overrides,
   };
   render(<ol><WorkflowStepCard {...props} /></ol>);
@@ -51,10 +51,11 @@ it("disables moves past either end and removing the only step", () => {
   expect(screen.getByRole("menuitem", { name: "workflow.step_remove" }).getAttribute("aria-disabled")).toBe("true");
 });
 
-it("turns the approval gate on when a step becomes a deployment", () => {
+it("offers an independent approval flag without choosing a step type", () => {
   const props = renderCard();
-  fireEvent.click(screen.getByRole("radio", { name: "workflow.kind_deployment" }));
-  expect(props.onReplace).toHaveBeenCalledWith(expect.objectContaining({ kind: "deployment", requiresApproval: true }));
+  expect(screen.queryByRole("radiogroup")).toBeNull();
+  fireEvent.click(screen.getByRole("checkbox"));
+  expect(props.onChange).toHaveBeenCalledWith({ requiresApproval: true });
 });
 
 it("names each invalid field beside its control", () => {

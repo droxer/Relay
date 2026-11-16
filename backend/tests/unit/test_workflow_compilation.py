@@ -18,7 +18,7 @@ def definition():
             {"id": "build", "name": "Build", "agentId": "builder",
              "instructions": "Implement reviewed design", "expectedOutputs": ["implementation"],
              "acceptanceCriteria": ["Tests pass"]},
-            {"id": "deploy", "name": "Deploy", "agentId": "reviewer", "kind": "deployment",
+            {"id": "deploy", "name": "Deploy", "agentId": "reviewer", "requiresApproval": True,
              "instructions": "Deploy verified changes", "expectedOutputs": ["deployment record"],
              "acceptanceCriteria": ["Health check passes"]},
         ],
