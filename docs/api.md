@@ -2032,7 +2032,9 @@ Terminal projection and cursor updates are atomic. Prepared successor recovery
 uses the same ledger-bound admission adapter; published commands are never
 recreated on replay. Workflow events are authoritative and materialize on
 restart. Project Tasks may assign a workflow Team only in that Team's Project.
-`POST /tasks/{id}/runs` enters the dedicated adapter: Task dispatch claim, frozen
+`POST /tasks/{id}/runs` and the background scheduler (assigned Tasks and Automation
+occurrences, acting for the Task owner — `tasks/scheduled_workflow.py`) enter the
+dedicated adapter: Task dispatch claim, frozen
 Thread, durable workflow request, `task.execution.claimed` generation and Task/Thread
 link commit atomically. Gates and retries retain this generation and request;
 stale generations cannot publish successors or change a newer Task owner. A gate
