@@ -150,7 +150,7 @@
 .next-steps-mark {
   flex: 0 0 auto;
   block-size: 1lh;
-  color: var(--ink-4);
+  color: var(--ink-3);
   transition: color var(--t-fast) var(--ease);
 }
 
@@ -184,7 +184,8 @@
 .next-steps-item:disabled:not([data-sending]) { color: var(--ink-4); }
 
 /* Touch rows keep their quiet outline, with room for a finger even when the
-   suggestion is only a few words. The send action stays discoverable. */
+   suggestion is only a few words. The send action stays discoverable, and
+   Adopt gets finger-sized padding. */
 @media (pointer: coarse) {
   .next-steps-item {
     min-height: var(--touch-target);
@@ -194,5 +195,5 @@
   .next-steps-send { opacity: 1; }
 
   .next-steps-adopt,
-  .next-steps-adopted { min-height: var(--touch-target); }
+  .next-steps-adopted { min-height: var(--touch-target); padding: 0 var(--sp-3); }
 }
