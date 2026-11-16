@@ -372,7 +372,10 @@ fallback requests; short control-plane probes retain their separate deadline.
 Each report identity permits at most ten actual wire attempts in a rolling
 24-hour window. Its `.attempts` sidecar is fsynced before each send and survives
 restart and acceptance (until the window expires); live delivery, replay, batches, payload compaction and identity fallback
-share this budget. Exhaustion defers delivery until the oldest attempt expires,
+share this budget. Failed live sends and replay share a per-report exponential
+backoff from one to eight seconds, honoring any longer backend `Retry-After`.
+This prevents rapid replay ticks from exhausting the budget during a brief outage.
+Exhaustion defers delivery until the oldest attempt expires,
 retaining the report and honoring `Retry-After`. It never discards exit evidence. Permanent report rejections are quarantined
 with their bytes
 and reason intact. Only malformed input is a 400: unexpected processing

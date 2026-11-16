@@ -8,6 +8,8 @@ import { TerminalOutbox } from "../src/terminal-outbox.js";
 
 for (const batching of [false, true]) {
   test(`replay skips a live report in flight (batching=${batching})`, async t => {
+    let now = Date.now();
+    t.mock.method(Date, 'now', () => now);
     const root = mkdtempSync(join(tmpdir(), 'relay-outbox-inflight-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const outbox = new TerminalOutbox(root);
@@ -40,8 +42,10 @@ for (const batching of [false, true]) {
       assert.equal(sends, 1, 'live redelivery must share the same sender');
       assert.deepEqual(await response.json(), { error: 'temporary' });
       assert.equal(new TerminalOutbox(root).status().pending, 1, 'failed delivery remains durable');
+      now += 1000;
       await assert.rejects(outbox.wrapFetch(async () => { throw new Error('offline'); })(
         'http://backend/events', request), /offline/);
+      now += 2000;
       const accepted = await outbox.wrapFetch(async (_url, init) => new Response('{}', {
         headers: new Headers(init?.headers),
       }))('http://backend/events', request);
@@ -202,7 +206,9 @@ test("output quota preserves existing evidence and still allows terminal results
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
- test("live retry preserves output after replay has finalized the command", async () => {
+ test("live retry preserves output after replay has finalized the command", async t => {
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
   const root = mkdtempSync(join(tmpdir(), "relay-late-output-"));
   try {
     const outbox = new TerminalOutbox(root);
@@ -220,6 +226,7 @@ test("output quota preserves existing evidence and still allows terminal results
     await outbox.replay(async (url, init) => JSON.parse(String(init?.body)).type === "run.output"
       ? new Response("unavailable", { status: 503 }) : backend(url, init), "http://backend/events", "token");
     assert.equal(terminal, true);
+    now += 1000;
     await outbox.wrapFetch(backend)("http://backend/events", { method: "POST", body: JSON.stringify(output) });
     assert.deepEqual(received, ["chunk"]);
     assert.equal(outbox.pending().length, 0);
@@ -468,6 +475,8 @@ for (const firstSender of ["live", "replay"] as const) {
 
 for (const delivery of ["live", "replay", "batch"] as const) {
   test(`${delivery} strict completion compacts HTTP 413 with payload-bound acceptance`, async (t) => {
+    let now = Date.now();
+    t.mock.method(Date, 'now', () => now);
     const root = mkdtempSync(join(tmpdir(), "relay-strict-compact-"));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const outbox = new TerminalOutbox(root);
@@ -505,6 +514,7 @@ for (const delivery of ["live", "replay", "batch"] as const) {
     restarted.negotiate(true, delivery === "batch");
     await restarted.replay(send, "http://backend/events", "token");
     assert.equal(restarted.pending().length, 1, "compact success without receipt proof must retain exit evidence");
+    now += 60_000;
     await restarted.replay(send, "http://backend/events", "token");
     assert.equal(restarted.pending().length, 0);
     assert.ok(bodies.some(body => !JSON.parse(body).generatedFiles[0].contentBase64));

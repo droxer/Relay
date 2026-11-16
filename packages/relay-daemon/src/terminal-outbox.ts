@@ -365,6 +365,12 @@ export class TerminalOutbox {
     this.bytes += Buffer.byteLength(data) - previousBytes;
     return undefined;
   }
+  private deferRetry(key: string, minimumMs = 0): void {
+    // Live delivery and the 50–100ms replay loop share one backoff, so a
+    // brief outage cannot spend the daily budget before recovery is possible.
+    const backoff = Math.min(1000 * 2 ** Math.max(0, this.attemptTimes(key).length - 1), 8000);
+    this.retryAt.set(key, Math.max(this.retryAt.get(key) ?? 0, Date.now() + Math.max(backoff, minimumMs)));
+  }
   private quarantine(key: string, status: number, detail?: unknown): void {
     if (this.rejected.has(key) || !this.index.has(key)) return;
     const rejection = { status, detail: rejectionDetail(detail), at: new Date().toISOString() };
@@ -392,6 +398,10 @@ export class TerminalOutbox {
     if (this.archived.has(record.key)) return new Response('Report archived as undeliverable; evidence retained.', { status: 409 });
     const rejection = this.rejected.get(record.key);
     if (rejection) return new Response(`Report quarantined; automatic retries paused. Original HTTP ${rejection.status}: ${rejection.detail} Report ID: ${record.key}. Use relay reports and relay retry-report after stopping the daemon.`, { status: 409 });
+    const waitMs = (this.retryAt.get(record.key) ?? 0) - Date.now();
+    if (waitMs > 0) return new Response('Durable report retry deferred; evidence retained.', {
+      status: 429, headers: { 'Retry-After': String(Math.ceil(waitMs / 1000)) },
+    });
     if (this.blocked(record)) return new Response('Earlier output is awaiting delivery.', { status: 503 });
     const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
     const originalBody = JSON.stringify(event);
@@ -408,7 +418,8 @@ export class TerminalOutbox {
       const headers = new Headers(request?.headers);
       headers.set('X-Relay-Report-Id', sentReportId);
       headers.set('X-Relay-Report-Digest', sentDigest);
-      return send(url, { ...request, headers });
+      try { return await send(url, { ...request, headers }); }
+      catch (error) { this.deferRetry(record.key); throw error; }
     };
     const request = { ...init, body: originalBody };
     let response = terminalTypes.has(String(event.type))
@@ -428,11 +439,12 @@ export class TerminalOutbox {
       if ((this.strictAcknowledgements || payloadBoundIdentity) && (response.headers.get('X-Relay-Report-Id') !== sentReportId
         || response.headers.get('X-Relay-Report-Digest') !== sentDigest)) {
         await response.body?.cancel();
+        this.deferRetry(record.key);
         return new Response('Missing durable acceptance proof.', { status: 503 });
       }
       this.acknowledge(record.key);
     } else if (permanentlyRejected(response.status)) this.quarantine(record.key, response.status, await responseErrorDetail(response.clone()));
-    else this.retryAt.set(record.key, Date.now() + retryAfterMs(response.headers.get("Retry-After")));
+    else this.deferRetry(record.key, retryAfterMs(response.headers.get("Retry-After")));
     return response;
   }
   wrapFetch(send: typeof fetch): typeof fetch {
@@ -482,6 +494,9 @@ export class TerminalOutbox {
         'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ reports }),
         signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(EVENT_REQUEST_TIMEOUT_MS)]),
       });
+    } catch (error) {
+      for (const key of selected) this.deferRetry(key);
+      throw error;
     } finally { for (const key of selected) this.deliveries.delete(key); }
     if (response.status === 413) {
       await response.body?.cancel();
@@ -498,7 +513,13 @@ export class TerminalOutbox {
       }
       return;
     }
-    if (!response.ok) { this.replayAfter = Date.now() + retryAfterMs(response.headers.get("Retry-After")); await response.body?.cancel(); return; }
+    if (!response.ok) {
+      const minimumMs = retryAfterMs(response.headers.get("Retry-After"));
+      for (const key of selected) this.deferRetry(key, minimumMs);
+      this.replayAfter = Date.now() + minimumMs;
+      await response.body?.cancel();
+      return;
+    }
     const result = await response.json() as { receipts?: Array<{ id: string; digest: string; status: number; detail?: string }> };
     const expected = new Map(reports.map(report => [report.id, report.digest]));
     for (const receipt of result.receipts ?? []) {
@@ -517,6 +538,7 @@ export class TerminalOutbox {
         } catch { /* Retain the report for the next replay attempt. */ }
       } else if (permanentlyRejected(receipt.status)) this.quarantine(receipt.id, receipt.status, receipt.detail);
     }
+    for (const key of selected) if (this.index.has(key) && !this.rejected.has(key)) this.deferRetry(key);
   }
   async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {
     if (this.replaying || Date.now() < this.replayAfter) return;

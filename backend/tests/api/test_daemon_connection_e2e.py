@@ -41,6 +41,10 @@ def test_poll_failure_honors_retry_after_without_reregistering(connection, statu
 @pytest.mark.integration
 def test_blackholed_poll_does_not_block_heartbeats_or_recovery(connection, monkeypatch):
     h = connection
+    # Registration can finish before the daemon's first poll. A never-polled
+    # node is dispatchable by policy, so establish a poll observation before
+    # testing that the observation ages out while later polls are held.
+    eventually(lambda: h.ctx.registry.get(h.node_id).get("lastPollAt"))
     # Shorten only the server's observation windows to test stale admission
     # without spending a minute idle. Requests and timestamps remain real.
     # The window stays wide enough for the daemon's 1/5-of-it heartbeat when

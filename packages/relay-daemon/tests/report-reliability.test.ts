@@ -144,6 +144,8 @@ test('quarantined backlog does not repeatedly enumerate the index per successor'
 });
 
 test('strict peers retain reports until identity and payload acceptance are proven', async t => {
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
   const root = fixture(t);
   const outbox = new TerminalOutbox(root);
   outbox.negotiate(true);
@@ -159,6 +161,7 @@ test('strict peers retain reports until identity and payload acceptance are prov
   });
   assert.equal((await send('http://backend/events', { method: 'POST', body: JSON.stringify(event) })).status, 503);
   assert.equal(outbox.pending().length, 1);
+  now += 1000;
   assert.equal((await send('http://backend/events', { method: 'POST', body: JSON.stringify(event) })).status, 200);
   assert.equal(outbox.pending().length, 0);
 });
