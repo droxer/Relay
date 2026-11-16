@@ -82,8 +82,18 @@ test("one terminal transport failure does not starve another recoverable result"
     assert.equal(retainedBeforeRecovery, 1);
     assert.equal(attempts.filter(id => id === first.event.commandId).length, 1,
       "repeated replay passes must respect the failed report's cooldown");
-    await outbox.replay(async () => new Response("{}", { status: 200 }), "http://backend.invalid/events", "test-token");
+    const recovered: typeof fetch = async (_url, init) => {
+      attempts.push(JSON.parse(String(init?.body)).commandId);
+      return new Response("{}", { status: 200 });
+    };
+    now += 999;
+    await outbox.replay(recovered, "http://backend.invalid/events", "test-token");
+    assert.equal(outbox.pending().length, 1, "recovery still respects the failed report's cooldown");
+    assert.equal(attempts.length, 2, "no wire retry before the cooldown expires");
+    now++;
+    await outbox.replay(recovered, "http://backend.invalid/events", "test-token");
     assert.equal(outbox.pending().length, 0, "control: both records deliver when the first request recovers");
+    assert.deepEqual(attempts, [first.event.commandId, second.event.commandId, first.event.commandId]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
