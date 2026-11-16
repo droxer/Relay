@@ -1,5 +1,6 @@
 import type { ThreadItem } from "./threads.js";
 import { threadAwaitsHuman, threadWaitIndex, type ThreadWaitSource } from "./awaitingInput.ts";
+import { shownExecutionPhase } from "./queuedRun.ts";
 
 export type ThreadGroups = {
   needsYou: ThreadItem[];
@@ -26,12 +27,14 @@ function byQueueOrder(a: ThreadItem, b: ThreadItem): number {
 // agent (running), which wait for a computer to take their run (queued), and
 // which are settled (idle). A live or queued run overrides a non-running
 // status. Input order (newest-first) is preserved within groups, except the
-// queue, which reads in the order its runs were admitted.
+// queue, which reads in the order its runs were admitted. Given the reader's
+// clock, a run still inside its queue grace counts as running.
 // Waiting is read with the tasks, by the same rule as the thread's prompt: a
 // thread whose task moved on is not waiting, one a waiting task names is.
 export function groupThreads(
   items: readonly ThreadItem[],
   tasks: ThreadWaitSource = [],
+  now?: number,
 ): ThreadGroups {
   // Indexed once here, not per thread: the rail regroups on every streamed frame.
   const waits = threadWaitIndex(tasks);
@@ -40,9 +43,10 @@ export function groupThreads(
   const queued: ThreadItem[] = [];
   const idle: ThreadItem[] = [];
   for (const item of items) {
-    if (item.session.execution?.phase === "queued") {
+    const phase = shownExecutionPhase(item.session, { nodeOffline: item.nodeOffline, now });
+    if (phase === "queued") {
       queued.push(item);
-    } else if (item.session.execution && item.session.execution.phase !== "terminal") {
+    } else if (phase && phase !== "terminal") {
       running.push(item);
     } else if (threadAwaitsHuman(item.session, waits)) {
       needsYou.push(item);

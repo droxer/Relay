@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { queuedRun, queueWaitLabel } from "../src/lib/queuedRun.js";
+import { nextQueueGraceEnd, queuedRun, queueWaitLabel, QUEUE_GRACE_MS, shownExecutionPhase } from "../src/lib/queuedRun.js";
 import type { RelaySession } from "../src/types.js";
 
 const NOW = Date.parse("2026-11-08T12:00:00.000Z");
@@ -27,6 +27,50 @@ describe("queuedRun", () => {
     assert.equal(queuedRun(session({ phase: "queued", computerOnline: false }))?.cause, "offline");
     // The rail also knows a pinned computer dropped away.
     assert.equal(queuedRun(session({ phase: "queued", computerOnline: null }), { nodeOffline: true })?.cause, "offline");
+  });
+});
+
+describe("queue grace", () => {
+  const admittedAt = "2026-11-08T11:59:55.000Z";
+  const admitted = Date.parse(admittedAt);
+
+  it("shows a run a live computer has not yet taken as running until its grace ends", () => {
+    const run = session({ phase: "queued", computerOnline: true, queuedAt: admittedAt });
+    assert.equal(queuedRun(run, { now: admitted + QUEUE_GRACE_MS - 1 }), null);
+    assert.equal(shownExecutionPhase(run, { now: admitted + 2_000 }), "running");
+    assert.deepEqual(queuedRun(run, { now: admitted + QUEUE_GRACE_MS }), { cause: "slot", queuedAt: admittedAt });
+    assert.equal(shownExecutionPhase(run, { now: admitted + QUEUE_GRACE_MS }), "queued");
+  });
+
+  it("treats a server clock a little ahead of the reader as inside the grace", () => {
+    const run = session({ phase: "queued", computerOnline: null, queuedAt: admittedAt });
+    assert.equal(queuedRun(run, { now: admitted - 2_000 }), null);
+  });
+
+  it("gives no grace to a run waiting on an offline computer", () => {
+    assert.equal(queuedRun(session({ phase: "queued", computerOnline: false, queuedAt: admittedAt }), { now: admitted + 1_000 })?.cause, "offline");
+    assert.equal(queuedRun(session({ phase: "queued", computerOnline: true, queuedAt: admittedAt }), { now: admitted + 1_000, nodeOffline: true })?.cause, "offline");
+  });
+
+  it("gives no grace without an admission time or a clock", () => {
+    assert.equal(queuedRun(session({ phase: "queued", computerOnline: true }), { now: NOW })?.cause, "slot");
+    assert.equal(queuedRun(session({ phase: "queued", computerOnline: true, queuedAt: admittedAt }))?.cause, "slot");
+  });
+
+  it("leaves every other phase as the backend says", () => {
+    assert.equal(shownExecutionPhase(session({ phase: "stopping" }), { now: NOW }), "stopping");
+    assert.equal(shownExecutionPhase(session(undefined), { now: NOW }), undefined);
+  });
+
+  it("names the earliest grace still ahead, for the clock to wake on", () => {
+    const sessions = [
+      session({ phase: "queued", queuedAt: "2026-11-08T11:59:58.000Z" }),
+      session({ phase: "queued", queuedAt: admittedAt }),
+      session({ phase: "queued", queuedAt: "2026-11-08T11:00:00.000Z" }),
+      session({ phase: "running", queuedAt: admittedAt }),
+    ];
+    assert.equal(nextQueueGraceEnd(sessions, NOW), admitted + QUEUE_GRACE_MS);
+    assert.equal(nextQueueGraceEnd([sessions[2]], NOW), null);
   });
 });
 
