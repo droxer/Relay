@@ -58,9 +58,11 @@ test("cancelling the workspace owner is independent of another waiter's notifica
   }
 });
 
-test("one terminal transport failure does not starve another recoverable result", async () => {
+test("one terminal transport failure does not starve another recoverable result", async t => {
   const root = mkdtempSync(join(tmpdir(), "relay-replay-review-"));
   try {
+    let now = Date.now();
+    t.mock.method(Date, "now", () => now);
     const outbox = new TerminalOutbox(root);
     for (const commandId of ["a", "b"]) {
       outbox.retain({ type: "run.completed", commandId, leaseId: "lease", exitCode: 0 });
@@ -75,11 +77,13 @@ test("one terminal transport failure does not starve another recoverable result"
     };
     for (let i = 0; i < 4; i++) await outbox.replay(send, "http://backend.invalid/events", "test-token");
     const retainedBeforeRecovery = outbox.pending().length;
-    await outbox.replay(async () => new Response("{}", { status: 200 }), "http://backend.invalid/events", "test-token");
-    assert.equal(outbox.pending().length, 0, "control: both records deliver when the first request recovers");
     assert.ok(attempts.includes(String(second.event.commandId)),
       `Second result never attempted; four replay passes attempted only ${JSON.stringify(attempts)}`);
     assert.equal(retainedBeforeRecovery, 1);
+    assert.equal(attempts.filter(id => id === first.event.commandId).length, 1,
+      "repeated replay passes must respect the failed report's cooldown");
+    await outbox.replay(async () => new Response("{}", { status: 200 }), "http://backend.invalid/events", "test-token");
+    assert.equal(outbox.pending().length, 0, "control: both records deliver when the first request recovers");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
