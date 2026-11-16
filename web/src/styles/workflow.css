@@ -134,12 +134,16 @@
   grid-column: 1 / -1;
 }
 
+/* Who decides is the step's policy, not one more thing it does: a soft rule
+   sets it apart from the fields above. */
 .workflow-step-policy {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2) var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline-soft);
 }
 
 .workflow-step-flag {
@@ -278,12 +282,14 @@
   grid-template-rows: var(--header-h) auto minmax(0, 1fr) auto;
 }
 
+/* Its edges land on the transcript's text column, so the run reads as the
+   thread's own heading rather than a banner laid across it. */
 .chat-panel > .workflow-progress {
   position: static;
   justify-self: center;
-  width: min(calc(100% - var(--sp-4)), var(--thread-measure));
+  width: min(100% - var(--page-gutter) * 2, var(--thread-measure) - var(--page-gutter) * 2);
   max-height: 30dvh;
-  margin: var(--sp-1) 0;
+  margin: var(--sp-2) 0 var(--sp-1);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -295,6 +301,7 @@
 }
 
 .workflow-progress {
+  container: workflow-progress / inline-size;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -305,31 +312,63 @@
   color: var(--ink-2);
 }
 
+/* One line, whatever the step is called: the workflow, its meter and
+   position keep their width, the current step takes what is left and
+   ellipsizes (the timeline below and the slip both give its full name), and
+   the status in words always holds the trailing edge beside the chevron. */
 .workflow-progress-summary {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-areas: "label meter position step status chevron";
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--sp-1) var(--sp-3);
   min-height: var(--touch-target);
-  padding: var(--sp-1-5) var(--sp-3);
+  padding: var(--sp-1-5) var(--sp-2) var(--sp-1-5) var(--sp-3);
   border-radius: var(--r-3);
   font: var(--type-label);
   letter-spacing: var(--type-label-track);
   cursor: pointer;
   list-style: none;
+  transition: background-color var(--t-fast) var(--ease);
 }
 
 .workflow-progress-summary::-webkit-details-marker {
   display: none;
 }
 
+.workflow-progress-summary:hover {
+  background: var(--row-hover);
+}
+
+.workflow-progress[open] > .workflow-progress-summary {
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
 .workflow-progress-label {
+  grid-area: label;
+  max-width: 16rem;
   min-width: 0;
+  overflow: hidden;
   color: var(--ink-1);
-  overflow-wrap: anywhere;
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-progress-chevron {
+  grid-area: chevron;
+  color: var(--ink-3);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.workflow-progress[open] .workflow-progress-chevron {
+  transform: rotate(180deg);
 }
 
 .workflow-progress-meter {
+  grid-area: meter;
   display: inline-flex;
   flex-wrap: wrap;
   gap: var(--sp-0-5);
@@ -351,19 +390,25 @@
 .workflow-progress-pip[data-state="cancelled"] { --tone: var(--line-2); }
 
 .workflow-progress-position {
+  grid-area: position;
   color: var(--ink-3);
 }
 
 .workflow-progress-step {
+  grid-area: step;
   min-width: 0;
-  color: var(--ink-1);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The run's status in words — the toned word, not the pips, carries it. */
 .workflow-progress-status {
-  margin-inline-start: auto;
+  grid-area: status;
+  justify-self: end;
   color: var(--tone, var(--ink-2));
+  white-space: nowrap;
 }
 
 .workflow-progress[data-state="awaiting_approval"] .workflow-progress-status { --tone: var(--warn); }
@@ -371,22 +416,42 @@
 .workflow-progress[data-state="blocked"] .workflow-progress-status { --tone: var(--err); }
 .workflow-progress[data-state="completed"] .workflow-progress-status { --tone: var(--ok); }
 
+/* The ledger: each step's mark sits on one hairline rail, so the run reads
+   as a single path; everything a step recorded hangs in the column after
+   the mark, so owner, attempts, outputs and decisions share one left edge. */
 .workflow-timeline {
+  --mark: var(--avatar-xs);
+  --mark-gap: var(--sp-2);
   display: grid;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   max-height: min(60dvh, 32rem);
   overflow-y: auto;
   overscroll-behavior: contain;
   margin: 0;
-  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3);
   border-top: var(--hairline);
   list-style: none;
 }
 
 .workflow-timeline-step {
+  position: relative;
   display: grid;
   gap: var(--sp-1);
   min-width: 0;
+}
+
+.workflow-timeline-step > :not(.workflow-timeline-head) {
+  margin-inline-start: calc(var(--mark) + var(--mark-gap));
+}
+
+/* The rail: from under this mark to the next one, across the row gap. */
+.workflow-timeline-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-block: calc(var(--mark) + var(--sp-1)) calc(var(--sp-1) - var(--sp-4));
+  inset-inline-start: calc(var(--mark) / 2 - 0.5px);
+  width: 1px;
+  background: var(--line-1);
 }
 
 /* Index · name · state: the state keeps its column however long the name. */
@@ -394,19 +459,33 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: var(--sp-2);
+  gap: var(--mark-gap);
   min-width: 0;
 }
 
 .workflow-timeline-head > .workflow-step-index {
-  margin-top: calc((1lh - var(--avatar-xs)) / 2);
+  margin-top: calc((1lh - var(--mark)) / 2);
+  background: var(--surface-1);
 }
+
+/* The mark takes the step's tone; the word beside it still says the state. */
+.workflow-timeline-step[data-state="done"] .workflow-step-index {
+  --tone: var(--ok);
+  border-color: transparent;
+  background: var(--tone-tint);
+  color: var(--tone);
+}
+
+.workflow-timeline-step[data-state="current"] .workflow-step-index { border-color: var(--live); color: var(--live); }
+.workflow-timeline-step[data-state="waiting"] .workflow-step-index { border-color: var(--warn); color: var(--warn); }
+.workflow-timeline-step[data-state="blocked"] .workflow-step-index { border-color: var(--err); color: var(--err); }
+.workflow-timeline-step:is([data-state="pending"], [data-state="cancelled"]) .workflow-timeline-name { color: var(--ink-3); }
 
 .workflow-timeline-name {
   min-width: 0;
   color: var(--ink-1);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
   overflow-wrap: anywhere;
 }
 
@@ -423,9 +502,10 @@
 .workflow-timeline-step[data-state="blocked"] .workflow-timeline-state { --tone: var(--err); }
 
 .workflow-timeline-meta,
-.workflow-timeline-reason {
+.workflow-timeline-reason,
+.workflow-timeline-decision,
+.workflow-timeline-evidence {
   margin: 0;
-  padding-inline-start: calc(var(--avatar-xs) + var(--sp-2));
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
@@ -436,15 +516,37 @@
   color: var(--err);
 }
 
-.workflow-timeline-outputs {
+/* One attempt: its line, then what it recorded, set off from the step's
+   owner line above by a little air rather than another rule. */
+.workflow-timeline-attempt {
   display: grid;
   gap: var(--sp-1);
-  margin: 0 0 0 calc(var(--avatar-xs) + var(--sp-2));
+  min-width: 0;
+  margin-top: var(--sp-1);
+}
+
+.workflow-timeline-evidence {
+  display: grid;
+  gap: var(--sp-0-5);
+  padding-inline-start: var(--sp-4);
+  color: var(--ink-2);
+  list-style: disc;
+}
+
+.workflow-timeline-evidence::marker,
+.workflow-timeline-evidence > li::marker {
+  color: var(--ink-4);
+}
+
+.workflow-timeline-outputs {
+  display: grid;
+  gap: var(--sp-2);
+  margin: var(--sp-1) 0 0;
 }
 
 .workflow-timeline-output {
   display: grid;
-  gap: var(--sp-0-5);
+  gap: var(--sp-1);
   min-width: 0;
 }
 
@@ -493,6 +595,11 @@
   overflow-wrap: anywhere;
 }
 
+/* The run's menu stays level with the title's first line when it wraps. */
+.workflow-slip .composer-slip-head {
+  align-items: flex-start;
+}
+
 .workflow-slip-reason {
   margin: 0;
   color: var(--ink-2);
@@ -503,6 +610,24 @@
 
 .workflow-slip[data-state="blocked"] .workflow-slip-reason:first-of-type {
   color: var(--err);
+}
+
+/* Its answers carry no number key (no single key may decide a gate), so the
+   label leads and the effect — which names the step, often a sentence —
+   wraps beside it instead of running out of the slip. */
+.workflow-slip .awaiting-input-choice {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.workflow-slip .awaiting-input-choice-effect {
+  white-space: normal;
+}
+
+@media (max-width: 820px) {
+  .workflow-slip .awaiting-input-choice { grid-template-columns: minmax(0, 1fr) auto; }
+  .workflow-slip .awaiting-input-choice-label { grid-column: 1; grid-row: 1; }
+  .workflow-slip .awaiting-input-choice-effect { grid-column: 1; grid-row: 2; }
+  .workflow-slip .awaiting-input-choice-send { grid-column: 2; grid-row: 1; }
 }
 
 /* ---------- phone ---------- */
@@ -525,9 +650,25 @@
   .workflow-team-actions > * {
     flex: 1 1 0;
   }
+}
 
-  .workflow-progress-status {
-    margin-inline-start: 0;
+/* Adapt to the thread's available width, including split desktop panes. */
+@container workflow-progress (max-width: 640px) {
+  /* Keep status and count in separate rows, even with long translations. */
+  .workflow-progress-summary {
+    grid-template-areas:
+      "label label label status chevron"
+      "meter position step step step";
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  }
+
+  .workflow-progress-label {
+    max-width: none;
+  }
+
+  .workflow-progress-meter {
+    width: max-content;
+    max-width: 5rem;
   }
 }
 

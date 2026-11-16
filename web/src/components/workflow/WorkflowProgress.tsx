@@ -10,6 +10,7 @@ import {
   type WorkflowBlock,
   type WorkflowStepState,
 } from "../../lib/workflowRuns";
+import { ChevronDownIcon, ICON } from "../icons";
 
 const RUN_STATUS_KEY: Record<WorkflowRun["status"], string> = {
   awaiting_approval: "workflow.status_awaiting_approval",
@@ -37,10 +38,10 @@ function blockKey(block: WorkflowBlock): [string, Record<string, string>?] {
   }
 }
 
-function RecordedTime({ timestamp }: { timestamp?: string }) {
+function RecordedTime({ timestamp, lead = "" }: { timestamp?: string; lead?: string }) {
   const { i18n } = useTranslation();
   if (!timestamp || !Number.isFinite(Date.parse(timestamp))) return null;
-  return <time className="workflow-timeline-meta" dateTime={timestamp}>{new Date(timestamp).toLocaleString(i18n.language || undefined)}</time>;
+  return <>{lead}<time dateTime={timestamp}>{new Date(timestamp).toLocaleString(i18n.language || undefined)}</time></>;
 }
 
 function AttemptResult({ result }: { result: WorkflowAttemptResult }) {
@@ -54,9 +55,9 @@ function AttemptResult({ result }: { result: WorkflowAttemptResult }) {
       <p className="workflow-timeline-meta">
         {t("workflow.attempt", { attempt: result.workflowAttempt })}
         {` · ${t(result.status === "succeeded" ? "workflow.step_done" : "workflow.step_blocked")}`}
+        <RecordedTime timestamp={result.timestamp} lead=" · " />
       </p>
       {result.status === "blocked" ? <p className="workflow-timeline-reason">{t(`workflow.reason.${reason}`)}</p> : null}
-      <RecordedTime timestamp={result.timestamp} />
       {result.note ? <p className="workflow-timeline-reason">{result.note}</p> : null}
       {result.evidence?.length ? <ul className="workflow-timeline-evidence">{result.evidence.map((item, index) => <li key={index}>{item}</li>)}</ul> : null}
       {outputs.length ? (
@@ -89,6 +90,7 @@ export function WorkflowProgress({ run, agentName, expanded = false }: {
   const current = run.assignments[Math.min(run.currentIndex, run.assignments.length - 1)];
   const done = run.status === "completed" ? run.assignments.length : run.currentIndex;
   const block = workflowBlock(run);
+  const currentName = current && run.status !== "completed" ? workflowStepName(run, current) : null;
 
   return (
     <details className="workflow-progress" data-state={run.status} open={expanded || undefined}>
@@ -102,8 +104,9 @@ export function WorkflowProgress({ run, agentName, expanded = false }: {
         <span className="workflow-progress-position tnum">
           {t("workflow.progress_position", { done, total: run.assignments.length })}
         </span>
-        {current && run.status !== "completed" ? <span className="workflow-progress-step">{workflowStepName(run, current)}</span> : null}
+        {currentName ? <span className="workflow-progress-step" title={currentName}>{currentName}</span> : null}
         <span className="workflow-progress-status">{t(RUN_STATUS_KEY[run.status])}</span>
+        <ChevronDownIcon className="workflow-progress-chevron" size={ICON.sm} aria-hidden="true" />
       </summary>
       <ol className="workflow-timeline">
         {run.assignments.map((assignment, position) => {
@@ -127,14 +130,14 @@ export function WorkflowProgress({ run, agentName, expanded = false }: {
               {results.map(result => <AttemptResult key={result.assignmentId} result={result} />)}
               {[...run.gateDecisions, ...(run.recoveryDecisions ?? [])]
                 .filter(decision => decision.workflowStepId === assignment.workflowStepId)
-                .map((decision, index) => <div className="workflow-timeline-decision" key={decision.id ?? `${decision.kind}-${index}`}>
-                  <span>{t(`workflow.decision_${decision.kind}`)}</span>{" · "}
-                  <span>{t("workflow.attempt", { attempt: decision.workflowAttempt })}</span>{" · "}
-                  <RecordedTime timestamp={decision.timestamp} />
-                </div>)}
+                .map((decision, index) => <p className="workflow-timeline-decision" key={decision.id ?? `${decision.kind}-${index}`}>
+                  <span>{t(`workflow.decision_${decision.kind}`)}</span>
+                  {` · ${t("workflow.attempt", { attempt: decision.workflowAttempt })}`}
+                  <RecordedTime timestamp={decision.timestamp} lead=" · " />
+                </p>)}
               {(run.interruptions ?? []).filter(item => item.workflowStepId === assignment.workflowStepId)
                 .map((item, index) => <p className="workflow-timeline-reason" key={`interruption-${index}`}>
-                  {t("workflow.block_interrupted")}{" · "}<RecordedTime timestamp={item.timestamp} />
+                  {t("workflow.block_interrupted")}<RecordedTime timestamp={item.timestamp} lead=" · " />
                 </p>)}
             </li>
           );

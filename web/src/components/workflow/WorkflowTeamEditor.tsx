@@ -120,7 +120,7 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
     const accepted = await confirm({
       title: t("teams.delete_title", { name: team.name }),
       message: t("workflow.delete_message"),
-      confirmLabel: t("teams.delete"),
+      confirmLabel: t("workflow.delete"),
       tone: "danger",
     });
     if (!accepted) return;
@@ -205,7 +205,7 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
             <div className="adm-drawer-section-actions">
               <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy}>
                 <AdminDelete size={ICON.sm} aria-hidden="true" />
-                {t("teams.delete")}
+                {t("workflow.delete")}
               </Button>
             </div>
           </div>
