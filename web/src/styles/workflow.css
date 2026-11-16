@@ -505,6 +505,18 @@
   color: var(--err);
 }
 
+/* A step's question takes a written answer beside any offered choices. */
+.workflow-slip-answer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+
+.workflow-slip-answer > textarea {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---------- phone ---------- */
 
 /* The step's ⋯ menu becomes the phone's action sheet and holds every move,

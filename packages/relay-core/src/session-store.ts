@@ -349,9 +349,14 @@ export interface WorkflowAttemptResult {
   runId: string;
   commandId: string;
   timestamp: string;
-  status: "succeeded" | "blocked";
+  /** `question`: the step stopped to ask its owner; it reruns with the answer. */
+  status: "succeeded" | "blocked" | "question";
   reason?: string;
   outputs: Record<string, string>;
+  /** What a `question` result asked the owner. */
+  question?: string;
+  /** Answers a `question` result offered, when it was a choice. */
+  options?: string[];
   evidence?: string[];
   note?: string;
 }
@@ -367,12 +372,14 @@ export interface WorkflowAttemptBinding {
 
 export interface WorkflowDecisionRecord extends WorkflowAttemptBinding {
   id?: string;
-  kind: "approve" | "reject" | "retry" | "cancel";
+  kind: "approve" | "reject" | "retry" | "cancel" | "answer";
+  /** The owner's answer to the step's question, on an `answer` decision. */
+  answer?: string;
   actorUserId?: string;
   timestamp?: string;
 }
 
-export type WorkflowRunStatus = "awaiting_approval" | "ready" | "blocked" | "completed" | "cancelled";
+export type WorkflowRunStatus = "awaiting_approval" | "awaiting_input" | "ready" | "blocked" | "completed" | "cancelled";
 
 /** A frozen sequential run, materialized from `workflow.*` events
  *  (`backend/relay/collaboration/workflow_events.py`). */
@@ -705,7 +712,7 @@ export type RelayEvent =
   | { id: string; type: "workflow.started"; sessionId: string; timestamp: string; assignments: WorkflowAssignment[]; actorUserId?: string }
   | ({ id: string; type: "workflow.gate_decided"; sessionId: string; timestamp: string; kind: "approve" | "reject"; actorUserId: string } & WorkflowAttemptBinding)
   | ({ id: string; type: "workflow.step_finished"; sessionId: string; timestamp: string; terminalEvent: Record<string, unknown> } & WorkflowAttemptBinding)
-  | ({ id: string; type: "workflow.recovery_decided"; sessionId: string; timestamp: string; kind: "retry" | "cancel"; actorUserId: string } & WorkflowAttemptBinding)
+  | ({ id: string; type: "workflow.recovery_decided"; sessionId: string; timestamp: string; kind: "retry" | "cancel" | "answer"; answer?: string; actorUserId: string } & WorkflowAttemptBinding)
   | ({ id: string; type: "workflow.interrupted"; sessionId: string; timestamp: string; actorUserId: string } & WorkflowAttemptBinding)
   | ({ id: string; type: "workflow.admission_blocked"; sessionId: string; timestamp: string; reason: string } & WorkflowAttemptBinding);
 

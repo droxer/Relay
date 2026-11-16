@@ -371,3 +371,138 @@ def test_criteria_only_steps_advance_without_named_outputs(monkeypatch):
         completed = app.state.session_store.get_session(session["id"])
         assert completed["status"] == "completed"
         assert all(result["status"] == "succeeded" for result in completed["workflowRuns"][0]["attemptResults"])
+
+
+def ask(registry, node, command, question="Deploy to staging or production?", options=None):
+    return finish(registry, node, command, {}, roundResult={
+        "runId": command["runId"], "status": "blocked", "note": question,
+        **({"options": options} if options else {})})
+
+
+def answer(session, text):
+    return {**decision(session, "answer"), "answer": text}
+
+
+def test_step_question_waits_for_owner_and_resumes_with_answer(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, node, _, _, payload):
+        session = start(client, payload)
+        sid = session["id"]
+        url = f"/api/v1/threads/{sid}/workflow-decisions"
+        command, = take(app.state.registry, node)
+        ask(app.state.registry, node, command, options=["Staging", "Production"])
+        session = app.state.session_store.get_session(sid)
+        run = session["workflowRuns"][0]
+        assert run["status"] == "awaiting_input"
+        assert run["currentIndex"] == 0
+        assert run["attemptResults"][-1]["status"] == "question"
+        assert run["attemptResults"][-1]["question"] == "Deploy to staging or production?"
+        assert run["attemptResults"][-1]["options"] == ["Staging", "Production"]
+        assert take(app.state.registry, node) == []
+        assert client.post(url, json=decision(session, "retry")).status_code == 409
+        assert client.post(url, json={**decision(session, "answer"), "answer": "  "}).status_code == 400
+        body = answer(session, "Staging")
+        response = client.post(url, json=body)
+        assert response.status_code == 200, response.text
+        assert client.post(url, json=body).status_code == 409
+        resumed, = take(app.state.registry, node)
+        assert resumed["assignmentId"] != command["assignmentId"]
+        assert "Deploy to staging or production?" in resumed["state"]["assignment_brief"]
+        assert "Staging" in resumed["state"]["assignment_brief"]
+        finish(app.state.registry, node, resumed, {"Design": "recorded"})
+        session = app.state.session_store.get_session(sid)
+        run = session["workflowRuns"][0]
+        assert run["currentIndex"] == 1
+        assert [item["status"] for item in run["attemptResults"]] == ["question", "succeeded"]
+        assert materialize_events(session["events"])["workflowRuns"] == session["workflowRuns"]
+
+
+def test_answer_resumes_gated_step_without_second_approval(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, node, _, _, payload):
+        payload["workflowSteps"][0]["requiresApproval"] = True
+        session = start(client, payload)
+        url = f"/api/v1/threads/{session['id']}/workflow-decisions"
+        response = client.post(url, json=decision(session, "approve"))
+        assert response.status_code == 200, response.text
+        command, = take(app.state.registry, node)
+        ask(app.state.registry, node, command)
+        session = app.state.session_store.get_session(session["id"])
+        response = client.post(url, json=answer(session, "Production, after the smoke test"))
+        assert response.status_code == 200, response.text
+        assert response.json()["workflowRuns"][0]["status"] == "ready"
+        assert len(take(app.state.registry, node)) == 1
+
+
+def test_question_parks_linked_task_for_its_owner(monkeypatch):
+    from relay.daemon_registry.dispatch.workflow_tasks import sync_workflow_task
+    calls = []
+    monkeypatch.setattr("relay.daemon_registry.dispatch.workflow_tasks.SessionController._update_task_status",
+                        lambda self, status, message, extra: calls.append(status))
+    registry = type("R", (), {"task_store": type("T", (), {"get_task": lambda self, _id: {"status": "assigned", "executionOwner": None}})(),
+                               "store": None})()
+    monkeypatch.setattr("relay.daemon_registry.dispatch.workflow_tasks.request_execution_owner", lambda request: None)
+    sync_workflow_task(registry, {"taskId": "task"}, {"id": "s", "workflowRuns": [{"status": "awaiting_input", "currentIndex": 0,
+        "assignments": [{"assignmentId": "a"}], "attemptResults": [{"assignmentId": "a", "runId": "r",
+        "status": "question", "question": "Which region?"}]}]})
+    assert calls == ["waiting_for_human"]
+
+
+@pytest.mark.parametrize("exit_kind", ["answer", "cancel"])
+def test_workflow_question_projects_task_wait_and_clears_it(monkeypatch, exit_kind):
+    from relay.daemon_registry.dispatch.workflow_admission import workflow_request_id
+    from relay.daemon_registry.dispatch.workflow_tasks import sync_workflow_task
+
+    with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
+        team = client.post("/api/v1/teams", json=payload).json()["team"]
+        response = client.post("/api/v1/tasks", json={
+            "title": "Ship workflow", "projectId": project["id"], "assignedTeamId": team["id"],
+        })
+        assert response.status_code == 201, response.text
+        tid = response.json()["id"]
+        response = client.post(f"/api/v1/tasks/{tid}/runs", json={})
+        assert response.status_code == 202, response.text
+        session = response.json()["session"]
+        sid = session["id"]
+        command, = take(app.state.registry, node)
+        ask(app.state.registry, node, command, options=["Staging", "Production"])
+        session = app.state.session_store.get_session(sid)
+        task = app.state.task_store.get_task(tid)
+        wait = task["waitingRequest"]
+        assert wait["kind"] == "question"
+        assert wait["inputQuestion"] == "Deploy to staging or production?"
+        assert wait["inputOptions"] == ["Staging", "Production"]
+        assert task["waitingSessionId"] == sid
+        # Lists and detail use the same public awaiting projection.
+        for url in (f"/api/v1/tasks/{tid}", "/api/v1/tasks?view=summary"):
+            response = client.get(url)
+            assert response.status_code == 200, response.text
+            public = response.json()
+            if "tasks" in public:
+                public = next(item for item in public["tasks"] if item["id"] == tid)
+            assert public["awaiting"]["text"] == wait["inputQuestion"]
+            assert public["awaiting"]["options"] == wait["inputOptions"]
+            assert public["awaiting"]["questionId"] == wait["questionId"]
+        request = app.state.daemon_store.get_run_request(workflow_request_id(session["workflowRuns"][0]))
+        before = app.state.task_store.get_task(tid)["events"]
+        sync_workflow_task(app.state.registry, request, session)
+        assert app.state.task_store.get_task(tid)["events"] == before
+        # Repair a same-status projection that has an incomplete wait.
+        app.state.task_store.append_event(tid, {
+            "type": "task.status", "taskId": tid, "timestamp": before[-1]["timestamp"],
+            "status": "waiting_for_human", "sessionId": sid,
+            "request": {"kind": "check", "questionId": "legacy"},
+        }, execution_owner=task["executionOwner"])
+        sync_workflow_task(app.state.registry, request, session)
+        assert app.state.task_store.get_task(tid)["waitingRequest"] == wait
+        url = f"/api/v1/threads/{sid}/workflow-decisions"
+        body = answer(session, "Staging") if exit_kind == "answer" else decision(session, "cancel")
+        response = client.post(url, json=body)
+        assert response.status_code == 200, response.text
+        assert "waitingRequest" not in app.state.task_store.get_task(tid)
+        assert client.get(f"/api/v1/tasks/{tid}").json()["awaiting"] is None
+        if exit_kind == "answer":
+            resumed, = take(app.state.registry, node)
+            ask(app.state.registry, node, resumed, question="Which region?")
+            next_wait = app.state.task_store.get_task(tid)["waitingRequest"]
+            assert next_wait["questionId"] != wait["questionId"]
+            assert next_wait["inputQuestion"] == "Which region?"
+            assert "inputOptions" not in next_wait

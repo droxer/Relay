@@ -63,3 +63,16 @@ def test_criteria_only_step_still_requires_completion_evidence():
     event = completion()
     event["roundResult"]["work"] = {"status": "done"}
     assert workflow_step_result({"expectedOutputs": []}, event)["status"] == "blocked"
+
+
+def test_blocked_report_with_question_waits_for_owner():
+    event = completion(roundResult={"runId": "run", "status": "blocked", "note": " Which region? ",
+                                    "options": ["us", "eu", "us"]})
+    result = workflow_step_result({"expectedOutputs": []}, event)
+    assert result == {"status": "question", "reason": "workflow_question", "outputs": {},
+                      "question": "Which region?", "options": ["us", "eu"]}
+
+
+def test_blocked_report_without_words_still_blocks():
+    event = completion(roundResult={"runId": "run", "status": "blocked"})
+    assert workflow_step_result({}, event)["status"] == "blocked"

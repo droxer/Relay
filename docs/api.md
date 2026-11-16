@@ -1957,10 +1957,20 @@ service headers with an owner cookie cannot confer that authority. Cancellation
 remains available after live Agent admission becomes invalid.
 
 For an existing ledger, `POST /api/v1/threads/{sessionId}/workflow-decisions` records a gate
-answer or recovery action. Its JSON body must contain exactly `kind` (`approve`, `reject`, `retry` or `cancel`),
+answer or recovery action. Its JSON body must contain exactly `kind` (`approve`, `reject`, `retry`, `cancel` or `answer`),
 `workflowRunId`, `workflowStepId`, `workflowAttempt` (positive integer),
-`assignmentId`, and `expectedRevision` (nonnegative integer). The server supplies
+`assignmentId`, and `expectedRevision` (nonnegative integer); an `answer` also
+carries `answer` (1–4,000 characters after trimming). The server supplies
 the audit actor, event identity and timestamp. Unknown fields are rejected.
+
+A step that stops with a blocked round result carrying a question (`note`,
+optionally `options`) records an attempt result with status `question` and parks
+the ledger at `awaiting_input` (a linked Task reads `waiting_for_human`) instead
+of `blocked`. Only `answer` or `cancel` applies there. An answer allocates the
+step's next attempt, sets the ledger to `ready` without asking the step's
+approval gate again, and queues it with every earlier question and answer for
+that step in its brief. Like retry, it requires exit evidence for the asking
+attempt.
 
 Only the owning user's real login session may decide; service actors (including
 service headers with an owner cookie), Computer credentials and foreign admins
@@ -2041,6 +2051,12 @@ stale generations cannot publish successors or change a newer Task owner. A gate
 projects `waiting_for_human`, a failed/rejected step `blocked`, and complete workflow
 success follows the Task's existing acceptance policy (`review` for human acceptance).
 Cancellation retains delivered execution reservations until exit/reconciliation.
+When a workflow step asks its owner a question, its linked Task records a
+`waitingRequest` of kind `question` with a stable per-attempt `questionId`,
+`inputQuestion`, and optional `inputOptions`, plus `waitingSessionId`. Task list
+and detail responses expose this through the shared `awaiting` projection.
+Answering through `/threads/{id}/workflow-decisions` or cancelling clears the
+wait; another question from a later attempt receives a new id.
 Task Activity reads all linked Threads' frozen ledgers, including every failed and
 retried attempt, outputs, evidence, timestamps and decisions. Generic Agent-run,
 conversation, legacy approval and unsupported staged-command recovery remain

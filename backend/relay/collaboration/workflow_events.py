@@ -139,9 +139,20 @@ def apply_workflow_step_finished(session: dict[str, Any], event: dict[str, Any])
             updated["currentIndex"] += 1
             successor = updated["assignments"][updated["currentIndex"]]
             updated["status"] = "awaiting_approval" if successor["awaitApproval"] else "ready"
+    elif result["status"] == "question":
+        updated["status"] = "awaiting_input"
     else:
         updated["status"] = "blocked"
     session["workflowRuns"] = [updated if run is current else run for run in session["workflowRuns"]]
+
+
+ANSWER_LIMIT = 4000
+
+
+def workflow_answer_text(value: Any) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > ANSWER_LIMIT:
+        raise ValueError("workflow_answer_invalid")
+    return value.strip()
 
 
 def apply_workflow_recovery_decided(session: dict[str, Any], event: dict[str, Any]) -> None:
@@ -156,6 +167,16 @@ def apply_workflow_recovery_decided(session: dict[str, Any], event: dict[str, An
         updated.pop("admissionError", None)
         updated["assignments"][index] = retry_workflow_assignment(current["assignments"][index])
         updated["status"] = "awaiting_approval" if updated["assignments"][index]["awaitApproval"] else "ready"
+    elif event.get("kind") == "answer":
+        # The owner answered the step's question: rerun the step as a new
+        # attempt that carries the answer. Answering is the owner's consent
+        # for this step, so an approval gate is not asked again.
+        if current["status"] != "awaiting_input":
+            raise ValueError("workflow_answer_requires_question")
+        workflow_answer_text(event.get("answer"))
+        index = current["currentIndex"]
+        updated["assignments"][index] = retry_workflow_assignment(current["assignments"][index])
+        updated["status"] = "ready"
     elif event.get("kind") == "cancel":
         if current["status"] in ("completed", "cancelled"):
             raise ValueError("workflow_run_closed")

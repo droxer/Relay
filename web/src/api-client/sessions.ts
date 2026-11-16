@@ -151,12 +151,13 @@ export function recordDecision(
  *  binding is stale — the caller refetches the thread and asks again. */
 export function decideWorkflow(
   sessionId: string,
-  kind: "approve" | "reject" | "retry" | "cancel",
+  kind: "approve" | "reject" | "retry" | "cancel" | "answer",
   binding: WorkflowAttemptBinding,
+  answer?: string,
 ): Promise<RelaySession> {
   return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/workflow-decisions`, {
     method: "POST",
-    body: { kind, ...binding },
+    body: { kind, ...binding, ...(kind === "answer" ? { answer } : {}) },
   });
 }
 

@@ -138,3 +138,33 @@ it("shows acceptance criteria at approval without listing expected outputs", () 
   expect(screen.getByText("workflow.gate_criteria")).toBeTruthy();
   expect(screen.queryByText("workflow.gate_outputs")).toBeNull();
 });
+
+it("quotes a step's question and sends the owner's picked or written answer", async () => {
+  const decide = vi.fn().mockResolvedValue(undefined);
+  const asking = run({
+    status: "awaiting_input",
+    currentIndex: 1,
+    attemptResults: [...(run().attemptResults ?? []), {
+      workflowStepId: "deploy", workflowAttempt: 1, assignmentId: "deploy-a1", runId: "r2", commandId: "c2",
+      timestamp: "2026-11-16T00:01:00Z", status: "question", reason: "workflow_question", outputs: {},
+      question: "Which region?", options: ["us-east", "eu-west"],
+    }],
+  });
+  expect(workflowNeedsOwner(asking)).toBe(true);
+  render(<WorkflowSlip run={asking} decide={decide} />);
+  const slip = screen.getByRole("region", { name: "workflow.question_title" });
+  expect(within(slip).getByText("Which region?")).toBeTruthy();
+  const rows = within(within(slip).getByRole("list")).getAllByRole("button");
+  expect(rows.map((row) => row.querySelector(".awaiting-input-choice-label")?.textContent)).toEqual(["us-east", "eu-west"]);
+  fireEvent.click(rows[1]);
+  await waitFor(() => expect(decide).toHaveBeenCalledOnce());
+  const binding = { workflowRunId: "run-1", workflowStepId: "deploy", workflowAttempt: 1, assignmentId: "deploy-a1", expectedRevision: 4 };
+  expect(decide).toHaveBeenLastCalledWith("answer", binding, "eu-west");
+  const send = within(slip).getByRole("button", { name: "workflow.answer_send" });
+  expect((send as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(within(slip).getByRole("textbox", { name: "workflow.answer_label" }), { target: { value: "  both, us first " } });
+  fireEvent.click(send);
+  await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+  expect(decide).toHaveBeenLastCalledWith("answer", binding, "both, us first");
+  expect(within(slip).queryByText("workflow.retry")).toBeNull();
+});
