@@ -23,6 +23,7 @@ import { useRelayStore } from "../lib/store";
 import { threadSendKey } from "../lib/threadSendStore";
 import { threadDraftKey } from "../hooks/useComposer";
 import { useThreadQueue } from "../hooks/useThreadQueue";
+import { useQueueClock } from "../hooks/useQueueClock";
 import { MessageQueue } from "./composer/MessageQueue";
 import type { ThreadItem } from "./ThreadRow";
 import type { MentionCandidate } from "../lib/mentions";
@@ -393,9 +394,15 @@ export function ThreadsView({
     onCancelRun,
   });
   // A run admitted but not yet taken by a computer: the transcript holds its
-  // place in line where the reply will stream.
+  // place in line where the reply will stream. Inside its queue grace a run
+  // on a live computer is still being taken, so the "Starting on…" cue shows
+  // instead of a queue that would only flash.
+  const queueClock = useQueueClock(useMemo(() => (activeSession ? [activeSession] : []), [activeSession]));
   const activeQueuedRun = activeSession
-    ? queuedRun(activeSession, { nodeOffline: Boolean(activeRuntimeNode && (!activeRuntimeNode.online || activeRuntimeNode.stale)) })
+    ? queuedRun(activeSession, {
+        nodeOffline: Boolean(activeRuntimeNode && (!activeRuntimeNode.online || activeRuntimeNode.stale)),
+        now: queueClock,
+      })
     : null;
   // The task's own next move — accept a result, lift a block — offered in the
   // chip's popover and, while nothing else is asking, docked on the composer.

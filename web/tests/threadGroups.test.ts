@@ -135,4 +135,16 @@ describe("groupThreads awaiting an answer", () => {
     assert.deepEqual(groups.queued.map((c) => c.session.id), ["older", "newer", "unknown"]);
     assert.deepEqual(groups.running.map((c) => c.session.id), ["r"]);
   });
+
+  it("files a run inside its queue grace under running, then under queued", () => {
+    const base = item("q", "running");
+    const queued = { ...base, session: { ...base.session, execution: { phase: "queued", queuedAt: "2026-07-01T12:00:00.000Z", computerOnline: true } } as RelaySession };
+    const admitted = Date.parse("2026-07-01T12:00:00.000Z");
+    assert.deepEqual(groupThreads([queued], [], admitted + 3_000).running.map((c) => c.session.id), ["q"]);
+    assert.deepEqual(groupThreads([queued], [], admitted + 10_000).queued.map((c) => c.session.id), ["q"]);
+    // A computer known to be gone queues the run at once.
+    assert.deepEqual(groupThreads([{ ...queued, nodeOffline: true }], [], admitted + 3_000).queued.map((c) => c.session.id), ["q"]);
+    // Without the reader's clock the backend phase stands.
+    assert.deepEqual(groupThreads([queued]).queued.map((c) => c.session.id), ["q"]);
+  });
 });

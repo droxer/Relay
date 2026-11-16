@@ -13,7 +13,7 @@ import { OfflineBadge } from "./OfflineBadge";
 import type { RelaySession, TaskStatus } from "../types";
 import { canDeleteThread, threadLabel, threadRowMeta, type ThreadItem } from "../lib/threads";
 import { formatThreadStamp } from "../lib/threadStamp";
-import { queuedRun, queueWaitLabel } from "../lib/queuedRun";
+import { queuedRun, queueWaitLabel, shownExecutionPhase } from "../lib/queuedRun";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -58,8 +58,11 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
      overflow glyph holds both there. */
   const touch = useMediaQuery("(hover: none)");
   const { session } = item;
-  const executionPhase = session.execution?.phase;
-  const queued = queuedRun(session, { nodeOffline: item.nodeOffline });
+  // A run inside its queue grace reads as running everywhere on the row, in
+  // step with the rail group groupThreads put it in.
+  const reading = { nodeOffline: item.nodeOffline, now };
+  const executionPhase = shownExecutionPhase(session, reading);
+  const queued = queuedRun(session, reading);
   const tone = executionPhase === "unresponsive" || executionPhase === "recovery_required" ? "err"
     : queued ? "queued"
     : executionPhase && ["stopping", "finalizing"].includes(executionPhase) ? "attn" : suppliedTone;
@@ -77,7 +80,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
       : session.status === "cancelled" ? "cancelled" : "done"
   );
   const stateLabel = item.origin?.status ? t(`backlog.statuses.${item.origin.status}`)
-    : !hasLifecycle ? t(threadStatusLabelKey(session))
+    : !hasLifecycle ? t(threadStatusLabelKey(session, reading))
     : executionPhase && executionPhase !== "terminal" ? t(`thread.execution_${executionPhase}`)
     : tone === "attn" ? t("thread.group_needs_you")
     : tone === "run" ? t("thread.group_running") : t("thread.group_idle");
@@ -107,9 +110,9 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             ? t("thread.queued_offline")
             : queueWait ? t("thread.queued_for", { duration: queueWait }) : t("thread.execution_queued"),
         }
-      : session.execution && session.execution.phase !== "terminal" && session.execution.phase !== "running"
-      ? { tone: "attn", text: t(`thread.execution_${session.execution.phase}`) }
-      : session.execution?.phase === "running" || tone === "run"
+      : executionPhase && executionPhase !== "terminal" && executionPhase !== "running"
+      ? { tone: "attn", text: t(`thread.execution_${executionPhase}`) }
+      : executionPhase === "running" || tone === "run"
       ? {
           tone: "run",
           // Named by the logical agent, never the executor kind: several
@@ -166,7 +169,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             {hasLifecycle ? <TaskStatusIcon status={iconStatus} />
               /* A chat whose subline states its status keeps only the badge's
                  tinted mark: spelling it twice cost the title its width. */
-              : <ThreadStatusBadge session={session} compact iconOnly={Boolean(subline && status)} />}
+              : <ThreadStatusBadge session={session} reading={reading} compact iconOnly={Boolean(subline && status)} />}
             <span className="conversation-name">
               {item.origin ? <span className="conversation-ref tnum">{item.origin.ref}</span> : null}
               <strong title={label}>{label}</strong>

@@ -30,7 +30,7 @@ import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { useKeyChange } from "../hooks/useKeyChange";
-import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { useQueueClock } from "@/hooks/useQueueClock";
 import { ListSkeleton } from "./ListSkeleton";
 import { FilterSelect } from "./FiltersBar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -125,7 +125,10 @@ export function ThreadListPanel({
   const selectThread = useStableCallback(onSelectThread);
   const renameThread = useStableCallback(onRenameThread);
   const closeThread = useStableCallback(onCloseThread);
-  const now = useMinuteClock();
+  // The minute clock, woken early when a queued run's grace ends so the run
+  // moves from Running to Queued on time.
+  const threadSessions = useMemo(() => threads.map((item) => item.session), [threads]);
+  const now = useQueueClock(threadSessions);
   /* Ceiling measured against the live chat column — read once per gesture and
      once per key press, never per pointer move. */
   const listCeiling = useCallback(() => maxThreadListWidth(width, chatColumnWidth(), viewportWidth()), [width]);
@@ -155,7 +158,7 @@ export function ThreadListPanel({
   });
 
   const projectFiltered = directoryMode === "threads" && projectFilter !== THREAD_PROJECT_FILTER_ALL;
-  const railWindow = useRailWindow(threads, tasks, selectedSessionId, `${projectFilter}\n${kindFilter}\n${query}`);
+  const railWindow = useRailWindow(threads, tasks, now, selectedSessionId, `${projectFilter}\n${kindFilter}\n${query}`);
   const projectFilterChoices = useMemo(() => [
     { value: THREAD_PROJECT_FILTER_ALL, label: t("thread.project_filter_all") },
     ...projectFilterOptions.map((option) => ({
@@ -456,14 +459,14 @@ export function ThreadListPanel({
  * page when the reset key changes (search query, quick filters), since a
  * filter is a new list.
  */
-function useRailWindow(items: ThreadItem[], tasks: readonly RelayTaskListItem[], selectedSessionId: string | undefined, resetKey: string) {
+function useRailWindow(items: ThreadItem[], tasks: readonly RelayTaskListItem[], now: number, selectedSessionId: string | undefined, resetKey: string) {
   const [pages, setPages] = useState(1);
   useKeyChange(resetKey, () => setPages(1));
 
   // The wait index is the tasks inverted once per task poll; grouping then
   // costs one map lookup per thread per frame instead of a scan of every task.
   const waits = useMemo(() => buildThreadWaitIndex(tasks), [tasks]);
-  const groups = useMemo(() => groupThreads(items, waits), [items, waits]);
+  const groups = useMemo(() => groupThreads(items, waits, now), [items, waits, now]);
   const selectedIndex = useMemo(() => {
     if (!selectedSessionId) return -1;
     return [...groups.needsYou, ...groups.running, ...groups.queued, ...groups.idle]

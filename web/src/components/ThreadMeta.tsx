@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useKeyChange } from "../hooks/useKeyChange";
+import { useQueueClock } from "../hooks/useQueueClock";
 import { useTranslation } from "react-i18next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { nodeOwnershipProfile } from "../lib/adminHelpers";
@@ -76,10 +77,13 @@ export function ThreadMeta({
   /* A computer that is there is not news mid-conversation; one that dropped
      away is the reason a run stalls, so the header names it only then. */
   const computerOffline = !computer?.online || Boolean(computer.stale);
+  // The badge reads a queued run inside its grace as running, like the rail.
+  const now = useQueueClock(useMemo(() => [session], [session]));
+  const reading = { now, nodeOffline: Boolean(computer && computerOffline) };
 
   return (
     <div className="thread-meta" aria-label={t("thread.band_label")}>
-      {task ? <TaskChip task={task}>{taskStatus}</TaskChip> : <ThreadStatusBadge session={session} />}
+      {task ? <TaskChip task={task}>{taskStatus}</TaskChip> : <ThreadStatusBadge session={session} reading={reading} />}
       {project ? (
         <ProjectChip project={project} onOpen={onOpenProject} />
       ) : null}
