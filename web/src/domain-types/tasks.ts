@@ -110,6 +110,7 @@ export interface TaskMutationInput {
   routineState?: Exclude<RoutineState, "paused_by_relay">;
   assignedAgentId?: string | null;
   assignedTeamId?: string | null;
+  assignedWorkflowId?: string | null;
   /** Triage: moves an intake issue (one with no project) into a project.
       One way only — the server refuses it for a task that already has one. */
   projectId?: string;

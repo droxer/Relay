@@ -18,10 +18,12 @@ class TaskDispatchAssignment:
     project_id: str | None
     user_id: str | None
     execution_revision: int = 0
+    workflow_id: str | None = None
 
     @classmethod
     def capture(cls, task: dict[str, Any]) -> TaskDispatchAssignment:
         return cls(
+            workflow_id=task.get("assignedWorkflowId"),
             agent_id=task.get("assignedAgentId"),
             team_id=task.get("assignedTeamId"),
             project_id=task.get("projectId"),
@@ -306,6 +308,9 @@ class AgentPlacementStore(Protocol):
 
 
 class TeamStore(Protocol):
+    def save_workflow(self, team_id: str, payload: dict[str, Any], *, workflow_id: str | None = None) -> dict[str, Any]: ...
+    def delete_workflow(self, team_id: str, workflow_id: str) -> dict[str, Any]: ...
+
     def create_team(
         self, owner_user_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]: ...

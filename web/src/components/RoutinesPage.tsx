@@ -203,6 +203,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
+      assignedWorkflowId: task.assignedWorkflowId ?? "",
       ...routineFormFields(task),
     });
   }

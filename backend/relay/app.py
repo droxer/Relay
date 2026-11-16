@@ -68,6 +68,7 @@ from .api.threads import (
     reads as thread_read_routes,
 )
 from .api.agents import workflow_gates as workflow_gate_routes
+from .api.agents import workflows as workflow_definition_routes
 from .api.web import routes as web_routes
 from .api.conditional_get import ConditionalGetMiddleware
 from .api.deps import AppContext
@@ -409,6 +410,7 @@ API_ROUTERS = (
     thread_decision_routes.router,
     thread_workflow_decision_routes.router,
     workflow_gate_routes.router,
+    workflow_definition_routes.router,
     thread_event_routes.router,
     thread_artifact_routes.router,
     sandbox_routes.router,

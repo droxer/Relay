@@ -37,6 +37,7 @@ export type TaskBoardFormBase = {
   assignedAgent: "" | AgentName;
   assignedAgentId?: string;
   assignedTeamId?: string;
+  assignedWorkflowId?: string;
   acceptancePolicy?: AcceptancePolicy;
   collaborationStyle?: CollaborationStyle | null;
   startedAt?: string;
@@ -71,6 +72,7 @@ export function emptyBacklogForm(currentUser: CurrentUser): BacklogTaskFormState
     assignedAgent: "",
     assignedAgentId: "",
     assignedTeamId: "",
+    assignedWorkflowId: "",
   };
 }
 
@@ -132,6 +134,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     || a.assignedAgent !== b.assignedAgent
     || a.assignedAgentId !== b.assignedAgentId
     || a.assignedTeamId !== b.assignedTeamId
+    || a.assignedWorkflowId !== b.assignedWorkflowId
     || a.acceptancePolicy !== b.acceptancePolicy
     || (a.collaborationStyle ?? null) !== (b.collaborationStyle ?? null)
   ) {
@@ -168,11 +171,12 @@ export function taskAssignmentValue(form: TaskBoardFormState): string {
 }
 
 export function taskAssignmentMutationFields(
-  form: Pick<TaskBoardFormBase, "assignedAgentId" | "assignedTeamId">,
-): { assignedAgentId: string | null; assignedTeamId: string | null } {
+  form: Pick<TaskBoardFormBase, "assignedAgentId" | "assignedTeamId" | "assignedWorkflowId">,
+): { assignedAgentId: string | null; assignedTeamId: string | null; assignedWorkflowId?: string | null } {
   return {
     assignedAgentId: form.assignedAgentId || null,
     assignedTeamId: form.assignedTeamId || null,
+    ...(form.assignedWorkflowId !== undefined ? { assignedWorkflowId: form.assignedWorkflowId || null } : {}),
   };
 }
 
@@ -180,6 +184,7 @@ type TaskStartSelection = {
   id: string;
   assignedAgentId?: string;
   assignedTeamId?: string;
+  assignedWorkflowId?: string;
 };
 
 function taskStartAssignments(task: TaskStartSelection): Array<{ agentId: string }> | undefined {
@@ -206,6 +211,7 @@ export function clearTaskAssignment(form: TaskBoardFormState): TaskBoardFormStat
     assignedAgent: "" as const,
     assignedAgentId: "",
     assignedTeamId: "",
+    assignedWorkflowId: "",
   };
   if (cleared.variant === "routine") {
     return { ...cleared, routineState: "paused" };
@@ -218,11 +224,12 @@ export function clearTaskAssignment(form: TaskBoardFormState): TaskBoardFormStat
 
 export function teamAssignmentPatch(teamId: string): Pick<
   TaskBoardFormBase,
-  "assignedAgent" | "assignedAgentId" | "assignedTeamId"
+  "assignedAgent" | "assignedAgentId" | "assignedTeamId" | "assignedWorkflowId"
 > {
   return {
     assignedAgent: "",
     assignedAgentId: "",
     assignedTeamId: teamId,
+    assignedWorkflowId: "",
   };
 }

@@ -88,6 +88,7 @@ describe("taskBoardForm", () => {
       assignedAgent: "",
       assignedAgentId: "",
       assignedTeamId: "team_delivery",
+      assignedWorkflowId: "",
     });
   });
 
@@ -98,10 +99,12 @@ describe("taskBoardForm", () => {
     assert.deepEqual(taskAssignmentMutationFields(backlog), {
       assignedAgentId: null,
       assignedTeamId: "team_delivery",
+      assignedWorkflowId: null,
     });
     assert.deepEqual(taskAssignmentMutationFields(routine), {
       assignedAgentId: null,
       assignedTeamId: "team_ops",
+      assignedWorkflowId: null,
     });
   });
 

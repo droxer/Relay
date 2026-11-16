@@ -138,26 +138,30 @@ A lead and member Agents bound to one Computer chosen when the Team is set up
 (`computerId`). Every member's active Placement must be on that Computer; an
 unplaced Agent or an Agent on another Computer is not eligible to join. A
 Thread may address a Team only when the Team lives on the Thread's Computer.
-A reusable Project workflow Team additionally records an immutable `projectId`
-and ordered `workflowSteps`. Every step pins one enabled Project Agent; the same
-Agent may own several steps. Each step has a stable id, name, instructions,
-acceptance criteria and an optional pre-step approval gate
-(off by default). Steps have no predefined type; deployment can be described
-as ordinary step work. Only the signed-in
-Project owner manages the definition. This is separate from legacy Team styles
-and final-turn `humanApproval`. A workflow Team is built, edited and started
-from its Project's Agents tab; each run is a new Project Thread whose owner
-answers gates and retries or cancels a stopped step there. A Task in the same
-Project may assign this Team and enter the dedicated workflow runtime, whether
-a person starts it, the scheduler picks up an assigned Task, or an Automation
-in that Project fires (each occurrence freezes its own run). Its
-execution generation, request and Thread remain linked across gates and retries;
-Task details show every frozen attempt. Standalone/foreign-Project assignments
-and generic conversation addressing remain refused. Owner-session gate
-staging freezes a Project Thread and its first-step approval without a daemon
-command or execution reservation. An owner-session gate decision records approval or rejection for one frozen run/step/attempt
-and revision; approval alone is not evidence of command delivery.
 _Avoid_: Cross-node team, shared-path team
+
+**Workflow**:
+A reusable, ordered process owned by one Team and scoped to one Project.
+A Team may own multiple Workflows while keeping one roster. Each step names
+an enabled Agent from both the Team and Project, instructions, acceptance
+criteria, and an optional approval gate before work begins. The same Agent
+may own several steps. The Project owner manages and starts Workflows.
+A Task in that Project may select both a Team and one of its Workflows;
+without a Workflow selection the Team uses its collaboration style.
+_Avoid_: Workflow Team (a legacy representation that combines roster and process)
+
+**Workflow Run**:
+One execution of a Workflow, recorded in a Project Thread. Its definition
+is frozen when the run starts, so later edits or deletion of the Workflow
+do not change the run's steps, acceptance criteria, or approval gates.
+The owner answers gates and retries or cancels stopped steps in the Thread.
+A Task's execution remains linked to that Thread across gates and retries.
+Assigned Tasks and Automation occurrences enter the same runtime through the
+scheduler. A step may pause to ask its owner a question; answering reruns that
+step with the answer while preserving the run's frozen definition.
+Approval records a decision for a specific run, step, attempt, and revision;
+it does not itself prove command delivery or execution.
+_Avoid_: Workflow (when referring to an execution rather than its reusable definition)
 
 **Thread Runtime**:
 The computer selected when a thread is initialized. The selection is persisted

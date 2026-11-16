@@ -11,13 +11,14 @@ from uuid import NAMESPACE_URL, uuid5
 from ..agents.routing import resolve_agent_assignments
 from ..collaboration.workflow_compilation import compile_workflow
 from ..core.computer_identity import computer_id
+from ..core.workflows import workflow_execution_snapshot
 from ..daemon_registry.dispatch.workflow_tasks import sync_workflow_task
 from ..persistence.engine import store_transaction
 from ..persistence.protocols import TaskDispatchAssignment
 from ..projects.runtime import project_runtime_node
 from ..security.actor import Actor
 from ..teams.workflow import validate_workflow_write
-from .assignment import team_for_assignment, validate_project_task_assignment
+from .assignment import team_for_assignment, validate_project_task_assignment, validate_task_workflow
 from .claims import dispatch_claim_active
 from .dispatch_outcome import TaskDispatchContext, DispatchResult, _result, _record_result
 from .placement import task_goal_text
@@ -51,6 +52,9 @@ def dispatch_task_workflow(
                                        expected_user_id=owner, project_id=task.get("projectId"))
             assert team is not None
             validate_project_task_assignment(ctx, task, assigned_agent_id=None, assigned_team_id=team["id"])
+            if not task.get("assignedWorkflowId") and "workflows" in team:
+                team = workflow_execution_snapshot(team, team["id"])
+            team = validate_task_workflow(ctx, task) or team
             validate_workflow_write(ctx, owner, team)
             project = ctx.project_store.get_project(task["projectId"])
             if not project:

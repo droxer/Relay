@@ -2,10 +2,10 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { startWorkflowRun } from "../../api";
+import { startTeamWorkflow } from "../../api";
 import { useTeams } from "../../hooks/useTeams";
-import { projectWorkflowTeams } from "../../lib/workflowTeamDraft";
-import type { AgentTeam, ProjectRecord, UserAgent } from "../../types";
+import { projectWorkflows, workflowTeams } from "../../lib/workflowTeamDraft";
+import type { TeamWorkflow, ProjectRecord, UserAgent } from "../../types";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
@@ -13,7 +13,7 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionAdd, ActionStart, ICON } from "../icons";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
-import { WorkflowTeamEditor } from "./WorkflowTeamEditor";
+import { WorkflowEditor } from "./WorkflowEditor";
 
 type Props = {
   project: ProjectRecord;
@@ -24,18 +24,18 @@ type Props = {
   onOpenThread: (sessionId: string) => void;
 };
 
-/** The Members tab's workflow section: Teams built from this Project's
- *  Agents as an ordered list of steps, created, edited and started here.
+/** The Project Agents tab lists reusable Workflows under their owning Teams.
  *  Each run is a new Project Thread. */
-export function ProjectWorkflowTeams({ project, agents, userId, readOnly, onOpenThread }: Props) {
+export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThread }: Props) {
   const { t } = useTranslation();
   const { teams, isSuccess, error, refetch } = useTeams(userId);
-  const workflows = useMemo(() => projectWorkflowTeams(teams, project.id), [teams, project.id]);
+  const workflows = useMemo(() => projectWorkflows(teams, project.id), [teams, project.id]);
   const agentNames = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.displayName])), [agents]);
-  const [editing, setEditing] = useState<{ team: AgentTeam | null } | null>(null);
-  const [starting, setStarting] = useState<AgentTeam | null>(null);
+  const [editing, setEditing] = useState<{ workflow: TeamWorkflow | null } | null>(null);
+  const [starting, setStarting] = useState<TeamWorkflow | null>(null);
   const canManage = Boolean(userId) && userId === project.ownerUserId && !readOnly;
-  const canCreate = canManage && project.members.some((member) => member.enabled);
+  const eligibleTeams = useMemo(() => workflowTeams(teams, project), [teams, project]);
+  const canCreate = canManage && eligibleTeams.length > 0;
 
   let body;
   if (error && !isSuccess) {
@@ -52,22 +52,23 @@ export function ProjectWorkflowTeams({ project, agents, userId, readOnly, onOpen
   } else {
     body = (
       <ul className="workflow-team-list">
-        {workflows.map((team) => (
-          <li key={team.id} className="workflow-team-row">
+        {workflows.map((workflow) => (
+          <li key={workflow.id} className="workflow-team-row">
             <div className="workflow-team-main">
-              <span className="workflow-team-name">{team.name}</span>
+              <span className="workflow-team-name">{workflow.name}</span>
+              <span className="text-muted-foreground">{teams.find(parent => parent.id === workflow.teamId)?.name}</span>
               <WorkflowStepSummary
-                steps={team.workflowSteps ?? []}
-                label={t("workflow.steps_of", { name: team.name })}
+                steps={workflow.workflowSteps ?? []}
+                label={t("workflow.steps_of", { name: workflow.name })}
                 agentName={(agentId) => agentNames.get(agentId) ?? t("project.member_unavailable")}
               />
             </div>
             {canManage ? (
               <div className="workflow-team-actions">
-                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ team })}>
+                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>
                   {t("workflow.edit")}
                 </Button>
-                <Button type="button" variant="outline" size="dense" disabled={!team.enabled} onClick={() => setStarting(team)}>
+                <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting(workflow)}>
                   <ActionStart size={ICON.sm} aria-hidden="true" />
                   {t("workflow.start")}
                 </Button>
@@ -87,7 +88,7 @@ export function ProjectWorkflowTeams({ project, agents, userId, readOnly, onOpen
           <span className="tnum">{workflows.length}</span>
         </h2>
         {canCreate ? (
-          <Button type="button" variant="outline" size="dense" onClick={() => setEditing({ team: null })}>
+          <Button type="button" variant="outline" size="dense" onClick={() => setEditing({ workflow: null })}>
             <ActionAdd size={ICON.sm} aria-hidden="true" />
             {t("workflow.create")}
           </Button>
@@ -96,15 +97,16 @@ export function ProjectWorkflowTeams({ project, agents, userId, readOnly, onOpen
       {body}
       {canManage ? (
         <>
-          <WorkflowTeamEditor
+          <WorkflowEditor
             open={editing !== null}
             project={project}
-            team={editing?.team ?? null}
+            workflow={editing?.workflow ?? null}
+            teams={editing?.workflow ? teams.filter(parent => parent.id === editing.workflow?.teamId) : eligibleTeams}
             agents={agents}
             onClose={() => setEditing(null)}
           />
           <WorkflowRunStarter
-            team={starting}
+            workflow={starting}
             project={project}
             onClose={() => setStarting(null)}
             onStarted={(sessionId) => {
@@ -132,9 +134,9 @@ function newRequestId(): string {
 /** Asks for the run's goal, then starts it. One request id per opening, so a
  *  resubmit after a dropped response returns the same Thread, not a second. */
 function WorkflowRunStarter({
-  team, project, onClose, onStarted,
+  workflow, project, onClose, onStarted,
 }: {
-  team: AgentTeam | null;
+  workflow: TeamWorkflow | null;
   project: ProjectRecord;
   onClose: () => void;
   onStarted: (sessionId: string) => void;
@@ -145,16 +147,16 @@ function WorkflowRunStarter({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [opened, setOpened] = useState<{ teamId: string | null; requestId: string }>(() => ({ teamId: null, requestId: newRequestId() }));
-  if (team && opened.teamId !== team.id) {
-    setOpened({ teamId: team.id, requestId: newRequestId() });
+  if (workflow && opened.teamId !== workflow.id) {
+    setOpened({ teamId: workflow.id, requestId: newRequestId() });
     setGoal("");
     setFailure(null);
   }
-  const firstGated = team?.workflowSteps?.[0]?.requiresApproval === true;
+  const firstGated = workflow?.workflowSteps?.[0]?.requiresApproval === true;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!team || pending) return;
+    if (!workflow || pending) return;
     if (!goal.trim()) {
       setFailure(t("workflow.goal_required"));
       return;
@@ -162,7 +164,7 @@ function WorkflowRunStarter({
     setPending(true);
     setFailure(null);
     try {
-      const session = await startWorkflowRun(team.id, { requestId: opened.requestId, taskGoal: goal.trim() });
+      const session = await startTeamWorkflow(workflow.teamId, workflow.id, { requestId: opened.requestId, taskGoal: goal.trim() });
       announce({ message: firstGated ? t("workflow.started_gated") : t("workflow.started"), tone: "success" });
       setOpened({ teamId: null, requestId: newRequestId() });
       onStarted(session.id);
@@ -175,11 +177,11 @@ function WorkflowRunStarter({
 
   return (
     <Drawer
-      open={team !== null}
+      open={workflow !== null}
       onClose={() => { if (!pending) onClose(); }}
       kicker={project.name}
       title={t("workflow.start_title")}
-      subtitle={team?.name}
+      subtitle={workflow?.name}
       width="form"
       closeLabel={t("admin.v2.close_drawer")}
       bodyClassName="adm-drawer-body--column"

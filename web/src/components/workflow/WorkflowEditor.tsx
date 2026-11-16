@@ -2,9 +2,12 @@
 
 import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useRelayMutations } from "../../hooks/useRelayMutations";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { saveTeamWorkflow, deleteTeamWorkflow } from "../../api";
+import { TEAMS_QUERY_KEY } from "../../hooks/useTeams";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
-import type { AgentTeam, ProjectRecord, UserAgent } from "../../types";
+import type { AgentTeam, TeamWorkflow, ProjectRecord, UserAgent } from "../../types";
 import {
   WORKFLOW_LIMITS,
   draftFromTeam,
@@ -15,7 +18,7 @@ import {
   validateWorkflowDraft,
   workflowDraftChanged,
   workflowDraftValid,
-  workflowTeamInput,
+  workflowInput,
   type WorkflowDraftErrors,
   type WorkflowTeamDraft,
 } from "../../lib/workflowTeamDraft";
@@ -30,42 +33,49 @@ import { WorkflowStepCard } from "./WorkflowStepCard";
 type Props = {
   open: boolean;
   project: ProjectRecord;
-  /** Null creates a workflow Team; a saved one edits its definition. */
-  team: AgentTeam | null;
+  /** Null creates a Workflow under the selected Team. */
+  workflow: TeamWorkflow | null;
+  teams: AgentTeam[];
   agents: UserAgent[];
   onClose: () => void;
 };
 
-export function WorkflowTeamEditor(props: Props) {
+export function WorkflowEditor(props: Props) {
   // Re-key per opening so a closed drawer never leaks its draft into the next.
   const [opening, setOpening] = useState({ open: props.open, generation: 0 });
   if (opening.open !== props.open) {
     setOpening({ open: props.open, generation: opening.generation + (props.open ? 1 : 0) });
   }
-  return <WorkflowTeamEditorBody key={`${props.team?.id ?? "new"}:${opening.generation}`} {...props} />;
+  return <WorkflowEditorBody key={`${props.workflow?.id ?? "new"}:${opening.generation}`} {...props} />;
 }
 
-function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props) {
+function WorkflowEditorBody({ open, project, workflow, teams, agents, onClose }: Props) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
-  const { createTeamMutation, updateTeamMutation, deleteTeamMutation } = useRelayMutations();
-  const allowedAgentIds = useMemo(() => enabledProjectAgentIds(project), [project]);
+  const queryClient = useQueryClient();
+  const [teamId, setTeamId] = useState(workflow?.teamId ?? teams[0]?.id ?? "");
+  const parent = teams.find(item => item.id === teamId);
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
+  const saveMutation = useMutation({ mutationFn: (input: Parameters<typeof saveTeamWorkflow>[1]) => saveTeamWorkflow(teamId, input, workflow?.id), onSuccess: invalidate });
+  const deleteMutation = useMutation({ mutationFn: () => deleteTeamWorkflow(teamId, workflow!.id), onSuccess: invalidate });
+  const [failure, setFailure] = useState<string | null>(null);
+  const allowedAgentIds = useMemo(() => enabledProjectAgentIds(project).filter(id => parent?.memberAgentIds.includes(id)), [project, parent]);
   const stepAgents = useMemo(() => {
     const allowed = new Set(allowedAgentIds);
-    return agents.filter((agent) => allowed.has(agent.id) && !agent.deletedAt);
+    return agents.filter((agent) => allowed.has(agent.id) && agent.enabled && !agent.deletedAt);
   }, [agents, allowedAgentIds]);
   // A new workflow opens with one step owned by the Project lead; the person
   // names it and adds the rest.
-  const [saved] = useState<WorkflowTeamDraft>(() => team
-    ? draftFromTeam(team)
-    : { name: "", steps: [emptyWorkflowStep([], project.leadAgentId ?? stepAgents[0]?.id ?? "")] });
+  const [saved] = useState<WorkflowTeamDraft>(() => workflow
+    ? draftFromTeam(workflow)
+    : { name: "", steps: [emptyWorkflowStep([], stepAgents.find(agent => agent.id === parent?.leadAgentId)?.id ?? stepAgents[0]?.id ?? "")] });
   const [draft, setDraft] = useState<WorkflowTeamDraft>(saved);
   const [errors, setErrors] = useState<WorkflowDraftErrors | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const nameErrorId = useId();
   const stepsId = useId();
-  const busy = createTeamMutation.isPending || updateTeamMutation.isPending || deleteTeamMutation.isPending;
+  const busy = saveMutation.isPending || deleteMutation.isPending;
   const dirty = workflowDraftChanged(draft, saved);
   const confirmDiscard = useUnsavedChangesGuard(open && dirty && !busy);
   const shown = errors ?? { fields: {} };
@@ -74,7 +84,7 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
   function update(next: WorkflowTeamDraft) {
     setDraft(next);
     // Re-judge only once a save has shown errors, so fixes clear them live.
-    if (errors) setErrors(validateWorkflowDraft(next, allowedAgentIds));
+    if (errors) setErrors(validateWorkflowDraft(next, stepAgents.map(agent => agent.id)));
   }
 
   function focusStep(index: number) {
@@ -98,37 +108,36 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    const result = validateWorkflowDraft(draft, allowedAgentIds);
+    const result = validateWorkflowDraft(draft, stepAgents.map(agent => agent.id));
     setErrors(result);
     if (!workflowDraftValid(result)) {
       if (result.name) nameRef.current?.focus();
       else listRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
       return;
     }
-    const input = workflowTeamInput(draft, project, team?.enabled ?? true);
+    const input = workflowInput(draft, project.id, workflow?.enabled ?? true);
     try {
-      if (team) await updateTeamMutation.mutateAsync({ teamId: team.id, input });
-      else await createTeamMutation.mutateAsync(input);
+      await saveMutation.mutateAsync(input);
       onClose();
-    } catch {
-      // The shared mutation handler announces the server's reason; the draft stays.
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : String(error));
     }
   }
 
   async function remove() {
-    if (!team || busy) return;
+    if (!workflow || busy) return;
     const accepted = await confirm({
-      title: t("teams.delete_title", { name: team.name }),
+      title: t("teams.delete_title", { name: workflow.name }),
       message: t("workflow.delete_message"),
       confirmLabel: t("workflow.delete"),
       tone: "danger",
     });
     if (!accepted) return;
     try {
-      await deleteTeamMutation.mutateAsync(team.id);
+      await deleteMutation.mutateAsync();
       onClose();
-    } catch {
-      // Announced by the shared handler.
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -137,14 +146,24 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
       open={open}
       onClose={() => { void requestClose(); }}
       kicker={project.name}
-      title={team ? t("workflow.edit_title") : t("workflow.create_title")}
-      subtitle={team?.name}
+      title={workflow ? t("workflow.edit_title") : t("workflow.create_title")}
+      subtitle={workflow?.name}
       width="task"
       closeLabel={t("admin.v2.close_drawer")}
       bodyClassName="adm-drawer-body--column"
     >
       <form className="workflow-editor" onSubmit={(event) => void submit(event)} noValidate>
         <p className="workflow-editor-lede">{t("workflow.editor_lede")}</p>
+        <Field label={t("workflow.owning_team")} wrapper="div">
+          <Select value={teamId} disabled={busy || Boolean(workflow)} onValueChange={value => {
+            if (!value) return;
+            setTeamId(value);
+          }}>
+            <SelectTrigger className="w-full" aria-label={t("workflow.owning_team")}><SelectValue>{parent?.name ?? t("workflow.choose_team")}</SelectValue></SelectTrigger>
+            <SelectContent>{teams.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </Field>
+        {failure ? <p role="alert" className="text-destructive">{failure}</p> : null}
         <Field label={t("workflow.team_name")} error={shown.name ? t(`workflow.error_${shown.name}`, { limit: WORKFLOW_LIMITS.name }) : undefined} errorId={nameErrorId}>
           <Input
             ref={nameRef}
@@ -199,7 +218,7 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
 
         <p className="workflow-editor-note">{t("workflow.snapshot_note")}</p>
 
-        {team ? (
+        {workflow ? (
           <div className="adm-drawer-section">
             <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
             <div className="adm-drawer-section-actions">
@@ -215,7 +234,7 @@ function WorkflowTeamEditorBody({ open, project, team, agents, onClose }: Props)
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>
             {t("dialog.cancel")}
           </Button>
-          <Button size="cta" type="submit" loading={createTeamMutation.isPending || updateTeamMutation.isPending} disabled={deleteTeamMutation.isPending}>
+          <Button size="cta" type="submit" loading={saveMutation.isPending} disabled={deleteMutation.isPending || !parent}>
             {t("workflow.save")}
           </Button>
         </div>

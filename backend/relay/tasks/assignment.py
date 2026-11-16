@@ -9,6 +9,7 @@ from typing import Any
 
 from ..automations.model import EVENT_KINDS
 from ..core.team_workflows import is_workflow_team
+from ..core.workflows import workflow_execution_snapshot
 from ..core.computer_identity import computer_id
 from ..projects.runtime import project_task_assignment_error, project_computer_assignment_error
 from ..projects.access import ProjectAccessError, project_for_owner
@@ -98,6 +99,7 @@ def validate_project_task_assignment(
         project,
         assigned_agent_id=assigned_agent_id,
         assigned_team_id=assigned_team_id,
+        workflow_id=task.get("assignedWorkflowId") if assigned_team_id == task.get("assignedTeamId") else None,
     )
 
 
@@ -107,11 +109,16 @@ def validate_project_assignment(
     *,
     assigned_agent_id: str | None,
     assigned_team_id: str | None,
+    workflow_id: str | None = None,
 ) -> None:
     """A project task requires enabled roster membership and the project Computer."""
     team = ctx.team_store.get_team(assigned_team_id) if assigned_team_id else None
     if assigned_team_id and (not team or team.get("deletedAt")):
         raise TaskRequestError(404, "Team not found.")
+    if workflow_id:
+        team = validate_task_workflow(ctx, {"assignedTeamId": assigned_team_id,
+                                           "assignedWorkflowId": workflow_id,
+                                           "projectId": project["id"], "ownerUserId": project["ownerUserId"]})
     if code := project_computer_assignment_error(
         project, agent_id=assigned_agent_id, team=team,
         placement_store=ctx.agent_placement_store,
@@ -210,3 +217,23 @@ def validate_computer_assignment(
             for placement in ctx.agent_placement_store.list_placements(agent_id=member)
         ):
             raise TaskRequestError(400, "task_assignment_off_computer")
+
+
+def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | None:
+    workflow_id = task.get("assignedWorkflowId")
+    if workflow_id is None:
+        return None
+    if not isinstance(workflow_id, str) or not workflow_id:
+        raise TaskRequestError(400, "workflow_id_invalid")
+    team = ctx.team_store.get_team(task.get("assignedTeamId")) if task.get("assignedTeamId") else None
+    if not team or team.get("deletedAt") or not team.get("enabled", True):
+        raise TaskRequestError(409, "workflow_team_required")
+    if team.get("ownerUserId") != task.get("ownerUserId"):
+        raise TaskRequestError(403, "workflow_owner_required")
+    try:
+        snapshot = workflow_execution_snapshot(team, workflow_id)
+    except ValueError as error:
+        raise TaskRequestError(409, str(error)) from error
+    if not task.get("projectId") or task["projectId"] != snapshot["projectId"]:
+        raise TaskRequestError(409, "team_workflow_project_mismatch")
+    return snapshot

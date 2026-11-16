@@ -30,12 +30,12 @@ class ScheduledWorkflowContext:
 
 
 def workflow_team_for(task: dict[str, Any], team_store: Any | None) -> dict[str, Any] | None:
-    """The task's workflow Team, when its assigned Team is one."""
+    """Route an explicit Workflow selection or a legacy workflow Team."""
     team_id = task.get("assignedTeamId")
     if not team_id or team_store is None or not task.get("projectId"):
         return None
     team = team_store.get_team(team_id)
-    return team if team and is_workflow_team(team) else None
+    return team if team and (task.get("assignedWorkflowId") or is_workflow_team(team)) else None
 
 
 def dispatch_scheduled_workflow(

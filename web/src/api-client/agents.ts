@@ -8,6 +8,8 @@ import type {
   CreateAgentResponse,
   RelaySession,
   TeamMutationInput,
+  TeamWorkflow,
+  WorkflowMutationInput,
   UserAgent,
   UserAgentsResponse,
 } from "../types.ts";
@@ -196,4 +198,20 @@ export function acceptDefaultAgents(answer: DefaultAgentAnswer): Promise<{ agent
 /** Remember that the person does not want these defaults, so they are not asked again. */
 export function declineDefaultAgents(answer: DefaultAgentAnswer): Promise<{ ok: true }> {
   return apiJson<{ ok: true }>("/agents/default-offers/decline", { method: "POST", body: answer });
+}
+
+
+export function saveTeamWorkflow(teamId: string, input: WorkflowMutationInput, workflowId?: string): Promise<{ workflow: TeamWorkflow }> {
+  const path = `/teams/${encodeURIComponent(teamId)}/workflows`;
+  return apiJson(workflowId ? `${path}/${encodeURIComponent(workflowId)}` : path, {
+    method: workflowId ? "PATCH" : "POST", body: input,
+  });
+}
+
+export function deleteTeamWorkflow(teamId: string, workflowId: string): Promise<{ workflows: TeamWorkflow[] }> {
+  return apiJson(`/teams/${encodeURIComponent(teamId)}/workflows/${encodeURIComponent(workflowId)}`, { method: "DELETE" });
+}
+
+export function startTeamWorkflow(teamId: string, workflowId: string, input: { requestId: string; taskGoal: string }): Promise<RelaySession> {
+  return apiJson(`/teams/${encodeURIComponent(teamId)}/workflows/${encodeURIComponent(workflowId)}/runs`, { method: "POST", body: input });
 }
