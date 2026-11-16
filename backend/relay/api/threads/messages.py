@@ -8,6 +8,7 @@ from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, HTTPException, Request
 
 from ...core.thread_attachments import attachment_ids
+from ...core.workflow_selection import requested_workflow_style
 from ...collaboration.queue import ThreadQueueDispatcher, change_queue, queue_state
 from ...collaboration.models import MessageIntent, RecoveryIntent
 from ...collaboration.errors import CollaborationError
@@ -148,7 +149,10 @@ async def submit_thread_message(
                 "message": "A message addresses either a team or agents, not both.",
             },
         )
-    style = body.style
+    try:
+        style = requested_workflow_style(body.workflow_id, body.style)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if style is not None:
         try:
             style = validate_collaboration_style(style, "style")

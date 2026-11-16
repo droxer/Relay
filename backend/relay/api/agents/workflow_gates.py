@@ -6,6 +6,13 @@ from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
+
+from ...core.workflow_selection import predefined_style
+from ...collaboration.models import RunIntent
+from ...collaboration.service import CollaborationConductor
+from ...collaboration.errors import CollaborationError
+from .workflows import owned_workflow_team
 
 from ...agents.routing import resolve_agent_assignments
 from ...collaboration.workflow_compilation import compile_workflow
@@ -118,7 +125,24 @@ def stage_workflow_gate(
 
 
 @router.post("/teams/{team_id}/workflows/{workflow_id}/runs", status_code=201)
-def start_team_workflow(
+async def start_team_workflow(
     team_id: str, workflow_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
-    return stage_workflow_gate(team_id, request, ctx, _request_body=_request_body, workflow_id=workflow_id)
+    try:
+        style = predefined_style(workflow_id)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    if style is None:
+        return await run_in_threadpool(stage_workflow_gate, team_id, request, ctx,
+                                       _request_body=_request_body, workflow_id=workflow_id)
+    team = await run_in_threadpool(owned_workflow_team, request, ctx, team_id)
+    if not team.get("enabled", True):
+        raise HTTPException(409, "team_disabled")
+    request_id, goal = _body(_request_body)
+    try:
+        return await CollaborationConductor(ctx).submit(RunIntent(
+            task_goal=goal, session_id=None, raw_assignments=None, requested_team_id=team_id, style=style,
+            idempotency_key=f"workflow:{team_id}:{workflow_id}:{request_id}",
+        ), {"userId": team["ownerUserId"], "isAdmin": False})
+    except CollaborationError as error:
+        raise HTTPException(error.status, {"code": error.code, "message": str(error)}) from error

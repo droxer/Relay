@@ -10,6 +10,7 @@ from typing import Any
 from ..automations.model import EVENT_KINDS
 from ..core.team_workflows import is_workflow_team
 from ..core.workflows import workflow_execution_snapshot
+from ..core.workflow_selection import selected_workflow_id, predefined_style
 from ..core.computer_identity import computer_id
 from ..projects.runtime import project_task_assignment_error, project_computer_assignment_error
 from ..projects.access import ProjectAccessError, project_for_owner
@@ -115,7 +116,7 @@ def validate_project_assignment(
     team = ctx.team_store.get_team(assigned_team_id) if assigned_team_id else None
     if assigned_team_id and (not team or team.get("deletedAt")):
         raise TaskRequestError(404, "Team not found.")
-    if workflow_id:
+    if team and (workflow_id or predefined_style(selected_workflow_id(team)) is None):
         team = validate_task_workflow(ctx, {"assignedTeamId": assigned_team_id,
                                            "assignedWorkflowId": workflow_id,
                                            "projectId": project["id"], "ownerUserId": project["ownerUserId"]})
@@ -220,17 +221,18 @@ def validate_computer_assignment(
 
 
 def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | None:
-    workflow_id = task.get("assignedWorkflowId")
-    if workflow_id is None:
+    team_id = task.get("assignedTeamId")
+    if not team_id and task.get("assignedWorkflowId") is None:
         return None
-    if not isinstance(workflow_id, str) or not workflow_id:
-        raise TaskRequestError(400, "workflow_id_invalid")
-    team = ctx.team_store.get_team(task.get("assignedTeamId")) if task.get("assignedTeamId") else None
+    team = ctx.team_store.get_team(team_id) if team_id else None
     if not team or team.get("deletedAt") or not team.get("enabled", True):
         raise TaskRequestError(409, "workflow_team_required")
     if team.get("ownerUserId") != task.get("ownerUserId"):
         raise TaskRequestError(403, "workflow_owner_required")
     try:
+        workflow_id = selected_workflow_id(team, task)
+        if predefined_style(workflow_id) is not None:
+            return team
         snapshot = workflow_execution_snapshot(team, workflow_id)
     except ValueError as error:
         raise TaskRequestError(409, str(error)) from error

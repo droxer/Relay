@@ -33,7 +33,7 @@ class RunTargetValidationMixin(NodeBackendState):
         if not agent or agent.get("deletedAt") or not agent.get("enabled", True):
             raise ValueError("logical agent is disabled or missing")
         snapshot = assignment.get("teamSnapshot") or {}
-        if snapshot.get("workflowId"):
+        if snapshot.get("workflowId") and snapshot.get("workflowKind") != "predefined":
             team = self.team_store.get_team(snapshot["id"]) if self.team_store else None
             if (not team or team.get("deletedAt") or not team.get("enabled", True)
                 or team.get("ownerUserId") != snapshot.get("ownerUserId")

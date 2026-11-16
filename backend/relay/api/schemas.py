@@ -262,6 +262,7 @@ class ThreadMessageBody(RequestSchema):
     idempotency_key: TrimmedStr = Field(None, alias="idempotencyKey")
     user_message_id: TrimmedStr = Field(None, alias="userMessageId")
     style: Annotated[Any, WithJsonSchema({"type": "string"})] = None
+    workflow_id: CheckedStr = Field(None, alias="workflowId")
 
     @model_validator(mode="after")
     def _check_shape(self) -> ThreadMessageBody:

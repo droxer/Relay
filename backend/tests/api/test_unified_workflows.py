@@ -1,11 +1,22 @@
 """Predefined and custom Workflows share one selection and default contract."""
 from uuid import uuid4
+from contextlib import contextmanager
 
 import pytest
 
 from test_team_workflows import workflow_world
 from test_team_workflow_definitions import create_parent
 from test_scheduled_workflows import tick
+
+
+
+@contextmanager
+def unified_world(monkeypatch):
+    with workflow_world(monkeypatch) as world:
+        app, _, node, *_ = world
+        app.state.registry.register({**node, "protocolVersion": 1, "supportedAgents": ["codex", "claude"], "sandboxId": node["id"], "token": "token_node_here",
+                                     "capabilities": [*node["capabilities"], "work-results"]})
+        yield world
 
 
 def setup_definitions(client, project, payload):
@@ -20,7 +31,7 @@ def setup_definitions(client, project, payload):
 
 
 def test_team_catalog_and_predefined_default(monkeypatch):
-    with workflow_world(monkeypatch) as (_, client, _, _, project, payload):
+    with unified_world(monkeypatch) as (_, client, _, _, project, payload):
         team = create_parent(client, payload)
         assert team['defaultWorkflowId'] == 'preset:build_review'
         assert [item['kind'] for item in team['workflowOptions']] == ['predefined'] * 3
@@ -32,7 +43,7 @@ def test_team_catalog_and_predefined_default(monkeypatch):
 @pytest.mark.parametrize('scheduled', [False, True])
 @pytest.mark.parametrize('override', [False, True])
 def test_task_inherits_custom_default_or_overrides_with_predefined(monkeypatch, scheduled, override):
-    with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
+    with unified_world(monkeypatch) as (app, client, _, _, project, payload):
         team, workflow = setup_definitions(client, project, payload)
         response = client.post('/api/v1/tasks', json={
             'title': 'Deliver', 'projectId': project['id'], 'assignedTeamId': team['id'],
@@ -67,7 +78,7 @@ def test_task_inherits_custom_default_or_overrides_with_predefined(monkeypatch, 
 
 
 def test_default_definition_cannot_be_deleted_or_disabled(monkeypatch):
-    with workflow_world(monkeypatch) as (_, client, _, _, project, payload):
+    with unified_world(monkeypatch) as (_, client, _, _, project, payload):
         team, workflow = setup_definitions(client, project, payload)
         path = f"/api/v1/teams/{team['id']}/workflows/{workflow['id']}"
         assert client.delete(path).status_code == 409
@@ -78,7 +89,7 @@ def test_default_definition_cannot_be_deleted_or_disabled(monkeypatch):
 
 @pytest.mark.parametrize('workflow_id', ['preset:build_review', 'preset:pipeline', 'preset:lead_led'])
 def test_predefined_run_selection_preserves_its_snapshot(monkeypatch, workflow_id):
-    with workflow_world(monkeypatch) as (_, client, _, _, _, payload):
+    with unified_world(monkeypatch) as (_, client, _, _, _, payload):
         team = create_parent(client, payload)
         response = client.post('/api/v1/agent-runs', json={
             'taskGoal': 'Work together', 'teamId': team['id'], 'workflowId': workflow_id,
@@ -86,3 +97,15 @@ def test_predefined_run_selection_preserves_its_snapshot(monkeypatch, workflow_i
         })
         assert response.status_code == 202, response.text
         assert response.json()['collaborationRounds'][0]['teamSnapshot']['workflowId'] == workflow_id
+
+
+def test_predefined_starts_through_the_workflow_endpoint(monkeypatch):
+    with unified_world(monkeypatch) as (_, client, _, _, _, payload):
+        team = create_parent(client, payload)
+        path = f"/api/v1/teams/{team['id']}/workflows/preset:pipeline/runs"
+        body = {'requestId': str(uuid4()), 'taskGoal': 'Run the pipeline'}
+        response = client.post(path, json=body)
+        assert response.status_code == 201, response.text
+        session = response.json()
+        assert session['collaborationRounds'][0]['teamSnapshot']['workflowId'] == 'preset:pipeline'
+        assert client.post(path, json=body).json()['id'] == session['id']

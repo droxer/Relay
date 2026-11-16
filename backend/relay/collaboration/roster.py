@@ -156,11 +156,15 @@ class RosterMixin(ConductorState):
         """An unaddressed team round: the team's own roster and style."""
         team, members = self._team_for_round(round_team_id, session, actor)
         team_member_ids = {agent["id"] for agent in members}
+        try:
+            workflow_style = resolve_collaboration_style(team, None, intent.style)
+        except ValueError as error:
+            raise CollaborationError(str(error), status=409) from error
         raw_assignments = team_member_assignments(
             members,
             mode=intent.mode,
             team=team,
-            style=resolve_collaboration_style(team, None, intent.style),
+            style=workflow_style,
         )
         team_snapshot = raw_assignments[0].get(
             "teamSnapshot"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ...core.thread_attachments import attachment_ids
+from ...core.workflow_selection import requested_workflow_style
 
 from typing import Any
 
@@ -335,7 +336,10 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     decision = body.get("decision")
-    style = body.get("style")
+    try:
+        style = requested_workflow_style(body.get("workflowId"), body.get("style"))
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     if style is not None:
         try:
             style = validate_collaboration_style(style, "style")
