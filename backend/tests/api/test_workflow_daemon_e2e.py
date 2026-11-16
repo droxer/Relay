@@ -127,3 +127,22 @@ def test_daemon_workflow_cancel_stops_current_runtime_without_successor(workflow
     eventually(lambda: not h.ctx.daemon_store.list_active_runs(h.node_id))
     assert cancelled["workflowRuns"][0]["status"] == "cancelled"
     assert len([item for item in h.traces() if item["kind"] == "launch"]) == 1
+
+
+@pytest.mark.integration
+def test_daemon_completes_criteria_only_steps_with_evidence(workflow_daemon):
+    h = workflow_daemon
+    workflow = team(h)
+    steps = [{key: value for key, value in step.items() if key != "expectedOutputs"}
+             for step in workflow["workflowSteps"][:2]]
+    response = h.client.patch(f"/api/v1/teams/{workflow['id']}", json={"workflowSteps": steps})
+    assert response.status_code == 200, response.text
+    session = start(h, response.json()["team"])
+    completed = h.settled(session["id"], 2)
+    results = completed["workflowRuns"][0]["attemptResults"]
+    assert [item["status"] for item in results] == ["succeeded", "succeeded"]
+    assert all(item["outputs"] == {} and item["evidence"] for item in results)
+    launches = [item for item in h.traces() if item["kind"] == "launch"]
+    assert all("Required output names:" not in item["brief"] for item in launches)
+    assert all("Acceptance criteria:" in item["brief"] for item in launches)
+    assert "Emitted eight deterministic replies." in launches[1]["brief"]

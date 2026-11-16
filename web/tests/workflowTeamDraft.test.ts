@@ -21,7 +21,7 @@ const project = { id: "project-1", computerId: "computer-1", leadAgentId: "lead"
 function step(id: string, agentId: string, patch: Partial<WorkflowStepDraft> = {}): WorkflowStepDraft {
   return {
     id, name: id, agentId, instructions: `do ${id}`,
-    expectedOutputs: `${id} output`, acceptanceCriteria: `${id} ok`,
+    acceptanceCriteria: `${id} ok`,
     requiresApproval: false, ...patch,
   };
 }
@@ -50,15 +50,15 @@ describe("workflowTeamInput", () => {
     assert.equal("collaborationStyle" in input, false);
     assert.equal("humanApproval" in input, false);
     assert.equal(input.workflowSteps?.[3].requiresApproval, true);
+    assert.ok(input.workflowSteps?.every((step) => !("expectedOutputs" in step)));
   });
 
-  it("splits outputs and criteria by line and drops blanks", () => {
+  it("splits criteria by line and drops blanks", () => {
     const input = workflowTeamInput({
       name: "x",
-      steps: [step("a", "lead", { expectedOutputs: " one \n\n two ", acceptanceCriteria: "ok\n" })],
+      steps: [step("a", "lead", { acceptanceCriteria: " one \n\n two " })],
     }, project);
-    assert.deepEqual(input.workflowSteps?.[0].expectedOutputs, ["one", "two"]);
-    assert.deepEqual(input.workflowSteps?.[0].acceptanceCriteria, ["ok"]);
+    assert.deepEqual(input.workflowSteps?.[0].acceptanceCriteria, ["one", "two"]);
   });
 
   it("leads with the first step's agent when the project lead owns no step", () => {
@@ -91,10 +91,11 @@ describe("workflow draft editing", () => {
 
   it("loads legacy deployment metadata without losing an explicit gate", () => {
     const team = { name: "Ship it", workflowSteps: workflowTeamInput(draft, project).workflowSteps!.map((step) => ({
-      ...step, kind: "deployment" as const,
+      ...step, kind: "deployment" as const, expectedOutputs: ["Legacy deliverable"],
     })) } as AgentTeam;
     const loaded = draftFromTeam(team);
     assert.ok(loaded.steps.every((step) => !("kind" in step)));
+    assert.ok(loaded.steps.every((step) => !("expectedOutputs" in step)));
     assert.equal(loaded.steps[3].requiresApproval, true);
     assert.equal(loaded.steps[0].requiresApproval, false);
   });
@@ -117,11 +118,11 @@ describe("validateWorkflowDraft", () => {
   it("names each missing field and non-member agent per step", () => {
     const errors = validateWorkflowDraft({
       name: " ",
-      steps: [step("a", "stranger", { name: "", instructions: " ", expectedOutputs: "\n" })],
+      steps: [step("a", "stranger", { name: "", instructions: " ", acceptanceCriteria: "\n" })],
     }, ["lead"]);
     assert.equal(errors.name, "required");
     assert.deepEqual(errors.fields.a, {
-      name: "required", agentId: "not_member", instructions: "required", expectedOutputs: "required",
+      name: "required", agentId: "not_member", instructions: "required", acceptanceCriteria: "required",
     });
     assert.equal(workflowDraftValid(errors), false);
   });

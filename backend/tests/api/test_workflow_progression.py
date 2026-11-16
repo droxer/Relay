@@ -356,3 +356,18 @@ def test_successor_publication_failure_in_joined_transaction_leaves_no_command(m
         assert not request.get("currentCommandId")
         assert app.state.daemon_store.pending_command_for_run_request(request["id"]) is None
         assert take(app.state.registry, node) == []
+
+
+def test_criteria_only_steps_advance_without_named_outputs(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, node, _, _, payload):
+        for step in payload["workflowSteps"]:
+            del step["expectedOutputs"]
+            step["requiresApproval"] = False
+        session = start(client, payload)
+        for _ in payload["workflowSteps"]:
+            command, = take(app.state.registry, node)
+            assert "Required output names:" not in command["state"]["assignment_brief"]
+            finish(app.state.registry, node, command, {})
+        completed = app.state.session_store.get_session(session["id"])
+        assert completed["status"] == "completed"
+        assert all(result["status"] == "succeeded" for result in completed["workflowRuns"][0]["attemptResults"])

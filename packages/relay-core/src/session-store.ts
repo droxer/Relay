@@ -314,7 +314,8 @@ export interface WorkflowStepDefinition {
   name: string;
   agentId: string;
   instructions: string;
-  expectedOutputs: string[];
+  /** @deprecated Only retained for existing frozen workflow definitions. */
+  expectedOutputs?: string[];
   acceptanceCriteria: string[];
   /** @deprecated Legacy metadata; new workflow steps have no classification. */
   kind?: "work" | "deployment";

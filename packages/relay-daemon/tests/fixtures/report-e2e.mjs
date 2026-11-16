@@ -98,7 +98,8 @@ const environment = {
     mkdirSync(control, { recursive: true });
     let outputs;
     if (profile.workflow) {
-      const names = JSON.parse(command.state.assignment_brief.split('Required output names: ')[1].split('\n')[0]);
+      const legacyNames = command.state.assignment_brief.split('Required output names: ')[1];
+      const names = legacyNames ? JSON.parse(legacyNames.split('\n')[0]) : [];
       const failed = join(profile.root, 'verify-failed');
       if (names.includes('verify report') && !existsSync(failed)) {
         writeFileSync(failed, 'First verification deliberately omits its required output.');

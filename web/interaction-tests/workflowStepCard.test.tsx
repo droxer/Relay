@@ -23,7 +23,7 @@ vi.mock("@/components/ui/select", () => ({
 
 const step: WorkflowStepDraft = {
   id: "step-a", name: "设计一个很长很长的步骤名称 with a long English tail", agentId: "", instructions: "",
-  expectedOutputs: "", acceptanceCriteria: "", requiresApproval: false,
+  acceptanceCriteria: "", requiresApproval: false,
 };
 
 function renderCard(overrides: Partial<Parameters<typeof WorkflowStepCard>[0]> = {}) {
@@ -59,8 +59,15 @@ it("offers an independent approval flag without choosing a step type", () => {
 });
 
 it("names each invalid field beside its control", () => {
-  renderCard({ errors: { name: "required", expectedOutputs: "required", agentId: "not_member" } });
+  renderCard({ errors: { name: "required", acceptanceCriteria: "required", agentId: "not_member" } });
   expect(screen.getAllByText("workflow.error_required")).toHaveLength(2);
   expect(screen.getByText("workflow.error_not_member")).toBeTruthy();
   expect(screen.getByRole("textbox", { name: /workflow\.step_name/ }).getAttribute("aria-invalid")).toBe("true");
+});
+
+
+it("only asks for acceptance criteria as the completion requirements", () => {
+  renderCard();
+  expect(screen.queryByRole("textbox", { name: /workflow\.step_outputs/ })).toBeNull();
+  expect(screen.getByRole("textbox", { name: /workflow\.step_criteria/ })).toBeTruthy();
 });

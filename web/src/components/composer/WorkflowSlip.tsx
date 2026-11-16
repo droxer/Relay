@@ -112,9 +112,9 @@ export function WorkflowSlip({ run, decide }: {
         </h2>
       </div>
       {block ? <p className="workflow-slip-reason">{blockText(t, block)}</p> : null}
-      {gate && assignment.expectedOutputs.length ? (
+      {gate && assignment.acceptanceCriteria.length ? (
         <p className="workflow-slip-reason">
-          {t("workflow.gate_outputs", { outputs: assignment.expectedOutputs.join(t("workflow.list_separator")) })}
+          {t("workflow.gate_criteria", { criteria: assignment.acceptanceCriteria.join(t("workflow.list_separator")) })}
         </p>
       ) : null}
       <ul className="awaiting-input-choices" aria-label={t("awaiting.choices")}>

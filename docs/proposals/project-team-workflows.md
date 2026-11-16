@@ -121,7 +121,7 @@ failed in Next.js CSS processing with process creation / local port binding
 
 A user builds reusable Teams within one Project from its enabled Project
 Agents. The user defines a sequential list of named steps, with one responsible
-Agent, instructions, expected outputs and acceptance criteria per step. One
+Agent, instructions and acceptance criteria per step. One
 Agent may own several steps. Step names do not extend the Agent role vocabulary.
 The Team and every participant remain on the Project's Computer.
 
@@ -132,7 +132,7 @@ parallel branches and cross-Computer execution are outside this release.
 
 Each step may require approval before it starts. Deployment steps default to
 requiring approval; approval is explicit for each run and current attempt.
-Failure, rejection or missing required output prevents downstream execution.
+Failure, rejection or missing completion evidence prevents downstream execution.
 The owner may retry the current step or cancel; retries wait for prior execution
 exit evidence or recorded human reconciliation. No automatic repair loops or
 rollback. Acceptance criteria guide work; they do not certify correctness.
@@ -199,7 +199,7 @@ with the actual implemented contract. Prefer existing event/store mutations.
 
 Add an explicit immutable Project association for workflow Teams and a bounded,
 ordered step definition with stable step ids. Validate unique step ids,
-nonempty names/instructions, responsible Agent membership, expected outputs,
+nonempty names/instructions, responsible Agent membership,
 acceptance criteria and a boolean approval requirement. Preserve repeated
 assignees. Reject malformed input rather than dropping unknown workflow fields
 and returning success. Normalize before persisting; reads must preserve order.
@@ -273,7 +273,7 @@ or execution reservation. Approval records readiness; it does not start an Agent
 W1 execution guards remain in place. Durable request delivery, required-output
 transport, sequential progression and retry recovery are still pending.
 The work-graph manifest adapter now validates the frozen sequence and preserves
-step identity separately from retry identity, required outputs and gate flags.
+step identity separately from retry identity, acceptance criteria and gate flags.
 It rejects mixed runs, reordered steps, altered contracts and legacy fallback;
 this compiler alone does not provide durable execution or gate authorization.
 The legacy approval adapter cannot approve a first step; its index-only approval
@@ -365,7 +365,7 @@ remain separate external actions requiring authorization.
 `compile_assignment_work_graph` now has a workflow-specific branch that validates
 its full assignment sequence against the frozen definition. It preserves the
 compiler's stable work-item identity, per-attempt assignment identity, user order,
-step contracts, objectives and required outputs. Round manifests retain run/step/attempt
+step contracts, objectives and acceptance criteria. Round manifests retain run/step/attempt
 identity and approval requirements with a distinct `project-workflow-v1` policy.
 Legacy manifests retain their previous format, including legacy approval handling.
 The pure workflow compiler is registered with the existing policy-layer tests;

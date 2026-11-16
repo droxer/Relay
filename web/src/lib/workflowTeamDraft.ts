@@ -21,8 +21,7 @@ export type WorkflowStepDraft = {
   name: string;
   agentId: string;
   instructions: string;
-  /** One output or criterion per line, as the person types them. */
-  expectedOutputs: string;
+  /** One acceptance criterion per line, as the person types it. */
   acceptanceCriteria: string;
   requiresApproval: boolean;
 };
@@ -32,7 +31,7 @@ export type WorkflowTeamDraft = {
   steps: WorkflowStepDraft[];
 };
 
-export type WorkflowStepField = "name" | "agentId" | "instructions" | "expectedOutputs" | "acceptanceCriteria";
+export type WorkflowStepField = "name" | "agentId" | "instructions" | "acceptanceCriteria";
 export type WorkflowFieldError = "required" | "too_long" | "too_many" | "not_member";
 export type WorkflowDraftErrors = {
   name?: "required" | "too_long";
@@ -66,7 +65,6 @@ export function emptyWorkflowStep(
     name: "",
     agentId,
     instructions: "",
-    expectedOutputs: "",
     acceptanceCriteria: "",
     requiresApproval: false,
   };
@@ -80,7 +78,6 @@ export function draftFromTeam(team: AgentTeam): WorkflowTeamDraft {
       name: step.name,
       agentId: step.agentId,
       instructions: step.instructions,
-      expectedOutputs: step.expectedOutputs.join("\n"),
       acceptanceCriteria: step.acceptanceCriteria.join("\n"),
       requiresApproval: step.requiresApproval,
     })),
@@ -130,12 +127,10 @@ export function validateWorkflowDraft(draft: WorkflowTeamDraft, allowedAgentIds:
     const instructions = step.instructions.trim();
     if (!instructions) field.instructions = "required";
     else if (instructions.length > WORKFLOW_LIMITS.instructions) field.instructions = "too_long";
-    for (const key of ["expectedOutputs", "acceptanceCriteria"] as const) {
-      const entries = lines(step[key]);
-      if (!entries.length) field[key] = "required";
-      else if (entries.length > WORKFLOW_LIMITS.lines) field[key] = "too_many";
-      else if (entries.some((entry) => entry.length > WORKFLOW_LIMITS.line)) field[key] = "too_long";
-    }
+    const criteria = lines(step.acceptanceCriteria);
+    if (!criteria.length) field.acceptanceCriteria = "required";
+    else if (criteria.length > WORKFLOW_LIMITS.lines) field.acceptanceCriteria = "too_many";
+    else if (criteria.some((entry) => entry.length > WORKFLOW_LIMITS.line)) field.acceptanceCriteria = "too_long";
     if (Object.keys(field).length) errors.fields[step.id] = field;
   }
   return errors;
@@ -170,7 +165,6 @@ export function workflowTeamInput(
       name: step.name.trim(),
       agentId: step.agentId,
       instructions: step.instructions.trim(),
-      expectedOutputs: lines(step.expectedOutputs),
       acceptanceCriteria: lines(step.acceptanceCriteria),
       requiresApproval: step.requiresApproval,
     })),
@@ -185,7 +179,6 @@ export function workflowDraftChanged(draft: WorkflowTeamDraft, saved: WorkflowTe
       ...step,
       name: step.name.trim(),
       instructions: step.instructions.trim(),
-      expectedOutputs: lines(step.expectedOutputs),
       acceptanceCriteria: lines(step.acceptanceCriteria),
     })),
   });
