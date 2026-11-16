@@ -65,6 +65,7 @@ class InterceptHandler(logging.Handler):
 CONTEXT_KEYS = frozenset({
     "session_id", "run_id", "request_id", "node_id", "sandbox_id", "command_id", "tool",
     "event_type", "error_type", "repeat_count", "transient",
+    "report_id", "receipt_replay", "lock_wait_ms", "duration_ms",
 })
 
 
