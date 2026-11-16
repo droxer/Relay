@@ -121,6 +121,18 @@ export function WorkflowSlip({ run, decide }: {
           {asked ? t("workflow.question_title", position)
             : gate ? t("workflow.gate_title", position) : t("workflow.blocked_title", position)}
         </h2>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button type="button" variant="icon" size="icon-dense" disabled={pending !== null} aria-label={t("workflow.more")} title={t("workflow.more")}>
+                <NavMore size={ICON.md} aria-hidden="true" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem danger onClick={() => void cancelRun()}>{t("workflow.cancel_run")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       {asked ? (
         asked.question
@@ -174,22 +186,6 @@ export function WorkflowSlip({ run, decide }: {
           </Button>
         </form>
       ) : null}
-      <div className="composer-slip-foot">
-        <div className="composer-slip-actions">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button type="button" variant="icon" size="icon-dense" disabled={pending !== null} aria-label={t("workflow.more")} title={t("workflow.more")}>
-                  <NavMore size={ICON.md} aria-hidden="true" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem danger onClick={() => void cancelRun()}>{t("workflow.cancel_run")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
     </section>
   );
 }

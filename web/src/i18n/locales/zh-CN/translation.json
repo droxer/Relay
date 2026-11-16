@@ -3862,6 +3862,7 @@
     "snapshot_note": "修改只影响之后的运行。已经开始的运行保留它开始时的步骤。",
     "save": "保存工作流",
     "delete_message": "已开始的运行会保留记录。此操作无法撤销。",
+    "delete": "删除工作流",
     "edit_in_project": "请在项目的智能体标签页中编辑这些步骤。",
     "error_required": "必填。",
     "error_too_long": "请控制在 {{limit}} 个字符以内。",
