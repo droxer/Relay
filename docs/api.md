@@ -1901,7 +1901,7 @@ these fields. Legacy Teams omit both fields and keep their existing behavior.
 | step `name` | Nonempty string, at most 200 characters; free text, not an Agent role. |
 | step `agentId` | Nonempty string, at most 128 characters; one pinned Team member. Repeated assignees across steps are allowed. |
 | step `instructions` | Nonempty string, at most 8,000 characters. |
-| step `expectedOutputs` | Required array of 1–32 nonempty strings, each at most 2,000 characters. Describes required recorded outputs, not filesystem paths to execute. |
+| step `expectedOutputs` | Deprecated compatibility field; omitted for new steps. Existing frozen runs retain their saved output requirements. |
 | step `acceptanceCriteria` | Required array of 1–32 nonempty strings, each at most 2,000 characters. Instructions, not proof of success. |
 | step `kind` | Deprecated compatibility metadata (`work` or `deployment`); omitted for new steps. Steps have no predefined type. |
 | step `requiresApproval` | Boolean; defaults to `false` for every step, independently of legacy `kind` metadata. This records future per-attempt gates; W1 cannot approve or execute them. |
@@ -1986,19 +1986,21 @@ adapter (W2b).** Each command requires a daemon advertising both `round-result`
 and `workflow-results`. The latter guarantees the daemon forwards the verified
 `runId` with the structured report; older clients must update before dispatch.
 The agent writes the existing run-bound round-result envelope with outer
-`status: "done"`, matching `runId`, and `work: {status: "done", evidence: [...],
-outputs: {"<expected output name>": "<recorded content or concrete artifact reference>"}}`.
-Every frozen `expectedOutputs` name must have a nonblank recorded value. Output
-maps contain at most 32 entries, keys at most 2,000 characters, values at most
+`status: "done"`, matching `runId`, and `work: {status: "done", evidence: [...]}`.
+Evidence must describe concrete checks against the step’s acceptance criteria.
+Recorded `work.outputs` are optional for new steps. Existing frozen runs still
+require a nonblank value for every saved `expectedOutputs` name. When supplied,
+output maps contain at most 32 entries, keys at most 2,000 characters, values at most
 8,000 characters, and at most 65,536 characters combined. The normal work report
 validation also applies. These are attributed reports, not backend verification
 of artifact correctness or satisfaction of the acceptance criteria.
 
 `workflow.step_finished` records the attempt result and advances the frozen
-index only for successful execution, a valid structured success report, and all
-required outputs. Missing, rejected, truncated or failed results block the
-current step. Earlier successful recorded outputs are included in every
-successor's assignment brief. Repeated assignees retain distinct step/attempt
+index only for successful execution and a valid structured success report with
+nonempty completion evidence (plus any legacy frozen output requirements).
+Missing, rejected, truncated or failed results block the current step. Earlier
+successful results, including evidence and any recorded outputs, are included in
+every successor's assignment brief. Repeated assignees retain distinct step/attempt
 identities. The final successful step completes the Thread. No legacy repair,
 consultation, delegation or report-reminder policy applies.
 

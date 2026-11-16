@@ -43,3 +43,23 @@ def test_non_success_never_accepts_outputs(change):
     else:
         event["outputTruncated"] = True
     assert workflow_step_result({"expectedOutputs": ["Design"]}, event)["status"] == "blocked"
+
+
+@pytest.mark.parametrize("outputs", [None, {}])
+def test_criteria_only_step_accepts_completion_evidence_without_named_outputs(outputs):
+    event = completion()
+    work = event["roundResult"]["work"]
+    if outputs is None:
+        del work["outputs"]
+    else:
+        work["outputs"] = outputs
+    result = workflow_step_result({"expectedOutputs": [], "acceptanceCriteria": ["Tests pass"]}, event)
+    assert result["status"] == "succeeded"
+    assert result["evidence"] == ["verified"]
+    assert result["outputs"] == {}
+
+
+def test_criteria_only_step_still_requires_completion_evidence():
+    event = completion()
+    event["roundResult"]["work"] = {"status": "done"}
+    assert workflow_step_result({"expectedOutputs": []}, event)["status"] == "blocked"

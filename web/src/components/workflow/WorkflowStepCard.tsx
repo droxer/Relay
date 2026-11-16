@@ -137,16 +137,7 @@ export function WorkflowStepCard({
             {...described("instructions", "instructions")}
           />
         </Field>
-        <Field label={t("workflow.step_outputs")} hint={t("team_work.one_per_line")} error={errorText("expectedOutputs")} errorId={id("outputs-error")}>
-          <Textarea
-            rows={2}
-            value={step.expectedOutputs}
-            disabled={disabled}
-            onChange={(event) => onChange({ expectedOutputs: event.target.value })}
-            {...described("expectedOutputs", "outputs")}
-          />
-        </Field>
-        <Field label={t("workflow.step_criteria")} hint={t("team_work.one_per_line")} error={errorText("acceptanceCriteria")} errorId={id("criteria-error")}>
+        <Field label={t("workflow.step_criteria")} hint={t("team_work.one_per_line")} error={errorText("acceptanceCriteria")} errorId={id("criteria-error")} className="workflow-step-wide">
           <Textarea
             rows={2}
             value={step.acceptanceCriteria}

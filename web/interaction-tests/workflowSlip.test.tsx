@@ -131,3 +131,10 @@ it("shows recorded evidence, notes, timestamps and owner decisions in the frozen
   expect(screen.getByText("workflow.decision_approve")).toBeTruthy();
   expect(document.querySelector('time[datetime="2026-11-16T00:00:00Z"]')).toBeTruthy();
 });
+
+
+it("shows acceptance criteria at approval without listing expected outputs", () => {
+  render(<WorkflowSlip run={run()} decide={vi.fn()} />);
+  expect(screen.getByText("workflow.gate_criteria")).toBeTruthy();
+  expect(screen.queryByText("workflow.gate_outputs")).toBeNull();
+});

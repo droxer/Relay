@@ -141,7 +141,7 @@ Thread may address a Team only when the Team lives on the Thread's Computer.
 A reusable Project workflow Team additionally records an immutable `projectId`
 and ordered `workflowSteps`. Every step pins one enabled Project Agent; the same
 Agent may own several steps. Each step has a stable id, name, instructions,
-expected outputs, acceptance criteria and an optional pre-step approval gate
+acceptance criteria and an optional pre-step approval gate
 (off by default). Steps have no predefined type; deployment can be described
 as ordinary step work. Only the signed-in
 Project owner manages the definition. This is separate from legacy Team styles

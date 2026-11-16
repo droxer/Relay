@@ -82,7 +82,7 @@ def compile_workflow(
             "delegationAuthority": "conductor",
             "awaitApproval": step["requiresApproval"],
             "acceptanceCriteria": list(step["acceptanceCriteria"]),
-            "expectedOutputs": list(step["expectedOutputs"]),
+            "expectedOutputs": list(step.get("expectedOutputs", [])),
             "dependsOnWorkItemIds": [item["workItemId"] for item in compiled],
             "teamSnapshot": deepcopy(snapshot),
         })

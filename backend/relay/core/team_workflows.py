@@ -55,7 +55,9 @@ def _step(value: Any, members: list[str]) -> dict[str, Any]:
     return {
         "id": step_id, "name": _text(value.get("name"), "name", 200),
         "agentId": agent_id, "instructions": _text(value.get("instructions"), "instructions", 8000),
-        "expectedOutputs": _texts(value.get("expectedOutputs"), "expectedOutputs"),
+        # Preserve legacy requirements in frozen snapshots; new steps omit them.
+        **({"expectedOutputs": _texts(value["expectedOutputs"], "expectedOutputs")}
+           if "expectedOutputs" in value else {}),
         "acceptanceCriteria": _texts(value.get("acceptanceCriteria"), "acceptanceCriteria"),
         **({"kind": value["kind"]} if "kind" in value else {}),
         "requiresApproval": approval,

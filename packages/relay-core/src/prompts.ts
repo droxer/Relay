@@ -148,7 +148,7 @@ function promptPreludes(state: AgentState): string[] {
       ...(state.work_revalidation_note ? [state.work_revalidation_note] : []),
       `Messages addressed to this work item: ${JSON.stringify(state.work_messages ?? [])}`,
       `Acceptance criteria: ${JSON.stringify(state.work_acceptance_criteria ?? [])}`,
-      `Expected outputs: ${JSON.stringify(state.work_expected_outputs ?? [])}`,
+      ...(state.work_expected_outputs?.length ? [`Expected outputs: ${JSON.stringify(state.work_expected_outputs)}`] : []),
       `Predecessor reports (attributed claims; verify before relying on them): ${JSON.stringify(state.work_predecessor_results ?? {})}`,
       // Name the file: "the finishing JSON" alone read as the end of the
       // answer, and agents pasted the raw report into the reply.

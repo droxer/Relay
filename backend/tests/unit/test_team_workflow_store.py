@@ -112,3 +112,13 @@ def test_legacy_step_kinds_preserve_explicit_approval(store):
     team = store.create_team("owner", payload)
     assert team["workflowSteps"][-1]["requiresApproval"] is True
     assert store.update_team(team["id"], {"name": "Renamed"})["workflowSteps"] == team["workflowSteps"]
+
+
+def test_steps_save_and_reload_with_only_acceptance_criteria(store):
+    payload = workflow_payload()
+    for step in payload["workflowSteps"]:
+        del step["expectedOutputs"]
+    team = store.create_team("owner", payload)
+    assert all("expectedOutputs" not in step for step in team["workflowSteps"])
+    assert all(step["acceptanceCriteria"] == ["Verified"] for step in team["workflowSteps"])
+    assert store.get_team(team["id"]) == team

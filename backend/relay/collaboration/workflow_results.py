@@ -1,6 +1,6 @@
-"""Workflow-only acceptance of daemon-carried, run-bound recorded outputs.
+"""Workflow-only acceptance of daemon-carried, run-bound completion evidence.
 
-Outputs are attributed agent reports, not backend verification of their claims.
+Evidence and optional outputs are attributed reports, not backend verification.
 No legacy completion, delegation, consultation or automatic repair policy applies.
 """
 from __future__ import annotations
@@ -25,8 +25,8 @@ def workflow_step_result(assignment: dict[str, Any], event: dict[str, Any]) -> d
     result = validate_work_result(work)
     if not result or result["status"] != "done" or result.get("plan") or result.get("delegation"):
         return blocked
-    outputs = work.get("outputs")
-    if not isinstance(outputs, dict) or not 1 <= len(outputs) <= 32 or any(
+    outputs = work.get("outputs", {})
+    if not isinstance(outputs, dict) or len(outputs) > 32 or any(
         not isinstance(key, str) or not key.strip() or len(key) > 2000
         or not isinstance(value, str) or not value.strip() or len(value) > 8000
         for key, value in outputs.items()
@@ -34,7 +34,7 @@ def workflow_step_result(assignment: dict[str, Any], event: dict[str, Any]) -> d
         return {**blocked, "reason": "workflow_outputs_required"}
     if sum(len(key) + len(value) for key, value in outputs.items()) > 65536:
         return {**blocked, "reason": "workflow_outputs_too_large"}
-    if any(name not in outputs for name in assignment["expectedOutputs"]):
+    if any(name not in outputs for name in assignment.get("expectedOutputs", [])):
         return {**blocked, "reason": "workflow_outputs_required"}
     return {"status": "succeeded", "outputs": dict(outputs),
             "evidence": result["evidence"], "note": result["note"]}

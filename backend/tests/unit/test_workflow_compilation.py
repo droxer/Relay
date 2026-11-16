@@ -298,3 +298,12 @@ def test_workflow_marker_removal_does_not_enable_legacy_fallback():
         del assignment["workflowStepId"]
     with pytest.raises(ValueError, match="workflow"):
         manifest_for(assignments, team={"id": "legacy"})
+
+
+def test_criteria_only_workflow_compiles_without_expected_outputs():
+    team = definition()
+    for step in team["workflowSteps"]:
+        del step["expectedOutputs"]
+    assignments = compile_run(team)
+    assert all(item["expectedOutputs"] == [] for item in assignments)
+    assert assignments[0]["acceptanceCriteria"] == ["Risks documented"]
