@@ -45,10 +45,11 @@ def _step(value: Any, members: list[str]) -> dict[str, Any]:
     agent_id = _text(value.get("agentId"), "agentId", 128)
     if agent_id not in members:
         raise ValueError("team_workflow_assignee_not_member")
-    kind = value.get("kind", "work")
-    if kind not in ("work", "deployment"):
+    # Read legacy classifications without adding types to new steps. Keep the
+    # field when supplied so frozen workflow snapshots remain comparable.
+    if "kind" in value and value["kind"] not in ("work", "deployment"):
         raise ValueError("Workflow kind must be work or deployment.")
-    approval = value.get("requiresApproval", kind == "deployment")
+    approval = value.get("requiresApproval", False)
     if not isinstance(approval, bool):
         raise ValueError("requiresApproval must be a boolean.")
     return {
@@ -56,7 +57,8 @@ def _step(value: Any, members: list[str]) -> dict[str, Any]:
         "agentId": agent_id, "instructions": _text(value.get("instructions"), "instructions", 8000),
         "expectedOutputs": _texts(value.get("expectedOutputs"), "expectedOutputs"),
         "acceptanceCriteria": _texts(value.get("acceptanceCriteria"), "acceptanceCriteria"),
-        "kind": kind, "requiresApproval": approval,
+        **({"kind": value["kind"]} if "kind" in value else {}),
+        "requiresApproval": approval,
     }
 
 

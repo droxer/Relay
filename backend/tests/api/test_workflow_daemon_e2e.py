@@ -31,7 +31,7 @@ def team(h):
         "workflowSteps": [
             {"id": name, "name": name, "agentId": h.agent["id"], "instructions": f"Do {name}",
              "expectedOutputs": [f"{name} report"], "acceptanceCriteria": ["Record evidence"],
-             "kind": "deployment" if name == "deploy" else "work"}
+             "requiresApproval": name == "deploy"}
             for name in ("design", "build", "verify", "deploy")
         ],
     }, 201)["team"]

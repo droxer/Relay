@@ -4,12 +4,11 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import type { UserAgent } from "../../types";
 import type { WorkflowFieldError, WorkflowStepDraft, WorkflowStepField } from "../../lib/workflowTeamDraft";
-import { WORKFLOW_LIMITS, withStepKind } from "../../lib/workflowTeamDraft";
+import { WORKFLOW_LIMITS } from "../../lib/workflowTeamDraft";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -30,18 +29,15 @@ type Props = {
   errors?: Partial<Record<WorkflowStepField, WorkflowFieldError>>;
   disabled?: boolean;
   onChange: (patch: Partial<WorkflowStepDraft>) => void;
-  onReplace: (next: WorkflowStepDraft) => void;
   onMove: (to: number) => void;
   onRemove: () => void;
 };
-
-const KINDS = ["work", "deployment"] as const;
 
 /** One ordered step: its name, the Project Agent who owns it, what it must
  *  record, and whether a person approves it first. Reordering is by buttons
  *  (and the phone's action sheet), never drag, so touch and keyboard both work. */
 export function WorkflowStepCard({
-  step, index, count, agents, errors = {}, disabled, onChange, onReplace, onMove, onRemove,
+  step, index, count, agents, errors = {}, disabled, onChange, onMove, onRemove,
 }: Props) {
   const { t } = useTranslation();
   const uid = useId();
@@ -62,7 +58,7 @@ export function WorkflowStepCard({
   const last = index === count - 1;
 
   return (
-    <li className="workflow-step-card" aria-labelledby={id("title")} data-kind={step.kind}>
+    <li className="workflow-step-card" aria-labelledby={id("title")}>
       <div className="workflow-step-head">
         <span className="workflow-step-index tnum" aria-hidden="true">{index + 1}</span>
         <h3 id={id("title")} className="workflow-step-title">
@@ -162,21 +158,6 @@ export function WorkflowStepCard({
       </div>
 
       <div className="workflow-step-policy">
-        <RadioGroup
-          className="workflow-step-kind"
-          aria-label={t("workflow.step_kind")}
-          value={step.kind}
-          disabled={disabled}
-          onValueChange={(value) => {
-            if (value === "work" || value === "deployment") onReplace(withStepKind(step, value));
-          }}
-        >
-          {KINDS.map((kind) => (
-            <RadioGroupChoice key={kind} value={kind} className="workflow-step-kind-choice">
-              {t(`workflow.kind_${kind}`)}
-            </RadioGroupChoice>
-          ))}
-        </RadioGroup>
         <label className="workflow-step-flag">
           <Checkbox
             checked={step.requiresApproval}

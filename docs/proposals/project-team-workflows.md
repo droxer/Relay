@@ -17,7 +17,7 @@ only to their checkpoint and are superseded by the W2a/W2b adapters below.
 
 | Capability | Current boundary | Remaining acceptance |
 | --- | --- | --- |
-| Project Team definition | Backend save/validation plus the Project Agents-tab editor (ordered step cards, button/menu reorder, deployment gate default). | Real-backend save/reload in W4. |
+| Project Team definition | Backend save/validation plus the Project Agents-tab editor (ordered step cards, button/menu reorder, independent optional approval gates). | Real-backend save/reload in W4. |
 | Frozen workflow and human decisions | Backend decisions plus the thread composer slip (approve/reject, retry, cancel behind confirmation), bound to the shown attempt and revision. | Real-backend decision races in W4. |
 | Sequential execution | Dedicated workflow adapter runs saved order, checks recorded outputs, gates successors and preserves exit/reconciliation reservations. Real daemon integration now covers four steps, failed verification/retry, approval, restart, frozen edits and cancellation using a deterministic runtime. Generic unsupported entry paths remain guarded. | Task entry now shares the ledger and preserves one Task execution generation across gates/retries. Model-provider execution has not been tested. |
 | Browser state and controls | W2c: exact client projection for computable events; step results and retries refetch the snapshot (fixture pinned by `test_workflow_client_parity.py`). W3: start from the Project, sticky thread progress with timeline. | Task pickers allow matching-Project workflows; Task Activity shows all frozen ledgers and attempts. Generic composer addressing remains guarded. |
@@ -246,7 +246,8 @@ Acceptance:
 - Actual daemon commands follow saved step order even when role order differs
   and the same Agent owns multiple steps.
 - A gate before the first step or any later step prevents its command until
-  current-attempt owner approval. Deployment defaults to a gate.
+  current-attempt owner approval. Gates are explicit and off by default for
+  every step; steps have no predefined type.
 - Failure/rejection/missing output prevents all downstream commands; retry or
   cancel is available. Retry cannot overlap the previous execution.
 - Duplicate/stale decisions and completion replay cannot dispatch twice.
@@ -259,7 +260,7 @@ Acceptance:
 
 `collaboration/workflow_compilation.py` now compiles a detached workflow
 snapshot into one required assignment per saved step, preserving repeated
-assignees and first-step/deployment gate flags. Work-item identity is stable
+assignees and per-step approval gate flags. Work-item identity is stable
 within the run; assignment identity changes per retry attempt. It copies only
 Agent/routing fields from the roster, excluding legacy planning/repair authority.
 The helper allocates identities; it does not authorize retries or dispatch.
@@ -364,7 +365,7 @@ remain separate external actions requiring authorization.
 `compile_assignment_work_graph` now has a workflow-specific branch that validates
 its full assignment sequence against the frozen definition. It preserves the
 compiler's stable work-item identity, per-attempt assignment identity, user order,
-step kind, objectives and required outputs. Round manifests retain run/step/attempt
+step contracts, objectives and required outputs. Round manifests retain run/step/attempt
 identity and approval requirements with a distinct `project-workflow-v1` policy.
 Legacy manifests retain their previous format, including legacy approval handling.
 The pure workflow compiler is registered with the existing policy-layer tests;

@@ -28,7 +28,7 @@ def workflow_world(monkeypatch):
             "workflowSteps": [
                 {"id": "design", "name": "Design", "agentId": lead["id"], "instructions": "Design it",
                  "expectedOutputs": ["Design"], "acceptanceCriteria": ["Reviewed"]},
-                {"id": "deploy", "name": "Deploy", "kind": "deployment", "agentId": lead["id"],
+                {"id": "deploy", "name": "Deploy", "requiresApproval": True, "agentId": lead["id"],
                  "instructions": "Deploy it", "expectedOutputs": ["URL"], "acceptanceCriteria": ["Healthy"]},
             ],
         }

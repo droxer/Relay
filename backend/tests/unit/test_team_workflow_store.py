@@ -29,7 +29,7 @@ def test_order_defaults_and_events_round_trip(store):
     payload = workflow_payload()
     team = store.create_team("owner", payload)
     assert team["projectId"] == "project"
-    assert [s["requiresApproval"] for s in team["workflowSteps"]] == [False, False, False, True]
+    assert [s["requiresApproval"] for s in team["workflowSteps"]] == [False, False, False, False]
     steps = list(reversed(team["workflowSteps"]))
     updated = store.update_team(team["id"], {"workflowSteps": steps})
     assert store.get_team(team["id"]) == updated
@@ -94,3 +94,21 @@ def test_member_removal_keeps_step_evidence_and_cannot_restore_legacy_execution(
     assert removed["projectId"] == team["projectId"]
     with pytest.raises(ValueError):
         store.update_team(team["id"], {"projectId": None, "workflowSteps": None})
+
+
+def test_steps_need_no_kind_and_approval_is_independent(store):
+    payload = workflow_payload()
+    for step in payload["workflowSteps"]:
+        del step["kind"]
+    payload["workflowSteps"][0]["requiresApproval"] = True
+    team = store.create_team("owner", payload)
+    assert all("kind" not in step for step in team["workflowSteps"])
+    assert [s["requiresApproval"] for s in team["workflowSteps"]] == [True, False, False, False]
+
+
+def test_legacy_step_kinds_preserve_explicit_approval(store):
+    payload = workflow_payload()
+    payload["workflowSteps"][-1]["requiresApproval"] = True
+    team = store.create_team("owner", payload)
+    assert team["workflowSteps"][-1]["requiresApproval"] is True
+    assert store.update_team(team["id"], {"name": "Renamed"})["workflowSteps"] == team["workflowSteps"]

@@ -316,7 +316,8 @@ export interface WorkflowStepDefinition {
   instructions: string;
   expectedOutputs: string[];
   acceptanceCriteria: string[];
-  kind: "work" | "deployment";
+  /** @deprecated Legacy metadata; new workflow steps have no classification. */
+  kind?: "work" | "deployment";
   requiresApproval: boolean;
 }
 
