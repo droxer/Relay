@@ -64,3 +64,14 @@ it("does not offer promotion to another publication's viewer", async () => {
   await screen.findByRole("heading", { name: "Review" });
   expect(screen.queryByRole("button", { name: "skills.promote_revision_label" })).toBeNull();
 });
+
+
+it("refetches updated Skill detail only once after promotion", async () => {
+  show();
+  const user = userEvent.setup();
+  await screen.findByRole("heading", { name: "Review" });
+  api.getSkill.mockClear();
+  await user.click(screen.getByRole("button", { name: "skills.promote_revision_label" }));
+  await waitFor(() => expect(screen.getByText("skills.stable_revision").closest("li")?.textContent).toContain("v2"));
+  expect(api.getSkill).toHaveBeenCalledTimes(1);
+});

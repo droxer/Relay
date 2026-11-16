@@ -88,3 +88,16 @@ it("keeps inherited Automation access read-only in the picker", async () => {
   fireEvent.click(resource);
   expect(onChange).not.toHaveBeenCalled();
 });
+
+
+it("disconnecting invalidates the actual task list and record caches", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["relay", "tasks"], []);
+  client.setQueryData(["task-record", "task"], { id: "task" });
+  const view = render(<QueryClientProvider client={client}><ConnectionsSection /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole("button", { name: "connections.disconnect" }));
+  fireEvent.click(await screen.findByRole("button", { name: "connections.confirm_disconnect" }));
+  await waitFor(() => expect(client.getQueryState(["relay", "tasks"])?.isInvalidated).toBe(true));
+  expect(client.getQueryState(["task-record", "task"])?.isInvalidated).toBe(true);
+  view.unmount(); client.clear();
+});

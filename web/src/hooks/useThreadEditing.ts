@@ -4,10 +4,12 @@ import type { TFunction } from "i18next";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { useRelayMutations } from "./useRelayMutations";
 import type { RelaySession } from "../types";
+import { removeSessionDetail } from "../lib/sessionDetailCache";
 import { retainThreadDispatchView } from "../lib/threadDispatchView";
 
 interface ThreadEditingInput {
   threads: RelaySession[];
+  ownerId?: string;
   activeSessionId: string | undefined;
   token: string | undefined;
   /** Called after the open thread is deleted outright (not left pending). */
@@ -17,7 +19,7 @@ interface ThreadEditingInput {
 
 /** Rename and delete for the thread rail, each behind its own dialog. A
     failed mutation surfaces through the mutation's own onError toast. */
-export function useThreadEditing({ threads, activeSessionId, token, onActiveThreadDeleted, t }: ThreadEditingInput) {
+export function useThreadEditing({ threads, ownerId, activeSessionId, token, onActiveThreadDeleted, t }: ThreadEditingInput) {
   const { prompt, confirm } = useDialogs();
   const { renameSessionMutation, deleteSessionMutation } = useRelayMutations();
 
@@ -50,6 +52,7 @@ export function useThreadEditing({ threads, activeSessionId, token, onActiveThre
       });
       if (!ok) return;
       const pending = await deleteSessionMutation.mutateAsync({ sessionId, token });
+      if (!pending && ownerId) removeSessionDetail(ownerId, sessionId);
       if (!pending && activeSessionId === sessionId && view.isCurrent()) onActiveThreadDeleted();
     } catch {
       // mutation onError surfaces a toast.

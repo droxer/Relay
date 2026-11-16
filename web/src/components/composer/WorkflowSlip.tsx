@@ -6,11 +6,13 @@ import {
   currentWorkflowAssignment,
   workflowBlock,
   workflowDecisionBinding,
+  workflowQuestion,
   workflowStepName,
   type WorkflowBlock,
 } from "../../lib/workflowRuns";
 import { ActionSend, ICON, NavMore } from "../icons";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import {
   DropdownMenu,
@@ -19,14 +21,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type WorkflowDecision = "approve" | "reject" | "retry" | "cancel";
+type WorkflowDecision = "approve" | "reject" | "retry" | "cancel" | "answer";
+
+/** The backend's answer bound (`ANSWER_LIMIT` in `collaboration/workflow_events.py`). */
+const ANSWER_MAX_CHARS = 4000;
 
 /** Something being written: the slip must not pull focus out of it. */
 const TYPING_TARGET = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="dialog"], [role="menu"], [role="listbox"]';
 
-/** Whether a run needs its owner now: a gate to answer or a blocked step. */
+/** Whether a run needs its owner now: a gate, a step's question, or a blocked step. */
 export function workflowNeedsOwner(run: WorkflowRun | undefined): run is WorkflowRun {
-  return run?.status === "awaiting_approval" || run?.status === "blocked";
+  return run?.status === "awaiting_approval" || run?.status === "awaiting_input" || run?.status === "blocked";
 }
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -49,13 +54,14 @@ function blockText(t: Translate, block: WorkflowBlock): string {
  */
 export function WorkflowSlip({ run, decide }: {
   run: WorkflowRun;
-  decide: (kind: WorkflowDecision, binding: WorkflowAttemptBinding) => Promise<unknown>;
+  decide: (kind: WorkflowDecision, binding: WorkflowAttemptBinding, answer?: string) => Promise<unknown>;
 }) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const headingId = useId();
-  const [pending, setPending] = useState<WorkflowDecision | null>(null);
+  const [pending, setPending] = useState<WorkflowDecision | string | null>(null);
+  const [draft, setDraft] = useState("");
   const assignment = currentWorkflowAssignment(run);
   const binding = workflowDecisionBinding(run);
 
@@ -71,13 +77,15 @@ export function WorkflowSlip({ run, decide }: {
   if (!assignment || !binding) return null;
   const position = { index: run.currentIndex + 1, total: run.assignments.length, step: workflowStepName(run, assignment) };
   const gate = run.status === "awaiting_approval";
+  const asked = workflowQuestion(run);
   const block = workflowBlock(run);
 
-  const act = async (kind: WorkflowDecision) => {
+  // `pending` names the button pressed: a decision kind, or the option text answered.
+  const act = async (kind: WorkflowDecision, answer?: string) => {
     if (pending) return;
-    setPending(kind);
+    setPending(answer ?? kind);
     try {
-      await decide(kind, binding);
+      await (answer === undefined ? decide(kind, binding) : decide(kind, binding, answer));
     } catch {
       // Announced by the mutation; a 409 refetches the thread.
     } finally {
@@ -95,7 +103,9 @@ export function WorkflowSlip({ run, decide }: {
     if (accepted) await act("cancel");
   };
 
-  const choices: ReadonlyArray<{ kind: WorkflowDecision; label: string; effect: string }> = gate
+  const choices: ReadonlyArray<{ kind: WorkflowDecision; label: string; effect: string; answer?: string }> = asked
+    ? asked.options.map((option) => ({ kind: "answer", label: option, effect: t("workflow.answer_effect"), answer: option }))
+    : gate
     ? [
         { kind: "approve", label: t("workflow.approve"), effect: t("workflow.approve_effect", position) },
         { kind: "reject", label: t("workflow.reject"), effect: t("workflow.reject_effect") },
@@ -108,7 +118,8 @@ export function WorkflowSlip({ run, decide }: {
     <section className="composer-slip workflow-slip" aria-labelledby={headingId} data-state={run.status}>
       <div className="composer-slip-head">
         <h2 id={headingId} ref={headingRef} tabIndex={-1} className="composer-slip-title">
-          {gate ? t("workflow.gate_title", position) : t("workflow.blocked_title", position)}
+          {asked ? t("workflow.question_title", position)
+            : gate ? t("workflow.gate_title", position) : t("workflow.blocked_title", position)}
         </h2>
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -123,22 +134,27 @@ export function WorkflowSlip({ run, decide }: {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {asked ? (
+        asked.question
+          ? <blockquote className="awaiting-input-quote">{asked.question}</blockquote>
+          : <p className="awaiting-input-quote" data-empty="true">{t("workflow.question_empty")}</p>
+      ) : null}
       {block ? <p className="workflow-slip-reason">{blockText(t, block)}</p> : null}
       {gate && assignment.acceptanceCriteria.length ? (
         <p className="workflow-slip-reason">
           {t("workflow.gate_criteria", { criteria: assignment.acceptanceCriteria.join(t("workflow.list_separator")) })}
         </p>
       ) : null}
-      <ul className="awaiting-input-choices" aria-label={t("awaiting.choices")}>
+      {choices.length ? <ul className="awaiting-input-choices" aria-label={t("awaiting.choices")}>
         {choices.map((choice) => (
-          <li key={choice.kind}>
+          <li key={choice.answer ?? choice.kind}>
             <button
               type="button"
               className="awaiting-input-choice"
-              data-chosen={pending === choice.kind || undefined}
+              data-chosen={pending === (choice.answer ?? choice.kind) || undefined}
               disabled={pending !== null}
-              aria-busy={pending === choice.kind || undefined}
-              onClick={() => void act(choice.kind)}
+              aria-busy={pending === (choice.answer ?? choice.kind) || undefined}
+              onClick={() => void act(choice.kind, choice.answer)}
             >
               <span className="awaiting-input-choice-label">{choice.label}</span>
               <span className="awaiting-input-choice-effect">{choice.effect}</span>
@@ -146,7 +162,30 @@ export function WorkflowSlip({ run, decide }: {
             </button>
           </li>
         ))}
-      </ul>
+      </ul> : null}
+      {asked ? (
+        <form
+          className="workflow-slip-answer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const answer = draft.trim();
+            if (answer) void act("answer", answer).then(() => setDraft(""));
+          }}
+        >
+          <Textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            maxLength={ANSWER_MAX_CHARS}
+            rows={2}
+            disabled={pending !== null}
+            aria-label={t("workflow.answer_label")}
+            placeholder={t("workflow.answer_placeholder")}
+          />
+          <Button type="submit" size="sm" disabled={pending !== null || !draft.trim()} aria-busy={(pending !== null && pending === draft.trim()) || undefined}>
+            {t("workflow.answer_send")}
+          </Button>
+        </form>
+      ) : null}
     </section>
   );
 }
@@ -157,7 +196,7 @@ export function ThreadWorkflowSlip({ sessionId, run }: { sessionId: string; run:
   return (
     <WorkflowSlip
       run={run}
-      decide={(kind, binding) => decideWorkflowMutation.mutateAsync({ sessionId, kind, binding })}
+      decide={(kind, binding, answer) => decideWorkflowMutation.mutateAsync({ sessionId, kind, binding, answer })}
     />
   );
 }

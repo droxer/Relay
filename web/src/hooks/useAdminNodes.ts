@@ -43,7 +43,7 @@ function combineAdminNodes([nodesQuery, usersQuery]: AdminNodeResults) {
 
 // Admin page node snapshot (daemon nodes + users). Node polling shares
 // CONTROL_PANEL_NODES_KEY with useLocalDaemonNodes so localhost chat + admin
-// reuse one /api/v1/admin/daemon-nodes poll instead of two timers. When `live` is false the
+// reuse cached /api/v1/admin/daemon-nodes data; App disables its local reader here. When `live` is false the
 // data is fetched once and not refreshed, which keeps the admin card view stable.
 export function useAdminNodes(enabled: boolean, live: boolean = true): {
   nodes: ControlPanelDaemonNodeRecord[];
@@ -61,12 +61,14 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
     queries: [
       {
         queryKey: CONTROL_PANEL_NODES_KEY,
+        staleTime: CONTROL_PANEL_POLL_MS,
         queryFn: ({ signal }: { signal: AbortSignal }) => fetchControlPanelNodes(signal),
         enabled,
         refetchInterval: live ? CONTROL_PANEL_POLL_MS : false,
       },
       {
         queryKey: ADMIN_USERS_KEY,
+        staleTime: ADMIN_ROSTER_POLL_MS,
         queryFn: async ({ signal }: { signal: AbortSignal }) =>
           (await listControlPanelUsers(signal)).users ?? [],
         enabled,

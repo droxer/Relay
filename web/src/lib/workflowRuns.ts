@@ -158,11 +158,25 @@ export function workflowStepStates(run: WorkflowRun): WorkflowStepState[] {
   return run.assignments.map((_, index) => {
     if (run.status === "completed" || index < run.currentIndex) return "done";
     if (index > run.currentIndex) return run.status === "cancelled" ? "cancelled" : "pending";
-    if (run.status === "awaiting_approval") return "waiting";
+    if (run.status === "awaiting_approval" || run.status === "awaiting_input") return "waiting";
     if (run.status === "blocked") return "blocked";
     if (run.status === "cancelled") return "cancelled";
     return "current";
   });
+}
+
+export interface WorkflowQuestion {
+  question: string;
+  options: string[];
+}
+
+/** What the current step asked its owner, while the run waits on the answer. */
+export function workflowQuestion(run: WorkflowRun): WorkflowQuestion | undefined {
+  if (run.status !== "awaiting_input") return undefined;
+  const current = currentWorkflowAssignment(run);
+  const result = run.attemptResults?.filter(item => item.assignmentId === current?.assignmentId).at(-1);
+  if (result?.status !== "question") return undefined;
+  return { question: result.question ?? "", options: result.options ?? [] };
 }
 
 /** Result reasons the backend records (`collaboration/workflow_results.py`). */

@@ -10,6 +10,7 @@ const EMPTY_TEAMS: AgentTeam[] = [];
 
 export function useTeams(
   userId?: string,
+  poll = false,
 ): { teams: AgentTeam[]; isFetching: boolean; isSuccess: boolean; error: string | null; refetch: () => Promise<unknown> } {
   const query = useQuery({
     queryKey: [TEAMS_QUERY_KEY, userId],
@@ -19,7 +20,8 @@ export function useTeams(
     // catch node-reported availability drift; the stale window lets the many
     // pages that mount this hook share one read instead of refetching.
     staleTime: ROSTER_STALE_TIME_MS,
-    refetchInterval: RELAY_POLL_INTERVALS_MS.teams,
+    // AuthenticatedApp owns the timer; page observers reuse the same cache.
+    refetchInterval: poll ? RELAY_POLL_INTERVALS_MS.teams : false,
   });
   // Getters, not values: React Query re-renders a component for every result
   // field the component READ. Reading isFetching here on behalf of callers

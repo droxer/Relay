@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listTaskEvents } from "../api";
 import { pathForAppState } from "../lib/appRoute";
+import { useTaskQueryRevision } from "./useTaskQueryRevision";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 import { taskRef } from "../lib/taskRef";
 import { threadLifecycleMarkers, type LifecycleMarker } from "../lib/taskThreadLifecycle";
@@ -56,10 +57,7 @@ export function useTaskThreadLifecycle({ tasks, session, currentUserId, onOpenTa
     enabled: Boolean(taskId),
     staleTime: RELAY_POLL_INTERVALS_MS.tasks,
   });
-  const { refetch } = eventsQuery;
-  useEffect(() => {
-    if (taskId && status) void refetch();
-  }, [refetch, taskId, status]);
+  useTaskQueryRevision("task-events", taskId ?? null, task?.updatedAt ?? status, eventsQuery.isFetching);
   const events = eventsQuery.data?.events;
 
   const markers = useMemo<LifecycleMarker[]>(

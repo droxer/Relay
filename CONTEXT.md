@@ -148,7 +148,9 @@ Project owner manages the definition. This is separate from legacy Team styles
 and final-turn `humanApproval`. A workflow Team is built, edited and started
 from its Project's Agents tab; each run is a new Project Thread whose owner
 answers gates and retries or cancels a stopped step there. A Task in the same
-Project may assign this Team and enter the dedicated workflow runtime. Its
+Project may assign this Team and enter the dedicated workflow runtime, whether
+a person starts it, the scheduler picks up an assigned Task, or an Automation
+in that Project fires (each occurrence freezes its own run). Its
 execution generation, request and Thread remain linked across gates and retries;
 Task details show every frozen attempt. Standalone/foreign-Project assignments
 and generic conversation addressing remain refused. Owner-session gate

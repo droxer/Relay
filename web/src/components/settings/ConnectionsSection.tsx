@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GithubMark } from "../landing/GithubMark";
 import { ICON } from "../icons";
+import { TASKS_QUERY_KEY } from "../../hooks/useRelayData";
+import { TASK_RECORD_QUERY_KEY } from "../../hooks/useTaskRecord";
 import { listConnections, listConnectionProviders, startConnection, disconnectConnection, connectionUsage } from "../../api-client/connections";
 
 export function ConnectionsSection() {
@@ -18,8 +20,11 @@ export function ConnectionsSection() {
     onSuccess: ({ url }) => window.location.assign(url) });
   const disconnect = useMutation({ mutationFn: disconnectConnection, onSuccess: async () => {
     setRemoving(null);
-    await client.invalidateQueries({ queryKey: ["connections"] });
-    await client.invalidateQueries({ queryKey: ["tasks"] });
+    await Promise.all([
+      client.invalidateQueries({ queryKey: ["connections"] }),
+      client.invalidateQueries({ queryKey: TASKS_QUERY_KEY }),
+      client.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY] }),
+    ]);
   } });
   if (connections.isPending || providers.isPending) return <p role="status">{t("connections.loading")}</p>;
   if (connections.error || providers.error) return <div role="alert">{t("connections.load_failed")} <Button variant="outline" onClick={() => {
