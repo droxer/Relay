@@ -1,4 +1,6 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { isWorkflowTeam } from "../../lib/workflowTeamDraft";
 import type { TFunction } from "i18next";
 import { StateMark } from "../StateMark";
 import { availabilityPipTone } from "./availabilityTone";
@@ -52,7 +54,7 @@ function RoomMark({ routable, label }: { routable: boolean; label: string }) {
 // their availability spelled out so users can see why a target cannot take the
 // thread. A started thread may hand its next round to any agent or team on
 // its computer, so the picker stays live for the thread's whole life.
-export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams = [], activeTeamId = null, onTeamPicked, teamOptionsEnabled = false, room = null, roomSelected = false, onRoomPicked, running = false }: {
+export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams: allTeams = [], activeTeamId = null, onTeamPicked, teamOptionsEnabled = false, room = null, roomSelected = false, onRoomPicked, running = false }: {
   logicalAgents: UserAgent[];
   activeLogicalAgentId: string | null;
   onLogicalAgentPicked: (agent: UserAgent) => void;
@@ -88,6 +90,9 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   // availability chip — never who is named. `activeTeam` already resolves this
   // way; agents now match.
   const activeLogicalAgent = logicalAgents.find((agent) => agent.id === activeLogicalAgentId);
+  // A workflow Team runs from its Project, never as a conversation target:
+  // the backend refuses that entry (`team_workflow_execution_unavailable`).
+  const teams = useMemo(() => allTeams.filter((team) => !isWorkflowTeam(team)), [allTeams]);
   const activeTeam = teams.find((team) => team.id === activeTeamId && !team.deletedAt) ?? null;
   // The roster is the target only while no single member is picked, so the
   // trigger never claims the whole room while a mention narrows the round —

@@ -7,6 +7,7 @@ import { isSessionStreamConnected } from "../lib/sessionStreamStatus";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 import { isTerminalSessionStatus } from "../lib/sessionEventStream";
+import { workflowSnapshotDue } from "../lib/workflowRuns";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
@@ -20,6 +21,8 @@ const SESSIONS_KEY = ["relay", "sessions"] as const;
  * Queued and unsettled execution notices also reconcile while SSE is connected:
  * command pickup, lease renewal, and finalization can change execution truth
  * without changing session status or emitting a new conversation event.
+ * A workflow event the client cannot project (a step result, a retry) marks the
+ * session as owing a snapshot, refetched on each tick until one clears it.
  */
 export function useSessionDetail(sessionId: string | undefined, enabled: boolean) {
   const queryClient = useQueryClient();
@@ -53,7 +56,9 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
       const executionDue = executionPhase !== undefined
         && executionPhase !== "running" && executionPhase !== "terminal"
         && Date.now() - hydratedAt >= RELAY_POLL_INTERVALS_MS.sessions;
-      if (hydratedStatus !== undefined && cached?.status === hydratedStatus && !trails && !fallbackDue && !executionDue) return;
+      // Committed before it streams, so the next snapshot normally clears it.
+      const workflowStale = workflowSnapshotDue(cached) !== undefined;
+      if (hydratedStatus !== undefined && cached?.status === hydratedStatus && !trails && !fallbackDue && !executionDue && !workflowStale) return;
       pending = true;
       try {
         const snapshot = await getSession(sessionId, controller.signal);

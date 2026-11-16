@@ -55,7 +55,7 @@ def manager_overview(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
             "readAt": now_iso(), **counts, "total": total,
             "agents": [{"id": a["id"], "name": a["displayName"], "role": a.get("defaultRole")} for a in manager_candidates(ctx, project)],
             "teams": [{"id": team["id"], "name": team.get("name") or team.get("displayName")}
-                      for team in ctx.team_store.list_teams(project["ownerUserId"]) if team.get("computerId") == project["computerId"]],
+                      for team in ctx.team_store.list_teams(project["ownerUserId"]) if team.get("projectId", project["id"]) == project["id"] and team.get("computerId") == project["computerId"]],
             "flowPolicy": {"wipLimit": ctx.task_store.wip_limit_for_user(project["ownerUserId"]),
                            "occupied": ctx.task_store.count_wip(project["ownerUserId"])},
             "computers": [{k: n.get(k) for k in ("id", "computerId", "online", "dispatchable", "status")}

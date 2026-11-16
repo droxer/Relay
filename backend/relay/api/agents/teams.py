@@ -5,17 +5,37 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from ...persistence.team.store import TeamValidationError, validate_team_payload
-from ...security.request_auth import require_admin_session
+from ...security.request_auth import require_admin_session, require_user_session
+from ...core.team_workflows import is_workflow_team
+from ...teams.workflow import validate_workflow_write
 from ...teams.computer import resolve_team_computer
 from ...teams.membership import with_member_roles
 from .agents import _agent_views, _user_exists
 from ..deps import AppContextDep
-from ..actors import request_actor
+from ..actors import request_actor, chat_service_user_header
 from ..bodies import JsonBodyDep, string_field
 
 router = APIRouter()
 
 ROSTER_FIELDS = frozenset({"leadAgentId", "memberAgentIds", "computerId"})
+
+
+def _workflow_owner(
+    request: Request, ctx: AppContextDep, owner: str,
+    body: dict[str, Any], current: dict[str, Any] | None = None,
+) -> None:
+    if not is_workflow_team({**(current or {}), **body}):
+        return
+    if chat_service_user_header(request):
+        raise HTTPException(403, "Service actors cannot manage workflow Teams.")
+    account = require_user_session(request, ctx.auth_store)
+    if account.get("userId") != owner:
+        raise HTTPException(403, "Only the Project owner may manage workflow Teams.")
+    project_id = (current or {}).get("projectId") or body.get("projectId")
+    if isinstance(project_id, str):
+        project = ctx.project_store.get_project(project_id)
+        if project and project.get("ownerUserId") != owner:
+            raise HTTPException(403, "Only the Project owner may manage workflow Teams.")
 
 
 def _team_error(error: ValueError) -> HTTPException:
@@ -51,9 +71,10 @@ def _validated_roster(
     Returns the lead, the members, and the computer fields to persist — empty
     when the write touches neither roster nor computer.
     """
+    validate_workflow_write(ctx, owner_user_id, body, current=current)
     if current is not None and not ROSTER_FIELDS & body.keys():
         # Nothing about who is on the team or where it runs changes, so the
-        # stored roster is not re-judged. That keeps a team emptied by agent
+        # legacy roster is not re-judged (workflows were checked above). That keeps a team emptied by agent
         # deletion renamable; the store still refuses to enable it.
         return current.get("leadAgentId"), list(current.get("memberAgentIds") or []), {}
     lead, members = validate_team_payload(
@@ -167,6 +188,7 @@ def create_team(
 ) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     body = _request_body
+    _workflow_owner(request, ctx, actor["userId"], body)
     try:
         lead, members, computer = _validated_roster(ctx, actor["userId"], body)
         team = ctx.team_store.create_team(
@@ -191,6 +213,7 @@ def update_team(
     actor = request_actor(request, ctx.auth_store)
     current = _owned_team(ctx, team_id, actor["userId"])
     body = _request_body
+    _workflow_owner(request, ctx, current["ownerUserId"], body, current)
     try:
         roster = _validated_roster(ctx, actor["userId"], body, current=current)
         team = ctx.team_store.update_team(
@@ -204,7 +227,8 @@ def update_team(
 @router.delete("/teams/{team_id}", status_code=200)
 def delete_team(team_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    _owned_team(ctx, team_id, actor["userId"])
+    current = _owned_team(ctx, team_id, actor["userId"])
+    _workflow_owner(request, ctx, current["ownerUserId"], {}, current)
     deleted = ctx.team_store.delete_team(team_id)
     ctx.profile_image_store.delete("teams", team_id)
     return {"team": _team_view(ctx, deleted)}
@@ -228,11 +252,13 @@ def create_control_panel_team(
         raise HTTPException(400, "ownerUserId is required.")
     if not _user_exists(ctx.auth_store, owner_user_id):
         raise HTTPException(404, "User not found.")
+    _workflow_owner(request, ctx, owner_user_id, body)
     try:
         lead, members, computer = _validated_roster(ctx, owner_user_id, body)
         team = ctx.team_store.create_team(
             owner_user_id,
             {
+                **{key: value for key, value in body.items() if key != "ownerUserId"},
                 "name": body.get("name"),
                 "profileImageUrl": body.get("profileImageUrl"),
                 "enabled": body.get("enabled", True),
@@ -265,6 +291,7 @@ def update_control_panel_team(
     require_admin_session(request, ctx.auth_store)
     current = _active_team(ctx, team_id)
     body = _request_body
+    _workflow_owner(request, ctx, current["ownerUserId"], body, current)
     try:
         roster = _validated_roster(ctx, current["ownerUserId"], body, current=current)
         team = ctx.team_store.update_team(
@@ -280,7 +307,8 @@ def delete_control_panel_team(
     team_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    _active_team(ctx, team_id)
+    current = _active_team(ctx, team_id)
+    _workflow_owner(request, ctx, current["ownerUserId"], {}, current)
     deleted = ctx.team_store.delete_team(team_id)
     ctx.profile_image_store.delete("teams", team_id)
     return {"team": _team_view(ctx, deleted)}

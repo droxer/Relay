@@ -31,6 +31,7 @@ from ...sessions.controller import SessionController
 from ...persistence.events import relay_task_event
 from ..runs.run_cursor import CLEARED_RUN_CURSOR
 from ..state import RegistryState
+from .workflow import assert_workflow_runtime_supported
 
 
 class RunAdmissionMixin(RegistryState):
@@ -73,6 +74,7 @@ class RunAdmissionMixin(RegistryState):
         request_id: str | None = None,
         start_index: int = 0,
     ) -> dict[str, Any]:
+        assert_workflow_runtime_supported({"assignments": assignments, "state": state})
         assignments = [
             {
                 **assignment,
@@ -117,6 +119,7 @@ class RunAdmissionMixin(RegistryState):
         turn for a round an approval resumes."""
         existing = self.daemon_store.get_run_request(request_id) if request_id else None
         if existing:
+            assert_workflow_runtime_supported(existing)
             state = {**state, WORK_PROTOCOL: bool((existing.get("state") or {}).get(WORK_PROTOCOL))}
         else:
             state = {**state, WORK_PROTOCOL: bool(
@@ -246,6 +249,7 @@ class RunAdmissionMixin(RegistryState):
         request = self.daemon_store.get_run_request(request_id)
         if not request:
             raise KeyError(request_id)
+        assert_workflow_runtime_supported(request)
         assignments = request.get("assignments") or []
         index = request.get("currentIndex", 0)
         assignment = assignments[index] if index < len(assignments) else None

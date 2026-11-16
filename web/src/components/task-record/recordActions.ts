@@ -17,7 +17,7 @@ import { runNowRefused } from "../../lib/routine.ts";
 export type RecordAction = "run" | "retry" | "resume" | "cancel" | "done" | "delete" | "triage";
 
 export function recordActions(
-  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId" | "dispatchOutcome">,
+  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId" | "dispatchOutcome" | "attention">,
   /** Set when the task belongs to a project that is closed for work. */
   options?: { readOnly?: boolean },
 ): readonly RecordAction[] {
@@ -36,7 +36,7 @@ export function recordActions(
   if (issueNeedsProject(task)) actions.push("triage");
   // A dispatch that was refused leaves the occurrence assigned and not
   // running — the state `784d23fa` made require a manual retry.
-  else if (assigned && !(task.dispatchOutcome?.state === "queued" && task.dispatchOutcome.code === "task_wip_limit") && (task.status === "blocked" || task.status === "assigned")) actions.push("retry");
+  else if (task.attention?.code !== "workflow_blocked" && assigned && !(task.dispatchOutcome?.state === "queued" && task.dispatchOutcome.code === "task_wip_limit") && (task.status === "blocked" || task.status === "assigned")) actions.push("retry");
   if (task.status === "review") actions.push("done");
   return actions;
 }

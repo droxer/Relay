@@ -36,6 +36,7 @@ from ..records import (
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
 from ..state import RegistryState
+from ..dispatch.workflow import assert_workflow_runtime_supported
 from .finalization import (
     FINALIZATION_ATTEMPTS_STATE_KEY,
     FINALIZATION_RETRY_AT_STATE_KEY,
@@ -145,6 +146,10 @@ class RunProgressionMixin(RegistryState):
                 run_request, event, terminal_claim_id, session_before, controller
             )
             return
+        if (run_request.get("state") or {}).get("_relay_workflow_admission"):
+            self._finalize_workflow_step(run_request, event, terminal_claim_id)
+            return
+        assert_workflow_runtime_supported(run_request)
         turn = decide_turn_finalization(run_request, event, session_before)
         if (
             turn.event["type"] == "run.failed"

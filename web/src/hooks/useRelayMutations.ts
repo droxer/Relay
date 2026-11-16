@@ -21,6 +21,7 @@ setTaskPrerequisites,
   deleteTeam,
   RelayApiError,
   recordDecision,
+  decideWorkflow,
   renameSession,
   requestThreadRecovery,
   resumeAutomation,
@@ -33,6 +34,7 @@ setTaskPrerequisites,
 } from "../api";
 import type { AgentRunInput, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
+import type { WorkflowAttemptBinding } from "relay-core";
 import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
@@ -135,6 +137,24 @@ export function useRelayMutations() {
       void invalidateTasks();
     },
     onError: onRelayError("Failed to record decision", "errors.record_decision"),
+  });
+
+  const decideWorkflowMutation = useMutation({
+    mutationFn: ({ sessionId, kind, binding }: {
+      sessionId: string;
+      kind: "approve" | "reject" | "retry" | "cancel";
+      binding: WorkflowAttemptBinding;
+    }) => decideWorkflow(sessionId, kind, binding),
+    onSuccess: (session) => {
+      cacheSession(session);
+      void invalidateTasks();
+    },
+    onError: (error: unknown) => {
+      // A stale or already-decided attempt: refetch so the slip shows the
+      // current attempt instead of offering the old one again.
+      if (error instanceof RelayApiError && error.status === 409) void invalidateSessions();
+      onRelayError("Failed to record workflow decision", "errors.workflow_decision")(error);
+    },
   });
 
   const answerPermissionMutation = useMutation({
@@ -534,6 +554,7 @@ export function useRelayMutations() {
     deleteSessionMutation,
     cancelRunMutation,
     recordDecisionMutation,
+    decideWorkflowMutation,
     answerPermissionMutation,
     runLogicalAgentsMutation,
     submitThreadMessageMutation,

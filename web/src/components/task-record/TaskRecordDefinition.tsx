@@ -3,6 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { Markdown } from "../LazyMarkdown";
 import type { AgentTeam, RelayTaskListItem } from "../../types";
+import { isWorkflowTeam } from "../../lib/workflowTeamDraft";
 import { effectiveStyle } from "../../lib/collaborationStyle";
 import { taskAcceptancePolicy } from "../../lib/taskBoardForm";
 import { CollaborationStyleBadge } from "../CollaborationStyleBadge";
@@ -31,7 +32,7 @@ export function TaskRecordDefinition({
   task: RelayTaskListItem;
   variant: RecordVariant;
   locale: string;
-  team?: Pick<AgentTeam, "collaborationStyle">;
+  team?: Pick<AgentTeam, "collaborationStyle" | "workflowSteps">;
 }) {
   const { t } = useTranslation();
 
@@ -60,7 +61,11 @@ export function TaskRecordDefinition({
       value: t(task.routineState === "active" ? "record.enabled_yes" : "record.enabled_no"),
     });
   }
-  if (task.assignedTeamId) rows.push({
+  if (team && isWorkflowTeam(team)) rows.push({
+    key: "workflow", label: t("workflow.section_title"),
+    value: t("workflow.step_count", { count: team.workflowSteps?.length ?? 0 }),
+  });
+  if (task.assignedTeamId && !(team && isWorkflowTeam(team))) rows.push({
     key: "collaboration", label: t("collab_style.task_label"),
     value: <CollaborationStyleBadge style={effectiveStyle(team, task.collaborationStyle)}
       label={task.collaborationStyle ? undefined : t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(team)}`) })} />,

@@ -1,5 +1,6 @@
 import type { AgentTeam, UserAgent, LogicalAgentAvailability, ProjectRecord, RelayTaskListItem, TaskMutationInput } from "../types.js";
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
+import { isWorkflowTeam } from "./workflowTeamDraft.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
 import type { TaskAssignmentSelection } from "./taskBoardForm.ts";
 
@@ -117,7 +118,7 @@ export function taskAssignmentOptions({
   assignedAgentId,
   assignedTeamId,
 }: {
-  project?: Pick<ProjectRecord, "computerId" | "members"> | null;
+  project?: Pick<ProjectRecord, "computerId" | "members"> & { id?: string } | null;
   computerId?: string;
   agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
@@ -136,7 +137,7 @@ export function taskAssignmentOptions({
   return {
     agents: agents.filter((agent) => ((!project && agent.id === assignedAgentId) || agentOnTaskComputer(agent))
       && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, agent.id === assignedAgentId)),
-    teams: teams.filter((team) => ((!project && team.id === assignedTeamId) || (teamOnTaskComputer(team)
+    teams: teams.filter((team) => (!isWorkflowTeam(team) || (!!project?.id && team.projectId === project.id)) && ((!project && team.id === assignedTeamId) || (teamOnTaskComputer(team)
       && (!project || team.memberAgentIds.every((id) => projectMembers.has(id)))))
       && assignmentOptionVisible(team.ownerUserId, assigneeUserId, team.id === assignedTeamId)),
   };

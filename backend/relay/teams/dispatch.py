@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.team_workflows import is_workflow_team
 from ..core.role_charters import COORDINATOR_CHARTER, role_charter
 from ..collaboration.styles import (
     LEAD_LED,
@@ -24,6 +25,11 @@ class TeamDispatchError(ValueError):
         self.code = code
         self.permanent = permanent
         super().__init__(code)
+
+
+def assert_team_execution_supported(team: dict[str, Any] | None) -> None:
+    if team and is_workflow_team(team):
+        raise TeamDispatchError("team_workflow_execution_unavailable", permanent=True)
 
 
 def task_execution_user_id(task: dict[str, Any]) -> str:
@@ -131,6 +137,7 @@ def team_agents(
         )
     if team.get("ownerUserId") != user_id:
         raise TeamDispatchError("team_forbidden", permanent=True)
+    assert_team_execution_supported(team)
     members = list(team.get("memberAgentIds") or [])
     lead = team.get("leadAgentId")
     if not isinstance(lead, str) or lead not in members:
@@ -150,6 +157,7 @@ def team_member_assignments(
     include_on_request: bool = False,
     style: str = LEAD_LED,
 ) -> list[dict[str, Any]]:
+    assert_team_execution_supported(team)
     roster = agents
     lead_agent_id = team.get("leadAgentId") if team else None
     configs = (team or {}).get("memberConfigs", {})

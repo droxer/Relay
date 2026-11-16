@@ -13,6 +13,9 @@ from typing import Any
 
 from loguru import logger
 
+from ..daemon_registry.dispatch.workflow_admission import workflow_binding, workflow_request_state
+from ..daemon_registry.dispatch.workflow_tasks import sync_workflow_task
+from ..daemon_registry.runs.run_cursor import CLEARED_RUN_CURSOR
 from ..core.daemon_records import (
     EXECUTION_INTERRUPTED_STATE_KEY,
     EXIT_UNCONFIRMED_STATE_KEY,
@@ -318,6 +321,27 @@ class ExecutionLifecycleService:
                     "exitCode": 130, "agentLog": run.get("agentLog", ""),
                 },
             ))
+        if (
+            request and session.get("workflowRuns") and session.get("status") not in TERMINAL
+            and not session.get("deletionRequestedAt")
+            and not (request.get("state") or {}).get("_relay_stop_actor_user_id")
+        ):
+            # Preserve the workflow for an explicit retry after the human's
+            # recorded assertion. Reconciliation itself never re-admits work.
+            run = session["workflowRuns"][0]
+            binding = workflow_binding(run)
+            session = self.registry.store.append_event(session_id, relay_event(
+                "workflow.interrupted", session_id,
+                {**{key: value for key, value in binding.items() if key != "revision"},
+                 "expectedRevision": run["revision"], "actorUserId": user_id,
+                 "commandId": request.get("currentCommandId"), "runId": request.get("currentRunId")},
+            ))
+            self.registry.daemon_store.update_run_request(request["id"], {
+                "status": "prepared", **CLEARED_RUN_CURSOR,
+                "state": workflow_request_state(session["workflowRuns"][0], request),
+            })
+            sync_workflow_task(self.registry, request, session)
+            return self.status(session)
         if session.get("status") not in TERMINAL:
             # Same seam deletion uses, so task execution bookkeeping is
             # released exactly once and in one place.

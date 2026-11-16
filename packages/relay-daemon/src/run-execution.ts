@@ -490,7 +490,10 @@ export async function executeCommand(
     const agentLog = next.agent_logs.slice(-1)[0] ?? "";
     // Consume on every terminal path, including cancellation and delivery failure.
     const roundOutcome = readRoundResult(threadWorkspace.hostPath, command.runId);
-    const roundResult = roundOutcome.kind === "accepted" ? roundOutcome.result : undefined;
+    // The reader already checked the file's runId against this command.
+    // Carry that verified binding to consumers that validate structured work.
+    const roundResult = roundOutcome.kind === "accepted"
+      ? { ...roundOutcome.result, runId: command.runId } : undefined;
     if (roundOutcome.kind === "rejected") {
       // Never log the file itself: it is agent-written and may carry anything.
       logger.warn("round result rejected", {

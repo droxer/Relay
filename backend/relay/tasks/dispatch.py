@@ -9,6 +9,8 @@ from loguru import logger
 from ..collaboration.assignments import assignment_team_snapshot
 from ..collaboration.manifest import compile_assignment_work_graph, create_round_manifest
 from ..core.ids import new_database_id
+from ..core.team_workflows import is_workflow_team
+from .workflow import dispatch_task_workflow
 from ..core.models import AgentName
 from ..core.daemon_records import ComputerRunCapacityError
 from ..persistence.protocols import TaskDispatchAssignment
@@ -160,6 +162,9 @@ class TaskDispatcher:
         from_capacity = self._capacity_wait()
         if from_capacity:
             return from_capacity
+        team = self.ctx.team_store.get_team(self.task["assignedTeamId"]) if self.task.get("assignedTeamId") and self.ctx.team_store else None
+        if team and is_workflow_team(team):
+            return dispatch_task_workflow(self.ctx, self.task, self.actor, record_pending=self.record_pending)
         project_result = self._resolve_project_assignments()
         if project_result:
             return project_result

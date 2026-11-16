@@ -42,6 +42,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CollaborationStyleCards, CollaborationSlotPreview, CollaborationStyleSummary } from "./CollaborationStyleSelect";
 import { effectiveStyle } from "../lib/collaborationStyle";
+import { isWorkflowTeam } from "../lib/workflowTeamDraft";
+import { WorkflowStepSummary } from "./workflow/WorkflowStepSummary";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -87,6 +89,7 @@ function TeamProfile({
   const queryClient = useQueryClient();
   const { updateTeamMutation, deleteTeamMutation } = useRelayMutations();
   const { agents, computerId } = useTeamComputer(team, userId);
+  const workflow = isWorkflowTeam(team);
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(team.name);
   const [memberIds, setMemberIds] = useState<string[]>(team.memberAgentIds);
@@ -285,7 +288,7 @@ function TeamProfile({
                   <span className="tnum">{editing ? memberIds.length : team.members.length}</span>
                 </h2>
                 <span className="team-profile-section-head-side">
-                  {!editing && cardEditingId === null ? (
+                  {!editing && cardEditingId === null && !workflow ? (
                     <Button type="button" variant="outline" size="dense" onClick={startEditing}>
                       <ActionEdit size={ICON.sm} aria-hidden="true" />
                       {t("teams.edit")}
@@ -332,7 +335,7 @@ function TeamProfile({
                       member={{ ...member, placements: agents.find((agent) => agent.id === member.id)?.placements }}
                       config={team.memberConfigs?.[member.id] ?? {}}
                       lead={member.id === team.leadAgentId}
-                      canEdit={!busy && (cardEditingId === null || cardEditingId === member.id)}
+                      canEdit={!workflow && !busy && (cardEditingId === null || cardEditingId === member.id)}
                       saving={updateTeamMutation.isPending && cardEditingId === member.id}
                       onEditingChange={(open) => setCardEditingId(open ? member.id : null)}
                       onSave={(next) => saveMemberConfig(member.id, next)}
@@ -390,6 +393,21 @@ function TeamProfile({
                   </Button>
                 </div>
               </>
+            ) : workflow ? (
+              /* A workflow Team runs its saved steps, not a collaboration
+                 style, and is edited where its Project's Agents are. The
+                 legacy editor would send a style the server refuses. */
+              <section className="collab-style-section" aria-labelledby="team-profile-workflow">
+                <h2 id="team-profile-workflow" className="workspace-dossier-section-title">
+                  {t("workflow.steps")}
+                  <span className="tnum">{team.workflowSteps?.length ?? 0}</span>
+                </h2>
+                <WorkflowStepSummary
+                  steps={team.workflowSteps ?? []}
+                  agentName={(agentId) => team.members.find((member) => member.id === agentId)?.displayName ?? t("project.member_unavailable")}
+                />
+                <p className="workflow-editor-note">{t("workflow.edit_in_project")}</p>
+              </section>
             ) : <section className="collab-style-section" aria-labelledby="team-profile-style">
               {/* Same section grammar as Members: the style is part of the
                   team's document, not a loose form field under it. */}

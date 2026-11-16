@@ -1886,3 +1886,173 @@ retries with the same idempotency key after a five-minute claim lease. Disabling
 `RELAY_TASK_SCHEDULER_ENABLED` also disables queue advancement. Queue writes and
 reads remain available. Cancellations pause the queue by default;
 `preserveQueue: true` is used by the explicit “send this next” action.
+
+### Project Team workflow definitions (W1 foundation)
+
+`POST /api/v1/teams` and `PATCH /api/v1/teams/{id}` (including admin
+variants) accept the opt-in contract below. Responses and Team events preserve
+these fields. Legacy Teams omit both fields and keep their existing behavior.
+
+| Field | Type and validation |
+| --- | --- |
+| `projectId` | Nonempty string, at most 128 characters; live enabled Project owned by the Team owner. Once set it cannot be removed, cleared or changed. |
+| `workflowSteps` | Ordered array of 1–64 steps; required with `projectId`. Replacing it changes the saved order. It cannot be cleared to restore legacy execution. |
+| step `id` | Client-assigned stable string, 1–64 ASCII letters, digits, `_` or `-`; unique within the workflow. Preserve it when editing/reordering a step. |
+| step `name` | Nonempty string, at most 200 characters; free text, not an Agent role. |
+| step `agentId` | Nonempty string, at most 128 characters; one pinned Team member. Repeated assignees across steps are allowed. |
+| step `instructions` | Nonempty string, at most 8,000 characters. |
+| step `expectedOutputs` | Required array of 1–32 nonempty strings, each at most 2,000 characters. Describes required recorded outputs, not filesystem paths to execute. |
+| step `acceptanceCriteria` | Required array of 1–32 nonempty strings, each at most 2,000 characters. Instructions, not proof of success. |
+| step `kind` | `work` (default) or `deployment`. Explicit classification; the server does not infer deployment from a localized step name or Agent role. |
+| step `requiresApproval` | Boolean; defaults to `true` for `deployment`, `false` for `work`. An explicit boolean overrides the default. This records future per-attempt gates; W1 cannot approve or execute them. |
+
+Text is trimmed before persistence. Unknown step fields and unknown workflow
+Team write fields are rejected. Both fields must be supplied when opting an
+existing legacy Team into workflow mode. A workflow cannot also specify a
+non-null `collaborationStyle` or enable the legacy `humanApproval` policy;
+clear those legacy settings explicitly during conversion. A workflow is not a
+Pipeline and never falls back to role ordering.
+
+Every create/update rechecks all members, including unchanged rosters: each
+must be a live enabled Agent owned by the owner, an enabled Project Agent,
+and actively placed on the Project's Computer. `computerId` must match that
+Computer (inferred on creation when omitted). Rejected writes leave the Team
+snapshot and event sequence unchanged. Agent removal can retain historical
+step assignees; a subsequent definition save must repair the invalid roster.
+
+Only the Project owner's signed-in user session can create, update or delete
+these definitions. Administrator status, admin bearer tokens, chat service
+credentials and Computer credentials confer no workflow management authority.
+The admin routes apply the same owner rule. The owner can delete an invalid or
+archived Project's Team without restoring its roster first.
+
+No database migration is required: the fields live in existing Team snapshots
+and authoritative `team.created`/`team.updated` events. Names remain unique per
+owner, as with legacy Teams. Project manager Team lists exclude workflows
+belonging to other Projects on the same Computer.
+
+The internal Python session reducer additionally recognizes `workflow.started`
+and `workflow.gate_decided` for a frozen run and revision-bound gate ledger.
+`POST /api/v1/teams/{teamId}/workflow-runs` starts a frozen first attempt;
+`/workflow-gates` is an alias. The body contains exactly `requestId` (UUID string)
+and `taskGoal` (nonblank text, at most 20,000 characters). The Project owner's
+login session and an enabled workflow Team are required. Live Project, roster,
+Placement and Computer checks precede admission.
+
+The server atomically creates a Project-scoped Thread, `workflow.started`, and
+a durable prepared request bound to the frozen assignments. A pending first-step
+gate creates no daemon command or execution reservation. An ungated first step
+publishes one `run.start` through the existing daemon queue. Publication and
+request linkage share the database transaction; a refused start leaves no Thread.
+Success returns the Thread snapshot (201). Unknown fields/invalid input return
+400; invalid live admission or unavailable Computer capacity returns 409.
+
+Retain the request UUID for retries. Reusing the same owner, Team and UUID with
+the same goal returns the frozen Thread, without resetting its gate or delivering
+another command. A different goal returns 409. Definition edits do not rewrite
+an existing run. A linked command is replayed as existing work, without rerouting
+its assignee. A cancelled Thread cannot be reopened. Different UUIDs create
+separate Threads. Cancellation/deletion requires the owner's login session;
+service headers with an owner cookie cannot confer that authority. Cancellation
+remains available after live Agent admission becomes invalid.
+
+For an existing ledger, `POST /api/v1/threads/{sessionId}/workflow-decisions` records a gate
+answer or recovery action. Its JSON body must contain exactly `kind` (`approve`, `reject`, `retry` or `cancel`),
+`workflowRunId`, `workflowStepId`, `workflowAttempt` (positive integer),
+`assignmentId`, and `expectedRevision` (nonnegative integer). The server supplies
+the audit actor, event identity and timestamp. Unknown fields are rejected.
+
+Only the owning user's real login session may decide; service actors (including
+service headers with an owner cookie), Computer credentials and foreign admins
+are refused. The live Project must still belong to that owner and match the
+frozen Computer. Approval revalidates the frozen roster's enabled Project
+membership, Agents and Placements. Definition edits do not rewrite the waiting
+run. Rejection remains possible with a disabled assignee.
+
+Success returns the updated Thread snapshot (200). Invalid bodies return 400;
+a missing Thread returns 404; ownership violations return 403; stale, duplicate,
+closed or mismatched attempts and invalid live approval admission return 409.
+Approval, the gate event and current-step publication share one transaction;
+conflicting decisions cannot both consume the same revision. A publication or
+live-admission failure rolls back the approval and command. Approval sets the
+ledger to `ready` and queues exactly one command for the frozen current attempt;
+`agentRuns` and the durable request record the execution. Rejection sets
+`blocked` and queues nothing. Imported ledgers without the linked prepared
+request are refused; this endpoint does not invent execution linkage for them.
+No client should use the legacy decision route for workflow gates.
+
+**Sequential execution and owner recovery are supported by the workflow-specific
+adapter (W2b).** Each command requires a daemon advertising both `round-result`
+and `workflow-results`. The latter guarantees the daemon forwards the verified
+`runId` with the structured report; older clients must update before dispatch.
+The agent writes the existing run-bound round-result envelope with outer
+`status: "done"`, matching `runId`, and `work: {status: "done", evidence: [...],
+outputs: {"<expected output name>": "<recorded content or concrete artifact reference>"}}`.
+Every frozen `expectedOutputs` name must have a nonblank recorded value. Output
+maps contain at most 32 entries, keys at most 2,000 characters, values at most
+8,000 characters, and at most 65,536 characters combined. The normal work report
+validation also applies. These are attributed reports, not backend verification
+of artifact correctness or satisfaction of the acceptance criteria.
+
+`workflow.step_finished` records the attempt result and advances the frozen
+index only for successful execution, a valid structured success report, and all
+required outputs. Missing, rejected, truncated or failed results block the
+current step. Earlier successful recorded outputs are included in every
+successor's assignment brief. Repeated assignees retain distinct step/attempt
+identities. The final successful step completes the Thread. No legacy repair,
+consultation, delegation or report-reminder policy applies.
+
+A successor gate remains `awaiting_approval` until the owner approves that exact
+attempt/revision. Ungated successors revalidate the live Project, current enabled
+roster membership, pinned Logical Agent/Placement, Computer and executor before
+publication. Invalid admission records `workflow.admission_blocked` and requires
+owner retry. Transient capacity/liveness unavailability leaves the successor
+prepared and unreserved for recovery; it does not rerun completed work.
+
+`retry` is accepted only for a blocked attempt with no live command, running
+Agent projection or active execution reservation. Terminal projection or an
+explicit owner reconciliation must have settled the previous execution first.
+It appends `workflow.recovery_decided`, allocates the next deterministic attempt
+identity, preserves the frozen definition and successful predecessor outputs,
+and requires a fresh approval if the step is gated. Stale/concurrent retries
+return 409 and cannot publish two commands. `cancel` records the owner decision
+and cancels the workflow without requiring a valid live roster. Delivered
+execution reservations remain held until daemon exit or recorded human
+reconciliation; late success cannot advance a cancelled workflow.
+
+The existing `/execution/reconcile` route additionally requires the workflow
+owner's real session. For an interrupted workflow that has not been cancelled,
+it records both `session.execution_reconciled` and `workflow.interrupted`, leaves
+the current step blocked, and permits a separate explicit retry. It never
+converts human assertion into successful execution evidence.
+
+Terminal projection and cursor updates are atomic. Prepared successor recovery
+uses the same ledger-bound admission adapter; published commands are never
+recreated on replay. Workflow events are authoritative and materialize on
+restart. Project Tasks may assign a workflow Team only in that Team's Project.
+`POST /tasks/{id}/runs` enters the dedicated adapter: Task dispatch claim, frozen
+Thread, durable workflow request, `task.execution.claimed` generation and Task/Thread
+link commit atomically. Gates and retries retain this generation and request;
+stale generations cannot publish successors or change a newer Task owner. A gate
+projects `waiting_for_human`, a failed/rejected step `blocked`, and complete workflow
+success follows the Task's existing acceptance policy (`review` for human acceptance).
+Cancellation retains delivered execution reservations until exit/reconciliation.
+Task Activity reads all linked Threads' frozen ledgers, including every failed and
+retried attempt, outputs, evidence, timestamps and decisions. Generic Agent-run,
+conversation, legacy approval and unsupported staged-command recovery remain
+fail-closed with `team_workflow_execution_unavailable`. Standalone or another
+Project is refused with `team_workflow_project_mismatch`.
+
+The web client (W2c) projects `workflow.started`, `workflow.gate_decided`,
+`workflow.interrupted`, `workflow.admission_blocked`, a `cancel` recovery
+decision, and a cancelling `session.status` exactly as the session reducer does
+(`web/src/lib/workflowRuns.ts`). It does not recompute a step result
+(`workflow.step_finished`) or a retry's next attempt identity: those, and any
+event whose revision does not match the cached run, mark the thread as owing a
+snapshot, and the client refetches `GET /threads/{id}` instead of guessing.
+`backend/tests/unit/test_workflow_client_parity.py` pins the shared fixture
+`web/tests/fixtures/workflow-events.json` that both sides are tested against;
+regenerate it with `RELAY_UPDATE_FIXTURES=1` after an intentional reducer change.
+The W3 editor, run start, thread progress and decision slip use only the routes
+above. Integrated release verification, including themes/device sizes against a
+real backend and daemon, remains W4; this API does not claim release readiness.

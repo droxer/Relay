@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..automations.model import EVENT_KINDS
+from ..core.team_workflows import is_workflow_team
 from ..core.computer_identity import computer_id
 from ..projects.runtime import project_task_assignment_error, project_computer_assignment_error
 from ..projects.access import ProjectAccessError, project_for_owner
@@ -52,6 +53,7 @@ def team_for_assignment(
     *,
     expected_user_id: str,
     require_actor_access: bool = True,
+    project_id: str | None = None,
 ) -> dict[str, Any] | None:
     if not team_id:
         return None
@@ -71,6 +73,8 @@ def team_for_assignment(
         and team.get("ownerUserId") != actor["userId"]
     ):
         raise TaskRequestError(403, "Team access denied.")
+    if is_workflow_team(team) and team.get("projectId") != project_id:
+        raise TaskRequestError(409, "team_workflow_project_mismatch")
     return team
 
 
@@ -155,7 +159,8 @@ def _validate_filter_scope(
     logical_agent_for_assignment(
         ctx, owner_actor, filters.get("assignedAgentId"), expected_user_id=owner
     )
-    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_user_id=owner)
+    team_for_assignment(ctx, owner_actor, filters.get("assignedTeamId"), expected_user_id=owner,
+                        project_id=filters.get("projectId"))
     project = owned_project(ctx, filters.get("projectId"), owner)
     if project:
         validate_project_assignment(

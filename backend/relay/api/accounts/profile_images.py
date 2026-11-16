@@ -10,7 +10,8 @@ from ..agents.agents import _agent_with_placements
 from ..deps import AppContextDep
 from ..actors import request_actor
 from ..bodies import JsonBodyDep
-from ..agents.teams import _team_view
+from ..agents.teams import _team_view, _workflow_owner, _team_error
+from ...teams.workflow import validate_workflow_write
 
 router = APIRouter()
 
@@ -20,6 +21,7 @@ def _profile_entity(
     ctx: AppContextDep,
     kind: str,
     entity_id: str,
+    *, mutate: bool = False,
 ) -> tuple[dict[str, Any], str | None]:
     actor = request_actor(request, ctx.auth_store)
     if kind == "agents":
@@ -34,6 +36,12 @@ def _profile_entity(
         raise HTTPException(404, "Profile not found.")
     if not actor["isAdmin"] and owner_id != actor["userId"]:
         raise HTTPException(403, "Cannot access another user's profile image.")
+    if kind == "teams" and mutate:
+        _workflow_owner(request, ctx, entity["ownerUserId"], {}, entity)
+        try:
+            validate_workflow_write(ctx, entity["ownerUserId"], {}, current=entity)
+        except ValueError as error:
+            raise _team_error(error) from error
     return entity, owner_id
 
 
@@ -76,7 +84,7 @@ def update_profile_image(
     *,
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
-    _profile_entity(request, ctx, kind, entity_id)
+    _profile_entity(request, ctx, kind, entity_id, mutate=True)
     body = _request_body
     if "presetUrl" in body:
         return _apply_preset(ctx, kind, entity_id, body.get("presetUrl"))
@@ -131,7 +139,7 @@ def delete_profile_image(
     request: Request,
     ctx: AppContextDep,
 ) -> dict[str, Any]:
-    _profile_entity(request, ctx, kind, entity_id)
+    _profile_entity(request, ctx, kind, entity_id, mutate=True)
     try:
         if kind == "agents":
             updated = ctx.agent_store.update_agent(

@@ -19,6 +19,7 @@ import { RecordArtifacts } from "./RecordArtifacts";
 import { RecordHistory } from "./RecordHistory";
 import { RecordResultLine } from "./RecordResultLine";
 import { TaskReviewPanel } from "./TaskReviewPanel";
+import { TaskWorkflowTimeline } from "./TaskWorkflowTimeline";
 import { RecordRuns } from "./RecordRuns";
 import { TaskRecordActions } from "./TaskRecordActions";
 import { InlineStatus } from "../task-board/InlineTaskFields";
@@ -175,7 +176,7 @@ export function TaskRecordPage({
       ))}
     </TabsList>
   );
-  const liveThreadId = task.status === "running" ? task.linkedSessionIds.at(-1) : undefined;
+  const liveThreadId = task.status === "running" || task.attention?.code === "workflow_blocked" ? task.linkedSessionIds.at(-1) : undefined;
   const actions = (
     <TaskRecordActions
       readingFile={tab === "artifacts"}
@@ -266,8 +267,9 @@ export function TaskRecordPage({
           <TabsContent value="activity">
             {/* Why a run is stuck, and what to do about it, before the trace
                 of how it got there. */}
-            {task.status !== "review" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}
+            {task.status !== "review" && task.attention?.code !== "workflow_blocked" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}
             <RecordResultLine taskId={task.id} revision={revision} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
+            <TaskWorkflowTimeline taskId={task.id} sessionIds={task.linkedSessionIds ?? []} agentName={id => historyNames.agentName?.(id) ?? id} onOpenThread={onOpenThread} />
             <RecordHistory taskId={task.id} revision={revision} live={task.status === "running"} names={historyNames} currentUserId={currentUser.userId} onOpenThread={onOpenThread} />
           </TabsContent>
         )}

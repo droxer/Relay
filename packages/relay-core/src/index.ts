@@ -103,6 +103,7 @@ export {
   DAEMON_CAPABILITY_RELAY_THREAD_RECORDS,
   DAEMON_CAPABILITY_PROJECT_WORKSPACES,
   DAEMON_CAPABILITY_ROUND_RESULT,
+  DAEMON_CAPABILITY_WORKFLOW_RESULTS,
   DAEMON_CAPABILITY_PROJECT_SETUP,
   DAEMON_CAPABILITY_PROJECT_MANAGER,
   DAEMON_CAPABILITY_PROJECT_MANAGER_MCP,
@@ -291,6 +292,13 @@ export {
   type WorkspaceLayout,
   type SessionStatus,
   type WorkOutcome,
+  type WorkflowAssignment,
+  type WorkflowAttemptBinding,
+  type WorkflowAttemptResult,
+  type WorkflowDecisionRecord,
+  type WorkflowRun,
+  type WorkflowRunStatus,
+  type WorkflowStepDefinition,
 } from "./session-store.js";
 
 export {

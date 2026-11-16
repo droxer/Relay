@@ -52,6 +52,7 @@
 @import "./recovery.css" layer(relay);
 @import "./queued-run.css" layer(relay);
 @import "./composer-slip.css" layer(relay);
+@import "./workflow.css" layer(relay);
 @import "./awaiting-input.css" layer(relay);
 @import "./next-steps.css" layer(relay);
 @import "./message-queue.css" layer(relay);
