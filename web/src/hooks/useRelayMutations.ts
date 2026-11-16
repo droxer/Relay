@@ -140,11 +140,12 @@ export function useRelayMutations() {
   });
 
   const decideWorkflowMutation = useMutation({
-    mutationFn: ({ sessionId, kind, binding }: {
+    mutationFn: ({ sessionId, kind, binding, answer }: {
       sessionId: string;
-      kind: "approve" | "reject" | "retry" | "cancel";
+      kind: "approve" | "reject" | "retry" | "cancel" | "answer";
       binding: WorkflowAttemptBinding;
-    }) => decideWorkflow(sessionId, kind, binding),
+      answer?: string;
+    }) => decideWorkflow(sessionId, kind, binding, answer),
     onSuccess: (session) => {
       cacheSession(session);
       void invalidateTasks();

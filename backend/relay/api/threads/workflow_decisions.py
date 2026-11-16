@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ...collaboration.workflow_events import workflow_answer_text
 from ...persistence.events import relay_event
 from ...persistence.resource_lock import resource_transaction
 from ...security.request_auth import require_user_session
@@ -47,8 +48,15 @@ def assert_workflow_owner_session(
 
 
 def _validate_body(body: dict[str, Any]) -> None:
-    if set(body) != _FIELDS or body.get("kind") not in ("approve", "reject", "retry", "cancel"):
+    kind = body.get("kind")
+    fields = _FIELDS | {"answer"} if kind == "answer" else _FIELDS
+    if set(body) != fields or kind not in ("approve", "reject", "retry", "cancel", "answer"):
         raise HTTPException(400, "workflow_gate_decision_invalid")
+    if kind == "answer":
+        try:
+            body["answer"] = workflow_answer_text(body["answer"])
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
     for key in ("workflowRunId", "workflowStepId", "assignmentId"):
         value = body[key]
         if not isinstance(value, str) or not value.strip() or len(value) > 200:
@@ -76,7 +84,7 @@ def workflow_decision(
         session = get_session_or_404(ctx.session_store, session_id)
         if not owner or session.get("ownerUserId") != owner:
             raise HTTPException(403, "workflow_owner_required")
-        if _request_body["kind"] in ("retry", "cancel"):
+        if _request_body["kind"] in ("retry", "cancel", "answer"):
             try:
                 return ctx.registry.decide_workflow_recovery(session_id, {**_request_body, "actorUserId": owner})
             except ValueError as error:

@@ -22,7 +22,7 @@ class WorkflowRecoveryMixin(RegistryState):
             request = self.daemon_store.get_run_request(workflow_request_id(run))
             if not request or request["sessionId"] != sid or request["assignments"] != run["assignments"]:
                 raise ValueError("workflow_request_mismatch")
-            if decision["kind"] == "retry":
+            if decision["kind"] in ("retry", "answer"):
                 assert_workflow_task_owner(self, request, session)
                 # Prepared means either never delivered, or the terminal/reconcile
                 # adapter atomically settled the command and cleared the cursor.

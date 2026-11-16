@@ -45,6 +45,36 @@ def workflow_request_state(run: dict[str, Any], request: dict[str, Any]) -> dict
     }}
 
 
+def _owner_admitted(run: dict[str, Any], attempt: dict[str, Any], owner: str) -> bool:
+    """A gated attempt runs on the owner's approval of it, or their answer to
+    the previous attempt's question, recorded by the transition before this."""
+    def recorded(decision: dict[str, Any], kind: str, attempt_number: int) -> bool:
+        return (decision.get("kind") == kind
+                and decision.get("expectedRevision") == run["revision"] - 1
+                and decision.get("actorUserId") == owner
+                and decision.get("workflowRunId") == attempt["workflowRunId"]
+                and decision.get("workflowStepId") == attempt["workflowStepId"]
+                and decision.get("workflowAttempt") == attempt_number)
+    return any(recorded(decision, "approve", attempt["workflowAttempt"])
+               and decision.get("assignmentId") == attempt["assignmentId"]
+               for decision in run["gateDecisions"]) or any(
+        recorded(decision, "answer", attempt["workflowAttempt"] - 1)
+        for decision in run.get("recoveryDecisions", []))
+
+
+def _owner_answers(run: dict[str, Any], attempt: dict[str, Any]) -> str:
+    """Every question this step asked and the owner's answer, oldest first."""
+    asked = {result["assignmentId"]: result.get("question", "") for result in run.get("attemptResults", [])
+             if result["workflowStepId"] == attempt["workflowStepId"] and result["status"] == "question"}
+    answers = [{"question": asked[decision["assignmentId"]], "answer": decision["answer"]}
+               for decision in run.get("recoveryDecisions", [])
+               if decision.get("kind") == "answer" and decision.get("assignmentId") in asked]
+    if not answers:
+        return ""
+    return "Owner answers to this step's earlier questions (act on them; do not ask again): " + json.dumps(
+        answers, ensure_ascii=False) + "\n"
+
+
 class WorkflowAdmissionMixin(RegistryState):
     def admit_workflow_first_step(
         self, session_id: str, *, validate: Callable[[dict[str, Any]], None] | None = None,
@@ -89,14 +119,7 @@ class WorkflowAdmissionMixin(RegistryState):
             if request["status"] != "prepared" or request.get("currentIndex") != index:
                 raise ValueError("workflow_request_mismatch")
             first = run["assignments"][index]
-            if first["awaitApproval"] and not any(
-                decision.get("kind") == "approve"
-                and decision.get("expectedRevision") == run["revision"] - 1
-                and decision.get("actorUserId") == session["ownerUserId"]
-                and all(decision.get(key) == first[key] for key in (
-                    "workflowRunId", "workflowStepId", "workflowAttempt", "assignmentId",
-                )) for decision in run["gateDecisions"]
-            ):
+            if first["awaitApproval"] and not _owner_admitted(run, first, session["ownerUserId"]):
                 raise ValueError("workflow_gate_closed")
             snapshot = run["teamSnapshot"]
             if any(session.get(key) != snapshot.get(team_key) for key, team_key in (
@@ -157,6 +180,9 @@ class WorkflowAdmissionMixin(RegistryState):
                     "Workflow step: return outer status done and work.status done with nonempty work.evidence only on success. "
                     "Check every acceptance criterion and record concrete evidence for each. "
                     "Do not start successors or delegate. Missing evidence or failure stop this workflow.\n"
+                    "If you cannot finish without the owner's decision or information, stop and write outer status "
+                    "blocked with one question in note (and options when it is a choice); this step reruns with the answer.\n"
+                    + _owner_answers(run, first)
                     + (("Include work.outputs mapping each legacy required output name to its recorded content or artifact reference.\n"
                         "Required output names: " + json.dumps(first["expectedOutputs"], ensure_ascii=False) + "\n")
                        if first["expectedOutputs"] else "")
