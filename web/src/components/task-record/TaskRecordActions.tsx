@@ -73,9 +73,9 @@ export function TaskRecordActions({
       ) : null}
       {/* A running task's work is visible only in its thread; the record
           would otherwise show a status with no way to watch it. */}
-      {task.status === "running" && onWatchLive ? (
+      {(task.status === "running" || task.attention?.code === "workflow_blocked") && onWatchLive ? (
         <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onWatchLive}>
-          {t("record.watch_live")}
+          {t(task.attention?.code === "workflow_blocked" ? "backlog.open_thread" : "record.watch_live")}
         </Button>
       ) : null}
       {/* Cancelling stops a live run at once, unconfirmed. On a phone it would

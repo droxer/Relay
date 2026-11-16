@@ -6,6 +6,7 @@ import type {
   AgentTeamsResponse,
   CreateAgentInput,
   CreateAgentResponse,
+  RelaySession,
   TeamMutationInput,
   UserAgent,
   UserAgentsResponse,
@@ -36,6 +37,18 @@ export function createTeam(input: TeamMutationInput): Promise<{ team: AgentTeam 
 export function updateTeam(teamId: string, input: Partial<TeamMutationInput>): Promise<{ team: AgentTeam }> {
   return apiJson<{ team: AgentTeam }>(`/teams/${encodeURIComponent(teamId)}`, {
     method: "PATCH",
+    body: input,
+  });
+}
+
+/** Start a Project workflow Team in a new Project Thread. Keep `requestId`
+ *  for retries: the same id and goal return the original Thread. */
+export function startWorkflowRun(
+  teamId: string,
+  input: { requestId: string; taskGoal: string },
+): Promise<RelaySession> {
+  return apiJson<RelaySession>(`/teams/${encodeURIComponent(teamId)}/workflow-runs`, {
+    method: "POST",
     body: input,
   });
 }

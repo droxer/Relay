@@ -375,7 +375,8 @@ test("edits a task's priority, status and due date from its row", async ({ page 
   await row.hover();
   await row.getByRole("button", { name: "Set due date", exact: true }).click();
   await page.getByRole("grid").getByRole("button").filter({ hasText: /^15$/ }).first().click();
-  await expect(row.getByRole("button", { name: /^Due / })).toBeVisible();
+  // After the 15th, this same saved date is correctly announced as overdue.
+  await expect(row.getByRole("button", { name: /^(?:Due |Overdue, was due )/ })).toBeVisible();
   // The assignee is the row's own chip; the shared roster picker opens from it.
   await row.getByRole("combobox", { name: /^Assignee: Unassigned/ }).click();
   await expect(page.getByRole("option", { name: /Neighbour/ })).toHaveCount(0);

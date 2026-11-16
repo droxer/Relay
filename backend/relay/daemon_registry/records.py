@@ -65,6 +65,7 @@ NEXT_STEPS_STATE_KEY = "_relay_next_steps"
 # the moment the next command is staged.
 CARRIED_RUN_REQUEST_STATE_KEYS = frozenset(
     {
+        "_relay_workflow_admission",
         *WORK_STATE_KEYS,
         "input_attachments",
         "_relay_task_source_revision",

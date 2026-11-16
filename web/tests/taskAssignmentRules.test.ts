@@ -133,3 +133,16 @@ describe("project thread roster", () => {
     assert.deepEqual(projectRoomAgentIds(crewless, undefined), []);
   });
 });
+
+describe("Project workflow Task options", () => {
+  it("offers a workflow only inside its own Project, even if selected elsewhere", () => {
+    const agents = [agent("here", "c1")];
+    const workflow = { ...team("workflow", ["here"], "me"), projectId: "p", workflowSteps: [{ id: "design" }] } as AgentTeam;
+    const matching = { ...project, members: [{ agentId: "here", enabled: true }] } as ProjectRecord;
+    const options = { agents, teams: [workflow], assigneeUserId: "me", assignedTeamId: "workflow" };
+    assert.deepEqual(ids(taskAssignmentOptions({ ...options, project: matching }).teams), ["workflow"]);
+    const foreign = { ...matching, id: "other" };
+    assert.deepEqual(ids(taskAssignmentOptions({ ...options, project: foreign }).teams), []);
+    assert.deepEqual(ids(taskAssignmentOptions(options).teams), []);
+  });
+});

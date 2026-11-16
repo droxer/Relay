@@ -33,6 +33,7 @@ from ..records import (
     TERMINAL_EVENT_STATE_KEY,
 )
 from ..state import RegistryState
+from ..dispatch.workflow import assert_workflow_runtime_supported
 
 # A run whose reaping raises is retried on every reap tick, forever: reaping
 # failing is never exit evidence, so it must not release the reservation. To
@@ -355,6 +356,10 @@ class RunReaperMixin(RegistryState):
                 },
             )
             return
+        if (request.get("state") or {}).get("_relay_workflow_admission"):
+            # Only the frozen ledger can authorize recovery of a successor.
+            self._resume_workflow_admission(request["sessionId"])
+            return
         if prepared_round_is_durable(request, session):
             self.activate_run_request(request["id"])
             return
@@ -492,6 +497,7 @@ class RunReaperMixin(RegistryState):
             self._redeliver_staged_command(request, staged)
 
     def _redeliver_staged_command(self, request: dict[str, Any], staged: dict[str, Any]) -> None:
+        assert_workflow_runtime_supported(request)
         command = staged["command"]
         session = self.store.get_session_header(request["sessionId"])
         has_started = any(
@@ -549,6 +555,7 @@ class RunReaperMixin(RegistryState):
     def _recover_linked_request(self, request: dict[str, Any], command_id: str) -> None:
         command_record = self.daemon_store.get_command(command_id)
         if command_record and command_record.get("status") == "pending":
+            assert_workflow_runtime_supported(request)
             if self._follow_up_backing_off(request):
                 return
             with self._delivery_failure_budget(request):

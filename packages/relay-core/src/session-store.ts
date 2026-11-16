@@ -308,7 +308,91 @@ export interface ThreadMessageQueue {
   error?: string;
 }
 
+/** One saved step of a Project workflow Team (`backend/relay/core/team_workflows.py`). */
+export interface WorkflowStepDefinition {
+  id: string;
+  name: string;
+  agentId: string;
+  instructions: string;
+  expectedOutputs: string[];
+  acceptanceCriteria: string[];
+  kind: "work" | "deployment";
+  requiresApproval: boolean;
+}
+
+/** One frozen attempt of a step. `workItemId` is stable per step;
+ *  `assignmentId` and `workflowAttempt` change with every retry. */
+export interface WorkflowAssignment {
+  workflowRunId: string;
+  workflowStepId: string;
+  workflowAttempt: number;
+  assignmentId: string;
+  workItemId: string;
+  agentId?: string;
+  agent?: AgentName;
+  agentDisplayName?: string;
+  workOwnerAgentId: string;
+  workObjective: string;
+  awaitApproval: boolean;
+  expectedOutputs: string[];
+  acceptanceCriteria: string[];
+  teamSnapshot?: { id: string; name?: string; projectId?: string; workflowSteps?: WorkflowStepDefinition[] } & Record<string, unknown>;
+}
+
+/** The recorded result of one finished attempt. */
+export interface WorkflowAttemptResult {
+  workflowStepId: string;
+  workflowAttempt: number;
+  assignmentId: string;
+  runId: string;
+  commandId: string;
+  timestamp: string;
+  status: "succeeded" | "blocked";
+  reason?: string;
+  outputs: Record<string, string>;
+  evidence?: string[];
+  note?: string;
+}
+
+/** The ledger fields every owner decision binds to. */
+export interface WorkflowAttemptBinding {
+  workflowRunId: string;
+  workflowStepId: string;
+  workflowAttempt: number;
+  assignmentId: string;
+  expectedRevision: number;
+}
+
+export interface WorkflowDecisionRecord extends WorkflowAttemptBinding {
+  id?: string;
+  kind: "approve" | "reject" | "retry" | "cancel";
+  actorUserId?: string;
+  timestamp?: string;
+}
+
+export type WorkflowRunStatus = "awaiting_approval" | "ready" | "blocked" | "completed" | "cancelled";
+
+/** A frozen sequential run, materialized from `workflow.*` events
+ *  (`backend/relay/collaboration/workflow_events.py`). */
+export interface WorkflowRun {
+  workflowRunId: string;
+  teamSnapshot: NonNullable<WorkflowAssignment["teamSnapshot"]>;
+  assignments: WorkflowAssignment[];
+  currentIndex: number;
+  revision: number;
+  status: WorkflowRunStatus;
+  gateDecisions: WorkflowDecisionRecord[];
+  recoveryDecisions?: WorkflowDecisionRecord[];
+  interruptions?: Array<WorkflowAttemptBinding & { actorUserId?: string; timestamp?: string }>;
+  attemptResults?: WorkflowAttemptResult[];
+  admissionError?: string;
+  startedAt: string;
+}
+
 export interface RelaySession {
+  /** Frozen Project workflow runs; at most one is open at a time. */
+  workflowRuns?: WorkflowRun[];
+  activeWorkflowRunId?: string;
   messageQueue?: ThreadMessageQueue;
   execution?: ExecutionStatus;
   deletionRequestedAt?: string;
@@ -615,7 +699,13 @@ export type RelayEvent =
       sessionId: string;
       timestamp: string;
       title: string;
-    };
+    }
+  | { id: string; type: "workflow.started"; sessionId: string; timestamp: string; assignments: WorkflowAssignment[]; actorUserId?: string }
+  | ({ id: string; type: "workflow.gate_decided"; sessionId: string; timestamp: string; kind: "approve" | "reject"; actorUserId: string } & WorkflowAttemptBinding)
+  | ({ id: string; type: "workflow.step_finished"; sessionId: string; timestamp: string; terminalEvent: Record<string, unknown> } & WorkflowAttemptBinding)
+  | ({ id: string; type: "workflow.recovery_decided"; sessionId: string; timestamp: string; kind: "retry" | "cancel"; actorUserId: string } & WorkflowAttemptBinding)
+  | ({ id: string; type: "workflow.interrupted"; sessionId: string; timestamp: string; actorUserId: string } & WorkflowAttemptBinding)
+  | ({ id: string; type: "workflow.admission_blocked"; sessionId: string; timestamp: string; reason: string } & WorkflowAttemptBinding);
 
 export function nowIso(): string {
   return new Date().toISOString();

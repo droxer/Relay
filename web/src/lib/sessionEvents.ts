@@ -1,6 +1,7 @@
 import type { RelaySession } from "../types.js";
 import { mergeTokenUsage } from "./tokenUsage.ts";
 import { withPermissionRequested, withPermissionResolved, withPermissionsExpired } from "./permissionRequests.ts";
+import { applyWorkflowEvent, cancelOpenWorkflowRuns, isWorkflowEvent, workflowSnapshotDue } from "./workflowRuns.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
@@ -55,6 +56,8 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
     };
   }
 
+  if (isWorkflowEvent(event)) return applyWorkflowEvent(next, event);
+
   switch (event.type) {
     case "session.queue": return { ...next, messageQueue: event.queue };
     case "collaboration.round.started": {
@@ -89,7 +92,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
           delete updated.workOutcome;
           clearInputRequest(updated);
         }
-        return updated;
+        return event.status === "cancelled" ? cancelOpenWorkflowRuns(updated) : updated;
       }
     case "agent.started": {
       delete next.workOutcome;
@@ -287,5 +290,6 @@ function sameSessionShape(a: RelaySession, b: RelaySession): boolean {
     && a.agentRuns.length === b.agentRuns.length
     && a.artifacts.length === b.artifacts.length
     && a.decisions.length === b.decisions.length
+    && workflowSnapshotDue(a) === workflowSnapshotDue(b)
   );
 }

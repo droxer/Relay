@@ -1,4 +1,4 @@
-import type { AgentName, AgentRole, CollaborationStyle, DaemonAgentSkill } from "relay-core";
+import type { AgentName, AgentRole, CollaborationStyle, DaemonAgentSkill, WorkflowStepDefinition } from "relay-core";
 
 export type LogicalAgentAvailability = "ready" | "busy" | "pending" | "offline";
 
@@ -132,7 +132,16 @@ export interface TeamMemberConfig {
   expectedOutputs?: string[];
 }
 
+/** A step as the editor and the Team write API carry it
+ *  (`backend/relay/core/team_workflows.py`). */
+export type WorkflowStep = WorkflowStepDefinition;
+
 export interface AgentTeam {
+  /** Set only on a Project workflow Team; immutable once set. */
+  projectId?: string;
+  /** The ordered steps of a Project workflow Team. A Team with steps never
+   *  carries a collaboration style or the legacy human approval. */
+  workflowSteps?: WorkflowStep[];
   collaborationStyle?: CollaborationStyle;
   /** The team's person approves the work before its round's final step
    *  (ADR-023). Absent means no. */
@@ -161,6 +170,8 @@ export interface AgentTeamsResponse {
 }
 
 export interface TeamMutationInput {
+  projectId?: string;
+  workflowSteps?: WorkflowStep[];
   collaborationStyle?: CollaborationStyle | null;
   humanApproval?: boolean;
   memberConfigs?: Record<string, TeamMemberConfig>;

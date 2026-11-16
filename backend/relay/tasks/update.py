@@ -294,6 +294,7 @@ def _resolve_assignment(
         or current.get("assigneeUserId")
         or current.get("ownerUserId")
         or actor["userId"],
+        project_id=effective.get("projectId"),
         require_actor_access=not (
             team_id and team_id == current.get("assignedTeamId") and not assignee_changed
         ),

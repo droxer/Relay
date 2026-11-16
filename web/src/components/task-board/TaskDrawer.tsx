@@ -12,6 +12,7 @@ import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { isSubmitChord, submitShortcutLabel } from "../../lib/shortcuts";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
+import { isWorkflowTeam } from "../../lib/workflowTeamDraft";
 import { effectiveStyle } from "../../lib/collaborationStyle";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -448,7 +449,7 @@ export function TaskDrawer({
         {assignmentField}
         {/* Directly under the assignment that reveals it: picking a team
             below must not insert a field above where the reader is working. */}
-        {form.assignedTeamId ? <Field label={t("collab_style.task_label")} wrapper="div">
+        {form.assignedTeamId && !isWorkflowTeam(teams.find(team => team.id === form.assignedTeamId) ?? {}) ? <Field label={t("collab_style.task_label")} wrapper="div">
           <CollaborationStyleSelect aria-label={t("collab_style.task_label")} value={form.collaborationStyle ?? null}
             disabled={saving} onChange={(collaborationStyle) => onChange({ ...form, collaborationStyle })}
             inheritStyle={effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { agentLabel } from "../lib/plan";
 import { MAX_PROJECT_MEMBERS, orderedProjectMembers, projectMemberState } from "../lib/projectPage";
@@ -20,11 +20,14 @@ export function ProjectMembersPanel({
   agents,
   onAddMember,
   onEditMember,
+  children,
 }: {
   project: ProjectRecord;
   agents: UserAgent[];
   onAddMember?: () => void;
   onEditMember?: (member: ProjectMember) => void;
+  /** Sections that follow the crew in the same gutter (the workflows). */
+  children?: ReactNode;
 }) {
   const { t } = useTranslation();
   const agentsById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
@@ -54,6 +57,7 @@ export function ProjectMembersPanel({
           onEditMember={onEditMember}
         />
       </section>
+      {children}
     </div>
   );
 }

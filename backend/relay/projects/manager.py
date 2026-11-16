@@ -101,7 +101,7 @@ def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
     }, "proposals": [{k:v for k,v in p.items() if k not in ("result", "applicationInput")} for p in ctx.project_store.manager_proposals(project["id"])],
         "teams": [{"id": team["id"], "displayName": team.get("name") or team.get("displayName") or team["id"]}
                   for team in ctx.team_store.list_teams(project["ownerUserId"])
-                  if team.get("computerId") == project["computerId"] and team.get("enabled", True)]}
+                  if team.get("projectId", project["id"]) == project["id"] and team.get("computerId") == project["computerId"] and team.get("enabled", True)]}
 
 
 def ensure_manager_thread(ctx: Any, project: dict[str, Any]) -> tuple[dict[str, Any], str]:

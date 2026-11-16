@@ -81,7 +81,8 @@ const environment = {
       && resolve(profile.workspace, item.workspaceSubpath ?? `.threads/${item.sessionId}`) === resolve(options.probeWorkspace));
     if (!command) throw new Error(`E2E cannot identify workspace ${options.probeWorkspace}`);
     launched.add(command.id);
-    trace('launch', { commandId: command.id, runId: command.runId, sessionId: command.sessionId });
+    trace('launch', { commandId: command.id, runId: command.runId, sessionId: command.sessionId,
+      ...(profile.workflow ? { brief: command.state?.assignment_brief } : {}) });
     for (let index = 0; index < 8 && !options.signal?.aborted; index++) {
       const chunk = JSON.stringify({ type: 'item.completed', item: { id: `reply-${index}`, type: 'agent_message', text: `E2E reply ${index} for ${command.runId}` } }) + '\n';
       const rendered = options.stdoutRenderer?.(chunk);
@@ -95,8 +96,20 @@ const environment = {
     }
     const control = join(options.probeWorkspace, '.relay');
     mkdirSync(control, { recursive: true });
+    let outputs;
+    if (profile.workflow) {
+      const names = JSON.parse(command.state.assignment_brief.split('Required output names: ')[1].split('\n')[0]);
+      const failed = join(profile.root, 'verify-failed');
+      if (names.includes('verify report') && !existsSync(failed)) {
+        writeFileSync(failed, 'First verification deliberately omits its required output.');
+        outputs = {};
+      } else {
+        outputs = Object.fromEntries(names.map(name => [name, `Recorded ${name} from ${command.runId}`]));
+      }
+    }
     writeFileSync(join(control, 'round-result.json'), JSON.stringify({ status: 'done', runId: command.runId,
-      work: { status: 'done', note: 'E2E completed.', evidence: ['Emitted eight deterministic replies.'] } }));
+      work: { status: 'done', note: 'E2E completed.', evidence: ['Emitted eight deterministic replies.'],
+        ...(outputs ? { outputs } : {}) } }));
     trace('runtime-ended', { commandId: command.id, aborted: false });
     return { exit_code: 0, stdout: '', stderr: '' };
   },

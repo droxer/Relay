@@ -1,0 +1,575 @@
+/* ============================== project workflows ============================== */
+/* A workflow is an ordered list, read top to bottom: the editor's step cards,
+   the Project tab's summary rows, and a thread's progress line all number
+   their steps the same way. Status is always written in words beside its
+   tone, so no state relies on colour alone. Long Chinese or English names
+   wrap; only recorded outputs scroll, inside their own box. */
+
+/* ---------- shared marks ---------- */
+
+.workflow-step-index {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+  border: var(--hairline);
+  border-radius: var(--r-full);
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+/* The approval gate: a word on a warm tint, since a person must act there. */
+.workflow-step-gate {
+  --tone: var(--warn);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 var(--sp-1-5);
+  border-radius: var(--r-1);
+  background: var(--tone-tint);
+  color: var(--tone);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  white-space: nowrap;
+}
+
+/* ---------- editor ---------- */
+
+.workflow-editor {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.workflow-editor-lede,
+.workflow-editor-note {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
+}
+
+.workflow-editor-steps {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.workflow-editor-steps-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.workflow-editor-steps-title .tnum {
+  color: var(--ink-3);
+}
+
+.workflow-step-list {
+  display: grid;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-step-card {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border: var(--hairline);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+}
+
+/* A deployment step carries the gate's tone on its leading edge as well as
+   in words, so it reads as the step that changes something outside. */
+.workflow-step-card[data-kind="deployment"] {
+  --tone: var(--warn);
+  box-shadow: inset var(--sp-0-5) 0 0 var(--tone-line);
+}
+
+.workflow-step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.workflow-step-title {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+}
+
+.workflow-step-title-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workflow-step-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sp-0-5);
+}
+
+.workflow-step-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--sp-3) var(--sp-4);
+  min-width: 0;
+}
+
+.workflow-step-wide {
+  grid-column: 1 / -1;
+}
+
+.workflow-step-policy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+/* Work | Deployment: a two-choice segment drawn on the radio semantics. */
+.workflow-step-kind {
+  display: inline-flex;
+  gap: 0;
+  padding: var(--sp-0-5);
+  border: var(--hairline);
+  border-radius: var(--r-2);
+}
+
+.workflow-step-kind-choice {
+  min-height: var(--control-h-xs);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.workflow-step-kind-choice[data-checked] {
+  background: var(--action-soft);
+  color: var(--ink-1);
+}
+
+.workflow-step-kind-choice[data-disabled] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+.workflow-step-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  cursor: pointer;
+}
+
+.workflow-editor-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ---------- project section ---------- */
+
+.workflow-teams {
+  margin-top: var(--sp-6);
+}
+
+.workflow-teams-state {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.workflow-teams-state p {
+  margin: 0;
+}
+
+.workflow-team-list {
+  margin: 0;
+  padding: 0;
+  border: var(--hairline);
+  border-radius: var(--r-3);
+  list-style: none;
+}
+
+.workflow-team-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+}
+
+.workflow-team-row + .workflow-team-row {
+  border-top: var(--hairline);
+}
+
+.workflow-team-main {
+  display: grid;
+  flex: 1 1 18rem;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.workflow-team-name {
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  overflow-wrap: anywhere;
+}
+
+.workflow-team-steps {
+  display: grid;
+  gap: var(--sp-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Index in its own column, so a long name wraps under itself, not the number. */
+.workflow-team-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.workflow-team-step > .workflow-step-index {
+  margin-top: calc((1lh - var(--avatar-xs)) / 2);
+}
+
+.workflow-team-step-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-0-5) var(--sp-2);
+  min-width: 0;
+}
+
+.workflow-team-step .workflow-step-index,
+.workflow-timeline .workflow-step-index {
+  width: var(--avatar-xs);
+  height: var(--avatar-xs);
+}
+
+.workflow-team-step-name {
+  min-width: 0;
+  color: var(--ink-1);
+  overflow-wrap: anywhere;
+}
+
+.workflow-team-step-agent {
+  min-width: 0;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.workflow-team-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* ---------- thread progress ---------- */
+
+/* Workflow threads have an explicit progress row between header and log.
+   It must not scroll away with the log's initial pin-to-bottom. */
+.chat-panel:has(> .workflow-progress) {
+  grid-template-rows: var(--header-h) auto minmax(0, 1fr) auto;
+}
+
+.chat-panel > .workflow-progress {
+  position: static;
+  justify-self: center;
+  width: min(calc(100% - var(--sp-4)), var(--thread-measure));
+  max-height: 30dvh;
+  margin: var(--sp-1) 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 820px) {
+  .messenger-shell[data-mobile-view="chat"] .chat-panel:has(> .workflow-progress) {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+}
+
+.workflow-progress {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 var(--sp-3);
+  border: var(--hairline);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  color: var(--ink-2);
+}
+
+.workflow-progress-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-3);
+  min-height: var(--touch-target);
+  padding: var(--sp-1-5) var(--sp-3);
+  border-radius: var(--r-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  cursor: pointer;
+  list-style: none;
+}
+
+.workflow-progress-summary::-webkit-details-marker {
+  display: none;
+}
+
+.workflow-progress-label {
+  min-width: 0;
+  color: var(--ink-1);
+  overflow-wrap: anywhere;
+}
+
+.workflow-progress-meter {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-0-5);
+}
+
+.workflow-progress-pip {
+  --tone: var(--ink-4);
+  width: var(--sp-3);
+  height: var(--sp-1);
+  border-radius: var(--r-full);
+  background: var(--tone);
+}
+
+.workflow-progress-pip[data-state="done"] { --tone: var(--ok); }
+.workflow-progress-pip[data-state="current"] { --tone: var(--live); }
+.workflow-progress-pip[data-state="waiting"] { --tone: var(--warn); }
+.workflow-progress-pip[data-state="blocked"] { --tone: var(--err); }
+.workflow-progress-pip[data-state="pending"],
+.workflow-progress-pip[data-state="cancelled"] { --tone: var(--line-2); }
+
+.workflow-progress-position {
+  color: var(--ink-3);
+}
+
+.workflow-progress-step {
+  min-width: 0;
+  color: var(--ink-1);
+  overflow-wrap: anywhere;
+}
+
+/* The run's status in words — the toned word, not the pips, carries it. */
+.workflow-progress-status {
+  margin-inline-start: auto;
+  color: var(--tone, var(--ink-2));
+}
+
+.workflow-progress[data-state="awaiting_approval"] .workflow-progress-status { --tone: var(--warn); }
+.workflow-progress[data-state="ready"] .workflow-progress-status { --tone: var(--live); }
+.workflow-progress[data-state="blocked"] .workflow-progress-status { --tone: var(--err); }
+.workflow-progress[data-state="completed"] .workflow-progress-status { --tone: var(--ok); }
+
+.workflow-timeline {
+  display: grid;
+  gap: var(--sp-3);
+  max-height: min(60dvh, 32rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  border-top: var(--hairline);
+  list-style: none;
+}
+
+.workflow-timeline-step {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+/* Index · name · state: the state keeps its column however long the name. */
+.workflow-timeline-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.workflow-timeline-head > .workflow-step-index {
+  margin-top: calc((1lh - var(--avatar-xs)) / 2);
+}
+
+.workflow-timeline-name {
+  min-width: 0;
+  color: var(--ink-1);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
+}
+
+.workflow-timeline-state {
+  white-space: nowrap;
+  color: var(--tone, var(--ink-3));
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.workflow-timeline-step[data-state="done"] .workflow-timeline-state { --tone: var(--ok); }
+.workflow-timeline-step[data-state="current"] .workflow-timeline-state { --tone: var(--live); }
+.workflow-timeline-step[data-state="waiting"] .workflow-timeline-state { --tone: var(--warn); }
+.workflow-timeline-step[data-state="blocked"] .workflow-timeline-state { --tone: var(--err); }
+
+.workflow-timeline-meta,
+.workflow-timeline-reason {
+  margin: 0;
+  padding-inline-start: calc(var(--avatar-xs) + var(--sp-2));
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
+}
+
+.workflow-timeline-reason {
+  color: var(--err);
+}
+
+.workflow-timeline-outputs {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0 0 0 calc(var(--avatar-xs) + var(--sp-2));
+}
+
+.workflow-timeline-output {
+  display: grid;
+  gap: var(--sp-0-5);
+  min-width: 0;
+}
+
+.workflow-timeline-output dt {
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+/* A recorded output can be long: it scrolls in its own box, never the page. */
+.workflow-timeline-output dd {
+  max-height: 12rem;
+  margin: 0;
+  padding: var(--sp-1-5) var(--sp-2);
+  overflow: auto;
+  border: var(--hairline-soft);
+  border-radius: var(--r-2);
+  background: var(--surface-0);
+  color: var(--ink-1);
+  font: var(--type-code);
+  letter-spacing: var(--type-code-track);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- composer slip ---------- */
+
+/* Keep the transcript and its progress reachable on short screens and when
+   the keyboard reduces the viewport. Long decisions scroll within the slip. */
+.workflow-slip {
+  max-height: 35dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-height: 450px) {
+  .workflow-slip {
+    max-height: 25dvh;
+  }
+}
+
+/* The slip's title is the step's name, which may be long: wrap it rather
+   than clip the one thing the person is deciding about. */
+.workflow-slip .composer-slip-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.workflow-slip-reason {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow-wrap: anywhere;
+}
+
+.workflow-slip[data-state="blocked"] .workflow-slip-reason:first-of-type {
+  color: var(--err);
+}
+
+/* ---------- phone ---------- */
+
+/* The step's ⋯ menu becomes the phone's action sheet and holds every move,
+   so the row of chevrons gives its width back to the step's name. */
+@media (max-width: 640px) {
+  .workflow-step-move {
+    display: none;
+  }
+
+  .workflow-step-card {
+    padding-inline: var(--sp-3);
+  }
+
+  .workflow-team-actions {
+    width: 100%;
+  }
+
+  .workflow-team-actions > * {
+    flex: 1 1 0;
+  }
+
+  .workflow-progress-status {
+    margin-inline-start: 0;
+  }
+}
+
+/* Task details use the same ledger, expanded in normal document flow. */
+.record-workflow-timeline { min-width: 0; margin-block: var(--sp-4); }
+.record-workflow-timeline .workflow-progress { position: static; max-height: none; }
+.record-workflow-timeline .workflow-timeline { max-height: none; overflow-y: visible; }

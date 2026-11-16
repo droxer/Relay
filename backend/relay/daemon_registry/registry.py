@@ -28,6 +28,10 @@ from .dispatch.commands import CommandQueueMixin
 from .dispatch.admission import RunAdmissionMixin
 from .dispatch.delivery import AssignmentDeliveryMixin
 from .dispatch.follow_up import FollowUpRetryMixin
+from .dispatch.workflow_recovery import WorkflowRecoveryMixin
+from .dispatch.workflow_admission import WorkflowAdmissionMixin
+from .dispatch.workflow_staging import WorkflowGateStagingMixin
+from .runs.workflow import WorkflowProgressionMixin
 from .runs.progression import RunProgressionMixin
 from .runs.transitions import RunTransitionMixin
 from .runs.failure import RunFailureMixin
@@ -53,6 +57,10 @@ class DaemonNodeRegistry(
     RunAdmissionMixin,
     AssignmentDeliveryMixin,
     FollowUpRetryMixin,
+    WorkflowGateStagingMixin,
+    WorkflowAdmissionMixin,
+    WorkflowRecoveryMixin,
+    WorkflowProgressionMixin,
     RunProgressionMixin,
     RunTransitionMixin,
     RunFailureMixin,

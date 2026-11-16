@@ -40,6 +40,7 @@ from ..projects.access import (
 )
 from ..schemas import ThreadCreateBody, ThreadCreateBodyDep, openapi_body
 from .projections import ensure_session_managed_affinity
+from .workflow_decisions import assert_workflow_owner_session
 
 router = APIRouter()
 
@@ -247,7 +248,8 @@ def reconcile_execution(session_id: str, request: Request, ctx: AppContextDep) -
     deleted either while its stuck request counts as active work.
     """
     actor = request_actor(request, ctx.auth_store)
-    get_session_for_actor(ctx.session_store, session_id, actor)
+    session = get_session_for_actor(ctx.session_store, session_id, actor)
+    assert_workflow_owner_session(request, ctx, session)
     status = ctx.execution_lifecycle.reconcile(session_id, actor["userId"])
     if status is None:
         raise HTTPException(
@@ -294,6 +296,7 @@ def cancel_session_run(
 ) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
     session = get_session_for_actor(ctx.session_store, session_id, actor)
+    assert_workflow_owner_session(request, ctx, session)
     body = _request_body
     reason = string_field(body, "reason") or "Cancelled by user."
     if body.get("preserveQueue") is not True and session.get("messageQueue"):
@@ -371,7 +374,8 @@ def delete_session(
     session_id: str, request: Request, ctx: AppContextDep
 ) -> Response:
     actor = request_actor(request, ctx.auth_store)
-    get_session_for_actor(ctx.session_store, session_id, actor)
+    session = get_session_for_actor(ctx.session_store, session_id, actor)
+    assert_workflow_owner_session(request, ctx, session)
     stop = request.query_params.get("stop", "false")
     if stop not in ("true", "false"):
         raise HTTPException(400, "stop must be true or false.")

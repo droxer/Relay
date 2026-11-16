@@ -11,8 +11,14 @@ from typing import Any
 
 from ..core.ids import new_relay_id
 from ..core.project_roles import round_manager_context
+from ..core.team_workflows import is_workflow_team
 from .styles import LEAD_LED
 from .templates import STYLE_POLICIES
+from .workflow_compilation import workflow_work_graph
+
+_WORKFLOW_ASSIGNMENT_FIELDS = (
+    "workflowRunId", "workflowStepId", "workflowAttempt", "awaitApproval",
+)
 
 
 def create_round_manifest(
@@ -55,6 +61,10 @@ def create_round_manifest(
             "dependsOnWorkItemIds": assignment["dependsOnWorkItemIds"],
             "required": assignment.get("required", True),
             **{key: assignment[key] for key in ("acceptanceCriteria", "expectedOutputs") if key in assignment},
+            **(
+                {key: assignment[key] for key in _WORKFLOW_ASSIGNMENT_FIELDS}
+                if "workflowRunId" in assignment else {}
+            ),
         }
         for assignment in compiled_assignments
     ]
@@ -92,6 +102,7 @@ def create_round_manifest(
                     "brief",
                     "coordinator",
                     "synthesizer",
+                    *(_WORKFLOW_ASSIGNMENT_FIELDS if "workflowRunId" in assignment else ()),
                 )
                 if assignment.get(key) is not None
             }
@@ -112,8 +123,11 @@ def create_round_manifest(
             },
             "delegationPolicy": {
                 "authority": "conductor",
-                "policy": STYLE_POLICIES.get(style or LEAD_LED)
-                or ("lead-plan-v1" if source == "lead_plan" else "sequential-role-delegation-v1"),
+                "policy": (
+                    "project-workflow-v1" if is_workflow_team(team_snapshot or {})
+                    else STYLE_POLICIES.get(style or LEAD_LED)
+                    or ("lead-plan-v1" if source == "lead_plan" else "sequential-role-delegation-v1")
+                ),
             },
         },
     }
@@ -134,6 +148,17 @@ def compile_assignment_work_graph(
     removes every specialist from an already-compiled round. Reuse the captured
     objectives so compiling the same roster again remains idempotent.
     """
+    if is_workflow_team(team_snapshot or {}):
+        if purpose != "accomplish":
+            raise ValueError("workflow_purpose_invalid")
+        return workflow_work_graph(assignments, team_snapshot=team_snapshot or {})
+    if any(
+        any(key in item for key in _WORKFLOW_ASSIGNMENT_FIELDS[:3])
+        or item.get("workKind") == "workflow_step"
+        or is_workflow_team(item.get("teamSnapshot") or {})
+        for item in assignments
+    ):
+        raise ValueError("workflow_snapshot_required")
     work_item_ids = [assignment["assignmentId"] for assignment in assignments]
     compiled: list[dict[str, Any]] = []
     for index, assignment in enumerate(assignments):

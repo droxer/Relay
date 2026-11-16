@@ -22,7 +22,7 @@ import { runtimeLabel } from "../../lib/runtimeLabel";
 // references an agent/team no longer present in the fetched roster (deleted or
 // scoped out) instead of leaking a raw `agent:<id>` value.
 export type AgentView = Pick<UserAgent, "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">;
-export type TeamView = Pick<AgentTeam, "name" | "profileImageUrl" | "members" | "lead" | "enabled">;
+export type TeamView = Pick<AgentTeam, "name" | "profileImageUrl" | "members" | "lead" | "enabled"> & Partial<Pick<AgentTeam, "workflowSteps">>;
 
 // Status is carried by the glyph's corner pip (the designed agent-state
 // indicator), never by a text label. Map availability onto the shared
@@ -98,7 +98,11 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
       <RosterTeamMark team={team} />
       <span className="roster-option-copy">
         <span translate="no">{team.name}</span>
-        <span>{t("backlog.team_member_count", { count: team.members.length })}</span>
+        {/* A workflow Team is told apart by its steps: the members alone
+            would read like any other Team. */}
+        <span>{team.workflowSteps?.length
+          ? t("workflow.step_count", { count: team.workflowSteps.length })
+          : t("backlog.team_member_count", { count: team.members.length })}</span>
       </span>
     </span>
   );

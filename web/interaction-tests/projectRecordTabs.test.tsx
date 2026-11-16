@@ -8,6 +8,7 @@ vi.mock("../src/hooks/useProjectLookup", () => ({ useProjectLookup: () => () => 
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/hooks/useInlineTaskEdits", () => ({ useInlineTaskEdits: () => null }));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
+vi.mock("../src/components/task-record/TaskWorkflowTimeline", () => ({ TaskWorkflowTimeline: () => null }));
 vi.mock("../src/components/task-record/RecordHistory", () => ({ RecordHistory: () => null }));
 vi.mock("../src/components/task-record/RecordResultLine", () => ({ RecordResultLine: () => null }));
 vi.mock("../src/components/task-record/RecordArtifacts", () => ({ RecordArtifacts: () => null }));

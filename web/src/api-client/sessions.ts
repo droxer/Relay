@@ -8,6 +8,7 @@ import type {
 } from "../types.ts";
 import { apiJson, fetchWithSession, RelayApiError, readApiResponse } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
+import type { WorkflowAttemptBinding } from "relay-core";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
 /** One page of the thread list, newest first. Without a page this is the
@@ -143,6 +144,19 @@ export function recordDecision(
     method: "POST",
     token,
     body: { kind, note },
+  });
+}
+
+/** An owner decision on a workflow run's current attempt. 409 when the
+ *  binding is stale — the caller refetches the thread and asks again. */
+export function decideWorkflow(
+  sessionId: string,
+  kind: "approve" | "reject" | "retry" | "cancel",
+  binding: WorkflowAttemptBinding,
+): Promise<RelaySession> {
+  return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/workflow-decisions`, {
+    method: "POST",
+    body: { kind, ...binding },
   });
 }
 

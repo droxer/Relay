@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any
 
+from ...collaboration.workflow_events import (
+    apply_workflow_gate_decided, apply_workflow_started, apply_workflow_step_finished,
+    apply_workflow_recovery_decided, apply_workflow_interrupted, apply_workflow_admission_blocked,
+)
 from ...core.permission_requests import (
     apply_permission_requested,
     apply_permission_resolved,
@@ -90,6 +95,12 @@ NEXT_STEPS_FIELD = "nextSteps"
 def _apply_session_status(session: dict[str, Any], event: dict[str, Any]) -> None:
     session["status"] = event["status"]
     session["phase"] = event["phase"]
+    if event["status"] == "cancelled" and session.get("workflowRuns"):
+        session["workflowRuns"] = [
+            {**deepcopy(run), "status": "cancelled", "revision": run["revision"] + 1}
+            if run["status"] not in ("completed", "cancelled") else run
+            for run in session["workflowRuns"]
+        ]
     if event.get("pendingDecision"):
         session["pendingDecision"] = event["pendingDecision"]
     else:
@@ -322,6 +333,12 @@ def _apply_queue(session: dict[str, Any], event: dict[str, Any]) -> None:
 
 
 SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
+    "workflow.started": apply_workflow_started,
+    "workflow.step_finished": apply_workflow_step_finished,
+    "workflow.recovery_decided": apply_workflow_recovery_decided,
+    "workflow.interrupted": apply_workflow_interrupted,
+    "workflow.admission_blocked": apply_workflow_admission_blocked,
+    "workflow.gate_decided": apply_workflow_gate_decided,
     "session.queue": _apply_queue,
     "session.status": _apply_session_status,
     "collaboration.round.started": _apply_collaboration_round_started,

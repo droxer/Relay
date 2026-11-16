@@ -199,7 +199,7 @@ describe("adaptive agent execution", () => {
     }
   });
 
-  it("builds commands for every agent without a verdict marker", () => {
+  it("builds commands for every agent without a verdict marker", () => withEnv({ PATH: process.env.PATH }, () => {
     const taskState = state({ task_goal: "Handle auth" });
     for (const [agent, command] of [
       ["claude", buildClaudeCommand(taskState)],
@@ -211,11 +211,11 @@ describe("adaptive agent execution", () => {
       assert.match(command, /Handle auth/);
       assert.doesNotMatch(command, /RELAY_REVIEW_VERDICT/);
     }
-  });
+  }));
 });
 
 describe("prompts", () => {
-  it("applies the logical-agent identity and personality to every runtime", () => {
+  it("applies the logical-agent identity and personality to every runtime", () => withEnv({ PATH: process.env.PATH }, () => {
     const logicalAgentState = state({
       task_goal: "Implement the endpoint",
       agent_display_name: "Sentinel",
@@ -251,7 +251,7 @@ describe("prompts", () => {
         `${label} should place the personality before the user task`,
       );
     }
-  });
+  }));
   it("describes the shared thread workspace and the agent's private home", () => {
     const sharedWorkspaceState = state({
       task_goal: "Draft the report",

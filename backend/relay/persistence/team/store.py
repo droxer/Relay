@@ -12,12 +12,20 @@ from sqlalchemy.exc import IntegrityError
 
 from ...collaboration.contracts import member_configs, text_list
 from ...collaboration.styles import validate_collaboration_style
+from ...core.team_workflows import is_workflow_team, workflow_fields
 from ...core.ids import new_database_id, now_iso
 from ...core.preset_avatars import validate_profile_image_url
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
 from ..tables import teams as teams_tables
+
+
+TEAM_FIELDS = frozenset({
+    "name", "profileImageUrl", "leadAgentId", "memberAgentIds", "computerId", "enabled",
+    "memberConfigs", "acceptanceCriteria", "collaborationStyle", "humanApproval",
+    "projectId", "workflowSteps",
+})
 
 
 class TeamValidationError(ValueError):
@@ -342,13 +350,17 @@ def _without_member(
 def _new_team(
     owner_user_id: str, payload: dict[str, Any]
 ) -> dict[str, Any]:
+    if is_workflow_team(payload) and set(payload) - TEAM_FIELDS:
+        raise ValueError("Unsupported workflow Team fields.")
     owner_user_id = owner_user_id.strip()
     if not owner_user_id:
         raise ValueError("ownerUserId is required.")
     name = _required_name(payload.get("name"))
     members = payload.get("memberAgentIds")
     lead = payload.get("leadAgentId")
-    if not isinstance(members, list) or not members:
+    if not isinstance(members, list) or not members or any(
+        not isinstance(member, str) or not member.strip() for member in members
+    ):
         raise TeamValidationError("team_members_required")
     if len(set(members)) != len(members):
         raise TeamValidationError("team_members_duplicate")
@@ -360,6 +372,7 @@ def _new_team(
     )
     timestamp = now_iso()
     return {
+        **workflow_fields(payload),
         "id": team_id,
         "ownerUserId": owner_user_id,
         "name": name,
@@ -416,8 +429,7 @@ def _human_approval(value: Any) -> bool:
 def _normalize_team_patch(
     patch: dict[str, Any], *, current: dict[str, Any]
 ) -> dict[str, Any]:
-    allowed = {"name", "profileImageUrl", "leadAgentId", "memberAgentIds", "computerId", "enabled", "memberConfigs", "acceptanceCriteria", "collaborationStyle", "humanApproval"}
-    unknown = set(patch) - allowed
+    unknown = set(patch) - TEAM_FIELDS
     if unknown:
         raise ValueError(f"Unsupported team field(s): {', '.join(sorted(unknown))}.")
     normalized: dict[str, Any] = {}
@@ -471,6 +483,9 @@ def _normalize_team_patch(
         if patch["enabled"] and not members:
             raise TeamValidationError("team_members_required")
         normalized["enabled"] = patch["enabled"]
+    workflow = workflow_fields({**patch, **normalized}, current=current)
+    if workflow:
+        normalized.update(workflow)
     return normalized
 
 

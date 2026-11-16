@@ -56,6 +56,33 @@ class RegistryState:
     _last_progress_persisted_at: dict[str, float]
 
     if TYPE_CHECKING:
+        def ensure_task_execution_claim(self, request: dict[str, Any]) -> dict[str, Any]:
+            ...
+
+        def _close_terminal_session_agent(self, event: dict[str, Any]) -> None:
+            ...
+
+        def admit_workflow_first_step(self, session_id: str, *, validate: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
+            ...
+
+        def _finalize_workflow_step(self, request: dict[str, Any], event: dict[str, Any], claim: str) -> None:
+            ...
+
+        def _resume_workflow_admission(self, sid: str) -> None:
+            ...
+
+        def _delivery_sandbox(self, node_id: str) -> dict[str, Any] | None:
+            ...
+
+        def _placement_admits_run(self, run_request: dict[str, Any], assignment: dict[str, Any], sandbox: dict[str, Any], *, node_id: str, index: int, active_runs: list[dict[str, Any]] | None, validate_logical_assignment: bool) -> bool:
+            ...
+
+        def _prepare_run_start_command(self, run_request: dict[str, Any], assignment: dict[str, Any], sandbox: dict[str, Any], *, assignments: list[dict[str, Any]], index: int, node_id: str, run_id: str) -> dict[str, Any]:
+            ...
+
+        def _dispatch_run_start(self, run_request: dict[str, Any], node_id: str, command: dict[str, Any]) -> dict[str, Any]:
+            ...
+
         # Methods one mixin calls on another, declared so each mixin type-checks
         # alone. This list is the registry's internal interface between concerns.
         def _age_ms(self, iso_timestamp: str) -> int:

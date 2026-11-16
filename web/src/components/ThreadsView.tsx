@@ -57,6 +57,9 @@ import { threadPanelLayout } from "../lib/threadPanel";
 import { resolveProjectOverviewState, type ProjectCollectionStatus } from "../lib/projectPage";
 import { HandoffStatus } from "./HandoffStatus";
 import { TeamHandoffCue } from "./TeamHandoffCue";
+import { ThreadWorkflowSlip, workflowNeedsOwner } from "./composer/WorkflowSlip";
+import { WorkflowProgress } from "./workflow/WorkflowProgress";
+import { activeWorkflowRun } from "../lib/workflowRuns";
 import { styleForRun, turnSlot } from "../lib/collaborationStyle";
 import { CollaborationStatus } from "./CollaborationStatus";
 import { RunStartingCue } from "./RunStartingCue";
@@ -344,6 +347,11 @@ export function ThreadsView({
   }, [transcriptLikely]);
   const agentDisplayNames = useMemo(() => buildExecutorDisplayNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentNames = useMemo(() => buildLogicalAgentNameMap(logicalAgents), [logicalAgents]);
+  const workflowRun = activeWorkflowRun(activeSession);
+  // Only the run's owner can decide; anyone else sees the progress, not the slip.
+  const workflowOwnerWait = workflowNeedsOwner(workflowRun)
+    && Boolean(currentUser.userId) && activeSession?.ownerUserId === currentUser.userId
+    ? workflowRun : undefined;
   const logicalAgentImages = useMemo(() => buildLogicalAgentImageMap(logicalAgents), [logicalAgents]);
   const activeLogicalAgent = useMemo(
     () => logicalAgents.find((agent) => agent.id === activeLogicalAgentId && !agent.deletedAt),
@@ -614,6 +622,13 @@ export function ThreadsView({
 
         {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} onReportGone={onReportExecutionGone} /> : null}
 
+        {workflowRun ? (
+          <WorkflowProgress
+            key={workflowRun.workflowRunId}
+            run={workflowRun}
+            agentName={(agentId) => logicalAgentNames[agentId] ?? t("project.member_unavailable")}
+          />
+        ) : null}
         {/* The wizard is instructions, not a chat log: it gets a plain scroller,
             so the transcript's pin-to-bottom (and its live log role) cannot
             scroll it past its own heading as the install command loads in. */}
@@ -792,6 +807,12 @@ export function ThreadsView({
                 agentDisplayNames,
               )}
               onAnswer={onAnswerPermission}
+            />
+          ) : workflowOwnerWait && activeSession ? (
+            <ThreadWorkflowSlip
+              key={`${activeSession.id}:${workflowOwnerWait.workflowRunId}:${workflowOwnerWait.revision}`}
+              sessionId={activeSession.id}
+              run={workflowOwnerWait}
             />
           ) : awaitingDecision ? (
             <DecisionBar

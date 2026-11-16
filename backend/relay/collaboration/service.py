@@ -6,7 +6,7 @@ from typing import Any
 from starlette.concurrency import run_in_threadpool
 
 from ..agents.routing import AgentRoutingError
-from ..teams.dispatch import TeamDispatchError
+from ..teams.dispatch import TeamDispatchError, assert_team_execution_supported
 from .approval_round import ApprovalRoundMixin
 from .assignments import AssignmentsMixin, _with_work_contract
 from .errors import CollaborationError
@@ -129,6 +129,15 @@ class CollaborationConductor(
     ) -> _RoundDispatch:
         """Resolve persisted state on one worker before asynchronous dispatch."""
         session = self._session_for_actor(intent.session_id, actor)
+        # Guard before approval/recovery and before retargeting can erase Team scope.
+        team_ids = {intent.requested_team_id, intent.address_team_id, (session or {}).get("teamId")}
+        task_id = intent.task_id or (session or {}).get("taskId")
+        if task_id:
+            task = self.ctx.task_store.get_task(task_id)
+            team_ids.add(task.get("assignedTeamId"))
+        for team_id in team_ids:
+            if team_id:
+                assert_team_execution_supported(self.ctx.team_store.get_team(team_id))
         session = self._backfill_runtime_affinity(session)
         answered_task = (
             self._assert_current_question(session, intent.question_id)

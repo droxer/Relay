@@ -61,11 +61,13 @@ from .api.threads import (
     artifacts as thread_artifact_routes,
     attachments as thread_attachment_routes,
     decisions as thread_decision_routes,
+    workflow_decisions as thread_workflow_decision_routes,
     events as thread_event_routes,
     lifecycle as thread_lifecycle_routes,
     messages as thread_message_routes,
     reads as thread_read_routes,
 )
+from .api.agents import workflow_gates as workflow_gate_routes
 from .api.web import routes as web_routes
 from .api.conditional_get import ConditionalGetMiddleware
 from .api.deps import AppContext
@@ -405,6 +407,8 @@ API_ROUTERS = (
     thread_read_routes.router,
     thread_lifecycle_routes.router,
     thread_decision_routes.router,
+    thread_workflow_decision_routes.router,
+    workflow_gate_routes.router,
     thread_event_routes.router,
     thread_artifact_routes.router,
     sandbox_routes.router,

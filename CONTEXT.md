@@ -138,6 +138,22 @@ A lead and member Agents bound to one Computer chosen when the Team is set up
 (`computerId`). Every member's active Placement must be on that Computer; an
 unplaced Agent or an Agent on another Computer is not eligible to join. A
 Thread may address a Team only when the Team lives on the Thread's Computer.
+A reusable Project workflow Team additionally records an immutable `projectId`
+and ordered `workflowSteps`. Every step pins one enabled Project Agent; the same
+Agent may own several steps. Each step has a stable id, name, instructions,
+expected outputs, acceptance criteria and an optional pre-step approval gate
+(default on for an explicitly classified deployment step). Only the signed-in
+Project owner manages the definition. This is separate from legacy Team styles
+and final-turn `humanApproval`. A workflow Team is built, edited and started
+from its Project's Agents tab; each run is a new Project Thread whose owner
+answers gates and retries or cancels a stopped step there. A Task in the same
+Project may assign this Team and enter the dedicated workflow runtime. Its
+execution generation, request and Thread remain linked across gates and retries;
+Task details show every frozen attempt. Standalone/foreign-Project assignments
+and generic conversation addressing remain refused. Owner-session gate
+staging freezes a Project Thread and its first-step approval without a daemon
+command or execution reservation. An owner-session gate decision records approval or rejection for one frozen run/step/attempt
+and revision; approval alone is not evidence of command delivery.
 _Avoid_: Cross-node team, shared-path team
 
 **Thread Runtime**:
