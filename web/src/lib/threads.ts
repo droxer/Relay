@@ -172,10 +172,12 @@ export function pickActiveThreadSession(input: {
   selectedSessionId?: string;
   activeSessionId: string | null;
   composingNew: boolean;
+  /** A directory must not implicitly open a remembered or recent thread. */
+  listOnly?: boolean;
   /** An explicit URL must never resolve to a different conversation. */
   requestedSessionId?: string;
 }): RelaySession | undefined {
-  if (input.composingNew) return undefined;
+  if (input.composingNew || input.listOnly) return undefined;
   if (input.requestedSessionId) {
     return input.threads.find((session) => session.id === input.requestedSessionId);
   }

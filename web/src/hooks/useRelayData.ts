@@ -18,6 +18,8 @@ export const NODES_QUERY_KEY = ["relay", "daemon-nodes"] as const;
 const NODES_KEY = NODES_QUERY_KEY;
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 export const SESSIONS_QUERY_KEY = SESSIONS_KEY;
+const SESSION_PAGES_KEY = ["relay", "session-pages"] as const;
+type SessionPages = { headCursor: string | null; olderCursor?: string | null };
 const TASKS_KEY = ["relay", "tasks"] as const;
 export const PROJECTS_QUERY_KEY = ["relay", "projects"] as const;
 const PROJECTS_KEY = PROJECTS_QUERY_KEY;
@@ -89,7 +91,7 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
 }
 
 // Server state for the control-plane console, owned by TanStack Query.
-// Freshness-critical nodes and task state poll every 3s; sessions back off
+// Visible nodes and task state poll every 10s; sessions back off
 // while the open thread's SSE tail is connected; projects and stable sandbox
 // inventory reconcile less often. No poll runs in a hidden tab. Dedup and retry/backoff come
 // from the cache instead of hand-rolled timers. The hook keeps its previous
@@ -98,6 +100,7 @@ export function useRelayData(
   token: string | undefined,
   enabled: boolean,
   taskListVisible = true,
+  workspaceVisible = true,
 ): RelayDataResult {
   const queryClient = useQueryClient();
   const taskListCache = useRef<TaskListCache>({});
@@ -121,8 +124,8 @@ export function useRelayData(
   // the older cursor is where the last older page ended — undefined until one
   // loads, null once the oldest has. Both are keyset positions, so a poll that
   // reshuffles the first page never invalidates them.
-  const [headCursor, setHeadCursor] = useState<string | null>(null);
-  const [olderCursor, setOlderCursor] = useState<string | null | undefined>(undefined);
+  const [headCursor, setHeadCursor] = useState<string | null>(() => queryClient.getQueryData<SessionPages>(SESSION_PAGES_KEY)?.headCursor ?? null);
+  const [olderCursor, setOlderCursor] = useState<string | null | undefined>(() => queryClient.getQueryData<SessionPages>(SESSION_PAGES_KEY)?.olderCursor);
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const [moreSessionsFailed, setMoreSessionsFailed] = useState(false);
   const loadingMoreRef = useRef(false);
@@ -133,6 +136,7 @@ export function useRelayData(
     queries: [
       {
         queryKey: SANDBOXES_KEY,
+        staleTime: RELAY_POLL_INTERVALS_MS.sandboxes,
         enabled,
         refetchInterval: RELAY_POLL_INTERVALS_MS.sandboxes,
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<SandboxRecord[]> => {
@@ -142,8 +146,9 @@ export function useRelayData(
       },
       {
         queryKey: NODES_KEY,
+        staleTime: RELAY_POLL_INTERVALS_MS.nodes,
         enabled,
-        refetchInterval: RELAY_POLL_INTERVALS_MS.nodes,
+        refetchInterval: workspaceVisible ? RELAY_POLL_INTERVALS_MS.nodes : 60_000,
         // Nodes are readable with the session cookie alone — the backend
         // scopes /daemon-nodes to what the actor owns. Skipping the fetch
         // without a sandbox token left every tokenless client blind to live
@@ -153,8 +158,9 @@ export function useRelayData(
       },
       {
         queryKey: SESSIONS_KEY,
+        staleTime: RELAY_POLL_INTERVALS_MS.sessions,
         enabled,
-        refetchInterval: sessionsPollIntervalMs(streamConnected),
+        refetchInterval: workspaceVisible ? sessionsPollIntervalMs(streamConnected) : 60_000,
         // Keep an unchanged session's identity across polls without walking
         // its events, so an identical poll re-renders no row.
         structuralSharing: (previous: unknown, next: unknown) =>
@@ -178,6 +184,7 @@ export function useRelayData(
       },
       {
         queryKey: TASKS_KEY,
+        staleTime: RELAY_POLL_INTERVALS_MS.tasks,
         enabled,
         refetchInterval: taskListVisible ? RELAY_POLL_INTERVALS_MS.tasks : 60_000,
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[]> => {
@@ -189,6 +196,7 @@ export function useRelayData(
       },
       {
         queryKey: PROJECTS_KEY,
+        staleTime: RELAY_POLL_INTERVALS_MS.projects,
         enabled,
         refetchInterval: RELAY_POLL_INTERVALS_MS.projects,
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<ProjectRecord[]> =>
@@ -202,9 +210,25 @@ export function useRelayData(
     const wasVisible = previouslyVisible.current;
     previouslyVisible.current = taskListVisible;
     if (enabled && taskListVisible && !wasVisible) {
-      void queryClient.invalidateQueries({ queryKey: TASKS_KEY }, { cancelRefetch: false });
+      void queryClient.refetchQueries({ queryKey: TASKS_KEY, exact: true, stale: true }, { cancelRefetch: false });
     }
   }, [enabled, taskListVisible, queryClient]);
+
+  const previouslyWorkspaceVisible = useRef(workspaceVisible);
+  useEffect(() => {
+    const wasVisible = previouslyWorkspaceVisible.current;
+    previouslyWorkspaceVisible.current = workspaceVisible;
+    if (enabled && workspaceVisible && !wasVisible) {
+      for (const queryKey of [SESSIONS_KEY, NODES_KEY]) {
+        void queryClient.refetchQueries({ queryKey, exact: true, stale: true }, { cancelRefetch: false });
+      }
+    }
+  }, [enabled, workspaceVisible, queryClient]);
+
+  // Cursors describe the cached rows, so keep their lifetime with those rows.
+  useEffect(() => {
+    if (enabled) queryClient.setQueryData<SessionPages>(SESSION_PAGES_KEY, { headCursor, olderCursor });
+  }, [enabled, headCursor, olderCursor, queryClient]);
 
   // When disabled (e.g. logged out) drop cached rows so the UI clears at once.
   // resetQueries, NOT setQueryData: seeding [] counts as data written after
@@ -254,7 +278,7 @@ export function useRelayData(
     const previous = previousTokenRef.current;
     previousTokenRef.current = token;
     if (enabled && previous !== token) {
-      void queryClient.refetchQueries({ queryKey: RELAY_KEY });
+      void queryClient.refetchQueries({ queryKey: RELAY_KEY, type: "active" });
     }
   }, [token, enabled, queryClient]);
 
@@ -266,7 +290,7 @@ export function useRelayData(
       manualRefreshesRef.current += 1;
       setManualRefreshPending(true);
       try {
-        await queryClient.refetchQueries({ queryKey: RELAY_KEY });
+        await queryClient.refetchQueries({ queryKey: RELAY_KEY, type: "active" });
       } finally {
         if (override && overrideRef.current === override) overrideRef.current = undefined;
         manualRefreshesRef.current -= 1;

@@ -3,6 +3,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listDaemonNodes } from "../api";
+import { NODES_QUERY_KEY } from "./useRelayData";
+import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 import { nodesAssignedToUser } from "../lib/computerNodes";
 import {
   computersForUser,
@@ -56,12 +58,13 @@ export function useComputerOptions(userId: string, enabled: boolean): {
   retry: () => void;
 } {
   const query = useQuery({
-    queryKey: ["computer-options", "daemon-nodes", userId],
-    queryFn: ({ signal }: { signal: AbortSignal }) => listDaemonNodes(undefined, signal),
+    queryKey: NODES_QUERY_KEY,
+    staleTime: RELAY_POLL_INTERVALS_MS.nodes,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => (await listDaemonNodes(undefined, signal)).nodes ?? [],
     enabled,
   });
   const nodes = useMemo(
-    () => nodesAssignedToUser(query.data?.nodes ?? [], userId),
+    () => nodesAssignedToUser(query.data ?? [], userId),
     [query.data, userId],
   );
   const nodeLikes = useMemo(() => nodes.map(toNodeLike), [nodes]);

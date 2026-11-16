@@ -129,8 +129,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const [threadKindFilter, setThreadKindFilter] = useState<ThreadKindFilter>(THREAD_KIND_FILTER_ALL);
   const mounted = useClientMounted();
   const panels = usePanelLayout(mounted);
-  const { agents: logicalAgents, isSuccess: agentsReady } = useUserAgents(user.userId);
-  const { teams, isSuccess: teamsReady } = useTeams(user.userId);
+  const { agents: logicalAgents, isSuccess: agentsReady } = useUserAgents(user.userId, true);
+  const { teams, isSuccess: teamsReady } = useTeams(user.userId, true);
   const composerRef = useRef<ComposerHandle>(null);
   const messageOperationIdsRef = useRef(new Map<string, string>());
   const recoveryOperationIdsRef = useRef(new Map<string, string>());
@@ -138,6 +138,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const selectedUserToken = tokens[selectedUser];
   const pathname = useLocationPathname();
   const openingRoute = pathname ? parseAppPath(pathname) : null;
+  const workspaceVisible = !openingRoute
+    || ["home", "main", "projects", "computers"].includes(openingRoute.route)
+    || Boolean(openingRoute.sessionId);
   const {
     sandboxes,
     nodes,
@@ -158,9 +161,11 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     refresh,
     setSandboxes,
   } = useRelayData(selectedUserToken, true,
-    !openingRoute || ["home", "main", "projects", "backlog", "routine", "computers"].includes(openingRoute.route));
+    !openingRoute || ["home", "main", "projects", "backlog", "routine", "computers"].includes(openingRoute.route),
+    workspaceVisible);
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
-    user.role === "admin" && canUseLocalControlPanel(),
+    user.role === "admin" && canUseLocalControlPanel()
+      && workspaceVisible,
   );
   const visibleNodes = useMemo(() => mergeVisibleDaemonNodes(nodes, localNodes), [nodes, localNodes]);
   const runtimeNodes = useMemo(
@@ -205,12 +210,13 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       threads: requestedSessionId ? myThreads : myThreads.filter(session => openingComputerId
         ? !session.projectId && sessionComputer(session, runtimeNodes) === openingComputerId
         : openingProjectId ? session.projectId === openingProjectId : true),
+      listOnly: openingRoute?.route === "main" && !requestedSessionId,
       selectedSessionId,
       activeSessionId,
       composingNew,
       requestedSessionId,
     }),
-    [activeSessionId, composingNew, myThreads, selectedSessionId, requestedSessionId, openingComputerId, openingProjectId, runtimeNodes],
+    [activeSessionId, composingNew, myThreads, selectedSessionId, requestedSessionId, openingRoute?.route, openingComputerId, openingProjectId, runtimeNodes],
   );
   const space = useThreadSpace(activeSession?.id);
   const targetComputerId = openingRoute?.computerId ?? projects.find(project => project.id === openingRoute?.projectId)?.computerId;
@@ -423,12 +429,12 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // A phone shows the thread list OR the conversation, never both, so on the
   // list the fallback thread has no transcript on screen to keep fresh.
   const isPhone = useMediaQuery(OVERLAY_TAKEOVER_QUERY);
-  const transcriptVisible = threadSurfaceVisible && !(isPhone && mobileView === "threads");
+  const transcriptVisible = threadSurfaceVisible && Boolean(requestedSessionId) && !(isPhone && mobileView === "threads");
 
   // Full detail plus the live SSE tail of the open thread, merged into the
   // sessions cache so it updates at push latency — only while it is shown.
-  const threadDetail = useSessionDetail(requestedSessionId ?? activeSession?.id, transcriptVisible);
-  useSessionEvents(activeSession?.id, transcriptVisible && shouldTailSessionEvents(activeSession?.status));
+  const threadDetail = useSessionDetail(requestedSessionId, transcriptVisible, user.id);
+  useSessionEvents(activeSession?.id, transcriptVisible && threadDetail.ready && shouldTailSessionEvents(activeSession?.status));
 
   const selectedToken = selectedSandbox ? (tokens[selectedSandbox.id] ?? tokens[selectedUser]) : tokens[selectedUser];
   const {
@@ -562,6 +568,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   ) : null;
 
   const { renameThread, deleteThread } = useThreadEditing({
+    ownerId: user.id,
     threads: myThreads,
     activeSessionId: activeSession?.id,
     token: selectedToken,

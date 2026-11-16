@@ -149,10 +149,8 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
     setDescription(next.description);
     setVisibility(next.visibility);
   }, { from: undefined });
-  async function refresh(id?: string) {
+  async function refresh() {
     await queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] });
-    if (id)
-      await queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY, id] });
   }
   function openCreate() {
     setRepositoryResult(null);
@@ -187,11 +185,11 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
       if ("skills" in created) {
         setRepositoryResult(created);
         if (created.skills[0]) onSelectSkill(created.skills[0].id);
-        await refresh(created.skills[0]?.id);
+        await refresh();
       } else {
         resetCreate();
         onSelectSkill(created.id);
-        await refresh(created.id);
+        await refresh();
       }
     } catch (err) {
       setError(errorText(err));
@@ -214,7 +212,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
     setError(null);
     try {
       await updateSkill(skill.id, { displayName, description, visibility });
-      await refresh(skill.id);
+      await refresh();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -229,7 +227,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
       await reviseSkill(skill.id, revisionFiles, revisionNote);
       setRevisionFiles([]);
       setRevisionNote("");
-      await refresh(skill.id);
+      await refresh();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -242,7 +240,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
     setError(null);
     try {
       await promoteSkillRevision(skill.id, revisionId);
-      await refresh(skill.id);
+      await refresh();
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -595,7 +593,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                         setBusy(true);
                         try {
                           await reimportSkill(skill.id);
-                          await refresh(skill.id);
+                          await refresh();
                         } finally {
                           setBusy(false);
                         }

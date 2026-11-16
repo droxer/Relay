@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SessionCapabilities } from "../api";
 import { AUTH_CAPABILITIES_QUERY_KEY, AuthSessionClientContext } from "../hooks/useAuthSession";
+import { configurePersonalQueryCache } from "../lib/personalQueryCache";
 import { TaskReviewProvider } from "./task-record/TaskReviewProvider";
 import { ArtifactViewerProvider } from "./ArtifactViewerProvider";
 
@@ -19,6 +20,7 @@ export function PersonalSpaceProvider({ children }: { children: ReactNode }) {
   });
   const [client] = useState(() => {
     const scoped = new QueryClient({ defaultOptions: authClient.getDefaultOptions() });
+    configurePersonalQueryCache(scoped);
     const flags = authClient.getQueryData<SessionCapabilities>(AUTH_CAPABILITIES_QUERY_KEY);
     if (flags) scoped.setQueryData(AUTH_CAPABILITIES_QUERY_KEY, flags);
     return scoped;

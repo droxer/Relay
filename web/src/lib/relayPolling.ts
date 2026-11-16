@@ -30,7 +30,7 @@ export const RELAY_POLL_INTERVALS_MS = {
 } as const;
 
 /** How long a mounted roster read is reused before a new mount refetches it. */
-export const ROSTER_STALE_TIME_MS = 10_000;
+export const ROSTER_STALE_TIME_MS = RELAY_POLL_INTERVALS_MS.agents;
 
 export function sessionsPollIntervalMs(streamConnected: boolean): number {
   return streamConnected ? RELAY_POLL_INTERVALS_MS.sessionsWhileStreaming : RELAY_POLL_INTERVALS_MS.sessions;

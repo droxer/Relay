@@ -29,8 +29,17 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const unsaved = useRef(new Map<string, QueuedMessage>());
   const key = ["thread-queue", queueKey];
   const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue`;
-  const query = useQuery({ queryKey: key, queryFn: () => apiJson<QueueState>(path), enabled: !!threadId,
-    refetchInterval: 1000, refetchOnWindowFocus: "always" });
+  const query = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => apiJson<QueueState>(path, { signal }),
+    enabled: !!threadId,
+    staleTime: 1_000,
+    // Own actions write the returned queue immediately. Only active work
+    // needs a fast poll; a settled, empty queue can discover other tabs slowly.
+    refetchInterval: (query) => running || query.state.data?.messages.length || query.state.data?.sending
+      ? 1_000 : 30_000,
+    refetchOnWindowFocus: true,
+  });
   const state = query.data?.messages ? query.data : EMPTY;
   const activeKey = useRef(queueKey);
   useLayoutEffect(() => { activeKey.current = queueKey; }, [queueKey]);

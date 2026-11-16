@@ -109,6 +109,37 @@ useSessionEvents -> GET /threads/{id}/events -> authorization header read
                  -> applySessionEventUnchecked -> TanStack Query cache
 ```
 
+The thread directory does not implicitly open a remembered thread. Only an
+explicit thread URL hydrates detail or starts its SSE tail. `useSessionDetail`
+reuses hydrated QueryClient entries and a bounded, account-scoped
+`sessionStorage` cache (`lib/sessionDetailCache.ts`) across reloads in the same
+tab; stale details still reconcile through the existing fallback intervals.
+The initial snapshot precedes the SSE subscription, and detail hydration and
+SSE recovery share `lib/sessionSnapshotQuery.ts` for in-flight HTTP deduplication.
+
+All signed-in surfaces use `lib/personalQueryCache.ts`, installed on each
+Account's own QueryClient by `PersonalSpaceProvider`. The policy applies to
+Task/Automation details, Project/Task file browsers, Skills and their files,
+Agent/Team activity, tags, Connections, notifications/preferences, and Admin
+queries (dashboard date ranges, agents, computers, settings, channels, waitlist).
+Freshness follows each resource's update cadence (2–60 seconds, five minutes
+for Connection provider metadata); inactive results stay cached for at most
+ten minutes after their last observer leaves. Explicit query settings still
+win: approvals keep their immediate revalidation and immutable artifacts keep
+their existing lifetime. Mutations must update or invalidate affected keys.
+Computer selectors share `NODES_QUERY_KEY` with the shell, and Channels shares
+`CONTROL_PANEL_NODES_KEY` with Admin. Never add a second key for these same
+response shapes merely because the consumer is a different page.
+
+Collection queries use freshness windows matched to their poll budgets and
+retain thread paging cursors with the cached rows. On unrelated pages, session
+and computer reads back off to 60 seconds; returning reconciles stale caches
+without forcing fresh ones to reload. `AuthenticatedApp` owns the Agent and
+Team roster polling timers, while page observers reuse those queries. Empty,
+settled message queues poll every 30 seconds; active runs or queued messages
+retain their one-second cadence. Manual refresh refetches active readers only,
+so cache metadata and unmounted detail queries do not become network work.
+
 Never replace a cache entry with an older snapshot after SSE has advanced it.
 Use the merge helpers under `web/src/lib/sessionPollMerge.ts` and keep event
 application monotonic and idempotent.

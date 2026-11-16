@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useNotifications, useNotificationPreferences } from "../src/hooks/useNotifications";
 import { markNotificationsRead, clearNotifications, listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
+import { configurePersonalQueryCache } from "../src/lib/personalQueryCache";
 import { NotificationsSection } from "../src/components/settings/NotificationsSection";
 
 const auth = vi.hoisted(() => ({ user: { id: "account-a" } as { id: string } | null }));
@@ -199,4 +200,22 @@ it("does not let delayed read receipts restore an obsolete unread count", async 
   await waitFor(()=>expect(client.isMutating()).toBe(0));
   expect(client.getQueryData<{unreadCount:number}>(["relay","notifications","account-a"])?.unreadCount).toBe(0);
   view.unmount();client.clear();
+});
+
+
+it("reuses a fresh inbox and preferences when Settings is reopened", async () => {
+  vi.useFakeTimers();
+  const { client, wrapper } = setup();
+  configurePersonalQueryCache(client);
+  const hook = () => ({ inbox: useNotifications({ enabled: true, onOpen: vi.fn() }), prefs: useNotificationPreferences() });
+  const first = renderHook(hook, { wrapper });
+  await act(async () => {});
+  first.unmount();
+  await act(() => vi.advanceTimersByTimeAsync(2_000));
+  const second = renderHook(hook, { wrapper });
+  await act(async () => {});
+  expect(listNotifications).toHaveBeenCalledTimes(1);
+  expect(getNotificationPreferences).toHaveBeenCalledTimes(1);
+  expect(second.result.current.inbox.notices).toHaveLength(1);
+  second.unmount(); client.clear();
 });
