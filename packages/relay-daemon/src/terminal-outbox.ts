@@ -20,6 +20,17 @@ function sequence(event: Record<string, unknown>): number {
   if (event.type === 'run.output.batch') return Number((event.entries as Array<{ sequence: number }>)[0]?.sequence ?? 0);
   return Number(event.sequence ?? 0);
 }
+function reportKey(event: Record<string, unknown>): string {
+  return digest(JSON.stringify([event.commandId, event.leaseId ?? null,
+    ...(outputTypes.has(String(event.type)) ? [event.type, sequence(event)] : [])]));
+}
+/** Called after persistTerminalEvent: absence now means another sender has
+ * acknowledged this report, so a waiting producer must not retain it again. */
+export function hasPendingDurableReport(send: typeof fetch, body: unknown): boolean {
+  const event = body as Record<string, unknown> | null;
+  if (!event || !durable(event) || typeof event.commandId !== 'string') return true;
+  return outboxes.get(send)?.hasPendingReport(event) ?? true;
+}
 export function persistTerminalEvent(send: typeof fetch, body: unknown): Promise<void> {
   const event = body as Record<string, unknown> | null;
   if (event && durable(event) && typeof event.commandId === 'string') return outboxes.get(send)?.retain(event).durable ?? Promise.resolve();
@@ -154,7 +165,7 @@ export class TerminalOutbox {
   retain(event: Record<string, unknown>): TerminalRecord {
     if (terminalTypes.has(String(event.type))) event = terminalEventPayload(event);
     const output = outputTypes.has(String(event.type));
-    const key = digest(JSON.stringify([event.commandId, event.leaseId ?? null, ...(output ? [event.type, sequence(event)] : [])]));
+    const key = reportKey(event);
     if (!this.index.has(key)) {
       if (!output && this.strictAcknowledgements) {
         // Include all captured output in the terminal receipt, including
@@ -207,6 +218,7 @@ export class TerminalOutbox {
     // First retained payload wins, including when a failed upload races a producer.
     return this.read(key);
   }
+  hasPendingReport(event: Record<string, unknown>): boolean { return this.index.has(reportKey(event)); }
   async flush(): Promise<void> { await Promise.all([...this.writes.values()].map(write => write.done)); }
   private acknowledge(key: string, delivered = true): void {
     const record = this.index.get(key);

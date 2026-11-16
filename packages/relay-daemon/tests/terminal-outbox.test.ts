@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { postJsonWithRetry } from "../src/backend-transport.js";
 import { TerminalOutbox } from "../src/terminal-outbox.js";
 
 for (const batching of [false, true]) {
@@ -631,3 +632,25 @@ for (const detail of ['Report names an unknown command.', 'Report does not match
     assert.equal(outbox.status().quarantined, 1);
   });
 }
+
+
+test('live retry does not recreate a terminal report acknowledged by replay during backoff', { timeout: 3000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-outbox-acknowledged-retry-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  const event = { type: 'run.completed', commandId: 'cmd', leaseId: 'lease', runId: 'run', exitCode: 0 };
+  let attempts = 0;
+  let retryScheduled!: () => void;
+  const backoff = new Promise<void>(resolve => { retryScheduled = resolve; });
+  const send: typeof fetch = async (_url, init) => {
+    attempts++;
+    return new Response('{}', { status: attempts === 1 ? 503 : 200, headers: new Headers(init?.headers) });
+  };
+  const producer = postJsonWithRetry(outbox.wrapFetch(send), 'http://backend/events', event, 'token', undefined, retryScheduled);
+  await backoff;
+  await outbox.replay(send, 'http://backend/events', 'token');
+  assert.equal(outbox.status().pending, 0, 'replay has acknowledged the report');
+  await producer;
+  assert.equal(attempts, 2, 'only the failed live attempt and successful replay may reach the backend');
+  assert.equal(outbox.status().pending, 0);
+});
