@@ -1,6 +1,7 @@
 import logging
 from io import StringIO
 
+import pytest
 from loguru import logger
 from relay.core import logging_config
 from relay.core.logging_config import setup_logging
@@ -137,3 +138,25 @@ def test_daemon_wire_access_lines_are_debug_and_repeated_failures_collapse(monke
     levels = [routed(access('/api/v1/daemon-nodes/n/events', 500))[0] for _ in range(100)]
     assert levels.count('INFO') == 3  # first, 10th, 100th
     assert levels.count('DEBUG') == 97
+
+
+@pytest.mark.parametrize('receipt_replay', [False, True])
+def test_terminal_report_diagnostics_survive_configured_sink(receipt_replay):
+    sink = StringIO()
+    setup_logging(level='INFO', sink=sink)
+    try:
+        logger.bind(
+            node_id='node-1', command_id='command-1', report_id='report-1',
+            receipt_replay=receipt_replay, lock_wait_ms=125.5, duration_ms=10001.25,
+            token='private-report-token', body={'prompt': 'private-report-content'},
+        ).info('Durable terminal report handling finished')
+    finally:
+        setup_logging(sink=StringIO())
+    text = sink.getvalue()
+    for field in (
+        "'node_id': 'node-1'", "'command_id': 'command-1'", "'report_id': 'report-1'",
+        f"'receipt_replay': {receipt_replay}", "'lock_wait_ms': 125.5", "'duration_ms': 10001.25",
+    ):
+        assert field in text
+    assert 'private-report-token' not in text
+    assert 'private-report-content' not in text
