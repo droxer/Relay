@@ -188,6 +188,7 @@ export interface RelayTask {
   assignedAgentId?: string;
   /** Named team responsible for dispatching this task through its lead agent. */
   assignedTeamId?: string;
+  assignedWorkflowId?: string;
   dispatchClaim?: { id: string; claimedAt: string; expiresAt: string };
   dispatchOutcome?: {
     state: "started" | "queued" | "rejected";
@@ -334,6 +335,7 @@ export type RelayTaskEvent =
       taskId: string;
       timestamp: string;
       teamId: string;
+      workflowId?: string;
     }
   | {
       id: string;
@@ -508,6 +510,8 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     } else if (event.type === "task.assigned") {
       if ("teamId" in event) {
         task.assignedTeamId = event.teamId;
+        if (event.workflowId) task.assignedWorkflowId = event.workflowId;
+        else delete task.assignedWorkflowId;
         delete task.assignedAgent;
         delete task.assignedAgentId;
       } else {
@@ -515,11 +519,13 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
         if (event.agentId) task.assignedAgentId = event.agentId;
         else delete task.assignedAgentId;
         delete task.assignedTeamId;
+        delete task.assignedWorkflowId;
       }
     } else if (event.type === "task.unassigned") {
       delete task.assignedAgent;
       delete task.assignedAgentId;
       delete task.assignedTeamId;
+      delete task.assignedWorkflowId;
     } else if (event.type === "task.dispatch_claimed") {
       task.dispatchClaim = event.claim;
     } else if (event.type === "task.dispatch_released") {

@@ -163,7 +163,7 @@ class TaskDispatcher:
         if from_capacity:
             return from_capacity
         team = self.ctx.team_store.get_team(self.task["assignedTeamId"]) if self.task.get("assignedTeamId") and self.ctx.team_store else None
-        if team and is_workflow_team(team):
+        if self.task.get("assignedWorkflowId") or (team and is_workflow_team(team)):
             return dispatch_task_workflow(self.ctx, self.task, self.actor, record_pending=self.record_pending)
         project_result = self._resolve_project_assignments()
         if project_result:

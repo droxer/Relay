@@ -94,6 +94,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
             ("assignedAgent", "agent"),
             ("assignedAgentId", "agentId"),
             ("assignedTeamId", "teamId"),
+            ("assignedWorkflowId", "workflowId"),
         ):
             if payload.get(field):
                 assignment[event_field] = payload[field]
@@ -110,7 +111,8 @@ def task_assignment_events(
 ) -> list[dict[str, Any]]:
     if assignment.get("teamId"):
         assigned = relay_task_event(
-            "task.assigned", task_id, {"teamId": assignment["teamId"]}
+            "task.assigned", task_id, {"teamId": assignment["teamId"],
+                                       **({"workflowId": assignment["workflowId"]} if assignment.get("workflowId") else {})}
         )
         message = f"Assigned to team {assignment['teamId']}."
         activity_payload: dict[str, Any] = {}
@@ -212,7 +214,8 @@ def task_update_events(
         if agent_id and team_id:
             raise ValueError("task_agent_and_team_conflict")
         if team_id:
-            resolved_assignment = {"teamId": team_id}
+            resolved_assignment = {"teamId": team_id,
+                                   **({"workflowId": payload["assignedWorkflowId"]} if payload.get("assignedWorkflowId") else {})}
         elif agent_id:
             agent = payload.get("assignedAgent")
             if not agent:
@@ -315,6 +318,7 @@ def routine_occurrence_events(
                 occurrence_id,
                 {
                     **({"agent": agent} if agent else {}),
+                    **({"workflowId": routine["assignedWorkflowId"]} if routine.get("assignedWorkflowId") else {}),
                     **(
                         {"agentId": routine["assignedAgentId"]}
                         if routine.get("assignedAgentId")

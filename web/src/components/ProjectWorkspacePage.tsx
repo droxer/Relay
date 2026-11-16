@@ -27,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectMark } from "./ProjectMark";
 import { ProjectMemberEditor } from "./ProjectMemberEditor";
 import { ProjectMembersPanel } from "./ProjectMembersPanel";
-import { ProjectWorkflowTeams } from "./workflow/ProjectWorkflowTeams";
+import { ProjectWorkflows } from "./workflow/ProjectWorkflows";
 import { ProjectSettingsPanel, type ProjectComputerSummary } from "./ProjectSettingsPanel";
 import { ProjectSetupPanel } from "./ProjectSetupPanel";
 import { setupNeedsAttention } from "../lib/projectSetup";
@@ -245,7 +245,7 @@ export function ProjectWorkspacePage({
             onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
             onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
           >
-            <ProjectWorkflowTeams
+            <ProjectWorkflows
               project={project}
               agents={agents}
               userId={currentUser.userId}

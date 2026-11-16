@@ -19,6 +19,7 @@ from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
 from ..tables import teams as teams_tables
+from ...core.workflows import team_workflows, workflow_definition
 
 
 TEAM_FIELDS = frozenset({
@@ -195,6 +196,40 @@ class DatabaseTeamStore:
             return updated, {"patch": patch, "team": updated}
 
         return self._mutate(team_id, "team.updated", remove_from_snapshot)
+
+    def save_workflow(
+        self, team_id: str, payload: dict[str, Any], *, workflow_id: str | None = None,
+    ) -> dict[str, Any]:
+        def mutate(current: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+            workflows = team_workflows(current)
+            old = next((item for item in workflows if item["id"] == workflow_id), None)
+            if workflow_id and old is None:
+                raise KeyError(workflow_id)
+            definition = workflow_definition(current, payload, current=old)
+            if any(item["id"] != definition["id"] and item["name"].casefold() == definition["name"].casefold()
+                   for item in workflows):
+                raise ValueError("workflow_name_taken")
+            workflows = [definition if item["id"] == workflow_id else item for item in workflows]
+            if old is None:
+                workflows.append(definition)
+            updated = {**current, "workflows": workflows, "updatedAt": now_iso()}
+            return updated, {"workflow": definition, "team": updated}
+
+        saved = self._mutate(team_id, "team.workflow_updated" if workflow_id else "team.workflow_created", mutate)
+        return next(item for item in saved["workflows"] if item["id"] == workflow_id) if workflow_id else saved["workflows"][-1]
+
+    def delete_workflow(self, team_id: str, workflow_id: str) -> dict[str, Any]:
+        def mutate(current: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+            workflows = team_workflows(current)
+            deleted = next((item for item in workflows if item["id"] == workflow_id), None)
+            if deleted is None:
+                raise KeyError(workflow_id)
+            updated = {**current, "workflows": [item for item in workflows if item["id"] != workflow_id],
+                       "updatedAt": now_iso()}
+            return updated, {"workflow": deleted, "team": updated}
+
+        saved = self._mutate(team_id, "team.workflow_deleted", mutate)
+        return saved
 
     def events(self, team_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:

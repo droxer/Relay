@@ -415,6 +415,22 @@ function TeamProfile({
               <CollaborationStyleSummary style={effectiveStyle(team)} />
             </section>}
           </form>
+          {team.workflows?.length ? (
+            <section className="collab-style-section" aria-labelledby="team-owned-workflows">
+              <h2 id="team-owned-workflows" className="workspace-dossier-section-title">
+                {t("workflow.section_title")} <span className="tnum">{team.workflows.length}</span>
+              </h2>
+              <ul className="workflow-team-list">
+                {team.workflows.map(definition => <li key={definition.id} className="workflow-team-row">
+                  <a className="record-inline-action" href={`/projects/${encodeURIComponent(definition.projectId)}?tab=members`}>
+                    {definition.name}
+                  </a>
+                  <span>{t("workflow.step_count", { count: definition.workflowSteps.length })}</span>
+                </li>)}
+              </ul>
+              <p className="workflow-editor-note">{t("workflow.edit_in_project")}</p>
+            </section>
+          ) : null}
         </div>
 
         <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>

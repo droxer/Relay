@@ -2076,3 +2076,7 @@ regenerate it with `RELAY_UPDATE_FIXTURES=1` after an intentional reducer change
 The W3 editor, run start, thread progress and decision slip use only the routes
 above. Integrated release verification, including themes/device sizes against a
 real backend and daemon, remains W4; this API does not claim release readiness.
+
+Team-owned workflow definitions and their run endpoints are documented in
+[Teams and Workflows](guides/team-workflows.md). Task assignments may include
+`assignedWorkflowId` alongside `assignedTeamId` to select a reusable process.

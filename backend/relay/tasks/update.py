@@ -25,6 +25,7 @@ from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 from .assignment import (
     logical_agent_for_assignment,
     team_for_assignment,
+    validate_task_workflow,
     validate_project_assignment,
     validate_project_task_assignment,
     validate_task_computer,
@@ -345,6 +346,7 @@ def _ensure_patch_not_empty(
         and not assignment.agent
         and "assignedAgentId" not in body
         and "assignedTeamId" not in body
+        and "assignedWorkflowId" not in body
         and not routine
         and fields.acceptance_policy is None
         and fields.collaboration_style is None
@@ -369,6 +371,8 @@ def _plan_next_assignment(
         ctx.session_store, current
     ):
         raise TaskRequestError(409, "task_execution_active")
+    if following.changed or request.move_project or "assignedWorkflowId" in request.body or "computerId" in request.body:
+        validate_task_workflow(ctx, {**effective, **following.patch})
     has_target = bool(effective.get("projectId") or following.agent_id or following.team_id)
     next_is_routine = routine.get("isRoutine", current.get("isRoutine"))
     if (
@@ -384,6 +388,7 @@ def _plan_next_assignment(
             request.move_project,
             assigned_agent_id=following.agent_id,
             assigned_team_id=following.team_id,
+            workflow_id=following.patch.get("assignedWorkflowId", current.get("assignedWorkflowId")),
         )
     clear_requested = following.changed and not (following.agent_id or following.team_id)
     # Clearing stays allowed: it is how a legacy Ready intake issue goes back
@@ -416,7 +421,14 @@ def _next_assignment(
         team_id = None
     if "assignedTeamId" in body and assignment.team_id:
         agent_id = None
-    changed = agent_id != current.get("assignedAgentId") or team_id != current.get(
+    workflow_id = body.get("assignedWorkflowId", current.get("assignedWorkflowId"))
+    if team_id != current.get("assignedTeamId") and "assignedWorkflowId" not in body:
+        workflow_id = None
+    if not team_id:
+        if body.get("assignedWorkflowId"):
+            raise TaskRequestError(400, "workflow_team_required")
+        workflow_id = None
+    changed = workflow_id != current.get("assignedWorkflowId") or agent_id != current.get("assignedAgentId") or team_id != current.get(
         "assignedTeamId"
     )
     patch: dict[str, Any] = {}
@@ -428,6 +440,7 @@ def _next_assignment(
         patch = {
             "assignedAgentId": agent_id,
             "assignedTeamId": team_id,
+            "assignedWorkflowId": workflow_id,
             **({"assignedAgent": executor_kind} if agent_id else {}),
         }
     return _NextAssignment(agent_id, team_id, changed, status, patch)

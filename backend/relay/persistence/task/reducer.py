@@ -123,6 +123,9 @@ def _apply_task_project_set(task: dict[str, Any], event: dict[str, Any]) -> None
 def _apply_task_assigned(task: dict[str, Any], event: dict[str, Any]) -> None:
     if event.get("teamId"):
         task["assignedTeamId"] = event["teamId"]
+        task.pop("assignedWorkflowId", None)
+        if event.get("workflowId"):
+            task["assignedWorkflowId"] = event["workflowId"]
         task.pop("assignedAgent", None)
         task.pop("assignedAgentId", None)
         return
@@ -132,12 +135,14 @@ def _apply_task_assigned(task: dict[str, Any], event: dict[str, Any]) -> None:
     else:
         task.pop("assignedAgentId", None)
     task.pop("assignedTeamId", None)
+    task.pop("assignedWorkflowId", None)
 
 
 def _apply_task_unassigned(task: dict[str, Any], _event: dict[str, Any]) -> None:
     task.pop("assignedAgent", None)
     task.pop("assignedAgentId", None)
     task.pop("assignedTeamId", None)
+    task.pop("assignedWorkflowId", None)
 
 
 def _apply_task_dispatch_claimed(task: dict[str, Any], event: dict[str, Any]) -> None:

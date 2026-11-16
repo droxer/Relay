@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ...persistence.team.store import TeamValidationError, validate_team_payload
 from ...security.request_auth import require_admin_session, require_user_session
 from ...core.team_workflows import is_workflow_team
+from ...core.workflows import team_workflows
 from ...teams.workflow import validate_workflow_write
 from ...teams.computer import resolve_team_computer
 from ...teams.membership import with_member_roles
@@ -173,7 +174,7 @@ def _team_view(
         (member for member in members if member["id"] == team.get("leadAgentId")),
         None,
     )
-    return {**team, "members": members, "lead": lead}
+    return {**team, "workflows": team_workflows(team), "members": members, "lead": lead}
 
 
 @router.get("/teams")

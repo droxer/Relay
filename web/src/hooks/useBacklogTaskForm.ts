@@ -80,6 +80,7 @@ export function useBacklogTaskForm({
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
+      assignedWorkflowId: task.assignedWorkflowId ?? "",
     });
   }
 

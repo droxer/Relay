@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ...agents.routing import resolve_agent_assignments
 from ...collaboration.workflow_compilation import compile_workflow
 from ...core.team_workflows import is_workflow_team
+from ...core.workflows import workflow_execution_snapshot
 from ...core.computer_identity import computer_id
 from ...persistence.resource_lock import resource_transaction
 from ...security.request_auth import require_user_session
@@ -41,6 +42,7 @@ def _body(body: dict[str, Any]) -> tuple[str, str]:
 @router.post("/teams/{team_id}/workflow-gates", status_code=201)
 def stage_workflow_gate(
     team_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep,
+    workflow_id: str | None = None,
 ) -> dict[str, Any]:
     """Freeze the run; deliver the first step when no approval gate is pending."""
     if chat_service_user_header(request):
@@ -55,6 +57,13 @@ def stage_workflow_gate(
         raise HTTPException(403, "workflow_owner_required")
     if not team.get("enabled", True):
         raise HTTPException(409, "team_disabled")
+    if workflow_id is None and "workflows" in team and is_workflow_team(team):
+        workflow_id = team_id
+    if workflow_id is not None:
+        try:
+            team = workflow_execution_snapshot(team, workflow_id)
+        except ValueError as error:
+            raise HTTPException(409, str(error)) from error
     if not is_workflow_team(team):
         raise HTTPException(409, "workflow_definition_required")
     project = project_for_owner(ctx, team["projectId"], owner, require_enabled=True)
@@ -64,8 +73,9 @@ def stage_workflow_gate(
         with ctx.registry.dispatch_lock, ctx.registry.dispatch_scope([
             node["id"] for node in ctx.registry.monitor_nodes()
             if computer_id(node) == project["computerId"]
-        ]), resource_transaction(ctx.registry.daemon_store.engine, f"workflow-start:{owner}:{team_id}:{request_id}"):
-            identity = json.dumps(["relay.workflow-gate.v1", owner, team_id, request_id])
+        ]), resource_transaction(ctx.registry.daemon_store.engine, f"workflow-start:{owner}:{team_id}:{workflow_id or team_id}:{request_id}"):
+            identity = json.dumps(["relay.workflow-gate.v1", owner, team_id, request_id]
+                                  + ([workflow_id] if workflow_id and workflow_id != team_id else []))
             session_id = str(uuid5(NAMESPACE_URL, identity))
             try:
                 existing = ctx.session_store.get_session(session_id)
@@ -105,3 +115,10 @@ def stage_workflow_gate(
             return session
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
+
+
+@router.post("/teams/{team_id}/workflows/{workflow_id}/runs", status_code=201)
+def start_team_workflow(
+    team_id: str, workflow_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep,
+) -> dict[str, Any]:
+    return stage_workflow_gate(team_id, request, ctx, _request_body=_request_body, workflow_id=workflow_id)

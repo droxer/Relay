@@ -17,6 +17,7 @@ from .assignment import (
     validate_computer_assignment,
     logical_agent_for_assignment,
     team_for_assignment,
+    validate_task_workflow,
     validate_project_assignment,
     validate_trigger_scope,
 )
@@ -103,10 +104,12 @@ def _resolve_assignment(
         assignee = logical_agent["supervisorUserId"]
     if request.project:
         validate_project_assignment(
-            ctx, request.project, assigned_agent_id=agent_id, assigned_team_id=team_id
+            ctx, request.project, assigned_agent_id=agent_id, assigned_team_id=team_id,
+            workflow_id=body.get("assignedWorkflowId")
         )
     team_for_assignment(ctx, actor, team_id, expected_user_id=assignee,
                         project_id=(request.project or {}).get("id"))
+    validate_task_workflow(ctx, {**body, "ownerUserId": request.owner, "assignedTeamId": team_id})
     validate_task_owner_assignment(request.owner, assignee)
     agent = logical_agent["executorKind"] if logical_agent else None
     return _Assignment(assignee=assignee, agent_id=agent_id, team_id=team_id, agent=agent)
@@ -184,6 +187,7 @@ def _create_record(
                 else {}
             ),
             **({"assignedTeamId": assignment.team_id} if assignment.team_id else {}),
+            **({"assignedWorkflowId": body["assignedWorkflowId"]} if body.get("assignedWorkflowId") else {}),
             **({"externalSource": request.external_source} if request.external_source else {}),
             **plan.routine,
         }

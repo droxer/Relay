@@ -1,4 +1,4 @@
-import type { AgentTeam, ProjectRecord, TeamMutationInput } from "../types.ts";
+import type { AgentTeam, ProjectRecord, TeamMutationInput, TeamWorkflow, WorkflowMutationInput } from "../types.ts";
 
 /**
  * The Project workflow Team editor's draft and its translation to the Team
@@ -70,7 +70,7 @@ export function emptyWorkflowStep(
   };
 }
 
-export function draftFromTeam(team: AgentTeam): WorkflowTeamDraft {
+export function draftFromTeam(team: Pick<AgentTeam, "name" | "workflowSteps">): WorkflowTeamDraft {
   return {
     name: team.name,
     steps: (team.workflowSteps ?? []).map((step) => ({
@@ -188,4 +188,34 @@ export function workflowDraftChanged(draft: WorkflowTeamDraft, saved: WorkflowTe
 /** Workflow Teams that belong to this Project. */
 export function projectWorkflowTeams(teams: readonly AgentTeam[], projectId: string): AgentTeam[] {
   return teams.filter((team) => !team.deletedAt && team.projectId === projectId && Boolean(team.workflowSteps?.length));
+}
+
+
+/** Definitions grouped under their owning Team, including legacy saved Teams. */
+export function projectWorkflows(teams: readonly AgentTeam[], projectId: string): TeamWorkflow[] {
+  return teams.filter(team => !team.deletedAt).flatMap(team => team.workflows ?? (
+    team.projectId && team.workflowSteps ? [{
+      id: team.id, teamId: team.id, projectId: team.projectId, name: team.name,
+      workflowSteps: team.workflowSteps, enabled: team.enabled,
+      createdAt: team.createdAt, updatedAt: team.updatedAt,
+    }] : []
+  )).filter(workflow => workflow.projectId === projectId);
+}
+
+export function workflowTeams(teams: readonly AgentTeam[], project: ProjectRecord): AgentTeam[] {
+  const enabled = new Set(enabledProjectAgentIds(project));
+  return teams.filter(team => !team.deletedAt && team.enabled && team.computerId === project.computerId
+    && team.memberAgentIds.some(id => enabled.has(id)));
+}
+
+
+export function workflowInput(draft: WorkflowTeamDraft, projectId: string, enabled = true): WorkflowMutationInput {
+  return {
+    name: draft.name.trim(), projectId, enabled,
+    workflowSteps: draft.steps.map(step => ({
+      id: step.id, name: step.name.trim(), agentId: step.agentId,
+      instructions: step.instructions.trim(), acceptanceCriteria: lines(step.acceptanceCriteria),
+      requiresApproval: step.requiresApproval,
+    })),
+  };
 }

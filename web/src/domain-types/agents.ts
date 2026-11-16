@@ -137,6 +137,7 @@ export interface TeamMemberConfig {
 export type WorkflowStep = WorkflowStepDefinition;
 
 export interface AgentTeam {
+  workflows?: TeamWorkflow[];
   /** Set only on a Project workflow Team; immutable once set. */
   projectId?: string;
   /** The ordered steps of a Project workflow Team. A Team with steps never
@@ -185,3 +186,17 @@ export interface TeamMutationInput {
   /** A preset from `lib/presetAvatars.ts`; only sent when creating a team. */
   profileImageUrl?: string;
 }
+
+/** A reusable process owned by a Team; several workflows share its roster. */
+export interface TeamWorkflow {
+  id: string;
+  teamId: string;
+  projectId: string;
+  name: string;
+  workflowSteps: WorkflowStep[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WorkflowMutationInput = Pick<TeamWorkflow, "name" | "projectId" | "workflowSteps"> & { enabled?: boolean };
