@@ -3,10 +3,9 @@
 import { useTranslation } from "react-i18next";
 import { Markdown } from "../LazyMarkdown";
 import type { AgentTeam, RelayTaskListItem } from "../../types";
+import { defaultWorkflowId, predefinedStyle } from "../../lib/workflowSelection";
 import { isWorkflowTeam } from "../../lib/workflowTeamDraft";
-import { effectiveStyle } from "../../lib/collaborationStyle";
 import { taskAcceptancePolicy } from "../../lib/taskBoardForm";
-import { CollaborationStyleBadge } from "../CollaborationStyleBadge";
 import { TaskTagList } from "../TaskTags";
 import type { ReactNode } from "react";
 import type { RecordVariant } from "./recordVocabulary";
@@ -32,7 +31,7 @@ export function TaskRecordDefinition({
   task: RelayTaskListItem;
   variant: RecordVariant;
   locale: string;
-  team?: Pick<AgentTeam, "collaborationStyle" | "workflowSteps" | "workflows">;
+  team?: Pick<AgentTeam, "collaborationStyle" | "workflowSteps" | "workflows" | "defaultWorkflowId">;
 }) {
   const { t } = useTranslation();
 
@@ -61,18 +60,17 @@ export function TaskRecordDefinition({
       value: t(task.routineState === "active" ? "record.enabled_yes" : "record.enabled_no"),
     });
   }
-  const workflow = team?.workflows?.find(item => item.id === task.assignedWorkflowId);
-  if (task.assignedWorkflowId) rows.push({
-    key: "workflow", label: t("workflow.select_workflow"), value: workflow?.name ?? t("workflow.unavailable"),
-  });
-  else if (team && isWorkflowTeam(team)) rows.push({
+  const selectedId = task.assignedWorkflowId
+    ?? (task.collaborationStyle ? `preset:${task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle}` : team?.defaultWorkflowId ?? (team?.collaborationStyle ? `preset:${team.collaborationStyle === "solo" ? "build_review" : team.collaborationStyle}` : undefined));
+  const workflow = team?.workflows?.find(item => item.id === selectedId);
+  if (task.assignedTeamId && !(team && isWorkflowTeam(team) && !selectedId)) {
+    const style = predefinedStyle(selectedId ?? defaultWorkflowId());
+    const name = style ? t(`collab_style.${style}`) : workflow?.name ?? t("workflow.unavailable");
+    rows.push({ key: "workflow", label: t("workflow.select_workflow"),
+      value: task.assignedWorkflowId || task.collaborationStyle ? name : t("workflow.inherit_default", { name }) });
+  } else if (team && isWorkflowTeam(team)) rows.push({
     key: "workflow", label: t("workflow.section_title"),
     value: t("workflow.step_count", { count: team.workflowSteps?.length ?? 0 }),
-  });
-  if (task.assignedTeamId && !task.assignedWorkflowId && !(team && isWorkflowTeam(team))) rows.push({
-    key: "collaboration", label: t("collab_style.task_label"),
-    value: <CollaborationStyleBadge style={effectiveStyle(team, task.collaborationStyle)}
-      label={task.collaborationStyle ? undefined : t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(team)}`) })} />,
   });
   rows.push(
     { key: "created", label: t("record.created"), value: recordTimestamp(task.createdAt, locale), meta: true },

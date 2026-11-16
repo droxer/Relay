@@ -22,8 +22,9 @@ const stageOf = (role: string | undefined) => STAGE[role ?? ""] ?? STAGE.impleme
 export interface SlotMember { id: string; role?: string; onRequest?: boolean }
 type Slot = { slot: "builder" | "reviewer" | "member" | "lead"; memberId: string };
 
-export function effectiveStyle(team?: { collaborationStyle?: CollaborationStyle }, taskStyle?: CollaborationStyle | null): CollaborationStyle {
-  const style = taskStyle ?? team?.collaborationStyle ?? DEFAULT_COLLABORATION_STYLE;
+export function effectiveStyle(team?: { collaborationStyle?: CollaborationStyle; defaultWorkflowId?: string }, taskStyle?: CollaborationStyle | null): CollaborationStyle {
+  const selected = team?.defaultWorkflowId?.replace("preset:", "") as CollaborationStyle | undefined;
+  const style = taskStyle ?? (selected && COLLABORATION_STYLES.includes(selected) ? selected : undefined) ?? team?.collaborationStyle ?? DEFAULT_COLLABORATION_STYLE;
   return style === "solo" ? DEFAULT_COLLABORATION_STYLE : style;
 }
 

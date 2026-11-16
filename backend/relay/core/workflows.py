@@ -80,4 +80,5 @@ def validate_default_workflow(team: dict[str, Any], workflow_id: Any) -> str:
         raise ValueError("workflow_not_found")
     if not definition.get("enabled", True):
         raise ValueError("workflow_disabled")
+    workflow_execution_snapshot(team, workflow_id)
     return str(workflow_id)

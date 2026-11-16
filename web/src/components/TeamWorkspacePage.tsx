@@ -40,10 +40,12 @@ import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CollaborationStyleCards, CollaborationSlotPreview, CollaborationStyleSummary } from "./CollaborationStyleSelect";
+import { CollaborationSlotPreview, CollaborationStyleSummary } from "./CollaborationStyleSelect";
 import { effectiveStyle } from "../lib/collaborationStyle";
 import { isWorkflowTeam } from "../lib/workflowTeamDraft";
 import { WorkflowStepSummary } from "./workflow/WorkflowStepSummary";
+import { WorkflowSelect } from "./workflow/WorkflowSelect";
+import { defaultWorkflowId, predefinedStyle } from "../lib/workflowSelection";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -96,7 +98,8 @@ function TeamProfile({
   const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>(team.memberConfigs ?? {});
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
   const [leadId, setLeadId] = useState(team.leadAgentId ?? "");
-  const [style, setStyle] = useState(effectiveStyle(team));
+  const [workflowId, setWorkflowId] = useState(defaultWorkflowId(team));
+  const style = predefinedStyle(workflowId);
   const [humanApproval, setHumanApproval] = useState(team.humanApproval === true);
   const [imageSaving, setImageSaving] = useState(false);
   // The one member card open for inline edit; the others lock until it closes.
@@ -118,7 +121,7 @@ function TeamProfile({
     memberIds,
   )
     || leadId !== (team.leadAgentId ?? "")
-    || style !== effectiveStyle(team)
+    || workflowId !== defaultWorkflowId(team)
     || humanApproval !== (team.humanApproval === true)
     || memberIds.length !== team.memberAgentIds.length
     || memberIds.some((id) => !team.memberAgentIds.includes(id));
@@ -169,7 +172,7 @@ function TeamProfile({
     setNameDraft(team.name);
     setMemberIds(team.memberAgentIds);
     setLeadId(team.leadAgentId ?? "");
-    setStyle(effectiveStyle(team));
+    setWorkflowId(defaultWorkflowId(team));
     setHumanApproval(team.humanApproval === true);
     setMemberConfigs(team.memberConfigs ?? {});
     setAcceptanceCriteria(team.acceptanceCriteria ?? []);
@@ -220,7 +223,7 @@ function TeamProfile({
           ...(offComputer.length === 0 && computerId ? { computerId } : {}),
           memberConfigs, acceptanceCriteria,
           leadAgentId: leadId,
-          collaborationStyle: style,
+          defaultWorkflowId: workflowId,
           // Lead-led holds no approval step, so the setting is not offered there.
           humanApproval: style !== "lead_led" && humanApproval,
           enabled: team.enabled,
@@ -348,13 +351,14 @@ function TeamProfile({
             {editing ? (
               <>
                 <section className="collab-style-section" aria-labelledby="team-profile-style">
-                  <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("collab_style.label")}</h2>
-                  <CollaborationStyleCards aria-labelledby="team-profile-style" value={style} onChange={setStyle} disabled={busy} />
-                  <CollaborationSlotPreview members={memberIds.map((id) => ({
+                  <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("workflow.default_workflow")}</h2>
+                  <p className="workflow-editor-note">{t("workflow.template_hint")}</p>
+                  <WorkflowSelect team={team} value={workflowId} onChange={value => { if (value) setWorkflowId(value); }} disabled={busy} aria-label={t("workflow.default_workflow")} />
+                  {style ? <CollaborationSlotPreview members={memberIds.map((id) => ({
                     id, role: memberConfigs[id]?.role ?? agents.find((a) => a.id === id)?.defaultRole,
                     onRequest: memberConfigs[id]?.participation === "on_request",
-                  }))} leadId={leadId} style={style} approval={humanApproval} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} />
-                  <div className="team-work-flags">
+                  }))} leadId={leadId} style={style} approval={humanApproval} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} /> : <WorkflowStepSummary steps={team.workflows?.find(item => item.id === workflowId)?.workflowSteps ?? []} agentName={id => agents.find(agent => agent.id === id)?.displayName ?? id} />}
+                  {style ? <div className="team-work-flags">
                     <label className="team-work-flag">
                       <Checkbox
                         checked={style !== "lead_led" && humanApproval}
@@ -367,7 +371,7 @@ function TeamProfile({
                     <p id="team-profile-approval-hint" className="team-work-flag-hint">
                       {t(style === "lead_led" ? "collab_style.approval_lead_led" : "collab_style.approval_hint")}
                     </p>
-                  </div>
+                  </div> : null}
                 </section>
                 <Field label={t("team_work.criteria")} hint={t("team_work.one_per_line")}>
                   <Textarea
@@ -402,6 +406,10 @@ function TeamProfile({
                   {t("workflow.steps")}
                   <span className="tnum">{team.workflowSteps?.length ?? 0}</span>
                 </h2>
+                <Field label={t("workflow.default_workflow")} wrapper="div">
+                  <WorkflowSelect team={team} value={defaultWorkflowId(team)} disabled={busy}
+                    onChange={value => { if (value) void updateTeamMutation.mutateAsync({ teamId: team.id, input: { defaultWorkflowId: value } }).catch(() => {}); }} />
+                </Field>
                 <WorkflowStepSummary
                   steps={team.workflowSteps ?? []}
                   agentName={(agentId) => team.members.find((member) => member.id === agentId)?.displayName ?? t("project.member_unavailable")}
@@ -411,8 +419,12 @@ function TeamProfile({
             ) : <section className="collab-style-section" aria-labelledby="team-profile-style">
               {/* Same section grammar as Members: the style is part of the
                   team's document, not a loose form field under it. */}
-              <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("collab_style.label")}</h2>
-              <CollaborationStyleSummary style={effectiveStyle(team)} />
+              <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("workflow.default_workflow")}</h2>
+              {predefinedStyle(defaultWorkflowId(team)) ? <CollaborationStyleSummary style={effectiveStyle(team)} /> : <>
+                <p>{team.workflows?.find(item => item.id === defaultWorkflowId(team))?.name ?? t("workflow.unavailable")}</p>
+                <WorkflowStepSummary steps={team.workflows?.find(item => item.id === defaultWorkflowId(team))?.workflowSteps ?? []}
+                  agentName={id => team.members.find(member => member.id === id)?.displayName ?? id} />
+              </>}
             </section>}
           </form>
           {team.workflows?.length ? (

@@ -141,18 +141,22 @@ Thread may address a Team only when the Team lives on the Thread's Computer.
 _Avoid_: Cross-node team, shared-path team
 
 **Workflow**:
-A reusable, ordered process owned by one Team and scoped to one Project.
-A Team may own multiple Workflows while keeping one roster. Each step names
-an enabled Agent from both the Team and Project, instructions, acceptance
-criteria, and an optional approval gate before work begins. The same Agent
-may own several steps. The Project owner manages and starts Workflows.
-A Task in that Project may select both a Team and one of its Workflows;
-without a Workflow selection the Team uses its collaboration style.
-_Avoid_: Workflow Team (a legacy representation that combines roster and process)
+A reusable process for a Team's work. A **Predefined Workflow** assigns work
+by Team roles: Build → Review, Pipeline, or Lead-led. Lead-led lets the lead
+plan and delegate during a Run. A **Custom Workflow** defines ordered steps,
+each with an Agent, instructions, acceptance criteria, and an optional approval
+gate. Its Agents belong to both its Team and its Project.
+A Team may own several Custom Workflows and chooses one **Default Workflow**,
+which may be predefined or custom. A Task or Automation inherits that default
+or selects another Workflow. A Custom Workflow keeps its Project scope;
+incompatible selections are refused rather than replaced with another process.
+The Project owner manages Custom Workflow definitions.
+_Avoid_: Collaboration style (a compatibility name for a Predefined Workflow),
+Workflow Team (a legacy representation combining roster and process)
 
 **Workflow Run**:
-One execution of a Workflow, recorded in a Project Thread. Its definition
-is frozen when the run starts, so later edits or deletion of the Workflow
+One execution of a Workflow, recorded in a Thread. A Custom Workflow Run
+uses its Project Thread. Its definition is frozen when the run starts, so later edits or deletion of the Workflow
 do not change the run's steps, acceptance criteria, or approval gates.
 The owner answers gates and retries or cancels stopped steps in the Thread.
 A Task's execution remains linked to that Thread across gates and retries.

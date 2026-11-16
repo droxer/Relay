@@ -137,6 +137,8 @@ export interface TeamMemberConfig {
 export type WorkflowStep = WorkflowStepDefinition;
 
 export interface AgentTeam {
+  defaultWorkflowId?: string;
+  workflowOptions?: Array<{ id: string; kind: "predefined" | "steps"; name: string; projectId?: string; template?: CollaborationStyle; enabled: boolean }>;
   workflows?: TeamWorkflow[];
   /** Set only on a Project workflow Team; immutable once set. */
   projectId?: string;
@@ -171,6 +173,7 @@ export interface AgentTeamsResponse {
 }
 
 export interface TeamMutationInput {
+  defaultWorkflowId?: string;
   projectId?: string;
   workflowSteps?: WorkflowStep[];
   collaborationStyle?: CollaborationStyle | null;

@@ -42,6 +42,7 @@ export interface AgentRunInput {
   connectionGrants?: import("./connections.ts").ConnectionGrant[];
   idempotencyKey?: string;
   attachmentIds?: string[];
+  workflowId?: string;
   style?: CollaborationStyle;
   taskGoal: string;
   /** Computer selected as the immutable runtime for a new thread. */
@@ -69,6 +70,7 @@ export interface AgentRunInput {
 
 export interface ThreadMessageInput {
   attachmentIds?: string[];
+  workflowId?: string;
   style?: CollaborationStyle;
   text: string;
   intent: "accomplish" | "discuss" | "review";

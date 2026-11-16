@@ -1938,6 +1938,8 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
                 "collaborationStyle": "lead_led",
+            "workflowId": "preset:lead_led",
+            "workflowKind": "predefined",
             },
         ).json()["team"]
         task = _routine_run(
@@ -2030,6 +2032,8 @@ def test_message_to_a_team_thread_runs_every_member_lead_first(monkeypatch) -> N
             "memberAgentIds": [lead["id"], support["id"]],
             "leadAgentId": lead["id"],
             "collaborationStyle": "lead_led",
+            "workflowId": "preset:lead_led",
+            "workflowKind": "predefined",
         }
         round_events = [
             event

@@ -109,3 +109,82 @@ def test_predefined_starts_through_the_workflow_endpoint(monkeypatch):
         session = response.json()
         assert session['collaborationRounds'][0]['teamSnapshot']['workflowId'] == 'preset:pipeline'
         assert client.post(path, json=body).json()['id'] == session['id']
+
+
+@pytest.mark.parametrize('explicit', [False, True])
+def test_new_team_conversation_starts_the_selected_custom_workflow(monkeypatch, explicit):
+    with unified_world(monkeypatch) as (_, client, _, _, project, payload):
+        team, workflow = setup_definitions(client, project, payload)
+        body = {'taskGoal': 'Release from the team composer', 'teamId': team['id'],
+                'idempotencyKey': str(uuid4()), 'userMessageId': 'opening-message', **({'workflowId': workflow['id']} if explicit else {})}
+        response = client.post('/api/v1/agent-runs', json=body)
+        assert response.status_code == 202, response.text
+        session = response.json()
+        assert session['projectId'] == project['id']
+        assert session['workflowRuns'][0]['teamSnapshot']['workflowId'] == workflow['id']
+        retried = client.post('/api/v1/agent-runs', json=body).json()
+        assert retried['id'] == session['id']
+        assert len([event for event in retried['events'] if event['type'] == 'user.message']) == 1
+        assert next(event for event in retried['events'] if event['type'] == 'user.message')['id'] == 'opening-message'
+
+
+@pytest.mark.parametrize('predefined', [False, True])
+def test_automation_inherits_or_overrides_team_workflow(monkeypatch, predefined):
+    from datetime import UTC, datetime, timedelta
+    from automation_helpers import DAILY_TRIGGERS
+    from test_scheduled_workflows import occurrence_of
+    with unified_world(monkeypatch) as (app, client, _, _, project, payload):
+        team, workflow = setup_definitions(client, project, payload)
+        routine = client.post('/api/v1/tasks', json={
+            'title': 'Nightly', 'projectId': project['id'], 'assignedTeamId': team['id'],
+            'isRoutine': True, 'routineState': 'active', 'routineTriggers': DAILY_TRIGGERS,
+            **({'assignedWorkflowId': 'preset:pipeline'} if predefined else {}),
+        }).json()
+        app.state.task_scheduler.automations.tick(datetime.now(UTC) + timedelta(days=2))
+        occurrence = occurrence_of(app, routine['id'])
+        tick(app)
+        occurrence = app.state.task_store.get_task(occurrence['id'])
+        assert occurrence['linkedSessionIds'], occurrence
+        session = app.state.session_store.get_session(occurrence['linkedSessionIds'][0])
+        snapshot = (session['collaborationRounds'][0]['teamSnapshot'] if predefined
+                    else session['workflowRuns'][0]['teamSnapshot'])
+        assert snapshot['workflowId'] == ('preset:pipeline' if predefined else workflow['id'])
+
+
+def test_legacy_workflow_team_can_adopt_a_predefined_default_without_losing_steps(monkeypatch):
+    with unified_world(monkeypatch) as (_, client, _, _, _, payload):
+        legacy = client.post('/api/v1/teams', json=payload).json()['team']
+        response = client.patch(f"/api/v1/teams/{legacy['id']}", json={'defaultWorkflowId': 'preset:pipeline'})
+        assert response.status_code == 200, response.text
+        team = response.json()['team']
+        assert 'workflowSteps' not in team
+        assert team['workflows'][0]['workflowSteps'] == legacy['workflowSteps']
+        run = client.post('/api/v1/agent-runs', json={'taskGoal': 'Pipeline', 'teamId': team['id']})
+        assert run.status_code == 202, run.text
+        assert run.json()['collaborationRounds'][0]['teamSnapshot']['workflowId'] == 'preset:pipeline'
+
+
+@pytest.mark.parametrize('invalid', ['id', 'missing', 'attachment', 'assignments', 'project', 'computer', 'service'])
+def test_custom_conversation_entry_rejects_overrides_and_nonowner_actors(monkeypatch, invalid):
+    from fastapi.testclient import TestClient
+    with unified_world(monkeypatch) as (app, client, node, _, project, payload):
+        team, workflow = setup_definitions(client, project, payload)
+        body = {'taskGoal': 'Do not dispatch', 'teamId': team['id'], 'workflowId': workflow['id']}
+        if invalid == 'id':
+            body['workflowId'] = ''
+        elif invalid == 'missing':
+            body['workflowId'] = 'missing-definition'
+        elif invalid == 'attachment':
+            body['attachmentIds'] = ['attachment']
+        elif invalid == 'assignments':
+            body['assignments'] = []
+        elif invalid == 'project':
+            body['projectId'] = 'foreign'
+        elif invalid == 'computer':
+            body['daemonNodeId'] = 'other'
+        else:
+            client = TestClient(app)
+            client.headers.update({'Authorization': 'Bearer chat-test', 'x-relay-user-id': team['ownerUserId']})
+        response = client.post('/api/v1/agent-runs', json=body)
+        assert response.status_code in (400, 403, 409), response.text
+        assert app.state.registry.take_commands(node['id'], 'token_node_here') == []

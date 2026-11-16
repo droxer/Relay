@@ -195,7 +195,6 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       projectId: task.projectId,
       title: task.title,
       acceptancePolicy: taskAcceptancePolicy(task),
-      collaborationStyle: task.collaborationStyle ?? null,
       description: task.description,
       priority: task.priority,
       tags: task.tags ?? [],
@@ -203,7 +202,8 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
-      assignedWorkflowId: task.assignedWorkflowId ?? "",
+      assignedWorkflowId: task.assignedWorkflowId ?? (task.collaborationStyle ? `preset:${task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle}` : ""),
+      collaborationStyle: null,
       ...routineFormFields(task),
     });
   }

@@ -2,8 +2,8 @@ import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useS
 import { useTranslation } from "react-i18next";
 import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, UserAgent, ThreadMessageInput } from "../../types";
 import { ComposerImagePicker, ComposerImagePreviews, useComposerImages } from "./ComposerImages";
-import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
-import { effectiveStyle } from "../../lib/collaborationStyle";
+import { WorkflowSelect } from "../workflow/WorkflowSelect";
+import { predefinedStyle } from "../../lib/workflowSelection";
 import { sendShortcutLabel } from "../../lib/sendShortcut";
 import {
   ActionSend,
@@ -484,10 +484,10 @@ const ComposerView = forwardRef<ComposerHandle, {
                 running={running}
               />
               {activeTeamId && !projectName && !addressedLogicalAgentId && !contextPending ? (
-                <CollaborationStyleSelect compact aria-label={t("collab_style.composer_label")}
-                  value={style} onChange={setStyle} disabled={running || sendPending || readOnly}
-                  inheritStyle={effectiveStyle(teams?.find((team) => team.id === activeTeamId))}
-                  inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams?.find((team) => team.id === activeTeamId))}`) })} />
+                <WorkflowSelect compact inherit predefinedOnly aria-label={t("workflow.select_workflow")}
+                  team={teams?.find(team => team.id === activeTeamId)}
+                  value={style ? `preset:${style}` : null} onChange={value => setStyle(predefinedStyle(value) ?? null)}
+                  disabled={running || sendPending || readOnly} />
               ) : null}
             </div>
             {/* Mid-run, Enter queues the draft; the button says so beside

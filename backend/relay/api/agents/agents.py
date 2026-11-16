@@ -36,6 +36,7 @@ from ..bodies import JsonBodyDep, json_body, string_field
 from ...skills.bundle import resolve_bundle
 from ...skills.assignments import effective_assignments
 from ...skills.grants import read_grants
+from .workflow_entry import custom_workflow_entry
 
 router = APIRouter()
 
@@ -336,6 +337,9 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     decision = body.get("decision")
+    workflow_session = await custom_workflow_entry(request, ctx, body, task_goal)
+    if workflow_session is not None:
+        return workflow_session
     try:
         style = requested_workflow_style(body.get("workflowId"), body.get("style"))
     except ValueError as error:

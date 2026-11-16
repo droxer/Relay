@@ -92,7 +92,7 @@ export function threadMessageOperationKey({ attachmentIds, sessionId, text, inte
  *
  * Addressing is resolved and validated before this serialization boundary.
  */
-export function threadMessageInput({ text, intent = "accomplish", addressAgentIds, addressTeamId = null, userMessageId, style, questionId = null, approve = false }: {
+export function threadMessageInput({ text, intent = "accomplish", addressAgentIds, addressTeamId = null, userMessageId, style, workflowId, questionId = null, approve = false }: {
   text: string;
   /** `discuss` asks without handing out work; styles apply only to work. */
   intent?: ThreadMessageInput["intent"];
@@ -102,6 +102,7 @@ export function threadMessageInput({ text, intent = "accomplish", addressAgentId
   addressTeamId?: string | null;
   userMessageId: string;
   style?: ThreadMessageInput["style"] | null;
+  workflowId?: string;
   /** The wait this message answers; an answer always resumes work. */
   questionId?: string | null;
   /** With `questionId` naming an approval wait: approve its held step. */
@@ -113,7 +114,8 @@ export function threadMessageInput({ text, intent = "accomplish", addressAgentId
     userMessageId,
     idempotencyKey: userMessageId,
     ...(questionId && intent === "accomplish" ? { questionId, ...(approve ? { approve: true } : {}) } : {}),
-    ...(style && intent === "accomplish" && addressAgentIds.length === 0 ? { style } : {}),
+    ...(workflowId && intent === "accomplish" && addressAgentIds.length === 0 ? { workflowId } : {}),
+    ...(style && !workflowId && intent === "accomplish" && addressAgentIds.length === 0 ? { style } : {}),
     ...(addressAgentIds.length
       ? { addressAgentIds: [...addressAgentIds] }
       : addressTeamId

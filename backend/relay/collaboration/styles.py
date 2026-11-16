@@ -59,7 +59,10 @@ def resolve_collaboration_style(
     """Message beats task beats team beats the default."""
     if requested is not None:
         return validate_collaboration_style(requested)
-    style = predefined_style(selected_workflow_id(team, task))
+    try:
+        style = predefined_style(selected_workflow_id(team, task))
+    except ValueError as error:
+        raise CollaborationStyleError(str(error)) from error
     if style is None:
         raise CollaborationStyleError("workflow_requires_project_runtime")
     return validate_collaboration_style(style)

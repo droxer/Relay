@@ -20,7 +20,7 @@ from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
 from ..tables import teams as teams_tables
 from ...core.workflows import team_workflows, workflow_definition, validate_default_workflow
-from ...core.workflow_selection import workflow_id_for_style
+from ...core.workflow_selection import workflow_id_for_style, default_workflow_id
 
 
 TEAM_FIELDS = frozenset({
@@ -161,6 +161,10 @@ class DatabaseTeamStore:
         ) -> tuple[dict[str, Any], dict[str, Any]]:
             normalized = _normalize_team_patch(patch, current=current)
             updated = {**current, **normalized, "updatedAt": now_iso()}
+            if "defaultWorkflowId" in patch and is_workflow_team(current):
+                updated["workflows"] = team_workflows(current)
+                updated.pop("projectId", None)
+                updated.pop("workflowSteps", None)
             if updated.get("collaborationStyle") is None:
                 updated = {key: value for key, value in updated.items() if key != "collaborationStyle"}
             return updated, {"patch": normalized, "team": updated}
@@ -207,7 +211,7 @@ class DatabaseTeamStore:
             if workflow_id and old is None:
                 raise KeyError(workflow_id)
             definition = workflow_definition(current, payload, current=old)
-            if current.get("defaultWorkflowId") == workflow_id and not definition["enabled"]:
+            if workflow_id is not None and default_workflow_id(current) == workflow_id and not definition["enabled"]:
                 raise ValueError("workflow_is_default")
             if any(item["id"] != definition["id"] and item["name"].casefold() == definition["name"].casefold()
                    for item in workflows):
@@ -227,7 +231,7 @@ class DatabaseTeamStore:
             deleted = next((item for item in workflows if item["id"] == workflow_id), None)
             if deleted is None:
                 raise KeyError(workflow_id)
-            if current.get("defaultWorkflowId") == workflow_id:
+            if default_workflow_id(current) == workflow_id:
                 raise ValueError("workflow_is_default")
             updated = {**current, "workflows": [item for item in workflows if item["id"] != workflow_id],
                        "updatedAt": now_iso()}

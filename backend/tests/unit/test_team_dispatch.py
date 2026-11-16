@@ -164,6 +164,8 @@ def test_team_member_assignments_freezes_the_roster_for_the_round() -> None:
         "memberAgentIds": ["lead", "support"],
         "leadAgentId": "lead",
         "collaborationStyle": "lead_led",
+            "workflowId": "preset:lead_led",
+            "workflowKind": "predefined",
     }
     assert [item["teamSnapshot"] for item in assignments] == [expected, expected, expected]
 

@@ -41,3 +41,19 @@ def test_team_store_validates_and_persists_predefined_defaults(tmp_path):
     with pytest.raises(ValueError):
         store.update_team(team['id'], {'defaultWorkflowId': 'preset:unknown'})
     assert store.events(team['id']) == before
+
+
+@pytest.mark.parametrize('value', ['', None, 1, [], 'preset:missing'])
+def test_invalid_workflow_ids_fail_closed(value):
+    with pytest.raises(ValueError):
+        predefined_style(value)
+
+
+def test_run_selection_aliases_are_explicit_and_immutable():
+    from relay.core.workflow_selection import requested_workflow_style
+    assert requested_workflow_style(None, 'pipeline') == 'pipeline'
+    assert requested_workflow_style('preset:lead_led') == 'lead_led'
+    with pytest.raises(ValueError, match='conflict'):
+        requested_workflow_style('preset:pipeline', 'lead_led')
+    with pytest.raises(ValueError, match='requires_project'):
+        requested_workflow_style('custom')
