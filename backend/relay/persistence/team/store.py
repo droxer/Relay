@@ -19,13 +19,14 @@ from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
 from ..tables import teams as teams_tables
-from ...core.workflows import team_workflows, workflow_definition
+from ...core.workflows import team_workflows, workflow_definition, validate_default_workflow
+from ...core.workflow_selection import workflow_id_for_style, default_workflow_id
 
 
 TEAM_FIELDS = frozenset({
     "name", "profileImageUrl", "leadAgentId", "memberAgentIds", "computerId", "enabled",
     "memberConfigs", "acceptanceCriteria", "collaborationStyle", "humanApproval",
-    "projectId", "workflowSteps",
+    "projectId", "workflowSteps", "defaultWorkflowId",
 })
 
 
@@ -160,6 +161,10 @@ class DatabaseTeamStore:
         ) -> tuple[dict[str, Any], dict[str, Any]]:
             normalized = _normalize_team_patch(patch, current=current)
             updated = {**current, **normalized, "updatedAt": now_iso()}
+            if "defaultWorkflowId" in patch and is_workflow_team(current):
+                updated["workflows"] = team_workflows(current)
+                updated.pop("projectId", None)
+                updated.pop("workflowSteps", None)
             if updated.get("collaborationStyle") is None:
                 updated = {key: value for key, value in updated.items() if key != "collaborationStyle"}
             return updated, {"patch": normalized, "team": updated}
@@ -206,6 +211,8 @@ class DatabaseTeamStore:
             if workflow_id and old is None:
                 raise KeyError(workflow_id)
             definition = workflow_definition(current, payload, current=old)
+            if workflow_id is not None and default_workflow_id(current) == workflow_id and not definition["enabled"]:
+                raise ValueError("workflow_is_default")
             if any(item["id"] != definition["id"] and item["name"].casefold() == definition["name"].casefold()
                    for item in workflows):
                 raise ValueError("workflow_name_taken")
@@ -224,6 +231,8 @@ class DatabaseTeamStore:
             deleted = next((item for item in workflows if item["id"] == workflow_id), None)
             if deleted is None:
                 raise KeyError(workflow_id)
+            if default_workflow_id(current) == workflow_id:
+                raise ValueError("workflow_is_default")
             updated = {**current, "workflows": [item for item in workflows if item["id"] != workflow_id],
                        "updatedAt": now_iso()}
             return updated, {"workflow": deleted, "team": updated}
@@ -406,7 +415,7 @@ def _new_team(
         "teams", team_id, payload.get("profileImageUrl")
     )
     timestamp = now_iso()
-    return {
+    team = {
         **workflow_fields(payload),
         "id": team_id,
         "ownerUserId": owner_user_id,
@@ -431,6 +440,10 @@ def _new_team(
         "createdAt": timestamp,
         "updatedAt": timestamp,
     }
+
+    if "defaultWorkflowId" in payload:
+        team["defaultWorkflowId"] = validate_default_workflow(team, payload["defaultWorkflowId"])
+    return team
 
 
 def _normalized_team_snapshot(
@@ -518,6 +531,12 @@ def _normalize_team_patch(
         if patch["enabled"] and not members:
             raise TeamValidationError("team_members_required")
         normalized["enabled"] = patch["enabled"]
+    if "defaultWorkflowId" in patch:
+        normalized["defaultWorkflowId"] = validate_default_workflow({**current, **normalized}, patch["defaultWorkflowId"])
+        if "collaborationStyle" in patch and patch["collaborationStyle"] is not None and normalized["defaultWorkflowId"] != workflow_id_for_style(patch["collaborationStyle"]):
+            raise ValueError("workflow_selection_conflict")
+    elif "collaborationStyle" in patch:
+        normalized["defaultWorkflowId"] = workflow_id_for_style(patch["collaborationStyle"])
     workflow = workflow_fields({**patch, **normalized}, current=current)
     if workflow:
         normalized.update(workflow)

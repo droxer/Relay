@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ...core.workflows import team_workflows, workflow_definition, workflow_execution_snapshot
+from ...core.workflows import team_workflows, workflow_definition, workflow_execution_snapshot, workflow_catalog
 from ...security.request_auth import require_user_session
 from ...teams.workflow import validate_workflow_write
 from ..actors import chat_service_user_header
@@ -29,7 +29,8 @@ def owned_workflow_team(request: Request, ctx: AppContextDep, team_id: str) -> d
 
 @router.get('/teams/{team_id}/workflows')
 def list_workflows(team_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    return {'workflows': team_workflows(owned_workflow_team(request, ctx, team_id))}
+    team = owned_workflow_team(request, ctx, team_id)
+    return {'workflows': team_workflows(team), 'workflowOptions': workflow_catalog(team)}
 
 
 def _save(team: dict[str, Any], body: dict[str, Any], ctx: AppContextDep,
@@ -43,7 +44,7 @@ def _save(team: dict[str, Any], body: dict[str, Any], ctx: AppContextDep,
         validate_workflow_write(ctx, team['ownerUserId'], snapshot)
         saved = ctx.team_store.save_workflow(team['id'], body, workflow_id=workflow_id)
     except ValueError as error:
-        raise HTTPException(409 if str(error) == 'workflow_name_taken' else 400, str(error)) from error
+        raise HTTPException(409 if str(error) in {'workflow_name_taken', 'workflow_is_default'} else 400, str(error)) from error
     except KeyError as error:
         raise HTTPException(404, 'workflow_not_found') from error
     return {'workflow': saved}
@@ -68,4 +69,6 @@ def delete_workflow(team_id: str, workflow_id: str, request: Request, ctx: AppCo
         team = ctx.team_store.delete_workflow(team_id, workflow_id)
     except KeyError as error:
         raise HTTPException(404, 'workflow_not_found') from error
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
     return {'workflows': team_workflows(team)}

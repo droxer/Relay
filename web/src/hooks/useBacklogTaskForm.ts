@@ -72,7 +72,7 @@ export function useBacklogTaskForm({
       tags: task.tags ?? [],
       status: task.status,
       acceptancePolicy: taskAcceptancePolicy(task),
-      collaborationStyle: task.collaborationStyle ?? null,
+      collaborationStyle: null,
       startedAt: task.startedAt,
       dueDate: task.dueDate ?? "",
       assigneeUserId:
@@ -80,7 +80,7 @@ export function useBacklogTaskForm({
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
-      assignedWorkflowId: task.assignedWorkflowId ?? "",
+      assignedWorkflowId: task.assignedWorkflowId ?? (task.collaborationStyle ? `preset:${task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle}` : ""),
     });
   }
 

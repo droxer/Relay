@@ -7,7 +7,8 @@ from fastapi import APIRouter, HTTPException, Request
 from ...persistence.team.store import TeamValidationError, validate_team_payload
 from ...security.request_auth import require_admin_session, require_user_session
 from ...core.team_workflows import is_workflow_team
-from ...core.workflows import team_workflows
+from ...core.workflows import team_workflows, workflow_catalog, workflow_execution_snapshot
+from ...core.workflow_selection import default_workflow_id, predefined_style
 from ...teams.workflow import validate_workflow_write
 from ...teams.computer import resolve_team_computer
 from ...teams.membership import with_member_roles
@@ -73,6 +74,9 @@ def _validated_roster(
     when the write touches neither roster nor computer.
     """
     validate_workflow_write(ctx, owner_user_id, body, current=current)
+    if "defaultWorkflowId" in body and predefined_style(body["defaultWorkflowId"]) is None:
+        snapshot = workflow_execution_snapshot({**(current or {}), **body}, body["defaultWorkflowId"])
+        validate_workflow_write(ctx, owner_user_id, snapshot)
     if current is not None and not ROSTER_FIELDS & body.keys():
         # Nothing about who is on the team or where it runs changes, so the
         # legacy roster is not re-judged (workflows were checked above). That keeps a team emptied by agent
@@ -174,7 +178,8 @@ def _team_view(
         (member for member in members if member["id"] == team.get("leadAgentId")),
         None,
     )
-    return {**team, "workflows": team_workflows(team), "members": members, "lead": lead}
+    return {**team, "workflows": team_workflows(team), "workflowOptions": workflow_catalog(team),
+            "defaultWorkflowId": default_workflow_id(team), "members": members, "lead": lead}
 
 
 @router.get("/teams")

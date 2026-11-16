@@ -221,8 +221,9 @@ function WorkflowEditorBody({ open, project, workflow, teams, agents, onClose }:
         {workflow ? (
           <div className="adm-drawer-section">
             <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
+            {parent?.defaultWorkflowId === workflow.id ? <p className="workflow-editor-note">{t("workflow.default_in_use")}</p> : null}
             <div className="adm-drawer-section-actions">
-              <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy}>
+              <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy || parent?.defaultWorkflowId === workflow.id}>
                 <AdminDelete size={ICON.sm} aria-hidden="true" />
                 {t("workflow.delete")}
               </Button>

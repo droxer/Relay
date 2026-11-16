@@ -11,9 +11,7 @@ import { describeTrigger } from "../../lib/automationTrigger";
 import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { isSubmitChord, submitShortcutLabel } from "../../lib/shortcuts";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CollaborationStyleSelect } from "../CollaborationStyleSelect";
-import { projectWorkflows, isWorkflowTeam } from "../../lib/workflowTeamDraft";
-import { effectiveStyle } from "../../lib/collaborationStyle";
+import { WorkflowSelect } from "../workflow/WorkflowSelect";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -449,23 +447,10 @@ export function TaskDrawer({
         {assignmentField}
         {/* Directly under the assignment that reveals it: picking a team
             below must not insert a field above where the reader is working. */}
-        {selectedTeam && project && (projectWorkflows([selectedTeam], project.id).length > 0 || form.assignedWorkflowId) ? <Field label={t("workflow.select_workflow")} wrapper="div">
-          <Select value={form.assignedWorkflowId || "team-default"} disabled={saving} onValueChange={value => {
-            onChange({ ...form, assignedWorkflowId: value === "team-default" ? "" : value ?? "", collaborationStyle: null });
-          }}>
-            <SelectTrigger className="w-full" aria-label={t("workflow.select_workflow")}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="team-default">{t("workflow.team_default")}</SelectItem>
-              {projectWorkflows([selectedTeam], project.id).filter(workflow => workflow.enabled).map(workflow =>
-                <SelectItem key={workflow.id} value={workflow.id}>{workflow.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </Field> : null}
-        {form.assignedTeamId && !form.assignedWorkflowId && !isWorkflowTeam(teams.find(team => team.id === form.assignedTeamId) ?? {}) ? <Field label={t("collab_style.task_label")} wrapper="div">
-          <CollaborationStyleSelect aria-label={t("collab_style.task_label")} value={form.collaborationStyle ?? null}
-            disabled={saving} onChange={(collaborationStyle) => onChange({ ...form, collaborationStyle })}
-            inheritStyle={effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}
-            inheritLabel={t("collab_style.team_default", { style: t(`collab_style.${effectiveStyle(teams.find((team) => team.id === form.assignedTeamId))}`) })} />
+        {selectedTeam ? <Field label={t("workflow.select_workflow")} wrapper="div">
+          <WorkflowSelect team={selectedTeam} projectId={project?.id} predefinedOnly={!project} inherit disabled={saving}
+            value={form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null)}
+            onChange={workflowId => onChange({ ...form, assignedWorkflowId: workflowId ?? "", collaborationStyle: null })} />
         </Field> : null}
         {form.variant === "backlog" ? (
           <div className={form.id ? undefined : "task-drawer-form-grid"}>

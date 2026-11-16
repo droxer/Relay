@@ -22,6 +22,7 @@ function normalizeAcceptanceCriteria(criteria: string[]): string[] {
 }
 
 export function teamMutationInput(input: {
+  defaultWorkflowId?: string;
   collaborationStyle?: CollaborationStyle | null;
   humanApproval?: boolean;
   name: string;
@@ -34,6 +35,7 @@ export function teamMutationInput(input: {
 }): TeamMutationInput {
   return {
     name: input.name.trim(),
+    ...(input.defaultWorkflowId !== undefined ? { defaultWorkflowId: input.defaultWorkflowId } : {}),
     leadAgentId: input.leadAgentId,
     memberAgentIds: input.memberAgentIds,
     ...(input.computerId ? { computerId: input.computerId } : {}),

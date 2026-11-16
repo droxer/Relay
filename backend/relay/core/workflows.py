@@ -6,6 +6,7 @@ from typing import Any
 
 from .ids import new_database_id, now_iso
 from .team_workflows import workflow_fields
+from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style
 
 FIELDS = frozenset({'name', 'projectId', 'workflowSteps', 'enabled'})
 
@@ -58,8 +59,26 @@ def workflow_execution_snapshot(team: dict[str, Any], workflow_id: str) -> dict[
     return {
         **{key: deepcopy(value) for key, value in team.items()
            if key not in {'workflows', 'workflowSteps', 'projectId', 'collaborationStyle', 'humanApproval', 'memberConfigs'}},
-        'workflowId': workflow['id'], 'workflowVersion': workflow['updatedAt'],
+        'workflowId': workflow['id'], 'workflowKind': 'steps', 'workflowVersion': workflow['updatedAt'],
         'name': workflow['name'], 'projectId': workflow['projectId'],
         'workflowSteps': deepcopy(workflow['workflowSteps']), 'memberAgentIds': members,
         'leadAgentId': team['leadAgentId'] if team.get('leadAgentId') in members else members[0],
     }
+
+
+def workflow_catalog(team: dict[str, Any]) -> list[dict[str, Any]]:
+    return [*deepcopy(PREDEFINED_WORKFLOWS), *[
+        {**definition, "kind": "steps"} for definition in team_workflows(team)
+    ]]
+
+
+def validate_default_workflow(team: dict[str, Any], workflow_id: Any) -> str:
+    if predefined_style(workflow_id) is not None:
+        return str(workflow_id)
+    definition = next((item for item in team_workflows(team) if item["id"] == workflow_id), None)
+    if definition is None:
+        raise ValueError("workflow_not_found")
+    if not definition.get("enabled", True):
+        raise ValueError("workflow_disabled")
+    workflow_execution_snapshot(team, workflow_id)
+    return str(workflow_id)

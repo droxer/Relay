@@ -20,8 +20,8 @@ def assert_workflow_task_owner(registry: RegistryState, request: dict[str, Any],
         or task.get("ownerUserId") != session.get("ownerUserId")
         or task.get("projectId") != session.get("projectId")
         or task.get("assignedTeamId") != session.get("teamId")
-        or (task.get("assignedWorkflowId") or session.get("teamId")) !=
-            (session["workflowRuns"][0]["teamSnapshot"].get("workflowId") or session.get("teamId"))
+        or (task.get("assignedWorkflowId") is not None and task["assignedWorkflowId"] !=
+            (session["workflowRuns"][0]["teamSnapshot"].get("workflowId") or session.get("teamId")))
         or session["id"] not in task.get("linkedSessionIds", [])):
         raise ValueError("task_ownership_changed: workflow no longer owns this task")
 

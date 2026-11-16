@@ -1,14 +1,27 @@
 # Teams and Workflows
 
-A Team defines the available Agents and their Computer. A Workflow defines an
-ordered process using that roster. A Team can own several named Workflows,
-for example feature delivery and bug repair. Without a selected Workflow,
-the Team continues to use its collaboration style.
+A Team defines the available Agents and their Computer. A Workflow defines
+how they work together. Teams choose a default Workflow; Tasks and Automations
+inherit it or explicitly choose another Workflow from the same selector.
+
+Three immutable predefined Workflows preserve the existing execution policies:
+
+| Workflow | Behavior |
+| --- | --- |
+| Build → Review | Roles choose a builder and reviewer; review findings can trigger repair. |
+| Pipeline | Eligible Agents run in role order. |
+| Lead-led | The lead plans, delegates dynamically, and reviews the result. |
+
+Custom Workflows define explicit steps and Project scope. A Team can own
+several, such as feature delivery and bug repair. A Custom Workflow may be the
+Team default, but Tasks must belong to its Project. Selecting a predefined
+Workflow explicitly can override that default. No incompatible selection falls
+back to ordinary Team work.
 
 Create a Team first. In a Project's Agents tab, create a Workflow, select that
 Team, and assign each step to an enabled Agent in both rosters. The Team must
-be on the Project's Computer. Saving a Workflow never changes Team membership,
-leadership, collaboration style, or final-turn approval settings.
+be on the Project's Computer. Saving a Custom Workflow never changes Team membership,
+leadership, the default Workflow selection, or final-turn approval settings.
 
 Start a Workflow from the Project, or select the Team and Workflow in a Project
 Task or Automation. Each run records a frozen definition in a new Project
@@ -32,8 +45,12 @@ Writes accept `name`, `projectId`, `workflowSteps`, and optional `enabled`.
 A definition's Team and Project cannot change. Names are case-insensitively
 unique within a Team. Run requests accept `requestId` and `taskGoal`; a retry
 with the same request and goal returns that Workflow's original Thread.
-Tasks carry `assignedTeamId` and optional `assignedWorkflowId`; clearing the
-latter returns to Team collaboration. Changing Team clears the old Workflow
+Team writes accept `defaultWorkflowId`. Tasks carry `assignedTeamId` and optional
+`assignedWorkflowId`; clearing the latter inherits the current Team default.
+Predefined IDs are `preset:build_review`, `preset:pipeline`, and `preset:lead_led`.
+Team responses expose `defaultWorkflowId` and the combined `workflowOptions`
+catalog alongside the existing custom `workflows` collection.
+A default definition cannot be disabled or deleted until another default is chosen. Changing Team clears the old Workflow
 unless the request explicitly selects one belonging to the new Team.
 
 ## Persistence and compatibility
@@ -55,3 +72,25 @@ creating Tasks with `assignedWorkflowId`, use a forward fix rather than rolling
 back to such a version: it could dispatch ordinary Team collaboration instead
 of the selected process. No schema rollback is needed, but dispatch semantics
 must stay aware of the new assignment field.
+
+## Unified entry and compatibility
+
+`POST /agent-runs` and Thread messages accept `workflowId` for predefined
+selections. A new owner-session Team conversation with a custom selection or
+custom Team default opens that Workflow's Project Thread. The workflow run
+endpoint also accepts predefined IDs. It uses the same request-key replay as
+other predefined runs. Custom conversation starts reject attachment,
+connection-grant, and assignment overrides rather than discarding them.
+
+Legacy Team `collaborationStyle`, Task `collaborationStyle`, and run `style`
+remain input/read compatibility aliases. Explicit canonical selections win over
+stored aliases; contradictory explicit run fields are refused. Frozen existing
+histories are not rewritten. Predefined snapshots include their Workflow ID
+while retaining the execution fields that older clients display.
+
+When the owner explicitly chooses a default on a legacy workflow Team, Relay
+moves its existing steps into the child definition collection in the same Team
+transaction. The Team can then select predefined defaults as well. The legacy
+Workflow keeps its identity and saved steps, and old Run records are preserved.
+The composer sends an explicit resolved Workflow ID for each opening turn, so
+its retry remains pinned to the original choice after Team defaults change.

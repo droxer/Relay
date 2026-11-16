@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.team_workflows import is_workflow_team
+from ..core.workflow_selection import workflow_id_for_style
 from ..core.role_charters import COORDINATOR_CHARTER, role_charter
 from ..collaboration.styles import (
     LEAD_LED,
@@ -377,7 +378,8 @@ def team_runtime_snapshot(
         "teamRevision": team.get("updatedAt") or team.get("createdAt"),
         "memberAgentIds": [member["id"] for member in members],
         "leadAgentId": team.get("leadAgentId"),
-        **({"collaborationStyle": style} if style else {}),
+        **({"collaborationStyle": style, "workflowId": workflow_id_for_style(style),
+            "workflowKind": "predefined"} if style else {}),
         **({"styleFallbackFrom": style_fallback_from} if style_fallback_from else {}),
         **({"humanApproval": True} if team.get("humanApproval") else {}),
     }

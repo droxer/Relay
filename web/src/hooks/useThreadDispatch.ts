@@ -10,6 +10,7 @@ import { chooseSendAction, sendThreadSessionId, suppressActiveSessionDuringPendi
 import { canCancelThreadRun, threadCancelNodeId } from "../lib/threadRunning";
 import { resolveThreadMessageAddress, threadMessageInput, threadMessageOperationKey, threadRoundTeam } from "../lib/messageRouting";
 import { formatDispatchError } from "../lib/agentReadiness";
+import { defaultWorkflowId } from "../lib/workflowSelection";
 import { rerunAssignmentForSession } from "../lib/workflow";
 import { isUserAgentRoutable, preferredRoutableAgent } from "../lib/agentDisplayNames";
 import { useHandoffStore } from "../lib/handoffStore";
@@ -236,7 +237,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
               addressAgentIds: messageAddress.addressAgentIds,
               addressTeamId: addressedTeamId,
               userMessageId,
-              style: roundTeam.teamId ? requestedStyle : undefined,
+              workflowId: roundTeam.teamId && requestedStyle ? `preset:${requestedStyle}` : undefined,
               questionId,
               approve,
             }), attachmentIds },
@@ -253,7 +254,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
                 ? { assignments: newThreadAgentIds!.map((agentId) => ({ agentId })) }
                 : {}
               : pendingTeam
-              ? { teamId: pendingTeam.id, style: requestedStyle }
+              ? { teamId: pendingTeam.id, workflowId: requestedStyle ? `preset:${requestedStyle}` : defaultWorkflowId(pendingTeam) }
               : {
                   assignments: newThreadAgentIds!.map((agentId) => ({ agentId })),
                 }),
