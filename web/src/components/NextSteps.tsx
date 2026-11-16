@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { taskRef } from "../lib/taskRef";
 import type { RelayTaskListItem } from "../types";
-import { ActionAdd, ActionFollowUp, ActionSend, CheckIcon, ICON } from "./icons";
+import { ActionAdoptStep, ActionFollowUp, ActionSendStep, StatusOk, ICON } from "./icons";
 
 /** Turning a suggestion into a task, when the thread's scope allows it. */
 export type NextStepAdoption = {
@@ -67,7 +67,7 @@ export function NextSteps({ steps, onSend, adoption }: {
               >
                 <ActionFollowUp className="next-steps-mark" size={ICON.sm} aria-hidden="true" />
                 <span className="next-steps-label">{step}</span>
-                <ActionSend className="next-steps-send" size={ICON.sm} aria-hidden="true" />
+                <ActionSendStep className="next-steps-send" size={ICON.sm} aria-hidden="true" />
               </button>
               {adoption ? (
                 <AdoptStep
@@ -118,7 +118,7 @@ function AdoptStep({ step, destination, adoption, disabled, onAdopted }: {
         onClick={() => adoption.onOpenTask(task)}
         aria-label={t("next_steps.open_task", { ref: taskRef(task) })}
       >
-        <CheckIcon size={ICON.sm} aria-hidden="true" />
+        <StatusOk size={ICON.sm} aria-hidden="true" />
         <span>{t("next_steps.adopted", { ref: taskRef(task) })}</span>
       </button>
     );
@@ -152,7 +152,7 @@ function AdoptStep({ step, destination, adoption, disabled, onAdopted }: {
         disabled={disabled || open}
         onClick={() => setState("confirming")}
       >
-        <ActionAdd size={ICON.sm} aria-hidden="true" />
+        <ActionAdoptStep size={ICON.sm} aria-hidden="true" />
         <span>{t("next_steps.adopt")}</span>
       </button>
       {open ? (

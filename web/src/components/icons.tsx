@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   ArrowUp,
+  ListPlus,
+  SendHorizontal,
   ArrowUpRight,
   Bell,
   BookOpen,
@@ -232,6 +234,10 @@ export const ActionPrompt = withStandardStroke(ArrowUpRight, "ActionPrompt");
 // A suggested follow-up under a finished turn — the reply hook reads as
 // "continue from here" and stays distinct from the send glyph it pairs with.
 export const ActionFollowUp = withStandardStroke(CornerDownRight, "ActionFollowUp");
+// Next-step suggestion row: the horizontal plane sends this suggestion as the
+// next message; the list-plus keeps it as a task instead.
+export const ActionSendStep = withStandardStroke(SendHorizontal, "ActionSendStep");
+export const ActionAdoptStep = withStandardStroke(ListPlus, "ActionAdoptStep");
 export const ActionApprove = withStandardStroke(Check, "ActionApprove");
 export const ActionHandoff = withStandardStroke(Forward, "ActionHandoff");
 // Routing a turn to another agent — the two-way arrows read as "pass along",
