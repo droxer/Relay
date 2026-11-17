@@ -80,6 +80,10 @@ _Avoid_: Alert, message (a Thread message), event (an event-log record)
 The durable user-owned identity built on an Agent Runtime through a
 Placement. Its configuration is independent of the computer that executes it,
 and it does not own a workspace.
+Once a Task or Automation names a Logical Agent, execution keeps that identity.
+An Agent cannot replace or clear it, or substitute a Team; the User must approve
+the change through an explicit assignment edit or an owner-applied Project Task
+proposal. This applies equally to Project and standalone work.
 _Avoid_: Executor, CLI
 
 **Agent Role**:
