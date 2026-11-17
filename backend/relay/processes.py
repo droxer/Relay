@@ -12,6 +12,7 @@ import asyncio
 import os
 import signal
 import sys
+from functools import partial
 
 from loguru import logger
 
@@ -30,8 +31,13 @@ async def serve_with_worker(
     environment = {**os.environ, "RELAY_BACKGROUND_MODE": "external"}
     data_args = ["--data-dir", data_dir] if data_dir is not None else []
 
+    def stop_on_signal(sig: signal.Signals) -> None:
+        logger.info("Backend supervisor received shutdown signal", signal=sig.name,
+                    reason="signal", pid=os.getpid())
+        stopping.set()
+
     for sig in signals:
-        loop.add_signal_handler(sig, stopping.set)
+        loop.add_signal_handler(sig, partial(stop_on_signal, sig))
     try:
         commands = {
             "worker": ["worker", *data_args],
@@ -53,7 +59,9 @@ async def serve_with_worker(
         for role, wait in waits.items():
             if wait.done():
                 code = wait.result()
-                logger.error("Backend process {} exited unexpectedly (code {})", role, code)
+                logger.error("Backend process {} exited unexpectedly (code {})", role, code,
+                             pid=children[role].pid, reason="child_exit",
+                             signal=signal.Signals(-code).name if code < 0 else None)
                 # Even a clean child exit means half the service is missing.
                 return code if code > 0 else 1
         return 1

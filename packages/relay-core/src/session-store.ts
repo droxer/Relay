@@ -455,6 +455,9 @@ export interface RelaySession {
    * `artifacts` from the full session.
    */
   workspaceArtifactCount?: number;
+  /** Backend indexing projection: pending/indexed/failed count batches;
+   * overflow counts files beyond each run's first 200-item batch. */
+  artifactIndexStatus?: { pending: number; indexed: number; failed: number; overflow: number };
   decisions: HumanDecision[];
   collaborationRounds: CollaborationRoundManifest[];
   /** Monotonic count of authoritative collaboration rounds. */

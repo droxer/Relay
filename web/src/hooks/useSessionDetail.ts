@@ -83,9 +83,13 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
       const executionDue = executionPhase !== undefined
         && executionPhase !== "running" && executionPhase !== "terminal"
         && Date.now() - hydratedAt >= RELAY_POLL_INTERVALS_MS.sessions;
+      // Queue status changes need no conversation event, including the last
+      // batch completing after artifact.created already reached SSE.
+      const artifactIndexDue = (cached?.artifactIndexStatus?.pending ?? 0) > 0
+        && Date.now() - hydratedAt >= RELAY_POLL_INTERVALS_MS.sessions;
       // Committed before it streams, so the next snapshot normally clears it.
       const workflowStale = workflowSnapshotDue(cached) !== undefined;
-      if (hydratedStatus !== undefined && cached?.status === hydratedStatus && !trails && !fallbackDue && !executionDue && !workflowStale) return;
+      if (hydratedStatus !== undefined && cached?.status === hydratedStatus && !trails && !fallbackDue && !executionDue && !workflowStale && !artifactIndexDue) return;
       pending = true;
       try {
         const snapshot = await fetchSessionSnapshot(queryClient, sessionId);

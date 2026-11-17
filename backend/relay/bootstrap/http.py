@@ -45,9 +45,13 @@ class ServerTimingMiddleware:
             await self.app(scope, receive, send)
             return
         started_at = time.perf_counter()
+        status = None
+        response_complete = False
 
         async def send_with_timing(message: Message) -> None:
+            nonlocal status, response_complete
             if message["type"] == "http.response.start":
+                status = message["status"]
                 duration_ms = (time.perf_counter() - started_at) * 1000
                 headers = list(message.get("headers", []))
                 headers.append(
@@ -55,8 +59,27 @@ class ServerTimingMiddleware:
                 )
                 message = {**message, "headers": headers}
             await send(message)
+            if message["type"] == "http.response.body" and not message.get("more_body", False):
+                response_complete = True
 
-        await self.app(scope, receive, send_with_timing)
+        try:
+            await self.app(scope, receive, send_with_timing)
+        finally:
+            duration_ms = (time.perf_counter() - started_at) * 1000
+            state = scope.get("state", {})
+            completion_count = state.get("run_completed_count", 0)
+            slow_write = scope.get("method") in {"POST", "PUT", "PATCH", "DELETE"} and duration_ms >= 5000
+            if slow_write or completion_count:
+                log = logger.warning if slow_write else logger.info
+                log(
+                    "Slow write request" if slow_write else "Run completion request finished",
+                    method=scope.get("method"), path=scope.get("path"),
+                    status=status, response_complete=response_complete,
+                    duration_ms=round(duration_ms, 1),
+                    run_completed_count=completion_count,
+                    artifact_count=state.get("artifact_count", 0),
+                    run_id=state.get("run_id"),
+                )
 
 
 class CookieRequestGuardMiddleware:

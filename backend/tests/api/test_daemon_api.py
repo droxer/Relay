@@ -4192,6 +4192,12 @@ def test_run_completed_generated_files_flow_over_http(monkeypatch) -> None:
         )
         assert response.status_code == 200
 
+        # Artifact indexing is asynchronous now: drain the queue the embedded
+        # worker would service, then the file is listable and downloadable.
+        from store_fixtures import drain_artifact_indexing
+
+        drain_artifact_indexing(app.state.context.session_store)
+
         listed = _legacy_ui_client(client).get(
             "/api/v1/artifacts", headers={"Authorization": "Bearer ui_token"}
         ).json()["artifacts"]

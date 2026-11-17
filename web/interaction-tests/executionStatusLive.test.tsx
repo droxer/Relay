@@ -153,3 +153,24 @@ it("keeps the recovery notice for late output and an online computer until execu
   view.unmount();
   client.clear();
 });
+
+it("reconciles pending file batches after the final artifact event without further SSE", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("EventSource", Source);
+  setSessionStreamConnected(true);
+  const client = new QueryClient();
+  const pending: RelaySession = { ...queued, status: "completed", execution: undefined,
+    artifactIndexStatus: { pending: 1, indexed: 0, failed: 0, overflow: 0 } };
+  client.setQueryData(key, [pending]);
+  vi.mocked(getSession).mockResolvedValueOnce(pending).mockResolvedValue({ ...pending,
+    artifactIndexStatus: { pending: 0, indexed: 1, failed: 0, overflow: 0 } });
+  const view = render(<QueryClientProvider client={client}><OpenThread /></QueryClientProvider>);
+  await act(async () => {});
+  await act(() => vi.advanceTimersByTimeAsync(5_000));
+  expect(getSession).toHaveBeenCalledTimes(2);
+  expect(client.getQueryData<RelaySession[]>(key)?.[0].artifactIndexStatus?.pending).toBe(0);
+  await act(() => vi.advanceTimersByTimeAsync(15_000));
+  expect(getSession).toHaveBeenCalledTimes(2);
+  view.unmount();
+  client.clear();
+});

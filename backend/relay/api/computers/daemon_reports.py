@@ -115,6 +115,11 @@ async def daemon_reports(sandbox_id: str, request: Request, ctx: AppContextDep) 
             value = json.loads(report['body'])
             if not isinstance(value, dict) or value.get('type') not in ('run.output', 'run.output.batch', 'run.collaboration', 'run.completed', 'run.failed', 'run.cancelled'):
                 raise ValueError('Invalid durable report type.')
+            if value['type'] == 'run.completed':
+                request.state.run_completed_count = getattr(request.state, 'run_completed_count', 0) + 1
+                files = value.get('generatedFiles')
+                request.state.artifact_count = getattr(request.state, 'artifact_count', 0) + (len(files) if isinstance(files, list) else 0)
+                request.state.run_id = value.get('runId')
         except (ValueError, TypeError) as error:
             raise HTTPException(400, 'Invalid report payload.') from error
     receipts = await run_in_threadpool(_accept_batch, ctx.registry, sandbox_id, token, reports)

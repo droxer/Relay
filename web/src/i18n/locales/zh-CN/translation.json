@@ -2078,6 +2078,9 @@
     "size_mb": "{{count}} MB"
   },
   "space": {
+    "index_pending": "正在准备文件：{{count}} 批待处理。",
+    "index_failed": "{{count}} 批文件重试后仍未处理成功，请联系管理员。",
+    "index_overflow": "超出首批 200 个的 {{count}} 个文件已分批排队，上报的文件未被丢弃。",
     "panel_label": "对话文件",
     "title": "文件",
     "title_project": "文件",

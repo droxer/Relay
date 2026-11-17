@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -106,6 +108,7 @@ from .notifications.mailer import mailer_from_env
 from .accounts.waitlist import WaitlistService
 from .tasks.flow import wip_limit
 from .execution.lifecycle import ExecutionLifecycleService
+from .execution.artifact_indexing import ArtifactIndexWorker
 from .core.settings import AppSettings
 from .migrations_runtime.default_agents import seed_default_agents_at_startup
 from .migrations_runtime.abandoned_sessions import settle_abandoned_sessions_at_startup
@@ -149,7 +152,9 @@ def create_app(
     if mode not in ("embedded", "external"):
         raise ValueError("background_mode must be embedded or external.")
     root_dir = Path(root_dir)
-    logger.info("Relay backend starting", root_dir=str(root_dir))
+    logger.info("Relay backend starting", root_dir=str(root_dir), pid=os.getpid(),
+                deployment_id=os.environ.get("RAILWAY_DEPLOYMENT_ID"),
+                revision=os.environ.get("RAILWAY_GIT_COMMIT_SHA"))
     stores = build_stores(root_dir, managed_node_provider=settings.managed_node_provider)
     # One mailer for every transactional email; a half-configured mail setup
     # fails startup here rather than silently dropping invites and resets.
@@ -216,7 +221,17 @@ def create_app(
     computer_notifications = ComputerNotificationWatcher(
         registry, stores.auth, stores.notifications, interval_seconds=watch_interval_from_env(),
     )
-    loops = (execution_lifecycle, computer_notifications, scheduler) if mode == "embedded" else ()
+    artifact_indexer = (
+        ArtifactIndexWorker(
+            stores.sessions,
+            interval_seconds=settings.artifact_index_interval_seconds,
+            lease_seconds=settings.artifact_index_lease_seconds,
+            max_attempts=settings.artifact_index_max_attempts,
+        )
+        if settings.artifact_index_enabled
+        else None
+    )
+    loops = (execution_lifecycle, computer_notifications, artifact_indexer, scheduler) if mode == "embedded" else ()
     services = [service for service in (notification_bridge, *loops) if service]
 
     mcp_http: RelayMcpHttp
@@ -230,9 +245,12 @@ def create_app(
             async with mcp_http.run():
                 yield
         finally:
+            logger.info("Relay backend graceful shutdown started", pid=os.getpid(),
+                        reason="lifespan_shutdown; platform cause unknown")
             for service in reversed(services):
                 await service.stop()
             notifier.close()
+            logger.info("Relay backend graceful shutdown completed", pid=os.getpid())
 
     app = FastAPI(
         title="Relay backend",
@@ -257,6 +275,7 @@ def create_app(
         waitlist=waitlist,
         password_reset=password_reset,
         connections=connections,
+        artifact_indexer=artifact_indexer,
     )
     if scheduler is not None:
         scheduler.thread_queue = ThreadQueueDispatcher(app.state.context)
@@ -321,6 +340,7 @@ def _publish_state(
     waitlist: WaitlistService,
     password_reset: PasswordResetService,
     connections: ConnectionService,
+    artifact_indexer: ArtifactIndexWorker | None = None,
 ) -> None:
     """Build the one ``AppContext`` request handlers read (see api/deps.py).
 
@@ -371,6 +391,7 @@ def _publish_state(
         setattr(state, field.name, getattr(context, field.name))
     state.task_scheduler = scheduler
     state.computer_notifications = computer_notifications
+    state.artifact_indexer = artifact_indexer
 
 # Order matters: within each router group, a route registered earlier wins a
 # path both could match. A domain split across modules lists its routers in

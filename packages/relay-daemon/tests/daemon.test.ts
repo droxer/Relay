@@ -4262,15 +4262,14 @@ test("generated-file scan reports text documents at an agent home root and outpu
   assert.equal(byPath.get(`${own}/scratch/buffer.md`)?.snapshotSkipped, "not-snapshotable-type");
 });
 
-test("generated-file diff caps rows and stops storing once the budget is spent", async (t: TestContext) => {
+test("generated-file diff stops storing snapshots once the byte budget is spent", async (t: TestContext) => {
   const { mkdtempSync, rmSync, writeFileSync: writeFile } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join: joinPath } = await import("node:path");
-  const { diffGeneratedFiles, GENERATED_FILE_LIMIT } = await import("../src/generated-files.js");
+  const { diffGeneratedFiles } = await import("../src/generated-files.js");
   const workspace = mkdtempSync(joinPath(tmpdir(), "relay-generated-budget-"));
   t.after(() => rmSync(workspace, { recursive: true, force: true }));
 
-  assert.equal(GENERATED_FILE_LIMIT, 200);
   // 12 markdown files of 1 MB each: 8 fit the 8 MB event budget, 4 do not.
   const body = "x".repeat(1024 * 1024);
   for (let index = 0; index < 12; index += 1) {
@@ -4285,7 +4284,7 @@ test("generated-file diff caps rows and stops storing once the budget is spent",
   }
 });
 
-test("generated-file diff reports far more than the old twenty-file ceiling", async (t: TestContext) => {
+test("generated-file diff preserves metadata beyond the backend 200-file batch", async (t: TestContext) => {
   const { mkdtempSync, rmSync, writeFileSync: writeFile } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join: joinPath } = await import("node:path");
@@ -4297,7 +4296,7 @@ test("generated-file diff reports far more than the old twenty-file ceiling", as
     writeFile(joinPath(workspace, `module-${index}.py`), `# module ${index}\n`);
   }
   const changed = await diffGeneratedFiles(workspace, {});
-  assert.equal(changed.length, 200);
+  assert.equal(changed.length, 250);
 });
 
 test("generated-file scan skips sibling agent homes but keeps the running agent's own", async (t: TestContext) => {

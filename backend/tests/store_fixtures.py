@@ -111,3 +111,19 @@ def create_run_request_on_node(daemon_store: Any, request: dict[str, Any]) -> di
             "updatedAt": "2026-06-13T00:00:00.000Z",
         })
     return daemon_store.create_run_request(request)
+
+
+def drain_artifact_indexing(store: Any) -> int:
+    """Index every pending artifact batch synchronously (test helper).
+
+    Completion now enqueues reported files for background indexing, so tests
+    that used to read artifacts straight after ``run.completed`` must drain the
+    queue first. Returns the number of batches processed.
+    """
+    from relay.execution.artifact_indexing import ArtifactIndexWorker
+
+    worker = ArtifactIndexWorker(store)
+    processed = 0
+    while store.pending_artifact_index_batch_count():
+        processed += worker.tick()
+    return processed

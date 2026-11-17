@@ -151,6 +151,12 @@ class AppSettings:
     # server-local midnight, which surprises users in other zones.
     task_scheduler_timezone: ZoneInfo | None
     automation_outbox_batch: int
+    # Background artifact indexing (persistent pending batches drained by a
+    # worker, so run.completed never uploads snapshots inline).
+    artifact_index_enabled: bool
+    artifact_index_interval_seconds: float
+    artifact_index_lease_seconds: float
+    artifact_index_max_attempts: int
     # Idempotent record repairs at boot (migrations_runtime/startup.py).
     startup_repairs_enabled: bool
     # "embedded" runs the scheduler, recovery, and notification loops in the
@@ -189,6 +195,16 @@ class AppSettings:
             task_scheduler_max_dispatches=env.integer("RELAY_TASK_SCHEDULER_MAX_DISPATCHES", 5, minimum=1),
             task_scheduler_timezone=env.timezone("RELAY_TASK_SCHEDULER_TIMEZONE"),
             automation_outbox_batch=env.integer("RELAY_AUTOMATION_OUTBOX_BATCH", 200, minimum=1),
+            artifact_index_enabled=env.flag("RELAY_ARTIFACT_INDEX_ENABLED", True),
+            artifact_index_interval_seconds=env.number(
+                "RELAY_ARTIFACT_INDEX_INTERVAL_SECONDS", 5.0, minimum=0.01
+            ),
+            artifact_index_lease_seconds=env.number(
+                "RELAY_ARTIFACT_INDEX_LEASE_SECONDS", 300.0, minimum=1.0
+            ),
+            artifact_index_max_attempts=env.integer(
+                "RELAY_ARTIFACT_INDEX_MAX_ATTEMPTS", 5, minimum=1
+            ),
             startup_repairs_enabled=env.flag("RELAY_STARTUP_REPAIRS", True),
             background_mode=env.choice("RELAY_BACKGROUND_MODE", "embedded", ("embedded", "external")),
             managed_node_provider=env.text("RELAY_MANAGED_NODE_PROVIDER", DEFAULT_MANAGED_NODE_PROVIDER),

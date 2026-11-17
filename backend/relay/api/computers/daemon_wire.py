@@ -18,6 +18,7 @@ from ...computer.access import actor_may_manage_computer
 from ...core.models import DaemonNodeRegistration
 from ...core.repeat_log import RepeatedFailureLog, RepeatGate
 from ...daemon_registry.runs.reports import ReportPredecessorMissing
+from ...persistence.daemon.reports import ReportReceiptConflict
 from ...daemon_registry.records import (
     CommandEventMismatchError,
     LateOutputLeaseMismatchError,
@@ -497,6 +498,10 @@ async def daemon_events(
 ) -> dict[str, bool]:
     try:
         event = daemon_node_event(await json_body(request))
+        if event["type"] == "run.completed":
+            request.state.run_completed_count = 1
+            request.state.artifact_count = len(event.get("generatedFiles") or [])
+            request.state.run_id = event.get("runId")
         report_id = request.headers.get("X-Relay-Report-Id")
         report_digest = request.headers.get("X-Relay-Report-Digest")
         if report_id is not None or report_digest is not None:
@@ -512,6 +517,18 @@ async def daemon_events(
             )
             return {"ok": True}
         if report_id is not None and report_digest is not None:
+            # A lost HTTP response must not make accepted completion reports
+            # wait behind another run's registry locks on replay.
+            await run_in_threadpool(ctx.registry.assert_node_event_authorized, sandbox_id, bearer_token(request))
+            accepted = await run_in_threadpool(
+                ctx.registry.daemon_store.report_was_accepted,
+                sandbox_id, event["commandId"], report_id, report_digest,
+            )
+            if accepted:
+                await run_in_threadpool(ctx.registry.settle_acknowledged_stop, sandbox_id, event)
+                response.headers['X-Relay-Report-Id'] = report_id
+                response.headers['X-Relay-Report-Digest'] = report_digest
+                return {"ok": True}
             await run_in_threadpool(ctx.registry.handle_durable_report, sandbox_id, event, bearer_token(request), report_id, report_digest)
             response.headers['X-Relay-Report-Id'] = report_id
             response.headers['X-Relay-Report-Digest'] = report_digest
@@ -528,6 +545,8 @@ async def daemon_events(
         raise HTTPException(410, str(error)) from error
     except ReportPredecessorMissing as error:
         raise HTTPException(503, str(error), headers={"Retry-After": "1"}) from error
+    except ReportReceiptConflict as error:
+        raise HTTPException(409, str(error)) from error
     except CommandEventMismatchError as error:
         # The credential is good; the event is not. 401 would stop the daemon.
         # A daemon retries a rejected event from its outbox: one line per

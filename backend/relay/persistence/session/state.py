@@ -16,6 +16,7 @@ class SessionStoreState:
     agent_runs: Any
     workspace_files: Any
     tombstones: Any
+    artifact_index_batches: Any
     engine: Any
     blob_store: Any
     emit_automation_events: Any

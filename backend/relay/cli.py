@@ -5,10 +5,10 @@ import asyncio
 import json
 import os
 
-import uvicorn
 from loguru import logger
 
 from .app import create_app
+from .bootstrap.server import run_server
 from .background import apply_worker_schema, run_worker
 from .processes import serve_with_worker
 from .migrations_runtime.agent_computer_id import pending_agent_computer_id_migrations
@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Relay backend Admin Console: http://{}:{}/admin", args.host, args.port)
     logger.info("Relay web UI: http://{}:{}/", args.host, args.port)
     trust_proxy = deploy_config.trust_proxy_headers()
-    uvicorn.run(
+    run_server(
         app,
         host=args.host,
         port=args.port,

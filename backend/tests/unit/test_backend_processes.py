@@ -5,7 +5,7 @@ import json
 import os
 import signal
 import sys
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -68,6 +68,8 @@ def test_child_exit_stops_its_sibling_and_fails_the_container(monkeypatch, faile
 
 
 def test_sigterm_stops_both_children_and_restores_signal_handlers(monkeypatch):
+    log = Mock()
+    monkeypatch.setattr("relay.processes.logger", log)
     async def run():
         loop = asyncio.get_running_loop()
         callbacks = {}
@@ -94,6 +96,7 @@ def test_sigterm_stops_both_children_and_restores_signal_handlers(monkeypatch):
         assert all(signal.getsignal(sig) == handler for sig, handler in previous.items())
 
     asyncio.run(run())
+    assert any(call.kwargs.get("signal") == "SIGTERM" for call in log.info.call_args_list)
 
 
 def test_failed_second_spawn_cleans_up_the_first_process(monkeypatch):

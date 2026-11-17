@@ -22,6 +22,7 @@ from .lifecycle import SessionLifecycleRows
 from .events import SessionEventRows
 from .deletion import SessionDeletionRows
 from .artifacts import SessionArtifactRows
+from .artifact_indexing import SessionArtifactIndexingRows
 from .attachments import SessionAttachmentRows
 from .reads import SessionReadRows
 from .metrics import SessionMetricRows
@@ -34,6 +35,7 @@ class DatabaseSessionStore(
     SessionEventRows,
     SessionDeletionRows,
     SessionArtifactRows,
+    SessionArtifactIndexingRows,
     SessionAttachmentRows,
     SessionReadRows,
     SessionMetricRows,
@@ -48,6 +50,7 @@ class DatabaseSessionStore(
     agent_runs = sessions_tables.agent_runs
     workspace_files = sessions_tables.workspace_files
     tombstones = sessions_tables.tombstones
+    artifact_index_batches = sessions_tables.artifact_index_batches
 
     def __init__(
         self,
@@ -91,6 +94,7 @@ class DatabaseSessionStore(
             "session_agent_runs",
             "session_tombstones",
             "session_workspace_files",
+            "session_artifact_index_batches",
         }
         missing = required_tables.difference(schema.get_table_names())
         if missing:
@@ -107,6 +111,7 @@ class DatabaseSessionStore(
                 self.agent_runs,
                 self.tombstones,
                 self.workspace_files,
+                self.artifact_index_batches,
             )
         }
         for table_name, expected in required_columns.items():
@@ -117,10 +122,11 @@ class DatabaseSessionStore(
                     f"Database table {table_name} is missing required columns: "
                     f"{', '.join(sorted(absent))}."
                 )
-        required_unique_constraints = {
+        required_unique_constraints: dict[str, set[tuple[str, ...]]] = {
             "session_events": {("session_id", "sequence")},
             "session_run_token_usage": {("session_id", "run_id")},
             "session_agent_runs": {("session_id", "run_id")},
+            "session_artifact_index_batches": {("session_id", "run_id", "sequence")},
         }
         for table_name, expected_unique in required_unique_constraints.items():
             actual_unique = {

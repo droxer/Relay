@@ -36,7 +36,6 @@ GENERATED_ARTIFACT_EXTENSIONS = frozenset(
     }
 )
 OUTPUT_ARTIFACT_TEXT_EXTENSIONS = frozenset({".json", ".log", ".md", ".txt"})
-GENERATED_ARTIFACT_LIMIT = 200
 # Per-file cap for content snapshots kept alongside the artifact record.
 WORKSPACE_ARTIFACT_CONTENT_MAX_BYTES = int(
     os.environ.get("RELAY_WORKSPACE_ARTIFACT_SNAPSHOT_MAX_BYTES", str(2 * 1024 * 1024))
@@ -154,6 +153,10 @@ def daemon_reported_generated_files(
     ``produced_files`` reflects the reporting daemon's capability. Without it
     the older document-only rule decides candidacy, so an un-upgraded daemon
     indexes exactly as it always did.
+
+    Every valid file is returned, never silently truncated: a report larger
+    than one indexing batch is split by the enqueue step and the overflow is
+    recorded durably, not dropped.
     """
     items: list[dict[str, Any]] = []
     for raw in raw_files:
@@ -216,6 +219,4 @@ def daemon_reported_generated_files(
                 "snapshotSkipped": skipped,
             }
         )
-        if len(items) >= GENERATED_ARTIFACT_LIMIT:
-            break
     return items

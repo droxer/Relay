@@ -71,3 +71,13 @@ describe("thread space tab", () => {
     expect(screen.getByTestId("project-files")).toBeTruthy();
   });
 });
+
+it("shows pending, failed and overflow indexing with explicit units", () => {
+  window.history.replaceState({}, "", "/threads/one?space=1");
+  render(<ThreadSpacePanel {...panel("one", null).props}
+    artifactIndexStatus={{ pending: 2, indexed: 3, failed: 1, overflow: 50 }} />);
+  const status = screen.getByRole("status");
+  expect(status.textContent).toContain("space.index_pending");
+  expect(status.textContent).toContain("space.index_failed");
+  expect(status.textContent).toContain("space.index_overflow");
+});

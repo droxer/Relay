@@ -208,7 +208,16 @@ def get_session(
     session = ensure_session_managed_affinity(
         ctx, get_session_for_actor(ctx.session_store, session_id, actor)
     )
-    return {**session, "execution": ctx.execution_lifecycle.status(session)}
+    index_status = getattr(ctx.session_store, "artifact_index_status", None)
+    return {
+        **session,
+        "execution": ctx.execution_lifecycle.status(session),
+        **(
+            {"artifactIndexStatus": index_status(session_id)}
+            if index_status is not None
+            else {}
+        ),
+    }
 
 
 @router.get("/threads/{session_id}/execution")

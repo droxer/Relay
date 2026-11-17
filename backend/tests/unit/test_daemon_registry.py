@@ -26,6 +26,7 @@ from store_fixtures import make_agent_store
 from relay.persistence.daemon.store import DatabaseDaemonStore
 from store_fixtures import make_daemon_store, sqlite_url
 from store_fixtures import make_session_store
+from store_fixtures import drain_artifact_indexing
 from relay.core.ids import new_database_id
 from store_fixtures import make_task_store
 from relay.sessions.controller import SessionController
@@ -797,6 +798,7 @@ def test_project_dispatch_carries_shared_workspace_subpath() -> None:
                 },
                 "node_token",
             )
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             [artifact] = [
                 item
@@ -877,6 +879,7 @@ def test_task_dispatch_carries_shared_workspace_subpath() -> None:
                 },
                 "node_token",
             )
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             [artifact] = [
                 item
@@ -1693,6 +1696,7 @@ def test_daemon_completion_indexes_generated_pptx_artifact() -> None:
                 "node_token",
             )
 
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             [artifact] = [
                 item
@@ -1776,6 +1780,7 @@ def test_daemon_completion_indexes_text_files_under_output_folder() -> None:
                 "node_token",
             )
 
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             files = [
                 item
@@ -1916,6 +1921,7 @@ def test_daemon_reported_generated_files_index_without_shared_filesystem() -> No
                 "node_token",
             )
 
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             files = [
                 item
@@ -1989,6 +1995,7 @@ def _artifacts_from_completed_generated_file_report(
                 },
                 "node_token",
             )
+            drain_artifact_indexing(session_store)
             return session_store.get_session(session["id"])["artifacts"]
 
     return asyncio.run(run_flow())
@@ -2114,6 +2121,7 @@ def test_generated_file_replay_fills_in_partially_indexed_report() -> None:
                 request["assignments"][0],
             )
 
+            drain_artifact_indexing(session_store)
             artifacts = session_store.get_session(session["id"])["artifacts"]
             assert [item["workspaceRelativePath"] for item in artifacts] == [
                 first_path,
@@ -2202,6 +2210,7 @@ def test_regenerated_workspace_file_gets_artifact_per_producing_run() -> None:
                 "node_token",
             )
 
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             workspace_files = [
                 item
@@ -2995,6 +3004,7 @@ def test_daemon_failed_event_indexes_reported_generated_files() -> None:
                 "node_token",
             )
 
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             assert updated["status"] == "failed"
             assert [item["workspaceRelativePath"] for item in updated["artifacts"]] == [

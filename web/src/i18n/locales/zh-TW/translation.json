@@ -2078,6 +2078,9 @@
     "size_mb": "{{count}} MB"
   },
   "space": {
+    "index_pending": "正在準備檔案：{{count}} 批待處理。",
+    "index_failed": "{{count}} 批檔案重試後仍未處理成功，請聯絡管理員。",
+    "index_overflow": "超出首批 200 個的 {{count}} 個檔案已分批排隊，上報的檔案未被捨棄。",
     "panel_label": "對話檔案",
     "title": "檔案",
     "title_project": "檔案",
