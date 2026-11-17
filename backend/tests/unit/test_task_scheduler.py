@@ -1701,7 +1701,7 @@ def test_legacy_assignment_picks_deterministically_among_candidates() -> None:
 
 
 @pytest.mark.parametrize("failure", ["malformed", "timeout"])
-def test_scheduler_survives_a_failed_task_and_dispatches_the_next(monkeypatch, failure) -> None:
+def test_scheduler_records_one_failure_and_dispatches_the_next(monkeypatch, failure) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = make_session_store(root)
@@ -1733,29 +1733,29 @@ def test_scheduler_survives_a_failed_task_and_dispatches_the_next(monkeypatch, f
             poisoned = task_store.create_task({**fields, "title": "Malformed", "priority": "high"})
             healthy = task_store.create_task({**fields, "title": "Healthy", "priority": "low"})
             scheduler = TaskScheduler(task_store=task_store, registry=registry, backend=backend)
-            original = scheduler._materialize_legacy_assignment
-
-            def materialize(task):
-                if task["id"] == poisoned["id"]:
-                    raise ValueError("corrupt row")
-                return original(task)
-
-            if failure == "malformed":
-                monkeypatch.setattr(scheduler, "_materialize_legacy_assignment", materialize)
-            else:
+            if failure == "timeout":
                 original_run = backend.run
 
-                async def run(node_id, request):
+                async def dispatch(node_id, request):
                     if request["taskId"] == poisoned["id"]:
-                        raise TimeoutError("Dispatch operation timed out")
+                        raise TimeoutError("backend admission timed out")
                     return await original_run(node_id, request)
 
-                monkeypatch.setattr(backend, "run", run)
+                monkeypatch.setattr(backend, "run", dispatch)
 
                 def warning(message, **fields):
                     assert message != "Task dispatch still waiting on the daemon backend", fields
 
                 monkeypatch.setattr("relay.tasks.scheduler.logger.warning", warning)
+            else:
+                original = scheduler._materialize_legacy_assignment
+
+                def materialize(task):
+                    if task["id"] == poisoned["id"]:
+                        raise ValueError("corrupt row")
+                    return original(task)
+
+                monkeypatch.setattr(scheduler, "_materialize_legacy_assignment", materialize)
 
             result = await scheduler.tick()
 
@@ -1787,3 +1787,44 @@ def test_await_dispatch_keeps_waiting_and_reports_a_slow_backend(monkeypatch) ->
         assert scheduler_module._await_dispatch(future, "task_1") == "session"
 
     assert warnings and warnings[0]["task_id"] == "task_1"
+
+
+def test_await_dispatch_propagates_a_completed_backend_timeout(monkeypatch) -> None:
+    import concurrent.futures
+
+    from relay.tasks import scheduler as scheduler_module
+
+    class BoundedFuture(concurrent.futures.Future):
+        reads = 0
+
+        def result(self, timeout=None):
+            self.reads += 1
+            assert self.reads < 3, "a completed backend failure must not be retried"
+            return super().result(timeout)
+
+    future = BoundedFuture()
+    error = TimeoutError("backend admission timed out")
+    future.set_exception(error)
+    warnings = []
+    monkeypatch.setattr(scheduler_module.logger, "warning", lambda *args, **kw: warnings.append(kw))
+
+    with pytest.raises(TimeoutError) as caught:
+        scheduler_module._await_dispatch(future, "task_timeout")
+
+    assert caught.value is error
+    assert not warnings
+
+
+def test_await_dispatch_reads_a_result_that_finishes_at_the_wait_deadline() -> None:
+    import concurrent.futures
+
+    from relay.tasks import scheduler as scheduler_module
+
+    class DeadlineFuture(concurrent.futures.Future):
+        def result(self, timeout=None):
+            if not self.done():
+                self.set_result("session_at_deadline")
+                raise TimeoutError("wait expired just as dispatch finished")
+            return super().result(timeout)
+
+    assert scheduler_module._await_dispatch(DeadlineFuture(), "task_deadline") == "session_at_deadline"

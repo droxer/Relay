@@ -79,3 +79,17 @@ The transcript cap remains per stream, in characters. Data beyond it is still
 omitted; a single JSONL record too large to fit the retained regions may be
 omitted completely. Live output delivery is unchanged. Tests do not certify a
 live model provider, installed runtime authentication, or native BoxLite.
+
+## Merge synchronization
+
+Merged `origin/main` at `776dc389` to resolve overlapping scheduler changes.
+Kept main's equivalent terminal-timeout implementation and its new deadline
+tests, plus this branch's bounded regression guard. Verification after resolving:
+**83 Python tests** and **25 TypeScript daemon/transcript/workspace tests**
+passed; core/daemon builds, package typechecking, Ruff, and `git diff --check`
+passed. Python dependency audit found no known vulnerabilities.
+
+The current npm audit reports **24 high-severity advisories** through the
+existing `picomatch` dependency chain. Dependency manifests and lockfiles are
+identical to main; this conflict-resolution change does not alter dependencies.
+The earlier clean audit above records the result at initial implementation time.
