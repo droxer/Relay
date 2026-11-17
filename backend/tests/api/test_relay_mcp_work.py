@@ -251,3 +251,70 @@ def test_project_runtime_defaults_to_its_project_and_refuses_standalone_work(man
         standalone = app.state.task_store.create_task({"title": "Standalone", "ownerUserId": node["userId"], "computerId": command.get("workspaceScope", {}).get("computerId")})
         response = _rpc(client, token, "tools/call", {"name": "relay_get_task", "arguments": {"taskId": standalone["id"]}}).json()["result"]
         assert response["isError"]
+
+
+@pytest.mark.parametrize("automation", [False, True])
+@pytest.mark.parametrize("project_work", [False, True])
+@pytest.mark.parametrize("change", ["replace", "clear", "team"])
+def test_agents_cannot_change_a_named_assignment_without_owner_approval(
+    managed_env, automation, project_work, change,
+):
+    app, owner, node, project, planner, builder = managed_env
+    _join(managed_env, builder)
+    if project_work:
+        _, command = _start(managed_env)
+        token = credential(app, node, command)
+    else:
+        token = credential(app, node)
+    kind = "automation" if automation else "task"
+    created = owner.post("/api/v1/tasks", json={
+        "title": "Keep my Agent", "assignedAgentId": builder["id"],
+        **({"projectId": project["id"]} if project_work else {"computerId": project["computerId"]}),
+        **(paused_routine() if automation else {}),
+    })
+    assert created.status_code == 201, created.text
+    task = created.json()
+    fields = {
+        "replace": {"assignedAgentId": planner["id"]},
+        "clear": {"assignedAgentId": None},
+        "team": {"assignedTeamId": "replacement-team"},
+    }[change]
+    with TestClient(app) as client:
+        result = _rpc(client, token, "tools/call", {"name": f"relay_update_{kind}", "arguments": {
+            f"{kind}Id": task["id"], "fields": {"title": "Must not be applied", **fields},
+        }}).json()["result"]
+        assert result.get("isError"), result
+        assert "task_assignment_approval_required" in str(result)
+        unchanged = app.state.task_store.get_task(task["id"])
+        assert unchanged["assignedAgentId"] == builder["id"]
+        assert unchanged["title"] == "Keep my Agent"
+        kept = call(client, token, f"relay_update_{kind}", **{f"{kind}Id": task["id"]},
+                    fields={"title": "Same Agent", "assignedAgentId": builder["id"]})[kind]
+        assert kept["assignedAgentId"] == builder["id"]
+    # An explicit owner action is the approval; MCP cannot claim it on their behalf.
+    approved = owner.patch(f"/api/v1/tasks/{task['id']}", json={"assignedAgentId": planner["id"]})
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["assignedAgentId"] == planner["id"]
+
+
+def test_project_assignment_proposal_waits_for_owner_apply(managed_env):
+    app, owner, node, project, planner, builder = managed_env
+    _join(managed_env, builder)
+    _, command = _start(managed_env)
+    token = credential(app, node, command)
+    created = owner.post("/api/v1/tasks", json={
+        "title": "Approval needed", "projectId": project["id"], "assignedAgentId": builder["id"],
+    })
+    assert created.status_code == 201, created.text
+    task = created.json()
+    with TestClient(app) as client:
+        proposal = call(client, token, "relay_propose_task_changes", projectId=project["id"], operations=[{
+            "kind": "update", "taskId": task["id"], "fields": {"assignedAgentId": planner["id"]},
+        }])["proposal"]
+        assert app.state.task_store.get_task(task["id"])["assignedAgentId"] == builder["id"]
+        url = f"/api/v1/projects/{project['id']}/manager/proposals/{proposal['id']}/apply"
+        assert client.post(url, headers={"Authorization": f"Bearer {token}"},
+                           json={"idempotencyKey": "agent-cannot-approve"}).status_code == 401
+    approved = owner.post(url, json={"idempotencyKey": "owner-approved-switch"})
+    assert approved.status_code == 200, approved.text
+    assert app.state.task_store.get_task(task["id"])["assignedAgentId"] == planner["id"]

@@ -6,7 +6,7 @@ import type {
   WorkspaceBriefResponse,
 } from "../types.js";
 
-export type ProjectPageTab = "dashboard" | "workflows" | "members" | "tasks" | "automations" | "workspace" | "settings";
+export type ProjectPageTab = "dashboard" | "members" | "tasks" | "automations" | "workspace" | "settings";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
@@ -15,8 +15,10 @@ type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "read
    eye starts. The strip reads from what the project is to what you manage on
    it, so Settings sits last. Retired ids — "profile" (the old Agents tab) and
    "general" (folded into Members and Settings) — are unknown, so they land
-   here. */
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "tasks", "automations", "workflows", "workspace", "members", "settings"];
+   here. Members is the Collaboration tab: the crew and the workflows it runs
+   share one surface, so a retired ?tab=workflows link lands on it. */
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "tasks", "automations", "workspace", "members", "settings"];
+export const PROJECT_PAGE_TAB_ALIASES: Readonly<Record<string, ProjectPageTab>> = { workflows: "members" };
 export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "dashboard";
 
 /** Backend roster cap — the add-member affordance hides at the limit. */
@@ -49,8 +51,9 @@ export function agentsEligibleForProject(
 }
 
 export function parseProjectPageTab(value: string | null): ProjectPageTab {
-  return PROJECT_PAGE_TABS.includes(value as ProjectPageTab)
-    ? value as ProjectPageTab
+  const tab = value ? PROJECT_PAGE_TAB_ALIASES[value] ?? value : value;
+  return PROJECT_PAGE_TABS.includes(tab as ProjectPageTab)
+    ? tab as ProjectPageTab
     : DEFAULT_PROJECT_PAGE_TAB;
 }
 

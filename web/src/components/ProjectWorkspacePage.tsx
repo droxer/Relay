@@ -45,7 +45,6 @@ import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the ones that are not it. */
 const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
-  workflows: "workflow.section_title",
   dashboard: "project.dashboard_tab",
   members: "project.members_tab",
   tasks: "project.tasks_tab",
@@ -55,7 +54,6 @@ const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
 };
 
 const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
-  workflows: "workflow.independent_intro",
   dashboard: "project.dashboard_subtitle",
   members: "project.members_subtitle",
   tasks: "project.tasks_subtitle",
@@ -247,10 +245,6 @@ export function ProjectWorkspacePage({
             onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
             onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
           >
-
-          </ProjectMembersPanel>
-        </TabsContent>
-        <TabsContent value="workflows">
             <ProjectWorkflows
               project={project}
               agents={agents}
@@ -258,6 +252,7 @@ export function ProjectWorkspacePage({
               readOnly={membersReadOnly}
               onOpenThread={onOpenThread}
             />
+          </ProjectMembersPanel>
         </TabsContent>
         <TabsContent value="tasks" className="project-tasks-panel">
           {/* The backlog board itself, fixed to this project. */}

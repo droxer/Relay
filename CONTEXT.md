@@ -80,6 +80,10 @@ _Avoid_: Alert, message (a Thread message), event (an event-log record)
 The durable user-owned identity built on an Agent Runtime through a
 Placement. Its configuration is independent of the computer that executes it,
 and it does not own a workspace.
+Once a Task or Automation names a Logical Agent, execution keeps that identity.
+An Agent cannot replace or clear it, or substitute a Team; the User must approve
+the change through an explicit assignment edit or an owner-applied Project Task
+proposal. This applies equally to Project and standalone work.
 _Avoid_: Executor, CLI
 
 **Agent Role**:
@@ -121,7 +125,9 @@ yields while the delegate works in the same Thread's workspace, then receives
 the delegate's result and remains responsible for checking it and completing
 the original request. A delegate's report is a claim, not acceptance. Both
 Agents belong to the same User and run on the Thread's Computer; a Project
-Conversation additionally limits delegates to its Project Agent roster.
+Conversation, Task, or Automation additionally limits delegates to its enabled
+Project Agent roster, checked again before dispatch. Task and Automation
+Handoffs also stay within that roster and retain the original work scope.
 All eligible Agents are available by default, including Agents created later.
 The User may restrict the requesting Agent's targets or disable delegation.
 _Avoid_: Handoff (which transfers the next turn without a return obligation),

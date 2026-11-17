@@ -78,11 +78,13 @@ describe("project page behavior", () => {
     assert.equal(parseProjectPageTab("tasks"), "tasks");
     assert.equal(parseProjectPageTab("workspace"), "workspace");
     assert.equal(parseProjectPageTab("members"), "members");
+    // Workflows share the Collaboration (members) tab with the crew.
+    assert.equal(parseProjectPageTab("workflows"), "members");
     assert.equal(parseProjectPageTab("settings"), "settings");
   });
 
   it("orders the strip from reading to managing, with settings last", () => {
-    assert.deepEqual(PROJECT_PAGE_TABS, ["dashboard", "tasks", "automations", "workflows", "workspace", "members", "settings"]);
+    assert.deepEqual(PROJECT_PAGE_TABS, ["dashboard", "tasks", "automations", "workspace", "members", "settings"]);
   });
 
   it("lists the default tab first in the strip", () => {
