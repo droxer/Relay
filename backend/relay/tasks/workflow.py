@@ -29,12 +29,13 @@ def dispatch_task_workflow(
     ctx: TaskDispatchContext, source: dict[str, Any], actor: Actor, *, record_pending: bool,
 ) -> DispatchResult:
     registry = ctx.registry
-    project_id = source.get("projectId")
-    if not project_id:
-        return _record_result(ctx, source["id"], "rejected", code="team_workflow_project_mismatch")
-    project = ctx.project_store.get_project(project_id)
-    if not project:
-        return _record_result(ctx, source["id"], "rejected", code="project_not_found")
+    project = ctx.project_store.get_project(source["projectId"]) if source.get("projectId") else None
+    if project is None:
+        code = "project_not_found" if source.get("projectId") else "team_workflow_project_mismatch"
+        if not record_pending:
+            return _record_result(ctx, source["id"], "rejected", code=code)
+        # A scheduled task left assigned would be refused again on every tick.
+        return _record_pending_failure(ctx, source, code)
     try:
         with registry.dispatch_lock, registry.dispatch_scope([
             node["id"] for node in registry.monitor_nodes()
@@ -96,13 +97,21 @@ def dispatch_task_workflow(
         if not record_pending:
             raise
         code = error.detail if isinstance(error, TaskRequestError) else str(error)
-        with registry.dispatch_lock, ctx.task_store.task_write_scope(source["id"]) as current:
-            if (not TaskDispatchAssignment.capture(source).matches(current)
-                or current.get("status") not in ("backlog", "assigned", "queued")
-                or registry.daemon_store.active_run_request_for_task(source["id"])):
-                return _result(current, "queued", code="dispatch_superseded")
-            if code == "workflow_computer_unavailable":
-                return _record_result(ctx, source["id"], "queued", code=code, message=code)
-            updated = record_dispatch_failure(ctx.task_store, current, code=code, message=code)
-            return _result(updated, updated["dispatchOutcome"]["state"], code=code,
-                           message=updated["dispatchOutcome"].get("message"))
+        return _record_pending_failure(ctx, source, code)
+
+
+def _record_pending_failure(ctx: TaskDispatchContext, source: dict[str, Any], code: str) -> DispatchResult:
+    """Block a refused scheduled start; record a computer wait only when it changes."""
+    registry = ctx.registry
+    with registry.dispatch_lock, ctx.task_store.task_write_scope(source["id"]) as current:
+        if (not TaskDispatchAssignment.capture(source).matches(current)
+            or current.get("status") not in ("backlog", "assigned", "queued")
+            or registry.daemon_store.active_run_request_for_task(source["id"])):
+            return _result(current, "queued", code="dispatch_superseded")
+        if code == "workflow_computer_unavailable":
+            if current.get("dispatchOutcome") == {"state": "queued", "code": code, "message": code}:
+                return _result(current, "queued", code=code, message=code)
+            return _record_result(ctx, source["id"], "queued", code=code, message=code)
+        updated = record_dispatch_failure(ctx.task_store, current, code=code, message=code)
+        return _result(updated, updated["dispatchOutcome"]["state"], code=code,
+                       message=updated["dispatchOutcome"].get("message"))
