@@ -10,11 +10,12 @@ import {
   validateWorkflowDraft,
   workflowDraftChanged,
   workflowDraftValid,
+  workflowProjects,
   workflowTeamInput,
   type WorkflowStepDraft,
   type WorkflowTeamDraft,
 } from "../src/lib/workflowTeamDraft.js";
-import type { AgentTeam } from "../src/types.js";
+import type { AgentTeam, ProjectRecord } from "../src/types.js";
 
 const project = { id: "project-1", computerId: "computer-1", leadAgentId: "lead" };
 
@@ -141,5 +142,30 @@ describe("projectWorkflowTeams", () => {
       { id: "4", projectId: "project-1", workflowSteps: [{}], deletedAt: "x" },
     ] as AgentTeam[];
     assert.deepEqual(projectWorkflowTeams(teams, "project-1").map((team) => team.id), ["1"]);
+  });
+});
+
+describe("workflowProjects", () => {
+  const team = { id: "t", computerId: "computer-1", enabled: true, memberAgentIds: ["lead", "dev"] } as AgentTeam;
+  const projectOf = (id: string, patch: Partial<ProjectRecord> = {}) => ({
+    id, name: id, ownerUserId: "alice", computerId: "computer-1", enabled: true,
+    members: [{ agentId: "dev", role: "implementer", responsibilities: "", enabled: true }], ...patch,
+  }) as ProjectRecord;
+
+  it("offers only the owner's Projects that can hold a step of this Team", () => {
+    const projects = [
+      projectOf("b-own"),
+      projectOf("a-own"),
+      projectOf("other-owner", { ownerUserId: "bob" }),
+      projectOf("other-computer", { computerId: "computer-2" }),
+      projectOf("no-shared-agent", { members: [{ agentId: "x", role: "implementer", responsibilities: "", enabled: true }] }),
+      projectOf("member-disabled", { members: [{ agentId: "dev", role: "implementer", responsibilities: "", enabled: false }] }),
+    ];
+    assert.deepEqual(workflowProjects(team, projects, "alice").map(project => project.id), ["a-own", "b-own"]);
+  });
+
+  it("offers nothing to a disabled Team or a signed-out reader", () => {
+    assert.deepEqual(workflowProjects({ ...team, enabled: false }, [projectOf("p")], "alice"), []);
+    assert.deepEqual(workflowProjects(team, [projectOf("p")], undefined), []);
   });
 });

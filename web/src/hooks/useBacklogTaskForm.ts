@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { useRelayMutations } from "./useRelayMutations";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
+import { explicitTaskWorkflowId } from "../lib/workflowSelection";
 import {
   NEW_TASK_ACCEPTANCE_POLICY,
   taskAcceptancePolicy,
@@ -80,7 +81,7 @@ export function useBacklogTaskForm({
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
-      assignedWorkflowId: task.assignedWorkflowId ?? (task.collaborationStyle ? `preset:${task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle}` : ""),
+      assignedWorkflowId: explicitTaskWorkflowId(task) ?? "",
     });
   }
 

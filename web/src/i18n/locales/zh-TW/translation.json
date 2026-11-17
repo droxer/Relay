@@ -1,15 +1,11 @@
 {
   "collab_style": {
-    "label": "協作方式",
     "build_review": "構建與評審",
     "build_review_hint": "一名成員構建，另一名評審，修改直至通過。",
-    "solo": "單人",
-    "solo_hint": "由一名成員獨立完成工作。",
     "pipeline": "流水線",
     "pipeline_hint": "每位成員按角色順序依次處理。",
     "lead_led": "負責人主導",
     "lead_led_hint": "負責人規劃、分配並彙總成果。適合複雜工作。",
-    "team_default": "團隊預設（{{style}}）",
     "slot_builder": "構建者",
     "slot_reviewer": "評審者",
     "slot_lead": "負責人",
@@ -18,8 +14,6 @@
     "members_skipped_one": "{{names}} 在「構建與評審」中不會輪到。流水線會讓每位成員都輪到一次。",
     "members_skipped_other": "{{names}} 在「構建與評審」中不會輪到。流水線會讓每位成員都輪到一次。",
     "specialist_builds": "團隊裡沒有軟體工程師或缺陷修復工程師，因此由 {{name}} 負責構建。流水線能讓每位成員各司其職。",
-    "task_label": "協作方式",
-    "composer_label": "協作方式",
     "turn_builder": "構建者",
     "turn_reviewer": "程式碼評審員",
     "turn_reviewer_changes": "程式碼評審員 · 需要修改",
@@ -35,8 +29,6 @@
     "review_cycle": "評審第 {{cycle}} 輪，共 {{max}} 輪",
     "waiting_for_you": "評審輪數已達上限。等待你的評審。",
     "ran_solo": "單人執行：沒有可用的評審者",
-    "team_default_short": "團隊預設",
-    "inherit_hint": "沿用團隊的設定。",
     "slot_lead_summary": "彙總",
     "loop_until_approved": "由 {{builder}} 修改工作，直至 {{reviewer}} 批准。",
     "slot_approval": "審批",
@@ -1988,7 +1980,7 @@
     "tour_automations_body": "按計劃、任務或執行事件、Webhook 觸發工作，也可手動立即執行。每次執行都交給已分配的智慧體或團隊，並保留歷史記錄。",
     "tour_automations_alt": "顯示週期與下次執行時間的 Relay 自動化列表",
     "tour_teams_title": "團隊",
-    "tour_teams_body": "選擇獨立、構建與評審、流水線或負責人主導的協作方式。明確的角色與交接讓工作記錄清晰可查。",
+    "tour_teams_body": "為團隊選擇工作流程：構建與評審、流水線、負責人主導，或你自己定義的步驟。明確的角色與交接讓工作記錄清晰可查。",
     "tour_teams_alt": "Relay 團隊資料頁，顯示成員與職責",
     "principles_title": "Relay 堅持的原則",
     "principle_local_title": "在程式碼所在之處執行",
@@ -3832,7 +3824,6 @@
     "answer_label": "你的回答",
     "answer_placeholder": "輸入你的回答…",
     "answer_send": "傳送回答",
-
     "timeline_title": "工作流程時間軸",
     "timeline_load_failed": "無法載入工作流程時間軸。",
     "section_title": "工作流",
@@ -3924,6 +3915,16 @@
       "workflow_outputs_required": "有預期產出沒有被記錄。",
       "workflow_outputs_too_large": "記錄的產出過大。",
       "unknown": "此步驟沒有完成。"
-    }
+    },
+    "default_badge": "預設",
+    "unavailable": "工作流程不可用",
+    "project": "專案",
+    "project_hint": "自訂工作流程在一個專案中執行，其步驟使用該專案的智慧體。",
+    "custom_meta_one": "{{count}} 個步驟 · {{project}}",
+    "custom_meta_other": "{{count}} 個步驟 · {{project}}",
+    "project_unavailable": "專案不可用",
+    "open_project": "開啟專案",
+    "library_hint": "預定義工作流程依團隊角色分配工作。建立自訂工作流程來定義你自己的步驟，然後將其設為預設或依任務選擇。",
+    "create_needs_project": "要建立自訂工作流程，請先將此團隊的智慧體加入你在團隊所在電腦上的某個專案。"
   }
 }

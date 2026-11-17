@@ -1,207 +1,15 @@
-/* ======================= collaboration styles =======================
-   The style badge and menu options, the style schematic, and the team
-   picker cards the composer and the task form choose a style from. Split
-   out of chat.css and imported straight after it; nothing here shares a
-   selector with chat.css, so landing below the rest of it changes no
-   cascade outcome. */
+/* ======================= team collaboration =======================
+   How a Team's Workflow reads: the preview frame on the Team page (name,
+   kind, then who does what), the role-slot run order of a predefined
+   Workflow, and the round status lines in a thread. Split out of chat.css
+   and imported straight after it; nothing here shares a selector with
+   chat.css, so landing below the rest of it changes no cascade outcome. */
 
 .collab-status {
   margin: var(--sp-2) 0 0;
   color: var(--ink-3);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
-}
-
-/* Team style is identity, not health: use ink/surface tokens, never live,
-   warning or success colors. Glyphs stay consistent from roster to composer. */
-/* The chip plane every neutral chip shares (--control-fill, see badge.tsx);
-   the height is the Badge's --chip-h. Pipeline is told by its dashed edge. */
-.collab-style-badge {
-  max-width: 100%;
-  color: var(--ink-2);
-  background: var(--control-fill);
-}
-
-.collab-style-badge[data-style="pipeline"] {
-  border-style: dashed;
-}
-
-.collab-style-badge[data-style="lead_led"] {
-  color: var(--ink-1);
-  border-color: var(--ink-4);
-}
-
-.collab-style-option {
-  padding-block: var(--sp-3);
-}
-
-/* The inherit row closes the group it heads: a hairline, not a blank gap. */
-.collab-style-option-inherit {
-  margin-bottom: var(--sp-1);
-  border-bottom: var(--hairline);
-  border-radius: var(--r-2) var(--r-2) 0 0;
-}
-
-/* ---- style schematic ------------------------------------------------
-   One drawing per style (CollaborationStyleDiagram). Links recede, nodes
-   carry the shape; the lead is the only filled node. */
-.collab-diagram {
-  display: block;
-  width: 100%;
-  height: 100%;
-  color: var(--ink-2);
-  overflow: visible;
-}
-
-/* Strokes hold their weight at any plate size, so the small option plate
-   stays as legible as the card. */
-.collab-diagram circle,
-.collab-diagram line,
-.collab-diagram path,
-.collab-diagram polyline {
-  vector-effect: non-scaling-stroke;
-}
-
-.collab-diagram-node {
-  fill: var(--surface-1);
-  stroke: currentColor;
-  stroke-width: 1.5;
-}
-
-.collab-diagram-node-lead {
-  fill: currentColor;
-  stroke: currentColor;
-  stroke-width: 1.5;
-}
-
-.collab-diagram-link {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: var(--opacity-dormant);
-}
-
-.collab-diagram-return path {
-  stroke-dasharray: 3 3;
-}
-
-/* The art plate: a quiet framed surface the schematic sits on. */
-.collab-style-card-art,
-.collab-style-option-art {
-  display: block;
-  flex-shrink: 0;
-  border: var(--hairline);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-}
-
-.collab-style-option-art {
-  align-self: flex-start;
-  /* The schematic's height sits on the --control-h-lg rung; its width keeps
-     the drawing's own proportion. */
-  height: var(--control-h-lg);
-  aspect-ratio: 72 / 40;
-  padding: var(--sp-0-5) var(--sp-1);
-}
-
-.collab-style-card-art {
-  width: 100%;
-  aspect-ratio: 88 / 44;
-  /* Schematic geometry: no token rung sits at 72px. */
-  max-height: 72px;
-  padding: var(--sp-2) var(--sp-3);
-}
-
-/* ---- team picker cards ---------------------------------------------- */
-.collab-style-cards {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sp-3);
-}
-
-.collab-style-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  min-width: 0;
-  padding: var(--sp-3);
-  border: var(--hairline);
-  border-radius: var(--r-3);
-  background: var(--surface-1);
-  color: var(--ink-1);
-  transition:
-    border-color var(--t-fast) var(--ease),
-    background-color var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
-}
-
-.collab-style-card:hover:not([data-disabled]) {
-  border-color: var(--ink-4);
-}
-
-.collab-style-card[data-checked] {
-  border-color: var(--action);
-  box-shadow: 0 0 0 1px var(--action);
-}
-
-.collab-style-card[data-checked] .collab-style-card-art {
-  border-color: transparent;
-  background: var(--action-soft);
-}
-
-.collab-style-card[data-checked] .collab-diagram {
-  color: var(--action);
-}
-
-.collab-style-card[data-disabled] {
-  cursor: not-allowed;
-  opacity: var(--opacity-disabled);
-}
-
-.collab-style-card-name,
-.collab-style-summary-name {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  color: var(--ink-1);
-  font: var(--type-label);
-  letter-spacing: var(--type-label-track);
-}
-
-.collab-style-card-hint {
-  color: var(--ink-3);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-}
-
-@media (max-width: 820px) {
-  .collab-style-cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* Stacked, the art sits beside the words rather than above them. */
-  .collab-style-card {
-    display: grid;
-    /* The art column holds no text; it is the stacked art plate (the
-       --avatar-2xl box plus its gutter), and the words column flexes. */
-    grid-template-columns: calc(var(--avatar-2xl) + var(--sp-6)) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    column-gap: var(--sp-3);
-    row-gap: var(--sp-1);
-  }
-
-  .collab-style-card .collab-style-card-art {
-    grid-row: 1 / span 2;
-    align-self: start;
-    padding: var(--sp-1) var(--sp-2);
-  }
-}
-
-/* The composer/task trigger names the style it resolves to; "team default"
-   is a quiet qualifier, not the headline. */
-.collab-style-trigger-note {
-  color: var(--ink-3);
 }
 
 .collab-style-section {
@@ -214,37 +22,10 @@
   margin-bottom: 0;
 }
 
-.collab-style-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  min-width: 0;
-}
-
-.collab-style-summary > .collab-style-card-art {
-  /* Height on the --avatar-2xl rung; width keeps the drawing's proportion. */
-  width: auto;
-  height: var(--avatar-2xl);
-  aspect-ratio: 120 / 64;
-  padding: var(--sp-1) var(--sp-2);
-}
-
-.collab-style-summary-text {
-  display: grid;
-  gap: var(--sp-1);
-  min-width: 0;
-}
-
-.collab-style-summary-hint {
-  margin: 0;
-  color: var(--ink-3);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-}
-
-/* The run order reads as one flow: steps joined by chevrons, each step a
-   role over the member who fills it. */
-.collab-style-preview {
+/* One frame for either kind of Workflow: a predefined one's role slots and
+   a custom one's numbered steps answer the same question — who does what —
+   so they sit in the same plate under the same head. */
+.workflow-preview {
   display: grid;
   justify-self: start;
   gap: var(--sp-2);
@@ -254,6 +35,55 @@
   border: var(--hairline);
   border-radius: var(--r-3);
   background: var(--surface-1);
+}
+
+.workflow-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+
+.workflow-preview-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--ink-1);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  overflow-wrap: anywhere;
+}
+
+/* Kind and default are facts about the definition, not states: quiet ink
+   on the shared chip plane, never a status color. */
+.workflow-preview-kind {
+  display: inline-flex;
+  align-items: center;
+  height: var(--chip-h);
+  padding-inline: var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--control-fill);
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  white-space: nowrap;
+}
+
+.workflow-preview-hint {
+  margin: 0;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+/* The run order reads as one flow: steps joined by chevrons, each step a
+   role over the member who fills it. */
+.collab-style-preview {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
 }
 
 .collab-style-sequence {

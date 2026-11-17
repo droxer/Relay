@@ -33,6 +33,9 @@ import { WorkflowStepCard } from "./WorkflowStepCard";
 type Props = {
   open: boolean;
   project: ProjectRecord;
+  /** Projects a new Workflow may belong to, opened from a Team; `project`
+   *  is the first choice. Absent, the Workflow stays in `project`. */
+  projects?: ProjectRecord[];
   /** Null creates a Workflow under the selected Team. */
   workflow: TeamWorkflow | null;
   teams: AgentTeam[];
@@ -49,11 +52,14 @@ export function WorkflowEditor(props: Props) {
   return <WorkflowEditorBody key={`${props.workflow?.id ?? "new"}:${opening.generation}`} {...props} />;
 }
 
-function WorkflowEditorBody({ open, project, workflow, teams, agents, onClose }: Props) {
+function WorkflowEditorBody({ open, project: initialProject, projects, workflow, teams, agents, onClose }: Props) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const queryClient = useQueryClient();
   const [teamId, setTeamId] = useState(workflow?.teamId ?? teams[0]?.id ?? "");
+  const [projectId, setProjectId] = useState(initialProject.id);
+  const project = projects?.find(item => item.id === projectId) ?? initialProject;
+  const pickProject = !workflow && (projects?.length ?? 0) > 1;
   const parent = teams.find(item => item.id === teamId);
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
   const saveMutation = useMutation({ mutationFn: (input: Parameters<typeof saveTeamWorkflow>[1]) => saveTeamWorkflow(teamId, input, workflow?.id), onSuccess: invalidate });
@@ -154,6 +160,23 @@ function WorkflowEditorBody({ open, project, workflow, teams, agents, onClose }:
     >
       <form className="workflow-editor" onSubmit={(event) => void submit(event)} noValidate>
         <p className="workflow-editor-lede">{t("workflow.editor_lede")}</p>
+        {pickProject ? <Field label={t("workflow.project")} hint={t("workflow.project_hint")} wrapper="div">
+          <Select value={projectId} disabled={busy} onValueChange={value => {
+            if (!value || value === projectId) return;
+            const next = projects!.find(item => item.id === value);
+            if (!next) return;
+            setProjectId(value);
+            // Errors were judged against the old Project's Agents.
+            setErrors(null);
+            // Steps name Agents of the Project they run in: keep a step whose
+            // owner is in the new Project too, and hand the rest to its first.
+            const allowed = enabledProjectAgentIds(next).filter(id => parent?.memberAgentIds.includes(id));
+            update({ ...draft, steps: draft.steps.map(step => allowed.includes(step.agentId) ? step : { ...step, agentId: allowed[0] ?? "" }) });
+          }}>
+            <SelectTrigger className="w-full" aria-label={t("workflow.project")}><SelectValue>{project.name}</SelectValue></SelectTrigger>
+            <SelectContent>{projects!.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
+          </Select>
+        </Field> : null}
         <Field label={t("workflow.owning_team")} wrapper="div">
           <Select value={teamId} disabled={busy || Boolean(workflow)} onValueChange={value => {
             if (!value) return;
