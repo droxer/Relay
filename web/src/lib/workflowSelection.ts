@@ -21,6 +21,27 @@ export function workflowOptions(team?: Pick<AgentTeam, "workflows" | "workflowOp
   return catalog.filter(option => option.kind === "predefined" || !projectId || option.projectId === projectId);
 }
 
+/** Task/Automation choices must resolve in their Project before submission. */
+export function workflowSelectionIssue(team: AgentTeam | undefined, value: string | null, projectId?: string, projectAgentIds?: readonly string[]): "project" | "unavailable" | null {
+  if (!team) return null;
+  const selected = value || defaultWorkflowId(team);
+  const option = workflowOptions(team).find(item => item.id === selected);
+  if (!option || !option.enabled) return "unavailable";
+  if (option.kind === "steps" && option.projectId !== projectId) return "project";
+  return projectAgentIds && !workflowParticipantsAllowed(team, selected, projectAgentIds) ? "unavailable" : null;
+}
+
+/** A custom process may use a subset of the roster; presets use Team roles. */
+export function workflowParticipantsAllowed(team: AgentTeam | undefined, id: string, projectAgentIds: readonly string[]): boolean {
+  if (!team) return false;
+  const participants = predefinedStyle(id)
+    ? team.memberAgentIds
+    : (team.workflows?.find(item => item.id === id)?.workflowSteps
+      ?? (id === team.id ? team.workflowSteps : undefined))?.map(step => step.agentId);
+  return Boolean(participants?.length && participants.every(agentId => projectAgentIds.includes(agentId)
+    && team.memberAgentIds.includes(agentId)));
+}
+
 const presetId = (style: CollaborationStyle) => `preset:${style === "solo" ? "build_review" : style}`;
 
 /** The Workflow a Task explicitly chose: its canonical selection, else its

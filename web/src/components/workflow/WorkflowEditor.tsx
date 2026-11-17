@@ -77,6 +77,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
     : { name: "", steps: [emptyWorkflowStep([], stepAgents.find(agent => agent.id === parent?.leadAgentId)?.id ?? stepAgents[0]?.id ?? "")] });
   const [draft, setDraft] = useState<WorkflowTeamDraft>(saved);
   const [errors, setErrors] = useState<WorkflowDraftErrors | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const nameErrorId = useId();
@@ -87,10 +88,21 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
   const shown = errors ?? { fields: {} };
   const atLimit = draft.steps.length >= WORKFLOW_LIMITS.steps;
 
+  function judge(next: WorkflowTeamDraft, allowed: string[]) {
+    const result = validateWorkflowDraft(next, allowed);
+    // Before Save, scope changes only surface assignment problems. Empty
+    // names and instructions are expected while the person is composing.
+    return submitted ? result : {
+      fields: Object.fromEntries(Object.entries(result.fields)
+        .filter(([, fields]) => fields.agentId)
+        .map(([id, fields]) => [id, { agentId: fields.agentId }])),
+    };
+  }
+
   function update(next: WorkflowTeamDraft) {
     setDraft(next);
-    // Re-judge only once a save has shown errors, so fixes clear them live.
-    if (errors) setErrors(validateWorkflowDraft(next, stepAgents.map(agent => agent.id)));
+    // Clear shown assignment or submission errors as the person fixes them.
+    if (errors) setErrors(judge(next, stepAgents.map(agent => agent.id)));
   }
 
   function focusStep(index: number) {
@@ -114,6 +126,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
+    setSubmitted(true);
     const result = validateWorkflowDraft(draft, stepAgents.map(agent => agent.id));
     setErrors(result);
     if (!workflowDraftValid(result)) {
@@ -166,12 +179,10 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
             const next = projects!.find(item => item.id === value);
             if (!next) return;
             setProjectId(value);
-            // Errors were judged against the old Project's Agents.
-            setErrors(null);
-            // Steps name Agents of the Project they run in: keep a step whose
-            // owner is in the new Project too, and hand the rest to its first.
-            const allowed = enabledProjectAgentIds(next).filter(id => parent?.memberAgentIds.includes(id));
-            update({ ...draft, steps: draft.steps.map(step => allowed.includes(step.agentId) ? step : { ...step, agentId: allowed[0] ?? "" }) });
+            const allowed = enabledProjectAgentIds(next).filter(id => parent?.memberAgentIds.includes(id)
+              && agents.some(agent => agent.id === id && agent.enabled && !agent.deletedAt));
+            // Scope changes never silently change the person responsible.
+            setErrors(judge(draft, allowed));
           }}>
             <SelectTrigger className="w-full" aria-label={t("workflow.project")}><SelectValue>{project.name}</SelectValue></SelectTrigger>
             <SelectContent>{projects!.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
@@ -181,6 +192,9 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
           <Select value={teamId} disabled={busy || Boolean(workflow)} onValueChange={value => {
             if (!value) return;
             setTeamId(value);
+            const nextTeam = teams.find(item => item.id === value);
+            setErrors(judge(draft, enabledProjectAgentIds(project).filter(id => nextTeam?.memberAgentIds.includes(id)
+              && agents.some(agent => agent.id === id && agent.enabled && !agent.deletedAt))));
           }}>
             <SelectTrigger className="w-full" aria-label={t("workflow.owning_team")}><SelectValue>{parent?.name ?? t("workflow.choose_team")}</SelectValue></SelectTrigger>
             <SelectContent>{teams.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>

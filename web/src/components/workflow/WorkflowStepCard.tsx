@@ -116,7 +116,7 @@ export function WorkflowStepCard({
               <SelectValue placeholder={t("workflow.step_agent_placeholder")}>
                 {(value: string | null) => {
                   const picked = agents.find((agent) => agent.id === value);
-                  return picked ? <RosterTriggerValue agent={picked} /> : t("workflow.step_agent_placeholder");
+                  return picked ? <RosterTriggerValue agent={picked} /> : t(value ? "workflow.reassign_agent" : "workflow.step_agent_placeholder");
                 }}
               </SelectValue>
             </SelectTrigger>

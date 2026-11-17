@@ -12,6 +12,7 @@ import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { isSubmitChord, submitShortcutLabel } from "../../lib/shortcuts";
 import { DatePicker } from "@/components/ui/date-picker";
 import { WorkflowSelect } from "../workflow/WorkflowSelect";
+import { workflowSelectionIssue } from "../../lib/workflowSelection";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -267,6 +268,7 @@ export function TaskDrawer({
       return;
     }
     if (!validConnectionGrants(form.connectionGrants)) return;
+    if (workflowIssue) return;
     onSubmit(event);
   }
 
@@ -285,12 +287,16 @@ export function TaskDrawer({
     assigneeUserId: form.assigneeUserId,
     assignedAgentId: form.assignedAgentId,
     assignedTeamId: form.assignedTeamId,
+    allowWorkflowSelection: true,
   });
   const selectedAgent = agentOptions.find((agent) => agent.id === form.assignedAgentId);
   /* Intake: an issue outside a project has nowhere to run, so it offers no
      agent or team — the server refuses one — only the way into a project. */
   const intake = form.variant === "backlog" && projectChoice !== "required" && !form.projectId && !form.computerId && !form.sourceRoutineId;
   const selectedTeam = teamOptions.find((team) => team.id === form.assignedTeamId);
+  const projectAgentIds = project?.members.filter(member => member.enabled).map(member => member.agentId);
+  const workflowIssue = workflowSelectionIssue(selectedTeam,
+    form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
 
   // A saved task can reference an agent/team that has since been deleted or is
   // no longer in the fetched roster. Fall back to the executor kind the task
@@ -448,7 +454,7 @@ export function TaskDrawer({
         {/* Directly under the assignment that reveals it: picking a team
             below must not insert a field above where the reader is working. */}
         {selectedTeam ? <Field label={t("workflow.select_workflow")} wrapper="div">
-          <WorkflowSelect team={selectedTeam} projectId={project?.id} predefinedOnly={!project} inherit disabled={saving}
+          <WorkflowSelect team={selectedTeam} projectId={project?.id} projectAgentIds={projectAgentIds} restrictToProject predefinedOnly={!project} inherit disabled={saving}
             value={form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null)}
             onChange={workflowId => onChange({ ...form, assignedWorkflowId: workflowId ?? "", collaborationStyle: null })} />
         </Field> : null}
@@ -536,7 +542,7 @@ export function TaskDrawer({
           <Button type="button" variant="ghost" size="cta" onClick={onClose} disabled={busy}>
             {t("dialog.cancel")}
           </Button>
-          <Button type="submit" variant="default" size="cta" loading={saving} disabled={deleting}>
+          <Button type="submit" variant="default" size="cta" loading={saving} disabled={deleting || Boolean(workflowIssue)}>
             {saving ? t("admin.saving") : submitLabel}
           </Button>
           {/* Last in the DOM so the phone footer's odd-child rule still sees

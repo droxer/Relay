@@ -11,9 +11,8 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
-import { ActionAdd, ActionStart, ICON } from "../icons";
+import { ActionStart, ICON } from "../icons";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
-import { WorkflowEditor } from "./WorkflowEditor";
 
 type Props = {
   project: ProjectRecord;
@@ -31,11 +30,9 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
   const { teams, isSuccess, error, refetch } = useTeams(userId);
   const workflows = useMemo(() => projectWorkflows(teams, project.id), [teams, project.id]);
   const agentNames = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.displayName])), [agents]);
-  const [editing, setEditing] = useState<{ workflow: TeamWorkflow | null } | null>(null);
   const [starting, setStarting] = useState<TeamWorkflow | null>(null);
   const canManage = Boolean(userId) && userId === project.ownerUserId && !readOnly;
   const eligibleTeams = useMemo(() => workflowTeams(teams, project), [teams, project]);
-  const canCreate = canManage && eligibleTeams.length > 0;
 
   let body;
   if (error && !isSuccess) {
@@ -48,7 +45,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
   } else if (!isSuccess && userId) {
     body = <p className="workflow-teams-state" aria-busy="true">{t("workflow.loading")}</p>;
   } else if (workflows.length === 0) {
-    body = <p className="workflow-teams-state">{canCreate ? t("workflow.empty") : t("workflow.empty_read_only")}</p>;
+    body = <p className="workflow-teams-state">{canManage ? t("workflow.project_empty") : t("workflow.empty_read_only")}</p>;
   } else {
     body = (
       <ul className="workflow-team-list">
@@ -65,10 +62,8 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
             </div>
             {canManage ? (
               <div className="workflow-team-actions">
-                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>
-                  {t("workflow.edit")}
-                </Button>
-                <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting(workflow)}>
+                <a className="record-inline-action" href={`/teams/${encodeURIComponent(workflow.teamId)}`}>{t("workflow.manage_in_team")}</a>
+                <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled || !teams.find(team => team.id === workflow.teamId)?.enabled} onClick={() => setStarting(workflow)}>
                   <ActionStart size={ICON.sm} aria-hidden="true" />
                   {t("workflow.start")}
                 </Button>
@@ -87,24 +82,23 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
           {t("workflow.section_title")}
           <span className="tnum">{workflows.length}</span>
         </h2>
-        {canCreate ? (
-          <Button type="button" variant="outline" size="dense" onClick={() => setEditing({ workflow: null })}>
-            <ActionAdd size={ICON.sm} aria-hidden="true" />
-            {t("workflow.create")}
-          </Button>
-        ) : null}
       </div>
+      <p className="workflow-editor-note">{t("workflow.project_usage")}</p>
       {body}
+      {canManage && workflows.length === 0 && eligibleTeams.length === 0 ? (
+        <a className="record-inline-action" href="/teams">{t("workflow.find_team")}</a>
+      ) : null}
+      {canManage && workflows.length === 0 ? (
+        <ul className="workflow-team-list">
+          {eligibleTeams.map(team => (
+            <li className="workflow-team-row" key={team.id}>
+              <span>{team.name}</span>
+              <a className="record-inline-action" href={`/teams/${encodeURIComponent(team.id)}`}>{t("workflow.manage_in_team")}</a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {canManage ? (
-        <>
-          <WorkflowEditor
-            open={editing !== null}
-            project={project}
-            workflow={editing?.workflow ?? null}
-            teams={editing?.workflow ? teams.filter(parent => parent.id === editing.workflow?.teamId) : eligibleTeams}
-            agents={agents}
-            onClose={() => setEditing(null)}
-          />
           <WorkflowRunStarter
             workflow={starting}
             project={project}
@@ -114,7 +108,6 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
               onOpenThread(sessionId);
             }}
           />
-        </>
       ) : null}
     </section>
   );

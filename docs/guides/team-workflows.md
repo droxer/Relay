@@ -21,14 +21,25 @@ back to ordinary Team work.
 Create a Team first. Its page lists every Workflow it can run — the three
 predefined ones, then its custom ones — and marks the default. Create a custom
 Workflow there with New workflow (choosing one of your Projects where the
-Team's Agents are enabled), or from a Project's Agents tab by selecting the
-Team. Assign each step to an enabled Agent in both rosters. The Team must
+Team's Agents are enabled). Set as default lives beside each Workflow; selecting
+a Project-scoped default explains its effect on other Projects before saving.
+Assign each step to an enabled Agent in both rosters. The Team must
 be on the Project's Computer. Saving a Custom Workflow never changes Team membership,
 leadership, the default Workflow selection, or final-turn approval settings.
 
+A Project’s Agents tab shows applicable custom Workflows, their owning Teams,
+step previews, and Start run. Manage in Team returns to the owning Team’s library;
+Projects do not hold a second definition editor or a separate Workflow default.
+If no definition applies yet, eligible Teams link directly to their libraries.
+
 Start a Workflow from the Project, or select the Team and Workflow in a Project
-Task or Automation. Each run records a frozen definition in a new Project
-Thread. Editing or deleting a definition leaves existing runs intact. Approval,
+Task or Automation. A custom Workflow may use a subset of its Team roster;
+only its step Agents must be enabled members of the Project. Predefined
+Workflows require the Team roster in the Project. Incompatible inherited defaults
+are explained and cannot be saved; choose an applicable Workflow explicitly.
+Changing Project or Team in a new definition preserves step assignments and
+marks incompatible ones for explicit reassignment. Each run records a frozen
+definition in a new Project Thread. Editing or deleting a definition leaves existing runs intact. Approval,
 retry, cancellation, and execution reservations retain their existing behavior.
 The Team's live availability and the current step's membership are checked at
 admission; removing a participant cannot authorize a later step.

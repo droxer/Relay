@@ -43,8 +43,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { TeamWorkflowPreview } from "./workflow/TeamWorkflowPreview";
 import { TeamWorkflowLibrary } from "./workflow/TeamWorkflowLibrary";
 import { isWorkflowTeam } from "../lib/workflowTeamDraft";
-import { WorkflowStepSummary } from "./workflow/WorkflowStepSummary";
-import { WorkflowSelect } from "./workflow/WorkflowSelect";
 import { defaultWorkflowId, predefinedStyle } from "../lib/workflowSelection";
 
 type TeamPageTab = "profile" | "activities";
@@ -98,7 +96,7 @@ function TeamProfile({
   const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>(team.memberConfigs ?? {});
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>(team.acceptanceCriteria ?? []);
   const [leadId, setLeadId] = useState(team.leadAgentId ?? "");
-  const [workflowId, setWorkflowId] = useState(defaultWorkflowId(team));
+  const workflowId = defaultWorkflowId(team);
   const style = predefinedStyle(workflowId);
   const [humanApproval, setHumanApproval] = useState(team.humanApproval === true);
   const [imageSaving, setImageSaving] = useState(false);
@@ -121,7 +119,6 @@ function TeamProfile({
     memberIds,
   )
     || leadId !== (team.leadAgentId ?? "")
-    || workflowId !== defaultWorkflowId(team)
     || humanApproval !== (team.humanApproval === true)
     || memberIds.length !== team.memberAgentIds.length
     || memberIds.some((id) => !team.memberAgentIds.includes(id));
@@ -172,14 +169,19 @@ function TeamProfile({
     setNameDraft(team.name);
     setMemberIds(team.memberAgentIds);
     setLeadId(team.leadAgentId ?? "");
-    setWorkflowId(defaultWorkflowId(team));
     setHumanApproval(team.humanApproval === true);
     setMemberConfigs(team.memberConfigs ?? {});
     setAcceptanceCriteria(team.acceptanceCriteria ?? []);
     setValidationError(null);
   }
 
-  function startEditing() {
+  async function startEditing() {
+    // The canonical default write promotes a legacy definition atomically,
+    // preserving its identity and existing Runs before roster editing.
+    if (workflow) {
+      try { await updateTeamMutation.mutateAsync({ teamId: team.id, input: { defaultWorkflowId: workflowId } }); }
+      catch { return; }
+    }
     resetDraft();
     setEditing(true);
   }
@@ -291,8 +293,8 @@ function TeamProfile({
                   <span className="tnum">{editing ? memberIds.length : team.members.length}</span>
                 </h2>
                 <span className="team-profile-section-head-side">
-                  {!editing && cardEditingId === null && !workflow ? (
-                    <Button type="button" variant="outline" size="dense" onClick={startEditing}>
+                  {!editing && cardEditingId === null ? (
+                    <Button type="button" variant="outline" size="dense" onClick={() => void startEditing()} disabled={busy}>
                       <ActionEdit size={ICON.sm} aria-hidden="true" />
                       {t("teams.edit")}
                     </Button>
@@ -353,7 +355,6 @@ function TeamProfile({
                 <section className="collab-style-section" aria-labelledby="team-profile-style">
                   <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("workflow.default_workflow")}</h2>
                   <p className="workflow-editor-note">{t("workflow.template_hint")}</p>
-                  <WorkflowSelect team={team} value={workflowId} onChange={value => { if (value) setWorkflowId(value); }} disabled={busy} aria-label={t("workflow.default_workflow")} />
                   <TeamWorkflowPreview team={team} workflowId={workflowId} members={memberIds.map((id) => ({
                     id, role: memberConfigs[id]?.role ?? agents.find((a) => a.id === id)?.defaultRole,
                     onRequest: memberConfigs[id]?.participation === "on_request",
@@ -397,25 +398,6 @@ function TeamProfile({
                   </Button>
                 </div>
               </>
-            ) : workflow ? (
-              /* A workflow Team runs its saved steps, not a collaboration
-                 style, and is edited where its Project's Agents are. The
-                 legacy editor would send a style the server refuses. */
-              <section className="collab-style-section" aria-labelledby="team-profile-workflow">
-                <h2 id="team-profile-workflow" className="workspace-dossier-section-title">
-                  {t("workflow.steps")}
-                  <span className="tnum">{team.workflowSteps?.length ?? 0}</span>
-                </h2>
-                <Field label={t("workflow.default_workflow")} wrapper="div">
-                  <WorkflowSelect team={team} value={defaultWorkflowId(team)} disabled={busy}
-                    onChange={value => { if (value) void updateTeamMutation.mutateAsync({ teamId: team.id, input: { defaultWorkflowId: value } }).catch(() => {}); }} />
-                </Field>
-                <WorkflowStepSummary
-                  steps={team.workflowSteps ?? []}
-                  agentName={(agentId) => team.members.find((member) => member.id === agentId)?.displayName ?? t("project.member_unavailable")}
-                />
-                <p className="workflow-editor-note">{t("workflow.edit_in_project")}</p>
-              </section>
             ) : <section className="collab-style-section" aria-labelledby="team-profile-style">
               {/* Same section grammar as Members: the style is part of the
                   team's document, not a loose form field under it. */}
@@ -427,8 +409,7 @@ function TeamProfile({
                 nameOf={(id) => team.members.find((member) => member.id === id)?.displayName ?? t("project.member_unavailable")} />
             </section>}
           </form>
-          {/* A legacy workflow Team is its own single Workflow (above). */}
-          {workflow ? null : <TeamWorkflowLibrary team={team} agents={agents} userId={userId} />}
+          {!editing ? <TeamWorkflowLibrary team={team} agents={agents} userId={userId} /> : null}
         </div>
 
         <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>

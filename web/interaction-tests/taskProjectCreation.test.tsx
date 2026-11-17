@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { TaskDrawer } from "../src/components/task-board/TaskDrawer";
 import { emptyBacklogForm, emptyRoutineForm, type TaskBoardFormState } from "../src/lib/taskBoardForm";
-import type { CurrentUser, ProjectRecord } from "../src/types";
+import type { AgentTeam, CurrentUser, ProjectRecord } from "../src/types";
 
 vi.mock("../src/api", async (original) => ({
   ...(await original<typeof import("../src/api")>()),
@@ -119,4 +119,26 @@ it("can clear a legacy intake assignment without choosing another executor", () 
   fireEvent.click(screen.getByRole("button", { name: "issues.clear_assignment" }));
   fireEvent.click(screen.getByRole("button", { name: "backlog.save_task" }));
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", assignedAgentId: "" }));
+});
+
+it.each([false, true])("prevents incompatible inherited workflows before submission (automation: %s)", (automation) => {
+  const save = vi.fn();
+  const form = { ...(automation ? emptyRoutineForm(user) : emptyBacklogForm(user)), title: "Ship", projectId: "p", assignedTeamId: "delivery" };
+  const team = { id: "delivery", name: "Delivery", ownerUserId: "u", enabled: true, computerId: "c", memberAgentIds: ["a"],
+    defaultWorkflowId: "scoped", workflows: [{ id: "scoped", projectId: "q", enabled: true, name: "Ship" }] } as AgentTeam;
+  const view = (explicit = "") => <QueryClientProvider client={new QueryClient()}>
+    <TaskDrawer open form={{ ...form, assignedWorkflowId: explicit }} onChange={vi.fn()} onSubmit={save} onClose={vi.fn()}
+      saving={false} title="New" subtitle="Task" projects={projects.map(item => ({ ...item, computerId: "c" }))}
+      logicalAgents={[{ id: "a", displayName: "Ada", placements: [{ computerId: "c", desiredState: "active" }] }] as any} teams={[team]} />
+  </QueryClientProvider>;
+  const { rerender } = render(view());
+  expect(screen.getByRole("alert").textContent).toContain("workflow.incompatible_project");
+  const submit = screen.getByRole("button", { name: automation ? "routine.create" : "backlog.create_task" }) as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  fireEvent.submit(submit.closest("form")!);
+  expect(save).not.toHaveBeenCalled();
+  rerender(view("preset:pipeline"));
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: automation ? "routine.create" : "backlog.create_task" }));
+  expect(save).toHaveBeenCalledTimes(1);
 });
