@@ -169,7 +169,41 @@ test("Computer Tasks and Automations keep their files and Project work stays in 
   await expect(page).toHaveURL(url => url.pathname === `${path}/tasks/${records[0].id}` && url.searchParams.get("tab") === "artifacts");
   await expect(page.getByRole("dialog").getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.goto(`/tasks/${records[2].id}?tab=workspace`);
-  await expect(page).toHaveURL(url => url.pathname === `/projects/${p.id}` && url.searchParams.get("recordTab") === "artifacts");
+  await expect(page).toHaveURL(url => url.pathname === `/tasks/${records[2].id}` && url.searchParams.get("tab") === "artifacts");
   await expect(page.getByRole("dialog").getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
   for (const record of records) expect((await context.request.delete(`/api/v1/tasks/${record.id}`)).ok()).toBeTruthy();
+});
+
+test("global Tasks and Automations open Project records in place", async ({ page, context }) => {
+  const { node, agent } = await setup(page, context);
+  const p = await project(context.request, node, agent.id, "Global record routing");
+  const records = [
+    await post(context.request, "/tasks", { title: "Global Project Task", projectId: p.id }),
+    await post(context.request, "/tasks", { title: "Global Project Automation", projectId: p.id,
+      isRoutine: true, routineState: "active", routineTriggers: [] }),
+  ];
+  try {
+    for (const record of records) {
+      const collection = record.isRoutine ? "automations" : "tasks";
+      await page.goto(`/${collection}`);
+      await page.getByRole("link", { name: record.title, exact: true }).click();
+      await expect(page).toHaveURL(url => url.pathname === `/${collection}/${record.id}`);
+      const detail = page.getByRole("dialog", { name: record.title, exact: true });
+      await expect(detail).toBeVisible();
+      await detail.getByRole("tab", { name: "Files", exact: true }).click();
+      await expect(page).toHaveURL(url => url.pathname === `/${collection}/${record.id}` && url.searchParams.get("tab") === "artifacts");
+      await page.reload();
+      await expect(detail.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(page).toHaveURL(url => url.pathname === `/${collection}/${record.id}` && url.searchParams.get("tab") === "artifacts");
+
+      const projectTab = record.isRoutine ? "automations" : "tasks";
+      const recordKey = record.isRoutine ? "automation" : "task";
+      await page.goto(`/projects/${p.id}?tab=${projectTab}`);
+      await page.getByRole("link", { name: record.title, exact: true }).click();
+      await expect(detail).toBeVisible();
+      await expect(page).toHaveURL(url => url.pathname === `/projects/${p.id}` && url.searchParams.get(recordKey) === record.id);
+    }
+  } finally {
+    for (const record of records) expect((await context.request.delete(`/api/v1/tasks/${record.id}`)).ok()).toBeTruthy();
+  }
 });

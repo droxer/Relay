@@ -14,7 +14,6 @@ const inputs = { tasks: [task], sessions: [session], agents: [], teams: [], node
 beforeEach(() => { navigate.mockClear(); window.history.replaceState({}, '', '/home'); });
 
 it.each([
-  ['/tasks/t', '/projects/p?task=t'],
   ['/computers/c/tasks/t', '/projects/p?task=t'],
   ['/threads/s', '/projects/p/threads/s'],
   ['/computers/c/threads/s', '/projects/p/threads/s'],
@@ -108,13 +107,22 @@ it.each([null, undefined])('keeps a Computer Thread open when the summary Projec
 });
 
 it.each([
-  ['/tasks/t?tab=workspace', task, '/projects/p?task=t&recordTab=artifacts'],
   ['/tasks/t?tab=artifacts&priority=high', { ...task, projectId: undefined, computerId: 'c' }, '/computers/c/tasks/t?tab=artifacts&priority=high'],
-  ['/automations/t?tab=artifacts', { ...task, isRoutine: true }, '/projects/p?tab=automations&automation=t&recordTab=artifacts'],
 ])('preserves the selected record tab while moving %s to its owning workspace', (url, record, expected) => {
   window.history.replaceState({}, '', url);
   renderHook(() => useWorkspaceRoute({ ...inputs, tasks: [record as RelayTaskListItem], location: parseAppPath(window.location.pathname) }));
   expect(navigate).toHaveBeenCalledWith(expected, { replace: true });
+});
+
+// A Project record opened from the global Tasks/Automations pages stays there.
+it.each([
+  ['/tasks/t?tab=workspace', task],
+  ['/automations/t?tab=artifacts', { ...task, isRoutine: true }],
+])('keeps the Project record at %s on its global page', (url, record) => {
+  window.history.replaceState({}, '', url);
+  const { result } = renderHook(() => useWorkspaceRoute({ ...inputs, tasks: [record as RelayTaskListItem], location: parseAppPath(window.location.pathname) }));
+  expect(result.current).toBe(false);
+  expect(navigate).not.toHaveBeenCalled();
 });
 
 // Global collection destinations must stay accessible from the main navigation.
