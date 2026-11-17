@@ -2,9 +2,9 @@ import { expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WorkflowEditor } from "../src/components/workflow/WorkflowEditor";
-import { saveTeamWorkflow, deleteTeamWorkflow } from "../src/api";
+import { saveWorkflow, deleteWorkflow } from "../src/api";
 
-vi.mock("../src/api", () => ({ saveTeamWorkflow: vi.fn(async () => ({})), deleteTeamWorkflow: vi.fn(async () => ({})) }));
+vi.mock("../src/api", () => ({ saveWorkflow: vi.fn(async () => ({})), deleteWorkflow: vi.fn(async () => ({})) }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: async () => true }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
@@ -49,12 +49,12 @@ function renderEditor() {
   return onClose;
 }
 
-it("saves the definition under its owning Team without sending roster fields", async () => {
+it("saves an independent Project definition without sending roster fields", async () => {
   const onClose = renderEditor();
   fireEvent.change(screen.getByRole("textbox", { name: "workflow.team_name" }), { target: { value: "Delivery" } });
   expect(screen.queryByText("Outsider")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
-  await waitFor(() => expect(saveTeamWorkflow).toHaveBeenCalledWith("team", {
+  await waitFor(() => expect(saveWorkflow).toHaveBeenCalledWith({
     name: "Delivery", projectId: "project", workflowSteps: saved.workflowSteps, enabled: true,
   }, "build"));
   await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -63,6 +63,6 @@ it("saves the definition under its owning Team without sending roster fields", a
 it("deletes only the selected Workflow", async () => {
   const onClose = renderEditor();
   fireEvent.click(screen.getByRole("button", { name: "workflow.delete" }));
-  await waitFor(() => expect(deleteTeamWorkflow).toHaveBeenCalledWith("team", "build"));
+  await waitFor(() => expect(deleteWorkflow).toHaveBeenCalledWith("build"));
   await waitFor(() => expect(onClose).toHaveBeenCalled());
 });

@@ -1,4 +1,4 @@
-# Team-owned Workflows: verification
+# Workflows: verification
 
 The user journeys for this refactor were derived from the request to separate
 the Team roster from its reusable processes:
@@ -114,3 +114,49 @@ declaration on the new step disclosure. Removing the local rule preserves the
 shared `summary:focus-visible` styling in `tokens/base.css`. The existing focus
 contract reproduced the failure before removal; afterward all 2,177 built web
 tests and Workflow CSS Stylelint passed.
+
+
+## Independent Project Workflows — 2026-11-17
+
+This refactor replaces Team ownership with independent Project definitions and
+optional Team assignment. The accepted model is ADR-025. Tests first reproduced
+the missing canonical API, standalone dispatch/approval refusal, and legacy Team
+edits not reaching the extracted record. These paths now use one definition
+store; no synthetic Team is created for standalone execution.
+
+Regression coverage includes zero-Team creation/run, multiple Team links,
+unassignment and Team deletion preserving definitions, per-Project defaults,
+a stale read not overwriting another Project's default, Task/Automation scheduler
+starts, owner-only management, live Project membership, legacy editing/conversion,
+and idempotent migration preserving definition IDs/steps/timestamps.
+
+- Backend suite: **4,809 passed, 34 skipped**. Local loopback, terminal and
+  PostgreSQL migration tests ran with their required access. Initial failures
+  exposed a missing local daemon build, a legacy snapshot-envelope mismatch,
+  and an overly broad downgrade guard; all were corrected and rerun.
+- Migration/real-daemon targets: **38 passed**, including an independent four-step
+  process through failure, retry, gated approval, backend restart and frozen
+  definition preservation. The deterministic Agent Runtime substitutes model
+  output; the backend, daemon, HTTP transport and stores are real.
+- After incorporating the merged scheduler/Team-thread fixes, unified and
+  independent Workflow API targets: **38 passed**.
+- React suite: **200 files, 1,314 tests passed**. Built web Node tests:
+  **2,177 passed**, including palette, typography, route and projection contracts.
+- Browser suite: **15 passed**. Journeys cover Project management, Team assignment/defaults, legacy
+  definitions, zero-Team direct starts in desktop/phone layouts, and a saved
+  standalone Workflow Task. API fixtures advance update timestamps to exercise
+  record refresh; they do not stand in for the real-daemon tests above.
+- Production static export, app/package TypeScript compilation, backend mypy
+  (503 files), Ruff, CSS lint and diff checks passed. ESLint has zero errors and
+  three existing warnings outside the changed workflow components.
+- Impeccable source scan: zero findings. Inspected desktop/phone Project lists
+  and the phone run drawer; the new tab shares Project gutters and has no
+  horizontal overflow in the tested journeys.
+- After incorporating the merged Next.js security update, the production
+  dependency audit reports **zero vulnerabilities**. No dependencies are added
+  by this refactor.
+
+Rollout requires migration 0129 before serving this version. An empty database
+can downgrade; once Workflow records exist, downgrade refuses rather than losing
+Project-only definitions. Existing run snapshots and execution reservations are
+preserved. Use a forward fix after rollout.

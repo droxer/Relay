@@ -1887,7 +1887,10 @@ retries with the same idempotency key after a five-minute claim lease. Disabling
 reads remain available. Cancellations pause the queue by default;
 `preserveQueue: true` is used by the explicit “send this next” action.
 
-### Project Team workflow definitions (W1 foundation)
+### Legacy Project Team workflow definitions
+
+These Team fields/routes remain compatibility adapters. New clients use the
+independent Project Workflow endpoints documented below.
 
 `POST /api/v1/teams` and `PATCH /api/v1/teams/{id}` (including admin
 variants) accept the opt-in contract below. Responses and Team events preserve
@@ -2077,6 +2080,22 @@ The W3 editor, run start, thread progress and decision slip use only the routes
 above. Integrated release verification, including themes/device sizes against a
 real backend and daemon, remains W4; this API does not claim release readiness.
 
-Team-owned workflow definitions and their run endpoints are documented in
-[Teams and Workflows](guides/team-workflows.md). Task assignments may include
-`assignedWorkflowId` alongside `assignedTeamId` to select a reusable process.
+### Independent Project Workflows
+
+Custom definitions belong to a Project and remain available without a Team.
+The owner-session API is `GET/POST /api/v1/workflows`,
+`GET/PATCH/DELETE /api/v1/workflows/{id}`, and
+`POST /api/v1/workflows/{id}/runs`. List accepts optional `projectId`; run
+accepts `requestId`, `taskGoal`, and optional eligible linked `teamId`.
+A new run freezes `workflowSnapshot`, retaining `teamSnapshot` as a wire alias.
+
+Team assignment uses `PUT/DELETE /api/v1/teams/{teamId}/workflows/{id}/link`.
+Unassignment preserves the definition. Project-scoped Team defaults use
+`PUT/DELETE /api/v1/teams/{teamId}/workflow-defaults/{projectId}` (PUT body:
+`{workflowId}`). They materialize in `projectWorkflowDefaults`.
+
+Task/Automation assignments may include `assignedWorkflowId` without
+`assignedTeamId` for a standalone custom Workflow. Predefined selections still
+require a Team. Project scope and live participant access remain mandatory.
+See [Teams and Workflows](guides/team-workflows.md) for payloads, compatibility,
+and migration 0129's forward-only recovery boundary.

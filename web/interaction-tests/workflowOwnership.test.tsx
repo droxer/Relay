@@ -8,11 +8,11 @@ import { TeamWorkflowLibrary } from "../src/components/workflow/TeamWorkflowLibr
 import { ProjectWorkflows } from "../src/components/workflow/ProjectWorkflows";
 import { taskAssignmentOptions } from "../src/lib/taskAssignment";
 import { defaultWorkflowId, explicitTaskWorkflowId, workflowSelectionIssue } from "../src/lib/workflowSelection";
-import { listProjects, updateTeam, saveTeamWorkflow } from "../src/api";
+import { listProjects, saveWorkflow, listWorkflows, linkTeamWorkflow, setTeamProjectWorkflow, deleteWorkflow } from "../src/api";
 import type { AgentTeam, ProjectRecord, TeamWorkflow, UserAgent } from "../src/types";
 
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }));
-vi.mock("../src/api", () => ({ listProjects: vi.fn(), updateTeam: vi.fn(async () => ({})), saveTeamWorkflow: vi.fn(), deleteTeamWorkflow: vi.fn(), startTeamWorkflow: vi.fn() }));
+vi.mock("../src/api", () => ({ listProjects: vi.fn(), updateTeam: vi.fn(async () => ({})), saveWorkflow: vi.fn(), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(), listWorkflows: vi.fn(), linkTeamWorkflow: vi.fn(async () => ({})), setTeamProjectWorkflow: vi.fn(async () => ({})) }));
 vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", useTeams: () => ({ teams: [team], isSuccess: true }) }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm, announce: vi.fn() }) }));
@@ -38,7 +38,7 @@ function mount(children: ReactNode) {
   render(<QueryClientProvider client={client}>{children}</QueryClientProvider>);
   return client;
 }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(listProjects).mockResolvedValue({ projects: [project] } as never); confirm.mockResolvedValue(true); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(listProjects).mockResolvedValue({ projects: [project] } as never); vi.mocked(listWorkflows).mockResolvedValue({ workflows: [workflow] }); confirm.mockResolvedValue(true); });
 
 it("marks incompatible inherited defaults unavailable before Task save", () => {
   mount(<WorkflowSelect team={team} projectId="other" inherit value={null} onChange={vi.fn()} />);
@@ -52,12 +52,11 @@ it("keeps compatible inheritance available", () => {
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("changes the default in the Team library with scope confirmation", async () => {
+it("changes only the Team default for this Project", async () => {
   mount(<TeamWorkflowLibrary team={{ ...team, defaultWorkflowId: "preset:pipeline" }} agents={agents} userId="owner" />);
   const row = (await screen.findByText("Ship")).closest("li")!;
-  fireEvent.click(await within(row).findByRole("button", { name: "workflow.set_default" }));
-  await waitFor(() => expect(updateTeam).toHaveBeenCalledWith("t", { defaultWorkflowId: "w" }));
-  expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.any(String) }));
+  fireEvent.click(await within(row).findByRole("button", { name: "workflow.set_project_default" }));
+  await waitFor(() => expect(setTeamProjectWorkflow).toHaveBeenCalledWith("t", "p", "w"));
 });
 
 it("shows a retry instead of setup advice when Projects fail to load", async () => {
@@ -76,29 +75,26 @@ it("preserves step ownership and flags invalid assignees when Project changes", 
   expect(screen.getByTestId("assignee").textContent).toBe("a");
   expect(screen.getByText("not_member")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
-  expect(saveTeamWorkflow).not.toHaveBeenCalled();
+  expect(saveWorkflow).not.toHaveBeenCalled();
 });
 
-it("keeps Project execution contextual and links management to the owning Team", () => {
+it("manages and starts the independent Workflow in its Project", async () => {
   mount(<ProjectWorkflows project={project} agents={agents} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
-  expect(screen.getByRole("link", { name: "workflow.manage_in_team" }).getAttribute("href")).toBe("/teams/t");
-  expect(screen.getByRole("button", { name: "workflow.start" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "workflow.edit" })).toBeNull();
+  expect(await screen.findByRole("button", { name: "workflow.start" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "workflow.edit" })).toBeTruthy();
 });
 
 it("shows legacy definitions in the same Team library", async () => {
-  mount(<TeamWorkflowLibrary team={{ ...team, workflows: undefined, projectId: "p", workflowSteps: workflow.workflowSteps }} agents={agents} userId="owner" />);
-  expect(await screen.findByRole("button", { name: "workflow.edit" })).toBeTruthy();
-  expect(screen.getByRole("link", { name: "workflow.run_in_project" }).getAttribute("href")).toContain("/projects/p");
+  mount(<TeamWorkflowLibrary team={{ ...team, projectId: "p", workflowSteps: workflow.workflowSteps }} agents={agents} userId="owner" />);
+  expect(await screen.findByRole("link", { name: "workflow.open_project" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "workflow.open_project" }).getAttribute("href")).toContain("tab=workflows");
 });
 
-it("does not change the default when scope confirmation is cancelled", async () => {
-  confirm.mockResolvedValue(false);
+it("unassigns a reference without deleting the Project definition", async () => {
   mount(<TeamWorkflowLibrary team={{ ...team, defaultWorkflowId: "preset:pipeline" }} agents={agents} userId="owner" />);
-  const row = (await screen.findByText("Ship")).closest("li")!;
-  fireEvent.click(await within(row).findByRole("button", { name: "workflow.set_default" }));
-  await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
-  expect(updateTeam).not.toHaveBeenCalled();
+  fireEvent.click(await screen.findByRole("button", { name: "workflow.unassign" }));
+  await waitFor(() => expect(linkTeamWorkflow).toHaveBeenCalledWith("t", "w", false));
+  expect(deleteWorkflow).not.toHaveBeenCalled();
 });
 
 it("explains an unavailable explicit selection", () => {
@@ -121,6 +117,12 @@ it("offers a larger Team with an incompatible default only when a workflow picke
   const input = { project, agents: placed, teams: [{ ...team, defaultWorkflowId: "preset:pipeline" }], assigneeUserId: "owner" };
   expect(taskAssignmentOptions(input).teams).toEqual([]);
   expect(taskAssignmentOptions({ ...input, allowWorkflowSelection: true }).teams.map(item => item.id)).toEqual(["t"]);
+});
+
+it("offers a larger Team whose Project default selects compatible step Agents", () => {
+  const placed = agents.map(agent => ({ ...agent, placements: [{ computerId: "c", desiredState: "active" }] })) as UserAgent[];
+  const scoped = { ...team, defaultWorkflowId: "preset:pipeline", projectWorkflowDefaults: { p: team.workflows![0].id } };
+  expect(taskAssignmentOptions({ project, agents: placed, teams: [scoped], assigneeUserId: "owner" }).teams.map(item => item.id)).toEqual(["t"]);
 });
 
 it("offers only the custom process when the rest of the Team is outside the Project", () => {

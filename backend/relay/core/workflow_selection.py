@@ -31,8 +31,10 @@ def workflow_id_for_style(style: Any) -> str:
     return workflow_id
 
 
-def default_workflow_id(team: dict[str, Any] | None) -> str:
+def default_workflow_id(team: dict[str, Any] | None, project_id: str | None = None) -> str:
     team = team or {}
+    if project_id and project_id in (team.get('projectWorkflowDefaults') or {}):
+        return str(team['projectWorkflowDefaults'][project_id])
     if 'defaultWorkflowId' in team:
         value = team['defaultWorkflowId']
         predefined_style(value)  # Validate reserved ids, without resolving custom scope.
@@ -50,7 +52,7 @@ def selected_workflow_id(team: dict[str, Any] | None, task: dict[str, Any] | Non
         return str(value)
     if task.get('collaborationStyle') is not None:
         return workflow_id_for_style(task['collaborationStyle'])
-    return default_workflow_id(team)
+    return default_workflow_id(team, task.get("projectId"))
 
 
 def requested_workflow_style(workflow_id: Any, legacy_style: Any = None) -> str | None:

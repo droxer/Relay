@@ -5,6 +5,7 @@ import { canonicalBrowserUrl } from "../src/lib/appRoute";
 import type { RelayTaskListItem } from "../src/types";
 
 vi.mock("../src/hooks/useProjectLookup", () => ({ useProjectLookup: () => () => undefined }));
+vi.mock("../src/hooks/useProjectWorkflows", () => ({ useProjectWorkflows: () => ({ data: { workflows: [] } }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/hooks/useInlineTaskEdits", () => ({ useInlineTaskEdits: () => null }));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));

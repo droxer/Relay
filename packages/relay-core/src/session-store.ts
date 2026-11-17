@@ -338,6 +338,7 @@ export interface WorkflowAssignment {
   awaitApproval: boolean;
   expectedOutputs: string[];
   acceptanceCriteria: string[];
+  workflowSnapshot?: { id: string; teamId?: string | null; projectId?: string; workflowSteps?: WorkflowStepDefinition[] } & Record<string, unknown>;
   teamSnapshot?: { id: string; name?: string; projectId?: string; workflowSteps?: WorkflowStepDefinition[] } & Record<string, unknown>;
 }
 
@@ -386,6 +387,7 @@ export type WorkflowRunStatus = "awaiting_approval" | "awaiting_input" | "ready"
 export interface WorkflowRun {
   workflowRunId: string;
   teamSnapshot: NonNullable<WorkflowAssignment["teamSnapshot"]>;
+  workflowSnapshot?: WorkflowAssignment["workflowSnapshot"];
   assignments: WorkflowAssignment[];
   currentIndex: number;
   revision: number;

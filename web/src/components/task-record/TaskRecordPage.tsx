@@ -28,6 +28,7 @@ import { canManageAutomation, type RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
 import { RecordPrerequisites } from "./RecordPrerequisites";
 import { useUserAgents } from "../../hooks/useUserAgents";
+import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
 import { useTeams } from "../../hooks/useTeams";
 import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
 import type { HistoryNameResolver } from "./taskHistoryLabel";
@@ -132,6 +133,7 @@ export function TaskRecordPage({
   /* The band names the assignee and the timeline names assignment targets;
      both resolve through the same directories the boards use. */
   const { teams } = useTeams(currentUser.userId);
+  const workflowQuery = useProjectWorkflows(task?.projectId, Boolean(task?.assignedWorkflowId) && !task?.assignedTeamId);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const historyNames = useMemo<HistoryNameResolver>(() => ({
     teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
@@ -274,7 +276,7 @@ export function TaskRecordPage({
           </TabsContent>
         )}
         <TabsContent value="definition">
-          <TaskRecordDefinition task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
+          <TaskRecordDefinition workflowLabel={workflowQuery.data?.workflows.find(item => item.id === task.assignedWorkflowId)?.name} task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
           {onOpenTask ? (
             <RecordPrerequisites task={task} tasks={tasks} readOnly={readOnly} onOpenTask={onOpenTask} />
           ) : null}

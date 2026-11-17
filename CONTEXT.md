@@ -141,23 +141,29 @@ Thread may address a Team only when the Team lives on the Thread's Computer.
 _Avoid_: Cross-node team, shared-path team
 
 **Workflow**:
-A reusable process for a Team's work. A **Predefined Workflow** assigns work
-by Team roles: Build → Review, Pipeline, or Lead-led. Lead-led lets the lead
-plan and delegate during a Run. A **Custom Workflow** defines ordered steps,
-each with an Agent, instructions, acceptance criteria, and an optional approval
-gate. Its Agents belong to both its Team and its Project.
-A Team may own several Custom Workflows and chooses one **Default Workflow**,
-which may be predefined or custom. A Task or Automation inherits that default
-or selects another Workflow. A Custom Workflow keeps its Project scope;
-incompatible selections are refused rather than replaced with another process.
-The Project owner manages Custom Workflow definitions.
+A reusable process. A **Custom Workflow** belongs to one Project and defines
+ordered steps, each with an Agent, instructions, acceptance criteria, and an
+optional approval gate. The Project owner manages its definition. Its step
+Agents must be enabled in the Project and placed on the Project's Computer.
+A Custom Workflow can run independently or be assigned to eligible Teams;
+assignment references the same definition and requires every step Agent to
+belong to the Team. Removing a Team or its assignment preserves the Workflow.
+A **Predefined Workflow** assigns work by Team roles: Build → Review, Pipeline,
+or Lead-led. Lead-led lets the lead plan and delegate during a Run. Predefined
+Workflows require a Team.
+A Team chooses a predefined **Default Workflow** and may choose a custom default
+for each Project. A Task or Automation inherits the applicable Team default or
+selects a Workflow explicitly. An explicit Custom Workflow needs no Team.
+Incompatible selections are refused rather than replaced with another process.
 _Avoid_: Collaboration style (a compatibility name for a Predefined Workflow),
 Workflow Team (a legacy representation combining roster and process)
 
 **Workflow Run**:
-One execution of a Workflow, recorded in a Thread. A Custom Workflow Run
-uses its Project Thread. Its definition is frozen when the run starts, so later edits or deletion of the Workflow
-do not change the run's steps, acceptance criteria, or approval gates.
+One execution of a Workflow, recorded in a Thread. A Custom Workflow Run uses
+its Project Thread, with an optional Team. Its definition and participants are
+frozen when the run starts, so later edits or deletion of the Workflow do not
+change its steps, acceptance criteria, or approval gates. Live Project access
+and, when selected, Team membership still govern each step's admission.
 The owner answers gates and retries or cancels stopped steps in the Thread.
 A Task's execution remains linked to that Thread across gates and retries.
 Assigned Tasks and Automation occurrences enter the same runtime through the

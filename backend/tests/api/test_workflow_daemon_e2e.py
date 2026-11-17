@@ -24,17 +24,21 @@ def workflow_daemon(tmp_path, monkeypatch):
         h.close()
 
 
-def team(h):
-    return h.post("/teams", {
+def workflow_fields(h):
+    return {
         "name": "Ship in order", "projectId": h.project["id"],
-        "leadAgentId": h.agent["id"], "memberAgentIds": [h.agent["id"]],
         "workflowSteps": [
             {"id": name, "name": name, "agentId": h.agent["id"], "instructions": f"Do {name}",
              "expectedOutputs": [f"{name} report"], "acceptanceCriteria": ["Record evidence"],
              "requiresApproval": name == "deploy"}
             for name in ("design", "build", "verify", "deploy")
         ],
-    }, 201)["team"]
+    }
+
+
+def team(h):
+    return h.post("/teams", {**workflow_fields(h), "leadAgentId": h.agent["id"],
+                             "memberAgentIds": [h.agent["id"]]}, 201)["team"]
 
 
 def start(h, workflow):
@@ -52,12 +56,18 @@ def wait_for(h, sid, index, status):
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("entry", ["project", "task"])
+@pytest.mark.parametrize("entry", ["project", "task", "independent"])
 def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workflow_daemon, entry):
     h = workflow_daemon
-    workflow = team(h)
+    workflow = h.post("/workflows", workflow_fields(h), 201)["workflow"] if entry == "independent" else team(h)
     task = None
-    if entry == "task":
+    if entry == "independent":
+        assert h.ctx.team_store.list_teams() == []
+        session = h.post(f"/workflows/{workflow['id']}/runs", {
+            "requestId": str(uuid4()), "taskGoal": "Exercise independent steps",
+        }, 201)
+        assert not session.get("teamId")
+    elif entry == "task":
         task = h.post("/tasks", {"title": "Ship Task workflow", "projectId": h.project["id"],
                                   "assignedTeamId": workflow["id"]}, 201)
         result = h.post(f"/tasks/{task['id']}/runs", {}, 202)
@@ -72,7 +82,8 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
     assert len([item for item in h.traces() if item["kind"] == "launch"]) == 3
     assert not h.ctx.daemon_store.list_active_runs(h.node_id)
 
-    edited = h.client.patch(f"/api/v1/teams/{workflow['id']}", json={
+    edit_path = f"/api/v1/workflows/{workflow['id']}" if entry == "independent" else f"/api/v1/teams/{workflow['id']}"
+    edited = h.client.patch(edit_path, json={
         "workflowSteps": list(reversed(workflow["workflowSteps"])),
     })
     assert edited.status_code == 200, edited.text

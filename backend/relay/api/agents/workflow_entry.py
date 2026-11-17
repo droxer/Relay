@@ -32,7 +32,7 @@ async def custom_workflow_entry(
     if is_workflow_team(team) and body.get('workflowId') is None and 'defaultWorkflowId' not in team:
         return None  # Keep legacy callers fenced; explicit canonical selection opts in.
     try:
-        workflow_id = body['workflowId'] if body.get('workflowId') is not None else default_workflow_id(team)
+        workflow_id = body['workflowId'] if body.get('workflowId') is not None else default_workflow_id(team, body.get('projectId') or body.get('project_id'))
         if predefined_style(workflow_id) is not None:
             return None
     except ValueError as error:

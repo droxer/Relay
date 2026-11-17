@@ -36,8 +36,8 @@ export function WorkflowSelect({ team, value, onChange, inherit = false, predefi
   const options = workflowOptions(team, projectId).filter(option => (!predefinedOnly || option.kind === "predefined")
     && (!projectAgentIds || workflowParticipantsAllowed(team, option.id, projectAgentIds)));
   const nameOf = useWorkflowName(team);
-  const inheritedName = nameOf(defaultWorkflowId(team));
-  const selected = value ?? (inherit ? "inherit" : defaultWorkflowId(team));
+  const inheritedName = nameOf(defaultWorkflowId(team, projectId));
+  const selected = value ?? (inherit ? "inherit" : defaultWorkflowId(team, projectId));
   const inheritedIssue = restrictToProject ? workflowSelectionIssue(team, null, projectId, projectAgentIds) : null;
   const issue = restrictToProject ? workflowSelectionIssue(team, value, projectId, projectAgentIds) : null;
   const issueId = useId();

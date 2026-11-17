@@ -9,6 +9,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from ...core.computer_identity import computer_id
 from ...core.daemon_capabilities import has_capability
+from ...core.workflows import snapshot_team_id
 from ...core.ids import new_database_id
 from ...persistence.resource_lock import resource_transaction
 from ...sessions.agent_state import initial_agent_state
@@ -122,7 +123,7 @@ class WorkflowAdmissionMixin(RegistryState):
             if first["awaitApproval"] and not _owner_admitted(run, first, session["ownerUserId"]):
                 raise ValueError("workflow_gate_closed")
             snapshot = run["teamSnapshot"]
-            if any(session.get(key) != snapshot.get(team_key) for key, team_key in (
+            if any(session.get(key) != (snapshot_team_id(snapshot) if key == "teamId" else snapshot.get(team_key)) for key, team_key in (
                 ("ownerUserId", "ownerUserId"), ("projectId", "projectId"),
                 ("teamId", "id"), ("computerId", "computerId"),
             )):

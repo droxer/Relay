@@ -70,6 +70,8 @@ from .api.threads import (
     reads as thread_read_routes,
 )
 from .api.agents import workflow_gates as workflow_gate_routes
+from .api.projects import workflows as project_workflow_routes
+from .api.projects import workflow_runs as project_workflow_run_routes
 from .api.agents import workflows as workflow_definition_routes
 from .api.web import routes as web_routes
 from .api.conditional_get import ConditionalGetMiddleware
@@ -397,6 +399,8 @@ def _publish_state(
 # path both could match. A domain split across modules lists its routers in
 # the order its routes were declared.
 API_ROUTERS = (
+    project_workflow_routes.router,
+    project_workflow_run_routes.router,
     connection_routes.router,
     connection_tools_routes.router,
     automation_routes.router,

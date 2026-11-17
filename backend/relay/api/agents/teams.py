@@ -77,6 +77,10 @@ def _validated_roster(
     if "defaultWorkflowId" in body and predefined_style(body["defaultWorkflowId"]) is None:
         snapshot = workflow_execution_snapshot({**(current or {}), **body}, body["defaultWorkflowId"])
         validate_workflow_write(ctx, owner_user_id, snapshot)
+    if isinstance(body.get('projectWorkflowDefaults'), dict):
+        for workflow_id in body['projectWorkflowDefaults'].values():
+            snapshot = workflow_execution_snapshot({**(current or {}), **body}, workflow_id)
+            validate_workflow_write(ctx, owner_user_id, snapshot)
     if current is not None and not ROSTER_FIELDS & body.keys():
         # Nothing about who is on the team or where it runs changes, so the
         # legacy roster is not re-judged (workflows were checked above). That keeps a team emptied by agent

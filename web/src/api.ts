@@ -14,3 +14,5 @@ export * from "./api-client/admin.ts";
 export * from "./api-client/chat.ts";
 export * from "./api-client/skills.ts";
 export * from "./api-client/notifications.ts";
+
+export * from "./api-client/workflows.ts";

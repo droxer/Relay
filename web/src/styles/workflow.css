@@ -750,3 +750,50 @@
 .workflow-team-row[data-kind] {
   align-items: center;
 }
+
+/* Project processes share the dossier's list grammar and retain comfortable
+   reading space between the process, its participants and the run controls. */
+.workflow-project-library {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.workflow-project-library > .workflow-library-head {
+  align-items: flex-start;
+}
+
+.workflow-project-library .workflow-editor-note {
+  max-width: 65ch;
+  margin-bottom: 0;
+}
+
+.workflow-project-row {
+  padding-block: var(--sp-4);
+}
+
+.workflow-project-row .workflow-library-main {
+  gap: var(--sp-2);
+}
+
+.workflow-project-row .workflow-library-name,
+.workflow-project-row .workflow-library-meta {
+  margin: 0;
+}
+
+.workflow-project-empty {
+  padding-block: var(--sp-8);
+  max-width: 36rem;
+}
+
+.workflow-project-empty > h3 {
+  margin: 0 0 var(--sp-2);
+  font: var(--type-heading);
+  letter-spacing: var(--type-heading-track);
+  color: var(--ink-1);
+}
+
+.workflow-project-empty > p {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--ink-2);
+}
