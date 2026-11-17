@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -33,10 +33,14 @@ await new WorkspaceRunGate(root).run(join(root, 'project'), undefined, async () 
 });
 `;
 
-async function waitFor(path: string): Promise<void> {
+async function waitUntil(ready: () => boolean, description: string): Promise<void> {
   const deadline = Date.now() + 5000;
-  while (!existsSync(path) && Date.now() < deadline) await delay(5);
-  assert.ok(existsSync(path), `worker did not reach ${path}`);
+  while (!ready() && Date.now() < deadline) await delay(5);
+  assert.ok(ready(), `worker did not reach ${description}`);
+}
+
+async function waitFor(path: string): Promise<void> {
+  await waitUntil(() => existsSync(path), path);
 }
 
 test("competing daemon recoveries cannot delete a newly acquired workspace lock", async () => {
@@ -68,9 +72,13 @@ test("competing daemon recoveries cannot delete a newly acquired workspace lock"
     await waitFor(join(root, "observed-a"));
     launch("b");
     await waitFor(join(root, "started-b"));
-    // The buggy implementation lets both processes inspect the stale lock;
-    // the fixed implementation must serialize those observations.
-    await delay(250);
+    // Both processes must reach contention before either proceeds. The buggy
+    // implementation reaches stale inspection; the fix queues a second unique
+    // mutation claim. This handshake does not depend on worker startup speed.
+    const claims = join(directory, `${digest}.lock.claims`);
+    await waitUntil(() => existsSync(join(root, "observed-b"))
+      || (existsSync(claims) && readdirSync(claims).filter(id => !id.startsWith(".")).length === 2),
+    "second recovery contender");
     writeFileSync(join(root, "proceed-a"), "");
     await waitFor(join(root, "entered-a"));
     writeFileSync(join(root, "proceed-b"), "");

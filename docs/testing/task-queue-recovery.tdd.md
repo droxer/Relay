@@ -43,6 +43,16 @@ and serialize workspace recovery`.
 - `npm audit --registry=https://registry.npmjs.org --json`: zero vulnerabilities.
 - `uvx pip-audit --path backend/.venv/lib/python3.14/site-packages`: no known
   vulnerabilities; the local `relay` package is not published on PyPI and is skipped.
+- `npm run test:py`: **4,817 passed, 34 skipped** in 331.61 seconds. Skips
+  include optional PostgreSQL checks without a configured test database.
+- Full built TypeScript tests (`node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js dist/web/tests/*.test.js`):
+  **3,322 passed, 1 failed**. The failure was the unchanged output-buffer
+  durability-delay timing assertion; isolated rerun of its file passed **9/9**.
+- `npm run test:react -w web`: **1,313 passed, 1 failed**. The unchanged
+  `skillsDelete.test.tsx` timed out finding its heading during the concurrent
+  broad runs; `npm run test:react -w web -- interaction-tests/skillsDelete.test.tsx`
+  passed **2/2** on isolated retry.
+- `npm run build -w web -- --webpack`: production static export passed.
 
 ## Scope and operating assumptions
 
@@ -62,7 +72,8 @@ lock. PID reuse conservatively retains a claim until the reused process exits.
 Empty claim directories remain to avoid racing directory removal and creation.
 The process tests ran on macOS; native Windows execution is left to CI.
 
-The initial `npm test` attempts stopped during the unrelated production web
+The standard `npm test` attempts stopped during the unrelated production web
 build: Turbopack could not bind its subprocess port (`Operation not permitted`),
-including the attempt outside the sandbox. Full-suite and alternate production
-build results are recorded in the PR's evidence section after those runs finish.
+including the attempt outside the sandbox. Suites were therefore run separately;
+the webpack production build succeeded. The broad-run timing failures above are
+reported as observed rather than claiming the full wrappers passed.
