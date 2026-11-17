@@ -1769,3 +1769,29 @@ def test_await_dispatch_keeps_waiting_and_reports_a_slow_backend(monkeypatch) ->
         assert scheduler_module._await_dispatch(future, "task_1") == "session"
 
     assert warnings and warnings[0]["task_id"] == "task_1"
+
+
+def test_await_dispatch_propagates_a_completed_backend_timeout(monkeypatch) -> None:
+    import concurrent.futures
+
+    from relay.tasks import scheduler as scheduler_module
+
+    class BoundedFuture(concurrent.futures.Future):
+        reads = 0
+
+        def result(self, timeout=None):
+            self.reads += 1
+            assert self.reads < 3, "a completed backend failure must not be retried"
+            return super().result(timeout)
+
+    future = BoundedFuture()
+    error = TimeoutError("backend admission timed out")
+    future.set_exception(error)
+    warnings = []
+    monkeypatch.setattr(scheduler_module.logger, "warning", lambda *args, **kw: warnings.append(kw))
+
+    with pytest.raises(TimeoutError) as caught:
+        scheduler_module._await_dispatch(future, "task_timeout")
+
+    assert caught.value is error
+    assert not warnings
