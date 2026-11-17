@@ -61,6 +61,8 @@ def test_raw_codex_reply_survives_bridge_history_and_handoff(message):
     {"type": "item.started", "item": {"type": "agent_message", "text": "unfinished"}},
     {"type": "message", "role": "user", "content": "not an answer"},
     {"type": "item.completed", "item": None},
+    {"type": ["invalid"]},
+    {"type": "message", "content": [{"type": {"invalid": True}, "text": "not text"}]},
 ])
 def test_unfinished_or_nonassistant_records_are_not_continuity_answers(event):
     session = {"id": "s", "agentRuns": [{"id": "r", "agent": "codex", "status": "completed",

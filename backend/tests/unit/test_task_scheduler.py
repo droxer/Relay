@@ -1700,7 +1700,8 @@ def test_legacy_assignment_picks_deterministically_among_candidates() -> None:
             assert resolved["agentId"] == expected
 
 
-def test_scheduler_skips_a_malformed_task_and_dispatches_the_next(monkeypatch) -> None:
+@pytest.mark.parametrize("failure", ["malformed", "timeout"])
+def test_scheduler_survives_a_failed_task_and_dispatches_the_next(monkeypatch, failure) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = make_session_store(root)
@@ -1739,16 +1740,33 @@ def test_scheduler_skips_a_malformed_task_and_dispatches_the_next(monkeypatch) -
                     raise ValueError("corrupt row")
                 return original(task)
 
-            monkeypatch.setattr(scheduler, "_materialize_legacy_assignment", materialize)
+            if failure == "malformed":
+                monkeypatch.setattr(scheduler, "_materialize_legacy_assignment", materialize)
+            else:
+                original_run = backend.run
+
+                async def run(node_id, request):
+                    if request["taskId"] == poisoned["id"]:
+                        raise TimeoutError("Dispatch operation timed out")
+                    return await original_run(node_id, request)
+
+                monkeypatch.setattr(backend, "run", run)
+
+                def warning(message, **fields):
+                    assert message != "Task dispatch still waiting on the daemon backend", fields
+
+                monkeypatch.setattr("relay.tasks.scheduler.logger.warning", warning)
 
             result = await scheduler.tick()
 
             # The broken task is logged and skipped; it no longer stops every
             # task queued behind it from ever being dispatched.
             assert result.dispatched == 1
-            assert result.skipped == 1
+            assert result.skipped == (1 if failure == "malformed" else 0)
             assert task_store.get_task(healthy["id"])["linkedSessionIds"]
             assert not task_store.get_task(poisoned["id"]).get("linkedSessionIds")
+            if failure == "timeout":
+                assert task_store.get_task(poisoned["id"])["status"] == "blocked"
 
     asyncio.run(run_flow())
 

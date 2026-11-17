@@ -90,6 +90,11 @@ def _await_dispatch(future: concurrent.futures.Future[Any], task_id: str) -> Any
         try:
             return future.result(timeout=DISPATCH_WAIT_WARNING_SECONDS)
         except TimeoutError:
+            # The completed operation may itself have raised TimeoutError.
+            # Read its terminal result rather than spinning on that exception.
+            # This also handles completion racing the wait's deadline.
+            if future.done():
+                return future.result()
             waited += DISPATCH_WAIT_WARNING_SECONDS
             logger.warning(
                 "Task dispatch still waiting on the daemon backend",
