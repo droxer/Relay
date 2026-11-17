@@ -27,3 +27,4 @@ operational contracts are indexed in the [documentation guide](../README.md).
 | [ADR-023](023-style-templates-and-human-steps.md) | Collaboration styles as compiled templates, and human approve steps (proposed) |
 | [ADR-024](024-task-prerequisites-and-project-plans.md) | Task prerequisites, and project plans that agents propose and owners apply |
 | [ADR-025](025-independent-project-workflows.md) | Independent Project Workflows and optional Team assignment |
+| [ADR-026](026-team-and-project-workflow-ownership.md) | Team and Project ownership scopes for reusable Workflows |

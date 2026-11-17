@@ -3880,12 +3880,12 @@
     "optional_assignment_hint": "Choose a saved process to run directly with Project Agents. You can add a Team when needed.",
     "project_default_agents": "Use Project Agents",
     "open_projects": "Open Projects",
-    "assign_hint": "Create a Workflow in a Project on this Computer, using Agents from this Team, then assign it here.",
+    "assign_hint": "Create a workflow for this Team, or assign an existing Project workflow.",
     "unassign": "Unassign",
     "set_project_default": "Use by default in Project",
     "clear_project_default": "Clear Project default",
     "project_default": "Project default",
-    "team_reference_hint": "Use a Project workflow with this Team. Unassigning keeps its definition and recorded Runs in the Project.",
+    "team_reference_hint": "Team workflows belong to this Team. Project workflows keep their Project scope.",
     "assign_workflow": "Assign workflow",
     "manage_agents": "Manage Agents",
     "project_agents_needed": "Add an enabled Project Agent before creating a Workflow.",
@@ -3948,7 +3948,7 @@
     "step_count_other": "{{count}} steps",
     "create_title": "New workflow",
     "edit_title": "Edit workflow",
-    "editor_lede": "Define this Project’s process: an Agent, instructions, and acceptance criteria for each step. Add approval gates where a person should decide.",
+    "editor_lede": "Define the process: an Agent, instructions, and acceptance criteria for each step. Add approval gates where a person should decide.",
     "team_name": "Workflow name",
     "steps": "Steps",
     "step_label": "Step {{index}}",
@@ -4035,6 +4035,9 @@
     "project_unavailable": "Project unavailable",
     "open_project": "Open project",
     "library_hint": "Predefined workflows assign work by team role. Create a custom workflow to define your own steps, then choose it as the default or per task.",
-    "create_needs_project": "To create a custom workflow, add this team’s agents to one of your Projects on the team’s computer."
+    "create_needs_project": "To create a custom workflow, add this team’s agents to one of your Projects on the team’s computer.",
+    "team_owned": "Team-owned",
+    "project_owned": "Project-owned",
+    "clear_default": "Clear default"
   }
 }

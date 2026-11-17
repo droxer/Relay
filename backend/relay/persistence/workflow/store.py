@@ -66,7 +66,7 @@ class DatabaseWorkflowStore:
             raise KeyError(workflow_id)
         if old and old['ownerUserId'] != owner:
             raise ValueError('workflow_owner_required')
-        scope = old['projectId'] if old else project_id
+        scope = (old.get('projectId') or old.get('ownerTeamId')) if old else (project_id or payload.get('ownerTeamId'))
         with resource_transaction(self.engine, f'workflows:{scope}'):
             current = self.get_workflow(workflow_id) if workflow_id else None
             if workflow_id and not current:
@@ -74,7 +74,8 @@ class DatabaseWorkflowStore:
             definition = project_workflow_definition(owner, payload, current=current)
             if not current or current['name'].casefold() != definition['name'].casefold():
                 if any(value['id'] != definition['id'] and value['name'].casefold() == definition['name'].casefold()
-                       for value in self.list_workflows(owner, project_id=definition['projectId'])):
+                       for value in self.list_workflows(owner)
+                       if value.get('projectId') == definition.get('projectId') and value.get('ownerTeamId') == definition.get('ownerTeamId')):
                     raise ValueError('workflow_name_taken')
             if current and current['enabled'] and not definition['enabled']:
                 self.assert_not_default(current['id'])
@@ -98,7 +99,7 @@ class DatabaseWorkflowStore:
         current = self.get_workflow(workflow_id)
         if not current:
             raise KeyError(workflow_id)
-        with resource_transaction(self.engine, f"workflows:{current['projectId']}"):
+        with resource_transaction(self.engine, f"workflows:{current.get('projectId') or current.get('ownerTeamId')}"):
             self.assert_not_default(workflow_id)
             with store_transaction(self.engine) as conn:
                 version = conn.execute(select(workflows.c.event_version).where(workflows.c.id == workflow_id)).scalar_one()
@@ -121,6 +122,8 @@ class DatabaseWorkflowStore:
                 conn.execute(insert(links).values(team_id=team_id, workflow_id=workflow_id))
 
     def unlink(self, team_id: str, workflow_id: str) -> None:
+        if (self.get_workflow(workflow_id) or {}).get('ownerTeamId') == team_id:
+            raise ValueError('workflow_owner_link_required')
         with store_transaction(self.engine) as conn:
             team = conn.execute(select(teams.c.snapshot).where(teams.c.id == team_id)).scalar_one()
             if team.get('defaultWorkflowId') == workflow_id or (team.get('workflowSteps') and team['id'] == workflow_id) or workflow_id in (team.get('projectWorkflowDefaults') or {}).values():
@@ -150,7 +153,7 @@ class DatabaseWorkflowStore:
 
     @staticmethod
     def _row(value: dict[str, Any], version: int) -> dict[str, Any]:
-        return {'id': value['id'], 'owner_user_id': value['ownerUserId'], 'project_id': value['projectId'],
+        return {'id': value['id'], 'owner_user_id': value['ownerUserId'], 'project_id': value.get('projectId'), 'owner_team_id': value.get('ownerTeamId'),
                 'name': value['name'], 'name_key': value['name'].casefold(), 'snapshot': deepcopy(value),
                 'event_version': version, 'created_at': parse_db_time(value['createdAt']),
                 'updated_at': parse_db_time(value['updatedAt']), 'deleted_at': parse_db_time(value.get('deletedAt'))}

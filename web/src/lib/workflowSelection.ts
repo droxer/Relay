@@ -1,7 +1,7 @@
 import type { AgentTeam, CollaborationStyle, RelayTaskListItem } from "../types.ts";
 
 export const PREDEFINED_WORKFLOWS = ["build_review", "pipeline", "lead_led"] as const;
-export type WorkflowOption = { id: string; kind: "predefined" | "steps"; name?: string; projectId?: string; template?: CollaborationStyle; enabled: boolean };
+export type WorkflowOption = { id: string; kind: "predefined" | "steps"; name?: string; projectId?: string | null; template?: CollaborationStyle; enabled: boolean };
 
 export function predefinedStyle(id?: string | null): CollaborationStyle | undefined {
   return PREDEFINED_WORKFLOWS.find(style => id === `preset:${style}`);
@@ -19,7 +19,7 @@ export function workflowOptions(team?: Pick<AgentTeam, "workflows" | "workflowOp
     ...PREDEFINED_WORKFLOWS.map(template => ({ id: `preset:${template}`, kind: "predefined" as const, template, enabled: true })),
     ...(team?.workflows ?? []).map(workflow => ({ id: workflow.id, kind: "steps" as const, name: workflow.name, projectId: workflow.projectId, enabled: workflow.enabled })),
   ];
-  return catalog.filter(option => option.kind === "predefined" || !projectId || option.projectId === projectId);
+  return catalog.filter(option => option.kind === "predefined" || !projectId || !option.projectId || option.projectId === projectId);
 }
 
 /** Task/Automation choices must resolve in their Project before submission. */
@@ -28,7 +28,7 @@ export function workflowSelectionIssue(team: AgentTeam | undefined, value: strin
   const selected = value || defaultWorkflowId(team, projectId);
   const option = workflowOptions(team).find(item => item.id === selected);
   if (!option || !option.enabled) return "unavailable";
-  if (option.kind === "steps" && option.projectId !== projectId) return "project";
+  if (option.kind === "steps" && (!projectId || (option.projectId && option.projectId !== projectId))) return "project";
   return projectAgentIds && !workflowParticipantsAllowed(team, selected, projectAgentIds) ? "unavailable" : null;
 }
 

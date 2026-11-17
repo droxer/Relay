@@ -16,6 +16,12 @@ def validate_workflow_write(
     ctx: Any, owner_user_id: str, body: dict[str, Any],
     *, current: dict[str, Any] | None = None,
 ) -> None:
+    if body.get('ownerTeamId') and not body.get('projectId'):
+        team = ctx.team_store.get_team(body['ownerTeamId'])
+        if not team or team.get('deletedAt') or team.get('ownerUserId') != owner_user_id:
+            raise TeamValidationError('workflow_team_unavailable')
+        validate_team_definition(ctx, body, team)
+        return
     if body.get('workflowRecordVersion') == 1:
         if body.get('ownerUserId') != owner_user_id:
             raise TeamValidationError('workflow_owner_required')
@@ -56,3 +62,12 @@ def validate_workflow_write(
             member, project["computerId"], node_ids=nodes, placement_store=ctx.agent_placement_store,
         ):
             raise TeamValidationError("team_workflow_agent_unplaced")
+
+
+def validate_team_definition(ctx: Any, definition: dict[str, Any], team: dict[str, Any]) -> None:
+    if definition['ownerTeamId'] != team['id']:
+        raise ValueError('workflow_team_required')
+    for step in definition['workflowSteps']:
+        agent = ctx.agent_store.get_agent(step['agentId'])
+        if step['agentId'] not in team['memberAgentIds'] or not agent or agent.get('deletedAt') or not agent.get('enabled', True) or agent.get('supervisorUserId') != definition['ownerUserId']:
+            raise ValueError('team_workflow_assignee_not_member')

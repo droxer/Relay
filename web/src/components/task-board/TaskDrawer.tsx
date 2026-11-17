@@ -286,7 +286,11 @@ export function TaskDrawer({
     project,
     computerId: form.computerId,
     agents: logicalAgents,
-    teams,
+    teams: teams.map(team => ({ ...team, workflowOptions: undefined, workflows: [
+      ...(team.workflows ?? []), ...(workflowQuery.data?.workflows ?? [])
+        .filter(item => !item.ownerTeamId && !team.workflows?.some(existing => existing.id === item.id))
+        .map(item => ({ ...item, teamId: team.id })),
+    ] })),
     assigneeUserId: form.assigneeUserId,
     assignedAgentId: form.assignedAgentId,
     assignedTeamId: form.assignedTeamId,
