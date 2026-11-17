@@ -224,9 +224,10 @@ for (const mobile of [false, true]) {
     const library = page.getByRole("region", { name: /^Workflows/ });
     await expect(library.locator(".workflow-team-row")).toHaveCount(4);
     await expect(page.locator(".workflow-preview-name")).toHaveText("Delivery");
-    await expect(library.getByRole("link", { name: "Open project", exact: true })).toBeVisible();
+    // The Project's name is the link to its Workflows tab.
+    await expect(library.getByRole("link", { name: "API", exact: true })).toBeVisible();
     await page.screenshot({ path: `/tmp/relay-workflow-library-${mobile ? "phone" : "desktop"}.png`, fullPage: true, animations: "disabled" });
-    await library.getByRole("link", { name: "Open project", exact: true }).click();
+    await library.getByRole("link", { name: "API", exact: true }).click();
     const projectWorkflows = page.getByRole("region", { name: /^Workflows/ });
     await expect(projectWorkflows.getByRole("button", { name: "Start run", exact: true })).toBeVisible();
     await expect(projectWorkflows.getByRole("button", { name: "Edit", exact: true })).toBeVisible();

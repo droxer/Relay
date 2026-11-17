@@ -86,8 +86,9 @@ it("manages and starts the independent Workflow in its Project", async () => {
 
 it("shows legacy definitions in the same Team library", async () => {
   mount(<TeamWorkflowLibrary team={{ ...team, projectId: "p", workflowSteps: workflow.workflowSteps }} agents={agents} userId="owner" />);
-  expect(await screen.findByRole("link", { name: "workflow.open_project" })).toBeTruthy();
-  expect(screen.getByRole("link", { name: "workflow.open_project" }).getAttribute("href")).toContain("tab=workflows");
+  // The Project's name is the link to its Workflows tab.
+  const link = await screen.findByRole("link", { name: "Website" });
+  expect(link.getAttribute("href")).toContain("tab=workflows");
 });
 
 it("unassigns a reference without deleting the Project definition", async () => {

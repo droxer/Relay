@@ -37,13 +37,17 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
   const linkedTeams = (workflow: Workflow) => teams.filter(team => team.enabled && !team.deletedAt
     && team.workflows?.some(item => item.id === workflow.id)
     && workflow.workflowSteps.every(step => team.memberAgentIds.includes(step.agentId)));
+  // Approvals are named only when there are some; "0 approvals" is noise.
+  const processMeta = (workflow: Workflow) => {
+    const gates = workflow.workflowSteps.filter(step => step.requiresApproval).length;
+    const steps = t("workflow.step_count", { count: workflow.workflowSteps.length });
+    return gates ? `${steps} · ${t("workflow.approval_count", { count: gates })}` : steps;
+  };
 
   return <section className="project-profile project-general-section workflow-project-library" aria-labelledby="project-workflows-title">
+    {/* The tab's lede already says what a workflow is; the head only counts. */}
     <div className="workflow-library-head">
-      <div>
-        <h2 id="project-workflows-title" className="workspace-dossier-section-title">{t("workflow.section_title")} <span className="tnum">{workflows.length}</span></h2>
-        <p className="workflow-editor-note">{t("workflow.independent_intro")}</p>
-      </div>
+      <h2 id="project-workflows-title" className="workspace-dossier-section-title">{t("workflow.section_title")} <span className="tnum">{workflows.length}</span></h2>
       {canManage ? <Button type="button" variant="default" size="dense" disabled={!canCreate} onClick={() => setEditing({ workflow: null })}>
         <ActionAdd size={ICON.sm} aria-hidden="true" />{t("workflow.create")}
       </Button> : null}
@@ -55,20 +59,21 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
       : <ul className="workflow-team-list">
         {workflows.map(workflow => {
           const availableTeams = linkedTeams(workflow);
-          const gates = workflow.workflowSteps.filter(step => step.requiresApproval).length;
-          return <li key={workflow.id} className="workflow-team-row workflow-project-row">
-            <div className="workflow-library-main">
-              <div className="workflow-team-row-name"><h3 className="workflow-library-name">{workflow.name}</h3>
-                {!workflow.enabled ? <span className="workflow-preview-kind">{t("teams.disabled")}</span> : null}
+          return <li key={workflow.id} className="workflow-team-row workflow-project-row" data-enabled={workflow.enabled}>
+            <div className="workflow-project-row-head">
+              <div className="workflow-library-main">
+                <div className="workflow-team-row-name"><h3 className="workflow-library-name">{workflow.name}</h3>
+                  {!workflow.enabled ? <span className="workflow-preview-kind">{t("teams.disabled")}</span> : null}
+                </div>
+                <p className="workflow-library-meta">{processMeta(workflow)}</p>
               </div>
-              <p className="workflow-library-meta">{t("workflow.process_meta", { count: workflow.workflowSteps.length, gates })}</p>
-              <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={agentName} />
-              <p className="workflow-library-meta">{availableTeams.length ? t("workflow.optional_teams", { names: availableTeams.map(team => team.name).join(", ") }) : t("workflow.independent_run_hint")}</p>
+              {canManage ? <div className="workflow-team-actions">
+                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>
+                <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting(workflow)}><ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}</Button>
+              </div> : null}
             </div>
-            {canManage ? <div className="workflow-team-actions">
-              <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>
-              <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting(workflow)}><ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}</Button>
-            </div> : null}
+            <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={agentName} />
+            {availableTeams.length ? <p className="workflow-library-meta">{t("workflow.optional_teams", { names: availableTeams.map(team => team.name).join(", ") })}</p> : null}
           </li>;
         })}
       </ul>}
