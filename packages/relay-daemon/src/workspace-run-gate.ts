@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { acquireWorkspaceLockClaim } from "./workspace-lock-claims.js";
 
 const LOCK_RETRY_MS = 25;
 const INCOMPLETE_LOCK_STALE_MS = 30_000;
@@ -132,47 +133,57 @@ async function acquireFileLock(
 
   let lastOwner: string | undefined;
   let reportedWait = false;
-  while (true) {
-    signal?.throwIfAborted();
-    let descriptor: number | undefined;
+  const reportWait = async () => {
+    let blockingSessionId: string | undefined;
     try {
-      descriptor = openSync(lockPath, "wx", 0o600);
-      writeFileSync(descriptor, JSON.stringify(owner), "utf8");
-      closeSync(descriptor);
-      descriptor = undefined;
-      return () => releaseOwnedLock(lockPath, owner.token);
-    } catch (error) {
-      if (descriptor !== undefined) {
+      const lock = JSON.parse(readFileSync(lockPath, "utf8")) as Partial<LockOwner>;
+      if (typeof lock.sessionId === "string") blockingSessionId = lock.sessionId;
+    } catch { /* A lock can be released while it is inspected. */ }
+    if (!reportedWait || blockingSessionId !== lastOwner) {
+      await observer?.onWaiting?.(blockingSessionId);
+      lastOwner = blockingSessionId;
+      reportedWait = true;
+    }
+  };
+  // Every acquiring daemon joins the ordering before inspecting or changing
+  // the shared lock. Keep the legacy file/namespace for existing owners.
+  const releaseClaim = await acquireWorkspaceLockClaim(lockPath, signal, reportWait);
+  try {
+    while (true) {
+      signal?.throwIfAborted();
+      let descriptor: number | undefined;
+      try {
+        descriptor = openSync(lockPath, "wx", 0o600);
+        writeFileSync(descriptor, JSON.stringify(owner), "utf8");
         closeSync(descriptor);
-        try {
-          unlinkSync(lockPath);
-        } catch {
-          // The failed write is already the primary error.
-        }
-      }
-      if (!hasCode(error, "EEXIST")) throw error;
-      if (staleLock(lockPath)) {
-        try {
-          unlinkSync(lockPath);
-        } catch (unlinkError) {
-          if (!hasCode(unlinkError, "ENOENT")) {
-            await waitForRetry(signal);
+        descriptor = undefined;
+        return () => releaseOwnedLock(lockPath, owner.token);
+      } catch (error) {
+        if (descriptor !== undefined) {
+          closeSync(descriptor);
+          try {
+            unlinkSync(lockPath);
+          } catch {
+            // The failed write is already the primary error.
           }
         }
-        continue;
+        if (!hasCode(error, "EEXIST")) throw error;
+        if (staleLock(lockPath)) {
+          try {
+            unlinkSync(lockPath);
+          } catch (unlinkError) {
+            if (!hasCode(unlinkError, "ENOENT")) {
+              await waitForRetry(signal);
+            }
+          }
+          continue;
+        }
+        await reportWait();
+        await waitForRetry(signal);
       }
-      let blockingSessionId: string | undefined;
-      try {
-        const lock = JSON.parse(readFileSync(lockPath, "utf8")) as Partial<LockOwner>;
-        if (typeof lock.sessionId === "string") blockingSessionId = lock.sessionId;
-      } catch { /* A lock can be replaced while it is inspected. */ }
-      if (!reportedWait || blockingSessionId !== lastOwner) {
-        await observer?.onWaiting?.(blockingSessionId);
-        lastOwner = blockingSessionId;
-        reportedWait = true;
-      }
-      await waitForRetry(signal);
     }
+  } finally {
+    releaseClaim();
   }
 }
 
