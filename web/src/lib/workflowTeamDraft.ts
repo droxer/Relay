@@ -215,7 +215,7 @@ export function workflowTeams(teams: readonly AgentTeam[], project: ProjectRecor
 export function workflowProjects(team: AgentTeam, projects: readonly ProjectRecord[], userId: string | undefined): ProjectRecord[] {
   if (!userId) return [];
   return projects
-    .filter(project => project.ownerUserId === userId && !project.archivedAt && workflowTeams([team], project).length > 0)
+    .filter(project => project.ownerUserId === userId && project.enabled && !project.archivedAt && workflowTeams([team], project).length > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

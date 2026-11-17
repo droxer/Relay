@@ -2,6 +2,7 @@ import type { AgentTeam, UserAgent, LogicalAgentAvailability, ProjectRecord, Rel
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 import { isWorkflowTeam } from "./workflowTeamDraft.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
+import { defaultWorkflowId, workflowOptions, workflowParticipantsAllowed } from "./workflowSelection.ts";
 import type { TaskAssignmentSelection } from "./taskBoardForm.ts";
 
 /** Can this agent/team be offered for a task assigned to `assigneeUserId`?
@@ -106,8 +107,9 @@ export function teamSharesOneComputer(
 /**
  * The agents and teams a task may be given — the one rule the task drawer and
  * an inline row picker share. Project work offers only enabled roster
- * members and teams entirely made up of those members. Standalone work keeps
- * its Computer scope and current selection.
+ * members and Teams whose full roster or a custom Workflow fits the Project.
+ * Workflow selection separately checks the actual participants. Standalone
+ * work keeps its Computer scope and current selection.
  */
 export function taskAssignmentOptions({
   project,
@@ -117,6 +119,7 @@ export function taskAssignmentOptions({
   assigneeUserId,
   assignedAgentId,
   assignedTeamId,
+  allowWorkflowSelection = false,
 }: {
   project?: Pick<ProjectRecord, "computerId" | "members"> & { id?: string } | null;
   computerId?: string;
@@ -125,6 +128,8 @@ export function taskAssignmentOptions({
   assigneeUserId: string;
   assignedAgentId?: string;
   assignedTeamId?: string;
+  /** A drawer can choose a compatible process; inline assignment inherits. */
+  allowWorkflowSelection?: boolean;
 }): { agents: UserAgent[]; teams: AgentTeam[] } {
   const identity = project?.computerId ?? computerId;
   const projectMembers = new Set(project?.members.filter((member) => member.enabled).map((member) => member.agentId));
@@ -134,11 +139,16 @@ export function taskAssignmentOptions({
   const teamOnTaskComputer = (team: AgentTeam) => identity
     ? teamOnComputer(team, agents, identity)
     : !project && teamSharesOneComputer(team, agents);
+  const teamFitsProject = (team: AgentTeam) => !project
+    || team.memberAgentIds.every(id => projectMembers.has(id))
+    || Boolean(project.id && workflowOptions(team, project.id).some(option => option.kind === "steps" && option.enabled
+      && (allowWorkflowSelection || option.id === defaultWorkflowId(team))
+      && workflowParticipantsAllowed(team, option.id, [...projectMembers])));
   return {
     agents: agents.filter((agent) => ((!project && agent.id === assignedAgentId) || agentOnTaskComputer(agent))
       && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, agent.id === assignedAgentId)),
     teams: teams.filter((team) => (!isWorkflowTeam(team) || (!!project?.id && team.projectId === project.id)) && ((!project && team.id === assignedTeamId) || (teamOnTaskComputer(team)
-      && (!project || team.memberAgentIds.every((id) => projectMembers.has(id)))))
+      && teamFitsProject(team)))
       && assignmentOptionVisible(team.ownerUserId, assigneeUserId, team.id === assignedTeamId)),
   };
 }

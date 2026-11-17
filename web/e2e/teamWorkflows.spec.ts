@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark" = "light", projectCount = 1) {
+async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark" = "light", projectCount = 1, legacy = false, projectSubset = false) {
   const stamp = "2026-09-25T00:00:00Z";
   const computerId = "device:alice:host";
   const agents = ["lead", "qa"].map((id) => ({
@@ -27,14 +27,29 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
   // The team's whole roster is enabled Project Agents, so project work may name it.
   const project = { id: "project", name: "API", ownerUserId: "alice", computerId, enabled: true, leadAgentId: "lead", version: 1,
     members: [{ agentId: "lead", role: "implementer", responsibilities: "", enabled: true }, { agentId: "qa", role: "reviewer", responsibilities: "", enabled: true }] };
+  if (projectSubset) {
+    project.members = project.members.filter(member => member.agentId === "lead");
+    team = { ...team, defaultWorkflowId: "preset:pipeline", workflows: [{
+      id: "wf_project", teamId: "delivery", projectId: "project", name: "Project delivery", enabled: true,
+      workflowSteps: [{ id: "build", name: "Build", agentId: "lead", instructions: "Build it", acceptanceCriteria: ["Tests pass"], requiresApproval: false }],
+      createdAt: stamp, updatedAt: stamp,
+    }] };
+  }
   const projects = [project, { ...project, id: "web", name: "Web" }].slice(0, projectCount);
+  if (legacy) team = { ...team, collaborationStyle: undefined, projectId: "project", workflowSteps: [
+    { id: "build", name: "Build", agentId: "lead", instructions: "Build the change", acceptanceCriteria: ["Tests pass"], requiresApproval: false },
+  ] };
   const workflowWrites: Record<string, unknown>[] = [];
   const sends: Record<string, unknown>[] = [];
   const patches: Record<string, unknown>[] = [];
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
-    let body: unknown = { sessions: [session], agents, teams: [team], tasks: [task], nodes: [node], projects, sandboxes: [], skills: [] };
+    // Match the API's canonical projection of historical Team snapshots.
+    const teamView = team.workflowSteps && !team.workflows ? { ...team, defaultWorkflowId: team.defaultWorkflowId ?? team.id,
+      workflows: [{ id: team.id, teamId: team.id, projectId: team.projectId, name: team.name, enabled: team.enabled,
+        workflowSteps: team.workflowSteps, createdAt: stamp, updatedAt: stamp }] } : team;
+    let body: unknown = { sessions: [session], agents, teams: [teamView], tasks: [task], nodes: [node], projects, sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme, language: "en" } };
     if (path.endsWith("/teams/delivery/workflows") && method === "POST") {
       const input = route.request().postDataJSON(); workflowWrites.push(input);
@@ -49,6 +64,8 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
       if (method === "PATCH") { const patch = route.request().postDataJSON(); patches.push(patch); task = { ...task, ...patch }; }
       body = task;
     }
+    if (path.endsWith("/projects/project")) body = { project };
+    if (path.endsWith("/projects/web")) body = { project: projects[1] };
     if (path.endsWith("/threads/style-thread")) body = session;
     if (path.endsWith("/messages") || path.endsWith("/agent-runs")) {
       sends.push(route.request().postDataJSON());
@@ -79,12 +96,9 @@ for (const mobile of [false, true]) {
     await expect(preview).toHaveAttribute("data-style", "build_review");
     await expect(preview.locator(".workflow-preview-kind")).toHaveText("Predefined");
     await expect(preview.locator(".collab-style-sequence li").filter({ hasText: "Builder: Builder" })).toBeVisible();
-    await page.getByRole("button", { name: "Edit team" }).click();
-    await page.getByRole("combobox", { name: "Default workflow", exact: true }).click();
-    await expect(page.getByRole("option", { name: /^Solo/ })).toHaveCount(0);
-    await option(page, "Pipeline").click();
-    await expect(page.locator('.teams-detail .workflow-preview[data-style="pipeline"]')).toBeVisible();
-    await page.getByRole("button", { name: "Save team", exact: true }).click();
+    const library = page.getByRole("region", { name: /^Workflows/ });
+    await library.locator('.workflow-team-row[data-kind="predefined"]').filter({ hasText: "Pipeline" })
+      .getByRole("button", { name: "Set as default" }).click();
     await expect.poll(() => patches.at(-1)?.defaultWorkflowId).toBe("preset:pipeline");
     await page.reload();
     const saved = page.locator('.teams-detail .workflow-preview[data-style="pipeline"]');
@@ -199,4 +213,37 @@ test("failed sends retain the workflow and member mentions hide it", async ({ pa
   await expect(select).toContainText("Team default · Build and review");
   await text.fill("@Builder fix the API");
   await expect(select).toHaveCount(0);
+});
+
+for (const mobile of [false, true]) {
+  test(`legacy workflows are managed in Teams and run from Projects (${mobile ? "phone" : "desktop"})`, async ({ page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    await fixture(page, false, "light", 1, true);
+    await page.goto("/teams/delivery");
+    const library = page.getByRole("region", { name: /^Workflows/ });
+    await expect(library.locator(".workflow-team-row")).toHaveCount(4);
+    await expect(page.locator(".workflow-preview-name")).toHaveText("Delivery");
+    await expect(library.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+    await page.screenshot({ path: `/tmp/relay-workflow-library-${mobile ? "phone" : "desktop"}.png`, fullPage: true, animations: "disabled" });
+    await library.getByRole("link", { name: "Run in Project" }).click();
+    const projectWorkflows = page.getByRole("region", { name: /^Workflows/ });
+    await expect(projectWorkflows.getByRole("button", { name: "Start run", exact: true })).toBeVisible();
+    await expect(projectWorkflows.getByRole("link", { name: "Manage in Team" })).toHaveAttribute("href", "/teams/delivery");
+    await projectWorkflows.getByRole("button", { name: "Start run", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Start workflow" })).toBeVisible();
+    expect(await page.locator("body").evaluate(el => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: `/tmp/relay-workflow-project-${mobile ? "phone" : "desktop"}.png`, fullPage: true, animations: "disabled" });
+  });
+}
+
+test("Project Tasks can choose a custom workflow from a larger Team", async ({ page }) => {
+  const { patches } = await fixture(page, false, "light", 1, false, true);
+  await page.goto("/projects/project?task=task&recordTab=definition");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save task", exact: true })).toBeDisabled();
+  await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
+  await expect(page.getByRole("option", { name: /^Pipeline/ })).toHaveCount(0);
+  await page.getByRole("option", { name: /^Project delivery/ }).click();
+  await page.getByRole("button", { name: "Save task", exact: true }).click();
+  await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_project");
 });

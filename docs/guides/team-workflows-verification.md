@@ -71,3 +71,40 @@ workflow event/result policies. The focused React interaction rerun passed
 14 tests. The new scheduler tests first failed because an explicit Workflow
 selection fell through to ordinary Team dispatch, then passed after updating
 scheduler routing to recognize `assignedWorkflowId`.
+
+## Team ownership and Project use — 2026-11-17
+
+Regression tests first reproduced five UI gaps: incompatible inherited defaults
+remained selectable, the Team library lacked default controls, failed Project
+reads became setup advice, changing Project silently reassigned steps, and
+Projects retained a definition editor. A second reproducer showed the Task
+picker excluding a larger Team even when a custom Workflow used only Project
+Agents. These tests passed after the UI changes; no checkpoint commits were
+created for this pass.
+
+- `npm run test:react -w web`: all 199 files and 1,309 tests passed.
+- Final PR check added a reproducer for inline assignment offering a larger
+  Team with an incompatible default. Inline assignment now requires that
+  default to fit; drawers can offer other compatible Workflows. The focused
+  ownership, Task creation and Automation drawer targets passed all 56 tests
+  after this guard; app type checking passed again.
+- `web/e2e/teamWorkflows.spec.ts`: all 12 browser tests passed against local
+  Next.js, with mocked APIs. Coverage includes desktop/phone defaults, custom
+  creation, Project run entry, legacy definitions, Task overrides, and a custom
+  Workflow using a subset of the Team roster. API-shaped legacy projections
+  were additionally rerun in both viewports.
+- Workflow selection helper coverage: 100% lines, 96.96% statements, 90.19%
+  branches, 100% functions (`workflowOwnership.test.tsx`, Vitest V8).
+- Built workflow draft, Task assignment and run-projection targets: 20 tests
+  passed using `node --test`.
+- App type checking and package/test TypeScript compilation passed.
+- Scoped ESLint: zero errors, one existing unused-variable warning in
+  `TeamWorkspacePage.tsx`. Workflow CSS Stylelint passed.
+- Impeccable source scan over workflow components, Team profile and Task drawer:
+  zero findings. Desktop/phone screenshots inspected; no horizontal overflow
+  in the checked journeys.
+- `npm audit`: one existing moderate Next.js advisory, GHSA-mfr8-8qww-v76h;
+  dependencies were not changed by this pass.
+
+This pass changed UI and documentation only. It did not rerun the backend suite
+or production export, and browser API fixtures do not certify real daemon execution.
