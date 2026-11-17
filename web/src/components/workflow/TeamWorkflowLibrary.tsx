@@ -58,8 +58,10 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
     {projectsQuery.isPending || catalog.isPending ? <p aria-busy="true">{t("workflow.loading")}</p> : null}
     {projectsQuery.isError || catalog.isError ? <div role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="outline" size="dense" onClick={() => { void projectsQuery.refetch(); void catalog.refetch(); }}>{t("workspace.retry")}</Button></div> : null}
     <ul className="workflow-team-list">
+      {/* The glyph marks a predefined row and the step flow a custom one, so
+          neither needs a kind chip; only the default is called out. */}
       {PREDEFINED_WORKFLOWS.map(style => <li key={style} className="workflow-team-row" data-kind="predefined">
-        <span className="workflow-library-main"><span className="workflow-team-row-name"><PredefinedWorkflowIcon style={style} /><span className="workflow-library-name">{t(`collab_style.${style}`)}</span>{badge(t("workflow.predefined"))}
+        <span className="workflow-library-main"><span className="workflow-team-row-name"><PredefinedWorkflowIcon style={style} /><span className="workflow-library-name">{t(`collab_style.${style}`)}</span>
           {defaultWorkflowId(team) === `preset:${style}` ? badge(t("workflow.default_badge")) : null}</span><span className="workflow-library-meta">{t(`collab_style.${style}_hint`)}</span></span>
         {canManage && defaultWorkflowId(team) !== `preset:${style}` ? <Button type="button" variant="ghost" size="dense" disabled={change.isPending}
           onClick={() => apply(async () => { await updateTeam(team.id, { defaultWorkflowId: `preset:${style}` }); await client.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] }); })}>{t("workflow.set_default")}</Button> : null}
@@ -68,20 +70,23 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
         const project = projects.find(item => item.id === workflow.projectId);
         const isDefault = team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id || team.defaultWorkflowId === workflow.id;
         const projectUrl = `/projects/${encodeURIComponent(workflow.projectId ?? "")}?tab=workflows`;
-        return <li key={workflow.id} className="workflow-team-row" data-kind="steps">
-          <div className="workflow-library-main">
-            <span className="workflow-team-row-name"><span className="workflow-library-name">{workflow.name}</span>{badge(t(workflow.ownerTeamId ? "workflow.team_owned" : "workflow.project_owned"))}{isDefault ? badge(t("workflow.project_default")) : null}{!workflow.enabled ? badge(t("teams.disabled")) : null}</span>
-            <span className="workflow-library-meta">{t("workflow.custom_meta", { count: workflow.workflowSteps.length, project: workflow.ownerTeamId ? team.name : project?.name ?? t("workflow.project_unavailable") })}</span>
-            <details className="workflow-library-details"><summary>{t("workflow.view_steps")}</summary><WorkflowStepSummary steps={workflow.workflowSteps} agentName={id => agents.find(agent => agent.id === id)?.displayName ?? t("project.member_unavailable")} /></details>
-          </div>
-          <div className="workflow-team-actions">
-            {canManage ? <>
+        // A Project's name is the way to it; a Team-owned workflow names its Team.
+        const owner = workflow.ownerTeamId || !workflow.projectId
+          ? team.name
+          : <a className="record-inline-action" href={projectUrl} title={t("workflow.open_project")}>{project?.name ?? t("workflow.project_unavailable")}</a>;
+        return <li key={workflow.id} className="workflow-team-row workflow-project-row" data-kind="steps">
+          <div className="workflow-project-row-head">
+            <div className="workflow-library-main">
+              <span className="workflow-team-row-name"><span className="workflow-library-name">{workflow.name}</span>{badge(t(workflow.ownerTeamId ? "workflow.team_owned" : "workflow.project_owned"))}{isDefault ? badge(t("workflow.project_default")) : null}{!workflow.enabled ? badge(t("teams.disabled")) : null}</span>
+              <span className="workflow-library-meta">{t("workflow.step_count", { count: workflow.workflowSteps.length })} · {owner}</span>
+            </div>
+            {canManage ? <div className="workflow-team-actions">
               <Button type="button" variant="ghost" size="dense" disabled={change.isPending || !workflow.enabled}
                 onClick={() => apply(() => workflow.ownerTeamId ? updateTeam(team.id, { defaultWorkflowId: isDefault ? "preset:build_review" : workflow.id }) : setTeamProjectWorkflow(team.id, workflow.projectId!, isDefault ? null : workflow.id))}>{t(workflow.ownerTeamId ? (isDefault ? "workflow.clear_default" : "workflow.set_default") : (isDefault ? "workflow.clear_project_default" : "workflow.set_project_default"))}</Button>
               {!workflow.ownerTeamId ? <Button type="button" variant="ghost" size="dense" disabled={change.isPending || isDefault} onClick={() => apply(() => linkTeamWorkflow(team.id, workflow.id, false))}>{t("workflow.unassign")}</Button> : <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>}
-            </> : null}
-            {workflow.projectId ? <a className="record-inline-action" href={projectUrl}>{t("workflow.open_project")}</a> : null}
+            </div> : null}
           </div>
+          <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={id => agents.find(agent => agent.id === id)?.displayName ?? t("project.member_unavailable")} />
         </li>;
       })}
     </ul>

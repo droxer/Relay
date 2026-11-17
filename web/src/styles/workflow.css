@@ -164,10 +164,6 @@
 
 /* ---------- project section ---------- */
 
-.workflow-teams {
-  margin-top: var(--sp-6);
-}
-
 .workflow-teams-state {
   display: grid;
   justify-items: start;
@@ -211,68 +207,9 @@
   border-top: var(--hairline);
 }
 
-.workflow-team-main {
-  display: grid;
-  flex: 1 1 18rem;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-
-.workflow-team-name {
-  color: var(--ink-1);
-  font: var(--type-name);
-  letter-spacing: var(--type-name-track);
-  overflow-wrap: anywhere;
-}
-
-.workflow-team-steps {
-  display: grid;
-  gap: var(--sp-1-5);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Index in its own column, so a long name wraps under itself, not the number. */
-.workflow-team-step {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: var(--sp-2);
-  min-width: 0;
-  color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-.workflow-team-step > .workflow-step-index {
-  margin-top: calc((1lh - var(--avatar-xs)) / 2);
-}
-
-.workflow-team-step-body {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-0-5) var(--sp-2);
-  min-width: 0;
-}
-
-.workflow-team-step .workflow-step-index,
 .workflow-timeline .workflow-step-index {
   width: var(--avatar-xs);
   height: var(--avatar-xs);
-}
-
-.workflow-team-step-name {
-  min-width: 0;
-  color: var(--ink-1);
-  overflow-wrap: anywhere;
-}
-
-.workflow-team-step-agent {
-  min-width: 0;
-  color: var(--ink-3);
-  overflow-wrap: anywhere;
 }
 
 .workflow-team-actions {
@@ -732,21 +669,6 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-.workflow-library-details {
-  margin-top: var(--sp-2);
-  font: var(--type-body-sm);
-}
-
-.workflow-library-details > summary {
-  width: fit-content;
-  cursor: pointer;
-  color: var(--ink-2);
-}
-
-.workflow-library-details[open] > summary {
-  margin-bottom: var(--sp-2);
-}
-
 .workflow-team-row[data-kind] {
   align-items: center;
 }
@@ -767,12 +689,49 @@
   margin-bottom: 0;
 }
 
-.workflow-project-row {
+/* A single grid column: `normal`, not the base row's space-between, so the
+   track stretches to the row and a short flow cannot narrow the head. */
+.workflow-team-row.workflow-project-row {
+  display: grid;
+  align-items: start;
+  justify-content: normal;
+  gap: var(--sp-3);
   padding-block: var(--sp-4);
 }
 
+/* Name and counts lead; the run controls hold the trailing edge and drop
+   under the name only when the row is too narrow for both. */
+.workflow-project-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+
+.workflow-project-row[data-enabled="false"] .workflow-flow {
+  opacity: 0.6;
+}
+
 .workflow-project-row .workflow-library-main {
-  gap: var(--sp-2);
+  gap: var(--sp-0-5);
+}
+
+/* A saved workflow's steps reuse the role-slot tiles, numbered: one flow
+   grammar for predefined and custom processes. The gate rides inside the
+   step it guards, so "approve, then this step" reads in place. */
+.workflow-flow .collab-style-step-avatar {
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+}
+
+.workflow-flow .workflow-step-gate {
+  margin-inline-start: var(--sp-1);
+}
+
+.workflow-flow li[data-gate] .collab-style-step {
+  border-color: color-mix(in oklab, var(--warn) 45%, transparent);
 }
 
 .workflow-project-row .workflow-library-name,
@@ -796,4 +755,45 @@
   margin: 0;
   font: var(--type-body);
   color: var(--ink-2);
+}
+
+/* A narrow row — a phone, or the Team page's side column — reads a process
+   top to bottom. Kept last so it outranks the row and flow rules above it. */
+.workflow-team-row.workflow-project-row {
+  container: workflow-row / inline-size;
+}
+
+@container workflow-row (max-width: 640px) {
+  /* The tiles stack at full width and their numbers carry the order, so no
+     chevron is stranded at a line start. */
+  .workflow-flow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workflow-flow .collab-style-arrow {
+    display: none;
+  }
+
+  .workflow-flow .collab-style-step {
+    flex: 1 1 auto;
+  }
+
+  .workflow-flow .workflow-step-gate {
+    margin-inline-start: auto;
+  }
+
+  /* The row's controls close the card, after the steps they act on. */
+  .workflow-project-row-head {
+    display: contents;
+  }
+
+  .workflow-project-row .workflow-team-actions {
+    order: 1;
+    width: 100%;
+  }
+
+  .workflow-project-row .workflow-team-actions > * {
+    flex: 1 1 0;
+  }
 }

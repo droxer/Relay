@@ -17,8 +17,10 @@
              run ledger narrows its day column
      640px   compact — dashboard, admin shell, composer, workspace panes;
              also a CONTAINER tier, where the `artifact-preview` header
-             wraps a file's actions under its name, and where the
-             `task-table` drops its Assignee column and row tags
+             wraps a file's actions under its name, where the
+             `task-table` drops its Assignee column and row tags, and
+             where a `workflow-row` stacks its step flow and closes on
+             its actions
      768px   CONTAINER tier, not a viewport one — the `computer` and `record`
              containers widen here, and the `task-table` drops its Due and
              Priority columns so the title track keeps a readable share. Container queries are breakpoints too and
