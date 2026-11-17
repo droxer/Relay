@@ -83,9 +83,11 @@ const backendProxyRewrites = () => [
 const nextConfig = (phase: string): NextConfig => {
   const isDev = phase === PHASE_DEVELOPMENT_SERVER;
   const proxyToBackend = !isDev && process.env.RELAY_WEB_HOST === "proxy";
+  const experimental = { agentUpgrade: "security" as const };
 
   if (isDev) {
     return {
+      experimental,
       // Suppress the Next dev-mode indicator badge: it renders fixed at the
       // bottom-left corner and overlaps the SideNav "Settings" control. It
       // never ships, so hiding it only affects local dev ergonomics.
@@ -98,13 +100,14 @@ const nextConfig = (phase: string): NextConfig => {
 
   if (proxyToBackend) {
     return {
+      experimental,
       async rewrites() {
         return { beforeFiles: backendProxyRewrites(), fallback: spaFallbackRewrites() };
       },
     };
   }
 
-  return { output: "export" as const };
+  return { experimental, output: "export" as const };
 };
 
 export default nextConfig;
