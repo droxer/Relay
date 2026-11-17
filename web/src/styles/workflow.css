@@ -743,11 +743,6 @@
   color: var(--ink-2);
 }
 
-.workflow-library-details > summary:focus-visible {
-  outline: var(--focus-outline);
-  outline-offset: var(--focus-offset);
-}
-
 .workflow-library-details[open] > summary {
   margin-bottom: var(--sp-2);
 }

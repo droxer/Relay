@@ -108,3 +108,9 @@ created for this pass.
 
 This pass changed UI and documentation only. It did not rerun the backend suite
 or production export, and browser API fixtures do not certify real daemon execution.
+
+PR #843 CI follow-up: `paletteTokens.test.ts` caught a duplicate focus-ring
+declaration on the new step disclosure. Removing the local rule preserves the
+shared `summary:focus-visible` styling in `tokens/base.css`. The existing focus
+contract reproduced the failure before removal; afterward all 2,177 built web
+tests and Workflow CSS Stylelint passed.
