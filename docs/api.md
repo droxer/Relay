@@ -40,8 +40,10 @@ documentation locations, and UI metadata from the backend's shared constants.
 Standalone work lives under its Computer's stable identity. Project Tasks
 open at `/projects/{projectId}?task={taskId}`; Automations and their runs open
 at `/projects/{projectId}?tab=automations&automation={automationId}&run={runId}`.
-Legacy `/threads`, `/tasks`, and `/automations` record links resolve to the
-record's owning workspace when one is assigned. The main navigation always
+Legacy Thread links and standalone `/tasks` and `/automations` record links
+resolve to the record's owning workspace when one is assigned. Project records
+opened at global Task or Automation addresses stay in those collections;
+explicit Project record links open over the Project board. The main navigation always
 opens the global `/threads`, `/tasks`, and `/automations` lists; local Computer
 and Project tabs retain their scope. Unplaced records remain readable at their
 global addresses. A global Task list's `?project=` parameter filters the list.

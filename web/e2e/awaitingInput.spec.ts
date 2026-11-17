@@ -70,6 +70,7 @@ async function serve(page: Page, theme: "light" | "dark", taskScoped = true, ove
     const request = route.request();
     const path = new URL(request.url()).pathname;
     let body: unknown = { sessions: [thread], agents: [reviewer], teams: [], tasks: [waitingTask], nodes: [node], projects: [], sandboxes: [], skills: [], files: [], entries: [] };
+    if (path.endsWith("/queue")) body = { messages: [], paused: false };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme, language: "en" } };
     if (path.endsWith(`/threads/${session.id}`)) body = thread;
     if (path.endsWith(`/threads/${session.id}/events`)) {

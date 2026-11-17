@@ -255,7 +255,7 @@ for (const mobile of [false, true]) {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const { sends } = await fixture(page, false, "light", 1, false, false, true, false);
     await page.goto("/projects/project?tab=members");
-    await expect(page.getByRole("tab", { name: "Workflows", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tab", { name: "Collaboration", exact: true })).toHaveAttribute("aria-selected", "true");
     await page.screenshot({ path: `/tmp/independent-workflows-${mobile ? "phone" : "desktop"}.png`, animations: "disabled", fullPage: true });
     const library = page.getByRole("region", { name: /^Workflows/ });
     await library.getByRole("button", { name: "Start run", exact: true }).click();
