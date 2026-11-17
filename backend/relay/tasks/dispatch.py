@@ -16,7 +16,7 @@ from ..core.daemon_records import ComputerRunCapacityError
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
 from .claims import dispatch_claim_active
-from .assignment import validate_task_owner_assignment
+from .assignment import validate_task_owner_assignment, validate_standalone_assignment
 from .requests import TaskRequestError
 from .placement import ensure_managed_capacity_for_task, ready_node_for_task, task_goal_text
 from ..agents.routing import (
@@ -159,6 +159,9 @@ class TaskDispatcher:
         # re-resolve (and potentially block) work that already has an owner.
         if self._execution_active():
             return self._active_result()
+        scope_result = self._standalone_scope_refusal()
+        if scope_result:
+            return scope_result
         from_capacity = self._capacity_wait()
         if from_capacity:
             return from_capacity
@@ -211,6 +214,40 @@ class TaskDispatcher:
             code="task_execution_active",
             message="This task already has a dispatch or execution in progress.",
         )
+
+    def _standalone_scope_refusal(self) -> DispatchResult | None:
+        """Reject saved legacy Workflow Teams before standalone work is queued."""
+        if self.task.get("projectId"):
+            return None
+        try:
+            validate_standalone_assignment(
+                self.ctx,
+                assigned_agent_id=self.task.get("assignedAgentId"),
+                assigned_team_id=self.task.get("assignedTeamId"),
+            )
+        except TaskRequestError as error:
+            if not self.record_pending:
+                raise
+            message = (
+                f"This task's assignment is no longer valid ({error.detail}); "
+                "reassign it before it can run."
+            )
+            self.task = self.ctx.task_store.update_task(
+                self.task["id"],
+                {
+                    "status": "blocked",
+                    "blockerReason": message,
+                    "attention": {
+                        "code": dispatch_reason_code(error.detail),
+                        "source": "dispatch",
+                    },
+                },
+            )
+            return _record_result(
+                self.ctx, self.task["id"], "rejected",
+                code=error.detail, message=message,
+            )
+        return None
 
     def _dispatchable(self) -> bool:
         """Refuse a task that is not waiting to run, before anything mutates it.

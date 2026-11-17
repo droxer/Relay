@@ -716,6 +716,7 @@
     "no_due": "No due date",
     "no_agent": "No agent",
     "agent_team": "All agents (discussion)",
+    "assignment_reselect": "This assignment is unavailable. Select an eligible assignment before saving.",
     "assignment_label": "Assign to",
     "assign_later": "Assign later",
     "no_executor": "No agent",
@@ -3876,8 +3877,9 @@
   "tags.manager.error.tag_preview_required": "Preview the changes before confirming.",
   "tags.manager.error.tag_preview_stale": "The affected records have changed. Preview again before confirming.",
   "workflow": {
+    "workflows": "Workflows",
     "assigned_workflow": "Workflow",
-    "optional_assignment_hint": "Choose a saved process to run directly with Project Agents. You can add a Team when needed.",
+    "optional_assignment_hint": "Choose a Project-owned Workflow to run with Project Agents.",
     "project_default_agents": "Use Project Agents",
     "open_projects": "Open Projects",
     "assign_hint": "Create a workflow for this Team, or assign an existing Project workflow.",

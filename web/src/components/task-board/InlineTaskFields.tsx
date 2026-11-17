@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
 import { useTranslation } from "react-i18next";
 import { enUS, zhCN, zhTW } from "react-day-picker/locale";
 import { cn } from "@/lib/utils";
@@ -175,7 +176,20 @@ export function InlinePriority({
   );
 }
 
-export function InlineAssignee({
+type InlineAssigneeProps = Omit<Parameters<typeof InlineAssigneeOptions>[0], "workflowQuery">;
+
+export function InlineAssignee(props: InlineAssigneeProps) {
+  return props.project && !props.readOnly && taskAssignmentEditable(props.task)
+    ? <ProjectInlineAssignee {...props} />
+    : <InlineAssigneeOptions {...props} />;
+}
+
+function ProjectInlineAssignee(props: InlineAssigneeProps) {
+  const workflowQuery = useProjectWorkflows(props.project!.id);
+  return <InlineAssigneeOptions {...props} workflowQuery={workflowQuery} />;
+}
+
+function InlineAssigneeOptions({
   task,
   agents,
   teams,
@@ -183,7 +197,9 @@ export function InlineAssignee({
   display,
   onChange,
   readOnly = false,
+  workflowQuery,
 }: {
+  workflowQuery?: ReturnType<typeof useProjectWorkflows>;
   task: RelayTaskListItem;
   agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
@@ -195,6 +211,8 @@ export function InlineAssignee({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
+  const projectAgents = new Set(project?.members.filter(member => member.enabled).map(member => member.agentId));
+  const workflows = workflowQuery?.data?.workflows.filter(workflow => workflow.projectId === project?.id && !workflow.ownerTeamId && workflow.enabled && workflow.workflowSteps.every(step => projectAgents.has(step.agentId))) ?? [];
   const chip = (
     <TaskAssignee task={task} ready={display.ready} agentDisplayName={display.name} agentImageUrl={display.imageUrl} />
   );
@@ -220,22 +238,30 @@ export function InlineAssignee({
   const selectedAgent = !selectedTeam && task.assignedAgentId
     ? options.agents.find((agent) => agent.id === task.assignedAgentId)
     : undefined;
+  const staleAssignment = Boolean((task.assignedTeamId && !options.teams.some(team => team.id === task.assignedTeamId)) || (task.assignedAgentId && !options.agents.some(agent => agent.id === task.assignedAgentId)) || (project && task.assignedWorkflowId && !workflowQuery?.isPending && !workflowQuery?.isError && !workflows.some(workflow => workflow.id === task.assignedWorkflowId)));
   const value = task.assignedTeamId
     ? `team:${task.assignedTeamId}`
-    : task.assignedAgentId ? `agent:${task.assignedAgentId}` : "__none__";
+    : task.assignedAgentId ? `agent:${task.assignedAgentId}`
+      : task.assignedWorkflowId ? `workflow:${task.assignedWorkflowId}` : "__none__";
 
   return (
     <AssignmentSelect
       value={value}
       agents={options.agents}
       teams={options.teams}
+      hideTeams={Boolean(project)}
+      workflows={project ? workflows : undefined}
       selectedAgent={selectedAgent}
       selectedTeam={selectedTeam}
-      inline={{ label: t("backlog.inline.assignee_label", { name: taskAssigneeLabel(task, display.name, t) }), content: chip }}
+      inline={{ label: staleAssignment ? t("backlog.assignment_reselect") : t("backlog.inline.assignee_label", { name: taskAssigneeLabel(task, display.name, t) }), content: staleAssignment ? <>{chip}<span className="text-destructive">{t("backlog.assignment_reselect")}</span></> : chip }}
       onSelect={(selection) => {
         const unchanged = selection.kind === "none"
-          ? !task.assignedAgentId && !task.assignedTeamId
-          : selection.id === (selection.kind === "team" ? task.assignedTeamId : task.assignedAgentId);
+          ? !task.assignedAgentId && !task.assignedTeamId && !task.assignedWorkflowId
+          : selection.kind === "workflow"
+            ? selection.id === task.assignedWorkflowId && !task.assignedAgentId && !task.assignedTeamId
+            : selection.kind === "agent"
+              ? selection.id === task.assignedAgentId && !task.assignedTeamId && !task.assignedWorkflowId
+              : selection.id === task.assignedTeamId && !task.assignedAgentId && !task.assignedWorkflowId;
         if (!unchanged) onChange(selection);
       }}
     />

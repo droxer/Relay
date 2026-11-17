@@ -108,22 +108,22 @@ it("prevents custom inheritance on a Projectless Automation", () => {
   expect(screen.getByRole("alert").textContent).toContain("workflow.incompatible_project");
 });
 
-it("offers a larger Team when its custom workflow uses only this Project's Agents", () => {
+it("excludes Project Teams even when their custom Workflow fits the roster", () => {
   const placed = agents.map(agent => ({ ...agent, placements: [{ computerId: "c", desiredState: "active" }] })) as UserAgent[];
-  expect(taskAssignmentOptions({ project, agents: placed, teams: [team], assigneeUserId: "owner" }).teams.map(item => item.id)).toEqual(["t"]);
+  expect(taskAssignmentOptions({ project, agents: placed, teams: [team], assigneeUserId: "owner" }).teams.map(item => item.id)).toEqual([]);
 });
 
-it("offers a larger Team with an incompatible default only when a workflow picker is available", () => {
+it("excludes Project Teams even when a Workflow picker is available", () => {
   const placed = agents.map(agent => ({ ...agent, placements: [{ computerId: "c", desiredState: "active" }] })) as UserAgent[];
   const input = { project, agents: placed, teams: [{ ...team, defaultWorkflowId: "preset:pipeline" }], assigneeUserId: "owner" };
   expect(taskAssignmentOptions(input).teams).toEqual([]);
-  expect(taskAssignmentOptions({ ...input, allowWorkflowSelection: true }).teams.map(item => item.id)).toEqual(["t"]);
+  expect(taskAssignmentOptions({ ...input, allowWorkflowSelection: true }).teams.map(item => item.id)).toEqual([]);
 });
 
-it("offers a larger Team whose Project default selects compatible step Agents", () => {
+it("excludes Project Teams even with a compatible Project default", () => {
   const placed = agents.map(agent => ({ ...agent, placements: [{ computerId: "c", desiredState: "active" }] })) as UserAgent[];
   const scoped = { ...team, defaultWorkflowId: "preset:pipeline", projectWorkflowDefaults: { p: team.workflows![0].id } };
-  expect(taskAssignmentOptions({ project, agents: placed, teams: [scoped], assigneeUserId: "owner" }).teams.map(item => item.id)).toEqual(["t"]);
+  expect(taskAssignmentOptions({ project, agents: placed, teams: [scoped], assigneeUserId: "owner" }).teams.map(item => item.id)).toEqual([]);
 });
 
 it("offers only the custom process when the rest of the Team is outside the Project", () => {

@@ -22,6 +22,8 @@ from ..core.daemon_records import ComputerRunCapacityError
 from ..persistence.task.rows import task_claim_sort_key
 from ..persistence.task.rules import compact_task_writes
 from .claims import dispatch_claim_active
+from .assignment import validate_standalone_assignment
+from .requests import TaskRequestError
 from ..agents.routing import (
     AgentRoutingError,
     dispatch_failure_code,
@@ -243,6 +245,9 @@ class TaskScheduler:
         unroutable = self._unroutable(task)
         if unroutable is not None:
             return unroutable
+        scope_refused = self._standalone_scope_refused(task)
+        if scope_refused is not None:
+            return scope_refused
         if workflow_team_for(task, self.team_store):
             return self._dispatch_workflow(task)
         # A project task's team runs inside the project room, so the thread
@@ -365,6 +370,26 @@ class TaskScheduler:
         ):
             return CandidateOutcome.IGNORED
         if self._continuation_refused(task):
+            return CandidateOutcome.SKIPPED
+        return None
+
+    def _standalone_scope_refused(self, task: dict[str, Any]) -> CandidateOutcome | None:
+        """Reject saved legacy Workflow Teams before standalone work is queued."""
+        if task.get("projectId"):
+            return None
+        try:
+            validate_standalone_assignment(
+                self,
+                assigned_agent_id=task.get("assignedAgentId"),
+                assigned_team_id=task.get("assignedTeamId"),
+            )
+        except TaskRequestError as error:
+            message = (
+                f"This task's assignment is no longer valid ({error.detail}); "
+                "reassign it before it can run."
+            )
+            self._record_dispatch_deferred(task, error.detail, message, state="rejected")
+            self._block(task, message, error.detail)
             return CandidateOutcome.SKIPPED
         return None
 

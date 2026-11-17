@@ -32,7 +32,7 @@ describe("Task assignment discoverability", () => {
     assert.match(tabsSource, /className="roster-tabs" role="radiogroup"/);
     assert.match(tabsSource, /role="radio"\n\s+tabIndex=\{-1\}\n\s+aria-checked=/);
     assert.match(pickerSource, /id: "agents", label: t\("backlog\.agents_section"\)/);
-    assert.match(pickerSource, /id: "teams", label: t\("backlog\.teams_section"\)/);
+    assert.match(pickerSource, /id: "teams"(?: as const)?, label: t\("backlog\.teams_section"\)/);
     assert.doesNotMatch(pickerSource, /<SelectLabel>/);
     // Only the active roster is listed, so neither can bury the other.
     assert.match(pickerSource, /roster\.tab === "agents" \? \(/);

@@ -35,7 +35,7 @@ vi.mock("../src/components/task-record/TaskRecordView", () => ({ TaskRecordView:
   ? <div role="dialog" aria-label="Execution"><span>{taskId}</span><button onClick={drawer.onClose}>Close execution</button></div>
   : <div>Full page record</div> }));
 
-const projects = [{ id: "p", name: "Launch" }, { id: "q", name: "Support" }, { id: "a", name: "Archive", archivedAt: "today" }] as ProjectRecord[];
+const projects = [{ id: "p", name: "Launch", members: [] }, { id: "q", name: "Support", members: [] }, { id: "a", name: "Archive", members: [], archivedAt: "today" }] as ProjectRecord[];
 /* Real tasks always carry a number; without one the ref falls back to the id,
    which these fixtures reuse as the title. */
 let nextNumber = 0;

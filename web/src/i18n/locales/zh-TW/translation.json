@@ -707,6 +707,7 @@
     "no_due": "無截止日期",
     "no_agent": "無智慧體",
     "agent_team": "所有智慧體（討論）",
+    "assignment_reselect": "目前分配無法使用，請重新選擇有效的分配對象後儲存。",
     "assignment_label": "分配給",
     "assign_later": "稍後分配",
     "no_executor": "暫無智慧體",
@@ -3804,8 +3805,9 @@
   "tags.manager.error.tag_preview_required": "請先預覽變更，再確認操作。",
   "tags.manager.error.tag_preview_stale": "關聯紀錄已變更，請重新預覽後確認。",
   "workflow": {
+    "workflows": "工作流程",
     "assigned_workflow": "工作流程",
-    "optional_assignment_hint": "選擇已儲存的流程，直接由專案代理執行，也可視需要加入團隊。",
+    "optional_assignment_hint": "選擇專案擁有的工作流程，由專案智慧體執行。",
     "project_default_agents": "使用專案代理",
     "open_projects": "開啟專案",
     "assign_hint": "為此團隊建立工作流程，或指派現有專案工作流程。",

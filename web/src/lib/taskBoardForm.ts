@@ -152,9 +152,11 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
 export type TaskAssignmentSelection =
   | { kind: "none" }
   | { kind: "agent"; id: string }
-  | { kind: "team"; id: string };
+  | { kind: "team"; id: string }
+  | { kind: "workflow"; id: string };
 
 export function parseTaskAssignmentValue(value: string): TaskAssignmentSelection {
+  if (value.startsWith("workflow:") && value.length > 9) return { kind: "workflow", id: value.slice(9) };
   if (value.startsWith("team:") && value.length > 5) {
     return { kind: "team", id: value.slice(5) };
   }

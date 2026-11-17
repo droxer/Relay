@@ -143,10 +143,10 @@ _Avoid_: Cross-node team, shared-path team
 **Workflow**:
 A reusable process. A **Custom Workflow** belongs to exactly one Team or Project and defines
 ordered steps, each with an Agent, instructions, acceptance criteria, and an
-optional approval gate. The owner manages it where it was created. A Team-owned Workflow is available
-to Tasks and Automations assigned to that Team, across compatible Projects.
-A Project-owned Workflow is available to Tasks and Automations in that Project,
-with an optional eligible Team. Using a Workflow never transfers its ownership.
+optional approval gate. The owner manages it where it was created. A Team-owned Workflow runs with its owning Team through a direct Workflow Run.
+Standalone Tasks and Automations assigned to an ordinary Team use a predefined process.
+A Project-owned Workflow is available to Tasks and Automations in that Project
+without an assigned Team. Direct Workflow Runs may name an eligible Team. Using a Workflow never transfers its ownership.
 A Project is selected for execution; its enabled Agents and Computer constrain
 the actual participants. Team-owned steps also require membership in their Team.
 Removing a Team's reference to a Project Workflow preserves that definition.
@@ -256,9 +256,7 @@ _Avoid_: Workspace, Agent home
 **Project**:
 A user-owned collaboration boundary with one persistent workspace, an
 ordered roster of Project Agents, and any number of Project Conversations.
-Project Tasks and Automations may be assigned only to enabled Project Agents;
-a selected Team must consist entirely of enabled Project Agents. Membership
-is checked again when work is dispatched.
+Project Tasks and Automations may be assigned to enabled Project Agents or Project-owned Workflows, without a Team. Standalone Tasks and Automations may be assigned to Agents or ordinary Teams regardless of Project membership. Eligibility is checked again when work is dispatched.
 Project, Task, Automation, and Thread records are private to their owning User;
 an Account's admin role and a Task's assignee do not grant access to another
 User's records. Administrative hardware and account management are separate

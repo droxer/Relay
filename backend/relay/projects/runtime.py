@@ -7,7 +7,7 @@ from ..collaboration.styles import resolve_collaboration_style
 from ..core.computer_identity import computer_id
 from ..core.role_charters import role_charter
 from ..agents.routing import resolve_agent_assignments
-from ..teams.dispatch import TeamDispatchError, assert_team_execution_supported, team_agents, team_member_assignments
+from ..teams.dispatch import TeamDispatchError, team_agents, team_member_assignments
 from ..core.workspace_capabilities import required_workspace_capabilities
 from ..core.daemon_capabilities import has_capability
 
@@ -112,11 +112,11 @@ def resolve_project_task_assignments(
     owner = task.get("ownerUserId") or task.get("assigneeUserId")
     if project.get("ownerUserId") != owner:
         raise ProjectDispatchError("project_forbidden", permanent=True)
-    if task.get("assignedTeamId") and team_store:
-        try:
-            assert_team_execution_supported(team_store.get_team(task["assignedTeamId"]))
-        except TeamDispatchError as error:
-            raise ProjectDispatchError(error.code, permanent=True) from error
+    if task.get("assignedTeamId"):
+        # Project Tasks and Automations never assign a Team directly. A saved
+        # team assignment predates this scope rule and must be reassigned
+        # before it can run, without enqueueing any daemon command.
+        raise ProjectDispatchError("project_team_assignment_forbidden", permanent=True)
     members = [
         member for member in project.get("members", []) if member.get("enabled", True)
     ]

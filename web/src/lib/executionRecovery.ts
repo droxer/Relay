@@ -49,6 +49,7 @@ const taskGuides: Record<string, RecoveryGuide> = {};
 function register(codes: string[], key: string, destination?: RecoveryGuide["destination"]) {
   for (const code of codes) taskGuides[code] = { key, destination };
 }
+register(["project_team_assignment_forbidden", "standalone_team_workflow", "team_workflow_project_mismatch", "project_workflow_owner_mismatch", "workflow_not_found", "workflow_agent_conflict"], "assignment", "backlog");
 register(["agent_disabled", "agent_not_found", "agent_policy_unsupported", "executor_mismatch", "agent_mismatch", "task_not_assigned"], "assignment", "agents");
 register(["team_not_found", "team_disabled", "team_invalid", "team_unavailable"], "assignment", "teams");
 register(["project_not_found", "project_disabled", "project_roster_invalid", "project_agent_not_member", "project_agent_off_computer", "project_team_off_computer", "project_team_not_member"], "assignment", "projects");

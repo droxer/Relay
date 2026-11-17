@@ -1,5 +1,14 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { cloneElement, createElement } from "react";
+import { createContext, useContext } from "react";
+import { fireEvent, render as testingRender, screen, within } from "@testing-library/react";
+import { cloneElement, createElement, type ReactElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ProjectRecord, Workflow } from "../src/types";
+
+function render(element: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["workflows", "project-1"], { workflows: [{ id: "w", projectId: "project-1", name: "Ship workflow", enabled: true, workflowSteps: [] } as unknown as Workflow] });
+  return testingRender(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
+}
 import { expect, it, vi } from "vitest";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "../src/components/task-board/InlineTaskFields";
 import type { RelayTaskListItem } from "../src/types";
@@ -165,4 +174,39 @@ it("shows queued work but refuses to fabricate a queue transition", () => {
   expect(item.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(item);
   expect(onChange).not.toHaveBeenCalled();
+});
+
+
+it("clears a selected Project Workflow through Assign later", async () => {
+  const onChange = vi.fn();
+  render(<InlineAssignee task={{ ...base, assignedWorkflowId: "w" }} project={{ id: "project-1", members: [] } as unknown as ProjectRecord}
+    agents={[]} teams={[]} display={{ ready: false }} onChange={onChange} />);
+  fireEvent.click(screen.getByRole("combobox"));
+  expect(screen.getByRole("radio", { name: /workflow.workflows/ }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.queryByRole("radio", { name: /backlog.teams_section/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: "backlog.assign_later" }));
+  expect(onChange).toHaveBeenCalledWith({ kind: "none" });
+});
+
+it("replaces a stale Project Team with a Project Workflow", async () => {
+  const onChange = vi.fn();
+  render(<InlineAssignee task={{ ...base, assignedTeamId: "legacy", assignedWorkflowId: "w" }} project={{ id: "project-1", members: [] } as unknown as ProjectRecord}
+    agents={[]} teams={[]} display={{ ready: false }} onChange={onChange} />);
+  fireEvent.click(screen.getByRole("combobox", { name: "backlog.assignment_reselect" }));
+  fireEvent.click(screen.getByRole("radio", { name: /workflow.workflows/ }));
+  fireEvent.click(screen.getByRole("option", { name: "Ship workflow" }));
+  expect(onChange).toHaveBeenCalledWith({ kind: "workflow", id: "w" });
+});
+
+// Keep selection semantics while leaving popup positioning to browser tests.
+vi.mock("@/components/ui/select", () => {
+  const Context = createContext<any>({});
+  return {
+    Select: ({ children, value, onValueChange, disabled }: any) => <Context.Provider value={{ value, onValueChange, disabled }}>{children}</Context.Provider>,
+    SelectTrigger: ({ children, ...rest }: any) => <button type="button" role="combobox" aria-label={rest["aria-label"]} aria-labelledby={rest["aria-labelledby"]}>{children}</button>,
+    SelectValue: ({ children }: any) => { const { value } = useContext(Context); return <span>{typeof children === "function" ? children(value) : children}</span>; },
+    SelectContent: ({ children, header }: any) => <div>{header}{children}</div>,
+    SelectGroup: ({ children }: any) => <div>{children}</div>,
+    SelectItem: ({ children, value, disabled }: any) => { const choice = useContext(Context); return <button type="button" role="option" disabled={disabled || choice.disabled} onClick={() => { if (value !== choice.value) choice.onValueChange(value); }}>{children}</button>; },
+  };
 });
