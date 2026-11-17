@@ -69,7 +69,7 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
       {custom.map(workflow => {
         const project = projects.find(item => item.id === workflow.projectId);
         const isDefault = team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id || team.defaultWorkflowId === workflow.id;
-        const projectUrl = `/projects/${encodeURIComponent(workflow.projectId ?? "")}?tab=workflows`;
+        const projectUrl = `/projects/${encodeURIComponent(workflow.projectId ?? "")}?tab=members`;
         // A Project's name is the way to it; a Team-owned workflow names its Team.
         const owner = workflow.ownerTeamId || !workflow.projectId
           ? team.name

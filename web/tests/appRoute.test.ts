@@ -492,6 +492,8 @@ it("keeps the project tasks tab explicit and canonicalizes Dashboard as the defa
   // The retired General tab canonicalizes to the default.
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=general"), "/projects/p");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=members"), "/projects/p?tab=members");
+  // The retired Workflows tab folded into Collaboration (members).
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=workflows"), "/projects/p?tab=members");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=settings&status=review"), "/projects/p?tab=settings");
   // The board's filters belong to the Issues tab, not the dashboard.
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard&status=review"), "/projects/p");
