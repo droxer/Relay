@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from collections.abc import Callable
 from typing import Any
 
@@ -15,18 +16,20 @@ from ...collaboration.styles import validate_collaboration_style
 from ...core.team_workflows import is_workflow_team, workflow_fields
 from ...core.ids import new_database_id, now_iso
 from ...core.preset_avatars import validate_profile_image_url
+from ..workflow.store import DatabaseWorkflowStore
+from ..resource_lock import resource_transaction
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
 from ..tables import teams as teams_tables
 from ...core.workflows import team_workflows, workflow_definition, validate_default_workflow
-from ...core.workflow_selection import workflow_id_for_style, default_workflow_id
+from ...core.workflow_selection import workflow_id_for_style
 
 
 TEAM_FIELDS = frozenset({
     "name", "profileImageUrl", "leadAgentId", "memberAgentIds", "computerId", "enabled",
     "memberConfigs", "acceptanceCriteria", "collaborationStyle", "humanApproval",
-    "projectId", "workflowSteps", "defaultWorkflowId",
+    "projectId", "workflowSteps", "defaultWorkflowId", "projectWorkflowDefaults",
 })
 
 
@@ -79,6 +82,8 @@ class DatabaseTeamStore:
         self.engine = shared_engine(database_url)
         if create_schema:
             create_all_tables(self.engine)
+        self.workflow_store = DatabaseWorkflowStore(database_url)
+        self.workflow_store.migrate_legacy()
 
     def create_team(
         self, owner_user_id: str, payload: dict[str, Any]
@@ -95,11 +100,12 @@ class DatabaseTeamStore:
                         **_team_event_row(row["id"], 0, event)
                     )
                 )
+                self.workflow_store.import_team(team)
         except IntegrityError as error:
             if _is_name_conflict(error):
                 raise TeamValidationError("team_name_taken") from error
             raise
-        return team
+        return self.get_team(team["id"]) or team
 
     def get_team(self, team_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
@@ -114,9 +120,9 @@ class DatabaseTeamStore:
                 .first()
             )
         return (
-            _normalized_team_snapshot(
+            self._workflow_view(_normalized_team_snapshot(
                 row["snapshot"], row["owner_user_id"]
-            )
+            ))
             if row
             else None
         )
@@ -146,6 +152,8 @@ class DatabaseTeamStore:
             )
             for row in rows
         ]
+        definitions = self.workflow_store.for_teams([team["id"] for team in teams])
+        teams = [{**team, "workflows": definitions.get(team["id"], [])} for team in teams]
         return sorted(
             teams,
             key=lambda team: (
@@ -161,6 +169,17 @@ class DatabaseTeamStore:
         ) -> tuple[dict[str, Any], dict[str, Any]]:
             normalized = _normalize_team_patch(patch, current=current)
             updated = {**current, **normalized, "updatedAt": now_iso()}
+            if {'projectId', 'workflowSteps'} & patch.keys() and is_workflow_team(updated):
+                legacy = self.workflow_store.get_workflow(team_id)
+                if legacy:
+                    self.workflow_store.save_workflow(current['ownerUserId'], {
+                        'projectId': updated['projectId'], 'workflowSteps': updated['workflowSteps'],
+                    }, workflow_id=team_id)
+                else:
+                    self.workflow_store.import_team({key: value for key, value in updated.items()
+                                                     if key not in {'workflows', 'workflowStorageVersion'}})
+                updated['workflowStorageVersion'] = 1
+                updated = self._workflow_view(updated)
             if "defaultWorkflowId" in patch and is_workflow_team(current):
                 updated["workflows"] = team_workflows(current)
                 updated.pop("projectId", None)
@@ -169,7 +188,19 @@ class DatabaseTeamStore:
                 updated = {key: value for key, value in updated.items() if key != "collaborationStyle"}
             return updated, {"patch": normalized, "team": updated}
 
-        return self._mutate(team_id, "team.updated", update_snapshot)
+        ids = list((patch.get('projectWorkflowDefaults') or {}).values()) if isinstance(patch.get('projectWorkflowDefaults'), dict) else []
+        if isinstance(patch.get('defaultWorkflowId'), str) and not patch['defaultWorkflowId'].startswith('preset:'):
+            ids.append(patch['defaultWorkflowId'])
+        scopes = {definition['projectId'] for workflow_id in ids
+                  if (definition := self.workflow_store.get_workflow(workflow_id))}
+        if {'projectId', 'workflowSteps'} & patch.keys():
+            scope = patch.get('projectId') or (self.get_team(team_id) or {}).get('projectId')
+            if scope:
+                scopes.add(scope)
+        with ExitStack() as locks:
+            for scope in sorted(scopes):
+                locks.enter_context(resource_transaction(self.engine, f'workflows:{scope}'))
+            return self._mutate(team_id, "team.updated", update_snapshot)
 
     def delete_team(self, team_id: str) -> dict[str, Any]:
         def delete_snapshot(
@@ -185,6 +216,36 @@ class DatabaseTeamStore:
             return deleted, {"team": deleted}
 
         return self._mutate(team_id, "team.deleted", delete_snapshot)
+
+    def set_project_workflow_default(self, team_id: str, project_id: str, workflow_id: str | None) -> dict[str, Any]:
+        """Change one scope against the current version, preserving other scopes."""
+        def update_default(current: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+            defaults = dict(current.get('projectWorkflowDefaults', {}))
+            if workflow_id is None:
+                defaults.pop(project_id, None)
+            else:
+                defaults[project_id] = workflow_id
+            patch: dict[str, Any] = {'projectWorkflowDefaults': defaults}
+            legacy_id = current.get('defaultWorkflowId') or (current['id'] if current.get('workflowSteps') else None)
+            if workflow_id is None and any(item['id'] == legacy_id and item['projectId'] == project_id
+                                           for item in current.get('workflows', [])):
+                patch['defaultWorkflowId'] = workflow_id_for_style(current.get('collaborationStyle'))
+            # A stale default in another scope must not prevent this scope's
+            # repair. Validate only the selection being changed.
+            normalized = _normalize_team_patch({**patch, 'projectWorkflowDefaults': {
+                project_id: workflow_id,
+            } if workflow_id else {}}, current=current)
+            if len(defaults) > 256:
+                raise ValueError('workflow_defaults_invalid')
+            normalized['projectWorkflowDefaults'] = defaults
+            updated = {**current, **normalized, 'updatedAt': now_iso()}
+            if 'defaultWorkflowId' in patch and is_workflow_team(current):
+                updated.pop('projectId', None)
+                updated.pop('workflowSteps', None)
+            return updated, {'patch': normalized, 'team': updated}
+
+        with resource_transaction(self.engine, f'workflows:{project_id}'):
+            return self._mutate(team_id, 'team.updated', update_default)
 
     def remove_member(self, team_id: str, agent_id: str) -> dict[str, Any]:
         def remove_from_snapshot(
@@ -202,43 +263,51 @@ class DatabaseTeamStore:
 
         return self._mutate(team_id, "team.updated", remove_from_snapshot)
 
-    def save_workflow(
-        self, team_id: str, payload: dict[str, Any], *, workflow_id: str | None = None,
-    ) -> dict[str, Any]:
-        def mutate(current: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-            workflows = team_workflows(current)
-            old = next((item for item in workflows if item["id"] == workflow_id), None)
-            if workflow_id and old is None:
-                raise KeyError(workflow_id)
-            definition = workflow_definition(current, payload, current=old)
-            if workflow_id is not None and default_workflow_id(current) == workflow_id and not definition["enabled"]:
-                raise ValueError("workflow_is_default")
-            if any(item["id"] != definition["id"] and item["name"].casefold() == definition["name"].casefold()
-                   for item in workflows):
-                raise ValueError("workflow_name_taken")
-            workflows = [definition if item["id"] == workflow_id else item for item in workflows]
-            if old is None:
-                workflows.append(definition)
-            updated = {**current, "workflows": workflows, "updatedAt": now_iso()}
-            return updated, {"workflow": definition, "team": updated}
+    def _workflow_view(self, team: dict[str, Any]) -> dict[str, Any]:
+        definitions = self.workflow_store.list_workflows(team_id=team['id'])
+        legacy = next((item for item in definitions if item['id'] == team['id']), None)
+        if legacy and 'workflowSteps' in team:
+            team = {**team, 'workflowSteps': legacy['workflowSteps'], 'projectId': legacy['projectId']}
+        return {**team, 'workflows': [{**definition, 'teamId': team['id']} for definition in definitions]}
 
-        saved = self._mutate(team_id, "team.workflow_updated" if workflow_id else "team.workflow_created", mutate)
-        return next(item for item in saved["workflows"] if item["id"] == workflow_id) if workflow_id else saved["workflows"][-1]
+    def save_workflow(self, team_id: str, payload: dict[str, Any], *, workflow_id: str | None = None) -> dict[str, Any]:
+        with store_transaction(self.engine):
+            team = self._active_team(team_id)
+            if workflow_id and workflow_id not in {item['id'] for item in team['workflows']}:
+                raise KeyError(workflow_id)
+            # Preserve the historical Team-side validation contract.
+            workflow_definition(team, payload, current=next((item for item in team['workflows'] if item['id'] == workflow_id), None))
+            definition = self.workflow_store.save_workflow(team['ownerUserId'], payload, workflow_id=workflow_id)
+            self.workflow_store.link(team_id, definition['id'])
+            self._mutate(team_id, 'team.workflow_updated' if workflow_id else 'team.workflow_created',
+                         lambda current: (current, {'workflow': {**definition, 'teamId': team_id}, 'team': current}))
+            return {**definition, 'teamId': team_id}
 
     def delete_workflow(self, team_id: str, workflow_id: str) -> dict[str, Any]:
-        def mutate(current: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-            workflows = team_workflows(current)
-            deleted = next((item for item in workflows if item["id"] == workflow_id), None)
-            if deleted is None:
+        with store_transaction(self.engine):
+            team = self._active_team(team_id)
+            if workflow_id not in {item['id'] for item in team['workflows']}:
                 raise KeyError(workflow_id)
-            if default_workflow_id(current) == workflow_id:
-                raise ValueError("workflow_is_default")
-            updated = {**current, "workflows": [item for item in workflows if item["id"] != workflow_id],
-                       "updatedAt": now_iso()}
-            return updated, {"workflow": deleted, "team": updated}
+            self.workflow_store.delete_workflow(workflow_id)
+            self._mutate(team_id, 'team.workflow_deleted', lambda current: (current, {'workflowId': workflow_id, 'team': current}))
+            return self._workflow_view(team)
 
-        saved = self._mutate(team_id, "team.workflow_deleted", mutate)
-        return saved
+    def link_workflow(self, team_id: str, workflow_id: str, *, linked: bool = True) -> dict[str, Any]:
+        definition = self.workflow_store.get_workflow(workflow_id)
+        if not definition:
+            raise ValueError('workflow_not_found')
+        with resource_transaction(self.engine, f"workflows:{definition['projectId']}"):
+            if not self.workflow_store.get_workflow(workflow_id):
+                raise ValueError('workflow_not_found')
+            current = self._active_team(team_id)
+            if definition['ownerUserId'] != current['ownerUserId']:
+                raise ValueError('workflow_owner_required')
+            if linked:
+                self.workflow_store.link(team_id, workflow_id)
+            else:
+                self.workflow_store.unlink(team_id, workflow_id)
+            return self._mutate(team_id, 'team.workflow_linked' if linked else 'team.workflow_unlinked',
+                                lambda team: (team, {'workflowId': workflow_id, 'team': team}))
 
     def events(self, team_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
@@ -304,9 +373,9 @@ class DatabaseTeamStore:
                     )
                     if not row:
                         raise KeyError(team_id)
-                    current = _normalized_team_snapshot(
+                    current = self._workflow_view(_normalized_team_snapshot(
                         row["snapshot"] or {}, row["owner_user_id"]
-                    )
+                    ))
                     if current.get("deletedAt"):
                         raise KeyError(team_id)
                     mutation = mutate(current)
@@ -531,6 +600,16 @@ def _normalize_team_patch(
         if patch["enabled"] and not members:
             raise TeamValidationError("team_members_required")
         normalized["enabled"] = patch["enabled"]
+    if 'projectWorkflowDefaults' in patch:
+        defaults = patch['projectWorkflowDefaults']
+        if not isinstance(defaults, dict) or len(defaults) > 256:
+            raise ValueError('workflow_defaults_invalid')
+        for project_id, workflow_id in defaults.items():
+            definition = next((item for item in team_workflows(current) if item['id'] == workflow_id), None)
+            if not definition or definition['projectId'] != project_id or not definition['enabled']:
+                raise ValueError('workflow_defaults_invalid')
+            validate_default_workflow({**current, **normalized}, workflow_id)
+        normalized['projectWorkflowDefaults'] = dict(defaults)
     if "defaultWorkflowId" in patch:
         normalized["defaultWorkflowId"] = validate_default_workflow({**current, **normalized}, patch["defaultWorkflowId"])
         if "collaborationStyle" in patch and patch["collaborationStyle"] is not None and normalized["defaultWorkflowId"] != workflow_id_for_style(patch["collaborationStyle"]):
@@ -577,7 +656,7 @@ def _team_row(
         "lead_agent_id": team.get("leadAgentId"),
         "member_agent_ids": team.get("memberAgentIds", []),
         "enabled": team.get("enabled", True),
-        "snapshot": team,
+        "snapshot": {key: value for key, value in team.items() if key != "workflows"},
         "event_version": event_version,
         "created_at": parse_db_time(team["createdAt"]),
         "updated_at": parse_db_time(team["updatedAt"]),

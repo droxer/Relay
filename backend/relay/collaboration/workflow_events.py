@@ -13,6 +13,8 @@ the same checks; no process-local approval state is needed.
 """
 from __future__ import annotations
 
+from ..core.workflows import snapshot_team_id
+
 from copy import deepcopy
 from typing import Any
 
@@ -44,7 +46,8 @@ def apply_workflow_started(session: dict[str, Any], event: dict[str, Any]) -> No
         ("teamId", "id"), ("projectId", "projectId"),
         ("ownerUserId", "ownerUserId"), ("computerId", "computerId"),
     ):
-        if not session.get(session_key) or session[session_key] != snapshot.get(team_key):
+        expected = snapshot_team_id(snapshot) if session_key == "teamId" else snapshot.get(team_key)
+        if (session_key != "teamId" and not session.get(session_key)) or session.get(session_key) != expected:
             raise ValueError("workflow_scope_mismatch")
     assignments = workflow_work_graph(assignments, team_snapshot=snapshot)
     if any(item["workflowAttempt"] != 1 for item in assignments):
@@ -57,6 +60,7 @@ def apply_workflow_started(session: dict[str, Any], event: dict[str, Any]) -> No
         raise ValueError("workflow_run_in_flight")
     run = {
         "workflowRunId": run_id, "teamSnapshot": deepcopy(snapshot),
+        **({"workflowSnapshot": deepcopy(snapshot)} if snapshot.get("workflowRecordVersion") == 1 else {}),
         "assignments": assignments, "currentIndex": 0, "revision": 0,
         "status": "awaiting_approval" if assignments[0]["awaitApproval"] else "ready",
         "gateDecisions": [], "startedAt": event["timestamp"],

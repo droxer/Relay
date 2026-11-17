@@ -7,7 +7,8 @@ export function predefinedStyle(id?: string | null): CollaborationStyle | undefi
   return PREDEFINED_WORKFLOWS.find(style => id === `preset:${style}`);
 }
 
-export function defaultWorkflowId(team?: Pick<AgentTeam, "defaultWorkflowId" | "collaborationStyle" | "id" | "projectId" | "workflowSteps">): string {
+export function defaultWorkflowId(team?: Pick<AgentTeam, "defaultWorkflowId" | "collaborationStyle" | "id" | "projectId" | "workflowSteps" | "projectWorkflowDefaults">, projectId?: string): string {
+  if (projectId && team?.projectWorkflowDefaults?.[projectId]) return team.projectWorkflowDefaults[projectId];
   if (team?.defaultWorkflowId) return team.defaultWorkflowId;
   if (team?.projectId || team?.workflowSteps) return team.id;
   return `preset:${team?.collaborationStyle && team.collaborationStyle !== "solo" ? team.collaborationStyle : "build_review"}`;
@@ -24,7 +25,7 @@ export function workflowOptions(team?: Pick<AgentTeam, "workflows" | "workflowOp
 /** Task/Automation choices must resolve in their Project before submission. */
 export function workflowSelectionIssue(team: AgentTeam | undefined, value: string | null, projectId?: string, projectAgentIds?: readonly string[]): "project" | "unavailable" | null {
   if (!team) return null;
-  const selected = value || defaultWorkflowId(team);
+  const selected = value || defaultWorkflowId(team, projectId);
   const option = workflowOptions(team).find(item => item.id === selected);
   if (!option || !option.enabled) return "unavailable";
   if (option.kind === "steps" && option.projectId !== projectId) return "project";

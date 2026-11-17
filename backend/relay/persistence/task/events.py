@@ -88,7 +88,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
             created_payload[field] = payload[field]
 
     events = [relay_task_event("task.created", task_id, created_payload)]
-    if payload.get("assignedAgent") or payload.get("assignedTeamId"):
+    if payload.get("assignedAgent") or payload.get("assignedTeamId") or payload.get("assignedWorkflowId"):
         assignment = {}
         for field, event_field in (
             ("assignedAgent", "agent"),
@@ -116,6 +116,10 @@ def task_assignment_events(
         )
         message = f"Assigned to team {assignment['teamId']}."
         activity_payload: dict[str, Any] = {}
+    elif assignment.get("workflowId"):
+        assigned = relay_task_event('task.assigned', task_id, {'workflowId': assignment['workflowId']})
+        message = f"Assigned to workflow {assignment['workflowId']}."
+        activity_payload = {}
     elif assignment.get("agent"):
         assigned_payload = {"agent": assignment["agent"]}
         if assignment.get("agentId"):
@@ -206,7 +210,7 @@ def task_update_events(
         events.append(
             relay_task_event("task.project_set", task_id, {"projectId": payload["projectId"]})
         )
-    assignment_supplied = "assignedAgentId" in payload or "assignedTeamId" in payload
+    assignment_supplied = "assignedAgentId" in payload or "assignedTeamId" in payload or "assignedWorkflowId" in payload
     resolved_assignment = assignment
     if resolved_assignment is None and assignment_supplied:
         agent_id = payload.get("assignedAgentId")
@@ -216,6 +220,8 @@ def task_update_events(
         if team_id:
             resolved_assignment = {"teamId": team_id,
                                    **({"workflowId": payload["assignedWorkflowId"]} if payload.get("assignedWorkflowId") else {})}
+        elif payload.get("assignedWorkflowId"):
+            resolved_assignment = {"workflowId": payload["assignedWorkflowId"]}
         elif agent_id:
             agent = payload.get("assignedAgent")
             if not agent:
@@ -311,7 +317,7 @@ def routine_occurrence_events(
             },
         )
     ]
-    if agent or routine.get("assignedTeamId"):
+    if agent or routine.get("assignedTeamId") or routine.get("assignedWorkflowId"):
         events.append(
             relay_task_event(
                 "task.assigned",

@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ...persistence.sql import names_no_uuid_row
 from ...core.workflows import team_workflows, workflow_definition, workflow_execution_snapshot, workflow_catalog
 from ...security.request_auth import require_user_session
 from ...teams.workflow import validate_workflow_write
@@ -19,6 +20,8 @@ def owned_workflow_team(request: Request, ctx: AppContextDep, team_id: str) -> d
     if chat_service_user_header(request):
         raise HTTPException(403, 'workflow_owner_session_required')
     owner = require_user_session(request, ctx.auth_store)['userId']
+    if names_no_uuid_row(ctx.workflow_store.engine, team_id):
+        raise HTTPException(404, "team_not_found")
     team = ctx.team_store.get_team(team_id)
     if not team or team.get('deletedAt'):
         raise HTTPException(404, 'team_not_found')

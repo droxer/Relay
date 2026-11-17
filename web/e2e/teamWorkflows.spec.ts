@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark" = "light", projectCount = 1, legacy = false, projectSubset = false) {
+async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark" = "light", projectCount = 1, legacy = false, projectSubset = false, withCustom = false, withTeam = true) {
   const stamp = "2026-09-25T00:00:00Z";
   const computerId = "device:alice:host";
   const agents = ["lead", "qa"].map((id) => ({
@@ -14,7 +14,7 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
     memberAgentIds: ["lead", "qa"], members: agents, lead: agents[0], enabled: true,
     collaborationStyle: "build_review", memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
   let task = { id: "task", title: "Ship the fix", description: "Fix and review", status: "backlog", priority: "normal",
-    acceptancePolicy: "human", assignedTeamId: team.id, projectId: "project", ownerUserId: "alice",
+    acceptancePolicy: "human", assignedTeamId: withTeam ? team.id : undefined, projectId: "project", ownerUserId: "alice",
     isRoutine: false, linkedSessionIds: [], activity: [], events: [], createdAt: stamp, updatedAt: stamp };
   const session = { id: "style-thread", title: "Style thread", taskGoal: "Improve the API", teamId: team.id,
     ownerUserId: "alice", ownerAgentId: "lead", daemonNodeId: "node", computerId,
@@ -39,29 +39,35 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
   if (legacy) team = { ...team, collaborationStyle: undefined, projectId: "project", workflowSteps: [
     { id: "build", name: "Build", agentId: "lead", instructions: "Build the change", acceptanceCriteria: ["Tests pass"], requiresApproval: false },
   ] };
+  let workflows: Record<string, any>[] = legacy ? [{ id: team.id, name: team.name, projectId: "project", enabled: true, ownerUserId: "alice", workflowSteps: team.workflowSteps, createdAt: stamp, updatedAt: stamp }]
+    : projectSubset ? team.workflows as Record<string, any>[] : [];
+  if (withCustom && !workflows.length) workflows = [{ id: "wf_release", ownerUserId: "alice", projectId: "project", name: "Release", enabled: true,
+    workflowSteps: [{ id: "build", name: "Build", agentId: "lead", instructions: "Build it", acceptanceCriteria: ["Tests pass"], requiresApproval: false }], createdAt: stamp, updatedAt: stamp }];
+  const linked = new Set((legacy || projectSubset ? workflows : []).map(workflow => workflow.id));
   const workflowWrites: Record<string, unknown>[] = [];
   const sends: Record<string, unknown>[] = [];
   const patches: Record<string, unknown>[] = [];
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     const method = route.request().method();
-    // Match the API's canonical projection of historical Team snapshots.
-    const teamView = team.workflowSteps && !team.workflows ? { ...team, defaultWorkflowId: team.defaultWorkflowId ?? team.id,
-      workflows: [{ id: team.id, teamId: team.id, projectId: team.projectId, name: team.name, enabled: team.enabled,
-        workflowSteps: team.workflowSteps, createdAt: stamp, updatedAt: stamp }] } : team;
-    let body: unknown = { sessions: [session], agents, teams: [teamView], tasks: [task], nodes: [node], projects, sandboxes: [], skills: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme, language: "en" } };
-    if (path.endsWith("/teams/delivery/workflows") && method === "POST") {
-      const input = route.request().postDataJSON(); workflowWrites.push(input);
-      const workflow = { ...input, id: "wf_ship", teamId: "delivery", createdAt: stamp, updatedAt: stamp };
-      team = { ...team, workflows: [...((team.workflows as unknown[]) ?? []), workflow] };
-      body = { workflow };
+    const teamView = { ...team, workflows: workflows.filter(workflow => linked.has(workflow.id)).map(workflow => ({ ...workflow, teamId: team.id })) };
+    let body: unknown = { sessions: [session], agents, teams: withTeam ? [teamView] : [], tasks: [task], nodes: [node], projects, sandboxes: [], skills: [] };
+    if (path.endsWith("/workflows")) {
+      if (method === "POST") {
+        const input = route.request().postDataJSON(); workflowWrites.push(input);
+        const workflow = { ...input, ownerUserId: "alice", id: "wf_ship", createdAt: stamp, updatedAt: stamp };
+        workflows.push(workflow); body = { workflow };
+      } else body = { workflows: workflows.filter(workflow => !new URL(route.request().url()).searchParams.get("projectId") || workflow.projectId === new URL(route.request().url()).searchParams.get("projectId")) };
     }
+    const link = path.match(/\/teams\/delivery\/workflows\/([^/]+)\/link$/);
+    if (link) { if (method === "PUT") linked.add(link[1]); else linked.delete(link[1]); body = { team: teamView }; }
+    if (path.match(/\/workflows\/[^/]+\/runs$/)) { sends.push(route.request().postDataJSON()); body = { ...session, projectId: "project" }; }
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme, language: "en" } };
     if (path.endsWith("/teams/delivery") && method === "PATCH") {
       const patch = route.request().postDataJSON(); patches.push(patch); team = { ...team, ...patch }; body = { team };
     }
     if (path.endsWith("/tasks/task")) {
-      if (method === "PATCH") { const patch = route.request().postDataJSON(); patches.push(patch); task = { ...task, ...patch }; }
+      if (method === "PATCH") { const patch = route.request().postDataJSON(); patches.push(patch); task = { ...task, ...patch, updatedAt: new Date(Date.parse(stamp) + patches.length * 1000).toISOString() }; }
       body = task;
     }
     if (path.endsWith("/projects/project")) body = { project };
@@ -78,7 +84,7 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
     }
     if (path.endsWith("/events")) body = { events: [] };
     if (path.endsWith("/queue")) body = { messages: [] };
-    if (path.endsWith("/runs")) body = { runs: [] };
+    if (path.endsWith("/runs") && method === "GET") body = { runs: [] };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   return { sends, patches, workflowWrites };
@@ -109,30 +115,25 @@ for (const mobile of [false, true]) {
   });
 }
 
-test("a team lists every workflow and creates its own in a chosen project", async ({ page }) => {
+test("a Project creates an independent workflow and a Team can assign it", async ({ page }) => {
   const { workflowWrites } = await fixture(page, false, "light", 2);
-  await page.goto("/teams/delivery");
-  const library = page.getByRole("region", { name: /^Workflows/ });
-  const rows = library.locator(".workflow-team-row");
-  await expect(rows).toHaveCount(3);
-  await expect(rows.first()).toContainText("Build and review");
-  await expect(rows.first()).toContainText("Default");
-  await library.getByRole("button", { name: "New workflow", exact: true }).click();
+  await page.goto("/projects/web?tab=workflows");
+  await page.getByRole("button", { name: "New workflow", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "New workflow" });
-  await drawer.getByRole("combobox", { name: "Project", exact: true }).click();
-  await page.getByRole("option", { name: "Web", exact: true }).click();
+  await expect(drawer.getByRole("combobox", { name: "Team", exact: true })).toHaveCount(0);
   await drawer.getByLabel("Workflow name", { exact: true }).fill("Ship it");
   await drawer.getByLabel("Step name", { exact: true }).fill("Build");
   await drawer.getByLabel("Instructions", { exact: true }).fill("Build the change");
   await drawer.getByLabel(/^Acceptance criteria/).fill("Tests pass");
   await drawer.getByRole("button", { name: "Save workflow", exact: true }).click();
   await expect.poll(() => workflowWrites.at(-1)?.projectId).toBe("web");
-  expect(workflowWrites.at(-1)?.name).toBe("Ship it");
-  await expect(rows).toHaveCount(4);
-  await expect(rows.last()).toContainText("Ship it");
-  await expect(rows.last()).toContainText("Custom");
-  await expect(rows.last()).toContainText("1 step · Web");
-  await expect(drawer).toHaveCount(0);
+  expect(workflowWrites.at(-1)?.teamId).toBeUndefined();
+  await page.goto("/teams/delivery");
+  const library = page.getByRole("region", { name: /^Workflows/ });
+  await library.getByRole("combobox", { name: "Assign workflow" }).click();
+  await page.getByRole("option", { name: /^Ship it/ }).click();
+  await expect(library.locator(".workflow-team-row")).toHaveCount(4);
+  await expect(library).toContainText("Ship it");
 });
 
 test("a team with no eligible project explains how to make a custom workflow", async ({ page }) => {
@@ -141,7 +142,7 @@ test("a team with no eligible project explains how to make a custom workflow", a
   const library = page.getByRole("region", { name: /^Workflows/ });
   await expect(library.locator(".workflow-team-row")).toHaveCount(3);
   await expect(library.getByRole("button", { name: "New workflow" })).toHaveCount(0);
-  await expect(library).toContainText("add this team’s agents to one of your Projects");
+  await expect(library).toContainText("Create a Workflow in a Project");
 });
 
 test("task workflow can be chosen and cleared to inherit the team default", async ({ page }) => {
@@ -216,19 +217,19 @@ test("failed sends retain the workflow and member mentions hide it", async ({ pa
 });
 
 for (const mobile of [false, true]) {
-  test(`legacy workflows are managed in Teams and run from Projects (${mobile ? "phone" : "desktop"})`, async ({ page }) => {
+  test(`legacy workflows are assigned in Teams and managed from Projects (${mobile ? "phone" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     await fixture(page, false, "light", 1, true);
     await page.goto("/teams/delivery");
     const library = page.getByRole("region", { name: /^Workflows/ });
     await expect(library.locator(".workflow-team-row")).toHaveCount(4);
     await expect(page.locator(".workflow-preview-name")).toHaveText("Delivery");
-    await expect(library.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+    await expect(library.getByRole("link", { name: "Open project", exact: true })).toBeVisible();
     await page.screenshot({ path: `/tmp/relay-workflow-library-${mobile ? "phone" : "desktop"}.png`, fullPage: true, animations: "disabled" });
-    await library.getByRole("link", { name: "Run in Project" }).click();
+    await library.getByRole("link", { name: "Open project", exact: true }).click();
     const projectWorkflows = page.getByRole("region", { name: /^Workflows/ });
     await expect(projectWorkflows.getByRole("button", { name: "Start run", exact: true })).toBeVisible();
-    await expect(projectWorkflows.getByRole("link", { name: "Manage in Team" })).toHaveAttribute("href", "/teams/delivery");
+    await expect(projectWorkflows.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
     await projectWorkflows.getByRole("button", { name: "Start run", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Start workflow" })).toBeVisible();
     expect(await page.locator("body").evaluate(el => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
@@ -246,4 +247,39 @@ test("Project Tasks can choose a custom workflow from a larger Team", async ({ p
   await page.getByRole("option", { name: /^Project delivery/ }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_project");
+});
+
+for (const mobile of [false, true]) {
+  test(`Project Workflows run with no Teams (${mobile ? "phone" : "desktop"})`, async ({ page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    const { sends } = await fixture(page, false, "light", 1, false, false, true, false);
+    await page.goto("/projects/project?tab=workflows");
+    await expect(page.getByRole("tab", { name: "Workflows", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.screenshot({ path: `/tmp/independent-workflows-${mobile ? "phone" : "desktop"}.png`, animations: "disabled", fullPage: true });
+    const library = page.getByRole("region", { name: /^Workflows/ });
+    await library.getByRole("button", { name: "Start run", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Start workflow" });
+    await expect(dialog.getByRole("combobox", { name: "Team (optional)" })).toContainText("Independent");
+    await dialog.getByRole("textbox", { name: /^Goal/ }).fill("Release the Project");
+    await page.screenshot({ path: `/tmp/independent-workflow-run-${mobile ? "phone" : "desktop"}.png`, animations: "disabled", fullPage: true });
+    await dialog.getByRole("button", { name: "Start run", exact: true }).click();
+    await expect.poll(() => sends.length).toBe(1);
+    expect(sends[0].teamId).toBeUndefined();
+    expect(await page.locator("body").evaluate(el => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  });
+}
+
+
+test("a Project Task selects an independent workflow with no Teams", async ({ page }) => {
+  const { patches } = await fixture(page, false, "light", 1, false, false, true, false);
+  await page.goto("/projects/project?task=task&recordTab=definition");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
+  await page.getByRole("option", { name: "Release", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Team (optional)", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Save task", exact: true }).click();
+  await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_release");
+  expect(patches.at(-1)?.assignedTeamId).toBeNull();
+  await expect(page.getByRole("button", { name: "Save task", exact: true })).toHaveCount(0);
+  await expect(page.locator(".record-definition").getByText("Release", { exact: true })).toBeVisible();
 });

@@ -129,6 +129,12 @@ def _apply_task_assigned(task: dict[str, Any], event: dict[str, Any]) -> None:
         task.pop("assignedAgent", None)
         task.pop("assignedAgentId", None)
         return
+    if event.get('workflowId'):
+        task['assignedWorkflowId'] = event['workflowId']
+        task.pop('assignedTeamId', None)
+        task.pop('assignedAgent', None)
+        task.pop('assignedAgentId', None)
+        return
     task["assignedAgent"] = event["agent"]
     if event.get("agentId"):
         task["assignedAgentId"] = event["agentId"]

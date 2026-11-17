@@ -337,6 +337,7 @@ export type RelayTaskEvent =
       teamId: string;
       workflowId?: string;
     }
+  | { id: string; type: "task.assigned"; taskId: string; timestamp: string; workflowId: string }
   | {
       id: string;
       /** Triage: an intake issue joined a project. */
@@ -512,6 +513,11 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
         task.assignedTeamId = event.teamId;
         if (event.workflowId) task.assignedWorkflowId = event.workflowId;
         else delete task.assignedWorkflowId;
+        delete task.assignedAgent;
+        delete task.assignedAgentId;
+      } else if ("workflowId" in event) {
+        task.assignedWorkflowId = event.workflowId;
+        delete task.assignedTeamId;
         delete task.assignedAgent;
         delete task.assignedAgentId;
       } else {

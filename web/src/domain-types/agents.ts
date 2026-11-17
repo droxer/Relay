@@ -138,6 +138,7 @@ export type WorkflowStep = WorkflowStepDefinition;
 
 export interface AgentTeam {
   defaultWorkflowId?: string;
+  projectWorkflowDefaults?: Record<string, string>;
   workflowOptions?: Array<{ id: string; kind: "predefined" | "steps"; name: string; projectId?: string; template?: CollaborationStyle; enabled: boolean }>;
   workflows?: TeamWorkflow[];
   /** Set only on a Project workflow Team; immutable once set. */
@@ -190,10 +191,10 @@ export interface TeamMutationInput {
   profileImageUrl?: string;
 }
 
-/** A reusable process owned by a Team; several workflows share its roster. */
-export interface TeamWorkflow {
+/** A Project-scoped process with optional Team associations. */
+export interface Workflow {
   id: string;
-  teamId: string;
+  ownerUserId?: string;
   projectId: string;
   name: string;
   workflowSteps: WorkflowStep[];
@@ -202,4 +203,6 @@ export interface TeamWorkflow {
   updatedAt: string;
 }
 
-export type WorkflowMutationInput = Pick<TeamWorkflow, "name" | "projectId" | "workflowSteps"> & { enabled?: boolean };
+export interface TeamWorkflow extends Workflow { teamId: string }
+
+export type WorkflowMutationInput = Pick<Workflow, "name" | "projectId" | "workflowSteps"> & { enabled?: boolean };

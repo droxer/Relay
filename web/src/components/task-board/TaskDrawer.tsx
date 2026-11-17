@@ -11,6 +11,8 @@ import { describeTrigger } from "../../lib/automationTrigger";
 import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { isSubmitChord, submitShortcutLabel } from "../../lib/shortcuts";
 import { DatePicker } from "@/components/ui/date-picker";
+import { ProjectWorkflowSelect } from "../workflow/ProjectWorkflowSelect";
+import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
 import { WorkflowSelect } from "../workflow/WorkflowSelect";
 import { workflowSelectionIssue } from "../../lib/workflowSelection";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -237,6 +239,7 @@ export function TaskDrawer({
   const assignmentSummaryId = `${fieldPrefix}-assignment-summary`;
   const busy = saving || deleting;
   const project = projects.find((item) => item.id === form.projectId);
+  const workflowQuery = useProjectWorkflows(project?.id, Boolean(project) && !form.assignedAgentId);
   const availableProjects = projects.filter((item) => item.enabled && !item.archivedAt);
   const projectLabelId = useId();
   const projectTriggerRef = useRef<HTMLButtonElement>(null);
@@ -295,8 +298,13 @@ export function TaskDrawer({
   const intake = form.variant === "backlog" && projectChoice !== "required" && !form.projectId && !form.computerId && !form.sourceRoutineId;
   const selectedTeam = teamOptions.find((team) => team.id === form.assignedTeamId);
   const projectAgentIds = project?.members.filter(member => member.enabled).map(member => member.agentId);
-  const workflowIssue = workflowSelectionIssue(selectedTeam,
+  const teamWorkflowIssue = workflowSelectionIssue(selectedTeam,
     form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
+  const independentWorkflow = workflowQuery.data?.workflows.find(item => item.id === form.assignedWorkflowId);
+  const workflowIssue = form.assignedTeamId ? (!selectedTeam || teamWorkflowIssue) : Boolean(form.assignedWorkflowId
+    && (!project || !independentWorkflow?.enabled || workflowQuery.isError
+      || !independentWorkflow.workflowSteps.every(step => projectAgentIds?.includes(step.agentId))));
+
 
   // A saved task can reference an agent/team that has since been deleted or is
   // no longer in the fetched roster. Fall back to the executor kind the task
@@ -317,7 +325,18 @@ export function TaskDrawer({
         : undefined)
     : undefined;
 
-  const assignmentField = intake ? (
+  const hasCustomWorkflow = Boolean(form.assignedWorkflowId && !form.assignedWorkflowId.startsWith("preset:"));
+  const optionalTeams = teams.filter(team => team.enabled && !team.deletedAt && team.computerId === project?.computerId
+    && team.workflows?.some(workflow => workflow.id === form.assignedWorkflowId)
+    && independentWorkflow?.workflowSteps.every(step => team.memberAgentIds.includes(step.agentId)));
+  const assignmentField = hasCustomWorkflow && project ? (
+    <Field label={t("workflow.optional_team")} hint={t("workflow.independent_run_hint")} wrapper="div">
+      <Select value={form.assignedTeamId || "independent"} disabled={saving} onValueChange={id => updateBase({ assignedTeamId: id === "independent" ? "" : id ?? "" })}>
+        <SelectTrigger className="w-full" aria-label={t("workflow.optional_team")}><SelectValue>{form.assignedTeamId ? teams.find(team => team.id === form.assignedTeamId)?.name ?? t("backlog.assignment_unavailable_team") : t("workflow.independent")}</SelectValue></SelectTrigger>
+        <SelectContent><SelectItem value="independent">{t("workflow.independent")}</SelectItem>{optionalTeams.map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)}</SelectContent>
+      </Select>
+    </Field>
+  ) : intake ? (
         <Field label={t("backlog.assignment_label")} wrapper="div">
           <p className="adm-form-hint" id={assignmentSummaryId}>{t("issues.assignment_needs_project")}</p>
           {form.assignedAgentId || form.assignedTeamId || form.assignedAgent ? (
@@ -338,7 +357,9 @@ export function TaskDrawer({
         emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
         onSelect={(selection) => {
           if (selection.kind === "none") {
-            onChange(clearTaskAssignment(form));
+            onChange(form.assignedWorkflowId && !form.assignedWorkflowId.startsWith("preset:")
+              ? { ...form, assignedAgent: "", assignedAgentId: "", assignedTeamId: "" }
+              : clearTaskAssignment(form));
             return;
           }
           if (selection.kind === "agent") {
@@ -348,6 +369,7 @@ export function TaskDrawer({
               assignedAgent: logicalAgent.executorKind,
               assignedAgentId: logicalAgent.id,
               assignedTeamId: "",
+              assignedWorkflowId: "",
               // An ownerless agent says nothing about who the task is
               // for, so it leaves the assignee as the user chose it.
               assigneeUserId: logicalAgent.supervisorUserId ?? form.assigneeUserId,
@@ -358,7 +380,7 @@ export function TaskDrawer({
           const team = teams.find((candidate) => candidate.id === selection.id);
           if (team) {
             updateBase({
-              ...teamAssignmentPatch(team.id),
+              ...teamAssignmentPatch(team.id, form.assignedWorkflowId),
               ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
             });
           }
@@ -457,6 +479,11 @@ export function TaskDrawer({
           <WorkflowSelect team={selectedTeam} projectId={project?.id} projectAgentIds={projectAgentIds} restrictToProject predefinedOnly={!project} inherit disabled={saving}
             value={form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null)}
             onChange={workflowId => onChange({ ...form, assignedWorkflowId: workflowId ?? "", collaborationStyle: null })} />
+        </Field> : project && !form.assignedAgentId ? <Field label={t("workflow.select_workflow")} hint={t("workflow.optional_assignment_hint")} wrapper="div">
+          <ProjectWorkflowSelect workflows={workflowQuery.data?.workflows ?? []} value={form.assignedWorkflowId || ""}
+            onChange={id => updateBase({ assignedWorkflowId: id, collaborationStyle: null })}
+            disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
+            issue={Boolean(workflowIssue)} onRetry={() => void workflowQuery.refetch()} />
         </Field> : null}
         {form.variant === "backlog" ? (
           <div className={form.id ? undefined : "task-drawer-form-grid"}>

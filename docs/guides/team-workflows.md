@@ -1,115 +1,129 @@
 # Teams and Workflows
 
-A Team defines the available Agents and their Computer. A Workflow defines
-how they work together. Teams choose a default Workflow; Tasks and Automations
-inherit it or explicitly choose another Workflow from the same selector.
+A Team supplies a stable roster, lead, and Computer. A custom Workflow is a
+Project process with its own definition and lifecycle. It runs with the
+Project's Agents, with an optional Team. The Project owner manages it from
+**Project → Workflows**. Teams assign existing definitions without copying them.
+Deleting a Team or unassigning a Workflow leaves that definition in its Project.
 
-Three immutable predefined Workflows preserve the existing execution policies:
+## Project work
+
+Create a Workflow in its Project, assign each step to an enabled Project Agent,
+and add instructions, acceptance criteria, and optional approval gates. Every
+step Agent needs an active Placement on the Project's Computer. A Project with
+no Teams can create and run a Workflow. Start run asks for the goal and defaults
+to independent execution; an eligible assigned Team can be selected optionally.
+
+Tasks and Automations can select a custom Workflow directly, with no Agent or
+Team assignment. Selecting an eligible Team is optional. Removing or changing
+that Team preserves the explicit Workflow selection. Choosing an individual
+Agent clears the Workflow. An incompatible selection blocks saving/dispatch
+instead of silently changing the process.
+
+Teams list their assigned custom Workflows with Project links and step previews.
+Assign workflow offers definitions on the same Computer whose step Agents are
+all Team members. An assignment never remaps step Agents. Set as default applies
+to that Project only; clear that default before unassigning, disabling, or deleting
+the definition. A selected but invalid default requires explicit repair.
+
+Three predefined Workflows retain their Team role policies:
 
 | Workflow | Behavior |
 | --- | --- |
-| Build → Review | Roles choose a builder and reviewer; review findings can trigger repair. |
+| Build → Review | Roles choose a builder and reviewer; findings can trigger repair. |
 | Pipeline | Eligible Agents run in role order. |
 | Lead-led | The lead plans, delegates dynamically, and reviews the result. |
 
-Custom Workflows define explicit steps and Project scope. A Team can own
-several, such as feature delivery and bug repair. A Custom Workflow may be the
-Team default, but Tasks must belong to its Project. Selecting a predefined
-Workflow explicitly can override that default. No incompatible selection falls
-back to ordinary Team work.
+Predefined Workflows require a Team. Selection resolves an explicit Task choice,
+then the Team's default for the Task's Project, then its predefined default, then
+the system predefined default. Existing legacy custom defaults remain readable
+until changed. A custom Workflow has one immutable Project scope; cross-Project
+templates and role-based step reassignment are outside this version.
 
-Create a Team first. Its page lists every Workflow it can run — the three
-predefined ones, then its custom ones — and marks the default. Create a custom
-Workflow there with New workflow (choosing one of your Projects where the
-Team's Agents are enabled). Set as default lives beside each Workflow; selecting
-a Project-scoped default explains its effect on other Projects before saving.
-Assign each step to an enabled Agent in both rosters. The Team must
-be on the Project's Computer. Saving a Custom Workflow never changes Team membership,
-leadership, the default Workflow selection, or final-turn approval settings.
+## Execution
 
-A Project’s Agents tab shows applicable custom Workflows, their owning Teams,
-step previews, and Start run. Manage in Team returns to the owning Team’s library;
-Projects do not hold a second definition editor or a separate Workflow default.
-If no definition applies yet, eligible Teams link directly to their libraries.
+A run freezes its definition, explicit participants, Project, and optional Team
+in a new Project Thread. Later definition edits do not alter its ledger. The
+owner answers approval and questions, retries failures, or cancels from the
+Thread. Project/Agent availability and Placement are checked on admission;
+a run naming a Team also requires that Team's live availability and membership.
+Removing access cannot be bypassed by a frozen snapshot. Tasks, scheduler starts,
+and Automation occurrences use the same admission and execution path.
 
-Start a Workflow from the Project, or select the Team and Workflow in a Project
-Task or Automation. A custom Workflow may use a subset of its Team roster;
-only its step Agents must be enabled members of the Project. Predefined
-Workflows require the Team roster in the Project. Incompatible inherited defaults
-are explained and cannot be saved; choose an applicable Workflow explicitly.
-Changing Project or Team in a new definition preserves step assignments and
-marks incompatible ones for explicit reassignment. Each run records a frozen
-definition in a new Project Thread. Editing or deleting a definition leaves existing runs intact. Approval,
-retry, cancellation, and execution reservations retain their existing behavior.
-The Team's live availability and the current step's membership are checked at
-admission; removing a participant cannot authorize a later step.
+Daemons execute every step. Revision-bound decisions, deterministic request
+replay, retries, cancellation, Task generations, and exit/reconciliation
+reservations retain the existing runtime behavior. Standalone runs create no
+synthetic Team and need no lead. New ledgers expose `workflowSnapshot`; the
+historical `teamSnapshot` field remains a wire alias for older clients.
 
 ## API
 
-All routes require the owner's signed-in session; service actors cannot manage
-or start definitions. Definition writes additionally require Project ownership.
+All paths below are under `/api/v1`. These routes require the owner's signed-in
+session; service actors cannot manage or start definitions.
 
-- `GET /api/v1/teams/{teamId}/workflows`
-- `POST /api/v1/teams/{teamId}/workflows`
-- `PATCH /api/v1/teams/{teamId}/workflows/{workflowId}`
-- `DELETE /api/v1/teams/{teamId}/workflows/{workflowId}`
-- `POST /api/v1/teams/{teamId}/workflows/{workflowId}/runs`
+| Method and path | Purpose |
+| --- | --- |
+| `GET /workflows?projectId={id}` | List the owner's definitions, optionally by Project. |
+| `POST /workflows` | Create a Project definition. |
+| `GET /workflows/{id}` | Read the owned definition. |
+| `PATCH /workflows/{id}` | Edit the definition. |
+| `DELETE /workflows/{id}` | Soft-delete after repairing referencing defaults. |
+| `POST /workflows/{id}/runs` | Start independently or with optional `teamId`. |
+| `PUT /teams/{teamId}/workflows/{id}/link` | Assign the definition to an eligible Team. |
+| `DELETE /teams/{teamId}/workflows/{id}/link` | Unassign without deleting the definition. |
+| `PUT /teams/{teamId}/workflow-defaults/{projectId}` | Set the Project default with `{workflowId}`. |
+| `DELETE /teams/{teamId}/workflow-defaults/{projectId}` | Clear that Project's custom default. |
 
-Writes accept `name`, `projectId`, `workflowSteps`, and optional `enabled`.
-A definition's Team and Project cannot change. Names are case-insensitively
-unique within a Team. Run requests accept `requestId` and `taskGoal`; a retry
-with the same request and goal returns that Workflow's original Thread.
-Team writes accept `defaultWorkflowId`. Tasks carry `assignedTeamId` and optional
-`assignedWorkflowId`; clearing the latter inherits the current Team default.
-Predefined IDs are `preset:build_review`, `preset:pipeline`, and `preset:lead_led`.
-Team responses expose `defaultWorkflowId` and the combined `workflowOptions`
-catalog alongside the existing custom `workflows` collection.
-A default definition cannot be disabled or deleted until another default is chosen. Changing Team clears the old Workflow
-unless the request explicitly selects one belonging to the new Team.
+Definition writes accept `name`, `projectId`, `workflowSteps`, and optional
+`enabled`. Names are case-insensitively unique for new definitions/renames in a
+Project; migration preserves existing duplicates. Project scope cannot change.
+Run requests accept a UUID `requestId`, `taskGoal`, and optional linked `teamId`.
+Retrying the same request returns its original Thread; changing goal or Team
+with that request conflicts. Task/Automation records use `assignedWorkflowId`
+with optional `assignedTeamId`; an individual `assignedAgentId` conflicts.
+Predefined IDs remain `preset:build_review`, `preset:pipeline`, `preset:lead_led`.
 
-## Persistence and compatibility
+The old `/teams/{teamId}/workflows` CRUD/run routes and legacy Team definition
+fields remain adapters to the same canonical definitions. Team responses retain
+`workflows` and `workflowOptions` as projections of assigned definitions and
+`projectWorkflowDefaults` as a Project-to-Workflow map. Existing global
+`defaultWorkflowId` and `collaborationStyle` remain compatibility inputs.
 
-Workflows have independent IDs and are child entities in the Team aggregate.
-Definition changes use the Team store's transactional version check and append
-`team.workflow_created`, `team.workflow_updated`, or `team.workflow_deleted`.
-They are stored in the existing JSON snapshot, so no schema migration or new
-startup repair is required. The Team API includes its `workflows` collection.
+## Migration and operations
 
-Legacy workflow Teams are exposed as one Workflow with the existing Team ID.
-Their old fields and routes remain compatible; frozen historical run records
-are never rewritten. Once the collection is edited, it is authoritative for
-definition management and dedicated starts. New editor saves use only the
-nested Workflow API and never create another Team for another process.
+Run `make backend-migrate` before serving the new version. Migration 0129
+extracts old nested/legacy definitions into `workflows`, with versioned
+`workflow_events` and `team_workflow_links`. It preserves IDs, Project scope,
+steps, enabled states, timestamps, and existing defaults. Team snapshots retain
+compatibility markers, but their nested collection is no longer a second
+writable source of definition data. Historical/active run snapshots are untouched.
+Database-only test/direct-store construction performs the same idempotent import.
 
-Older backend versions do not understand a separate Workflow selection. After
-creating Tasks with `assignedWorkflowId`, use a forward fix rather than rolling
-back to such a version: it could dispatch ordinary Team collaboration instead
-of the selected process. No schema rollback is needed, but dispatch semantics
-must stay aware of the new assignment field.
+Once definitions exist, the migration refuses downgrade: Project-only definitions cannot
+be represented losslessly in the old Team aggregate. Use a forward fix after
+rollout. Restore a pre-upgrade backup only as an explicit recovery operation;
+older code cannot safely dispatch standalone Workflow Task assignments.
 
 ## Unified entry and compatibility
 
 `POST /agent-runs` and Thread messages accept `workflowId` for predefined
 selections. A new owner-session Team conversation with a custom selection or
-custom Team default opens that Workflow's Project Thread. An existing Team
-thread cannot run a custom default, so its later rounds keep the predefined
-Workflow its latest round ran. A scheduled Task that cannot run its selected
-custom Workflow (no Project, or a missing one) is blocked once rather than
-retried every tick; an offline Project Computer keeps it queued, recording that
-wait only when it changes. The workflow run
-endpoint also accepts predefined IDs. It uses the same request-key replay as
-other predefined runs. Custom conversation starts reject attachment,
-connection-grant, and assignment overrides rather than discarding them.
+applicable custom default opens that Workflow's Project Thread. Existing Team
+Threads keep their last predefined round policy when a later custom default
+cannot run in that Thread. The legacy Team run endpoint accepts predefined IDs
+and preserves request replay. Custom conversation starts reject attachment,
+connection-grant, and assignment overrides instead of discarding them.
 
-Legacy Team `collaborationStyle`, Task `collaborationStyle`, and run `style`
-remain input/read compatibility aliases. Explicit canonical selections win over
-stored aliases; contradictory explicit run fields are refused. Frozen existing
-histories are not rewritten. Predefined snapshots include their Workflow ID
-while retaining the execution fields that older clients display.
+Scheduled Tasks with an unavailable custom selection or missing Project block
+once. An offline Project Computer keeps the Task queued and records the wait
+only when it changes. Existing execution reservation and recovery rules apply.
 
-When the owner explicitly chooses a default on a legacy workflow Team, Relay
-moves its existing steps into the child definition collection in the same Team
-transaction. The Team can then select predefined defaults as well. The legacy
-Workflow keeps its identity and saved steps, and old Run records are preserved.
-The composer sends an explicit resolved Workflow ID for each opening turn, so
-its retry remains pinned to the original choice after Team defaults change.
+Legacy Team/Task `collaborationStyle` and run `style` remain input/read aliases;
+explicit canonical selections win over stored aliases, and contradictory
+explicit run fields are refused. Choosing a predefined default on a legacy
+Workflow Team preserves its independent custom definition and historical Runs.
+The composer resolves its opening selection explicitly so retries stay pinned
+even when defaults change.
+
+See [ADR-025](../adr/025-independent-project-workflows.md) for the ownership
+tradeoff and [verification](team-workflows-verification.md) for test evidence.

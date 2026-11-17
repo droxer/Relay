@@ -29,9 +29,16 @@ class ScheduledWorkflowContext:
     registry: Any
 
 
+    @property
+    def workflow_store(self) -> Any:
+        return self.team_store.workflow_store
+
+
 def workflow_team_for(task: dict[str, Any], team_store: Any | None) -> dict[str, Any] | None:
     """Route an explicit Workflow selection or a legacy workflow Team."""
     team_id = task.get("assignedTeamId")
+    if task.get("assignedWorkflowId") and predefined_style(task["assignedWorkflowId"]) is None:
+        return {"workflowId": task["assignedWorkflowId"]}
     if not team_id or team_store is None:
         return None
     team = team_store.get_team(team_id)

@@ -198,7 +198,7 @@ export function taskStartMutationInput(
 ): { taskId: string; assignments?: Array<{ agentId?: string; agent?: AgentName }> } {
   const selectedAssignments = taskStartAssignments(task);
   const assignments = selectedAssignments
-    ?? (!task.assignedAgentId && !task.assignedTeamId ? fallbackAssignments : undefined);
+    ?? (!task.assignedAgentId && !task.assignedTeamId && !task.assignedWorkflowId ? fallbackAssignments : undefined);
   return {
     taskId: task.id,
     ...(assignments ? { assignments } : {}),
@@ -222,7 +222,7 @@ export function clearTaskAssignment(form: TaskBoardFormState): TaskBoardFormStat
   };
 }
 
-export function teamAssignmentPatch(teamId: string): Pick<
+export function teamAssignmentPatch(teamId: string, workflowId = ""): Pick<
   TaskBoardFormBase,
   "assignedAgent" | "assignedAgentId" | "assignedTeamId" | "assignedWorkflowId"
 > {
@@ -230,6 +230,6 @@ export function teamAssignmentPatch(teamId: string): Pick<
     assignedAgent: "",
     assignedAgentId: "",
     assignedTeamId: teamId,
-    assignedWorkflowId: "",
+    assignedWorkflowId: workflowId,
   };
 }

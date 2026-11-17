@@ -64,8 +64,13 @@ def stage_workflow_gate(
         raise HTTPException(403, "workflow_owner_required")
     if not team.get("enabled", True):
         raise HTTPException(409, "team_disabled")
-    if workflow_id is None and "workflows" in team and is_workflow_team(team):
-        workflow_id = team_id
+    if workflow_id is None and is_workflow_team(team):
+        # Legacy route snapshots retain their original Team-shaped envelope;
+        # the steps themselves always come from the independent definition.
+        definition = next((item for item in team.get('workflows', []) if item['id'] == team_id), None)
+        if not definition or not definition.get('enabled', True):
+            raise HTTPException(409, 'workflow_not_found')
+        team = {**team, 'workflowSteps': definition['workflowSteps'], 'projectId': definition['projectId']}
     if workflow_id is not None:
         try:
             team = workflow_execution_snapshot(team, workflow_id)

@@ -422,11 +422,11 @@ def _next_assignment(
     if "assignedTeamId" in body and assignment.team_id:
         agent_id = None
     workflow_id = body.get("assignedWorkflowId", current.get("assignedWorkflowId"))
-    if team_id != current.get("assignedTeamId") and "assignedWorkflowId" not in body:
-        workflow_id = None
-    if not team_id:
-        if body.get("assignedWorkflowId"):
-            raise TaskRequestError(400, "workflow_team_required")
+    if body.get('assignedWorkflowId'):
+        if body.get('assignedAgentId'):
+            raise TaskRequestError(409, 'workflow_agent_conflict')
+        agent_id = None
+    elif agent_id:
         workflow_id = None
     changed = workflow_id != current.get("assignedWorkflowId") or agent_id != current.get("assignedAgentId") or team_id != current.get(
         "assignedTeamId"

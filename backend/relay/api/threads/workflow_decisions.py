@@ -5,6 +5,8 @@ registry adapter rechecks live admission against the frozen ledger.
 """
 from __future__ import annotations
 
+from ...core.workflows import snapshot_team_id
+
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -98,7 +100,7 @@ def workflow_decision(
         if not run or session.get("activeWorkflowRunId") != run["workflowRunId"]:
             raise HTTPException(409, "workflow_run_mismatch")
         snapshot = run["teamSnapshot"]
-        if any(session.get(key) != snapshot.get(team_key) for key, team_key in (
+        if any(session.get(key) != (snapshot_team_id(snapshot) if key == "teamId" else snapshot.get(team_key)) for key, team_key in (
             ("teamId", "id"), ("projectId", "projectId"),
             ("computerId", "computerId"), ("ownerUserId", "ownerUserId"),
         )) or project["computerId"] != snapshot["computerId"]:

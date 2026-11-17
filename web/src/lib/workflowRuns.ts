@@ -51,6 +51,7 @@ function startRun(session: RelaySession, event: Extract<WorkflowEvent, { type: "
   const run: WorkflowRun = {
     workflowRunId: first.workflowRunId,
     teamSnapshot: first.teamSnapshot,
+    ...(first.workflowSnapshot ? { workflowSnapshot: first.workflowSnapshot } : {}),
     assignments: event.assignments,
     currentIndex: 0,
     revision: 0,

@@ -142,7 +142,7 @@ export function taskAssignmentOptions({
   const teamFitsProject = (team: AgentTeam) => !project
     || team.memberAgentIds.every(id => projectMembers.has(id))
     || Boolean(project.id && workflowOptions(team, project.id).some(option => option.kind === "steps" && option.enabled
-      && (allowWorkflowSelection || option.id === defaultWorkflowId(team))
+      && (allowWorkflowSelection || option.id === defaultWorkflowId(team, project.id))
       && workflowParticipantsAllowed(team, option.id, [...projectMembers])));
   return {
     agents: agents.filter((agent) => ((!project && agent.id === assignedAgentId) || agentOnTaskComputer(agent))
@@ -227,5 +227,6 @@ export function taskAssigneeLabel(
 ): string {
   if (task.assignedTeamId) return resolvedName || t("backlog.assignment_unavailable_team");
   if (task.assignedAgentId) return resolvedName || t("backlog.assignment_unavailable_agent");
+  if (task.assignedWorkflowId) return t("workflow.assigned_workflow");
   return task.assignedAgent || t("backlog.unassigned");
 }

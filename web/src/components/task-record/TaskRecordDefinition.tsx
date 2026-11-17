@@ -28,10 +28,12 @@ export function TaskRecordDefinition({
   variant,
   locale,
   team,
+  workflowLabel,
 }: {
   task: RelayTaskListItem;
   variant: RecordVariant;
   locale: string;
+  workflowLabel?: string;
   team?: Pick<AgentTeam, "id" | "projectId" | "collaborationStyle" | "workflowSteps" | "workflows" | "defaultWorkflowId">;
 }) {
   const { t } = useTranslation();
@@ -65,12 +67,15 @@ export function TaskRecordDefinition({
   const explicitId = explicitTaskWorkflowId(task);
   // A legacy workflow Team with no selection runs its own steps (below).
   if (task.assignedTeamId && !(team && isWorkflowTeam(team) && !explicitId && !team.defaultWorkflowId)) {
-    const name = workflowName(explicitId ?? defaultWorkflowId(team));
+    const name = workflowName(explicitId ?? defaultWorkflowId(team, task.projectId));
     rows.push({ key: "workflow", label: t("workflow.select_workflow"),
       value: explicitId ? name : t("workflow.inherit_default", { name }) });
   } else if (team && isWorkflowTeam(team)) rows.push({
     key: "workflow", label: t("workflow.section_title"),
     value: t("workflow.step_count", { count: team.workflowSteps?.length ?? 0 }),
+  });
+  if (!task.assignedTeamId && task.assignedWorkflowId) rows.push({
+    key: "workflow", label: t("workflow.select_workflow"), value: workflowLabel ?? t("workflow.assigned_workflow"),
   });
   rows.push(
     { key: "created", label: t("record.created"), value: recordTimestamp(task.createdAt, locale), meta: true },

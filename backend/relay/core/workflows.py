@@ -82,3 +82,41 @@ def validate_default_workflow(team: dict[str, Any], workflow_id: Any) -> str:
         raise ValueError("workflow_disabled")
     workflow_execution_snapshot(team, workflow_id)
     return str(workflow_id)
+
+
+def project_workflow_definition(owner: str, payload: dict[str, Any], *, current: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Validate a Project process without borrowing a Team's identity."""
+    if set(payload) - FIELDS:
+        raise ValueError('workflow_fields_invalid')
+    merged = {**(current or {}), **payload}
+    steps = merged.get('workflowSteps')
+    if not isinstance(steps, list):
+        raise ValueError('workflowSteps must contain 1 to 64 steps.')
+    members = list(dict.fromkeys(step.get('agentId') for step in steps if isinstance(step, dict) and isinstance(step.get('agentId'), str)))
+    fields = workflow_fields({'projectId': merged.get('projectId'), 'workflowSteps': merged.get('workflowSteps'),
+                              'memberAgentIds': members}, current=current)
+    name = merged.get('name')
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 200:
+        raise ValueError('workflow_name_required')
+    if not isinstance(merged.get('enabled', True), bool):
+        raise ValueError('workflow_enabled_invalid')
+    timestamp = now_iso()
+    return {**fields, 'id': current['id'] if current else new_database_id(), 'ownerUserId': owner,
+            'name': name.strip(), 'enabled': merged.get('enabled', True),
+            'createdAt': current['createdAt'] if current else timestamp, 'updatedAt': timestamp}
+
+
+def project_workflow_snapshot(definition: dict[str, Any], project: dict[str, Any], team: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not definition.get('enabled', True) or definition.get('deletedAt'):
+        raise ValueError('workflow_disabled')
+    members = list(dict.fromkeys(step['agentId'] for step in definition['workflowSteps']))
+    if team and (not team.get('enabled', True) or team.get('deletedAt') or not set(members) <= set(team.get('memberAgentIds', []))):
+        raise ValueError('workflow_team_unavailable')
+    return {**deepcopy(definition), 'workflowId': definition['id'], 'workflowKind': 'steps',
+            'workflowRecordVersion': 1, 'workflowVersion': definition['updatedAt'],
+            'teamId': team['id'] if team else None, 'computerId': project['computerId'],
+            'memberAgentIds': members}
+
+
+def snapshot_team_id(snapshot: dict[str, Any]) -> str | None:
+    return snapshot.get('teamId') if snapshot.get('workflowRecordVersion') == 1 else snapshot.get('id')

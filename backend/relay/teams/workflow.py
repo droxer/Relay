@@ -6,6 +6,8 @@ from typing import Any
 from ..agents.location import agent_placed_on_computer
 from ..core.computer_identity import computer_id
 from ..core.team_workflows import workflow_fields
+from ..core.workflows import snapshot_team_id
+from ..projects.workflow import validate_project_workflow
 from ..persistence.team.store import TeamValidationError, validate_team_payload
 from .computer import resolve_team_computer
 
@@ -14,6 +16,15 @@ def validate_workflow_write(
     ctx: Any, owner_user_id: str, body: dict[str, Any],
     *, current: dict[str, Any] | None = None,
 ) -> None:
+    if body.get('workflowRecordVersion') == 1:
+        if body.get('ownerUserId') != owner_user_id:
+            raise TeamValidationError('workflow_owner_required')
+        team_id = snapshot_team_id(body)
+        team = ctx.team_store.get_team(team_id) if team_id else None
+        if team_id and not team:
+            raise TeamValidationError('workflow_team_unavailable')
+        validate_project_workflow(ctx, body, team)
+        return
     fields = workflow_fields(body, current=current)
     if not fields:
         return

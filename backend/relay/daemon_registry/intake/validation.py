@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import builtins
+from ...core.workflows import snapshot_team_id
+
 from collections import defaultdict
 from typing import Any
 
@@ -33,8 +35,8 @@ class RunTargetValidationMixin(NodeBackendState):
         if not agent or agent.get("deletedAt") or not agent.get("enabled", True):
             raise ValueError("logical agent is disabled or missing")
         snapshot = assignment.get("teamSnapshot") or {}
-        if snapshot.get("workflowId") and snapshot.get("workflowKind") != "predefined":
-            team = self.team_store.get_team(snapshot["id"]) if self.team_store else None
+        if snapshot.get("workflowId") and snapshot.get("workflowKind") != "predefined" and snapshot_team_id(snapshot):
+            team = self.team_store.get_team(snapshot_team_id(snapshot)) if self.team_store else None
             if (not team or team.get("deletedAt") or not team.get("enabled", True)
                 or team.get("ownerUserId") != snapshot.get("ownerUserId")
                 or team.get("computerId") != snapshot.get("computerId")

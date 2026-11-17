@@ -16,7 +16,6 @@ from ..persistence.engine import store_transaction
 from ..persistence.protocols import TaskDispatchAssignment
 from ..projects.runtime import project_runtime_node
 from ..security.actor import Actor
-from ..teams.workflow import validate_workflow_write
 from .assignment import team_for_assignment, validate_project_task_assignment, validate_task_workflow
 from .claims import dispatch_claim_active
 from .dispatch_outcome import TaskDispatchContext, DispatchResult, _result, _record_result
@@ -48,12 +47,12 @@ def dispatch_task_workflow(
             if TaskDispatchAssignment.capture(task) != TaskDispatchAssignment.capture(source):
                 return _result(task, "queued", code="dispatch_superseded")
             owner = task["ownerUserId"]
-            team = team_for_assignment(ctx, actor, task["assignedTeamId"],
+            team = team_for_assignment(ctx, actor, task.get("assignedTeamId"),
                                        expected_user_id=owner, project_id=task.get("projectId"))
-            assert team is not None
-            validate_project_task_assignment(ctx, task, assigned_agent_id=None, assigned_team_id=team["id"])
+            validate_project_task_assignment(ctx, task, assigned_agent_id=None, assigned_team_id=task.get("assignedTeamId"))
             team = validate_task_workflow(ctx, task) or team
-            validate_workflow_write(ctx, owner, team)
+            if team is None:
+                raise ValueError("workflow_definition_required")
             project = ctx.project_store.get_project(task["projectId"])
             if not project:
                 raise ValueError("project_not_found")
@@ -76,7 +75,7 @@ def dispatch_task_workflow(
             sid = str(uuid5(NAMESPACE_URL, "relay.task-workflow.v1:" + claim_id))
             assignments = compile_workflow(team, roster, run_id=sid)
             session = registry.stage_workflow_gate({
-                "id": sid, "ownerUserId": owner, "teamId": team["id"],
+                "id": sid, "ownerUserId": owner, "teamId": task.get("assignedTeamId"),
                 "projectId": project["id"], "computerId": project["computerId"],
                 "workspacePath": node.get("workspacePath") or "/workspace",
                 "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],

@@ -9,7 +9,7 @@ from typing import Any
 
 from ..automations.model import EVENT_KINDS
 from ..core.team_workflows import is_workflow_team
-from ..core.workflows import workflow_execution_snapshot
+from ..projects.workflow import validate_project_workflow
 from ..core.workflow_selection import selected_workflow_id, predefined_style
 from ..core.computer_identity import computer_id
 from ..projects.runtime import project_task_assignment_error, project_computer_assignment_error
@@ -116,7 +116,7 @@ def validate_project_assignment(
     team = ctx.team_store.get_team(assigned_team_id) if assigned_team_id else None
     if assigned_team_id and (not team or team.get("deletedAt")):
         raise TaskRequestError(404, "Team not found.")
-    if team and (workflow_id or predefined_style(selected_workflow_id(team)) is None):
+    if workflow_id or (team and predefined_style(selected_workflow_id(team, {'projectId': project['id']})) is None):
         team = validate_task_workflow(ctx, {"assignedTeamId": assigned_team_id,
                                            "assignedWorkflowId": workflow_id,
                                            "projectId": project["id"], "ownerUserId": project["ownerUserId"]})
@@ -221,21 +221,31 @@ def validate_computer_assignment(
 
 
 def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | None:
-    team_id = task.get("assignedTeamId")
-    if not team_id and task.get("assignedWorkflowId") is None:
+    team_id = task.get('assignedTeamId')
+    if not team_id and task.get('assignedWorkflowId') is None:
         return None
     team = ctx.team_store.get_team(team_id) if team_id else None
-    if not team or team.get("deletedAt") or not team.get("enabled", True):
-        raise TaskRequestError(409, "workflow_team_required")
-    if team.get("ownerUserId") != task.get("ownerUserId"):
-        raise TaskRequestError(403, "workflow_owner_required")
+    if team_id and (not team or team.get('deletedAt') or not team.get('enabled', True)):
+        raise TaskRequestError(409, 'workflow_team_required')
+    if team and team.get('ownerUserId') != task.get('ownerUserId'):
+        raise TaskRequestError(403, 'workflow_owner_required')
     try:
         workflow_id = selected_workflow_id(team, task)
         if predefined_style(workflow_id) is not None:
+            if not team:
+                raise ValueError('workflow_team_required')
             return team
-        snapshot = workflow_execution_snapshot(team, workflow_id)
+        definition = ctx.workflow_store.get_workflow(workflow_id)
+        if not definition:
+            raise ValueError('workflow_not_found')
+        if definition['ownerUserId'] != task.get('ownerUserId'):
+            raise TaskRequestError(403, 'workflow_owner_required')
+        if not task.get('projectId') or task['projectId'] != definition['projectId']:
+            raise ValueError('team_workflow_project_mismatch')
+        if task.get('assignedAgentId'):
+            raise ValueError('workflow_agent_conflict')
+        if team and workflow_id not in {item['id'] for item in team.get('workflows', [])}:
+            raise ValueError('workflow_not_found')
+        return validate_project_workflow(ctx, definition, team)
     except ValueError as error:
         raise TaskRequestError(409, str(error)) from error
-    if not task.get("projectId") or task["projectId"] != snapshot["projectId"]:
-        raise TaskRequestError(409, "team_workflow_project_mismatch")
-    return snapshot

@@ -2,12 +2,12 @@
 
 import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { saveTeamWorkflow, deleteTeamWorkflow } from "../../api";
-import { TEAMS_QUERY_KEY } from "../../hooks/useTeams";
+import { useMutation } from "@tanstack/react-query";
+import { saveWorkflow, deleteWorkflow } from "../../api";
+import { useInvalidateWorkflows } from "../../hooks/useProjectWorkflows";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
-import type { AgentTeam, TeamWorkflow, ProjectRecord, UserAgent } from "../../types";
+import type { AgentTeam, Workflow, ProjectRecord, UserAgent } from "../../types";
 import {
   WORKFLOW_LIMITS,
   draftFromTeam,
@@ -33,11 +33,11 @@ import { WorkflowStepCard } from "./WorkflowStepCard";
 type Props = {
   open: boolean;
   project: ProjectRecord;
-  /** Projects a new Workflow may belong to, opened from a Team; `project`
+  /** Optional Project choices for a new Workflow; `project`
    *  is the first choice. Absent, the Workflow stays in `project`. */
   projects?: ProjectRecord[];
-  /** Null creates a Workflow under the selected Team. */
-  workflow: TeamWorkflow | null;
+  /** Null creates an independent Workflow in the selected Project. */
+  workflow: Workflow | null;
   teams: AgentTeam[];
   agents: UserAgent[];
   onClose: () => void;
@@ -55,17 +55,14 @@ export function WorkflowEditor(props: Props) {
 function WorkflowEditorBody({ open, project: initialProject, projects, workflow, teams, agents, onClose }: Props) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
-  const queryClient = useQueryClient();
-  const [teamId, setTeamId] = useState(workflow?.teamId ?? teams[0]?.id ?? "");
+  const invalidate = useInvalidateWorkflows();
   const [projectId, setProjectId] = useState(initialProject.id);
   const project = projects?.find(item => item.id === projectId) ?? initialProject;
   const pickProject = !workflow && (projects?.length ?? 0) > 1;
-  const parent = teams.find(item => item.id === teamId);
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
-  const saveMutation = useMutation({ mutationFn: (input: Parameters<typeof saveTeamWorkflow>[1]) => saveTeamWorkflow(teamId, input, workflow?.id), onSuccess: invalidate });
-  const deleteMutation = useMutation({ mutationFn: () => deleteTeamWorkflow(teamId, workflow!.id), onSuccess: invalidate });
+  const saveMutation = useMutation({ mutationFn: (input: Parameters<typeof saveWorkflow>[0]) => saveWorkflow(input, workflow?.id), onSuccess: invalidate });
+  const deleteMutation = useMutation({ mutationFn: () => deleteWorkflow(workflow!.id), onSuccess: invalidate });
   const [failure, setFailure] = useState<string | null>(null);
-  const allowedAgentIds = useMemo(() => enabledProjectAgentIds(project).filter(id => parent?.memberAgentIds.includes(id)), [project, parent]);
+  const allowedAgentIds = useMemo(() => enabledProjectAgentIds(project), [project]);
   const stepAgents = useMemo(() => {
     const allowed = new Set(allowedAgentIds);
     return agents.filter((agent) => allowed.has(agent.id) && agent.enabled && !agent.deletedAt);
@@ -74,7 +71,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
   // names it and adds the rest.
   const [saved] = useState<WorkflowTeamDraft>(() => workflow
     ? draftFromTeam(workflow)
-    : { name: "", steps: [emptyWorkflowStep([], stepAgents.find(agent => agent.id === parent?.leadAgentId)?.id ?? stepAgents[0]?.id ?? "")] });
+    : { name: "", steps: [emptyWorkflowStep([], stepAgents.find(agent => agent.id === project.leadAgentId)?.id ?? stepAgents[0]?.id ?? "")] });
   const [draft, setDraft] = useState<WorkflowTeamDraft>(saved);
   const [errors, setErrors] = useState<WorkflowDraftErrors | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -179,8 +176,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
             const next = projects!.find(item => item.id === value);
             if (!next) return;
             setProjectId(value);
-            const allowed = enabledProjectAgentIds(next).filter(id => parent?.memberAgentIds.includes(id)
-              && agents.some(agent => agent.id === id && agent.enabled && !agent.deletedAt));
+            const allowed = enabledProjectAgentIds(next).filter(id => agents.some(agent => agent.id === id && agent.enabled && !agent.deletedAt));
             // Scope changes never silently change the person responsible.
             setErrors(judge(draft, allowed));
           }}>
@@ -188,18 +184,6 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
             <SelectContent>{projects!.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
           </Select>
         </Field> : null}
-        <Field label={t("workflow.owning_team")} wrapper="div">
-          <Select value={teamId} disabled={busy || Boolean(workflow)} onValueChange={value => {
-            if (!value) return;
-            setTeamId(value);
-            const nextTeam = teams.find(item => item.id === value);
-            setErrors(judge(draft, enabledProjectAgentIds(project).filter(id => nextTeam?.memberAgentIds.includes(id)
-              && agents.some(agent => agent.id === id && agent.enabled && !agent.deletedAt))));
-          }}>
-            <SelectTrigger className="w-full" aria-label={t("workflow.owning_team")}><SelectValue>{parent?.name ?? t("workflow.choose_team")}</SelectValue></SelectTrigger>
-            <SelectContent>{teams.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
         {failure ? <p role="alert" className="text-destructive">{failure}</p> : null}
         <Field label={t("workflow.team_name")} error={shown.name ? t(`workflow.error_${shown.name}`, { limit: WORKFLOW_LIMITS.name }) : undefined} errorId={nameErrorId}>
           <Input
@@ -258,9 +242,9 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
         {workflow ? (
           <div className="adm-drawer-section">
             <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
-            {parent?.defaultWorkflowId === workflow.id ? <p className="workflow-editor-note">{t("workflow.default_in_use")}</p> : null}
+            {teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId] === workflow.id) ? <p className="workflow-editor-note">{t("workflow.default_in_use")}</p> : null}
             <div className="adm-drawer-section-actions">
-              <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy || parent?.defaultWorkflowId === workflow.id}>
+              <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy || teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId] === workflow.id)}>
                 <AdminDelete size={ICON.sm} aria-hidden="true" />
                 {t("workflow.delete")}
               </Button>
@@ -272,7 +256,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>
             {t("dialog.cancel")}
           </Button>
-          <Button size="cta" type="submit" loading={saveMutation.isPending} disabled={deleteMutation.isPending || !parent}>
+          <Button size="cta" type="submit" loading={saveMutation.isPending} disabled={deleteMutation.isPending || !stepAgents.length}>
             {t("workflow.save")}
           </Button>
         </div>

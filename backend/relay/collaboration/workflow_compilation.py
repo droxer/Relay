@@ -85,6 +85,7 @@ def compile_workflow(
             "expectedOutputs": list(step.get("expectedOutputs", [])),
             "dependsOnWorkItemIds": [item["workItemId"] for item in compiled],
             "teamSnapshot": deepcopy(snapshot),
+            **({"workflowSnapshot": deepcopy(snapshot)} if snapshot.get("workflowRecordVersion") == 1 else {}),
         })
     return compiled
 

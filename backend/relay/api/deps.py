@@ -26,6 +26,7 @@ from ..persistence.skill.store import DatabaseSkillStore
 from ..realtime.event_notifier import KeyedEventNotifier, PostgresNotificationBridge
 from ..persistence.daemon.managed_nodes import DatabaseManagedNodeStore
 from ..persistence.automation.store import DatabaseAutomationStore
+from ..persistence.workflow.store import DatabaseWorkflowStore
 from ..persistence.notification.store import DatabaseNotificationStore
 from ..core.settings import AppSettings
 from ..security.rate_limit import AuthRateLimiter
@@ -82,6 +83,13 @@ class AppContext:
     chat_provision: ChatProvision
     github_connection: GitHubConnectionService | None = None
     connections: ConnectionService | None = None
+
+
+    @property
+    def workflow_store(self) -> DatabaseWorkflowStore:
+        # Shared database, independent aggregate; the Team store retains the
+        # construction seam for legacy integrations and test fixtures.
+        return self.team_store.workflow_store
 
 
 def app_context(request: Request) -> AppContext:
