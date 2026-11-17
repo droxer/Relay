@@ -248,3 +248,64 @@ includes the application level and selected operational identifiers (thread,
 run, permission request, Computer and command); arbitrary bound payloads and
 exception local-variable values are omitted. Permission retries do not emit a
 second prompt-opened INFO entry. `RELAY_LOG_LEVEL` controls the minimum level.
+
+## Completion artifact indexing
+
+Apply migration `20261117_0128` before deploying the API and worker. Completion
+acceptance persists reported file metadata and supplied snapshot bytes in the
+same transaction as its durable receipt. Blob uploads and `artifact.created`
+events run in the background, outside the completion request and registry locks.
+Each worker claim contains at most 200 files. Larger reports produce additional
+batches; they are not truncated. Update Computers to the matching daemon to
+remove its former 200-file metadata cap. The existing snapshot limits (2 MiB per
+file, 8 MiB per report) and 50,000-entry scan guard still apply; metadata-only
+files retain their `snapshotSkipped` reason. This is not an unlimited workspace
+capture guarantee.
+
+The authorized Thread detail read includes `artifactIndexStatus`:
+`pending` (queued plus in-flight), `indexed`, and `failed` count **batches**;
+`overflow` counts **files** beyond each run's first batch, including files since
+indexed. The Files panel displays outstanding and failed work and historical
+overflow. It reconciles every five seconds while pending work exists, including
+when the conversation SSE stream has no further events.
+
+`RELAY_ARTIFACT_INDEX_ENABLED` defaults on, `RELAY_ARTIFACT_INDEX_INTERVAL_SECONDS`
+to 5, `RELAY_ARTIFACT_INDEX_LEASE_SECONDS` to 300, and
+`RELAY_ARTIFACT_INDEX_MAX_ATTEMPTS` to 5. Embedded mode runs the loop in the API;
+external mode runs it in the control-plane worker. Restarted workers reclaim
+expired leases. Claim tokens fence status writes and stable artifact IDs make
+concurrent reclaims idempotent. After retry exhaustion, batches remain stored
+and visible as failed; there is currently no user-facing retry operation.
+Do not downgrade the queue migration while batches are pending or failed: the
+downgrade drops their preserved snapshot bytes.
+
+Every HTTP request carrying `run.completed`, including receipt replays, logs
+`duration_ms`, `artifact_count`, response status and `response_complete`; writes
+taking at least five seconds also emit `Slow write request`. Completion duration
+covers receipt processing and ASGI response sending, not delivery to the daemon.
+Accepted receipt replays on both `/events` and `/reports` bypass live run handling
+after authorization. New reports can still wait on registry/database locks; the
+queue removes blob upload latency from those scopes, not all possible waits.
+
+Server startup and exit logs carry PID, deployment identity, revision and peak
+RSS; graceful shutdown and received signal records identify observed SIGTERM or
+SIGINT. Neither SIGTERM nor a missing exit record proves a health-check failure
+or OOM. Correlate platform deployment/health events and exit status (SIGKILL may
+be OOM or forced termination). A dying process cannot log SIGKILL.
+
+A fresh read of Railway backend runtime logs for November 16, 13:14–13:25 UTC,
+filtered by Thread `49fe8c01-5196-5ef7-a851-00827c33056d`, corrects the premise
+in `prod-logs-2026-11-17.md` §3.2. Run `581ddb14-de4f-4fe5-ab86-5b799fbfc04c`
+completed at 13:15:39 (application timestamp), indexed 13 files by 13:15:43,
+and logged `Session completed` at 13:15:43. A **different** run,
+`29e33221-ea66-4df9-8928-adeb4ac3859d`, started at 13:15:56, completed at
+13:24:35 and indexed the next seven files by 13:24:37. The nine-minute gap
+therefore spans two runs; it does not establish a nine-minute completion request.
+The associated client 524s still lack correlated request timing/receipt evidence
+that distinguishes lock waiting from response loss. Neither cause is established.
+A bounded Railway HTTP-log query returned no matching records, which is not
+proof that no requests occurred. Fast receipt replay tests establish current
+behavior, not a historical cause. After an authorized rollout, collect a full
+24-hour window using the report's client/edge definitions: client 502 = 0,
+client 524 = 0, `No active run to cancel` = 0, completion request p99 < 10 seconds.
+Local tests do not establish these production results.

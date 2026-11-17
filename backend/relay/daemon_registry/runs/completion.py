@@ -6,6 +6,8 @@ A mixin of ``DaemonNodeRegistry``: it shares the registry's state and locks
 
 from __future__ import annotations
 
+import base64
+import time
 from pathlib import Path
 from typing import Any
 from loguru import logger
@@ -73,13 +75,17 @@ class RunCompletionMixin(RegistryState):
         artifact_snapshot: dict[str, Any] | None,
         assignment: dict[str, Any] | None = None,
     ) -> None:
-        """Index the files a run reported, each once per run.
+        """Enqueue the files a run reported, instead of indexing them inline.
 
-        The per-run dedupe below makes this safe to call twice for one event:
-        the terminal handler indexes before it takes the global dispatch lock
-        (``_index_generated_files_before_finalization``), and the finalization
-        under that lock finds nothing left to upload. A retried finalization
-        fills in only what an earlier attempt did not index.
+        Safe to call twice for one event: the terminal handler enqueues before
+        the exit evidence commits, and the finalization under the global lock
+        finds the batch already enqueued. The durable ``(session, run,
+        sequence)`` identity makes the enqueue itself idempotent across
+        replays and finalization retries.
+
+        The snapshot bytes are stored inline in the pending batch so a crash
+        after the completion receipt is acknowledged loses nothing; the
+        background indexer uploads and records them outside the request.
         """
         session_id = run_request["sessionId"]
         # Layout and the per-run dedupe read snapshot fields only.
@@ -129,37 +135,76 @@ class RunCompletionMixin(RegistryState):
             for artifact in session.get("artifacts", [])
             if artifact.get("agentRunId") == event["runId"]
         }
+        agent_id = assignment.get("agentId") if assignment and assignment.get("agentId") else None
+        pending: list[dict[str, Any]] = []
         for item in items:
-            path = item["path"]
             relative_path = item["relativePath"]
             if relative_path in seen_relative_paths:
                 continue
             seen_relative_paths.add(relative_path)
-            artifact = {
-                "id": new_database_id(),
-                "kind": "workspace_file",
-                "title": item["title"],
-                "path": path,
-                "createdAt": now_iso(),
-                "agentRunId": event["runId"],
-                "bytes": item["bytes"],
-                "contentType": item["contentType"],
-                "workspaceRelativePath": item["relativePath"],
-                **(
-                    {"snapshotSkipped": item["snapshotSkipped"]}
-                    if item.get("snapshotSkipped")
-                    else {}
-                ),
-                **(
-                    {"agentId": assignment["agentId"]}
-                    if assignment and assignment.get("agentId")
-                    else {}
-                ),
-            }
+            content = item.get("content")
+            pending.append(
+                {
+                    "id": new_database_id(),
+                    "kind": "workspace_file",
+                    "title": item["title"],
+                    "path": item["path"],
+                    "createdAt": now_iso(),
+                    "agentRunId": event["runId"],
+                    "bytes": item["bytes"],
+                    "contentType": item["contentType"],
+                    "workspaceRelativePath": item["relativePath"],
+                    **(
+                        {"snapshotSkipped": item["snapshotSkipped"]}
+                        if item.get("snapshotSkipped")
+                        else {}
+                    ),
+                    **({"agentId": agent_id} if agent_id else {}),
+                    "contentBase64": (
+                        base64.b64encode(content).decode("ascii")
+                        if content is not None
+                        else None
+                    ),
+                }
+            )
+        if not pending:
+            return
+        enqueue_started = time.monotonic()
+        enqueue = getattr(self.store, "enqueue_workspace_artifacts", None)
+        if enqueue is None:
+            # A store without the durable queue (legacy tests) falls back to
+            # inline indexing, preserving the old behavior exactly.
+            self._index_workspace_artifacts_inline(
+                session_id, event["runId"], agent_id, pending
+            )
+            return
+        inserted = enqueue(session_id, event["runId"], agent_id, pending)
+        logger.info(
+            "Generated workspace artifacts enqueued for background indexing",
+            session_id=session_id,
+            run_id=event["runId"],
+            artifact_count=len(pending),
+            batches=inserted,
+            duration_ms=round((time.monotonic() - enqueue_started) * 1000, 1),
+        )
+
+    def _index_workspace_artifacts_inline(
+        self,
+        session_id: str,
+        run_id: str,
+        agent_id: str | None,
+        pending: list[dict[str, Any]],
+    ) -> None:
+        """Fallback inline indexing for stores without the durable queue."""
+        for item in pending:
+            artifact = {key: value for key, value in item.items() if key != "contentBase64"}
+            content = (
+                base64.b64decode(item["contentBase64"])
+                if item.get("contentBase64")
+                else None
+            )
             if hasattr(self.store, "index_workspace_artifact"):
-                artifact, _session = self.store.index_workspace_artifact(
-                    session_id, artifact, item.get("content")
-                )
+                self.store.index_workspace_artifact(session_id, artifact, content)
             else:
                 self.store.append_event(
                     session_id,
@@ -169,10 +214,10 @@ class RunCompletionMixin(RegistryState):
             logger.info(
                 "Generated workspace artifact indexed",
                 session_id=session_id,
-                run_id=event["runId"],
+                run_id=run_id,
                 artifact_id=artifact["id"],
-                path=item["relativePath"],
-                snapshot=item.get("content") is not None,
+                path=artifact.get("workspaceRelativePath"),
+                snapshot=content is not None,
             )
 
     def _closing_controller(self, run_request: dict[str, Any]) -> SessionController:

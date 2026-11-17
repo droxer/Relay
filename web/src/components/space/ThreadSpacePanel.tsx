@@ -36,6 +36,7 @@ import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { SPACE_OVERLAY_QUERY } from "@/lib/breakpoints";
 import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
+import type { RelaySession } from "../../types";
 import { useKeyChange } from "../../hooks/useKeyChange";
 
 const SPACE_TABS: readonly SpaceTab[] = ["project", "thread"];
@@ -51,6 +52,7 @@ function serializeSpaceTabParam(value: SpaceTab | null): string | null {
 
 export function ThreadSpacePanel({
   sessionId,
+  artifactIndexStatus,
   projectId,
   items,
   selectableItems = items,
@@ -63,6 +65,7 @@ export function ThreadSpacePanel({
   onResizeActive,
 }: {
   sessionId: string;
+  artifactIndexStatus?: RelaySession["artifactIndexStatus"];
   /** The project this thread belongs to, when it has one: its workspace is the
    *  shared record the thread contributes to, so the panel leads with it. */
   projectId?: string | null;
@@ -220,6 +223,13 @@ export function ThreadSpacePanel({
           </TabsList>
         ) : null}
         <SpaceBody className="thread-space-body" showTabs={showTabs} value={activeTab}>
+          {artifactIndexStatus && (artifactIndexStatus.pending > 0 || artifactIndexStatus.failed > 0 || artifactIndexStatus.overflow > 0) ? (
+            <div className="thread-space-index-status" role="status">
+              {artifactIndexStatus.pending > 0 ? <p>{t("space.index_pending", { count: artifactIndexStatus.pending })}</p> : null}
+              {artifactIndexStatus.failed > 0 ? <p>{t("space.index_failed", { count: artifactIndexStatus.failed })}</p> : null}
+              {artifactIndexStatus.overflow > 0 ? <p>{t("space.index_overflow", { count: artifactIndexStatus.overflow })}</p> : null}
+            </div>
+          ) : null}
           {activeTab === "project" && projectId ? (
             /* Keyed by project: the browser holds its directory path and open
                file in local state, so without this, switching to a thread in

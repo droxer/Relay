@@ -181,9 +181,12 @@ class SessionArtifactRows(SessionStoreState):
             session = self._insert_artifact_with_event(
                 session_id, artifact, metadata, content=encoded
             )
-        except Exception:
-            # Safe to discard: the registry mints a fresh artifact id per
-            # index call, so no committed row can share this key.
+        except KeyError:
+            # The thread no longer exists, so no committed row can reference
+            # this deterministic key. Any other failure leaves the blob alone:
+            # the id is pre-minted and stable across re-claims, so a concurrent
+            # indexer may already have committed the exact same key, and
+            # discarding it would orphan that committed row's snapshot.
             if blob_key is not None:
                 self._discard_blob(blob_key)
             raise
@@ -223,14 +226,27 @@ class SessionArtifactRows(SessionStoreState):
             session_pk = row["id"]
             if event.get("type") == "session.deletion_requested" and (row["snapshot"] or {}).get("deletionRequestedAt"):
                 return row["snapshot"]
-            sequence = int(row["version"] or 0)
-            conn.execute(
-                insert(self.artifacts).values(
+            # The artifact id is pre-minted at enqueue time and stable across
+            # re-claims, so a concurrent indexer that won the race (the lease
+            # expired mid-upload) already committed this exact row and its
+            # snapshot blob. Insert idempotently: on conflict, write no
+            # duplicate event and bump no session version, and leave the shared
+            # blob untouched for the committed row to keep reading.
+            dialect_insert = (
+                postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
+            )
+            insert_result = conn.execute(
+                dialect_insert(self.artifacts)
+                .values(
                     **session_artifact_to_row(
                         session_pk, artifact, metadata, content=content
                     )
                 )
+                .on_conflict_do_nothing(index_elements=[self.artifacts.c.id])
             )
+            if insert_result.rowcount == 0:
+                return self.get_session(session_id)
+            sequence = int(row["version"] or 0)
             conn.execute(
                 insert(self.events).values(
                     **session_event_to_row(session_pk, sequence, event)

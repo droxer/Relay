@@ -856,6 +856,7 @@ export function ThreadsView({
       {!showProjectOverview && !showProjectDirectoryEmpty && spaceOpen && activeSession ? (
         <ThreadSpacePanel
           sessionId={activeSession.id}
+          artifactIndexStatus={activeSession.artifactIndexStatus}
           projectId={activeSession.projectId ?? null}
           items={spaceItems}
           selectableItems={spaceSelectableItems}

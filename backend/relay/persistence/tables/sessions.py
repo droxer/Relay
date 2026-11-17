@@ -198,3 +198,51 @@ tombstones = Table(
     Column("deleted_at", DateTime(timezone=True), nullable=False),
     UniqueConstraint("session_id", name="uq_session_tombstones_session"),
 )
+
+# Pending workspace-artifact indexing, drained by the background indexer.
+# A completed run enqueues its reported files here (with inline snapshot
+# content) in the receipt transaction, so the run.completed request never
+# performs per-file blob uploads or per-file storage transactions. Rows are
+# cascade-deleted with their thread; a stable (session_id, run_id, sequence)
+# identity makes re-enqueue idempotent across receipt replays and finalization
+# retries.
+artifact_index_batches = Table(
+    "session_artifact_index_batches",
+    metadata,
+    database_id_column(),
+    Column(
+        "session_id",
+        entity_uuid_type(),
+        ForeignKey("sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("run_id", Text, nullable=False),
+    Column("sequence", BigInteger, nullable=False),
+    Column("agent_id", Text, nullable=True),
+    # Each item is an artifact dict (pre-minted id, path, relativePath, …)
+    # plus its snapshot bytes as contentBase64, so the indexer can re-create
+    # the artifact row without re-reading the daemon report.
+    Column("items", json_type(), nullable=False),
+    Column("status", Text, nullable=False),
+    Column("attempts", BigInteger, nullable=False, server_default="0"),
+    Column("last_error", Text, nullable=True),
+    Column("claimed_at", DateTime(timezone=True), nullable=True),
+    # A per-claim token: the worker's completion/requeue/failure updates are
+    # fenced on it, so a stale claim whose lease expired (and was re-claimed
+    # by another indexer) can never overwrite the newer claim's status.
+    Column("lease_token", Text, nullable=True),
+    # Items past the first batch (beyond ARTIFACT_INDEX_BATCH_LIMIT) are still
+    # queued; this records how many overflowed so the status surface can show
+    # it instead of silently dropping them.
+    Column("overflow_count", BigInteger, nullable=False, server_default="0"),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint(
+        "session_id",
+        "run_id",
+        "sequence",
+        name="uq_session_artifact_index_batches_run_seq",
+    ),
+    Index("ix_session_artifact_index_batches_status", "status"),
+    Index("ix_session_artifact_index_batches_claimed", "claimed_at"),
+)

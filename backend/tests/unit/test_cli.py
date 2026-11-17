@@ -28,8 +28,8 @@ def test_cli_never_logs_bootstrap_token_and_uses_trusted_proxy_list(
         lambda message, *args, **kwargs: messages.append(message.format(*args)),
     )
     monkeypatch.setattr(
-        cli.uvicorn,
-        "run",
+        cli,
+        "run_server",
         lambda _app, **kwargs: uvicorn_options.update(kwargs),
     )
 

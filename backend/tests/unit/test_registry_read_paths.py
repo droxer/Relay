@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
 from relay.daemon_registry.node_backend import ServerDaemonNodeBackend
 from relay.daemon_registry.registry import DaemonNodeRegistry
-from store_fixtures import make_daemon_store, make_session_store
+from store_fixtures import drain_artifact_indexing, make_daemon_store, make_session_store
 
 
 def _register(registry: DaemonNodeRegistry, workspace: str) -> None:
@@ -133,40 +132,35 @@ def test_streamed_output_append_never_replays_the_thread(monkeypatch: Any) -> No
     asyncio.run(run_flow())
 
 
-def test_completion_indexes_generated_files_outside_the_global_lock(monkeypatch: Any) -> None:
+def test_completion_enqueues_generated_files_without_inline_indexing(monkeypatch: Any) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             registry, session_store, session, command = await _started_run(root)
-            global_lock_free: list[bool] = []
+            indexed: list[Any] = []
             original_index = session_store.index_workspace_artifact
-
-            def probe_lock() -> None:
-                # Another thread can take the global lock only if the
-                # completion handler has let go of it.
-                acquired = registry.dispatch_lock.acquire(blocking=False)
-                global_lock_free.append(acquired)
-                if acquired:
-                    registry.dispatch_lock.release()
-
-            def index_with_probe(*args: Any, **kwargs: Any) -> Any:
-                prober = threading.Thread(target=probe_lock)
-                prober.start()
-                prober.join()
-                return original_index(*args, **kwargs)
-
-            monkeypatch.setattr(session_store, "index_workspace_artifact", index_with_probe)
+            monkeypatch.setattr(
+                session_store,
+                "index_workspace_artifact",
+                lambda *args, **kwargs: indexed.append(args) or original_index(*args, **kwargs),
+            )
             event = _completed(command, [_file("a.md", b"# a"), _file("b.md", b"# b")])
 
             registry.handle_event("sbx_alice", event, "node_token")
 
-            assert global_lock_free == [True, True]
+            # The completion handler enqueues, never indexing inline, so the
+            # request path does no per-file work under any lock.
+            assert indexed == []
+            assert session_store.artifact_index_status(session["id"])["pending"] == 1
+
+            drain_artifact_indexing(session_store)
             updated = session_store.get_session(session["id"])
             assert updated["status"] == "completed"
             assert sorted(a["workspaceRelativePath"] for a in updated["artifacts"]
                           if a["kind"] == "workspace_file") == ["a.md", "b.md"]
 
-            # A replayed terminal event settles without indexing a second copy.
+            # A replayed terminal event settles without enqueueing a second copy.
             registry.handle_event("sbx_alice", {**event, "replayed": True}, "node_token")
+            assert session_store.artifact_index_status(session["id"])["pending"] == 0
             again = session_store.get_session(session["id"])
             assert len([a for a in again["artifacts"] if a["kind"] == "workspace_file"]) == 2
 
@@ -189,18 +183,22 @@ def test_completion_retry_after_indexing_failure_does_not_duplicate_artifacts(mo
 
             monkeypatch.setattr(session_store, "index_workspace_artifact", flaky_index)
             event = _completed(command, [_file("a.md", b"# a"), _file("b.md", b"# b")])
-            try:
-                registry.handle_event("sbx_alice", event, "node_token")
-            except RuntimeError:
-                pass
-            monkeypatch.setattr(session_store, "index_workspace_artifact", original_index)
+            registry.handle_event("sbx_alice", event, "node_token")
 
-            registry.handle_event("sbx_alice", {**event, "replayed": True}, "node_token")
-            registry.reap_stale_runs(force=True)
+            # The first drain fails on the transient error and requeues; the
+            # next drain indexes both files exactly once.
+            from relay.execution.artifact_indexing import ArtifactIndexWorker
+
+            worker = ArtifactIndexWorker(session_store)
+            assert worker.tick() == 1
+            assert session_store.artifact_index_status(session["id"])["pending"] == 1
+            assert worker.tick() == 1
+            monkeypatch.setattr(session_store, "index_workspace_artifact", original_index)
 
             updated = session_store.get_session(session["id"])
             paths = sorted(a["workspaceRelativePath"] for a in updated["artifacts"]
                            if a["kind"] == "workspace_file")
             assert paths == ["a.md", "b.md"]
+            assert session_store.artifact_index_status(session["id"])["indexed"] == 1
 
     asyncio.run(run_flow())

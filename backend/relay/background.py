@@ -27,7 +27,7 @@ from .core.storage_config import database_url_from_env
 CONTROL_QUEUE = "relay_control"
 CONTROL_TASKS = frozenset({
     "relay.scheduler", "relay.computer_notifications", "relay.execution_recovery",
-    "relay.recover_stalled_jobs", "relay.prune_jobs",
+    "relay.artifact_index", "relay.recover_stalled_jobs", "relay.prune_jobs",
 })
 
 
@@ -73,10 +73,16 @@ class BackgroundServices:
     scheduler: Any
     computer_notifications: Any
     execution_lifecycle: Any
+    artifact_indexer: Any = None
 
     @classmethod
     def from_state(cls, state: Any) -> BackgroundServices:
-        return cls(state.task_scheduler, state.computer_notifications, state.execution_lifecycle)
+        return cls(
+            state.task_scheduler,
+            state.computer_notifications,
+            state.execution_lifecycle,
+            getattr(state, "artifact_indexer", None),
+        )
 
 
 async def _finish_thread(callback: Callable[[], Any]) -> None:
@@ -132,6 +138,11 @@ def create_worker_app(
     @periodic("relay.execution_recovery", services.execution_lifecycle.interval_seconds)
     async def execution_recovery(timestamp: int) -> None:
         await _finish_thread(services.execution_lifecycle.tick)
+
+    if services.artifact_indexer is not None:
+        @periodic("relay.artifact_index", services.artifact_indexer.interval_seconds)
+        async def artifact_index(timestamp: int) -> None:
+            await _finish_thread(services.artifact_indexer.tick)
 
     @app.periodic(cron="* * * * *")
     @app.task(name="relay.recover_stalled_jobs", queue=CONTROL_QUEUE, queueing_lock="relay.recover_stalled_jobs")

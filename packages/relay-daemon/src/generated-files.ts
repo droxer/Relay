@@ -83,12 +83,8 @@ const GENERATED_FILE_EXCLUDED_NAMES = new Set([
   "yarn.lock",
 ]);
 
-/**
- * Row cap per report. Sized for "every changed file", not just documents;
- * with newest-first ordering this truncates the tail of a pathological run
- * rather than dropping recent work.
- */
-export const GENERATED_FILE_LIMIT = 200;
+// Report every changed candidate's metadata. The backend splits durable
+// indexing into 200-item batches; truncation here would hide the overflow.
 /** Per-file inline snapshot cap; larger files are reported metadata-only. */
 const GENERATED_FILE_CONTENT_MAX_BYTES = 2 * 1024 * 1024;
 /** Total inline content budget per run.completed event. */
@@ -334,8 +330,7 @@ export async function diffGeneratedFiles(
       const previous = before[item.path];
       return !previous || previous.mtimeMs !== item.mtimeMs || previous.bytes !== item.bytes;
     })
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .slice(0, GENERATED_FILE_LIMIT);
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
   let contentBudget = GENERATED_FILE_CONTENT_TOTAL_MAX_BYTES;
   const files: DaemonGeneratedFile[] = [];

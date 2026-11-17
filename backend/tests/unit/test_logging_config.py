@@ -137,3 +137,14 @@ def test_daemon_wire_access_lines_are_debug_and_repeated_failures_collapse(monke
     levels = [routed(access('/api/v1/daemon-nodes/n/events', 500))[0] for _ in range(100)]
     assert levels.count('INFO') == 3  # first, 10th, 100th
     assert levels.count('DEBUG') == 97
+
+
+def test_completion_and_process_diagnostics_survive_production_formatter():
+    record = {"extra": {"artifact_count": 150, "duration_ms": 6000, "response_complete": False,
+                        "pid": 2, "signal": "SIGTERM", "reason": "signal",
+                        "body": "private output"}}
+    logging_config._format_record(record)
+    assert record["extra"]["relay_context"] == {
+        "artifact_count": 150, "duration_ms": 6000, "response_complete": False,
+        "pid": 2, "signal": "SIGTERM", "reason": "signal",
+    }

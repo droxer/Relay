@@ -71,6 +71,20 @@
   min-height: 0;
 }
 
+.thread-space-body:has(> .thread-space-index-status) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.thread-space-index-status {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--hairline);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  overflow-wrap: anywhere;
+}
+
+.thread-space-index-status p { margin: 0; }
+
 .thread-space-header {
   display: flex;
   align-items: center;

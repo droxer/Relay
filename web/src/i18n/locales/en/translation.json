@@ -2120,6 +2120,12 @@
     "size_mb": "{{count}} MB"
   },
   "space": {
+    "index_pending_one": "Preparing files: {{count}} batch pending.",
+    "index_pending_other": "Preparing files: {{count}} batches pending.",
+    "index_failed_one": "{{count}} file batch could not be prepared after retries. Contact your administrator.",
+    "index_failed_other": "{{count}} file batches could not be prepared after retries. Contact your administrator.",
+    "index_overflow_one": "{{count}} additional file was queued beyond the first 200-file batch. No reported files were dropped.",
+    "index_overflow_other": "{{count}} additional files were queued beyond the first 200-file batch. No reported files were dropped.",
     "panel_label": "Thread files",
     "title": "Files",
     "title_project": "Files",

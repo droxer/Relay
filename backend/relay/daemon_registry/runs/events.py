@@ -49,61 +49,11 @@ class EventIngestMixin(RegistryState):
             with self.dispatch_scope([sandbox_id]):
                 self._handle_event_unlocked(sandbox_id, event, token)
             return
-        if isinstance(event.get("generatedFiles"), list):
-            # A run's files (hundreds of rows, with inline content) are
-            # uploaded under the node's own scope first, so the transition
-            # below holds the global lock for the state change alone.
-            with self.dispatch_scope([sandbox_id]):
-                self._index_generated_files_before_finalization(sandbox_id, event, token)
+        # Generated files are enqueued for background indexing inside the
+        # terminal handler, atomically with the exit evidence (and, on the
+        # durable path, the receipt). No blob upload runs under any lock.
         with self.dispatch_lock:
             self._handle_event_unlocked(sandbox_id, event, token)
-
-    def _index_generated_files_before_finalization(
-        self, sandbox_id: str, event: dict[str, Any], token: str | None
-    ) -> None:
-        """Index a terminal event's reported files ahead of its finalization.
-
-        Only an event the finalization would index is taken here — a
-        dispatched command's own completion with exit code 0, or its failure
-        report — and only while its thread is still open. Anything else is
-        left to the finalization, which applies the same per-run dedupe, so a
-        file is indexed exactly once whichever side gets to it. A failure
-        here fails the post: the daemon retries the event, and the retry
-        indexes only what is still missing.
-        """
-        self._assert_authorized(sandbox_id, token)
-        indexable = event["type"] == "run.failed" or (
-            event["type"] == "run.completed" and event.get("exitCode") == 0
-        )
-        record = self.daemon_store.get_command(event["commandId"])
-        if not indexable or not record or record.get("status") != "dispatched":
-            return
-        self._assert_event_matches_active(
-            sandbox_id, event, self._active_command_entry(record)
-        )
-        run_request = self.daemon_store.get_run_request(
-            record["command"].get("_runRequestId")
-        )
-        sandbox = self.sandboxes.get(sandbox_id)
-        if (
-            not run_request
-            or run_request.get("status") not in ACTIVE_RUN_REQUEST_STATUSES
-            or run_request.get("currentCommandId") != event["commandId"]
-            or not sandbox
-        ):
-            return
-        try:
-            session = self.store.get_session_header(run_request["sessionId"])
-        except KeyError:
-            return
-        if session_already_terminal(session):
-            return
-        assignments = run_request.get("assignments") or []
-        index = run_request.get("currentIndex", 0)
-        self._record_generated_workspace_artifacts(
-            sandbox, run_request, event, None,
-            assignments[index] if 0 <= index < len(assignments) else None,
-        )
 
     # Event types that carry streamed output. They take only the node lock and
     # may arrive replayed after their command reached a terminal status.
@@ -481,6 +431,10 @@ class EventIngestMixin(RegistryState):
     def _handle_run_terminal(
         self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any], late_output: bool
     ) -> None:
+        # Enqueue reported files before the exit evidence commits, so the
+        # durable receipt and the pending indexing batches land in one
+        # transaction: a crash after acknowledgement cannot lose a snapshot.
+        self._enqueue_terminal_generated_files(sandbox_id, command, event)
         if not self._mark_command_terminal(sandbox_id, event):
             logger.debug(
                 "Daemon node terminal event ignored: delivery is no longer active",
@@ -498,6 +452,45 @@ class EventIngestMixin(RegistryState):
             return
         if not self._claim_and_advance_run_request(event):
             self.clear_run_output(event["runId"])
+
+    def _enqueue_terminal_generated_files(
+        self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any]
+    ) -> None:
+        """Enqueue a terminal event's reported files for background indexing.
+
+        Runs inside the same transaction as the exit evidence (and, on the
+        durable path, the receipt), so the snapshot bytes are durable before
+        the daemon is acknowledged. A completed turn with a non-zero exit is
+        left to finalization, which decides from its round result whether its
+        files are deliverables (a question asked then crashed still counts).
+        """
+        if event["type"] not in ("run.completed", "run.failed"):
+            return
+        if event["type"] == "run.completed" and event.get("exitCode") != 0:
+            return
+        if not isinstance(event.get("generatedFiles"), list):
+            return
+        sandbox = self.sandboxes.get(sandbox_id)
+        run_request = self.daemon_store.get_run_request(command.get("_runRequestId"))
+        if (
+            not sandbox
+            or not run_request
+            or run_request.get("status") not in ACTIVE_RUN_REQUEST_STATUSES
+            or run_request.get("currentCommandId") != event["commandId"]
+        ):
+            return
+        try:
+            session = self.store.get_session_header(run_request["sessionId"])
+        except KeyError:
+            return
+        if session_already_terminal(session):
+            return
+        assignments = run_request.get("assignments") or []
+        index = run_request.get("currentIndex", 0)
+        self._record_generated_workspace_artifacts(
+            sandbox, run_request, event, None,
+            assignments[index] if 0 <= index < len(assignments) else None,
+        )
 
     def _finalize_durable_terminal(self, event: dict[str, Any]) -> None:
         with self.dispatch_lock:
