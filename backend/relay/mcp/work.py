@@ -160,6 +160,21 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
                 ))
             else:
                 assert task is not None
+                # MCP speaks for an Agent, even when its token carries the
+                # owner's authority. That authority is not consent to replace
+                # an already selected Agent. Check the locked, current record
+                # before applying any part of the patch (including a clear or
+                # a Team assignment, which would implicitly clear the Agent).
+                if task.get("assignedAgentId") and (
+                    ("assignedAgentId" in body and body["assignedAgentId"] != task["assignedAgentId"])
+                    or body.get("assignedTeamId")
+                ):
+                    raise McpError(
+                        409,
+                        "task_assignment_approval_required: Keep the assigned Agent. "
+                        "Ask the owner to change the assignment in Relay; for Project Tasks, "
+                        "you may stage a proposal for owner approval. No changes were applied.",
+                    )
                 task = update_task(ctx, actor, task, TaskPatchRequest(
                     body=body, reader=READER, requested_assignee=None, move_project=None,
                     reload=lambda: _record(ctx, grant, arguments[f"{kind}Id"], project_id, automation=automation, write=True),

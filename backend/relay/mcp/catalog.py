@@ -157,7 +157,7 @@ def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
                 required.append("fields")
             tools.append(Tool(
                 name=name,
-                description=f"{verb.title()} {'an Automation' if kind == 'automation' else 'a Task'}. Standalone runs manage work only on their Computer; Project runs stay in their Project and only its Lead may change Project work. Acceptance and execution recovery remain owner-only.",
+                description=f"{verb.title()} {'an Automation' if kind == 'automation' else 'a Task'}. Standalone runs manage work only on their Computer; Project runs stay in their Project and only its Lead may change Project work. An existing assigned Agent cannot be replaced, cleared, or changed to a Team without owner approval in Relay. For Project Tasks, stage a proposal instead. Acceptance and execution recovery remain owner-only.",
                 inputSchema={"type": "object", "properties": properties, "required": required, "additionalProperties": False},
                 annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=verb == "delete"),
             ))
