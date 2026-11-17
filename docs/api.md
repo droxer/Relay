@@ -2082,11 +2082,14 @@ real backend and daemon, remains W4; this API does not claim release readiness.
 
 ### Independent Project Workflows
 
-Custom definitions belong to a Project and remain available without a Team.
+Custom definitions belong to their creating Team or Project (exactly one owner).
+Team-owned definitions are reusable for that Team’s Tasks and Automations across
+compatible execution Projects; Project definitions apply within their Project.
 The owner-session API is `GET/POST /api/v1/workflows`,
 `GET/PATCH/DELETE /api/v1/workflows/{id}`, and
 `POST /api/v1/workflows/{id}/runs`. List accepts optional `projectId`; run
-accepts `requestId`, `taskGoal`, and optional eligible linked `teamId`.
+accepts `requestId`, `taskGoal`, and optional eligible `teamId`. Team-owned
+definitions additionally require their owning Team and an execution `projectId`.
 A new run freezes `workflowSnapshot`, retaining `teamSnapshot` as a wire alias.
 
 Team assignment uses `PUT/DELETE /api/v1/teams/{teamId}/workflows/{id}/link`.

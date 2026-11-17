@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from ...persistence.sql import names_no_uuid_row
 from ...core.workflows import project_workflow_definition
 from ...projects.workflow import validate_project_workflow
+from ...teams.workflow import validate_team_definition
 from ...security.request_auth import require_user_session
 from ..actors import chat_service_user_header
 from ..bodies import JsonBodyDep
@@ -47,10 +48,16 @@ def save_definition(request: Request, ctx: AppContextDep, body: dict[str, Any], 
     current = owned_definition(request, ctx, workflow_id) if workflow_id else None
     try:
         definition = project_workflow_definition(owner, body, current=current)
-        if names_no_uuid_row(ctx.workflow_store.engine, definition["projectId"]):
+        if definition.get('projectId') and names_no_uuid_row(ctx.workflow_store.engine, definition['projectId']):
             raise ValueError("workflow_project_not_found")
-        validate_project_workflow(ctx, definition, require_enabled=False)
+        if definition.get('ownerTeamId'):
+            team = owned_workflow_team(request, ctx, definition['ownerTeamId'])
+            validate_team_definition(ctx, definition, team)
+        else:
+            validate_project_workflow(ctx, definition, require_enabled=False)
         saved = ctx.workflow_store.save_workflow(owner, body, workflow_id=workflow_id)
+        if saved.get('ownerTeamId'):
+            ctx.team_store.link_workflow(saved['ownerTeamId'], saved['id'])
         return {'workflow': saved}
     except KeyError as error:
         raise HTTPException(404, "workflow_not_found") from error
@@ -83,7 +90,10 @@ def link_workflow(team_id: str, workflow_id: str, request: Request, ctx: AppCont
     team = owned_workflow_team(request, ctx, team_id)
     definition = owned_definition(request, ctx, workflow_id)
     try:
-        validate_project_workflow(ctx, definition, team, require_enabled=False)
+        if definition.get('ownerTeamId'):
+            validate_team_definition(ctx, definition, team)
+        else:
+            validate_project_workflow(ctx, definition, team, require_enabled=False)
         ctx.team_store.link_workflow(team_id, workflow_id)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
@@ -109,10 +119,10 @@ def set_project_default(team_id: str, project_id: str, request: Request, ctx: Ap
     if set(_request_body) != {'workflowId'} or not isinstance(workflow_id, str):
         raise HTTPException(400, 'workflow_defaults_invalid')
     definition = owned_definition(request, ctx, workflow_id)
-    if definition['projectId'] != project_id or workflow_id not in {item['id'] for item in team.get('workflows', [])}:
+    if (definition.get('projectId') and definition['projectId'] != project_id) or workflow_id not in {item['id'] for item in team.get('workflows', [])}:
         raise HTTPException(409, 'workflow_defaults_invalid')
     try:
-        validate_project_workflow(ctx, definition, team)
+        validate_project_workflow(ctx, definition, team, project_id=project_id)
         updated = ctx.team_store.set_project_workflow_default(team_id, project_id, workflow_id)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error

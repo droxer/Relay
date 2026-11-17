@@ -12,7 +12,7 @@ export function saveWorkflow(input: WorkflowMutationInput, workflowId?: string):
 export function deleteWorkflow(workflowId: string): Promise<{ deletedWorkflowId: string }> {
   return apiJson(`/workflows/${encodeURIComponent(workflowId)}`, { method: "DELETE" });
 }
-export function startProjectWorkflow(workflowId: string, input: { requestId: string; taskGoal: string; teamId?: string }): Promise<RelaySession> {
+export function startProjectWorkflow(workflowId: string, input: { requestId: string; taskGoal: string; teamId?: string; projectId?: string }): Promise<RelaySession> {
   return apiJson(`/workflows/${encodeURIComponent(workflowId)}/runs`, { method: "POST", body: input });
 }
 export function linkTeamWorkflow(teamId: string, workflowId: string, linked = true): Promise<{ team: AgentTeam }> {

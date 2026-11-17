@@ -127,10 +127,10 @@ def test_task_workflow_can_be_changed_cleared_and_rejects_foreign_scope(monkeypa
         assert response.status_code == 409, response.text
         other = create_parent(client, {**payload, 'name': 'Other team'})
         response = client.post('/api/v1/tasks', json={
-            'title': 'Wrong team', 'projectId': project['id'],
+            'title': 'Project workflow with another eligible Team', 'projectId': project['id'],
             'assignedTeamId': other['id'], 'assignedWorkflowId': workflows[0]['id'],
         })
-        assert response.status_code == 409, response.text
+        assert response.status_code == 201, response.text
 
 
 def test_disabled_definitions_can_be_edited_and_enabled_again(monkeypatch):

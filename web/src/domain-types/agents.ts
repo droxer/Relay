@@ -193,9 +193,10 @@ export interface TeamMutationInput {
 
 /** A Project-scoped process with optional Team associations. */
 export interface Workflow {
+  ownerTeamId?: string;
   id: string;
   ownerUserId?: string;
-  projectId: string;
+  projectId: string | null;
   name: string;
   workflowSteps: WorkflowStep[];
   enabled: boolean;
@@ -205,4 +206,4 @@ export interface Workflow {
 
 export interface TeamWorkflow extends Workflow { teamId: string }
 
-export type WorkflowMutationInput = Pick<Workflow, "name" | "projectId" | "workflowSteps"> & { enabled?: boolean };
+export type WorkflowMutationInput = Pick<Workflow, "name" | "projectId" | "workflowSteps" | "ownerTeamId"> & { enabled?: boolean };

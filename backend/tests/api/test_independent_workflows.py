@@ -232,3 +232,64 @@ def test_project_default_update_preserves_a_concurrently_changed_scope(monkeypat
         response = client.put(f"/api/v1/teams/{team['id']}/workflow-defaults/{project['id']}", json={'workflowId': first['id']})
         assert response.status_code == 200, response.text
         assert response.json()['team']['projectWorkflowDefaults'] == {project['id']: first['id'], other['id']: second['id']}
+
+
+def test_team_owned_workflow_needs_no_project_to_create_and_requires_its_team(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
+        team = create_parent(client, payload)
+        response = client.post(f"/api/v1/teams/{team['id']}/workflows", json={
+            'name': 'Team delivery', 'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
+        })
+        assert response.status_code == 201, response.text
+        workflow = response.json()['workflow']
+        assert workflow['ownerTeamId'] == team['id']
+        assert workflow['projectId'] is None
+        started = client.post(f"/api/v1/workflows/{workflow['id']}/runs", json={
+            'requestId': str(uuid4()), 'taskGoal': 'Use selected Project',
+            'teamId': team['id'], 'projectId': project['id'],
+        })
+        assert started.status_code == 201, started.text
+        assert started.json()['projectId'] == project['id']
+        for with_team in (False, True):
+            task = client.post('/api/v1/tasks', json={
+                'title': 'Use Team process', 'projectId': project['id'], 'assignedWorkflowId': workflow['id'],
+                **({'assignedTeamId': team['id']} if with_team else {}),
+            })
+            assert task.status_code == (201 if with_team else 409), task.text
+            if with_team:
+                run = client.post(f"/api/v1/tasks/{task.json()['id']}/runs", json={})
+                assert run.status_code == 202, run.text
+                assert run.json()['session']['projectId'] == project['id']
+        other = create_parent(client, {**payload, 'name': 'Other Team'})
+        assert client.put(f"/api/v1/teams/{other['id']}/workflows/{workflow['id']}/link", json={}).status_code == 409
+        assert client.get(f"/api/v1/workflows/{workflow['id']}").json()['workflow']['projectId'] is None
+
+
+def test_team_workflow_default_applies_across_projects_and_automations(monkeypatch):
+    from issue_projects import project_for_agents
+    from automation_helpers import DAILY_TRIGGERS
+    with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
+        team = create_parent(client, payload)
+        workflow = client.post(f"/api/v1/teams/{team['id']}/workflows", json={
+            'name': 'Reusable delivery', 'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
+        }).json()['workflow']
+        response = client.patch(f"/api/v1/teams/{team['id']}", json={'defaultWorkflowId': workflow['id']})
+        assert response.status_code == 200, response.text
+        other = project_for_agents(app.state.project_store, project['ownerUserId'],
+                                   [app.state.agent_store.get_agent(aid) for aid in payload['memberAgentIds']], name='Second Project')
+        for scope in (project, other):
+            result = client.post('/api/v1/tasks', json={
+                'title': 'Team work', 'projectId': scope['id'], 'assignedTeamId': team['id'],
+            })
+            assert result.status_code == 201, result.text
+            run = client.post(f"/api/v1/tasks/{result.json()['id']}/runs", json={})
+            assert run.status_code == 202, run.text
+            snapshot = run.json()['session']['workflowRuns'][0]['workflowSnapshot']
+            assert snapshot['projectId'] == scope['id']
+            assert snapshot['ownerTeamId'] == team['id']
+        routine = client.post('/api/v1/tasks', json={
+            'title': 'Automated Team workflow', 'projectId': other['id'], 'assignedTeamId': team['id'],
+            'assignedWorkflowId': workflow['id'], 'isRoutine': True, 'routineState': 'active', 'routineTriggers': DAILY_TRIGGERS,
+        })
+        assert routine.status_code == 201, routine.text
+        assert client.get(f"/api/v1/workflows/{workflow['id']}").json()['workflow']['projectId'] is None

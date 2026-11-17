@@ -1,11 +1,13 @@
 """Independent Project Workflow definitions, links, and authoritative events."""
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Table, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, ForeignKey, Index, Table, Text, UniqueConstraint, text
 from ..sql import database_id_column, entity_uuid_type, json_type, metadata
 
 workflows = Table(
     'workflows', metadata, database_id_column(),
     Column('owner_user_id', entity_uuid_type(), ForeignKey('users.id', ondelete='RESTRICT'), nullable=False),
-    Column('project_id', entity_uuid_type(), ForeignKey('projects.id', ondelete='RESTRICT'), nullable=False),
+    Column('project_id', entity_uuid_type(), ForeignKey('projects.id', ondelete='RESTRICT'), nullable=True),
+    Column('owner_team_id', entity_uuid_type(), ForeignKey('teams.id', ondelete='RESTRICT'), nullable=True),
+    CheckConstraint('(project_id IS NOT NULL AND owner_team_id IS NULL) OR (project_id IS NULL AND owner_team_id IS NOT NULL)', name='ck_workflow_owner_scope'),
     Column('name', Text, nullable=False), Column('name_key', Text, nullable=False),
     Column('snapshot', json_type(), nullable=False), Column('event_version', BigInteger, nullable=False),
     Column('created_at', DateTime(timezone=True), nullable=False),

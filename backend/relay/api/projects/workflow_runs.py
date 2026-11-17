@@ -29,8 +29,13 @@ def start_workflow(workflow_id: str, request: Request, ctx: AppContextDep, *, _r
         raise HTTPException(400, 'workflow_team_invalid')
     if team_id and names_no_uuid_row(ctx.workflow_store.engine, team_id):
         raise HTTPException(400, 'workflow_team_invalid')
-    request_id, goal = _body({key: value for key, value in _request_body.items() if key != 'teamId'})
-    project = ctx.project_store.get_project(definition['projectId'])
+    request_id, goal = _body({key: value for key, value in _request_body.items() if key not in {'teamId', 'projectId'}})
+    project_id = definition.get('projectId') or _request_body.get('projectId')
+    if not isinstance(project_id, str) or names_no_uuid_row(ctx.workflow_store.engine, project_id):
+        raise HTTPException(400, 'workflow_project_required')
+    if definition.get('projectId') and _request_body.get('projectId', project_id) != project_id:
+        raise HTTPException(409, 'team_workflow_project_mismatch')
+    project = ctx.project_store.get_project(project_id)
     if not project or project.get('ownerUserId') != owner:
         raise HTTPException(403, 'workflow_project_owner_required')
     identity = json.dumps(['relay.workflow.v2', owner, workflow_id, request_id])
@@ -44,15 +49,15 @@ def start_workflow(workflow_id: str, request: Request, ctx: AppContextDep, *, _r
             except KeyError:
                 existing = None
             if existing:
-                if existing.get('ownerUserId') != owner or existing.get('teamId') != team_id or existing.get('taskGoal') != goal:
+                if existing.get('ownerUserId') != owner or existing.get('teamId') != team_id or existing.get('projectId') != project_id or existing.get('taskGoal') != goal:
                     raise ValueError('workflow_request_conflict')
                 if existing['workflowRuns'][0]['status'] == 'ready' and existing['status'] not in ('completed', 'failed', 'cancelled'):
                     return ctx.registry.admit_workflow_first_step(session_id)
                 return existing
             team = ctx.team_store.get_team(team_id) if team_id else None
-            if team_id and (not team or workflow_id not in {item['id'] for item in team.get('workflows', [])}):
+            if team_id and not team:
                 raise ValueError('workflow_team_unavailable')
-            snapshot = validate_project_workflow(ctx, definition, team)
+            snapshot = validate_project_workflow(ctx, definition, team, project_id=project_id)
             node = current_project_node(ctx, project)
             if not node:
                 raise ValueError('workflow_computer_unavailable')
