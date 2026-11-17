@@ -160,3 +160,31 @@ Rollout requires migration 0129 before serving this version. An empty database
 can downgrade; once Workflow records exist, downgrade refuses rather than losing
 Project-only definitions. Existing run snapshots and execution reservations are
 preserved. Use a forward fix after rollout.
+
+## Team and Project ownership scopes — 2026-11-17
+
+ADR-026 revises Project-only authoring: Team creation requires no Project and
+persists `ownerTeamId`; Project creation retains `projectId`. Migration 0130
+checks that exactly one owner is present. Existing Project definitions retain
+their ownership, including those created through legacy Team routes.
+
+Scope regression tests cover Team creation without a Project, reuse in two
+Projects, global Team defaults, Automation assignment, explicit Project selection
+on direct starts, refusal by another Team, and Project definitions usable by an
+eligible Team without a link. Run snapshots bind the selected execution Project
+without modifying the reusable Team definition.
+
+- Backend suite: **4,814 passed, 34 skipped**, including PostgreSQL migrations
+  and real daemon execution. Targeted ownership API tests passed again after
+  adding the direct-start assertion.
+- React: **1,315 passed** across 200 files. Built web tests: **2,177 passed**.
+- Browser suite: **17 passed**, including zero-Project Team creation on desktop
+  and phone. Captures wait for the editor's closing animation to finish.
+- Production export, TypeScript compilation, mypy, Ruff, ESLint and design scan
+  passed (ESLint retains three existing warnings). No dependencies changed.
+
+A Project is still selected for execution, as requested. Team-owned workflows
+require their owning Team and compatible Project participants. Project-owned
+workflows remain available to that Project's Tasks and Automations; assigning
+or using one never transfers its ownership. Migration 0130 refuses downgrade
+while Team-owned definitions exist.

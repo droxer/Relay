@@ -56,7 +56,7 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
       if (method === "POST") {
         const input = route.request().postDataJSON(); workflowWrites.push(input);
         const workflow = { ...input, ownerUserId: "alice", id: "wf_ship", createdAt: stamp, updatedAt: stamp };
-        workflows.push(workflow); body = { workflow };
+        workflows.push(workflow); if (input.ownerTeamId) linked.add(workflow.id); body = { workflow };
       } else body = { workflows: workflows.filter(workflow => !new URL(route.request().url()).searchParams.get("projectId") || workflow.projectId === new URL(route.request().url()).searchParams.get("projectId")) };
     }
     const link = path.match(/\/teams\/delivery\/workflows\/([^/]+)\/link$/);
@@ -141,8 +141,8 @@ test("a team with no eligible project explains how to make a custom workflow", a
   await page.goto("/teams/delivery");
   const library = page.getByRole("region", { name: /^Workflows/ });
   await expect(library.locator(".workflow-team-row")).toHaveCount(3);
-  await expect(library.getByRole("button", { name: "New workflow" })).toHaveCount(0);
-  await expect(library).toContainText("Create a Workflow in a Project");
+  await expect(library.getByRole("button", { name: "New workflow" })).toBeEnabled();
+  await expect(library).toContainText("Create a workflow for this Team");
 });
 
 test("task workflow can be chosen and cleared to inherit the team default", async ({ page }) => {
@@ -284,3 +284,26 @@ test("a Project Task selects an independent workflow with no Teams", async ({ pa
   await expect(page.getByRole("button", { name: "Save task", exact: true })).toHaveCount(0);
   await expect(page.locator(".record-definition").getByText("Release", { exact: true })).toBeVisible();
 });
+
+
+for (const mobile of [false, true]) {
+  test(`Team workflow creation needs no Project (${mobile ? "phone" : "desktop"})`, async ({ page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    const { workflowWrites } = await fixture(page, false, "light", 0);
+    await page.goto("/teams/delivery");
+    await page.getByRole("button", { name: "New workflow", exact: true }).click();
+    const drawer = page.getByRole("dialog", { name: "New workflow" });
+    await expect(drawer.getByRole("combobox", { name: "Project", exact: true })).toHaveCount(0);
+    await drawer.getByLabel("Workflow name", { exact: true }).fill("Team delivery");
+    await drawer.getByLabel("Step name", { exact: true }).fill("Build");
+    await drawer.getByLabel("Instructions", { exact: true }).fill("Build the change");
+    await drawer.getByLabel(/^Acceptance criteria/).fill("Tests pass");
+    await drawer.getByRole("button", { name: "Save workflow", exact: true }).click();
+    await expect.poll(() => workflowWrites.at(-1)?.ownerTeamId).toBe("delivery");
+    expect(workflowWrites.at(-1)?.projectId).toBeNull();
+    await expect(page.getByRole("region", { name: /^Workflows/ })).toContainText("Team-owned");
+    await expect(drawer).toHaveCount(0);
+    await page.locator(".workflow-team-row").filter({ hasText: "Team delivery" }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/team-owned-workflow-${mobile ? "phone" : "desktop"}.png`, fullPage: true });
+  });
+}

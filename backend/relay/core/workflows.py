@@ -1,4 +1,4 @@
-"""Workflow child entities, committed atomically with their owning Team."""
+"""Workflow definitions owned by a Team or Project."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -8,7 +8,7 @@ from .ids import new_database_id, now_iso
 from .team_workflows import workflow_fields
 from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style
 
-FIELDS = frozenset({'name', 'projectId', 'workflowSteps', 'enabled'})
+FIELDS = frozenset({'name', 'projectId', 'ownerTeamId', 'workflowSteps', 'enabled'})
 
 
 def team_workflows(team: dict[str, Any]) -> list[dict[str, Any]]:
@@ -59,6 +59,7 @@ def workflow_execution_snapshot(team: dict[str, Any], workflow_id: str) -> dict[
     return {
         **{key: deepcopy(value) for key, value in team.items()
            if key not in {'workflows', 'workflowSteps', 'projectId', 'collaborationStyle', 'humanApproval', 'memberConfigs'}},
+        **({'ownerTeamId': workflow['ownerTeamId']} if workflow.get('ownerTeamId') else {}),
         'workflowId': workflow['id'], 'workflowKind': 'steps', 'workflowVersion': workflow['updatedAt'],
         'name': workflow['name'], 'projectId': workflow['projectId'],
         'workflowSteps': deepcopy(workflow['workflowSteps']), 'memberAgentIds': members,
@@ -93,8 +94,17 @@ def project_workflow_definition(owner: str, payload: dict[str, Any], *, current:
     if not isinstance(steps, list):
         raise ValueError('workflowSteps must contain 1 to 64 steps.')
     members = list(dict.fromkeys(step.get('agentId') for step in steps if isinstance(step, dict) and isinstance(step.get('agentId'), str)))
-    fields = workflow_fields({'projectId': merged.get('projectId'), 'workflowSteps': merged.get('workflowSteps'),
-                              'memberAgentIds': members}, current=current)
+    project_id = merged.get('projectId')
+    owner_team = merged.get('ownerTeamId')
+    if bool(project_id) == bool(owner_team):
+        raise ValueError('workflow_owner_scope_required')
+    fields = workflow_fields({'projectId': project_id or owner_team, 'workflowSteps': steps,
+                              'memberAgentIds': members})
+    fields['projectId'] = project_id
+    if owner_team:
+        fields['ownerTeamId'] = owner_team
+    if current and (current.get('projectId') != project_id or current.get('ownerTeamId') != owner_team):
+        raise ValueError('team_workflow_project_immutable')
     name = merged.get('name')
     if not isinstance(name, str) or not name.strip() or len(name.strip()) > 200:
         raise ValueError('workflow_name_required')
@@ -114,7 +124,7 @@ def project_workflow_snapshot(definition: dict[str, Any], project: dict[str, Any
         raise ValueError('workflow_team_unavailable')
     return {**deepcopy(definition), 'workflowId': definition['id'], 'workflowKind': 'steps',
             'workflowRecordVersion': 1, 'workflowVersion': definition['updatedAt'],
-            'teamId': team['id'] if team else None, 'computerId': project['computerId'],
+            'teamId': team['id'] if team else None, 'projectId': project['id'], 'computerId': project['computerId'],
             'memberAgentIds': members}
 
 

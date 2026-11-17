@@ -141,13 +141,15 @@ Thread may address a Team only when the Team lives on the Thread's Computer.
 _Avoid_: Cross-node team, shared-path team
 
 **Workflow**:
-A reusable process. A **Custom Workflow** belongs to one Project and defines
+A reusable process. A **Custom Workflow** belongs to exactly one Team or Project and defines
 ordered steps, each with an Agent, instructions, acceptance criteria, and an
-optional approval gate. The Project owner manages its definition. Its step
-Agents must be enabled in the Project and placed on the Project's Computer.
-A Custom Workflow can run independently or be assigned to eligible Teams;
-assignment references the same definition and requires every step Agent to
-belong to the Team. Removing a Team or its assignment preserves the Workflow.
+optional approval gate. The owner manages it where it was created. A Team-owned Workflow is available
+to Tasks and Automations assigned to that Team, across compatible Projects.
+A Project-owned Workflow is available to Tasks and Automations in that Project,
+with an optional eligible Team. Using a Workflow never transfers its ownership.
+A Project is selected for execution; its enabled Agents and Computer constrain
+the actual participants. Team-owned steps also require membership in their Team.
+Removing a Team's reference to a Project Workflow preserves that definition.
 A **Predefined Workflow** assigns work by Team roles: Build → Review, Pipeline,
 or Lead-led. Lead-led lets the lead plan and delegate during a Run. Predefined
 Workflows require a Team.

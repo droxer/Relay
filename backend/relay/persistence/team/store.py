@@ -191,14 +191,14 @@ class DatabaseTeamStore:
         ids = list((patch.get('projectWorkflowDefaults') or {}).values()) if isinstance(patch.get('projectWorkflowDefaults'), dict) else []
         if isinstance(patch.get('defaultWorkflowId'), str) and not patch['defaultWorkflowId'].startswith('preset:'):
             ids.append(patch['defaultWorkflowId'])
-        scopes = {definition['projectId'] for workflow_id in ids
+        scopes = {definition.get('projectId') or definition.get('ownerTeamId') for workflow_id in ids
                   if (definition := self.workflow_store.get_workflow(workflow_id))}
         if {'projectId', 'workflowSteps'} & patch.keys():
             scope = patch.get('projectId') or (self.get_team(team_id) or {}).get('projectId')
             if scope:
                 scopes.add(scope)
         with ExitStack() as locks:
-            for scope in sorted(scopes):
+            for scope in sorted(scope for scope in scopes if scope):
                 locks.enter_context(resource_transaction(self.engine, f'workflows:{scope}'))
             return self._mutate(team_id, "team.updated", update_snapshot)
 
@@ -244,7 +244,13 @@ class DatabaseTeamStore:
                 updated.pop('workflowSteps', None)
             return updated, {'patch': normalized, 'team': updated}
 
-        with resource_transaction(self.engine, f'workflows:{project_id}'):
+        scopes = {project_id}
+        definition = self.workflow_store.get_workflow(workflow_id) if workflow_id else None
+        if definition and definition.get('ownerTeamId'):
+            scopes.add(definition['ownerTeamId'])
+        with ExitStack() as locks:
+            for scope in sorted(scopes):
+                locks.enter_context(resource_transaction(self.engine, f'workflows:{scope}'))
             return self._mutate(team_id, 'team.updated', update_default)
 
     def remove_member(self, team_id: str, agent_id: str) -> dict[str, Any]:
@@ -296,10 +302,12 @@ class DatabaseTeamStore:
         definition = self.workflow_store.get_workflow(workflow_id)
         if not definition:
             raise ValueError('workflow_not_found')
-        with resource_transaction(self.engine, f"workflows:{definition['projectId']}"):
+        with resource_transaction(self.engine, f"workflows:{definition.get('projectId') or definition.get('ownerTeamId')}"):
             if not self.workflow_store.get_workflow(workflow_id):
                 raise ValueError('workflow_not_found')
             current = self._active_team(team_id)
+            if definition.get('ownerTeamId') and definition['ownerTeamId'] != team_id:
+                raise ValueError('workflow_team_required')
             if definition['ownerUserId'] != current['ownerUserId']:
                 raise ValueError('workflow_owner_required')
             if linked:
@@ -606,7 +614,7 @@ def _normalize_team_patch(
             raise ValueError('workflow_defaults_invalid')
         for project_id, workflow_id in defaults.items():
             definition = next((item for item in team_workflows(current) if item['id'] == workflow_id), None)
-            if not definition or definition['projectId'] != project_id or not definition['enabled']:
+            if not definition or definition.get('projectId') not in (None, project_id) or not definition['enabled']:
                 raise ValueError('workflow_defaults_invalid')
             validate_default_workflow({**current, **normalized}, workflow_id)
         normalized['projectWorkflowDefaults'] = dict(defaults)

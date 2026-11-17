@@ -3808,12 +3808,12 @@
     "optional_assignment_hint": "選擇已儲存的流程，直接由專案代理執行，也可視需要加入團隊。",
     "project_default_agents": "使用專案代理",
     "open_projects": "開啟專案",
-    "assign_hint": "在此電腦的專案中建立工作流程，步驟使用此團隊的代理，然後在這裡關聯。",
+    "assign_hint": "為此團隊建立工作流程，或指派現有專案工作流程。",
     "unassign": "取消關聯",
     "set_project_default": "在專案中預設使用",
     "clear_project_default": "清除專案預設",
     "project_default": "專案預設",
-    "team_reference_hint": "讓此團隊使用專案工作流程。取消關聯後，定義和歷史執行仍保留在專案中。",
+    "team_reference_hint": "團隊工作流程屬於此團隊；專案工作流程保留專案範圍。",
     "assign_workflow": "關聯工作流程",
     "manage_agents": "管理代理",
     "project_agents_needed": "建立工作流程前，請先加入已啟用的專案代理。",
@@ -3874,7 +3874,7 @@
     "step_count_other": "{{count}} 步",
     "create_title": "新建工作流",
     "edit_title": "編輯工作流",
-    "editor_lede": "定義專案流程：為每個步驟指定代理、指令和驗收標準。在需要人工決定時加入核准。",
+    "editor_lede": "為每個步驟設定智慧體、指令和驗收標準，並依需要加入審核。",
     "team_name": "工作流名称",
     "steps": "步驟",
     "step_label": "第 {{index}} 步",
@@ -3959,6 +3959,9 @@
     "project_unavailable": "專案不可用",
     "open_project": "開啟專案",
     "library_hint": "預定義工作流程依團隊角色分配工作。建立自訂工作流程來定義你自己的步驟，然後將其設為預設或依任務選擇。",
-    "create_needs_project": "要建立自訂工作流程，請先將此團隊的智慧體加入你在團隊所在電腦上的某個專案。"
+    "create_needs_project": "要建立自訂工作流程，請先將此團隊的智慧體加入你在團隊所在電腦上的某個專案。",
+    "team_owned": "團隊所有",
+    "project_owned": "專案所有",
+    "clear_default": "清除預設"
   }
 }

@@ -32,7 +32,8 @@ import { WorkflowStepCard } from "./WorkflowStepCard";
 
 type Props = {
   open: boolean;
-  project: ProjectRecord;
+  project?: ProjectRecord;
+  team?: AgentTeam;
   /** Optional Project choices for a new Workflow; `project`
    *  is the first choice. Absent, the Workflow stays in `project`. */
   projects?: ProjectRecord[];
@@ -52,17 +53,17 @@ export function WorkflowEditor(props: Props) {
   return <WorkflowEditorBody key={`${props.workflow?.id ?? "new"}:${opening.generation}`} {...props} />;
 }
 
-function WorkflowEditorBody({ open, project: initialProject, projects, workflow, teams, agents, onClose }: Props) {
+function WorkflowEditorBody({ open, project: initialProject, team, projects, workflow, teams, agents, onClose }: Props) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const invalidate = useInvalidateWorkflows();
-  const [projectId, setProjectId] = useState(initialProject.id);
+  const [projectId, setProjectId] = useState(initialProject?.id ?? "");
   const project = projects?.find(item => item.id === projectId) ?? initialProject;
   const pickProject = !workflow && (projects?.length ?? 0) > 1;
   const saveMutation = useMutation({ mutationFn: (input: Parameters<typeof saveWorkflow>[0]) => saveWorkflow(input, workflow?.id), onSuccess: invalidate });
   const deleteMutation = useMutation({ mutationFn: () => deleteWorkflow(workflow!.id), onSuccess: invalidate });
   const [failure, setFailure] = useState<string | null>(null);
-  const allowedAgentIds = useMemo(() => enabledProjectAgentIds(project), [project]);
+  const allowedAgentIds = useMemo(() => (team ? team.memberAgentIds : project ? enabledProjectAgentIds(project) : []), [project, team]);
   const stepAgents = useMemo(() => {
     const allowed = new Set(allowedAgentIds);
     return agents.filter((agent) => allowed.has(agent.id) && agent.enabled && !agent.deletedAt);
@@ -71,7 +72,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
   // names it and adds the rest.
   const [saved] = useState<WorkflowTeamDraft>(() => workflow
     ? draftFromTeam(workflow)
-    : { name: "", steps: [emptyWorkflowStep([], stepAgents.find(agent => agent.id === project.leadAgentId)?.id ?? stepAgents[0]?.id ?? "")] });
+    : { name: "", steps: [emptyWorkflowStep([], stepAgents.find(agent => agent.id === (team?.leadAgentId ?? project?.leadAgentId))?.id ?? stepAgents[0]?.id ?? "")] });
   const [draft, setDraft] = useState<WorkflowTeamDraft>(saved);
   const [errors, setErrors] = useState<WorkflowDraftErrors | null>(null);
   const [submitted, setSubmitted] = useState(false);
@@ -131,9 +132,9 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
       else listRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
       return;
     }
-    const input = workflowInput(draft, project.id, workflow?.enabled ?? true);
+    const input = workflowInput(draft, project?.id ?? "", workflow?.enabled ?? true);
     try {
-      await saveMutation.mutateAsync(input);
+      await saveMutation.mutateAsync(team ? { ...input, projectId: null, ownerTeamId: team.id } : input);
       onClose();
     } catch (error) {
       setFailure(error instanceof Error ? error.message : String(error));
@@ -161,7 +162,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={project.name}
+      kicker={team?.name ?? project?.name}
       title={workflow ? t("workflow.edit_title") : t("workflow.create_title")}
       subtitle={workflow?.name}
       width="task"
@@ -180,7 +181,7 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
             // Scope changes never silently change the person responsible.
             setErrors(judge(draft, allowed));
           }}>
-            <SelectTrigger className="w-full" aria-label={t("workflow.project")}><SelectValue>{project.name}</SelectValue></SelectTrigger>
+            <SelectTrigger className="w-full" aria-label={t("workflow.project")}><SelectValue>{project?.name}</SelectValue></SelectTrigger>
             <SelectContent>{projects!.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
           </Select>
         </Field> : null}
@@ -242,9 +243,9 @@ function WorkflowEditorBody({ open, project: initialProject, projects, workflow,
         {workflow ? (
           <div className="adm-drawer-section">
             <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
-            {teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId] === workflow.id) ? <p className="workflow-editor-note">{t("workflow.default_in_use")}</p> : null}
+            {teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id) ? <p className="workflow-editor-note">{t("workflow.default_in_use")}</p> : null}
             <div className="adm-drawer-section-actions">
-              <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy || teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId] === workflow.id)}>
+              <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy || teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id)}>
                 <AdminDelete size={ICON.sm} aria-hidden="true" />
                 {t("workflow.delete")}
               </Button>

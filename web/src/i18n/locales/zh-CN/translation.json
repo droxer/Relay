@@ -3808,12 +3808,12 @@
     "optional_assignment_hint": "选择已保存的流程，直接由项目智能体执行，也可按需添加团队。",
     "project_default_agents": "使用项目智能体",
     "open_projects": "打开项目",
-    "assign_hint": "在此电脑的项目中创建工作流，步骤使用此团队的智能体，然后在这里关联。",
+    "assign_hint": "为此团队创建工作流，或分配现有项目工作流。",
     "unassign": "取消关联",
     "set_project_default": "在项目中默认使用",
     "clear_project_default": "清除项目默认",
     "project_default": "项目默认",
-    "team_reference_hint": "让此团队使用项目工作流。取消关联后，定义和历史运行仍保留在项目中。",
+    "team_reference_hint": "团队工作流属于此团队；项目工作流保留项目范围。",
     "assign_workflow": "关联工作流",
     "manage_agents": "管理智能体",
     "project_agents_needed": "创建工作流前，请先添加已启用的项目智能体。",
@@ -3874,7 +3874,7 @@
     "step_count_other": "{{count}} 步",
     "create_title": "新建工作流",
     "edit_title": "编辑工作流",
-    "editor_lede": "定义项目流程：为每个步骤指定智能体、指令和验收标准。在需要人工决定时添加审批。",
+    "editor_lede": "为每个步骤设置智能体、指令和验收标准，并按需添加审批。",
     "team_name": "工作流名称",
     "steps": "步骤",
     "step_label": "第 {{index}} 步",
@@ -3959,6 +3959,9 @@
     "project_unavailable": "项目不可用",
     "open_project": "打开项目",
     "library_hint": "预定义工作流按团队角色分配工作。创建自定义工作流来定义你自己的步骤，然后将其设为默认或按任务选择。",
-    "create_needs_project": "要创建自定义工作流，请先将该团队的智能体加入你在团队所在计算机上的某个项目。"
+    "create_needs_project": "要创建自定义工作流，请先将该团队的智能体加入你在团队所在计算机上的某个项目。",
+    "team_owned": "团队所有",
+    "project_owned": "项目所有",
+    "clear_default": "清除默认"
   }
 }

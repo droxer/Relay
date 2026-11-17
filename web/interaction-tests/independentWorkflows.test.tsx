@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkflows } from "../src/components/workflow/ProjectWorkflows";
 import { WorkflowEditor } from "../src/components/workflow/WorkflowEditor";
 import { listWorkflows, saveWorkflow, startProjectWorkflow } from "../src/api";
-import type { ProjectRecord, UserAgent, Workflow } from "../src/types";
+import type { AgentTeam, ProjectRecord, UserAgent, Workflow } from "../src/types";
 
 vi.mock("../src/api", () => ({ listWorkflows: vi.fn(), saveWorkflow: vi.fn(async () => ({})), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(async () => ({ id: "run" })) }));
 vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", useTeams: () => ({ teams: [], isSuccess: true }) }));
@@ -47,4 +47,18 @@ it("offers Project workflow creation even with an empty Team directory", async (
   mount(<ProjectWorkflows project={project} agents={agents} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
   expect(await screen.findByText("workflow.project_empty_title")).toBeTruthy();
   expect((screen.getByRole("button", { name: "workflow.create" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+
+it("creates a Team-owned definition without a Project", async () => {
+  const team = { id: "team", name: "Delivery", leadAgentId: "a", memberAgentIds: ["a"] } as AgentTeam;
+  mount(<WorkflowEditor open team={team} workflow={null} teams={[team]} agents={agents} onClose={vi.fn()} />);
+  fireEvent.change(screen.getByRole("textbox", { name: "workflow.team_name" }), { target: { value: "Team delivery" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "workflow.step_name" }), { target: { value: "Build" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "workflow.step_instructions" }), { target: { value: "Build it" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /workflow.step_criteria/ }), { target: { value: "Tests pass" } });
+  fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
+  await waitFor(() => expect(saveWorkflow).toHaveBeenCalledWith(expect.objectContaining({
+    name: "Team delivery", ownerTeamId: "team", projectId: null,
+  }), undefined));
 });

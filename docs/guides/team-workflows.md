@@ -1,10 +1,15 @@
 # Teams and Workflows
 
-A Team supplies a stable roster, lead, and Computer. A custom Workflow is a
-Project process with its own definition and lifecycle. It runs with the
-Project's Agents, with an optional Team. The Project owner manages it from
-**Project → Workflows**. Teams assign existing definitions without copying them.
-Deleting a Team or unassigning a Workflow leaves that definition in its Project.
+A Workflow belongs to the Team or Project where it was created. Create a Team
+workflow from **Team → Workflows → New workflow**, without selecting a Project.
+It is available to Tasks and Automations assigned to that Team, across compatible
+Projects. Create a Project workflow from **Project → Workflows**; it is available
+to Tasks and Automations in that Project. Usage and Team links do not transfer
+ownership. The backend enforces these scopes as well as the selectors.
+
+Team workflows retain explicit step Agents from the Team. Select a Project for
+execution (or use the Task/Automation's Project); its enabled roster and Computer
+must support those steps. A Team definition remains reusable after each run.
 
 ## Project work
 
@@ -37,7 +42,7 @@ Three predefined Workflows retain their Team role policies:
 Predefined Workflows require a Team. Selection resolves an explicit Task choice,
 then the Team's default for the Task's Project, then its predefined default, then
 the system predefined default. Existing legacy custom defaults remain readable
-until changed. A custom Workflow has one immutable Project scope; cross-Project
+until changed. A custom Workflow has one immutable Team or Project owner; cross-Project
 templates and role-based step reassignment are outside this version.
 
 ## Execution
@@ -74,10 +79,11 @@ session; service actors cannot manage or start definitions.
 | `PUT /teams/{teamId}/workflow-defaults/{projectId}` | Set the Project default with `{workflowId}`. |
 | `DELETE /teams/{teamId}/workflow-defaults/{projectId}` | Clear that Project's custom default. |
 
-Definition writes accept `name`, `projectId`, `workflowSteps`, and optional
-`enabled`. Names are case-insensitively unique for new definitions/renames in a
-Project; migration preserves existing duplicates. Project scope cannot change.
-Run requests accept a UUID `requestId`, `taskGoal`, and optional linked `teamId`.
+Definition writes accept `name`, `workflowSteps`, optional `enabled`, and exactly
+one of `projectId` or `ownerTeamId`. Team creation routes supply the Team owner. Names are case-insensitively unique for new definitions/renames in a
+Project; migration preserves existing duplicates. Owner scope cannot change.
+Run requests accept a UUID `requestId`, `taskGoal`, optional `teamId`, and a
+`projectId` for Team-owned definitions. Team-owned runs require their owning Team.
 Retrying the same request returns its original Thread; changing goal or Team
 with that request conflicts. Task/Automation records use `assignedWorkflowId`
 with optional `assignedTeamId`; an individual `assignedAgentId` conflicts.
@@ -91,7 +97,9 @@ fields remain adapters to the same canonical definitions. Team responses retain
 
 ## Migration and operations
 
-Run `make backend-migrate` before serving the new version. Migration 0129
+Run `make backend-migrate` before serving the new version. Migration 0130 adds
+Team ownership and requires exactly one Team/Project owner; existing definitions
+retain their Project ownership. Migration 0129
 extracts old nested/legacy definitions into `workflows`, with versioned
 `workflow_events` and `team_workflow_links`. It preserves IDs, Project scope,
 steps, enabled states, timestamps, and existing defaults. Team snapshots retain

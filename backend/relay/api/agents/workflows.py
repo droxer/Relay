@@ -6,9 +6,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 
 from ...persistence.sql import names_no_uuid_row
-from ...core.workflows import team_workflows, workflow_definition, workflow_execution_snapshot, workflow_catalog
+from ...core.workflows import team_workflows, project_workflow_definition, workflow_definition, workflow_execution_snapshot, workflow_catalog
 from ...security.request_auth import require_user_session
-from ...teams.workflow import validate_workflow_write
+from ...teams.workflow import validate_workflow_write, validate_team_definition
 from ..actors import chat_service_user_header
 from ..bodies import JsonBodyDep
 from ..deps import AppContextDep
@@ -42,6 +42,17 @@ def _save(team: dict[str, Any], body: dict[str, Any], ctx: AppContextDep,
     if workflow_id and current is None:
         raise HTTPException(404, 'workflow_not_found')
     try:
+        if body.get('projectId') and body.get('ownerTeamId'):
+            raise ValueError('workflow_owner_scope_required')
+        if not body.get('projectId', (current or {}).get('projectId')):
+            if body.get('ownerTeamId', team['id']) != team['id']:
+                raise ValueError('workflow_team_required')
+            payload = {**body, 'ownerTeamId': team['id'], 'projectId': None}
+            definition = project_workflow_definition(team['ownerUserId'], payload, current=current)
+            validate_team_definition(ctx, definition, team)
+            saved = ctx.workflow_store.save_workflow(team['ownerUserId'], payload, workflow_id=workflow_id)
+            ctx.team_store.link_workflow(team['id'], saved['id'])
+            return {'workflow': {**saved, 'teamId': team['id']}}
         definition = workflow_definition(team, body, current=current)
         snapshot = workflow_execution_snapshot({**team, 'workflows': [{**definition, 'enabled': True}]}, definition['id'])
         validate_workflow_write(ctx, team['ownerUserId'], snapshot)

@@ -8,8 +8,10 @@ from ..persistence.team.store import TeamValidationError
 
 
 def validate_project_workflow(ctx: Any, definition: dict[str, Any], team: dict[str, Any] | None = None,
-                              *, require_enabled: bool = True) -> dict[str, Any]:
-    project = ctx.project_store.get_project(definition['projectId'])
+                              *, require_enabled: bool = True, project_id: str | None = None) -> dict[str, Any]:
+    if definition.get('ownerTeamId') and (not team or team['id'] != definition['ownerTeamId']):
+        raise TeamValidationError('workflow_team_required')
+    project = ctx.project_store.get_project(definition.get('projectId') or project_id) if definition.get('projectId') or project_id else None
     if not project or project.get('archivedAt') or not project.get('enabled', True):
         raise TeamValidationError('team_workflow_project_disabled')
     if project.get('ownerUserId') != definition['ownerUserId']:

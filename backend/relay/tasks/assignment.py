@@ -240,12 +240,12 @@ def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | N
             raise ValueError('workflow_not_found')
         if definition['ownerUserId'] != task.get('ownerUserId'):
             raise TaskRequestError(403, 'workflow_owner_required')
-        if not task.get('projectId') or task['projectId'] != definition['projectId']:
+        if not task.get('projectId') or (definition.get('projectId') and task['projectId'] != definition['projectId']):
             raise ValueError('team_workflow_project_mismatch')
         if task.get('assignedAgentId'):
             raise ValueError('workflow_agent_conflict')
-        if team and workflow_id not in {item['id'] for item in team.get('workflows', [])}:
+        if definition.get('ownerTeamId') and (not team or team['id'] != definition['ownerTeamId']):
             raise ValueError('workflow_not_found')
-        return validate_project_workflow(ctx, definition, team)
+        return validate_project_workflow(ctx, definition, team, project_id=task.get('projectId'))
     except ValueError as error:
         raise TaskRequestError(409, str(error)) from error

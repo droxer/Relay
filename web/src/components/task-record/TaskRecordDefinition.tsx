@@ -67,7 +67,7 @@ export function TaskRecordDefinition({
   const explicitId = explicitTaskWorkflowId(task);
   // A legacy workflow Team with no selection runs its own steps (below).
   if (task.assignedTeamId && !(team && isWorkflowTeam(team) && !explicitId && !team.defaultWorkflowId)) {
-    const name = workflowName(explicitId ?? defaultWorkflowId(team, task.projectId));
+    const name = (explicitId && workflowLabel) || workflowName(explicitId ?? defaultWorkflowId(team, task.projectId));
     rows.push({ key: "workflow", label: t("workflow.select_workflow"),
       value: explicitId ? name : t("workflow.inherit_default", { name }) });
   } else if (team && isWorkflowTeam(team)) rows.push({

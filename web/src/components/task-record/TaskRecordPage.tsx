@@ -133,7 +133,7 @@ export function TaskRecordPage({
   /* The band names the assignee and the timeline names assignment targets;
      both resolve through the same directories the boards use. */
   const { teams } = useTeams(currentUser.userId);
-  const workflowQuery = useProjectWorkflows(task?.projectId, Boolean(task?.assignedWorkflowId) && !task?.assignedTeamId);
+  const workflowQuery = useProjectWorkflows(task?.projectId, Boolean(task?.assignedWorkflowId));
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const historyNames = useMemo<HistoryNameResolver>(() => ({
     teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
