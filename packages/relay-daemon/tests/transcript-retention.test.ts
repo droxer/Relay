@@ -49,3 +49,23 @@ test("a single oversized JSONL frame is omitted rather than emitting broken JSON
   capture.append(first + "\n" + JSON.stringify({ type: "tool", text: "x".repeat(10_000) }) + "\n" + last + "\n");
   verifyTranscript(capture.toString(), 1024);
 });
+
+test("plain-text capture keeps both ends without splitting emoji at the gap", () => {
+  const capture = new BoundedTextCapture(101);
+  capture.append("FIRST " + "🙂".repeat(100) + " FINAL");
+  const retained = capture.toString();
+  assert.ok(retained.length <= 101);
+  assert.match(retained, /^FIRST /);
+  assert.match(retained, / FINAL$/);
+  assert.ok(retained.isWellFormed());
+  assert.match(retained, /omitted/);
+});
+
+test("small capture budgets remain bounded even when only an omission fits", () => {
+  for (const cap of [0, 1, 24, 25, 26]) {
+    const capture = new BoundedTextCapture(cap);
+    capture.append("x".repeat(100));
+    capture.append("y".repeat(100));
+    assert.ok(capture.toString().length <= cap);
+  }
+});
