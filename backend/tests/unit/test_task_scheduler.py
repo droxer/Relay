@@ -1769,3 +1769,49 @@ def test_await_dispatch_keeps_waiting_and_reports_a_slow_backend(monkeypatch) ->
         assert scheduler_module._await_dispatch(future, "task_1") == "session"
 
     assert warnings and warnings[0]["task_id"] == "task_1"
+
+
+@pytest.mark.parametrize("policy", ["human", "automatic"])
+def test_queued_project_task_waits_for_task_completion_not_process_exit(monkeypatch, policy):
+    from relay.persistence.events import relay_task_event
+
+    monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            tasks, registry, scheduler, task = _round_scheduler_fixture(root, max_task_rounds=3)
+            tasks.update_task(task["id"], {"acceptancePolicy": policy})
+            queued = tasks.create_task({
+                "title": "Next task in the same project", "projectId": task["projectId"],
+                "assignedAgentId": task["assignedAgentId"], "assignedAgent": "codex",
+                "assigneeUserId": "alice", "ownerUserId": "alice", "status": "assigned",
+                "priority": "low",
+            })
+            assert (await scheduler.tick()).dispatched == 1
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            assert tasks.get_task(queued["id"])["status"] == "queued"
+            # A completed process with unfinished work retains its WIP slot.
+            _report_round(registry, command, "blocked")
+            assert not registry.daemon_store.list_active_runs("sbx_alice")
+            assert (await scheduler.tick()).dispatched == 0
+            assert tasks.get_task(queued["id"])["status"] == "queued"
+            assert tasks.count_wip("alice") == 1
+            # Resume the same task and report a genuinely finished outcome.
+            tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "assigned"}))
+            assert (await scheduler.tick()).dispatched == 1
+            [continuation] = registry.take_commands("sbx_alice", "node_token")
+            assert continuation["sessionId"] == command["sessionId"]
+            _report_round(registry, continuation, "done")
+            if policy == "human":
+                assert tasks.get_task(task["id"])["status"] == "review"
+                assert (await scheduler.tick()).dispatched == 0
+                assert tasks.get_task(queued["id"])["status"] == "queued"
+                tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "done"}))
+            assert tasks.get_task(task["id"])["status"] == "done"
+            assert tasks.count_wip("alice") == 0
+            assert (await scheduler.tick()).dispatched == 1
+            [next_command] = registry.take_commands("sbx_alice", "node_token")
+            assert next_command["sessionId"] == tasks.get_task(queued["id"])["linkedSessionIds"][-1]
+            assert next_command["workspaceSubpath"] == command["workspaceSubpath"]
+
+    asyncio.run(run_flow())

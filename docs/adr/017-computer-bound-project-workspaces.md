@@ -20,7 +20,7 @@ Tasks and sessions may reference `projectId`. Historical rows remain unclassifie
 
 Every project dispatch resolves the current daemon runtime for the project's stable Computer. A task with an explicit `assignedAgentId` executes only that enabled Project Agent; a task without an explicit assignee executes the enabled roster, lead first. Dispatch re-resolves every selected member placement on that Computer. The backend sends project identity and `workspaceSubpath` to the daemon, but never executes an agent itself. Daemons must advertise `project-workspaces`; older daemons fail closed.
 
-All conversations in a project resolve to the same physical project directory. Runs targeting the same directory are serialized by the daemon workspace gate, while different project directories may run concurrently. The project roster is compiled into each collaboration round, including the project revision and every member's role-specific brief.
+All conversations in a project resolve to the same physical project directory. Runs targeting the same Project directory may execute concurrently, subject to the User's concurrent task limit and Computer/Agent Runtime execution capacity. The backend does not defer them on workspace contention or another Thread's follow-up queue, and the daemon does not acquire the Project workspace gate. Each run uses separate private outcome and next-step control files. The project roster is compiled into each collaboration round, including the project revision and every member's role-specific brief.
 
 The web client exposes the hierarchy `Projects -> Project -> task conversations`, plus an `Unclassified` folder for legacy conversations. Project-room composers do not offer Computer, team, or individual-agent overrides; an explicit mention may address a Project Agent for a turn, while an unaddressed message runs the project room.
 
@@ -34,5 +34,14 @@ the agent roster must never be reused as an authorization list.
 - Moving a project to another Computer is intentionally unsupported; create a new project if the workspace boundary changes.
 - A project cannot contain agents placed on different Computers.
 - Updating a roster affects future rounds, while prior manifests retain the project revision used for auditability.
-- Project files survive across its conversations, so code must treat the physical directory—not the session ID—as the write-concurrency boundary.
+- Project files survive across conversations and are shared by concurrent Tasks. Tasks that require ordering must express prerequisites; the directory itself is not a scheduling mutex.
 - Archiving a project prevents new dispatches but does not rewrite or delete historical tasks, sessions, events, or files.
+
+## Revision — 2026-11-18
+
+The owner requested Project concurrency governed by the system's per-user Task
+limit. This replaces the original directory serialization decision, which
+prevented independent Tasks in one Project from using available capacity. Task
+WIP remains reserved through blocked and review states; only Task completion
+(automatic or human acceptance) opens room for queued work during normal flow.
+Computer process limits and same-Thread execution ordering remain enforced.

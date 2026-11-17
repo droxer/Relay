@@ -134,3 +134,31 @@ test('shutdown aborts a pending upload even after its terminal outcome is durabl
   assert.equal(aborted, true);
   await supervisor.settle();
 });
+
+
+for (const subpath of ['projects/a', 'links/repo']) {
+  test(`project runs execute concurrently in ${subpath}`, async t => {
+    const { supervisor, root } = fixture(t);
+    const started: string[] = [];
+    const waiting: unknown[] = [];
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    try {
+      for (const [id, agent] of [['a', 'codex'], ['b', 'claude']] as const) {
+        assert.equal(supervisor.accept(
+          { ...command(id, agent), workspaceLayout: 'project', workspaceSubpath: subpath },
+          join(root, subpath),
+          async () => { started.push(id); await pending; return done(id); },
+          async blocker => { waiting.push(blocker); },
+        ), 'accepted');
+      }
+      await tick();
+      assert.deepEqual(started, ['a', 'b']);
+      assert.deepEqual(waiting, []);
+      assert.equal(supervisor.accept(command('c', 'claude'), root, async () => done('c')), 'computer-capacity');
+    } finally {
+      release();
+      await supervisor.settle();
+    }
+  });
+}
