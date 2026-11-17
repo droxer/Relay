@@ -188,3 +188,100 @@ def test_custom_conversation_entry_rejects_overrides_and_nonowner_actors(monkeyp
         response = client.post('/api/v1/agent-runs', json=body)
         assert response.status_code in (400, 403, 409), response.text
         assert app.state.registry.take_commands(node['id'], 'token_node_here') == []
+
+
+def _count_outcomes(monkeypatch, store):
+    recorded = []
+    original = store.record_dispatch_outcome
+
+    def spy(task_id, state, **kwargs):
+        recorded.append((task_id, state, kwargs.get('code')))
+        return original(task_id, state, **kwargs)
+
+    monkeypatch.setattr(store, 'record_dispatch_outcome', spy)
+    return recorded
+
+
+def test_projectless_task_inheriting_a_custom_default_blocks_once(monkeypatch):
+    from relay.core.computer_identity import computer_id
+    with unified_world(monkeypatch) as (app, client, node, _, project, payload):
+        team = create_parent(client, payload)
+        response = client.post('/api/v1/tasks', json={
+            'title': 'Ad hoc', 'assignedTeamId': team['id'], 'computerId': computer_id(node),
+        })
+        assert response.status_code == 201, response.text
+        task = response.json()
+        # The default changes after the task already inherits it.
+        setup_definitions_for(client, team, project, payload)
+        app.state.task_store.update_task(task['id'], {'status': 'assigned'})
+        recorded = _count_outcomes(monkeypatch, app.state.task_store)
+        for _ in range(3):
+            tick(app)
+        current = app.state.task_store.get_task(task['id'])
+        assert current['status'] == 'blocked', current
+        assert current['dispatchOutcome']['code'] == 'team_workflow_project_mismatch'
+        assert len(recorded) <= 1, recorded
+
+
+def test_offline_workflow_computer_records_its_wait_once(monkeypatch):
+    with unified_world(monkeypatch) as (app, client, _, _, project, payload):
+        team, _workflow = setup_definitions(client, project, payload)
+        task = client.post('/api/v1/tasks', json={
+            'title': 'Deliver', 'projectId': project['id'], 'assignedTeamId': team['id'], 'status': 'assigned',
+        }).json()
+        monkeypatch.setattr('relay.tasks.workflow.project_runtime_node', lambda *_: None)
+        recorded = _count_outcomes(monkeypatch, app.state.task_store)
+        for _ in range(3):
+            tick(app)
+        current = app.state.task_store.get_task(task['id'])
+        assert current['status'] == 'assigned', current
+        assert current['dispatchOutcome'] == {
+            'state': 'queued', 'code': 'workflow_computer_unavailable', 'message': 'workflow_computer_unavailable',
+        }
+        assert len(recorded) == 1, recorded
+
+
+def setup_definitions_for(client, team, project, payload):
+    workflow = client.post(f"/api/v1/teams/{team['id']}/workflows", json={
+        'name': 'Delivery', 'projectId': project['id'], 'workflowSteps': payload['workflowSteps'],
+    }).json()['workflow']
+    response = client.patch(f"/api/v1/teams/{team['id']}", json={'defaultWorkflowId': workflow['id']})
+    assert response.status_code == 200, response.text
+    return workflow
+
+
+def test_team_thread_keeps_its_predefined_workflow_after_a_custom_default(monkeypatch):
+    with unified_world(monkeypatch) as (app, client, node, _, project, payload):
+        team = create_parent(client, payload)
+        started = client.post('/api/v1/agent-runs', json={
+            'taskGoal': 'Talk it through', 'teamId': team['id'], 'workflowId': 'preset:pipeline',
+            'idempotencyKey': str(uuid4()),
+        })
+        assert started.status_code == 202, started.text
+        session = started.json()
+        _drain_runs(client, node, session['id'])
+        setup_definitions_for(client, team, project, payload)
+        response = client.post(f"/api/v1/threads/{session['id']}/messages", json={
+            'text': 'And the follow-up', 'intent': 'accomplish', 'idempotencyKey': str(uuid4()),
+        })
+        assert response.status_code == 202, response.text
+        rounds = app.state.session_store.get_session(session['id'])['collaborationRounds']
+        assert {item['teamSnapshot']['workflowId'] for item in rounds} == {'preset:pipeline'}
+
+
+def _drain_runs(client, node, session_id):
+    """Lease and complete every queued run so the thread is idle again."""
+    headers = {'Authorization': 'Bearer token_node_here'}
+    for _ in range(8):
+        commands = client.get(f"/api/v1/daemon-nodes/{node['id']}/commands?leaseMode=explicit&leaseSeconds=10",
+                              headers=headers).json()['commands']
+        runs = [command for command in commands if command.get('runId')]
+        if not runs:
+            return
+        for command in runs:
+            response = client.post(f"/api/v1/daemon-nodes/{node['id']}/events", headers=headers, json={
+                'type': 'run.completed', 'commandId': command['id'], 'leaseId': command['leaseId'],
+                'sessionId': session_id, 'runId': command['runId'], 'agent': command['agent'],
+                'exitCode': 0, 'agentLog': 'Done.',
+            })
+            assert response.status_code == 200, response.text

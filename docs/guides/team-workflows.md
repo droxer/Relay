@@ -91,7 +91,12 @@ must stay aware of the new assignment field.
 
 `POST /agent-runs` and Thread messages accept `workflowId` for predefined
 selections. A new owner-session Team conversation with a custom selection or
-custom Team default opens that Workflow's Project Thread. The workflow run
+custom Team default opens that Workflow's Project Thread. An existing Team
+thread cannot run a custom default, so its later rounds keep the predefined
+Workflow its latest round ran. A scheduled Task that cannot run its selected
+custom Workflow (no Project, or a missing one) is blocked once rather than
+retried every tick; an offline Project Computer keeps it queued, recording that
+wait only when it changes. The workflow run
 endpoint also accepts predefined IDs. It uses the same request-key replay as
 other predefined runs. Custom conversation starts reject attachment,
 connection-grant, and assignment overrides rather than discarding them.

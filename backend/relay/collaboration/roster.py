@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..core.human_waits import QUESTION_ID_PREFIX
+from ..core.workflow_selection import default_workflow_id, predefined_style
 from ..projects.runtime import (
     ProjectDispatchError,
     project_member_ids,
@@ -22,7 +23,23 @@ from ..security.actor import Actor
 from .errors import CollaborationError
 from .intake import _PreparedRound, _mode
 from .state import ConductorState
-from .styles import LEAD_LED, resolve_collaboration_style
+from .styles import COLLABORATION_STYLES, LEAD_LED, resolve_collaboration_style
+
+
+def _thread_workflow_style(team: dict[str, Any], session: dict[str, Any] | None) -> str | None:
+    """A thread keeps its predefined Workflow once the Team default cannot run in it.
+
+    A custom default runs only in its own Project Thread, so an existing Team
+    thread continues with the style its latest round ran instead of refusing.
+    """
+    if session is None or predefined_style(default_workflow_id(team)) is not None:
+        return None
+    for round_ in reversed(session.get("collaborationRounds") or []):
+        snapshot = round_.get("teamSnapshot") or {}
+        style = snapshot.get("styleFallbackFrom") or snapshot.get("collaborationStyle")
+        if style in COLLABORATION_STYLES:
+            return str(style)
+    return None
 
 
 @dataclass(frozen=True)
@@ -157,7 +174,9 @@ class RosterMixin(ConductorState):
         team, members = self._team_for_round(round_team_id, session, actor)
         team_member_ids = {agent["id"] for agent in members}
         try:
-            workflow_style = resolve_collaboration_style(team, None, intent.style)
+            workflow_style = resolve_collaboration_style(
+                team, None, intent.style or _thread_workflow_style(team, session)
+            )
         except ValueError as error:
             raise CollaborationError(str(error), status=409) from error
         raw_assignments = team_member_assignments(
