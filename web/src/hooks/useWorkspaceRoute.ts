@@ -39,8 +39,11 @@ export function useWorkspaceRoute({ location, tasks, sessions, nodes, ready, fai
       const identity = taskComputer(task, nodes, sessions);
       const automationId = task.sourceRoutineId ?? (task.isRoutine ? task.id : null);
       const expectedRunId = task.sourceRoutineId ? task.id : null;
+      const recordRoute = automationId ? "routine" : "backlog";
+      // A project record opened from the global Tasks/Automations pages stays there.
       const correctScope = task.projectId
-        ? location.route === "projects" && task.projectId === location.projectId
+        ? (location.route === "projects" && task.projectId === location.projectId)
+          || (!location.computerId && !location.projectId && location.route === recordRoute)
         : identity === (location.computerId ?? null) && location.route === (automationId ? "routine" : "backlog");
       const correctRecord = parentId === (automationId ?? task.id) && (runId ?? null) === expectedRunId;
       if (!correctScope || !correctRecord) {
