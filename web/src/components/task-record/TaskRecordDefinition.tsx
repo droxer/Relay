@@ -3,7 +3,8 @@
 import { useTranslation } from "react-i18next";
 import { Markdown } from "../LazyMarkdown";
 import type { AgentTeam, RelayTaskListItem } from "../../types";
-import { defaultWorkflowId, predefinedStyle } from "../../lib/workflowSelection";
+import { defaultWorkflowId, explicitTaskWorkflowId } from "../../lib/workflowSelection";
+import { useWorkflowName } from "../workflow/WorkflowSelect";
 import { isWorkflowTeam } from "../../lib/workflowTeamDraft";
 import { taskAcceptancePolicy } from "../../lib/taskBoardForm";
 import { TaskTagList } from "../TaskTags";
@@ -31,9 +32,10 @@ export function TaskRecordDefinition({
   task: RelayTaskListItem;
   variant: RecordVariant;
   locale: string;
-  team?: Pick<AgentTeam, "collaborationStyle" | "workflowSteps" | "workflows" | "defaultWorkflowId">;
+  team?: Pick<AgentTeam, "id" | "projectId" | "collaborationStyle" | "workflowSteps" | "workflows" | "defaultWorkflowId">;
 }) {
   const { t } = useTranslation();
+  const workflowName = useWorkflowName(team);
 
   const rows: { key: string; label: string; value: ReactNode; meta?: boolean }[] = [
     {
@@ -60,14 +62,12 @@ export function TaskRecordDefinition({
       value: t(task.routineState === "active" ? "record.enabled_yes" : "record.enabled_no"),
     });
   }
-  const selectedId = task.assignedWorkflowId
-    ?? (task.collaborationStyle ? `preset:${task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle}` : team?.defaultWorkflowId ?? (team?.collaborationStyle ? `preset:${team.collaborationStyle === "solo" ? "build_review" : team.collaborationStyle}` : undefined));
-  const workflow = team?.workflows?.find(item => item.id === selectedId);
-  if (task.assignedTeamId && !(team && isWorkflowTeam(team) && !selectedId)) {
-    const style = predefinedStyle(selectedId ?? defaultWorkflowId());
-    const name = style ? t(`collab_style.${style}`) : workflow?.name ?? t("workflow.unavailable");
+  const explicitId = explicitTaskWorkflowId(task);
+  // A legacy workflow Team with no selection runs its own steps (below).
+  if (task.assignedTeamId && !(team && isWorkflowTeam(team) && !explicitId && !team.defaultWorkflowId)) {
+    const name = workflowName(explicitId ?? defaultWorkflowId(team));
     rows.push({ key: "workflow", label: t("workflow.select_workflow"),
-      value: task.assignedWorkflowId || task.collaborationStyle ? name : t("workflow.inherit_default", { name }) });
+      value: explicitId ? name : t("workflow.inherit_default", { name }) });
   } else if (team && isWorkflowTeam(team)) rows.push({
     key: "workflow", label: t("workflow.section_title"),
     value: t("workflow.step_count", { count: team.workflowSteps?.length ?? 0 }),

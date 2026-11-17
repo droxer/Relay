@@ -3,8 +3,18 @@
 import { useTranslation } from "react-i18next";
 import type { AgentTeam } from "../../types";
 import { defaultWorkflowId, predefinedStyle, workflowOptions } from "../../lib/workflowSelection";
-import { CollaborationStyleIcon } from "../CollaborationStyleBadge";
+import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+
+/** A Workflow's display name: a predefined one's localized name, else the
+ *  Team's custom definition, else "unavailable" for one no longer offered. */
+export function useWorkflowName(team?: Pick<AgentTeam, "workflows">): (workflowId: string) => string {
+  const { t } = useTranslation();
+  return (workflowId) => {
+    const style = predefinedStyle(workflowId);
+    return style ? t(`collab_style.${style}`) : team?.workflows?.find(item => item.id === workflowId)?.name ?? t("workflow.unavailable");
+  };
+}
 
 /** One selection contract for predefined role processes and custom steps. */
 export function WorkflowSelect({ team, value, onChange, inherit = false, predefinedOnly = false, projectId, disabled, compact, id, "aria-label": label }: {
@@ -21,10 +31,7 @@ export function WorkflowSelect({ team, value, onChange, inherit = false, predefi
 }) {
   const { t } = useTranslation();
   const options = workflowOptions(team, projectId).filter(option => !predefinedOnly || option.kind === "predefined");
-  const nameOf = (workflowId: string) => {
-    const style = predefinedStyle(workflowId);
-    return style ? t(`collab_style.${style}`) : team?.workflows?.find(item => item.id === workflowId)?.name ?? t("workflow.unavailable");
-  };
+  const nameOf = useWorkflowName(team);
   const inheritedName = nameOf(defaultWorkflowId(team));
   const selected = value ?? (inherit ? "inherit" : defaultWorkflowId(team));
   return <Select value={selected} disabled={disabled} onValueChange={next => {
@@ -39,7 +46,7 @@ export function WorkflowSelect({ team, value, onChange, inherit = false, predefi
       {inherit ? <SelectItem value="inherit">{t("workflow.inherit_default", { name: inheritedName })}</SelectItem> : null}
       {options.map(option => <SelectItem key={option.id} value={option.id} disabled={!option.enabled}>
         <span className="flex items-center gap-2">
-          {option.template ? <CollaborationStyleIcon style={option.template} /> : null}
+          {option.template ? <PredefinedWorkflowIcon style={option.template} /> : null}
           <span>{nameOf(option.id)}</span>
           <span className="text-muted-foreground">{t(option.kind === "predefined" ? "workflow.predefined" : "workflow.custom")}</span>
         </span>

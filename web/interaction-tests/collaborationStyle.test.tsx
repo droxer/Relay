@@ -1,9 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { COLLABORATION_STYLES, effectiveStyle, previewSlots, turnSlot, styleForRun, reviewCycle, reviewBudgetExhausted } from "../src/lib/collaborationStyle";
-import { CollaborationStyleSelect, CollaborationSlotPreview, CollaborationStyleCards, CollaborationStyleSummary } from "../src/components/CollaborationStyleSelect";
-import { CollaborationStyleDiagram } from "../src/components/CollaborationStyleDiagram";
-import { fireEvent } from "@testing-library/react";
+import { TeamWorkflowPreview } from "../src/components/workflow/TeamWorkflowPreview";
+import type { AgentTeam, CollaborationStyle } from "../src/types";
+import type { SlotMember } from "../src/lib/collaborationStyle";
 import { threadMessageInput, threadMessageOperationKey } from "../src/lib/messageRouting";
 import { teamMutationInput } from "../src/lib/teamForm";
 import { materializeTaskEvents } from "../../packages/relay-core/src/task-store";
@@ -12,14 +12,37 @@ import { TaskRecordDefinition } from "../src/components/task-record/TaskRecordDe
 import { MessageBlock } from "../src/components/MessageBlock";
 import { taskBoardFormsEqual } from "../src/lib/taskBoardForm";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
-import { CollaborationStyleBadge } from "../src/components/CollaborationStyleBadge";
+import { PredefinedWorkflowIcon } from "../src/components/workflow/PredefinedWorkflowIcon";
 
-it("gives every team style a labeled badge with a decorative glyph", () => {
-  const { container } = render(<>{COLLABORATION_STYLES.map((style) => <CollaborationStyleBadge key={style} style={style} />)}</>);
-  for (const style of COLLABORATION_STYLES) {
-    expect(screen.getByText(`collab_style.${style}`)).toBeTruthy();
-  }
+const team = { id: "team", workflows: [] } as unknown as AgentTeam;
+/** A predefined Workflow's role preview, rendered the way the Team page does. */
+const CollaborationSlotPreview = ({ style, ...rest }: { members: SlotMember[]; leadId?: string; style: CollaborationStyle; approval?: boolean; nameOf: (id: string) => string }) =>
+  <TeamWorkflowPreview team={team} workflowId={`preset:${style}`} {...rest} />;
+
+it("gives every predefined workflow a decorative glyph", () => {
+  const { container } = render(<>{COLLABORATION_STYLES.map((style) => <PredefinedWorkflowIcon key={style} style={style} />)}</>);
   expect(container.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(3);
+});
+
+it("states a predefined workflow by name, kind, and meaning above its role slots", () => {
+  const { container } = render(<CollaborationSlotPreview members={[{ id: "a", role: "implementer" }, { id: "b", role: "reviewer" }]} leadId="a" style="pipeline" nameOf={(id) => id} />);
+  expect(container.querySelector(".workflow-preview")?.getAttribute("data-style")).toBe("pipeline");
+  expect(screen.getByText("collab_style.pipeline")).toBeTruthy();
+  expect(screen.getByText("workflow.predefined")).toBeTruthy();
+  expect(screen.getByText("collab_style.pipeline_hint")).toBeTruthy();
+});
+
+it("states a custom workflow in the same frame, with its steps and owners", () => {
+  const custom = { ...team, workflows: [{ id: "wf", name: "Ship", projectId: "p", enabled: true,
+    workflowSteps: [{ id: "s1", name: "Build", agentId: "a" }, { id: "s2", name: "Verify", agentId: "b", requiresApproval: true }] }] } as unknown as AgentTeam;
+  const { container } = render(<TeamWorkflowPreview team={custom} workflowId="wf" members={[]} nameOf={(id) => `agent-${id}`} />);
+  expect(container.querySelector(".workflow-preview")?.getAttribute("data-kind")).toBe("steps");
+  expect(screen.getByText("Ship")).toBeTruthy();
+  expect(screen.getByText("workflow.custom")).toBeTruthy();
+  expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+    expect.stringContaining("agent-a"), expect.stringContaining("agent-b"),
+  ]);
+  expect(screen.getByText("workflow.gate_badge")).toBeTruthy();
 });
 
 it("presents the team sequence as an ordered, readable preview", () => {
@@ -54,14 +77,6 @@ it("mirrors role-based slot filling and excludes on-request specialists", () => 
   ]);
   expect(previewSlots(members.slice(0, 1), "lead", "build_review").fallbackFrom).toBe("build_review");
   expect(previewSlots([], undefined, "solo").slots).toEqual([]);
-});
-
-it("renders the current style and supports a disabled control", () => {
-  const onChange = vi.fn();
-  render(<CollaborationStyleSelect value="solo" disabled onChange={onChange} inheritLabel="Team default" aria-label="Style" />);
-  const control = screen.getByRole("combobox", { name: "Style" }) as HTMLButtonElement;
-  expect(control.disabled).toBe(true);
-  expect(control.textContent).toContain("collab_style.build_review");
 });
 
 it("explains a one-member fallback", () => {
@@ -178,6 +193,23 @@ it("serializes overrides and strips invalid message contexts", async () => {
   expect(bodies.slice(2).map((b) => b.style)).toEqual(["solo", undefined, undefined, "pipeline"]);
 });
 
+it("sends a chosen workflow by id and never beside a contradicting style alias", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (_url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  await submitThreadMessage("s", { text: "go", intent: "accomplish", workflowId: "preset:lead_led", style: "pipeline" });
+  await submitThreadMessage("s", { text: "go", intent: "discuss", workflowId: "preset:lead_led" });
+  await submitThreadMessage("s", { text: "go", intent: "accomplish", addressAgentIds: ["a"], workflowId: "preset:lead_led" });
+  await runLogicalAgents({ taskGoal: "go", teamId: "t", workflowId: "wf_custom", style: "pipeline" });
+  await runLogicalAgents({ taskGoal: "go", workflowId: "preset:pipeline" });
+  expect(bodies.map((b) => [b.workflowId, b.style])).toEqual([
+    ["preset:lead_led", undefined], [undefined, undefined], [undefined, undefined],
+    ["wf_custom", undefined], [undefined, undefined],
+  ]);
+});
+
 it("shows the task override only for team assignments", () => {
   const task = { id: "t", title: "T", description: "", assignedTeamId: "team", collaborationStyle: "solo" };
   const { rerender } = render(<TaskRecordDefinition task={task as never} variant="task" locale="en" />);
@@ -203,13 +235,6 @@ it("counts only active-round repairs and distinguishes budget exhaustion from ot
   expect(reviewBudgetExhausted({ ...session, status: "completed", workOutcome: "blocked", agentRuns: reviews } as never)).toBe(true);
 });
 
-it("names the resolved style on an inheriting trigger, with team default as a qualifier", () => {
-  render(<CollaborationStyleSelect value={null} onChange={vi.fn()} inheritLabel="Team default" inheritStyle="pipeline" aria-label="Style" />);
-  const control = screen.getByRole("combobox", { name: "Style" });
-  expect(control.textContent).toContain("collab_style.pipeline");
-  expect(control.textContent).toContain("collab_style.team_default_short");
-});
-
 it("shows the review loop and labels pipeline steps by role", () => {
   const { unmount } = render(<CollaborationSlotPreview members={[{ id: "a", role: "implementer" }, { id: "b", role: "reviewer" }]} leadId="a" style="build_review" nameOf={(id) => id} />);
   expect(screen.getByText("collab_style.loop_until_approved")).toBeTruthy();
@@ -226,28 +251,4 @@ it("names the lead's closing lead-led step for what it does", () => {
   const items = screen.getAllByRole("listitem").map((item) => item.textContent);
   expect(items[0]).toContain("collab_style.slot_lead");
   expect(items.at(-1)).toContain("collab_style.slot_lead_summary");
-});
-
-it("offers team styles as radio cards and reports the pick", () => {
-  const onChange = vi.fn();
-  render(<CollaborationStyleCards value="build_review" onChange={onChange} />);
-  const radios = screen.getAllByRole("radio");
-  expect(radios.map((radio) => radio.getAttribute("aria-label"))).toEqual(COLLABORATION_STYLES.map((style) => `collab_style.${style}`));
-  expect(radios[0].getAttribute("aria-checked")).toBe("true");
-  fireEvent.click(screen.getByRole("radio", { name: "collab_style.lead_led" }));
-  expect(onChange).toHaveBeenCalledWith("lead_led");
-});
-
-it("draws a decorative schematic per style, with the lead as the only filled node", () => {
-  const { container } = render(<>{COLLABORATION_STYLES.map((style) => <CollaborationStyleDiagram key={style} style={style} />)}</>);
-  const svgs = [...container.querySelectorAll("svg.collab-diagram")];
-  expect(svgs.map((svg) => svg.getAttribute("data-style"))).toEqual([...COLLABORATION_STYLES]);
-  expect(svgs.every((svg) => svg.getAttribute("aria-hidden") === "true")).toBe(true);
-  expect(svgs.map((svg) => svg.querySelectorAll(".collab-diagram-node-lead").length)).toEqual([0, 0, 2]);
-});
-
-it("summarizes a legacy Solo team as its normalized style", () => {
-  const { container } = render(<CollaborationStyleSummary style="solo" />);
-  expect(container.querySelector(".collab-style-summary")?.getAttribute("data-style")).toBe("build_review");
-  expect(screen.getByText("collab_style.build_review_hint")).toBeTruthy();
 });

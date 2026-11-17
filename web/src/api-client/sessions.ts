@@ -73,7 +73,10 @@ export function runLogicalAgents(input: AgentRunInput): Promise<RelaySession> {
       ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),
       ...(input.daemonNodeId ? { daemonNodeId: input.daemonNodeId } : {}),
       ...(input.teamId ? { teamId: input.teamId } : {}),
-      ...(input.teamId && input.style && !input.assignments?.length ? { style: input.style } : {}),
+      // The canonical Workflow selection; `style` is its legacy alias and
+      // goes only when no Workflow is named, so the two never contradict.
+      ...(input.teamId && input.workflowId && !input.assignments?.length ? { workflowId: input.workflowId } : {}),
+      ...(input.teamId && input.style && !input.workflowId && !input.assignments?.length ? { style: input.style } : {}),
       ...(input.projectId ? { projectId: input.projectId } : {}),
       ...(input.assignments ? { assignments: input.assignments } : {}),
       sessionId: input.sessionId,
@@ -93,7 +96,8 @@ export function submitThreadMessage(
       text: input.text,
       ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),
       intent: input.intent,
-      ...(input.style && input.intent === "accomplish" && !input.addressAgentIds?.length ? { style: input.style } : {}),
+      ...(input.workflowId && input.intent === "accomplish" && !input.addressAgentIds?.length ? { workflowId: input.workflowId } : {}),
+      ...(input.style && !input.workflowId && input.intent === "accomplish" && !input.addressAgentIds?.length ? { style: input.style } : {}),
       ...(input.addressAgentIds?.length
         ? { addressAgentIds: input.addressAgentIds }
         : input.addressTeamId

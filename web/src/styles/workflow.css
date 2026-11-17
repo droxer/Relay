@@ -199,6 +199,14 @@
   padding: var(--sp-3) var(--sp-4);
 }
 
+.workflow-team-row-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+
 .workflow-team-row + .workflow-team-row {
   border-top: var(--hairline);
 }
@@ -688,3 +696,42 @@
 .record-workflow-timeline { min-width: 0; margin-block: var(--sp-4); }
 .record-workflow-timeline .workflow-progress { position: static; max-height: none; }
 .record-workflow-timeline .workflow-timeline { max-height: none; overflow-y: visible; }
+
+/* The Team's Workflow library: predefined and custom rows share one list,
+   told apart by their tag, not by a different row shape. */
+.workflow-library-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+}
+
+.workflow-library-head > .workspace-dossier-section-title {
+  margin-bottom: 0;
+}
+
+.workflow-library-main {
+  display: grid;
+  flex: 1 1 18rem;
+  gap: var(--sp-0-5);
+  min-width: 0;
+}
+
+.workflow-library-name {
+  color: var(--ink-1);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  overflow-wrap: anywhere;
+}
+
+.workflow-library-meta {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.workflow-team-row[data-kind] {
+  align-items: center;
+}

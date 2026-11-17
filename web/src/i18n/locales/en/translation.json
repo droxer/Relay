@@ -1,15 +1,11 @@
 {
   "collab_style": {
-    "label": "Collaboration style",
     "build_review": "Build and review",
     "build_review_hint": "One member builds and another reviews, with revisions until approved.",
-    "solo": "Solo",
-    "solo_hint": "One member completes the work independently.",
     "pipeline": "Pipeline",
     "pipeline_hint": "Every member takes a turn in role order.",
     "lead_led": "Lead-led",
     "lead_led_hint": "The lead plans, delegates, and combines the results. Best for complex work.",
-    "team_default": "Team default ({{style}})",
     "slot_builder": "Builder",
     "slot_reviewer": "Reviewer",
     "slot_lead": "Lead",
@@ -18,8 +14,6 @@
     "members_skipped_one": "{{names}} won't take a turn in Build and review. Pipeline gives every member a turn.",
     "members_skipped_other": "{{names}} won't take a turn in Build and review. Pipeline gives every member a turn.",
     "specialist_builds": "No Software Engineer or Bug Fixer here, so {{name}} builds. Pipeline lets each member do their own part.",
-    "task_label": "Collaboration style",
-    "composer_label": "Collaboration style",
     "turn_builder": "Builder",
     "turn_reviewer": "Code Reviewer",
     "turn_reviewer_changes": "Code Reviewer · changes requested",
@@ -35,8 +29,6 @@
     "review_cycle": "Review round {{cycle}} of {{max}}",
     "waiting_for_you": "Review round limit reached. Waiting for your review.",
     "ran_solo": "Ran solo: no reviewer available",
-    "team_default_short": "team default",
-    "inherit_hint": "Follow the team’s setting.",
     "slot_lead_summary": "Summary",
     "loop_until_approved": "{{builder}} revises the work until {{reviewer}} approves it.",
     "slot_approval": "Approval",
@@ -2027,7 +2019,7 @@
     "tour_automations_body": "Trigger work on a schedule, from task or run events, through a webhook, or with Run now. Each run goes to its assigned agent or team and keeps its history.",
     "tour_automations_alt": "The Relay automations list with cadence and next run",
     "tour_teams_title": "Teams",
-    "tour_teams_body": "Choose Solo, Build and review, Pipeline, or Lead-led collaboration. Clear roles and handoffs show who did what.",
+    "tour_teams_body": "Give a team a workflow: Build and review, Pipeline, Lead-led, or your own steps. Clear roles and handoffs show who did what.",
     "tour_teams_alt": "A Relay team profile with members and responsibilities",
     "principles_title": "What Relay holds to",
     "principle_local_title": "Runs where your code lives",
@@ -3901,7 +3893,6 @@
     "answer_label": "Your answer",
     "answer_placeholder": "Write your answer…",
     "answer_send": "Send answer",
-
     "timeline_title": "Workflow timeline",
     "timeline_load_failed": "Could not load the workflow timeline.",
     "section_title": "Workflows",
@@ -3994,6 +3985,16 @@
       "workflow_outputs_required": "An expected output was not recorded.",
       "workflow_outputs_too_large": "The recorded outputs were too large.",
       "unknown": "The step did not finish."
-    }
+    },
+    "default_badge": "Default",
+    "unavailable": "Unavailable workflow",
+    "project": "Project",
+    "project_hint": "A custom workflow runs in one Project; its steps use that Project’s agents.",
+    "custom_meta_one": "{{count}} step · {{project}}",
+    "custom_meta_other": "{{count}} steps · {{project}}",
+    "project_unavailable": "Project unavailable",
+    "open_project": "Open project",
+    "library_hint": "Predefined workflows assign work by team role. Create a custom workflow to define your own steps, then choose it as the default or per task.",
+    "create_needs_project": "To create a custom workflow, add this team’s agents to one of your Projects on the team’s computer."
   }
 }

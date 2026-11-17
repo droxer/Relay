@@ -40,8 +40,8 @@ import { Field } from "@/components/ui/field";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CollaborationSlotPreview, CollaborationStyleSummary } from "./CollaborationStyleSelect";
-import { effectiveStyle } from "../lib/collaborationStyle";
+import { TeamWorkflowPreview } from "./workflow/TeamWorkflowPreview";
+import { TeamWorkflowLibrary } from "./workflow/TeamWorkflowLibrary";
 import { isWorkflowTeam } from "../lib/workflowTeamDraft";
 import { WorkflowStepSummary } from "./workflow/WorkflowStepSummary";
 import { WorkflowSelect } from "./workflow/WorkflowSelect";
@@ -354,10 +354,10 @@ function TeamProfile({
                   <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("workflow.default_workflow")}</h2>
                   <p className="workflow-editor-note">{t("workflow.template_hint")}</p>
                   <WorkflowSelect team={team} value={workflowId} onChange={value => { if (value) setWorkflowId(value); }} disabled={busy} aria-label={t("workflow.default_workflow")} />
-                  {style ? <CollaborationSlotPreview members={memberIds.map((id) => ({
+                  <TeamWorkflowPreview team={team} workflowId={workflowId} members={memberIds.map((id) => ({
                     id, role: memberConfigs[id]?.role ?? agents.find((a) => a.id === id)?.defaultRole,
                     onRequest: memberConfigs[id]?.participation === "on_request",
-                  }))} leadId={leadId} style={style} approval={humanApproval} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} /> : <WorkflowStepSummary steps={team.workflows?.find(item => item.id === workflowId)?.workflowSteps ?? []} agentName={id => agents.find(agent => agent.id === id)?.displayName ?? id} />}
+                  }))} leadId={leadId} approval={humanApproval} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} />
                   {style ? <div className="team-work-flags">
                     <label className="team-work-flag">
                       <Checkbox
@@ -420,29 +420,15 @@ function TeamProfile({
               {/* Same section grammar as Members: the style is part of the
                   team's document, not a loose form field under it. */}
               <h2 id="team-profile-style" className="workspace-dossier-section-title">{t("workflow.default_workflow")}</h2>
-              {predefinedStyle(defaultWorkflowId(team)) ? <CollaborationStyleSummary style={effectiveStyle(team)} /> : <>
-                <p>{team.workflows?.find(item => item.id === defaultWorkflowId(team))?.name ?? t("workflow.unavailable")}</p>
-                <WorkflowStepSummary steps={team.workflows?.find(item => item.id === defaultWorkflowId(team))?.workflowSteps ?? []}
-                  agentName={id => team.members.find(member => member.id === id)?.displayName ?? id} />
-              </>}
+              <TeamWorkflowPreview team={team} workflowId={defaultWorkflowId(team)} members={team.members.map((member) => ({
+                id: member.id, role: team.memberConfigs?.[member.id]?.role ?? member.defaultRole,
+                onRequest: team.memberConfigs?.[member.id]?.participation === "on_request",
+              }))} leadId={team.leadAgentId ?? undefined} approval={team.humanApproval === true}
+                nameOf={(id) => team.members.find((member) => member.id === id)?.displayName ?? t("project.member_unavailable")} />
             </section>}
           </form>
-          {team.workflows?.length ? (
-            <section className="collab-style-section" aria-labelledby="team-owned-workflows">
-              <h2 id="team-owned-workflows" className="workspace-dossier-section-title">
-                {t("workflow.section_title")} <span className="tnum">{team.workflows.length}</span>
-              </h2>
-              <ul className="workflow-team-list">
-                {team.workflows.map(definition => <li key={definition.id} className="workflow-team-row">
-                  <a className="record-inline-action" href={`/projects/${encodeURIComponent(definition.projectId)}?tab=members`}>
-                    {definition.name}
-                  </a>
-                  <span>{t("workflow.step_count", { count: definition.workflowSteps.length })}</span>
-                </li>)}
-              </ul>
-              <p className="workflow-editor-note">{t("workflow.edit_in_project")}</p>
-            </section>
-          ) : null}
+          {/* A legacy workflow Team is its own single Workflow (above). */}
+          {workflow ? null : <TeamWorkflowLibrary team={team} agents={agents} userId={userId} />}
         </div>
 
         <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>

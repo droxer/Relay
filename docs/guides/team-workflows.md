@@ -18,8 +18,11 @@ Team default, but Tasks must belong to its Project. Selecting a predefined
 Workflow explicitly can override that default. No incompatible selection falls
 back to ordinary Team work.
 
-Create a Team first. In a Project's Agents tab, create a Workflow, select that
-Team, and assign each step to an enabled Agent in both rosters. The Team must
+Create a Team first. Its page lists every Workflow it can run — the three
+predefined ones, then its custom ones — and marks the default. Create a custom
+Workflow there with New workflow (choosing one of your Projects where the
+Team's Agents are enabled), or from a Project's Agents tab by selecting the
+Team. Assign each step to an enabled Agent in both rosters. The Team must
 be on the Project's Computer. Saving a Custom Workflow never changes Team membership,
 leadership, the default Workflow selection, or final-turn approval settings.
 

@@ -209,6 +209,16 @@ export function workflowTeams(teams: readonly AgentTeam[], project: ProjectRecor
 }
 
 
+/** Projects where `userId` may give `team` a custom Workflow: their own
+ *  open Projects on the Team's Computer with at least one enabled Project
+ *  Agent from its roster, since every step needs an Agent in both rosters. */
+export function workflowProjects(team: AgentTeam, projects: readonly ProjectRecord[], userId: string | undefined): ProjectRecord[] {
+  if (!userId) return [];
+  return projects
+    .filter(project => project.ownerUserId === userId && !project.archivedAt && workflowTeams([team], project).length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function workflowInput(draft: WorkflowTeamDraft, projectId: string, enabled = true): WorkflowMutationInput {
   return {
     name: draft.name.trim(), projectId, enabled,
