@@ -46,7 +46,7 @@ test("a failed wait observer releases its own claim", async () => {
   });
 });
 
-test("live incomplete claims block until completed or cancelled", async () => {
+test("a live incomplete claim blocks contenders until it is withdrawn", async () => {
   await fixture(async (path, directory) => {
     mkdirSync(directory);
     const partial = join(directory, `${process.pid}-partial`);
