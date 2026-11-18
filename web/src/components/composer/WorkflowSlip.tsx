@@ -52,9 +52,10 @@ function blockText(t: Translate, block: WorkflowBlock): string {
  * menu behind a confirmation. Every answer is bound to the attempt shown
  * here; a stale one is refused by the server and the thread refreshes.
  */
-export function WorkflowSlip({ run, decide }: {
+export function WorkflowSlip({ run, decide, focusOnMount = true }: {
   run: WorkflowRun;
   decide: (kind: WorkflowDecision, binding: WorkflowAttemptBinding, answer?: string) => Promise<unknown>;
+  focusOnMount?: boolean;
 }) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
@@ -68,11 +69,12 @@ export function WorkflowSlip({ run, decide }: {
   // Focus the heading, not a verb: a stray Enter must never decide, and a
   // person mid-sentence keeps the caret.
   useEffect(() => {
+    if (!focusOnMount) return;
     headingRef.current?.scrollIntoView?.({ block: "nearest" });
     const focused = document.activeElement;
     const typing = focused instanceof Element && focused !== document.body && focused.closest(TYPING_TARGET);
     if (!typing) headingRef.current?.focus();
-  }, []);
+  }, [focusOnMount]);
 
   if (!assignment || !binding) return null;
   const position = { index: run.currentIndex + 1, total: run.assignments.length, step: workflowStepName(run, assignment) };
@@ -190,12 +192,17 @@ export function WorkflowSlip({ run, decide }: {
   );
 }
 
-/** The slip for a thread, wired to the decision route. */
-export function ThreadWorkflowSlip({ sessionId, run }: { sessionId: string; run: WorkflowRun }) {
+/** The workflow slip wired to its Thread's decision route. */
+export function ThreadWorkflowSlip({ sessionId, run, focusOnMount }: {
+  sessionId: string;
+  run: WorkflowRun;
+  focusOnMount?: boolean;
+}) {
   const { decideWorkflowMutation } = useRelayMutations();
   return (
     <WorkflowSlip
       run={run}
+      focusOnMount={focusOnMount}
       decide={(kind, binding, answer) => decideWorkflowMutation.mutateAsync({ sessionId, kind, binding, answer })}
     />
   );
