@@ -77,7 +77,7 @@ def claim(store, task):
     )
 
 
-def test_wip_admission_counts_review_waiting_and_blocked_but_not_ready(
+def test_wip_admission_counts_waiting_blocked_and_admitted_ready(
     store, monkeypatch
 ):
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
@@ -85,7 +85,7 @@ def test_wip_admission_counts_review_waiting_and_blocked_but_not_ready(
     second = store.create_task({"title": "Second", "ownerUserId": "alice"})
     claimed = claim(store, first)
     assert claimed["startedAt"]
-    for state in ["review", "waiting_for_human", "blocked", "assigned"]:
+    for state in ["waiting_for_human", "blocked", "assigned"]:
         status(store, first, state)
         with pytest.raises(ValueError, match="task_wip_limit"):
             claim(store, second)
@@ -188,25 +188,30 @@ def test_stale_manual_transition_does_not_overwrite_a_new_execution(store):
     assert store.get_task(task["id"])["status"] == "assigned"
 
 
-def test_reopening_finished_execution_requires_capacity(store, monkeypatch):
+@pytest.mark.parametrize("delivery_status", ["review", "done"])
+def test_reopening_delivered_work_requires_capacity(store, monkeypatch, delivery_status):
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
     old = store.create_task({"title": "Old"})
-    claim(store, old)
-    status(store, old, "done")
+    started = claim(store, old)["startedAt"]
+    status(store, old, delivery_status)
     active = store.create_task({"title": "Active"})
     claim(store, active)
+    if delivery_status == "review":
+        blocked = status(store, old, "blocked", reason="Missing sign-off")
+        assert blocked["workflowStage"] == "review"
+        assert store.count_wip("unowned") == 1
+        status(store, old, "review")
+    retry = relay_task_event(
+        "task.execution.claimed", old["id"], {"requestId": "reopen", "expectedRevision": 1},
+    )
     with pytest.raises(ValueError, match="task_wip_limit"):
-        store.append_event(
-            old["id"],
-            relay_task_event(
-                "task.execution.claimed",
-                old["id"],
-                {
-                    "requestId": "reopen",
-                    "expectedRevision": 1,
-                },
-            ),
-        )
+        store.append_event(old["id"], retry)
+    assert store.get_task(old["id"])["status"] == delivery_status
+    status(store, active, "done")
+    admitted = store.append_event(old["id"], retry)
+    assert admitted["startedAt"] == started
+    assert admitted["status"] == "assigned"
+    assert store.count_wip("unowned") == 1
 
 
 def test_prepared_start_cannot_overwrite_a_new_block(store):
@@ -247,11 +252,11 @@ def test_sql_wip_occupancy_matches_policy_and_scope(store):
     from relay.tasks.flow import flow_scope, is_wip
     for state in ("assigned", "queued", "running", "review", "waiting_for_human", "blocked", "done", "cancelled"):
         store.create_task({"title": state, "status": state, "ownerUserId": "alice"})
-    store.create_task({"title": "Delegated away", "status": "review", "ownerUserId": "alice", "assigneeUserId": "bob"})
-    store.create_task({"title": "Delegated to Alice", "status": "review", "ownerUserId": "bob", "assigneeUserId": "alice"})
+    store.create_task({"title": "Delegated away", "status": "running", "ownerUserId": "alice", "assigneeUserId": "bob"})
+    store.create_task({"title": "Delegated to Alice", "status": "running", "ownerUserId": "bob", "assigneeUserId": "alice"})
     store.create_task({"title": "Template", "status": "review", "ownerUserId": "alice", "isRoutine": True})
     expected = sum(is_wip(t) and flow_scope(t) == "alice" for t in store.list_tasks())
-    assert store.count_wip("alice") == expected == 4
+    assert store.count_wip("alice") == expected == 3
 
 
 def test_cancel_fences_late_execution_results_even_after_reopening(store):

@@ -5522,7 +5522,9 @@ def test_only_the_final_assignment_reports_the_round_result() -> None:
     asyncio.run(run_flow())
 
 
-def _round_result_registry(root: str, store_factory=make_daemon_store) -> tuple[Any, Any, Any]:
+def _round_result_registry(
+    root: str, store_factory=make_daemon_store, *, max_concurrent_runs: int = 1,
+) -> tuple[Any, Any, Any]:
     session_store = make_session_store(root)
     daemon_store = store_factory(root)
     task_store = make_task_store(root)
@@ -5533,6 +5535,7 @@ def _round_result_registry(root: str, store_factory=make_daemon_store) -> tuple[
             "userId": "alice",
             "token": "node_token",
             "workspacePath": "/workspace/alice",
+            "maxConcurrentRuns": max_concurrent_runs,
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
             "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", "round-result"],
@@ -7919,16 +7922,25 @@ def test_two_users_on_one_machine_do_not_supersede_each_other() -> None:
         assert not registry.get("node-bob").get("retiredAt")
 
 
-def test_wip_admission_refuses_delivery_until_review_is_accepted(monkeypatch):
+def test_wip_admission_allows_delivery_when_another_task_enters_review(monkeypatch):
     monkeypatch.setenv('RELAY_TASK_WIP_LIMIT', '1')
 
     async def run_flow():
         with TemporaryDirectory() as root:
-            sessions, tasks, registry = _round_result_registry(root)
+            sessions, tasks, registry = _round_result_registry(root, max_concurrent_runs=2)
             backend = ServerDaemonNodeBackend(registry)
             first = tasks.create_task({'title': 'First'})
             second = tasks.create_task({'title': 'Second'})
             command = await _run_task_round(registry, backend, first['id'])
+            with pytest.raises(ValueError, match='task_wip_limit'):
+                await _run_task_round(registry, backend, second['id'])
+            assert registry.take_commands('sbx_alice', 'node_token') == []
+            assert not registry.daemon_store.active_run_request_for_task(second['id'])
+            assert 'startedAt' not in tasks.get_task(second['id'])
+            assert all(
+                session['status'] != 'running' or session['id'] == command['sessionId']
+                for session in sessions.list_sessions()
+            )
             registry.handle_event('sbx_alice', {
                 'type': 'run.completed', 'commandId': command['id'],
                 'sessionId': command['sessionId'], 'runId': command['runId'],
@@ -7936,13 +7948,6 @@ def test_wip_admission_refuses_delivery_until_review_is_accepted(monkeypatch):
                 'roundResult': {'status': 'done', 'note': 'Ready for acceptance'},
             }, 'node_token')
             assert tasks.get_task(first['id'])['status'] == 'review'
-            with pytest.raises(ValueError, match='task_wip_limit'):
-                await _run_task_round(registry, backend, second['id'])
-            assert registry.take_commands('sbx_alice', 'node_token') == []
-            assert not registry.daemon_store.active_run_request_for_task(second['id'])
-            assert 'startedAt' not in tasks.get_task(second['id'])
-            assert all(session['status'] != 'running' for session in sessions.list_sessions())
-            tasks.update_task(first['id'], {'status': 'done'})
             assert (await _run_task_round(registry, backend, second['id']))['agent'] == 'codex'
 
     asyncio.run(run_flow())

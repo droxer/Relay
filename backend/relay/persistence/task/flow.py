@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from sqlalchemy import and_, or_, select, func
-from ...tasks.flow import TERMINAL_TASK_STATUSES, wip_limit
+from ...tasks.flow import WIP_EXEMPT_STATUSES, WIP_STARTED_STATUSES, wip_limit
 from ..tables.auth import users
 from ..tables.tasks import tasks
 
@@ -22,12 +22,13 @@ def wip_count_query(scope: str, *, exclude_task_id: str | None = None):
         .select_from(tasks)
         .where(
             scope_filter,
-            tasks.c.status.not_in(TERMINAL_TASK_STATUSES),
+            tasks.c.status.not_in(WIP_EXEMPT_STATUSES),
+            tasks.c.snapshot["workflowStage"].as_string().is_distinct_from("review"),
             tasks.c.is_routine.is_(False),
             tasks.c.deleted_at.is_(None),
             or_(
                 tasks.c.snapshot["startedAt"].as_string().is_not(None),
-                tasks.c.status.in_(("running", "review", "waiting_for_human")),
+                tasks.c.status.in_(WIP_STARTED_STATUSES),
             ),
         )
     )

@@ -11,8 +11,8 @@ deliverable; ending an attempt does not necessarily finish the task.
 | Ready | `status=assigned` | Selected or admitted demand waiting for an agent to start. The scheduler pulls when runtime and WIP capacity permit. |
 | Queued | `status=queued` | Waiting for WIP capacity after a start request; starts automatically when a slot opens. Does not consume WIP. |
 | In progress | `workflowStage=running` | An agent has started executing. Human waits remain on this stage until review or another queued continuation. |
-| Review | `workflowStage=review` | Work awaits acceptance by a person with access to the task. Rework returns it to the execution queue. |
-| Done | `status=done` | Accepted delivery. Frees the task's WIP slot. |
+| Review | `workflowStage=review` | Work awaits acceptance by a person with access to the task. Entering Review frees the WIP slot. Rework requires capacity again. |
+| Done | `status=done` | Accepted delivery. Automatic acceptance frees the WIP slot at this stage. |
 | Cancelled | `status=cancelled` | Abandoned work; preserves history and frees WIP after execution is safely settled. Does not count as delivered work. |
 
 The existing API status identifiers remain valid for reads; `queued` and `cancelled` are additional states. `blocked` and
@@ -69,20 +69,21 @@ not cancel admitted tasks. Scope is the task's human assignee, falling back to
 its owner; tasks with neither share an
 unowned scope. All backend replicas must use the same configured fallback limit.
 
-The WIP-admission boundary is the first accepted execution claim. It reserves a
-slot but stays in Ready until the daemon reports that an agent has started.
-Legacy event histories also recognize the first running/review/human-waiting
-transition. Unadmitted Ready and Queued inventory and routine templates do not consume WIP.
-All admitted, unfinished tasks do, including blocked work, review, and queued
-continuations. Retries use the same slot; reopening a finished task or moving WIP
-to another user requires capacity.
+The first accepted execution claim reserves a slot while the task stays in Ready.
+The daemon moves it to In progress when an agent starts. Legacy event histories
+also recognize running and human-waiting states as evidence of admission.
+Unadmitted Ready and Queued inventory and routine templates use no slot. A task
+retains its slot during blocked execution, waits for input during execution, and
+queued continuations. Entering Review releases capacity, including when acceptance
+is later put on hold. Returning a task for rework, reopening a finished task, or
+moving admitted work to another user requires capacity.
 
 A capacity preflight queues new work before allocating a thread; the final check
 remains atomic to cover concurrent starts. Manual starts, scheduled starts, and
-task-scoped thread recovery share the event store admission check. PostgreSQL serializes count-and-admit with a transaction
-advisory lock; SQLite acquires its writer lock before reading snapshots. Admission
-reads unfinished snapshots for the affected user. Execution still runs only
-through daemon commands.
+task-scoped thread recovery share the event store admission check. PostgreSQL
+serializes count-and-admit with a transaction advisory lock. SQLite acquires its
+writer lock before reading snapshots. Admission counts occupied slots from task
+snapshots for the affected user. Execution runs through daemon commands.
 
 At capacity, tasks enter `status=queued`, `workflowStage=queued`, with
 `dispatch.code=task_wip_limit` and `dispatch.state=queued`. This is a capacity wait,
@@ -120,7 +121,7 @@ An explicit display sort does not change dispatch order.
 
 The board uses event-derived `startedAt` and `finishedAt`, not `updatedAt`:
 
-- WIP: all started, unfinished tasks in the accessible task list.
+- Board WIP: all started, unfinished tasks in the accessible task list, including work awaiting acceptance.
 - Oldest work-item age: elapsed days since the oldest unfinished task started.
 - Throughput: tasks currently Done whose acceptance occurred in the last 30 days.
 - Average cycle time: elapsed time from first start through acceptance, including waits.

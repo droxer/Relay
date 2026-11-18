@@ -1810,7 +1810,7 @@
       "task_capacity_label": "併發任務上限",
       "task_capacity_short": "任務名額",
       "task_capacity_summary": "任務名額：{{count}}",
-      "task_capacity_hint": "所有專案中已開始但未完成的任務（含待驗收和受阻任務）。超出上限的任務自動排隊。預設 5，清空可恢復預設值。",
+      "task_capacity_hint": "名額跨所有專案計算。任務進入待驗收時釋出名額，執行受阻時保留名額。超出上限的任務自動排隊。清空可恢復預設值 5。",
       "task_capacity_invalid": "請輸入 1–100 的整數，或清空以使用預設值。"
     },
     "signing_in": "正在登入…",
