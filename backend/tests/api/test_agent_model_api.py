@@ -264,32 +264,28 @@ def test_registration_keeps_only_well_formed_models_of_known_runtimes(env) -> No
     assert node["agentModels"] == {"codex": ["gpt-6-luna", "gpt-5.6-terra"]}
 
 
-def test_registration_caps_each_runtimes_model_list(env) -> None:
-    app, _client = env
-    _register_node(
-        app, ["agent-model"], agentModels={"codex": [f"m-{i}" for i in range(500)]}
-    )
-
-    node = app.state.registry.get("node_a")
-
-    assert len(node["agentModels"]["codex"]) == 200
-
-
 def test_create_agent_roster_keeps_models_after_registry_reload(env) -> None:
     app, client = env
-    _register_node(app, ["agent-model", "endpoint-models"],
-                   agentModels={"codex": ["provider/fast", "provider/deep"]},
-                   customModelEndpoints=["codex"],
-                   agentDefaultModels={"codex": "provider/fast"})
+    models = {
+        kind: [f"{kind}/model-{i}" for i in range(500)]
+        for kind in ("claude", "codex", "pi", "opencode")
+    }
+    _register_node(
+        app,
+        ["agent-model", "endpoint-models"],
+        agentModels=models,
+        customModelEndpoints=["codex"],
+        agentDefaultModels={"codex": "codex/model-0"},
+    )
     # A restarted backend or another replica rebuilds its roster from storage.
     app.state.registry.sandboxes["node_a"] = app.state.registry.daemon_store.get_node("node_a")
     _login_alice(client)
     response = client.get("/api/v1/daemon-nodes")
     assert response.status_code == 200
     node = next(node for node in response.json()["nodes"] if node["id"] == "node_a")
-    assert node["agentModels"] == {"codex": ["provider/fast", "provider/deep"]}
+    assert node["agentModels"] == models
     assert node["customModelEndpoints"] == ["codex"]
-    assert node["agentDefaultModels"] == {"codex": "provider/fast"}
+    assert node["agentDefaultModels"] == {"codex": "codex/model-0"}
 
 
 def test_agent_offers_the_models_its_runtime_reports(env) -> None:
