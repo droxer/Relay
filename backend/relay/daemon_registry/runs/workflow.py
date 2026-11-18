@@ -1,6 +1,7 @@
 """Workflow terminal projection: durable evidence, no legacy repair policy."""
 from __future__ import annotations
 
+from contextlib import ExitStack
 from typing import Any
 
 from ...persistence.events import relay_event
@@ -69,7 +70,7 @@ class WorkflowProgressionMixin(RegistryState):
         if run["status"] == "ready":
             self._resume_workflow_admission(sid)
 
-    def _resume_workflow_admission(self, sid: str) -> None:
+    def _resume_workflow_admission(self, sid: str, *, recovery_request_id: str | None = None) -> None:
         """Resume only ledger-authorized work, never repair a failed attempt."""
         try:
             # Report ingestion may already own a transaction. A savepoint is
@@ -82,7 +83,14 @@ class WorkflowProgressionMixin(RegistryState):
                 return  # Capacity/liveness wait; no attempt has executed or failed.
             # Failed admission rolled back command publication. Persist the
             # blocker separately: recovery must not silently repair an attempt.
-            with resource_transaction(self.daemon_store.engine, f"workflow-gate:{sid}"), self.store.mutation_scope(sid):
+            with resource_transaction(self.daemon_store.engine, f"workflow-gate:{sid}"), ExitStack() as scopes:
+                try:
+                    scopes.enter_context(self.store.mutation_scope(sid))
+                except KeyError:
+                    if recovery_request_id is None:
+                        raise
+                    self._settle_prepared_request_for_missing_session(recovery_request_id)
+                    return
                 session = self.store.get_session(sid)
                 run = session["workflowRuns"][0]
                 request = self.daemon_store.get_run_request(workflow_request_id(run))

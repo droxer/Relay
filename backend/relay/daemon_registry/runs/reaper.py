@@ -22,6 +22,7 @@ from ...collaboration.models import (
 )
 from ...core.ids import new_relay_id
 from ...core.daemon_records import EXECUTION_INTERRUPTED_STATE_KEY
+from ...persistence.engine import after_store_commit
 from ...tasks.execution import request_execution_owner
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT,
@@ -336,13 +337,7 @@ class RunReaperMixin(RegistryState):
         try:
             session = self.store.get_session_header(request["sessionId"])
         except KeyError:
-            self.daemon_store.update_run_request(
-                request["id"],
-                {
-                    "status": "failed",
-                    "error": "Prepared collaboration session no longer exists.",
-                },
-            )
+            self._settle_prepared_request_for_missing_session(request["id"])
             return
         if session.get("status") in TERMINAL_SESSION_STATUSES:
             self.daemon_store.update_run_request(
@@ -358,13 +353,23 @@ class RunReaperMixin(RegistryState):
             return
         if (request.get("state") or {}).get("_relay_workflow_admission"):
             # Only the frozen ledger can authorize recovery of a successor.
-            self._resume_workflow_admission(request["sessionId"])
+            self._resume_workflow_admission(request["sessionId"], recovery_request_id=request["id"])
             return
         if prepared_round_is_durable(request, session):
             self.activate_run_request(request["id"])
             return
         if prepared_admission_expired(request, datetime.now(UTC)):
             self._expire_prepared_admission(request)
+
+    def _settle_prepared_request_for_missing_session(self, request_id: str) -> None:
+        reason = "Prepared collaboration session no longer exists."
+        settled = self.daemon_store.update_run_request_if_status(request_id, "prepared", {
+            "status": "failed", "error": reason,
+        })
+        if settled is not None:
+            after_store_commit(self.daemon_store.engine, lambda: logger.info(
+                reason, request_id=request_id, session_id=settled["sessionId"],
+            ))
 
     def _expire_prepared_admission(self, request: dict[str, Any]) -> None:
         state = {
