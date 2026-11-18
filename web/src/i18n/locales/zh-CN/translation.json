@@ -707,6 +707,7 @@
     "no_due": "无截止日期",
     "no_agent": "无智能体",
     "agent_team": "所有智能体（讨论）",
+    "assignment_reselect": "当前分配不可用，请重新选择有效的分配对象后保存。",
     "assignment_label": "分配给",
     "assign_later": "稍后分配",
     "no_executor": "暂无智能体",
@@ -3804,8 +3805,9 @@
   "tags.manager.error.tag_preview_required": "请先预览变更，再确认操作。",
   "tags.manager.error.tag_preview_stale": "关联记录已变化，请重新预览后确认。",
   "workflow": {
+    "workflows": "工作流",
     "assigned_workflow": "工作流",
-    "optional_assignment_hint": "选择已保存的流程，直接由项目智能体执行，也可按需添加团队。",
+    "optional_assignment_hint": "选择项目拥有的工作流，由项目智能体执行。",
     "project_default_agents": "使用项目智能体",
     "open_projects": "打开项目",
     "assign_hint": "为此团队创建工作流，或分配现有项目工作流。",

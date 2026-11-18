@@ -17,15 +17,19 @@ def take(registry, node):
 
 
 def task_workflow(client, project, payload, **patch):
-    team_response = client.post("/api/v1/teams", json=payload)
-    assert team_response.status_code == 201, team_response.text
-    team = team_response.json()["team"]
+    """A Project Task that names its own Project's Workflow, never a Team."""
+    created = client.post("/api/v1/workflows", json={
+        "name": "Ship by workflow", "projectId": project["id"],
+        "workflowSteps": payload["workflowSteps"],
+    })
+    assert created.status_code == 201, created.text
+    workflow = created.json()["workflow"]
     response = client.post("/api/v1/tasks", json={
         "title": "Ship by workflow", "projectId": project["id"],
-        "assignedTeamId": team["id"], **patch,
+        "assignedWorkflowId": workflow["id"], **patch,
     })
     assert response.status_code == 201, response.text
-    return response.json(), team
+    return response.json(), workflow
 
 
 def start_task(client, task):
@@ -37,7 +41,7 @@ def start_task(client, task):
 
 def test_task_workflow_gate_retry_and_completion_keep_one_execution(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
-        task, team = task_workflow(client, project, payload)
+        task, workflow = task_workflow(client, project, payload)
         session = start_task(client, task)
         sid = session["id"]
         registry = app.state.registry
@@ -67,7 +71,7 @@ def test_task_workflow_gate_retry_and_completion_keep_one_execution(monkeypatch)
         assert waiting["waitingSessionId"] == sid
         assert waiting["executionOwner"] == owner
         assert take(registry, node) == []
-        assert client.patch(f"/api/v1/teams/{team['id']}", json={"workflowSteps": list(reversed(payload["workflowSteps"]))}).status_code == 200
+        assert client.patch(f"/api/v1/workflows/{workflow['id']}", json={"workflowSteps": list(reversed(payload["workflowSteps"]))}).status_code == 200
         response = client.post(url, json=decision(session, "approve"))
         assert response.status_code == 200, response.text
         deploy, = take(registry, node)
@@ -85,8 +89,11 @@ def test_task_workflow_gate_retry_and_completion_keep_one_execution(monkeypatch)
 @pytest.mark.parametrize("scope", ["standalone", "foreign"])
 def test_workflow_task_assignment_requires_matching_project(monkeypatch, scope):
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
-        team = client.post("/api/v1/teams", json=payload).json()["team"]
-        body = {"title": "Invalid scope", "assignedTeamId": team["id"]}
+        workflow = client.post("/api/v1/workflows", json={
+            "name": "Scoped delivery", "projectId": project["id"],
+            "workflowSteps": payload["workflowSteps"],
+        }).json()["workflow"]
+        body = {"title": "Invalid scope", "assignedWorkflowId": workflow["id"]}
         if scope == "foreign":
             from issue_projects import project_for_agents
             other = project_for_agents(app.state.project_store, project["ownerUserId"],
@@ -199,13 +206,14 @@ def test_task_runtime_failure_before_executing_blocks_workflow(monkeypatch):
 
 def test_disabled_saved_workflow_records_actionable_dispatch_blocker(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
-        task, team = task_workflow(client, project, payload)
-        app.state.team_store.update_team(team["id"], {"enabled": False})
+        task, workflow = task_workflow(client, project, payload)
+        disabled = client.patch(f"/api/v1/workflows/{workflow['id']}", json={"enabled": False})
+        assert disabled.status_code == 200, disabled.text
         response = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert response.status_code == 202, response.text
         assert response.json()["dispatch"]["state"] == "rejected"
         assert response.json()["task"]["status"] == "blocked"
-        assert "team_disabled" in response.json()["task"]["blockerReason"]
+        assert "workflow_disabled" in response.json()["task"]["blockerReason"]
         assert take(app.state.registry, node) == []
 
 
@@ -215,6 +223,7 @@ def test_legacy_create_session_cannot_leave_orphan_workflow_task(monkeypatch):
         before = app.state.task_store.list_tasks()
         response = client.post("/api/v1/tasks", json={"title": "Legacy session entry",
             "projectId": project["id"], "assignedTeamId": team["id"], "createSession": True})
-        assert response.status_code == 409, response.text
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"] == "project_team_assignment_forbidden"
         assert app.state.task_store.list_tasks() == before
         assert take(app.state.registry, node) == []

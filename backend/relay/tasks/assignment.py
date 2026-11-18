@@ -80,6 +80,25 @@ def team_for_assignment(
     return team
 
 
+def validate_standalone_assignment(
+    ctx: Any,
+    *,
+    assigned_agent_id: str | None,
+    assigned_team_id: str | None,
+) -> None:
+    """Ordinary Agents and Teams remain eligible regardless of Project membership.
+
+    Legacy Project Workflow Teams are not ordinary Teams and must be replaced
+    with an Agent or Team for standalone Tasks and Automations.
+    """
+    if not assigned_team_id:
+        return
+    team_store = getattr(ctx, "team_store", None)
+    team = team_store.get_team(assigned_team_id) if team_store else None
+    if team and is_workflow_team(team):
+        raise TaskRequestError(409, "standalone_team_workflow")
+
+
 def validate_project_task_assignment(
     ctx: Any,
     task: dict[str, Any],
@@ -89,6 +108,9 @@ def validate_project_task_assignment(
 ) -> None:
     project_id = task.get("projectId")
     if not project_id:
+        validate_standalone_assignment(
+            ctx, assigned_agent_id=assigned_agent_id, assigned_team_id=assigned_team_id,
+        )
         if identity := task.get("computerId"):
             validate_computer_assignment(ctx, identity, assigned_agent_id, assigned_team_id)
         return
@@ -111,11 +133,20 @@ def validate_project_assignment(
     assigned_agent_id: str | None,
     assigned_team_id: str | None,
     workflow_id: str | None = None,
+    allow_team: bool = False,
 ) -> None:
-    """A project task requires enabled roster membership and the project Computer."""
+    """A project task runs an enabled roster Agent or a Project-owned Workflow.
+
+    A Team is never a Task/Automation assignment: Team conversations, direct
+    Workflow Runs, and Team-owned Workflows are separate contracts. ``allow_team``
+    is true only for the event-trigger observation filter, whose Team
+    observation is not Task/Automation assignment.
+    """
     team = ctx.team_store.get_team(assigned_team_id) if assigned_team_id else None
     if assigned_team_id and (not team or team.get("deletedAt")):
         raise TaskRequestError(404, "Team not found.")
+    if assigned_team_id and not allow_team:
+        raise TaskRequestError(400, "project_team_assignment_forbidden")
     if workflow_id or (team and predefined_style(selected_workflow_id(team, {'projectId': project['id']})) is None):
         team = validate_task_workflow(ctx, {"assignedTeamId": assigned_team_id,
                                            "assignedWorkflowId": workflow_id,
@@ -176,6 +207,7 @@ def _validate_filter_scope(
             project,
             assigned_agent_id=filters.get("assignedAgentId"),
             assigned_team_id=filters.get("assignedTeamId"),
+            allow_team=True,
         )
 
 
@@ -240,12 +272,15 @@ def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | N
             raise ValueError('workflow_not_found')
         if definition['ownerUserId'] != task.get('ownerUserId'):
             raise TaskRequestError(403, 'workflow_owner_required')
-        if not task.get('projectId') or (definition.get('projectId') and task['projectId'] != definition['projectId']):
+        if definition.get('projectId') != task.get('projectId'):
+            # A Project Task or Automation may name only a Workflow owned by
+            # its own Project, so a team-owned or foreign definition never
+            # reaches the project runtime.
             raise ValueError('team_workflow_project_mismatch')
+        if definition.get('ownerTeamId'):
+            raise ValueError('project_workflow_owner_mismatch')
         if task.get('assignedAgentId'):
             raise ValueError('workflow_agent_conflict')
-        if definition.get('ownerTeamId') and (not team or team['id'] != definition['ownerTeamId']):
-            raise ValueError('workflow_not_found')
         return validate_project_workflow(ctx, definition, team, project_id=task.get('projectId'))
     except ValueError as error:
         raise TaskRequestError(409, str(error)) from error

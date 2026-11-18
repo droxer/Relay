@@ -20,7 +20,6 @@ export function ProjectWorkflowSelect({ workflows, value, onChange, disabled, lo
       <SelectContent>
         <SelectItem value="none">{t("workflow.project_default_agents")}</SelectItem>
         {workflows.map(workflow => <SelectItem key={workflow.id} value={workflow.id} disabled={!workflow.enabled}>{workflow.name}</SelectItem>)}
-        {value && !selected ? <SelectItem value={value} disabled>{t("workflow.unavailable")}</SelectItem> : null}
       </SelectContent>
     </Select>
     {failed ? <div role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="ghost" size="dense" onClick={onRetry}>{t("workspace.retry")}</Button></div>

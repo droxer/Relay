@@ -276,7 +276,7 @@ export function TaskRecordPage({
           </TabsContent>
         )}
         <TabsContent value="definition">
-          <TaskRecordDefinition workflowLabel={workflowQuery.data?.workflows.find(item => item.id === task.assignedWorkflowId)?.name} task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
+          <TaskRecordDefinition workflowLabel={workflowQuery.data?.workflows?.find(item => item.id === task.assignedWorkflowId)?.name} task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
           {onOpenTask ? (
             <RecordPrerequisites task={task} tasks={tasks} readOnly={readOnly} onOpenTask={onOpenTask} />
           ) : null}

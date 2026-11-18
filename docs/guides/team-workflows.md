@@ -2,8 +2,9 @@
 
 A Workflow belongs to the Team or Project where it was created. Create a Team
 workflow from **Team → Workflows → New workflow**, without selecting a Project.
-It is available to Tasks and Automations assigned to that Team, across compatible
-Projects. Create a Project workflow from **Project → Workflows**; it is available
+Run it directly with its owning Team in a Project. Standalone Tasks and Automations
+assigned to an ordinary Team use a predefined process. Create a Project workflow
+from **Project → Workflows**; it is available
 to Tasks and Automations in that Project. Usage and Team links do not transfer
 ownership. The backend enforces these scopes as well as the selectors.
 
@@ -19,10 +20,7 @@ step Agent needs an active Placement on the Project's Computer. A Project with
 no Teams can create and run a Workflow. Start run asks for the goal and defaults
 to independent execution; an eligible assigned Team can be selected optionally.
 
-Tasks and Automations can select a custom Workflow directly, with no Agent or
-Team assignment. Selecting an eligible Team is optional. Removing or changing
-that Team preserves the explicit Workflow selection. Choosing an individual
-Agent clears the Workflow. An incompatible selection blocks saving/dispatch
+Project Tasks and Automations can select a Project-owned Workflow directly, with no Agent or Team assignment. Choosing an individual Agent clears the Workflow. Standalone Tasks and Automations can select an Agent or ordinary Team regardless of Project membership. An incompatible selection blocks saving/dispatch
 instead of silently changing the process.
 
 Teams list their assigned custom Workflows with Project links and step previews.
@@ -85,8 +83,8 @@ Project; migration preserves existing duplicates. Owner scope cannot change.
 Run requests accept a UUID `requestId`, `taskGoal`, optional `teamId`, and a
 `projectId` for Team-owned definitions. Team-owned runs require their owning Team.
 Retrying the same request returns its original Thread; changing goal or Team
-with that request conflicts. Task/Automation records use `assignedWorkflowId`
-with optional `assignedTeamId`; an individual `assignedAgentId` conflicts.
+with that request conflicts. Project Task/Automation records use `assignedWorkflowId`
+without `assignedTeamId`; an individual `assignedAgentId` conflicts.
 Predefined IDs remain `preset:build_review`, `preset:pipeline`, `preset:lead_led`.
 
 The old `/teams/{teamId}/workflows` CRUD/run routes and legacy Team definition

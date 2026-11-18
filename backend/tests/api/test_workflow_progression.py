@@ -452,9 +452,13 @@ def test_workflow_question_projects_task_wait_and_clears_it(monkeypatch, exit_ki
     from relay.daemon_registry.dispatch.workflow_tasks import sync_workflow_task
 
     with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
-        team = client.post("/api/v1/teams", json=payload).json()["team"]
+        workflow = client.post("/api/v1/workflows", json={
+            "name": "Ship pipeline", "projectId": project["id"],
+            "workflowSteps": payload["workflowSteps"],
+        }).json()["workflow"]
         response = client.post("/api/v1/tasks", json={
-            "title": "Ship workflow", "projectId": project["id"], "assignedTeamId": team["id"],
+            "title": "Ship workflow", "projectId": project["id"],
+            "assignedWorkflowId": workflow["id"],
         })
         assert response.status_code == 201, response.text
         tid = response.json()["id"]

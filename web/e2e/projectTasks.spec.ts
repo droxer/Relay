@@ -395,6 +395,6 @@ test("edits a task's priority, status and due date from its row", async ({ page 
     { priority: "high" },
     { status: "assigned" },
     { dueDate: expect.stringMatching(/^\d{4}-\d{2}-15$/) },
-    { assignedAgentId: "agent-atlas", assignedTeamId: null, collaborationStyle: "" },
+    { assignedAgentId: "agent-atlas", assignedTeamId: null, assignedWorkflowId: null, collaborationStyle: "" },
   ]);
 });

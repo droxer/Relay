@@ -93,12 +93,7 @@ def test_disabled_project_is_a_transient_dispatch_failure() -> None:
     assert raised.value.permanent is False
 
 
-@pytest.mark.parametrize("task_style, expected", [
-    (None, ["lead", "builder", "reviewer"]),
-    ("pipeline", ["lead", "builder", "reviewer"]),
-    ("build_review", ["builder", "reviewer"]),
-])
-def test_project_team_task_preserves_style_and_workspace(monkeypatch, task_style, expected):
+def test_project_task_refuses_a_saved_team_assignment():
     project = _project()
     agents = {
         member["agentId"]: {
@@ -113,29 +108,24 @@ def test_project_team_task_preserves_style_and_workspace(monkeypatch, task_style
         "collaborationStyle": "pipeline",
     }
 
-    def resolve(assignments, **kwargs):
-        assert kwargs["required_node_id"] == "node"
-        assert kwargs["user_id"] == "alice"
-        return assignments
+    with pytest.raises(ProjectDispatchError) as raised:
+        resolve_project_task_assignments(
+            {"projectId": project["id"], "assignedTeamId": team["id"],
+             "ownerUserId": "alice"},
+            project_store=SimpleNamespace(get_project=lambda _: project),
+            team_store=SimpleNamespace(get_team=lambda _: team),
+            agent_store=SimpleNamespace(get_agent=agents.get),
+            placement_store=None,
+            daemon_nodes=[{
+                "id": "node", "userId": "alice", "workspaceId": "main", "online": True,
+                "status": "ready", "capabilities": ["project-workspaces"],
+            }],
+        )
 
-    monkeypatch.setattr("relay.projects.runtime.resolve_agent_assignments", resolve)
-    assignments, snapshot = resolve_project_task_assignments(
-        {"projectId": project["id"], "assignedTeamId": team["id"],
-         "ownerUserId": "alice", "collaborationStyle": task_style},
-        project_store=SimpleNamespace(get_project=lambda _: project),
-        team_store=SimpleNamespace(get_team=lambda _: team),
-        agent_store=SimpleNamespace(get_agent=agents.get),
-        placement_store=None,
-        daemon_nodes=[{
-            "id": "node", "userId": "alice", "workspaceId": "main", "online": True,
-            "status": "ready", "capabilities": ["project-workspaces"],
-        }],
-    )
-    assert [item["agentId"] for item in assignments] == expected
-    assert all(item["teamSnapshot"]["collaborationStyle"] == (task_style or "pipeline")
-               for item in assignments)
-    assert all(item["projectSnapshot"] == snapshot for item in assignments)
-    assert snapshot["projectId"] == project["id"]
+    # A saved assignment predating this rule must be reassigned: no Team runs
+    # a Project Task, and the refusal is permanent until the person acts.
+    assert raised.value.code == "project_team_assignment_forbidden"
+    assert raised.value.permanent is True
 
 
 _NODE = {

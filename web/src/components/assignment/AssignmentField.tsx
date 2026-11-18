@@ -7,10 +7,11 @@ import {
   Select,
   SelectContent,
   SelectGroup,
+  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AgentTeam, UserAgent } from "../../types";
+import type { AgentTeam, UserAgent, Workflow } from "../../types";
 import { teamAvailability } from "../../lib/taskAssignment";
 import { agentLabel } from "../../lib/plan";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
@@ -40,7 +41,7 @@ type AssignmentSelection = TaskAssignmentSelection;
 export type { AgentView, TeamView };
 export { availabilityTone, effectiveAgentAvailability };
 
-type AssignmentTab = "agents" | "teams";
+type AssignmentTab = "agents" | "teams" | "workflows";
 
 function AssignmentSummary({
   agent,
@@ -148,6 +149,8 @@ export function AssignmentSelect({
   describedBy,
   autoFocus = false,
   inline,
+  hideTeams = false,
+  workflows,
 }: {
   /** `agent:<id>`, `team:<id>`, or `NO_ASSIGNMENT`. */
   value: string;
@@ -161,15 +164,19 @@ export function AssignmentSelect({
   triggerId?: string;
   describedBy?: string;
   autoFocus?: boolean;
+  hideTeams?: boolean;
+  workflows?: Workflow[];
   /** A list row's compact trigger: the row's own assignee chip, named by
    *  `label`, instead of the drawer's full-width field. */
   inline?: { label: string; content: ReactNode };
 }) {
   const { t } = useTranslation();
-  const selectedTab: AssignmentTab = selectedTeam ? "teams" : "agents";
+  const selectedTab: AssignmentTab = value.startsWith("workflow:") && workflows ? "workflows"
+    : selectedTeam && !hideTeams ? "teams" : "agents";
   const tabs: RosterTab<AssignmentTab>[] = [
     { id: "agents", label: t("backlog.agents_section"), count: agents.length },
-    { id: "teams", label: t("backlog.teams_section"), count: teams.length },
+    ...(workflows ? [{ id: "workflows" as const, label: t("workflow.workflows"), count: workflows.length }] : []),
+    ...(!hideTeams ? [{ id: "teams" as const, label: t("backlog.teams_section"), count: teams.length }] : []),
   ];
   const roster = useRosterTabs({ tabs, activeTab: selectedTab, label: t("backlog.assignment_label") });
 
@@ -235,6 +242,8 @@ export function AssignmentSelect({
               ) : null}
               <RosterActionOption value={NAV_AGENTS} label={t("backlog.manage_agents")} icon={<NavAgents size={ICON.sm} />} />
             </>
+          ) : roster.tab === "workflows" ? (
+            <>{workflows?.map(workflow => <SelectItem key={workflow.id} value={`workflow:${workflow.id}`}>{workflow.name}</SelectItem>)}</>
           ) : (
             <>
               {teams.map((team) => (

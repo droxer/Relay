@@ -69,7 +69,7 @@ it("lets a routine be created without a project", () => {
   expect(screen.queryByText("project.required")).toBeNull();
 });
 
-it.each([false, true])("limits Project Agent and Team choices to the roster (automation: %s)", (automation) => {
+it.each([false, true])("offers Project roster Agents without Teams (automation: %s)", (automation) => {
   const on = (computerId: string) => [{ computerId, desiredState: "active" }];
   const onComputer = [{ id: "pc", name: "On computer", enabled: true, computerId: "pc-1", members: [{ agentId: "a", enabled: true }] }] as unknown as ProjectRecord[];
   function Placed() {
@@ -88,7 +88,7 @@ it.each([false, true])("limits Project Agent and Team choices to the roster (aut
       ] as any} />;
   }
   render(<QueryClientProvider client={new QueryClient()}><Placed /></QueryClientProvider>);
-  expect(screen.getByTestId("assignment-options").textContent).toBe("MemberProject team");
+  expect(screen.getByTestId("assignment-options").textContent).toBe("Member");
 });
 
 
@@ -121,7 +121,7 @@ it("can clear a legacy intake assignment without choosing another executor", () 
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", assignedAgentId: "" }));
 });
 
-it.each([false, true])("prevents incompatible inherited workflows before submission (automation: %s)", (automation) => {
+it.each([false, true])("rejects legacy Project Team assignment before submission (automation: %s)", (automation) => {
   const save = vi.fn();
   const form = { ...(automation ? emptyRoutineForm(user) : emptyBacklogForm(user)), title: "Ship", projectId: "p", assignedTeamId: "delivery" };
   const team = { id: "delivery", name: "Delivery", ownerUserId: "u", enabled: true, computerId: "c", memberAgentIds: ["a"],
@@ -132,13 +132,13 @@ it.each([false, true])("prevents incompatible inherited workflows before submiss
       logicalAgents={[{ id: "a", displayName: "Ada", placements: [{ computerId: "c", desiredState: "active" }] }] as any} teams={[team]} />
   </QueryClientProvider>;
   const { rerender } = render(view());
-  expect(screen.getByRole("alert").textContent).toContain("workflow.incompatible_project");
+  expect(screen.getByRole("alert").textContent).toContain("backlog.assignment_reselect");
   const submit = screen.getByRole("button", { name: automation ? "routine.create" : "backlog.create_task" }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
   fireEvent.submit(submit.closest("form")!);
   expect(save).not.toHaveBeenCalled();
   rerender(view("preset:pipeline"));
-  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole("alert").textContent).toContain("backlog.assignment_reselect");
   fireEvent.click(screen.getByRole("button", { name: automation ? "routine.create" : "backlog.create_task" }));
-  expect(save).toHaveBeenCalledTimes(1);
+  expect(save).not.toHaveBeenCalled();
 });

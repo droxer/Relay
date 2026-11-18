@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
 
-from issue_projects import PROJECT_CAPABILITY, project_for_team
+from issue_projects import PROJECT_CAPABILITY
 from user_ids import user_id
 
 ALICE = user_id("alice")
@@ -113,9 +113,10 @@ def _approval_team_task(client: TestClient) -> tuple[dict, dict, dict]:
     assert response.status_code == 201
     team = response.json()["team"]
     assert team["humanApproval"] is True
-    project = project_for_team(app, ALICE, team)
+    # Approval is a Team-round behavior, so this work runs standalone on the
+    # team's Computer; a Project Task may not name a Team.
     task = client.post("/api/v1/tasks", json={
-        "projectId": project["id"],
+        "computerId": computer_id(app.state.registry.get(NODE)),
         "ownerUserId": ALICE,
         "title": "Build it and check it",
         "assigneeUserId": ALICE,

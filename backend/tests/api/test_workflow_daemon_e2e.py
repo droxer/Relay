@@ -61,24 +61,24 @@ def wait_for(h, sid, index, status):
 @pytest.mark.integration
 @pytest.mark.parametrize("entry", [
     "project", "task", "independent", "independent_task",
-    "team_manual", "team_schedule", "independent_manual", "independent_schedule",
-    "owned_task", "owned_manual", "owned_schedule",
+    "independent_manual", "independent_schedule",
 ])
 def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workflow_daemon, entry):
     h = workflow_daemon
     independent = entry.startswith("independent")
-    owned = entry.startswith("owned")
     automation = entry.endswith(("_manual", "_schedule"))
-    parent = None
-    if owned:
-        parent = h.post("/teams", {"name": "Reusable delivery", "leadAgentId": h.agent["id"],
-                                    "memberAgentIds": [h.agent["id"]]}, 201)["team"]
-        workflow = h.post("/workflows", {
-            "name": "Team delivery", "ownerTeamId": parent["id"],
-            "workflowSteps": workflow_fields(h)["workflowSteps"],
-        }, 201)["workflow"]
+    if entry == "task":
+        # A Project Task names its own Project Workflow, never a Team.
+        workflow = h.post(
+            "/workflows",
+            {**workflow_fields(h), "projectId": h.project["id"]},
+            201,
+        )["workflow"]
     else:
-        workflow = h.post("/workflows", workflow_fields(h), 201)["workflow"] if independent else team(h)
+        workflow = (
+            h.post("/workflows", workflow_fields(h), 201)["workflow"]
+            if independent else team(h)
+        )
     task = None
     routine = None
     if entry == "independent":
@@ -87,13 +87,10 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
             "requestId": str(uuid4()), "taskGoal": "Exercise independent steps",
         }, 201)
         assert not session.get("teamId")
-    elif entry in ("task", "independent_task", "owned_task") or automation:
-        assignment = ({"assignedWorkflowId": workflow["id"]} if independent or owned
-                      else {"assignedTeamId": workflow["id"]})
-        if owned:
-            assignment["assignedTeamId"] = parent["id"]
+    elif entry == "task" or independent:
+        # Every Project Task here names a Workflow; none names a Team.
         task = h.post("/tasks", {"title": "Ship Task workflow", "projectId": h.project["id"],
-                                  **assignment,
+                                  "assignedWorkflowId": workflow["id"],
                                   **({"isRoutine": True, "routineState": "active",
                                       "routineTriggers": DAILY_TRIGGERS} if automation else {})}, 201)
         if automation:
@@ -122,7 +119,7 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
     assert len([item for item in h.traces() if item["kind"] == "launch"]) == 3
     assert not h.ctx.daemon_store.list_active_runs(h.node_id)
 
-    edit_path = f"/api/v1/workflows/{workflow['id']}" if independent or owned else f"/api/v1/teams/{workflow['id']}"
+    edit_path = f"/api/v1/workflows/{workflow['id']}" if independent or entry == "task" else f"/api/v1/teams/{workflow['id']}"
     edited = h.client.patch(edit_path, json={
         "workflowSteps": list(reversed(workflow["workflowSteps"])),
     })
@@ -173,11 +170,6 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
         assert rows[0]["taskId"] == task["id"]
         assert rows[0]["latestSessionId"] == sid
         assert rows[0]["triggerKind"] == ("schedule" if entry.endswith("_schedule") else "manual")
-    if owned:
-        definition = h.ctx.workflow_store.get_workflow(workflow["id"])
-        assert definition["projectId"] is None
-        assert definition["ownerTeamId"] == parent["id"]
-        assert run["workflowSnapshot"]["projectId"] == h.project["id"]
 
 
 @pytest.mark.integration

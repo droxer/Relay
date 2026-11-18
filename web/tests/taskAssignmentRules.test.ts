@@ -35,7 +35,7 @@ function task(over: Partial<RelayTaskListItem> = {}): RelayTaskListItem {
 const ids = (records: ReadonlyArray<{ id: string }>) => records.map((record) => record.id);
 
 describe("task assignment rules", () => {
-  it("offers only enabled Project Agents and teams wholly in the roster", () => {
+  it("offers only enabled Project roster Agents and no Teams", () => {
     const agents = [agent("here", "c1"), agent("away", "c2"), agent("remote-member", "c2"), agent("theirs", "c1", "someone-else")];
     const teams = [team("local", ["here"]), team("split", ["here", "away"])];
     const options = taskAssignmentOptions({ project, agents, teams, assigneeUserId: "me" });
@@ -63,17 +63,24 @@ describe("task assignment rules", () => {
       assigneeUserId: "me", assignedAgentId: "disabled", assignedTeamId: "mixed",
     });
     assert.deepEqual(ids(options.agents), ["here"]);
-    assert.deepEqual(ids(options.teams), ["valid"]);
+    assert.deepEqual(ids(options.teams), []);
   });
 
-  it("preserves standalone Computer scope and current selection", () => {
+  it("excludes stale selections outside the standalone Computer scope", () => {
     const agents = [agent("here", "c1"), agent("away", "c2")];
     const options = taskAssignmentOptions({
       computerId: "c1", agents, teams: [team("local", ["here"])],
       assigneeUserId: "me", assignedAgentId: "away",
     });
-    assert.deepEqual(ids(options.agents), ["here", "away"]);
+    assert.deepEqual(ids(options.agents), ["here"]);
     assert.deepEqual(ids(options.teams), ["local"]);
+  });
+
+  it("keeps Project members and their ordinary Teams eligible for standalone work", () => {
+    const agents = [agent("member", "c1", "me")];
+    const options = taskAssignmentOptions({ computerId: "c1", agents, teams: [team("ordinary", ["member"], "me")], assigneeUserId: "me" });
+    assert.deepEqual(ids(options.agents), ["member"]);
+    assert.deepEqual(ids(options.teams), ["ordinary"]);
   });
 
   it("edits assignment only before work starts, and never on an intake issue", () => {
@@ -84,18 +91,20 @@ describe("task assignment rules", () => {
   });
 
   it("builds the same PATCH the task drawer sends for each kind of change", () => {
+    assert.deepEqual(taskAssignmentPatch(task(), { kind: "workflow", id: "w" }),
+      { assignedAgentId: null, assignedTeamId: null, assignedWorkflowId: "w", collaborationStyle: "" });
     // The server derives the assignee from the agent's supervisor, so it is not sent.
     assert.deepEqual(taskAssignmentPatch(task({ collaborationStyle: "build_review" }), { kind: "agent", id: "a" }),
-      { assignedAgentId: "a", assignedTeamId: null, collaborationStyle: "" });
+      { assignedAgentId: "a", assignedTeamId: null, assignedWorkflowId: null, collaborationStyle: "" });
     assert.deepEqual(taskAssignmentPatch(task({ collaborationStyle: "solo" }), { kind: "team", id: "x" }),
-      { assignedAgentId: null, assignedTeamId: "x", collaborationStyle: "build_review" });
+      { assignedAgentId: null, assignedTeamId: "x", assignedWorkflowId: null, collaborationStyle: "build_review" });
     assert.deepEqual(taskAssignmentPatch(task(), { kind: "team", id: "x" }),
-      { assignedAgentId: null, assignedTeamId: "x", collaborationStyle: "" });
+      { assignedAgentId: null, assignedTeamId: "x", assignedWorkflowId: null, collaborationStyle: "" });
     // A Ready task with nobody on it is not ready: it falls back to Backlog.
     assert.deepEqual(taskAssignmentPatch(task({ status: "assigned" }), { kind: "none" }),
-      { assignedAgentId: null, assignedTeamId: null, collaborationStyle: "", status: "backlog" });
+      { assignedAgentId: null, assignedTeamId: null, assignedWorkflowId: null, collaborationStyle: "", status: "backlog" });
     assert.deepEqual(taskAssignmentPatch(task(), { kind: "none" }),
-      { assignedAgentId: null, assignedTeamId: null, collaborationStyle: "" });
+      { assignedAgentId: null, assignedTeamId: null, assignedWorkflowId: null, collaborationStyle: "" });
   });
 });
 
@@ -135,12 +144,12 @@ describe("project thread roster", () => {
 });
 
 describe("Project workflow Task options", () => {
-  it("offers a workflow only inside its own Project, even if selected elsewhere", () => {
+  it("never offers legacy Workflow Teams for Task assignment", () => {
     const agents = [agent("here", "c1")];
     const workflow = { ...team("workflow", ["here"], "me"), projectId: "p", workflowSteps: [{ id: "design" }] } as AgentTeam;
     const matching = { ...project, members: [{ agentId: "here", enabled: true }] } as ProjectRecord;
     const options = { agents, teams: [workflow], assigneeUserId: "me", assignedTeamId: "workflow" };
-    assert.deepEqual(ids(taskAssignmentOptions({ ...options, project: matching }).teams), ["workflow"]);
+    assert.deepEqual(ids(taskAssignmentOptions({ ...options, project: matching }).teams), []);
     const foreign = { ...matching, id: "other" };
     assert.deepEqual(ids(taskAssignmentOptions({ ...options, project: foreign }).teams), []);
     assert.deepEqual(ids(taskAssignmentOptions(options).teams), []);

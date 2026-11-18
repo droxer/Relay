@@ -2,7 +2,6 @@ import type { AgentTeam, UserAgent, LogicalAgentAvailability, ProjectRecord, Rel
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 import { isWorkflowTeam } from "./workflowTeamDraft.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
-import { defaultWorkflowId, workflowOptions, workflowParticipantsAllowed } from "./workflowSelection.ts";
 import type { TaskAssignmentSelection } from "./taskBoardForm.ts";
 
 /** Can this agent/team be offered for a task assigned to `assigneeUserId`?
@@ -107,9 +106,8 @@ export function teamSharesOneComputer(
 /**
  * The agents and teams a task may be given — the one rule the task drawer and
  * an inline row picker share. Project work offers only enabled roster
- * members and Teams whose full roster or a custom Workflow fits the Project.
- * Workflow selection separately checks the actual participants. Standalone
- * work keeps its Computer scope and current selection.
+ * members; Project Workflows are chosen separately. Standalone work offers
+ * ordinary Teams and Agents within its Computer scope.
  */
 export function taskAssignmentOptions({
   project,
@@ -117,9 +115,6 @@ export function taskAssignmentOptions({
   agents,
   teams,
   assigneeUserId,
-  assignedAgentId,
-  assignedTeamId,
-  allowWorkflowSelection = false,
 }: {
   project?: Pick<ProjectRecord, "computerId" | "members"> & { id?: string } | null;
   computerId?: string;
@@ -139,17 +134,11 @@ export function taskAssignmentOptions({
   const teamOnTaskComputer = (team: AgentTeam) => identity
     ? teamOnComputer(team, agents, identity)
     : !project && teamSharesOneComputer(team, agents);
-  const teamFitsProject = (team: AgentTeam) => !project
-    || team.memberAgentIds.every(id => projectMembers.has(id))
-    || Boolean(project.id && workflowOptions(team, project.id).some(option => option.kind === "steps" && option.enabled
-      && (allowWorkflowSelection || option.id === defaultWorkflowId(team, project.id))
-      && workflowParticipantsAllowed(team, option.id, [...projectMembers])));
   return {
-    agents: agents.filter((agent) => ((!project && agent.id === assignedAgentId) || agentOnTaskComputer(agent))
-      && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, agent.id === assignedAgentId)),
-    teams: teams.filter((team) => (!isWorkflowTeam(team) || (!!project?.id && team.projectId === project.id)) && ((!project && team.id === assignedTeamId) || (teamOnTaskComputer(team)
-      && teamFitsProject(team)))
-      && assignmentOptionVisible(team.ownerUserId, assigneeUserId, team.id === assignedTeamId)),
+    agents: agents.filter((agent) => agent.enabled !== false && !agent.deletedAt && agentOnTaskComputer(agent)
+      && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, false)),
+    teams: project ? [] : teams.filter((team) => !isWorkflowTeam(team) && teamOnTaskComputer(team)
+      && assignmentOptionVisible(team.ownerUserId, assigneeUserId, false)),
   };
 }
 
@@ -164,19 +153,22 @@ export type TaskAssignmentChange = TaskAssignmentSelection;
 /** The PATCH an assignment change sends — the same fields the task drawer
  *  submits. The server derives the assignee from the agent's supervisor. */
 export function taskAssignmentPatch(task: RelayTaskListItem, change: TaskAssignmentChange): TaskMutationInput {
+  if (change.kind === "workflow") return { assignedAgentId: null, assignedTeamId: null, assignedWorkflowId: change.id, collaborationStyle: "" };
   if (change.kind === "team") {
     return {
       assignedAgentId: null,
       assignedTeamId: change.id,
+      assignedWorkflowId: null,
       collaborationStyle: task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle ?? "",
     };
   }
   if (change.kind === "agent") {
-    return { assignedAgentId: change.id, assignedTeamId: null, collaborationStyle: "" };
+    return { assignedAgentId: change.id, assignedTeamId: null, assignedWorkflowId: null, collaborationStyle: "" };
   }
   return {
     assignedAgentId: null,
     assignedTeamId: null,
+    assignedWorkflowId: null,
     collaborationStyle: "",
     // A Ready task with nobody on it is not ready.
     ...((task.status === "assigned" || task.status === "queued") ? { status: "backlog" as const } : {}),

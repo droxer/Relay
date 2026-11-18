@@ -12,7 +12,7 @@ delivery, recorded results, and the Task/run ledger.
 | Computer-scoped standalone and Project Tasks run in their selected workspace and complete once | `backend/tests/api/test_task_automation_daemon_e2e.py` |
 | Run now, due schedules, and authenticated webhooks create an occurrence, execute it, and expose its Thread and terminal timestamp in the definition's ledger | Same file |
 | Occurrences retain their Automation source; the definition stays active and never acquires execution ownership | Both daemon test files |
-| Project Workflows with no Team, legacy Team selections, and reusable Team-owned Workflows execute Tasks and manual/scheduled Automation occurrences | `backend/tests/api/test_workflow_daemon_e2e.py` |
+| Project Workflows with no Team and independent-workflow Tasks and manual/scheduled Automation occurrences execute Tasks and Automation occurrences | `backend/tests/api/test_workflow_daemon_e2e.py` |
 | A missing required output blocks; owner retry and approval resume the same execution after a backend restart | Same file |
 | Editing a definition does not change the frozen step order; retries retain one Task execution owner and one linked Thread | Same file |
 | Cancellation stops the runtime without starting a successor; criteria-only steps retain evidence | Existing cases in the same file |
@@ -24,12 +24,20 @@ Runtime's output is deterministic. Schedule ticks are explicit; no background
 timer races the test. Browser journeys use API fixtures and complement, rather
 than replace, daemon delivery evidence.
 
+PR #856 narrows Project Task and Automation assignment to enabled Project
+Agents and the Project's own Workflows, so a legacy Team selection is refused
+before dispatch and must be reassigned. That boundary is covered by
+`backend/tests/api/test_project_assignment_scope.py`; the Workflow execution
+journeys here therefore cover Project Workflows and independent Project work
+only.
+
 ## Findings
 
 Real-daemon coverage previously exercised direct Workflow starts and one legacy
 Team Task entry, leaving explicit no-Team Task selections and Automation
 occurrences without equivalent recovery coverage. The expanded suite covers
-those paths, Team ownership, and standalone Computer work.
+those paths and standalone Computer work; Team-owned Workflow execution remains
+covered by direct Workflow Runs rather than a Project Task assignment.
 
 Browser verification exposed stale expectations for separate Agents/Workflows
 tabs after they became Collaboration and for global Project record links to

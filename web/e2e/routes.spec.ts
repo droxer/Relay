@@ -209,6 +209,12 @@ test("all thread routes share list controls, geometry, search and creation", asy
     await page.goto(path);
     const rail = page.locator("#thread-panel");
     await expect(rail.locator(".conversation-row")).toHaveCount(7);
+    // Measure a settled row: off-screen rows use content-visibility's
+    // reserved height, so bring it into view before reading its real box.
+    const measuredRow = rail.locator("li.conversation-row").filter({ has: page.locator('strong[title="Route other-chat"]') });
+    await measuredRow.scrollIntoViewIfNeeded();
+    await expect(measuredRow).toContainText("Route other-chat");
+    await expect(measuredRow.locator(".conversation-project")).toHaveText("Other project");
     await expect(rail.locator('.conversation-group[data-tone="idle"] .conversation-group-label')).toHaveCount(0);
     const layout = await rail.evaluate(element => {
       const style = (selector: string) => {

@@ -41,13 +41,15 @@ def test_team_catalog_and_predefined_default(monkeypatch):
 
 
 @pytest.mark.parametrize('scheduled', [False, True])
-@pytest.mark.parametrize('override', [False, True])
-def test_task_inherits_custom_default_or_overrides_with_predefined(monkeypatch, scheduled, override):
+def test_task_selects_its_project_workflow(monkeypatch, scheduled):
     with unified_world(monkeypatch) as (app, client, _, _, project, payload):
-        team, workflow = setup_definitions(client, project, payload)
+        workflow = client.post('/api/v1/workflows', json={
+            'name': 'Delivery', 'projectId': project['id'],
+            'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
+        }).json()['workflow']
         response = client.post('/api/v1/tasks', json={
-            'title': 'Deliver', 'projectId': project['id'], 'assignedTeamId': team['id'],
-            **({'assignedWorkflowId': 'preset:pipeline'} if override else {}),
+            'title': 'Deliver', 'projectId': project['id'],
+            'assignedWorkflowId': workflow['id'],
             **({'status': 'assigned'} if scheduled else {}),
         })
         assert response.status_code == 201, response.text
@@ -62,19 +64,9 @@ def test_task_inherits_custom_default_or_overrides_with_predefined(monkeypatch, 
             assert response.status_code == 202, response.text
             session = response.json()['session']
             assert session is not None, response.text
-        if override:
-            assert not session.get('workflowRuns')
-            snapshot = session['collaborationRounds'][0]['teamSnapshot']
-            assert snapshot['workflowId'] == 'preset:pipeline'
-            assert snapshot['collaborationStyle'] == 'pipeline'
-        else:
-            assert session['workflowRuns'][0]['teamSnapshot']['workflowId'] == workflow['id']
-            assert session['workflowRuns'][0]['status'] == 'awaiting_approval'
-        # Changing future defaults never changes an already frozen Run.
-        before = session.get('workflowRuns') or session['collaborationRounds']
-        assert client.patch(f"/api/v1/teams/{team['id']}", json={'defaultWorkflowId': 'preset:lead_led'}).status_code == 200
-        current = app.state.session_store.get_session(session['id'])
-        assert (current.get('workflowRuns') or current['collaborationRounds']) == before
+        assert session['workflowRuns'][0]['teamSnapshot']['workflowId'] == workflow['id']
+        assert session['workflowRuns'][0]['status'] == 'awaiting_approval'
+        assert not session.get('teamId')
 
 
 def test_default_definition_cannot_be_deleted_or_disabled(monkeypatch):
@@ -128,17 +120,19 @@ def test_new_team_conversation_starts_the_selected_custom_workflow(monkeypatch, 
         assert next(event for event in retried['events'] if event['type'] == 'user.message')['id'] == 'opening-message'
 
 
-@pytest.mark.parametrize('predefined', [False, True])
-def test_automation_inherits_or_overrides_team_workflow(monkeypatch, predefined):
+def test_automation_selects_its_project_workflow(monkeypatch):
     from datetime import UTC, datetime, timedelta
     from automation_helpers import DAILY_TRIGGERS
     from test_scheduled_workflows import occurrence_of
     with unified_world(monkeypatch) as (app, client, _, _, project, payload):
-        team, workflow = setup_definitions(client, project, payload)
+        workflow = client.post('/api/v1/workflows', json={
+            'name': 'Delivery', 'projectId': project['id'],
+            'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
+        }).json()['workflow']
         routine = client.post('/api/v1/tasks', json={
-            'title': 'Nightly', 'projectId': project['id'], 'assignedTeamId': team['id'],
+            'title': 'Nightly', 'projectId': project['id'],
+            'assignedWorkflowId': workflow['id'],
             'isRoutine': True, 'routineState': 'active', 'routineTriggers': DAILY_TRIGGERS,
-            **({'assignedWorkflowId': 'preset:pipeline'} if predefined else {}),
         }).json()
         app.state.task_scheduler.automations.tick(datetime.now(UTC) + timedelta(days=2))
         occurrence = occurrence_of(app, routine['id'])
@@ -146,9 +140,8 @@ def test_automation_inherits_or_overrides_team_workflow(monkeypatch, predefined)
         occurrence = app.state.task_store.get_task(occurrence['id'])
         assert occurrence['linkedSessionIds'], occurrence
         session = app.state.session_store.get_session(occurrence['linkedSessionIds'][0])
-        snapshot = (session['collaborationRounds'][0]['teamSnapshot'] if predefined
-                    else session['workflowRuns'][0]['teamSnapshot'])
-        assert snapshot['workflowId'] == ('preset:pipeline' if predefined else workflow['id'])
+        assert session['workflowRuns'][0]['teamSnapshot']['workflowId'] == workflow['id']
+        assert not session.get('teamId')
 
 
 def test_legacy_workflow_team_can_adopt_a_predefined_default_without_losing_steps(monkeypatch):
@@ -225,9 +218,13 @@ def test_projectless_task_inheriting_a_custom_default_blocks_once(monkeypatch):
 
 def test_offline_workflow_computer_records_its_wait_once(monkeypatch):
     with unified_world(monkeypatch) as (app, client, _, _, project, payload):
-        team, _workflow = setup_definitions(client, project, payload)
+        workflow = client.post('/api/v1/workflows', json={
+            'name': 'Delivery', 'projectId': project['id'],
+            'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
+        }).json()['workflow']
         task = client.post('/api/v1/tasks', json={
-            'title': 'Deliver', 'projectId': project['id'], 'assignedTeamId': team['id'], 'status': 'assigned',
+            'title': 'Deliver', 'projectId': project['id'],
+            'assignedWorkflowId': workflow['id'], 'status': 'assigned',
         }).json()
         monkeypatch.setattr('relay.tasks.workflow.project_runtime_node', lambda *_: None)
         recorded = _count_outcomes(monkeypatch, app.state.task_store)

@@ -145,18 +145,18 @@ test("a team with no eligible project explains how to make a custom workflow", a
   await expect(library).toContainText("Create a workflow for this Team");
 });
 
-test("task workflow can be chosen and cleared to inherit the team default", async ({ page }) => {
-  const { patches } = await fixture(page);
+test("a Project Task selects and clears its Project Workflow", async ({ page }) => {
+  const { patches } = await fixture(page, false, "light", 1, false, false, true, false);
   await page.goto("/projects/project?task=task&recordTab=definition");
-  await expect(page.getByText("Team default · Build and review")).toBeVisible();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
-  await option(page, "Pipeline").click();
+  await option(page, "Release").click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
-  await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("preset:pipeline");
+  await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_release");
+  await expect.poll(() => patches.at(-1)?.assignedTeamId).toBeNull();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
-  await page.getByRole("option", { name: "Team default · Build and review", exact: true }).click();
+  await page.getByRole("option", { name: "Use Project Agents", exact: true }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBeNull();
 });
@@ -277,7 +277,7 @@ test("a Project Task selects an independent workflow with no Teams", async ({ pa
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
   await page.getByRole("option", { name: "Release", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Team (optional)", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Team (optional)", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_release");
   expect(patches.at(-1)?.assignedTeamId).toBeNull();

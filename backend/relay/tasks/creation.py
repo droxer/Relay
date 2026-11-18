@@ -15,6 +15,7 @@ from .assignment import (
     validate_task_owner_assignment,
     validate_task_computer,
     validate_computer_assignment,
+    validate_standalone_assignment,
     logical_agent_for_assignment,
     team_for_assignment,
     validate_task_workflow,
@@ -106,6 +107,10 @@ def _resolve_assignment(
         validate_project_assignment(
             ctx, request.project, assigned_agent_id=agent_id, assigned_team_id=team_id,
             workflow_id=body.get("assignedWorkflowId")
+        )
+    else:
+        validate_standalone_assignment(
+            ctx, assigned_agent_id=agent_id, assigned_team_id=team_id,
         )
     team_for_assignment(ctx, actor, team_id, expected_user_id=assignee,
                         project_id=(request.project or {}).get("id"))
