@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { stripVTControlCharacters } from "node:util";
+import { OpenCodeStreamRenderer, PiStreamRenderer } from "relay-core";
 
 import {
   AgentStreamAccumulator,
@@ -235,6 +237,100 @@ function piRun({ bridged }: { bridged: boolean }): string {
 }
 
 describe("runtime transcripts: pi", () => {
+  it("preserves standalone whitespace and completes each indexed content block", () => {
+    const content = [
+      { type: "text", text: "First\n\nsecond" },
+      { type: "text", text: "Arrived in text_end." },
+      { type: "text", text: "Arrived in message_end." },
+    ];
+    const message = { role: "assistant", content, stopReason: "stop" };
+    const raw = jsonl([
+      { type: "turn_start" },
+      ...["First", "\n\n", "second"].map((delta) => piUpdate({ type: "text_delta", contentIndex: 0, delta })),
+      piUpdate({ type: "text_end", contentIndex: 0, content: content[0]!.text }),
+      piUpdate({ type: "text_end", contentIndex: 1, content: content[1]!.text }),
+      { type: "message_end", message },
+      { type: "turn_end", message },
+    ]);
+    assert.deepEqual(texts(assertRendersTranscript("pi", raw)), content.map((block) => block.text));
+    assert.equal(
+      stripVTControlCharacters(new PiStreamRenderer().feed(raw)),
+      "● First\n\n  second\n● Arrived in text_end.\n● Arrived in message_end.\n",
+    );
+  });
+
+  it("keeps the partial reply and shows a repeated assistant failure once", () => {
+    const text = "The partial reply.";
+    const message = {
+      role: "assistant", content: [{ type: "text", text }],
+      stopReason: "error", errorMessage: "Provider disconnected",
+    };
+    const raw = jsonl([
+      { type: "turn_start" },
+      piUpdate({ type: "text_delta", contentIndex: 0, delta: text }),
+      { type: "message_end", message },
+      { type: "turn_end", message },
+    ]);
+
+    const segments = assertRendersTranscript("pi", raw);
+    assert.deepEqual(segments, [
+      { kind: "text", text },
+      { kind: "status", tone: "bad", text: "Pi error: Provider disconnected" },
+    ]);
+    assert.equal(hasTerminalOutcome(segments), true);
+    const terminal = stripVTControlCharacters(new PiStreamRenderer().feed(raw));
+    assert.match(terminal, /The partial reply\.[\s\S]*ERR\s+Pi error: Provider disconnected/);
+    assert.equal(terminal.split("Provider disconnected").length - 1, 1);
+  });
+
+  it("reconciles the final retry error with the preceding assistant failure", () => {
+    const errorMessage = "Rate limited";
+    const raw = jsonl([
+      { type: "turn_start" },
+      { type: "turn_end", message: { role: "assistant", stopReason: "error", errorMessage } },
+      { type: "auto_retry_end", success: false, finalError: errorMessage },
+      { type: "agent_settled" },
+    ]);
+    assert.deepEqual(assertRendersTranscript("pi", raw), [
+      { kind: "status", tone: "bad", text: "Pi error: Rate limited" },
+    ]);
+  });
+
+  it("keeps an announced Pi retry active and displays an exhausted retry as terminal", () => {
+    const errorMessage = "Rate limited";
+    const failure = { type: "turn_end", message: { role: "assistant", stopReason: "error", errorMessage } };
+    const attempt = jsonl([{ type: "turn_start" }, failure, { type: "agent_end", willRetry: true }]);
+    const retry = jsonl([
+      { type: "auto_retry_start", attempt: 1, maxAttempts: 2, errorMessage },
+      { type: "turn_start" },
+      { type: "tool_execution_start", toolCallId: "retry-call", toolName: "read", args: { path: "status.md" } },
+    ]);
+    assert.equal(hasTerminalOutcome(parseAgentStream("pi", attempt)), false);
+    assert.equal(hasTerminalOutcome(assertRendersTranscript("pi", attempt + retry)), false);
+    const olderRun = jsonl([{ type: "turn_start" }, failure]) + retry;
+    assert.equal(hasTerminalOutcome(assertRendersTranscript("pi", olderRun)), false);
+    assert.equal(hasTerminalOutcome(assertRendersTranscript("pi", attempt + retry + jsonl([
+      failure, { type: "auto_retry_end", success: false, finalError: errorMessage },
+    ]))), true);
+  });
+
+  it("reconciles an earlier recovered Pi block and a rewritten reply in final order", () => {
+    const message = { role: "assistant", content: [
+      { type: "text", text: "First block." },
+      { type: "text", text: "Second block, revised." },
+    ] };
+    const raw = jsonl([
+      { type: "turn_start" },
+      piUpdate({ type: "text_delta", contentIndex: 1, delta: "Second block, draft." }),
+      { type: "message_end", message },
+      { type: "turn_end", message },
+    ]);
+    assert.deepEqual(texts(assertRendersTranscript("pi", raw)), ["First block.", "Second block, revised."]);
+    const output = stripVTControlCharacters(new PiStreamRenderer().feed(raw));
+    assert.match(output, /Pi final reply\n● First block\.\n● Second block, revised\.\n$/);
+    assert.equal(output.split("Second block, revised.").length - 1, 1);
+  });
+
   for (const bridged of [false, true]) {
     it(`renders a ${bridged ? "pi-extension bridged" : "plain"} run's thinking, tools, and reply`, () => {
       const segments = assertRendersTranscript("pi", piRun({ bridged }));
@@ -255,6 +351,31 @@ describe("runtime transcripts: pi", () => {
     const live = new AgentStreamAccumulator("pi").update(open.slice(0, open.lastIndexOf("\n") + 1));
     assert.deepEqual(texts(live), ["研究已完成，交付物已就绪。"]);
   });
+
+  it("echoes thinking and each tool call once in the terminal", () => {
+    const terminal = stripVTControlCharacters(new PiStreamRenderer().feed(piRun({ bridged: false })));
+    assert.match(terminal, /○ The user is asking about agentic workflow trends\./);
+    assert.match(terminal, /⏺.*bash/);
+    assert.equal(terminal.split("⏺").length - 1, 1);
+  });
+});
+
+it("renders both streamed and complete OpenCode reasoning in the terminal", () => {
+  const terminal = stripVTControlCharacters(new OpenCodeStreamRenderer().feed(jsonl([
+    { type: "reasoning", delta: true, part: { messageID: "thought", text: "Inspect " } },
+    { type: "reasoning", delta: true, part: { messageID: "thought", text: "the input." } },
+    { type: "text", delta: true, part: { messageID: "reply", text: "Checked." } },
+    { type: "reasoning", part: { text: "Verify the output." } },
+  ])));
+  assert.match(terminal, /○ Inspect the input\.\n+● Checked\.\n+○ Verify the output\./);
+});
+
+it("preserves the indentation of complete OpenCode replies", () => {
+  const text = "    const value = 42;\n    console.log(value);";
+  const raw = jsonl([{ type: "text", part: { text: `${text}\n` } }]);
+  assert.deepEqual(texts(assertRendersTranscript("opencode", raw)), [text]);
+  const terminal = stripVTControlCharacters(new OpenCodeStreamRenderer().feed(raw));
+  assert.match(terminal, /●     const value = 42;\n      console\.log\(value\);/);
 });
 
 describe("runtime transcripts: codex failures", () => {

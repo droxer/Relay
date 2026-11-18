@@ -42,15 +42,15 @@ describe("buildOpenCodeCommand", () => {
     );
   }));
 
-  it("runs headless with --auto for trusted local and BoxLite runs, ignoring the launch", () => {
+  it("runs headless with thinking and --auto for trusted local and BoxLite runs", () => {
     withEnv({ ...LOCAL, RELAY_LOCAL_PERMISSION_POLICY: "trusted" }, () => {
       const command = buildOpenCodeCommand(prompted(), "/work/space");
-      assert.match(command, /opencode run --format json --auto -- /);
+      assert.match(command, /opencode run --format json --thinking --auto -- /);
       assert.doesNotMatch(command, /opencode-acp/);
     });
     withEnv({}, () => {
       const command = buildOpenCodeCommand(prompted(), "/work/space");
-      assert.match(command, /opencode run --format json --auto -- /);
+      assert.match(command, /opencode run --format json --thinking --auto -- /);
     });
   });
 

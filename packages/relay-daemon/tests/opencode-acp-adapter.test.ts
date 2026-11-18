@@ -37,7 +37,8 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     case "session/prompt":
       promptId = message.id;
       if (process.env.FAKE_OPENCODE_HANG) return;
-      update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Working." } });
+      update(sessionId, { sessionUpdate: "agent_thought_chunk", messageId: "thought", content: { type: "text", text: "Checking." } });
+      update(sessionId, { sessionUpdate: "agent_message_chunk", messageId: "reply", content: { type: "text", text: "Working." } });
       update(sessionId, { sessionUpdate: "tool_call", toolCallId: "call_1", name: "shell", title: "echo hi", kind: "execute", status: "pending", rawInput: { command: "echo hi" } });
       send({ id: 100, method: "session/request_permission", params: { sessionId, toolCall: { toolCallId: "call_1", name: "shell", title: "echo hi", kind: "execute", status: "pending", rawInput: { command: "echo hi" } }, options: [
         { optionId: "once", kind: "allow_once", name: "Allow once" },
@@ -119,10 +120,15 @@ describe("OpenCode ACP adapter", () => {
     });
     assert.deepEqual(result.log[0], { answer: { outcome: { outcome: "selected", optionId: "once" } } });
     const lines = events(result.stdout);
-    assert.deepEqual(lines[0], { type: "text", delta: true, part: { type: "text", text: "Working." } });
-    assert.equal((lines[1].part as { tool: string }).tool, "shell");
-    assert.equal((lines[1].part as { state: { status: string } }).state.status, "completed");
-    assert.deepEqual(lines[2], { type: "text", delta: true, part: { type: "text", text: "Done." } });
+    assert.deepEqual(lines[0], { type: "reasoning", delta: true, part: { type: "reasoning", text: "Checking.", messageID: "thought" } });
+    assert.deepEqual(lines[1], { type: "text", delta: true, part: { type: "text", text: "Working.", messageID: "reply" } });
+    const calls = lines.filter((line) => line.type === "tool_use")
+      .map((line) => line.part as { tool: string; callID: string; state: { status: string } });
+    assert.deepEqual(calls.map(({ tool, callID, state }) => [tool, callID, state.status]), [
+      ["shell", "call_1", "pending"],
+      ["shell", "call_1", "completed"],
+    ]);
+    assert.deepEqual(lines.at(-1), { type: "text", delta: true, part: { type: "text", text: "Done." } });
   });
 
   it("denies with reject and never selects the always option", async () => {
@@ -131,7 +137,7 @@ describe("OpenCode ACP adapter", () => {
     assert.equal(result.code, 0);
     assert.deepEqual(result.log[0], { answer: { outcome: { outcome: "selected", optionId: "reject" } } });
     assert.notEqual((result.log[0].answer as { outcome: { optionId: string } }).outcome.optionId, "always");
-    const failed = events(result.stdout).find((line) => line.type === "tool_use");
+    const failed = events(result.stdout).findLast((line) => line.type === "tool_use");
     const state = (failed?.part as { state: { status: string; error?: string; output?: string } }).state;
     assert.equal(state.status, "error");
     assert.equal(state.error, "denied");

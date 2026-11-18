@@ -1,7 +1,7 @@
 import { formatOpenCodeToolError } from "relay-core/opencode-errors";
-import { asRecord, oneLineTarget, toolInput, toolTarget } from "./builders.ts";
+import { asRecord, oneLineTarget, toolInput, toolTarget, upsertSegmentById } from "./builders.ts";
 import { streamRecords, stripAnsi } from "./records.ts";
-import type { AgentSegment } from "./segments.ts";
+import type { AgentSegment, ToolSegment } from "./segments.ts";
 
 // Native runs emit whole parts; Relay's ACP adapter marks append-only text
 // chunks with `delta: true`. Keep one growing segment across these records.
@@ -11,15 +11,19 @@ export function parseOpenCode(raw: string): AgentSegment[] {
 
 export class OpenCodeStreamParser {
   private segments: AgentSegment[] = [];
-  private textIndex = -1;
+  private activeDelta?: { index: number; kind: "text" | "thinking"; messageId: unknown };
+  private toolSegmentById = new Map<string, number>();
+  private failedTools = new Set<string>();
 
   // Preview the unfinished suffix without committing it: the next transport
   // chunk may extend a plain line or complete a fragmented JSON record.
   preview(raw: string): AgentSegment[] {
-    if (!raw) return this.segments;
+    if (!raw.trim()) return this.segments;
     const parser = new OpenCodeStreamParser();
     parser.segments = this.segments;
-    parser.textIndex = this.textIndex;
+    parser.activeDelta = this.activeDelta;
+    parser.toolSegmentById = new Map(this.toolSegmentById);
+    parser.failedTools = new Set(this.failedTools);
     return parser.append(raw);
   }
 
@@ -29,33 +33,18 @@ export class OpenCodeStreamParser {
       if (record.kind === "text") {
         const text = stripAnsi(record.text).trim();
         if (text) out.push({ kind: "text", text });
-        this.textIndex = -1;
+        this.activeDelta = undefined;
         continue;
       }
 
       const event = record.value;
       const part = asRecord(event.part);
-      if (event.type === "text" && event.delta === true) {
-        const text = typeof part.text === "string" ? part.text : "";
-        if (!text) continue;
-        const previous = out[this.textIndex];
-        if (previous?.kind === "text") {
-          out[this.textIndex] = { kind: "text", text: previous.text + text };
-        } else {
-          this.textIndex = out.length;
-          out.push({ kind: "text", text });
-        }
-        continue;
-      }
       if (event.type === "text" || event.type === "reasoning") {
-        this.textIndex = -1;
-        const text = typeof part.text === "string" ? part.text.trim() : "";
-        if (text) out.push({ kind: event.type === "text" ? "text" : "thinking", text });
+        this.appendContent(out, event.type === "text" ? "text" : "thinking", part, event.delta === true);
       } else if (event.type === "tool_use") {
-        this.textIndex = -1;
-        out.push(...openCodeTool(part));
+        this.appendTool(out, part);
       } else if (event.type === "error") {
-        this.textIndex = -1;
+        this.activeDelta = undefined;
         const error = asRecord(event.error);
         out.push({ kind: "status", tone: "bad", text: `OpenCode error: ${String(error.message ?? "unknown error")}` });
       }
@@ -63,21 +52,52 @@ export class OpenCodeStreamParser {
     this.segments = out;
     return out;
   }
-}
 
-function openCodeTool(part: Record<string, unknown>): AgentSegment[] {
-  const state = asRecord(part.state);
-  if (state.status !== "completed" && state.status !== "error") return [];
-  const name = typeof part.tool === "string" ? part.tool : "tool";
-  // OpenCode 2.x sets a completed tool's title to its own name, which says
-  // nothing the tool line does not already show.
-  const target = toolTarget(toolInput(state.input))
-    ?? (state.title === name ? undefined : oneLineTarget(state.title));
-  const segments: AgentSegment[] = [{ kind: "tool", name, ...(target ? { target } : {}) }];
-  if (state.status === "error") {
+  private appendContent(
+    out: AgentSegment[], kind: "text" | "thinking", part: Record<string, unknown>, delta: boolean,
+  ): void {
+    const text = typeof part.text === "string" ? part.text : "";
+    if (!delta) {
+      this.activeDelta = undefined;
+      const content = kind === "text" ? text.replace(/^(?:[ \t]*\r?\n)+/, "").trimEnd() : text.trim();
+      if (content) out.push({ kind, text: content });
+      return;
+    }
+    if (!text) return;
+    const active = this.activeDelta;
+    const messageId = part.messageID;
+    if (active?.kind === kind && active.messageId === messageId) {
+      const previous = out[active.index];
+      if (previous?.kind === kind) out[active.index] = { kind, text: previous.text + text };
+    } else {
+      this.activeDelta = { index: out.length, kind, messageId };
+      out.push({ kind, text });
+    }
+  }
+
+  private appendTool(out: AgentSegment[], part: Record<string, unknown>): void {
+    const state = asRecord(part.state);
+    const callID = part.callID ?? part.id;
+    const id = typeof callID === "string" ? callID : undefined;
+    if (state.status !== "completed" && state.status !== "error"
+      && !(id && (state.status === "pending" || state.status === "running"))) return;
+    const index = id ? this.toolSegmentById.get(id) : undefined;
+    const previous = index === undefined ? undefined : out[index] as ToolSegment;
+    const name = typeof part.tool === "string" ? part.tool : previous?.name ?? "tool";
+    const target = toolTarget(toolInput(state.input))
+      ?? previous?.target
+      ?? (state.title === name ? undefined : oneLineTarget(state.title));
+    const tool: ToolSegment = { kind: "tool", name, ...(target ? { target } : {}) };
+    if (index === undefined) this.activeDelta = undefined;
+    if (!previous || previous.name !== name || previous.target !== target) {
+      upsertSegmentById(out, this.toolSegmentById, id, tool);
+    }
+    if (state.status !== "error" || (id && this.failedTools.has(id))) return;
     // Older Relay ACP adapters reported a failed tool's message as `output`.
     const error = [state.error, state.output].find((value) => typeof value === "string" && value.trim());
-    if (typeof error === "string") segments.push({ kind: "status", ...formatOpenCodeToolError(name, error) });
+    if (typeof error !== "string") return;
+    this.activeDelta = undefined;
+    if (id) this.failedTools.add(id);
+    out.push({ kind: "status", scope: "tool", ...formatOpenCodeToolError(name, error) });
   }
-  return segments;
 }

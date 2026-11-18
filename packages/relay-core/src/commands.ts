@@ -266,7 +266,7 @@ export function buildOpenCodeCommand(state: AgentState, workspacePath?: string):
 
 /** Trusted runs only: `--auto` approves every tool that is not explicitly denied. */
 function buildOpenCodeRunInvocation(prompt: string, workspacePath?: string, pinnedModel?: string): string {
-  const argv = [...agentArgv("opencode"), "run", "--format", "json", "--auto"];
+  const argv = [...agentArgv("opencode"), "run", "--format", "json", "--thinking", "--auto"];
   const model = runtimeModel(pinnedModel, () => undefined);
   if (model) argv.push("--model", model);
   argv.push("--", prompt);

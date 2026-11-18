@@ -526,6 +526,31 @@ describe("projectMessages artifact projection", () => {
     }
   });
 
+  for (const [agent, frames] of [
+    ["pi", [{
+      type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Saved reply." }] },
+    }]],
+    ["opencode", [
+      { type: "text", delta: true, part: { messageID: "reply", text: "Saved " } },
+      { type: "text", delta: true, part: { messageID: "reply", text: "reply." } },
+    ]],
+  ] as const) {
+    it(`recovers a ${agent} reply from clean JSONL in the completed log`, () => {
+      const stdout = frames.map((frame) => JSON.stringify(frame) + "\n").join("");
+      const run = { sessionId: "ses_1", timestamp, runId: "run_1", agent };
+      for (const live of ["", JSON.stringify(frames[0]) + "\n", stdout]) {
+        const messages = projectMessages(session([
+          { ...run, id: "started", type: "agent.started" },
+          { ...run, id: "streamed", type: "agent.output", stream: "stdout", text: live },
+          { ...run, id: "completed", type: "agent.completed", status: "completed", exitCode: 0, agentLog: `stdout:\n${stdout}` },
+        ]), t);
+        const message = messages.find((item) => item.kind === "agent");
+        assert.ok(message?.kind === "agent");
+        assert.deepEqual(parseAgentStream(agent, message.stdout), [{ kind: "text", text: "Saved reply." }]);
+      }
+    });
+  }
+
   it("uses the completed agent log when streamed output missed the final answer", () => {
     const finalFrame = `${JSON.stringify({
       type: "item.completed",

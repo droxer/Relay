@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from relay.sessions.bridge import compute_prior_agent_bridge, extract_last_assistant_text
@@ -80,6 +81,38 @@ def test_extract_last_assistant_text_reads_claude_stream_json_result() -> None:
     )
 
     assert extract_last_assistant_text(transcript) == "final team handoff"
+
+
+def test_bridge_reads_pi_assistant_replies_and_ignores_tool_results() -> None:
+    events = [
+        {"type": "message_end", "message": {
+            "role": "assistant", "content": [
+                {"type": "thinking", "thinking": "private reasoning"},
+                {"type": "text", "text": "Pi handoff."},
+            ],
+        }},
+        {"type": "message_end", "message": {
+            "role": "toolResult", "content": [{"type": "text", "text": "tool output"}],
+        }},
+    ]
+    assert extract_last_assistant_text("\n".join(map(json.dumps, events))) == "Pi handoff."
+    events[0]["type"] = "turn_end"
+    assert extract_last_assistant_text("\n".join(map(json.dumps, events))) == "Pi handoff."
+
+
+def test_bridge_reads_native_and_acp_opencode_replies() -> None:
+    native = {"type": "text", "part": {"type": "text", "text": "    opencode_handoff()\n"}}
+    assert extract_last_assistant_text(json.dumps(native)) == "    opencode_handoff()"
+    acp = [
+        {"type": "text", "delta": True, "part": {"text": "Earlier.", "messageID": "before"}},
+        {"type": "reasoning", "delta": True, "part": {"text": "Think."}},
+        {"type": "text", "delta": True, "part": {"text": "OpenCode", "messageID": "final"}},
+        {"type": "text", "delta": True, "part": {"text": " ", "messageID": "final"}},
+        {"type": "text", "delta": True, "part": {"text": "handoff.", "messageID": "final"}},
+        {"type": "tool_use", "part": {"tool": "read", "state": {"output": "tool output"}}},
+        {"type": "text", "delta": True, "part": {"text": "\n", "messageID": "empty"}},
+    ]
+    assert extract_last_assistant_text("\n".join(map(json.dumps, acp))) == "OpenCode handoff."
 
 
 class _FakeStore:
