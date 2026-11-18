@@ -389,7 +389,11 @@
     overflow-y: auto;
   }
 
+  /* Hold the roster at its own height (up to the cap): the page scrolls
+     here, so a long record below would otherwise shrink it into a scroller
+     too short for even one row. */
   .teams-roster {
+    flex-shrink: 0;
     max-height: 46vh;
     border-right: 0;
     border-bottom: var(--hairline);

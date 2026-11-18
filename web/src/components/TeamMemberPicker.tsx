@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import type { UserAgent } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
-import { TonePill } from "./StatusPill";
+import { LeadBadge } from "./LeadBadge";
 import { ActionAdd, ActionRemove, ICON } from "./icons";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
@@ -101,7 +101,7 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
                   <AgentMetaLine executorKind={agent.executorKind} placements={agent.placements} />
                 </span>
                 {lead ? (
-                  <TonePill tone="info" label={t("project.lead_badge")} />
+                  <LeadBadge />
                 ) : (
                   <Button
                     type="button"

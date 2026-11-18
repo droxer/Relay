@@ -1,6 +1,5 @@
 "use client";
 
-import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentTeam, CollaborationStyle } from "../../types";
 import { approvalSlotIndex, previewGaps, previewSlots, type SlotMember } from "../../lib/collaborationStyle";
@@ -63,32 +62,27 @@ function RoleSlots({ members, leadId, style, nameOf, approval }: {
     if (slot === "member" && role) return t(`team_work.role_${role}`, { defaultValue: t("collab_style.slot_member") });
     return t(`collab_style.slot_${slot === "lead" && index > 0 ? "lead_summary" : slot}`);
   };
+  const approvalStep = { key: "approval", slot: "approval", role: t("collab_style.slot_approval"), name: t("collab_style.slot_approval_name") };
+  const steps = preview.slots.flatMap((slot, index) => [
+    ...(index === approvalAt ? [approvalStep] : []),
+    { key: `${slot.slot}-${index}`, slot: slot.slot, role: slotLabel(slot.slot, slot.memberId, index), name: nameOf(slot.memberId) },
+  ]);
   const builder = preview.slots.find((slot) => slot.slot === "builder");
   const reviewer = preview.slots.find((slot) => slot.slot === "reviewer");
   return <div className="collab-style-preview" data-style={preview.style} aria-live="polite">
+    {/* Each step carries the arrow to the next, so a wrapped line ends on
+        "→" and continues, never starting with a stranded arrow. */}
     <ol className="collab-style-sequence">
-      {preview.slots.map((slot, index) => <Fragment key={`${slot.slot}-${index}`}>
-      {index === approvalAt ? <li data-slot="approval">
-        <DisclosureChevron aria-hidden="true" className="collab-style-arrow" />
+      {steps.map((step, index) => <li key={step.key} data-slot={step.slot}>
         <span className="collab-style-step">
-          <span className="collab-style-step-avatar" aria-hidden="true">{initialOf(t("collab_style.slot_approval_name"))}</span>
+          <span className="collab-style-step-avatar" aria-hidden="true">{initialOf(step.name)}</span>
           <span className="collab-style-step-text">
-            <span className="collab-style-step-role">{t("collab_style.slot_approval")}<span className="sr-only">: </span></span>
-            <span className="collab-style-step-name">{t("collab_style.slot_approval_name")}</span>
+            <span className="collab-style-step-role">{step.role}<span className="sr-only">: </span></span>
+            <span className="collab-style-step-name">{step.name}</span>
           </span>
         </span>
-      </li> : null}
-      <li data-slot={slot.slot}>
-        {index > 0 ? <DisclosureChevron aria-hidden="true" className="collab-style-arrow" /> : null}
-        <span className="collab-style-step">
-          <span className="collab-style-step-avatar" aria-hidden="true">{initialOf(nameOf(slot.memberId))}</span>
-          <span className="collab-style-step-text">
-            <span className="collab-style-step-role">{slotLabel(slot.slot, slot.memberId, index)}<span className="sr-only">: </span></span>
-            <span className="collab-style-step-name">{nameOf(slot.memberId)}</span>
-          </span>
-        </span>
-      </li>
-      </Fragment>)}
+        {index < steps.length - 1 ? <DisclosureChevron aria-hidden="true" className="collab-style-arrow" /> : null}
+      </li>)}
     </ol>
     {builder && reviewer ? <p className="collab-style-loop">
       <ActionRetry aria-hidden="true" className="size-4 shrink-0" />

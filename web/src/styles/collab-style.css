@@ -104,8 +104,8 @@
 
 .collab-style-arrow {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   margin-inline: var(--sp-1);
   color: var(--ink-4);
 }

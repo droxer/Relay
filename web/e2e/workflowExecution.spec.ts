@@ -160,3 +160,54 @@ for (const { width, height, language, labels } of [
     });
   });
 }
+
+test("a phone thread keeps room for the transcript beside the workflow progress", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await fixture(page, "en");
+  await page.goto("/threads/release-2");
+
+  const progress = page.locator(".chat-panel > .workflow-progress");
+  await expect(progress.getByRole("button", { name: "View run details" })).toBeVisible();
+  // One summary line plus the current step: the details button rides beside
+  // it, so the card stays a band rather than a third of the screen.
+  expect((await progress.boundingBox())!.height).toBeLessThanOrEqual(100);
+  const log = await progress.evaluate(element => element.nextElementSibling!.getBoundingClientRect().height);
+  expect(log).toBeGreaterThanOrEqual(200);
+});
+
+test("the workflow ledger survives forced colours and two-digit steps", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await fixture(page, "en");
+  await page.goto("/threads/release-2");
+  await page.getByRole("button", { name: "View run details" }).click();
+  const timeline = page.locator(".workflow-run-dialog .workflow-timeline");
+  await expect(timeline.locator(".workflow-timeline-step")).toHaveCount(20);
+
+  // The rail is a border, which forced colours keep; a background is dropped.
+  const rail = await timeline.locator(".workflow-timeline-step").first().evaluate(step => {
+    const style = getComputedStyle(step, "::before");
+    return { drawn: parseFloat(style.borderInlineStartWidth) > 0, style: style.borderInlineStartStyle };
+  });
+  expect(rail).toEqual({ drawn: true, style: "solid" });
+
+  // Every number, "20" included, sits inside its ring.
+  const overflowing = await timeline.locator(".workflow-step-index").evaluateAll(marks => marks.filter(mark => {
+    const range = document.createRange();
+    range.selectNodeContents(mark);
+    const text = range.getBoundingClientRect();
+    const box = mark.getBoundingClientRect();
+    return text.left < box.left + 2 || text.right > box.right - 2;
+  }).map(mark => mark.textContent));
+  expect(overflowing).toEqual([]);
+});
+
+test("a task's workflow run keeps a full-size thread link", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await fixture(page, "en");
+  await page.goto("/projects/release?task=ship&recordTab=activity");
+  const link = page.locator(".record-workflow-actions .record-inline-action").first();
+  await expect(link).toBeVisible();
+  expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(24);
+});

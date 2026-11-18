@@ -305,3 +305,27 @@ describe("reviewed design regressions", () => {
     assert.match(styles, /@container record-artifacts \(max-width: 640px\)/);
   });
 });
+
+describe("team and workflow tokens", () => {
+  const workflow = readWeb("src/styles/workflow.css");
+  const collab = readWeb("src/styles/collab-style.css");
+
+  it("draws marks and rails from tokens, not raw values", () => {
+    assert.doesNotMatch(collab, /\.collab-style-arrow\s*\{[^}]*\b16px/s);
+    assert.doesNotMatch(workflow, /\.workflow-timeline-step:not\(:last-child\)::before\s*\{[^}]*(?<![-\w])(?:0\.5|1)px/s);
+    assert.doesNotMatch(workflow, /opacity:\s*0\.\d/);
+    assert.doesNotMatch(workflow, /color-mix\(in oklab, var\(--warn\)/);
+  });
+
+  it("keeps workflow cards and marks on whatever plane holds them", () => {
+    // --surface-1 reads sunken on the dark drawer and vanishes on the light one.
+    assert.doesNotMatch(workflow, /\.workflow-step-card\s*\{[^}]*background:\s*var\(--surface-1\)/s);
+    assert.doesNotMatch(workflow, /\.workflow-timeline-head > \.workflow-step-index\s*\{[^}]*background/s);
+  });
+
+  it("marks a team lead with the shared LeadBadge", () => {
+    const picker = readWeb("src/components/TeamMemberPicker.tsx");
+    assert.match(picker, /<LeadBadge/);
+    assert.doesNotMatch(picker, /label=\{t\("project\.lead_badge"\)\}/);
+  });
+});
