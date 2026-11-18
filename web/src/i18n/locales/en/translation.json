@@ -1848,7 +1848,7 @@
       "task_capacity_label": "Concurrent task limit",
       "task_capacity_short": "Task capacity",
       "task_capacity_summary": "Task capacity: {{count}}",
-      "task_capacity_hint": "Started, unfinished tasks across all projects, including review and blocked work. Extra tasks queue automatically. Default: 5; clear to restore the default.",
+      "task_capacity_hint": "Applies across all projects. Tasks release their slot when they enter review. Blocked execution keeps its slot. Extra tasks queue automatically. Clear to restore the default of 5.",
       "task_capacity_invalid": "Enter a whole number from 1 to 100, or clear to use the default."
     },
     "signing_in": "Signing in…",

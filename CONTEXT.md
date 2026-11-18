@@ -441,15 +441,15 @@ Reopening to Ready reacquires capacity for previously started work.
 
 
 **Task Capacity**:
-The maximum started, unfinished Tasks a User may have across Projects, including
-review and blocked work. The control panel's Concurrent task limit defaults to
-five; extra starts enter Queued. It bounds work in progress, while a Computer's
-run capacity separately bounds simultaneous agent processes. A process exiting,
-a blocked Task, or a Task awaiting acceptance does not release this limit. Queued
-Tasks may enter execution only after an admitted Task finishes automatically or
-its owner accepts it as done (explicit cancellation or deletion also removes work
-from the limit). Project directories impose no additional serialization limit;
-each concurrent run keeps its result and next-step control files separate.
+The maximum Tasks a User may have admitted for execution across Projects. The
+control panel's Concurrent task limit defaults to five. Extra starts enter Queued.
+A Task releases capacity on entry to Review, automatic completion, cancellation,
+or deletion. Blocked execution and waits for input during execution retain their
+slot after the process exits. A hold on Review stays within Review, and taking
+the Task back for rework requires capacity again. A Computer's run capacity
+separately bounds simultaneous agent processes. Project directories impose no
+additional serialization limit. Each concurrent run keeps its result and
+next-step control files separate.
 
 
 ### Thread message queue

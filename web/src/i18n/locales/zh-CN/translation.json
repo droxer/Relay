@@ -1810,7 +1810,7 @@
       "task_capacity_label": "并发任务上限",
       "task_capacity_short": "任务名额",
       "task_capacity_summary": "任务名额：{{count}}",
-      "task_capacity_hint": "所有项目中已开始但未完成的任务（含待验收和受阻任务）。超出上限的任务自动排队。默认 5，清空可恢复默认值。",
+      "task_capacity_hint": "名额跨所有项目计算。任务进入待验收时释放名额，执行受阻时保留名额。超出上限的任务自动排队。清空可恢复默认值 5。",
       "task_capacity_invalid": "请输入 1–100 的整数，或清空以使用默认值。"
     },
     "signing_in": "正在登录…",

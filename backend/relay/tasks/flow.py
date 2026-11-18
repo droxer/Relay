@@ -6,7 +6,8 @@ import os
 from typing import Any
 
 UNKNOWN_REASON = "Execution needs attention."
-TERMINAL_TASK_STATUSES = ("done", "cancelled")
+WIP_EXEMPT_STATUSES = ("review", "done", "cancelled")
+WIP_STARTED_STATUSES = ("running", "waiting_for_human")
 WIP_WAIT_MESSAGE = "Work-in-progress capacity is full. This task will start automatically when a slot opens."
 FLOW_STAGES = ("backlog", "assigned", "queued", "running", "review", "done", "cancelled")
 # A new task waits for a person's acceptance unless it asks otherwise. A task
@@ -28,13 +29,15 @@ def flow_scope(task: dict[str, Any]) -> str:
 
 
 def is_wip(task: dict[str, Any]) -> bool:
-    if task.get("isRoutine") or task.get("deletedAt") or task.get("status") in TERMINAL_TASK_STATUSES:
+    if (
+        task.get("isRoutine")
+        or task.get("deletedAt")
+        or task.get("status") in WIP_EXEMPT_STATUSES
+        # A hold on review preserves the review stage until rework starts.
+        or task.get("workflowStage") == "review"
+    ):
         return False
-    return bool(task.get("startedAt")) or task.get("status") in (
-        "running",
-        "review",
-        "waiting_for_human",
-    )
+    return bool(task.get("startedAt")) or task.get("status") in WIP_STARTED_STATUSES
 
 
 def needs_wip_admission(current: dict[str, Any], updated: dict[str, Any]) -> bool:

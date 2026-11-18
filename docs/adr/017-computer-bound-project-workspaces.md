@@ -41,7 +41,7 @@ the agent roster must never be reused as an authorization list.
 
 The owner requested Project concurrency governed by the system's per-user Task
 limit. This replaces the original directory serialization decision, which
-prevented independent Tasks in one Project from using available capacity. Task
-WIP remains reserved through blocked and review states; only Task completion
-(automatic or human acceptance) opens room for queued work during normal flow.
+prevented independent Tasks in one Project from using available capacity. A Task
+releases its slot when it enters Review or reaches automatic completion. Blocked
+execution retains its slot. Rework from Review requires capacity again.
 Computer process limits and same-Thread execution ordering remain enforced.

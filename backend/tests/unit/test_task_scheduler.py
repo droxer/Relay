@@ -1790,7 +1790,7 @@ def test_await_dispatch_keeps_waiting_and_reports_a_slow_backend(monkeypatch) ->
 
 
 @pytest.mark.parametrize("policy", ["human", "automatic"])
-def test_queued_project_task_waits_for_task_completion_not_process_exit(monkeypatch, policy):
+def test_queued_project_task_starts_after_delivery(monkeypatch, policy):
     from relay.persistence.events import relay_task_event
 
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
@@ -1807,7 +1807,9 @@ def test_queued_project_task_waits_for_task_completion_not_process_exit(monkeypa
             })
             assert (await scheduler.tick()).dispatched == 1
             [command] = registry.take_commands("sbx_alice", "node_token")
-            assert tasks.get_task(queued["id"])["status"] == "queued"
+            waiting = tasks.get_task(queued["id"])
+            assert waiting["status"] == "queued"
+            assert waiting["dispatchOutcome"]["code"] == "task_wip_limit"
             # A completed process with unfinished work retains its WIP slot.
             _report_round(registry, command, "blocked")
             assert not registry.daemon_store.list_active_runs("sbx_alice")
@@ -1820,16 +1822,13 @@ def test_queued_project_task_waits_for_task_completion_not_process_exit(monkeypa
             [continuation] = registry.take_commands("sbx_alice", "node_token")
             assert continuation["sessionId"] == command["sessionId"]
             _report_round(registry, continuation, "done")
-            if policy == "human":
-                assert tasks.get_task(task["id"])["status"] == "review"
-                assert (await scheduler.tick()).dispatched == 0
-                assert tasks.get_task(queued["id"])["status"] == "queued"
-                tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "done"}))
-            assert tasks.get_task(task["id"])["status"] == "done"
+            delivery_status = "review" if policy == "human" else "done"
+            assert tasks.get_task(task["id"])["status"] == delivery_status
             assert tasks.count_wip("alice") == 0
             assert (await scheduler.tick()).dispatched == 1
             [next_command] = registry.take_commands("sbx_alice", "node_token")
             assert next_command["sessionId"] == tasks.get_task(queued["id"])["linkedSessionIds"][-1]
             assert next_command["workspaceSubpath"] == command["workspaceSubpath"]
+            assert tasks.get_task(task["id"])["status"] == delivery_status
 
     asyncio.run(run_flow())

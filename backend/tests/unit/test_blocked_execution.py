@@ -304,7 +304,7 @@ def test_wip_wait_is_queued_without_creating_threads_and_resumes(execution, monk
     ctx, task, _ = execution
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
     occupied = ctx.task_store.create_task({
-        "title": "Already in progress", "status": "review",
+        "title": "Already in progress", "status": "running",
         "assigneeUserId": "alice", "acceptancePolicy": "human",
     })
     for _ in range(3):
@@ -322,7 +322,7 @@ def test_wip_wait_is_queued_without_creating_threads_and_resumes(execution, monk
         assert queued["dispatchOutcome"]["code"] == "task_wip_limit"
         assert not queued.get("startedAt")
         assert not queued.get("linkedSessionIds")
-    ctx.task_store.update_task(occupied["id"], {"status": "done"})
+    ctx.task_store.update_task(occupied["id"], {"status": "review"})
     asyncio.run(scheduler(ctx).tick())
     resumed = ctx.task_store.get_task(task["id"])
     assert resumed["dispatchOutcome"]["state"] == "started"
@@ -354,7 +354,7 @@ def test_atomic_wip_refusal_after_preflight_still_queues(execution, monkeypatch,
 def test_capacity_wait_does_not_erase_a_genuine_previous_failure(execution, monkeypatch, legacy):
     ctx, task, _ = execution
     monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
-    ctx.task_store.create_task({"title": "At capacity", "status": "review", "ownerUserId": "alice"})
+    ctx.task_store.create_task({"title": "At capacity", "status": "running", "ownerUserId": "alice"})
     if legacy == "ambiguous":
         ctx.task_store.record_dispatch_outcome(task["id"], "queued", code="dispatch_failed", message="Acceptance unknown")
     else:

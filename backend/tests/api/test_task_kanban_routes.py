@@ -122,8 +122,9 @@ def test_capacity_usage_counts_current_user_across_projects_before_pagination(cl
     user_id = client.post("/api/v1/tasks", json={"title": "Owner"}).json()["ownerUserId"]
     store = client.app.state.task_store
     for i in range(3):
-        store.create_task({"title": str(i), "ownerUserId": user_id, "status": "review"})
-    store.create_task({"title": "Someone else", "ownerUserId": "other", "status": "review"})
+        store.create_task({"title": str(i), "ownerUserId": user_id, "status": "running"})
+    store.create_task({"title": "Awaiting acceptance", "ownerUserId": user_id, "status": "review"})
+    store.create_task({"title": "Someone else", "ownerUserId": "other", "status": "running"})
     response = client.get("/api/v1/tasks?view=summary&limit=1").json()
     assert response["flowUsage"] == {"userId": user_id, "occupied": 3}
 

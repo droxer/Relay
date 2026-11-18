@@ -1093,8 +1093,9 @@ progress only when the daemon reports that an agent has started. `GET /tasks` an
 default of 5 when no override is set. Admin user create/PATCH accepts
 `maxConcurrentTasks` (integer 1–100); PATCH null clears it. User responses include
 `effectiveMaxConcurrentTasks`. These edits require an administrator.
-Usage is for the signed-in user across projects,
-even for an administrator; it is computed before pagination.
+Usage counts the signed-in user's occupied slots across projects before pagination,
+including for administrators. A task entering Review releases its slot. Rework
+requires capacity again.
 
 New tasks accept only Backlog/Ready as initial status. `acceptancePolicy` is
 `human` (default) or `automatic`; it is immutable once work starts. Successful
