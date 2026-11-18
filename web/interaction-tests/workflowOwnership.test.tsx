@@ -89,6 +89,7 @@ it("shows legacy definitions in the same Team library", async () => {
   // The Project's name is the link to its Workflows tab.
   const link = await screen.findByRole("link", { name: "Website" });
   expect(link.getAttribute("href")).toContain("tab=members");
+  expect(link.closest(".workflow-project-origin")?.textContent).toContain("workflow.project_origin");
 });
 
 it("unassigns a reference without deleting the Project definition", async () => {

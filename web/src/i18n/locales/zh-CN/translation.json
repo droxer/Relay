@@ -3966,6 +3966,7 @@
     "create_needs_project": "要创建自定义工作流，请先将该团队的智能体加入你在团队所在计算机上的某个项目。",
     "team_owned": "团队所有",
     "project_owned": "项目所有",
+    "project_origin": "所属项目：",
     "clear_default": "清除默认"
   }
 }
