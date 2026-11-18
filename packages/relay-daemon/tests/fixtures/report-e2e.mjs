@@ -111,7 +111,11 @@ const environment = {
         outputs = Object.fromEntries(names.map(name => [name, `Recorded ${name} from ${command.runId}`]));
       }
     }
-    writeFileSync(join(control, 'round-result.json'), JSON.stringify({ status: 'done', runId: command.runId,
+    // Follow the actual runtime prompt: concurrent Project runs receive private
+    // result paths that differ from the state originally sent by the backend.
+    const resultFile = /When you stop, write `([^`]+)`/.exec(args.join(' '))?.[1];
+    if (!resultFile) throw new Error('E2E runtime prompt is missing its result path');
+    writeFileSync(join(options.probeWorkspace, resultFile), JSON.stringify({ status: 'done', runId: command.runId,
       work: { status: 'done', note: 'E2E completed.', evidence: ['Emitted eight deterministic replies.'],
         ...(outputs ? { outputs } : {}) } }));
     trace('runtime-ended', { commandId: command.id, aborted: false });

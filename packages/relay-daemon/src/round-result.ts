@@ -49,8 +49,8 @@ type ParsedRoundResult = Exclude<RoundResultOutcome, { kind: "absent" }>;
  * it must not vanish either: the outcome names why it was refused, so a
  * human's question is never dropped without a trace.
  */
-export function readRoundResult(workspacePath: string, expectedRunId?: string): RoundResultOutcome {
-  const file = consumeControlFile(workspacePath, ROUND_RESULT_RELATIVE_PATH, ROUND_RESULT_MAX_BYTES);
+export function readRoundResult(workspacePath: string, expectedRunId?: string, relativePath = ROUND_RESULT_RELATIVE_PATH): RoundResultOutcome {
+  const file = consumeControlFile(workspacePath, relativePath, ROUND_RESULT_MAX_BYTES);
   if (file.kind === "absent") return { kind: "absent" };
   if (file.kind === "oversize") return { kind: "rejected", reason: "oversize" };
   if (file.kind !== "read") return { kind: "rejected", reason: "malformed" };
@@ -58,8 +58,8 @@ export function readRoundResult(workspacePath: string, expectedRunId?: string): 
 }
 
 /** {@link readRoundResult} for callers that only need an accepted verdict. */
-export function consumeRoundResult(workspacePath: string, expectedRunId?: string): RoundResult | undefined {
-  const outcome = readRoundResult(workspacePath, expectedRunId);
+export function consumeRoundResult(workspacePath: string, expectedRunId?: string, relativePath = ROUND_RESULT_RELATIVE_PATH): RoundResult | undefined {
+  const outcome = readRoundResult(workspacePath, expectedRunId, relativePath);
   return outcome.kind === "accepted" ? outcome.result : undefined;
 }
 

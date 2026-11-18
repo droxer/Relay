@@ -51,7 +51,7 @@ import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/wor
 import { isMainModule } from "../src/cli.js";
 import { consumeRoundResult, readRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
 import { WorkspaceRunGate } from "../src/workspace-run-gate.js";
-import { AGENT_NAMES, type AgentName, type DaemonNodeCommand, type DaemonNodeEvent, type DaemonNodeRegistration, type DaemonNodeRunCommand, type StreamExecResult } from "relay-core";
+import { initialAgentState, AGENT_NAMES, type AgentName, type DaemonNodeCommand, type DaemonNodeEvent, type DaemonNodeRegistration, type DaemonNodeRunCommand, type StreamExecResult } from "relay-core";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -6683,4 +6683,69 @@ test('an unexpected fatal poll response drains active execution before rejecting
   assert.equal(cancelled, true);
   assert.equal(closed, true);
   assert.ok(events.some(event => event.type === 'run.cancelled'));
+});
+
+
+test("parallel project runs retain their own verdicts and next steps", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-project-parallel-"));
+  const stop = new AbortController();
+  const events: DaemonNodeEvent[] = [];
+  const controls: string[] = [];
+  let served = false;
+  let bothStarted!: () => void;
+  const started = new Promise<void>(resolve => { bothStarted = resolve; });
+  const commands = ["a", "b"].map(id => ({
+    ...runCommand(`cmd_parallel_${id}`), sessionId: `session_${id}`, runId: `run_${id}`,
+    workspacePath: root, workspaceLayout: "project" as const, workspaceSubpath: "projects/shared",
+    state: { ...initialAgentState("parallel work"), round_result_file: ".relay/round-result.json", next_steps_file: ".relay/next-steps.json" },
+  }));
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "sbx_test", userId: "alice",
+      workspacePath: root, token: "node_token", pollIntervalMs: 5, maxConcurrentRuns: 2,
+      signal: AbortSignal.any([stop.signal, AbortSignal.timeout(5000)]), logger: testLogger(),
+      environment: fakeEnvironment({ exec: async (_cmd, args) => {
+        if (isInventoryProbe(args)) return { exit_code: 0, stdout: "", stderr: "" };
+        const prompt = args?.join(" ") ?? "";
+        const result = /When you stop, write `([^`]+)`/.exec(prompt)?.[1];
+        const steps = /When you finish, you may write `([^`]+)`/.exec(prompt)?.[1];
+        const runId = /Include "runId": "([^"\n]+)"/.exec(prompt)?.[1];
+        assert.ok(result && steps && runId, prompt);
+        mkdirSync(join(root, "projects/shared/.relay"), { recursive: true });
+        writeFileSync(join(root, "projects/shared", result), JSON.stringify({ runId, status: "done", note: runId }));
+        writeFileSync(join(root, "projects/shared", steps), JSON.stringify({ nextSteps: [`Follow up ${runId}`] }));
+        controls.push(result, steps);
+        if (controls.length === 4) bothStarted();
+        await started;
+        return { exit_code: 0, stdout: "done\n", stderr: "" };
+      } }),
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/api") return jsonResponse({ name: "Relay backend" });
+        if (path === "/api/v1/daemon-node-registrations") return jsonResponse({ ok: true });
+        if (path.endsWith("/commands")) {
+          if (served) return jsonResponse({ commands: [] });
+          served = true; return jsonResponse({ commands });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          events.push(event);
+          if (events.filter(e => e.type === "run.completed" || e.type === "run.failed").length === 2) stop.abort();
+          return jsonResponse({ ok: true }, 202);
+        }
+        throw new Error(`unexpected URL ${url}`);
+      },
+    });
+    const completed = events.filter(e => e.type === "run.completed");
+    assert.equal(completed.length, 2, JSON.stringify(events));
+    assert.equal(new Set(controls).size, 4);
+    for (const event of completed) {
+      assert.equal(event.roundResult?.note, event.runId);
+      assert.deepEqual(event.nextSteps, [`Follow up ${event.runId}`]);
+    }
+    for (const path of controls) assert.equal(existsSync(join(root, "projects/shared", path)), false);
+  } finally {
+    stop.abort(); bothStarted();
+    rmSync(root, { recursive: true, force: true });
+  }
 });

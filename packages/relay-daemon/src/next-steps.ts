@@ -11,8 +11,8 @@ const NEXT_STEPS_MAX_BYTES = 8 * 1024;
  * suggestion as its own. A missing, oversized, or malformed file is simply no
  * suggestion: it never fails the run.
  */
-export function consumeNextSteps(workspacePath: string): string[] {
-  const file = consumeControlFile(workspacePath, NEXT_STEPS_RELATIVE_PATH, NEXT_STEPS_MAX_BYTES);
+export function consumeNextSteps(workspacePath: string, relativePath = NEXT_STEPS_RELATIVE_PATH): string[] {
+  const file = consumeControlFile(workspacePath, relativePath, NEXT_STEPS_MAX_BYTES);
   if (file.kind !== "read") return [];
   try {
     const parsed: unknown = JSON.parse(file.text);

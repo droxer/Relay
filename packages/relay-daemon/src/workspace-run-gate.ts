@@ -31,7 +31,7 @@ interface WorkspaceGateObserver {
   onWaiting?: (blockingSessionId: string | null | undefined) => Promise<void>;
 }
 
-/** Serializes writes that target the same physical project workspace. */
+/** Serializes non-Project runs that target the same physical workspace. */
 export class WorkspaceRunGate {
   private readonly owners = new Map<string, string>();
   private readonly waiters = new Map<string, Set<WorkspaceGateObserver>>();
