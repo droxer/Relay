@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createLocalRuntime } from "../src/local-runtime.js";
+import { watchExecutionExit } from "../src/execution-capture.js";
 
 /**
  * A fake Pi on an isolated PATH that counts every invocation, so the test can
@@ -99,6 +100,25 @@ test("a cancelled local workspace lease cannot launch a native process", async (
     await assert.rejects(lease.execStream(process.execPath, ["-e", "process.exit(99)"]), /cancelled/i);
     lease.release();
   } finally { await runtime.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a local workspace forwards process evidence through its execution signal", async t => {
+  const root = mkdtempSync(join(tmpdir(), "relay-local-exit-evidence-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const runSignal = new AbortController().signal;
+  const spawned: number[] = [];
+  watchExecutionExit(runSignal, { onSpawn: pid => spawned.push(pid) });
+  const lease = await createLocalRuntime().acquireWorkspace(root, runSignal);
+  try {
+    for (const signal of [runSignal, new AbortController().signal]) {
+      const result = await lease.execStream(process.execPath, ["--version"], { signal });
+      assert.equal(result.exit_code, 0);
+    }
+    assert.equal(spawned.length, 2);
+    assert.ok(spawned.every(pid => pid > 0));
+  } finally {
+    lease.release();
+  }
 });
 
 

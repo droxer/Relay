@@ -33,6 +33,21 @@ test("a guest that will not go away proves nothing", async () => {
   assert.equal(await retireStaleGuests(runtime, "relay-node"), false);
 });
 
+test("a guest listing that returns after cancellation cannot start removing guests", async () => {
+  let finishListing!: (guests: Array<{ name: string }>) => void;
+  const listing = new Promise<Array<{ name: string }>>(resolve => { finishListing = resolve; });
+  let removals = 0;
+  const stop = new AbortController();
+  const recovery = retireStaleGuests({
+    listInfo: () => listing,
+    remove: async () => { removals++; },
+  }, "relay-node", stop.signal);
+  stop.abort();
+  finishListing([{ name: "relay-node" }]);
+  await assert.rejects(recovery, { name: "AbortError" });
+  assert.equal(removals, 0);
+});
+
 test("wall-clock jumps never bypass process-group evidence", (t) => {
   let now = BOOT;
   t.mock.method(Date, "now", () => now);

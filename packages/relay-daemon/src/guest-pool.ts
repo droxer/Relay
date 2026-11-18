@@ -53,9 +53,11 @@ interface Guest {
 export class GuestPool {
   private readonly guests = new Map<string, Guest>();
   private readonly freeSlots: number[];
+  private readonly fencedSlots = new Set<number>();
   private waiters = new Set<() => void>();
   private closed = false;
   private booting = 0;
+  private stalledBoots = 0;
   private readonly bootLimit: number;
   private readonly retiring = new Set<Promise<void>>();
 
@@ -74,6 +76,9 @@ export class GuestPool {
       this.assertOpen(signal);
       const guest = this.guests.get(workspace) ?? this.claimSlot(workspace);
       if (guest) return this.lease(guest, signal);
+      if (this.fencedSlots.size === this.options.capacity || this.stalledBoots === this.bootLimit) {
+        throw new Error("No usable BoxLite guest slots remain. A previous boot or cleanup is unconfirmed.");
+      }
       await this.nextRelease(signal);
     }
   }
@@ -121,11 +126,18 @@ export class GuestPool {
     const boxName = this.options.boxName(slot);
     // The replaced guest owns this slot's box name until it has stopped.
     let started = false;
+    let pending = true;
+    let stalled = false;
     this.booting++;
     const rawStarting = previous.then(() => {
       started = true;
       return this.options.start({ workspace, boxName, manager });
-    }).finally(() => { this.booting--; this.wake(); });
+    }).finally(() => {
+      pending = false;
+      this.booting--;
+      if (stalled) this.stalledBoots--;
+      this.wake();
+    });
     const starting = withExecutionDeadline(rawStarting, this.options.bootTimeoutMs ?? 60_000, "Guest boot");
     const guest: Guest = { workspace, slot, manager, starting, rawStarting, started: () => started, booted: false, users: 0, lastReleasedAt: 0 };
     this.guests.set(workspace, guest);
@@ -133,16 +145,26 @@ export class GuestPool {
       if (this.guests.get(workspace) === guest) this.guests.delete(workspace);
       if (error instanceof ExecutionDeadlineError) {
         // The timeout is not exit proof. Cleanup a late boot before reusing its slot.
+        this.fencedSlots.add(slot);
+        if (pending) {
+          stalled = true;
+          this.stalledBoots++;
+        }
+        this.options.onUnconfirmed?.(error);
         const retirement = stopGuest(guest);
         this.retiring.add(retirement);
         void retirement.then(() => {
           this.retiring.delete(retirement);
+          this.fencedSlots.delete(slot);
           if (!this.closed) this.freeSlots.push(slot);
           this.wake();
         }, failure => { this.options.onUnconfirmed?.(failure); });
       } else if (started && !(error instanceof ExecutionCleanupError)) {
         if (!this.closed) this.freeSlots.push(slot);
-      } else this.options.onUnconfirmed?.(error); // Previous occupant could not be stopped.
+      } else {
+        this.fencedSlots.add(slot);
+        this.options.onUnconfirmed?.(error);
+      }
       this.wake();
     });
     return guest;

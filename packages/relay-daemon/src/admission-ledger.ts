@@ -7,6 +7,7 @@ import { syncDirectory } from './sync-directory.js';
  * Resolved identities are never expired merely to reclaim memory. */
 export class AdmissionLedger {
   private readonly cache = new Set<string>();
+  private readonly unpersistedRestores = new Set<string>();
   constructor(private readonly directory: string, private readonly capacity = 4096) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
   }
@@ -18,7 +19,18 @@ export class AdmissionLedger {
     this.cache.add(id);
     if (this.cache.size > this.capacity) this.cache.delete(this.cache.keys().next().value!);
   }
+  /** Preserve recovered identities even when their shard cannot be backfilled. */
+  restore(id: string): void {
+    try { this.add(id); }
+    catch (error) {
+      this.unpersistedRestores.add(id);
+      throw error;
+    }
+  }
   has(id: string): boolean {
+    return this.unpersistedRestores.has(id) || this.hasDurableFence(id);
+  }
+  private hasDurableFence(id: string): boolean {
     if (this.cache.has(id)) { this.remember(id); return true; }
     const hash = this.identity(id);
     let fd: number;
@@ -38,8 +50,21 @@ export class AdmissionLedger {
       return false;
     } finally { closeSync(fd); }
   }
-  add(id: string): void {
-    if (this.has(id)) return;
+  add(id: string, { syncExisting = false }: { syncExisting?: boolean } = {}): void {
+    if (syncExisting) this.cache.delete(id);
+    // Reporting non-execution still requires a durable fence.
+    if (this.hasDurableFence(id)) {
+      if (syncExisting) {
+        // A retry can see a hash left behind by a failed flush.
+        this.cache.delete(id);
+        const fd = openSync(this.path(this.identity(id)), 'r+');
+        try { fsyncSync(fd); } finally { closeSync(fd); }
+        syncDirectory(this.directory);
+        this.remember(id);
+      }
+      this.unpersistedRestores.delete(id);
+      return;
+    }
     const hash = this.identity(id);
     const fd = openSync(this.path(hash), 'a', 0o600);
     try {
@@ -53,5 +78,6 @@ export class AdmissionLedger {
     } finally { closeSync(fd); }
     syncDirectory(this.directory);
     this.remember(id);
+    this.unpersistedRestores.delete(id);
   }
 }

@@ -16,6 +16,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { acquireWorkspaceLockClaim } from "./workspace-lock-claims.js";
 
 const LOCK_RETRY_MS = 25;
+const LOCK_RELEASE_RETRY_MS = 250;
 const INCOMPLETE_LOCK_STALE_MS = 30_000;
 
 interface LockOwner {
@@ -31,20 +32,39 @@ interface WorkspaceGateObserver {
   onWaiting?: (blockingSessionId: string | null | undefined) => Promise<void>;
 }
 
+interface WorkspaceNotification {
+  next?: { owner: string | null | undefined };
+}
+
 /** Serializes non-Project runs that target the same physical workspace. */
 export class WorkspaceRunGate {
   private readonly owners = new Map<string, string>();
   private readonly waiters = new Map<string, Set<WorkspaceGateObserver>>();
   private readonly tails = new Map<string, Promise<void>>();
-  private readonly notifications = new WeakMap<WorkspaceGateObserver, Promise<void>>();
+  private readonly notifications = new WeakMap<WorkspaceGateObserver, WorkspaceNotification>();
 
-  private notify(observer: WorkspaceGateObserver, owner: string | null | undefined): Promise<void> {
-    // Serialize each waiter's updates, without making another execution depend
-    // on that waiter's transport or cancellation signal.
-    const pending = (this.notifications.get(observer) ?? Promise.resolve())
-      .catch(() => undefined).then(() => observer.onWaiting?.(owner));
-    this.notifications.set(observer, pending);
-    return pending;
+  private notify(observer: WorkspaceGateObserver, owner: string | null | undefined): void {
+    if (!observer.onWaiting) return;
+    const pending = this.notifications.get(observer);
+    if (pending) {
+      pending.next = { owner };
+      return;
+    }
+    const notification: WorkspaceNotification = { next: { owner } };
+    this.notifications.set(observer, notification);
+    void this.sendNotifications(observer, notification);
+  }
+
+  private async sendNotifications(observer: WorkspaceGateObserver, notification: WorkspaceNotification): Promise<void> {
+    // Keep delivery ordered and only retain the latest unsent state while the
+    // backend is slow. Workspace access depends solely on the local locks.
+    while (notification.next) {
+      const { owner } = notification.next;
+      notification.next = undefined;
+      try { await observer.onWaiting?.(owner); }
+      catch { /* Status delivery is advisory. */ }
+    }
+    this.notifications.delete(observer);
   }
 
   constructor(private readonly workspaceRoot?: string) {}
@@ -72,18 +92,18 @@ export class WorkspaceRunGate {
         const waiters = this.waiters.get(key) ?? new Set<WorkspaceGateObserver>();
         waiters.add(observer);
         this.waiters.set(key, waiters);
-        await this.notify(observer, this.owners.get(key));
+        this.notify(observer, this.owners.get(key));
       }
       await waitForTurn(predecessor, signal);
       signal?.throwIfAborted();
-      releaseFileLock = await acquireFileLock(this.workspaceRoot, key, signal, observer);
+      releaseFileLock = await acquireFileLock(this.workspaceRoot, key, signal, observer?.sessionId,
+        observer ? id => this.notify(observer, id) : undefined);
       if (observer) {
         this.waiters.get(key)?.delete(observer);
         this.owners.set(key, observer.sessionId);
-        await this.notify(observer, null);
+        this.notify(observer, null);
         for (const waiter of this.waiters.get(key) ?? []) {
-          // A cancelled queued run must not fail the current workspace owner.
-          void this.notify(waiter, observer.sessionId).catch(() => undefined);
+          this.notify(waiter, observer.sessionId);
         }
       }
       signal?.throwIfAborted();
@@ -109,7 +129,8 @@ async function acquireFileLock(
   workspaceRoot: string | undefined,
   key: string,
   signal: AbortSignal | undefined,
-  observer?: WorkspaceGateObserver,
+  sessionId?: string,
+  onWaiting?: (blockingSessionId: string | undefined) => void,
 ): Promise<(() => void) | undefined> {
   if (!workspaceRoot) return undefined;
   const physicalKey = canonicalPhysicalPath(key);
@@ -128,7 +149,7 @@ async function acquireFileLock(
     pid: process.pid,
     token: randomUUID(),
     createdAt: Date.now(),
-    sessionId: observer?.sessionId,
+    sessionId,
   };
 
   let lastOwner: string | undefined;
@@ -140,7 +161,7 @@ async function acquireFileLock(
       if (typeof lock.sessionId === "string") blockingSessionId = lock.sessionId;
     } catch { /* A lock can be released while it is inspected. */ }
     if (!reportedWait || blockingSessionId !== lastOwner) {
-      await observer?.onWaiting?.(blockingSessionId);
+      onWaiting?.(blockingSessionId);
       lastOwner = blockingSessionId;
       reportedWait = true;
     }
@@ -265,9 +286,12 @@ function releaseOwnedLock(lockPath: string, token: string): void {
   try {
     const owner = JSON.parse(readFileSync(lockPath, "utf8")) as Partial<LockOwner>;
     if (owner.token === token) unlinkSync(lockPath);
-  } catch {
-    // Never mask the run result during cleanup. A surviving lock is recovered
-    // by PID liveness (or the incomplete-lock timeout) on the next acquire.
+  } catch (error) {
+    // Waiters still see this PID as live. Retry in the background and recheck
+    // the token before unlinking so cleanup cannot remove a replacement lock.
+    if (!hasCode(error, "ENOENT") && !(error instanceof SyntaxError)) {
+      setTimeout(() => releaseOwnedLock(lockPath, token), LOCK_RELEASE_RETRY_MS).unref();
+    }
   }
 }
 

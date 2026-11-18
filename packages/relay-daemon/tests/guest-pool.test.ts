@@ -170,12 +170,13 @@ test('boot deadlines quarantine the slot until late boot cleanup proves it stopp
   await new Promise(resolve => setTimeout(resolve, 30));
   try {
     assert.match(String(error), /timed out/);
-    const next = pool.acquire('/w/b');
-    await tick();
+    await assert.rejects(pool.acquire('/w/b', AbortSignal.timeout(100)), /no usable BoxLite guest slots/i);
     assert.equal(boots.length, 1);
     boots[0]!.resolve();
     await tick();
     assert.equal(boots[0]!.closed, true);
+    const next = pool.acquire('/w/b');
+    await tick();
     assert.equal(boots.length, 2);
     boots[1]!.resolve();
     (await next).release();
@@ -207,11 +208,7 @@ test('failed guest teardown never frees its slot for another workspace', async (
   });
   (await pool.acquire('/w/a')).release();
   await assert.rejects(pool.acquire('/w/b'), /stop failed/);
-  const abort = new AbortController();
-  const waiting = pool.acquire('/w/c', abort.signal);
-  await tick();
-  abort.abort();
-  await assert.rejects(waiting, /cancelled/);
+  await assert.rejects(pool.acquire('/w/c', AbortSignal.timeout(100)), /no usable BoxLite guest slots/i);
   assert.equal(starts, 1);
   await pool.close();
 });
@@ -226,10 +223,7 @@ test('uncertain startup cleanup keeps the slot fenced and surfaces its failure',
     start: async () => { starts++; throw new ExecutionCleanupError('cleanup unconfirmed'); },
   });
   await assert.rejects(pool.acquire('/w/a'), /cleanup unconfirmed/);
-  const abort = new AbortController();
-  const waiting = pool.acquire('/w/b', abort.signal);
-  await tick(); abort.abort();
-  await assert.rejects(waiting, /cancelled/);
+  await assert.rejects(pool.acquire('/w/b', AbortSignal.timeout(100)), /no usable BoxLite guest slots/i);
   assert.equal(starts, 1);
   assert.equal(failures.length, 1);
   await pool.close();
@@ -260,10 +254,11 @@ test('a timed-out boot keeps its boot budget until the underlying operation sett
   const { pool, boots } = controlledPool(2, { maxConcurrentBoots: 1, bootTimeoutMs: 10 });
   const first = pool.acquire('/w/a');
   await assert.rejects(first, /deadline|timed out/i);
-  const second = pool.acquire('/w/b');
-  await tick();
+  await assert.rejects(pool.acquire('/w/b', AbortSignal.timeout(100)), /no usable BoxLite guest slots/i);
   assert.equal(boots.length, 1);
   boots[0]!.resolve();
+  await tick();
+  const second = pool.acquire('/w/b');
   await tick();
   assert.equal(boots.length, 2);
   boots[1]!.resolve();

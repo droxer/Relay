@@ -71,6 +71,7 @@ export class TerminalOutbox {
   private replayAfter = 0;
   private readonly retryAt = new Map<string, number>();
   private readonly deliveries = new Set<string>();
+  private readonly acceptedTerminalsAwaitingCleanup = new Set<string>();
   private batching = false;
   private accepted = 0;
   private bytes = 0;
@@ -82,8 +83,10 @@ export class TerminalOutbox {
   private readonly positions = new Map<string, number>();
   private onPressure?: () => void;
   private onAcceptance?: () => void;
+  private beforeTerminalRemoval?: (commandId: string) => boolean;
   setPressureHandler(handler: () => void): void { this.onPressure = handler; }
   setAcceptanceHandler(handler: () => void): void { this.onAcceptance = handler; }
+  setTerminalCleanupHandler(handler: (commandId: string) => boolean): void { this.beforeTerminalRemoval = handler; }
   constructor(private readonly directory: string, private readonly onTerminal?: (commandId: string) => void,
     private readonly maxOutputBytes = 1024 * 1024 * 1024, private readonly onWriteError?: (error: Error) => void) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -223,7 +226,7 @@ export class TerminalOutbox {
   private acknowledge(key: string, delivered = true): void {
     const record = this.index.get(key);
     if (!record) return;
-    if (delivered) {
+    if (delivered && !this.acceptedTerminalsAwaitingCleanup.has(key)) {
       this.accepted++;
       this.onAcceptance?.();
       if (!record.terminal) {
@@ -237,6 +240,14 @@ export class TerminalOutbox {
         }
       }
     }
+    if (delivered && record.terminal && this.beforeTerminalRemoval
+      && !this.beforeTerminalRemoval(String(JSON.parse(record.owner)[0]))) {
+      // Keep the terminal proof across restart until the stale journal entry
+      // is gone. The backend already accepted it, so retry only local cleanup.
+      this.acceptedTerminalsAwaitingCleanup.add(key);
+      this.retryAt.set(key, Date.now() + 1_000);
+      return;
+    }
     // A crash before cleanup persists simply replays a durably accepted identity.
     rmSync(join(this.directory, `${key}.json`), { force: true });
     this.bytes -= record.bytes;
@@ -245,6 +256,7 @@ export class TerminalOutbox {
     this.order.remove(key, record);
     this.index.delete(key);
     this.retryAt.delete(key);
+    this.acceptedTerminalsAwaitingCleanup.delete(key);
     const rejection = join(this.directory, `${key}.rejected`);
     if (existsSync(rejection)) { this.bytes -= statSync(rejection).size; rmSync(rejection); syncDirectory(this.directory); }
     this.rejected.delete(key);
@@ -306,6 +318,7 @@ export class TerminalOutbox {
     finally { this.deliveries.delete(record.key); }
   }
   private async sendRecord(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
+    if (this.acceptedTerminalsAwaitingCleanup.has(record.key)) return new Response(null, { status: 200 });
     await this.stored(record.key);
     const rejection = this.rejected.get(record.key);
     if (rejection) return new Response(`Report quarantined; automatic retries paused. Original HTTP ${rejection.status}: ${rejection.detail} Report ID: ${record.key}. Use relay reports and relay retry-report after stopping the daemon.`, { status: 409 });
@@ -426,15 +439,23 @@ export class TerminalOutbox {
     }
   }
   async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {
-    if (this.replaying || Date.now() < this.replayAfter) return;
+    const paused = Date.now() < this.replayAfter;
+    if (this.replaying || signal?.aborted || (paused && this.acceptedTerminalsAwaitingCleanup.size === 0)) return;
     this.replaying = true;
     try {
       // Terminal evidence goes first. Round-robin streams prevent one backlog
       // monopolizing replay; only read a payload when it is actually attempted.
-      const ordered = this.order.candidates(key => !this.rejected.has(key)
+      const ordered: Array<[string, RecordIndex]> = [];
+      const candidates = this.order.candidates(key => (!paused || this.acceptedTerminalsAwaitingCleanup.has(key))
+        && !this.rejected.has(key)
         && !this.deliveries.has(key)
-        && Date.now() >= (this.retryAt.get(key) ?? 0))
-        .map(key => [key, this.index.get(key)!] as [string, RecordIndex]);
+        && Date.now() >= (this.retryAt.get(key) ?? 0));
+      for (const key of candidates) {
+        if (this.acceptedTerminalsAwaitingCleanup.has(key)) {
+          try { this.acknowledge(key); }
+          catch { this.retryAt.set(key, Date.now() + 1_000); }
+        } else ordered.push([key, this.index.get(key)!]);
+      }
       if (this.batching) {
         try { await this.replayBatch(send, eventUrl, token, ordered, signal); } catch { /* Retry the same durable identities next tick. */ }
         return;

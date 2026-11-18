@@ -3,6 +3,7 @@ import { realpathSync, statSync } from "node:fs";
 import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent, localRuntimeEnvironment, commandExecution, type AgentName } from "relay-core";
 import type { DaemonExecutionEnvironment } from "./index.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
+import { exitHooksFor, watchExecutionExit } from "./execution-capture.js";
 import { localExitProven, windowsExitProven } from "./exit-proof.js";
 import { listWindowsProcesses } from "./windows-process-tree.js";
 import { runNativeScript, nativeCommand } from "./native-command.js";
@@ -44,10 +45,13 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
       const execStream: DaemonExecutionEnvironment["execStream"] = async (cmd, args = [], options = {}) => {
         assertActive();
         if (options.cwd && realpathSync.native(options.cwd) !== root) throw new Error("Local workspace scope mismatch.");
-        return localProcessExecStream(cmd, args, {
-          ...options, cwd: root,
-          signal: signal ? options.signal ? AbortSignal.any([signal, options.signal]) : signal : options.signal,
-        });
+        let executionSignal = options.signal ?? signal;
+        if (signal && options.signal && signal !== options.signal) {
+          executionSignal = AbortSignal.any([signal, options.signal]);
+          const hooks = exitHooksFor(options.signal) ?? exitHooksFor(signal);
+          if (hooks) watchExecutionExit(executionSignal, hooks);
+        }
+        return localProcessExecStream(cmd, args, { ...options, cwd: root, signal: executionSignal });
       };
       return {
         ensureAgentReady: async (agent, signal) => {
@@ -62,9 +66,9 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
         release: () => { released = true; },
       };
     },
-    proveExited: async (records) => {
+    proveExited: async (records, signal) => {
       if (process.platform !== "win32") return records.filter((record) => localExitProven(record)).map((record) => record.id);
-      const processes = records.length ? await listWindowsProcesses() : undefined;
+      const processes = records.length ? await listWindowsProcesses(signal) : undefined;
       return records.filter((record) => windowsExitProven(record, processes)).map((record) => record.id);
     },
     close: async () => undefined,

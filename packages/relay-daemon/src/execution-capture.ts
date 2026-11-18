@@ -4,6 +4,8 @@ type StreamRenderer = (chunk: string) => string;
 
 export interface ExecutionExitHooks {
   stopGraceMs?: number;
+  /** Shutdown escalation requests termination without changing exit evidence. */
+  forceStop?: AbortSignal;
   /** A host-mode run started as this process group (on Windows, this root pid) at `spawnedAt`. */
   onSpawn?: (processGroup: number, spawnedAt: number) => void;
   /** Called once when a stop has gone unconfirmed for `unconfirmedAfterMs`. */
@@ -71,7 +73,7 @@ export async function collectExecution(
   const terminate = async (): Promise<void> => {
     if (exited || terminating) return;
     terminating = true;
-    const force = Date.now() - stoppingAt! >= graceMs;
+    const force = hooks.forceStop?.aborted || Date.now() - stoppingAt! >= graceMs;
     let timeout: NodeJS.Timeout | undefined;
     try {
       const action = recovery.terminate ? recovery.terminate(force)
@@ -101,8 +103,14 @@ export async function collectExecution(
     stopTimer = setInterval(() => { void terminate(); }, retryMs);
   };
   const abortExecution = (): void => { cancelled = true; requestStop(); };
+  const forceExecution = (): void => {
+    if (stoppingAt === undefined) abortExecution();
+    else void terminate();
+  };
   if (signal?.aborted) abortExecution();
   signal?.addEventListener("abort", abortExecution, { once: true });
+  if (hooks.forceStop?.aborted) forceExecution();
+  hooks.forceStop?.addEventListener("abort", forceExecution, { once: true });
 
   const released = new Promise<typeof RELEASED>(resolve => {
     if (hooks.release?.aborted) resolve(RELEASED);
@@ -194,6 +202,7 @@ export async function collectExecution(
     if (stopTimer) clearInterval(stopTimer);
     if (drainTimer) clearTimeout(drainTimer);
     signal?.removeEventListener("abort", abortExecution);
+    hooks.forceStop?.removeEventListener("abort", forceExecution);
   }
 }
 
