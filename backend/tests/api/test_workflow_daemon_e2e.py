@@ -1,10 +1,13 @@
 """Loopback backend + real daemon workflow delivery, with a deterministic runtime."""
+import asyncio
 import json
 import time
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 
+from automation_helpers import DAILY_TRIGGERS
 from daemon_e2e import DaemonE2E, eventually
 from test_workflow_progression import decision
 
@@ -56,23 +59,60 @@ def wait_for(h, sid, index, status):
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("entry", ["project", "task", "independent"])
+@pytest.mark.parametrize("entry", [
+    "project", "task", "independent", "independent_task",
+    "team_manual", "team_schedule", "independent_manual", "independent_schedule",
+    "owned_task", "owned_manual", "owned_schedule",
+])
 def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workflow_daemon, entry):
     h = workflow_daemon
-    workflow = h.post("/workflows", workflow_fields(h), 201)["workflow"] if entry == "independent" else team(h)
+    independent = entry.startswith("independent")
+    owned = entry.startswith("owned")
+    automation = entry.endswith(("_manual", "_schedule"))
+    parent = None
+    if owned:
+        parent = h.post("/teams", {"name": "Reusable delivery", "leadAgentId": h.agent["id"],
+                                    "memberAgentIds": [h.agent["id"]]}, 201)["team"]
+        workflow = h.post("/workflows", {
+            "name": "Team delivery", "ownerTeamId": parent["id"],
+            "workflowSteps": workflow_fields(h)["workflowSteps"],
+        }, 201)["workflow"]
+    else:
+        workflow = h.post("/workflows", workflow_fields(h), 201)["workflow"] if independent else team(h)
     task = None
+    routine = None
     if entry == "independent":
         assert h.ctx.team_store.list_teams() == []
         session = h.post(f"/workflows/{workflow['id']}/runs", {
             "requestId": str(uuid4()), "taskGoal": "Exercise independent steps",
         }, 201)
         assert not session.get("teamId")
-    elif entry == "task":
+    elif entry in ("task", "independent_task", "owned_task") or automation:
+        assignment = ({"assignedWorkflowId": workflow["id"]} if independent or owned
+                      else {"assignedTeamId": workflow["id"]})
+        if owned:
+            assignment["assignedTeamId"] = parent["id"]
         task = h.post("/tasks", {"title": "Ship Task workflow", "projectId": h.project["id"],
-                                  "assignedTeamId": workflow["id"]}, 201)
-        result = h.post(f"/tasks/{task['id']}/runs", {}, 202)
-        assert result["dispatch"]["state"] == "started", result
-        session = result["session"]
+                                  **assignment,
+                                  **({"isRoutine": True, "routineState": "active",
+                                      "routineTriggers": DAILY_TRIGGERS} if automation else {})}, 201)
+        if automation:
+            routine = task
+        if entry.endswith("_schedule"):
+            scheduler = h.scheduler()
+            scheduler.automations.tick(datetime.now(UTC) + timedelta(days=2))
+            asyncio.run(scheduler.tick())
+            task, = [item for item in h.ctx.task_store.list_tasks() if item.get("sourceRoutineId") == routine["id"]]
+            sid, = task["linkedSessionIds"]
+            session = h.session(sid)
+        else:
+            result = h.post(f"/tasks/{task['id']}/runs", {}, 202)
+            assert result["dispatch"]["state"] == "started", result
+            session = result["session"]
+            task = result["task"]
+        if independent:
+            assert not session.get("teamId")
+            assert h.ctx.team_store.list_teams() == []
     else:
         session = start(h, workflow)
     sid = session["id"]
@@ -82,7 +122,7 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
     assert len([item for item in h.traces() if item["kind"] == "launch"]) == 3
     assert not h.ctx.daemon_store.list_active_runs(h.node_id)
 
-    edit_path = f"/api/v1/workflows/{workflow['id']}" if entry == "independent" else f"/api/v1/teams/{workflow['id']}"
+    edit_path = f"/api/v1/workflows/{workflow['id']}" if independent or owned else f"/api/v1/teams/{workflow['id']}"
     edited = h.client.patch(edit_path, json={
         "workflowSteps": list(reversed(workflow["workflowSteps"])),
     })
@@ -122,6 +162,22 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
         assert finished["status"] == "review"
         assert finished["executionOwner"] == owner
         assert finished["linkedSessionIds"] == [sid]
+    if routine:
+        definition = h.ctx.task_store.get_task(routine["id"])
+        assert definition["isRoutine"] and definition["routineState"] == "active"
+        assert not definition.get("executionOwner")
+        response = h.client.get(f"/api/v1/tasks/{routine['id']}/runs")
+        assert response.status_code == 200, response.text
+        rows = response.json()["runs"]
+        assert len(rows) == 1
+        assert rows[0]["taskId"] == task["id"]
+        assert rows[0]["latestSessionId"] == sid
+        assert rows[0]["triggerKind"] == ("schedule" if entry.endswith("_schedule") else "manual")
+    if owned:
+        definition = h.ctx.workflow_store.get_workflow(workflow["id"])
+        assert definition["projectId"] is None
+        assert definition["ownerTeamId"] == parent["id"]
+        assert run["workflowSnapshot"]["projectId"] == h.project["id"]
 
 
 @pytest.mark.integration

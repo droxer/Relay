@@ -18,7 +18,7 @@ for (const mobile of [false, true]) {
     const created: Array<Record<string, unknown>> = [];
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
-      let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks: [...tasks, elsewhere], sandboxes: [], skills: [] };
+      let body: unknown = { sessions: [], agents: [], teams: [], workflows: [], nodes: [], projects: [project], tasks: [...tasks, elsewhere], sandboxes: [], skills: [] };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
       if (path.endsWith("/tasks") && route.request().method() === "POST") {
         const input = route.request().postDataJSON();
@@ -44,8 +44,8 @@ for (const mobile of [false, true]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-dashboard-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
-    // Members carries the crew's cards; Settings carries the edit form.
-    await page.getByRole("tab", { name: "Agents", exact: true }).click();
+    // Collaboration carries the crew and Workflows; Settings carries the edit form.
+    await page.getByRole("tab", { name: "Collaboration", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=members$/);
     await expect(page.getByRole("heading", { name: /Project agents/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -232,6 +232,7 @@ for (const mobile of [false, true]) {
       let body: unknown = { sessions: [session], tasks: [task], projects: [project], agents: [], teams: [], nodes: [], sandboxes: [], skills: [] };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
       if (path.endsWith("/threads/s")) body = session;
+      if (path.endsWith("/queue")) body = { messages: [], paused: false };
       if (path.endsWith("/tasks/t")) body = task;
       if (path.endsWith("/events")) body = { events: [] };
       if (path.endsWith("/runs")) body = { runs: [{ ...task, taskId: "t", latestSessionId: "s", startedAt: stamp, endedAt: stamp, artifactCount: 0 }] };
@@ -249,10 +250,14 @@ for (const mobile of [false, true]) {
     await expect(page.locator("#chat-panel")).toBeVisible();
     await page.reload();
     await expect(page.locator("#chat-panel")).toBeVisible();
-    // Both legacy task-thread and task record links retain the Project.
+    // Legacy task-thread links resolve to the Project Thread. Global record
+    // links stay global; an explicit Project record opens over its board.
     await page.goto("/tasks/t/threads/s?project=p");
     await expect(page).toHaveURL(/\/projects\/p\/threads\/s$/);
     await page.goto("/tasks/t?project=p");
+    await expect(page).toHaveURL(/\/tasks\/t\?project=p$/);
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
+    await page.goto("/projects/p?task=t");
     await expect(page).toHaveURL(url => url.pathname === "/projects/p" && url.searchParams.get("task") === "t");
     await expect(page.getByRole("dialog").getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
     await page.goto("/projects/p/new");
@@ -272,6 +277,7 @@ test("sidenav work links open global collections from a Project", async ({ page 
     let body: unknown = { sessions: [room], tasks: [], projects: [project], agents: [], teams: [], nodes: [], sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/s")) body = room;
+    if (path.endsWith("/queue")) body = { messages: [], paused: false };
     if (path.endsWith("/events")) body = { events: [] };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });

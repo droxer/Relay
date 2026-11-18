@@ -214,6 +214,8 @@ class ServerDaemonNodeBackend(
             prepared_request = self._prepared_run_request(request, run_request_id)
             if prepared_request:
                 request = self._resume_prepared_request(request, prepared_request)
+            else:
+                request = self._project_task_delegation_request(request)
             # Explicit admission scope is frozen in the authoritative manifest.
             # The task ID has already been supplied by the task/conductor path;
             # a caller-provided manifest cannot grant task mutation authority.

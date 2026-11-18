@@ -1,7 +1,7 @@
 import { shouldReloadOnNavigation } from "./buildFreshness.ts";
 import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
-import { DEFAULT_PROJECT_PAGE_TAB, PROJECT_PAGE_TABS } from "./projectPage.ts";
+import { DEFAULT_PROJECT_PAGE_TAB, PROJECT_PAGE_TAB_ALIASES, PROJECT_PAGE_TABS } from "./projectPage.ts";
 import {
   DEFAULT_ADMIN_SECTION,
   DEFAULT_SETTINGS_SECTION,
@@ -517,7 +517,8 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
        predates the Agents default and meant the tasks board, so it still
        lands there rather than losing its task. */
     const fallbackTab = source.has("task") ? "tasks" : DEFAULT_PROJECT_PAGE_TAB;
-    const requestedTab = source.get("tab") || fallbackTab;
+    const rawTab = source.get("tab") || fallbackTab;
+    const requestedTab = PROJECT_PAGE_TAB_ALIASES[rawTab] ?? rawTab;
     const tab = PROJECT_TABS.has(requestedTab) ? requestedTab : fallbackTab;
     // An open task implies the tasks tab (only it can show the record), so a
     // task URL stays `?task=` without restating the tab; otherwise the tab is

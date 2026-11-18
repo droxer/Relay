@@ -14,15 +14,16 @@ import {
 } from "./state.js";
 import { extractTokenUsageFromJsonl } from "./token-usage.js";
 import { CodexCollaborationStream } from "./codex-collaboration.js";
+import { truncateAgentTranscript } from "./transcript.js";
 
 // The completed-run agent log is the fallback transcript for runs whose live
 // output events are incomplete. A small tail cap drops the head of the stream,
 // which renders as the reply's first characters going missing, so keep the
-// budget generous; override with RELAY_AGENT_RESULT_LOG_LIMIT when needed.
+// budget generous and retain both ends; override with RELAY_AGENT_RESULT_LOG_LIMIT.
 const DEFAULT_AGENT_TRANSCRIPT_LIMIT = 262_144;
 
 /**
- * Byte budget for retained agent transcript text, read at call time so tests
+ * Character budget for retained agent transcript text, read at call time so tests
  * and operators can widen it. Every layer that truncates a transcript honors
  * this same number — the daemon's live stream capture as well as the log built
  * here — because a lower cap upstream would silently defeat raising it.
@@ -119,7 +120,7 @@ function requiredExecStream(options: AgentRunOptions) {
 function agentResultLog(label: string, result: { exit_code: number; stdout: string; stderr: string; error_message?: string }, limit = agentTranscriptLimit()): string {
   const parts = [`[${label} Exit ${result.exit_code}]`];
   if (result.error_message) parts.push(`Error: ${result.error_message}`);
-  if (result.stderr.trim()) parts.push(`stderr:\n${result.stderr.slice(-limit)}`);
-  if (result.stdout.trim()) parts.push(`stdout:\n${result.stdout.slice(-limit)}`);
+  if (result.stderr.trim()) parts.push(`stderr:\n${truncateAgentTranscript(result.stderr, limit)}`);
+  if (result.stdout.trim()) parts.push(`stdout:\n${truncateAgentTranscript(result.stdout, limit)}`);
   return parts.join("\n");
 }

@@ -21,6 +21,8 @@ from ...agents.routing import (
     resolve_legacy_session_computer_id,
 )
 from ...tasks.workspace import recorded_task_session_id, recorded_task_workspace, resolve_task_workspace
+from ...agents.delegation import delegation_candidates
+from ...projects.runtime import project_member_ids
 from .state import NodeBackendState
 
 
@@ -51,6 +53,12 @@ class RunTargetValidationMixin(NodeBackendState):
                 or requester.get("computerId") != agent.get("computerId")
             ):
                 raise ValueError("Delegation permission is no longer available.")
+            project_id = (assignment.get("projectSnapshot") or {}).get("projectId")
+            if project_id:
+                project = self.project_store.get_project(project_id) if self.project_store else None
+                members = project_member_ids(project) if project else set()
+                if agent_id not in members or requester_id not in members:
+                    raise ValueError("project_agent_not_member")
         if agent.get("toolPolicy"):
             raise ValueError(
                 "agent_policy_unsupported: logical agent policy is not enforceable by this runtime"
@@ -166,6 +174,27 @@ class RunTargetValidationMixin(NodeBackendState):
             }
             resolved_assignments.append(resolved)
         return {**request, "assignments": resolved_assignments}
+
+    def _project_task_delegation_request(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Manual and scheduled Project work share the individual delegation contract."""
+        collaboration = request.get("collaboration") or {}
+        manifest = collaboration.get("manifest") or {}
+        assignments = request["assignments"]
+        if (
+            not request.get("taskId") or not request.get("projectId")
+            or len(assignments) != 1 or manifest.get("teamSnapshot") or manifest.get("workflow")
+            or manifest.get("projectSetup") or "delegationCandidates" in manifest
+            or assignments[0].get("mode", "action") != "action"
+            or not assignments[0].get("agentId")
+        ):
+            return request
+        project = self.project_store.get_project(request["projectId"]) if self.project_store else None
+        if not project:
+            return request
+        candidates = delegation_candidates(self, assignments[0], project=project)
+        return {**request, "collaboration": {**collaboration, "manifest": {
+            **manifest, "delegationCandidates": candidates,
+        }}}
 
     def _active_runs_by_node(self) -> dict[str, builtins.list[dict[str, Any]]]:
         active_runs_by_node: dict[str, builtins.list[dict[str, Any]]] = defaultdict(list)

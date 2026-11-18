@@ -117,7 +117,7 @@ for (const mobile of [false, true]) {
 
 test("a Project creates an independent workflow and a Team can assign it", async ({ page }) => {
   const { workflowWrites } = await fixture(page, false, "light", 2);
-  await page.goto("/projects/web?tab=workflows");
+  await page.goto("/projects/web?tab=members");
   await page.getByRole("button", { name: "New workflow", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "New workflow" });
   await expect(drawer.getByRole("combobox", { name: "Team", exact: true })).toHaveCount(0);
@@ -254,8 +254,8 @@ for (const mobile of [false, true]) {
   test(`Project Workflows run with no Teams (${mobile ? "phone" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     const { sends } = await fixture(page, false, "light", 1, false, false, true, false);
-    await page.goto("/projects/project?tab=workflows");
-    await expect(page.getByRole("tab", { name: "Workflows", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.goto("/projects/project?tab=members");
+    await expect(page.getByRole("tab", { name: "Collaboration", exact: true })).toHaveAttribute("aria-selected", "true");
     await page.screenshot({ path: `/tmp/independent-workflows-${mobile ? "phone" : "desktop"}.png`, animations: "disabled", fullPage: true });
     const library = page.getByRole("region", { name: /^Workflows/ });
     await library.getByRole("button", { name: "Start run", exact: true }).click();

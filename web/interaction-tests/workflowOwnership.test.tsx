@@ -88,7 +88,7 @@ it("shows legacy definitions in the same Team library", async () => {
   mount(<TeamWorkflowLibrary team={{ ...team, projectId: "p", workflowSteps: workflow.workflowSteps }} agents={agents} userId="owner" />);
   // The Project's name is the link to its Workflows tab.
   const link = await screen.findByRole("link", { name: "Website" });
-  expect(link.getAttribute("href")).toContain("tab=workflows");
+  expect(link.getAttribute("href")).toContain("tab=members");
 });
 
 it("unassigns a reference without deleting the Project definition", async () => {

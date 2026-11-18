@@ -14,6 +14,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     await page.route('**/api/**', async route => {
       const path=new URL(route.request().url()).pathname;const method=route.request().method();
       let body: unknown={sessions:[session],agents:[agent],teams:[],nodes:[],projects:[project],tasks,sandboxes:[],skills:[]};
+      if(path.endsWith('/queue')) body={messages:[],paused:false};
       if(path.endsWith('/auth/me')) body={authenticated:true,user:{id:'u',userId:'u',username:'Fei',role:'user',theme:zh?'dark':'light',language:zh?'zh-CN':'en'}};
       if(path.endsWith('/manager/conversation') && method==='POST') {conversations++;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({threadId:'manager-thread'})});return;}
       if(path.endsWith('/manager')) {managerReads++;body={project,manager:{agentId:'ada',agentName:'Ada',threadId:'manager-thread',toolsAvailable:true,reason:null,candidates:[{id:'ada',displayName:'Ada'}]},proposals:[proposal]};}
@@ -69,6 +70,7 @@ test('manager handover replaces a saved target when reopening the normal Thread'
  await page.route('**/api/**',async route=>{
   const path=new URL(route.request().url()).pathname;
   let body:unknown={sessions:[session],agents,projects:[project],nodes:[node],teams:[],tasks:[],skills:[],sandboxes:[]};
+  if(path.endsWith('/queue'))body={messages:[],paused:false};
   if(path.endsWith('/auth/me'))body={authenticated:true,user:{id:'u',userId:'u',username:'Fei',role:'user',theme:'light',language:'en'}};
   if(path.endsWith('/threads/manager-thread'))body=session;
   if(path.endsWith('/manager'))body={project,manager:{agentId:'bea',agentName:'Bea',threadId:'manager-thread',reason:null,toolsAvailable:true,candidates:agents},proposals:[]};

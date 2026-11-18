@@ -51,6 +51,7 @@ async function serve(page: Page, theme: Theme, status: "done" | "review" | "bloc
     const request = route.request();
     const path = new URL(request.url()).pathname;
     let body: unknown = { sessions: [session], agents: [agent], teams: [], tasks: [current], nodes: [node], projects: [], sandboxes: [], skills: [], files: [], entries: [] };
+    if (path.endsWith("/queue")) body = { messages: [], paused: false };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme, language: "en" } };
     if (path.endsWith(`/threads/${session.id}`)) body = session;
     if (path.endsWith(`/threads/${session.id}/events`)) {

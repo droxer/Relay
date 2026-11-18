@@ -247,6 +247,14 @@ run-start, or reconciliation MCP tool. Browser owner authentication is required
 for Apply. Assigning ready work or activating an Automation may let the scheduler
 dispatch it through the ordinary daemon path.
 
+Once a Task or Automation has an `assignedAgentId`, MCP updates cannot replace
+or clear it, or substitute a Team, even for the Project Lead or an owner token.
+Such calls return `task_assignment_approval_required` and apply none of the
+requested fields. Updates that keep the same Agent remain allowed. The owner
+can explicitly edit the assignment in Relay; for Project Tasks, an Agent may
+instead stage a proposal and wait for the owner to Apply it. An unavailable
+assigned Agent remains assigned; dispatch does not select a replacement.
+
 ## Verification and rollout
 
 Migrations 0113 (proposals), 0114 (Connections), 0115 (MCP token digests) and

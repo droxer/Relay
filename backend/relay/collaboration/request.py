@@ -7,6 +7,7 @@ from typing import Any
 
 from ..core.ids import new_relay_id
 from ..agents.delegation import delegation_candidates
+from ..projects.runtime import project_member_ids
 from ..sessions.handoff_context import capture_handoff_context
 from ..security.actor import Actor
 from .errors import CollaborationError
@@ -56,6 +57,10 @@ class RoundRequestMixin(ConductorState):
             intent, session, is_recovery, answered_task
         )
         manifest = {**manifest, **scope_fields}
+        if task_id and project_snapshot and intent.project_setup is None:
+            project = self.ctx.project_store.get_project(project_snapshot["projectId"])
+            if any(item["agentId"] not in project_member_ids(project) for item in resolved):
+                raise CollaborationError("project_agent_not_member", status=400)
         if len(resolved) == 1 and not team_snapshot and intent.mode == "action" and not is_recovery and intent.project_setup is None:
             project = self.ctx.project_store.get_project(project_snapshot["projectId"]) if project_snapshot else None
             candidates = delegation_candidates(self.ctx, resolved[0], project=project)

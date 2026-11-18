@@ -31,6 +31,13 @@ a plaintext token once and stores only its hash.
 
 ## Delivery and recovery
 
+Project Tasks and Automation occurrences retain Direct Delegation and Handoff.
+An individual Agent can delegate to another enabled Project member and receives
+control back to verify the result. Delegation respects the Agent's target
+restrictions and the shared Computer boundary; membership is rechecked before
+the delegate is dispatched. A Handoff transfers the next turn to an enabled
+Project member while retaining the same Thread and Task execution scope.
+
 Every trigger passes through the same pending state. Firings coalesce behind a
 running occurrence; missed schedule slots collapse into one catch-up. Pending
 events expire after 24 hours. Self-origin events, own occurrences, and chains

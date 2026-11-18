@@ -68,25 +68,42 @@ def _extract_stream_json_assistant_text(transcript: str) -> str | None:
         result = event.get("result")
         if event.get("type") == "result" and isinstance(result, str) and result.strip():
             return result.strip()
-        if event.get("type") != "assistant":
-            continue
-        message = event.get("message")
-        content = message.get("content") if isinstance(message, dict) else None
-        if isinstance(content, str) and content.strip():
-            return content.strip()
-        if not isinstance(content, list):
-            continue
-        text = "\n".join(
-            block["text"].strip()
-            for block in content
-            if isinstance(block, dict)
-            and block.get("type") == "text"
-            and isinstance(block.get("text"), str)
-            and block["text"].strip()
-        )
+        message: Any = None
+        if event.get("type") == "item.completed":
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                message = item
+        elif event.get("type") == "assistant":
+            message = event.get("message")
+        elif event.get("type") in ("message", "assistant_message", "agent_message"):
+            candidate_message = event.get("message", event)
+            if isinstance(candidate_message, dict) and candidate_message.get("role", "assistant") == "assistant":
+                message = candidate_message
+        text = _assistant_message_text(message)
         if text:
             return text
     return None
+
+
+def _assistant_message_text(message: Any) -> str | None:
+    if not isinstance(message, dict):
+        return None
+    text = message.get("text")
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip() or None
+    if not isinstance(content, list):
+        return None
+    return "\n".join(
+        block["text"].strip()
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") in ("text", "output_text")
+        and isinstance(block.get("text"), str)
+        and block["text"].strip()
+    ) or None
 
 
 def include_run_in_continuity(run: dict[str, Any]) -> bool:

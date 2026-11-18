@@ -101,6 +101,7 @@ async function serveRouteWork(page: import("@playwright/test").Page) {
       nodes: [{ id: "route-node", computerId: "route-computer", userId: "routes-user", status: "ready", online: true, stale: false, activeRuns: [], agents: {} }],
       sandboxes: [], skills: [], notifications: [], files: [], entries: [], hasMore: false,
     };
+    if (path.endsWith("/queue")) body = { messages: [], paused: false };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: {
       id: "routes-user", userId: "routes-user", username: "Routes", role: "user", theme: "light", language: "en",
     } };

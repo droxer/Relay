@@ -29,6 +29,8 @@ def delegation_candidates(
     agent = ctx.agent_store.get_agent(assignment.get("agentId")) or {}
     if not agent.get("supervisorUserId"):
         return []
+    if project and agent.get("id") not in project_member_ids(project):
+        return []
     nodes = ctx.registry.monitor_nodes()
     node = next((node for node in nodes if node["id"] == assignment["daemonNodeId"]), None)
     if not has_capability(node, DAEMON_CAPABILITY_DIRECT_DELEGATION):
@@ -54,5 +56,8 @@ def delegation_candidates(
             )
         except ValueError:
             continue  # An unavailable delegate must not prevent A's own work.
+        # Retain the Project identity so delivery can recheck live membership.
+        if project:
+            target = {**target, "projectSnapshot": assignment.get("projectSnapshot") or {"projectId": project["id"]}}
         candidates.append(target)
     return candidates

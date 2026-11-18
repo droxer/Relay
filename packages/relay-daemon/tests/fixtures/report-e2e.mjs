@@ -82,9 +82,12 @@ const environment = {
     if (!command) throw new Error(`E2E cannot identify workspace ${options.probeWorkspace}`);
     launched.add(command.id);
     trace('launch', { commandId: command.id, runId: command.runId, sessionId: command.sessionId,
+      priorConversation: command.state?.prior_conversation,
       ...(profile.workflow ? { brief: command.state?.assignment_brief } : {}) });
+    const stdout = [];
     for (let index = 0; index < 8 && !options.signal?.aborted; index++) {
       const chunk = JSON.stringify({ type: 'item.completed', item: { id: `reply-${index}`, type: 'agent_message', text: `E2E reply ${index} for ${command.runId}` } }) + '\n';
+      stdout.push(chunk);
       const rendered = options.stdoutRenderer?.(chunk);
       if (rendered) options.sink?.(rendered);
       await sleep(25);
@@ -116,7 +119,7 @@ const environment = {
       work: { status: 'done', note: 'E2E completed.', evidence: ['Emitted eight deterministic replies.'],
         ...(outputs ? { outputs } : {}) } }));
     trace('runtime-ended', { commandId: command.id, aborted: false });
-    return { exit_code: 0, stdout: '', stderr: '' };
+    return { exit_code: 0, stdout: stdout.join(''), stderr: '' };
   },
 };
 
