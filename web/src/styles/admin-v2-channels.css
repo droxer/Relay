@@ -344,8 +344,8 @@
 
 .adm-chat-integration-main span {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .adm-chat-readiness {
@@ -471,8 +471,8 @@
 
 .adm-chat-rows small {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

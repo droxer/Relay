@@ -290,8 +290,8 @@
      restates --type-body-sm one rung down (--fs-2 → --fs-1), so the badge
      alone held its size while the text around it dropped to 12px. Taking the role is a small,
      deliberate change, not a no-op. */
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* Status hue lives only on the dot (tone-* sets --tone in base.css), matching

@@ -91,7 +91,7 @@ html {
   z-index: var(--z-dialog);
   /* Parked a step past the top edge, not flush with it: at exactly -100% -
      top its bottom edge sat on y=0 and a fractional height let one row of
-     the action fill paint as an orange sliver over every page. */
+     the action fill paint as a sliver over every page. */
   transform: translateY(calc(-100% - var(--sp-4) - var(--sp-2)));
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
@@ -363,12 +363,15 @@ button[data-danger]:focus-visible,
 
    Nothing else may define a `.tone-*` class. A component opts in by reading
    var(--tone); it never re-derives the tone → hue mapping for itself. */
-.tone-good    { --tone: var(--ok); }
-.tone-info    { --tone: var(--info); }
-.tone-bad     { --tone: var(--err); }
-.tone-warn    { --tone: var(--warn); }
-.tone-live    { --tone: var(--live); }
-.tone-neutral { --tone: var(--ink-4); }
+.tone-good    { --tone: var(--ok);    --tone-mark: var(--ok-mark); }
+.tone-info    { --tone: var(--info);  --tone-mark: var(--info); }
+.tone-bad     { --tone: var(--err);   --tone-mark: var(--err-mark); }
+.tone-warn    { --tone: var(--warn);  --tone-mark: var(--warn-mark); }
+.tone-live    { --tone: var(--live);  --tone-mark: var(--live-mark); }
+.tone-neutral { --tone: var(--ink-4); --tone-mark: var(--ink-4); }
+/* --tone is the INK (text, rings, small dots); --tone-mark is the same state
+   painted as an AREA — a bar segment, a donut arc and its legend swatch. See
+   the status marks in palette.css for why the two differ. */
 
 /* Selected row in a navigation rail — threads, projects, agents, teams.
    ONE definition, because the three rails are one grammar and were drifting

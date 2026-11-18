@@ -198,6 +198,16 @@ it("replaces a stale Project Team with a Project Workflow", async () => {
   expect(onChange).toHaveBeenCalledWith({ kind: "workflow", id: "w" });
 });
 
+it("marks a stale assignment in its cell without spelling the sentence into the row", () => {
+  render(<InlineAssignee task={{ ...base, assignedTeamId: "legacy" }} project={{ id: "project-1", members: [] } as unknown as ProjectRecord}
+    agents={[]} teams={[]} display={{ ready: false }} onChange={vi.fn()} />);
+  const trigger = screen.getByRole("combobox", { name: "backlog.assignment_reselect" });
+  // A sentence in a nowrap table cell widened the Assignee column until the
+  // title column had nothing left; the label speaks it and a mark shows it.
+  expect(trigger.textContent).not.toContain("backlog.assignment_reselect");
+  expect(trigger.querySelector(".assignee-reselect-mark")?.getAttribute("title")).toBe("backlog.assignment_reselect");
+});
+
 // Keep selection semantics while leaving popup positioning to browser tests.
 vi.mock("@/components/ui/select", () => {
   const Context = createContext<any>({});

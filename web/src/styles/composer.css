@@ -180,8 +180,8 @@
      --type-body-sm one rung down, could not move it — and left weight, leading,
      and family to inherit rather than be declared. The name above it is
      --type-label, so the pair still separates by size and ink. */
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .thread-runtime-option-id {
@@ -495,8 +495,8 @@
   place-items: center;
   border-color: transparent;
   border-radius: var(--r-full);
-  background: var(--cta-fill);
-  color: var(--cta-ink);
+  background: var(--action);
+  color: var(--on-action);
   cursor: pointer;
   transition:
     background var(--t-fast) var(--ease),
@@ -505,7 +505,7 @@
 }
 
 .send-button:not(:disabled):hover {
-  background: var(--cta-hover);
+  background: var(--action-hover);
 }
 
 .send-button:not(:disabled):active {

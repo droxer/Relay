@@ -79,7 +79,7 @@
   padding: var(--sp-3) var(--sp-4);
   border-bottom: var(--hairline);
   color: var(--ink-2);
-  font: var(--type-body-sm);
+  font: var(--type-meta);
   overflow-wrap: anywhere;
 }
 

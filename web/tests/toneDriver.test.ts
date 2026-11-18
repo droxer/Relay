@@ -91,18 +91,20 @@ const baseCode = stripComments(base.text);
 const DECLARED = [...baseCode.matchAll(/\.tone-([a-z]+)\s*\{\s*--tone:/g)].map((m) => m[1]).sort();
 
 describe("tone driver vocabulary", () => {
-  it("declares exactly the six status tones, each setting only --tone", () => {
+  it("declares exactly the six status tones, each setting only its ink and its mark", () => {
+    // --tone is the state as INK (text, small dots); --tone-mark is the same
+    // state painted as an AREA (bar segments, donut arcs), which the light
+    // register cannot share with the deepened text inks (palette.css).
     assert.deepEqual(DECLARED, ["bad", "good", "info", "live", "neutral", "warn"]);
     for (const tone of DECLARED) {
       const rule = baseCode.match(new RegExp(`\\.tone-${tone}\\s*\\{([^}]*)\\}`));
       assert.ok(rule, `.tone-${tone} rule not found`);
       const declarations = rule[1].split(";").map((d) => d.trim()).filter(Boolean);
-      assert.equal(
-        declarations.length,
-        1,
-        `.tone-${tone} must set --tone and nothing else, got: ${declarations.join("; ")}`,
+      assert.deepEqual(
+        declarations.map((d) => d.split(":")[0].trim()),
+        ["--tone", "--tone-mark"],
+        `.tone-${tone} must set --tone and --tone-mark and nothing else, got: ${declarations.join("; ")}`,
       );
-      assert.match(declarations[0], /^--tone:/);
     }
   });
 

@@ -106,7 +106,7 @@
   display: block;
   overflow: hidden;
   color: var(--ink-3);
-  font: var(--type-body-sm);
+  font: var(--type-meta);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

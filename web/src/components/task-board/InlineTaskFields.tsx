@@ -253,7 +253,7 @@ function InlineAssigneeOptions({
       workflows={project ? workflows : undefined}
       selectedAgent={selectedAgent}
       selectedTeam={selectedTeam}
-      inline={{ label: staleAssignment ? t("backlog.assignment_reselect") : t("backlog.inline.assignee_label", { name: taskAssigneeLabel(task, display.name, t) }), content: staleAssignment ? <>{chip}<span className="text-destructive">{t("backlog.assignment_reselect")}</span></> : chip }}
+      inline={{ label: staleAssignment ? t("backlog.assignment_reselect") : t("backlog.inline.assignee_label", { name: taskAssigneeLabel(task, display.name, t) }), content: staleAssignment ? <>{chip}<span className="assignee-reselect-mark" title={t("backlog.assignment_reselect")}><StatusWarn size={ICON.xs} aria-hidden="true" /></span></> : chip }}
       onSelect={(selection) => {
         const unchanged = selection.kind === "none"
           ? !task.assignedAgentId && !task.assignedTeamId && !task.assignedWorkflowId

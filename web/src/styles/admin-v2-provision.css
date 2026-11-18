@@ -50,8 +50,8 @@
 }
 
 .adm-provision-section-meta {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -448,8 +448,8 @@
 .adm-cred-value {
   flex: 1;
   color: var(--ink-1);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   word-break: break-all;
   background: transparent;
   padding: 0;

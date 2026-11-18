@@ -101,8 +101,8 @@ button.project-member-row:hover {
 .project-member-row-meta {
   overflow: hidden;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -195,8 +195,8 @@ button.project-member-row:hover .project-member-row-open {
   align-items: center;
   gap: var(--sp-2);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   cursor: pointer;
 }
 
@@ -456,8 +456,8 @@ button.project-member-row:hover .project-member-row-open {
   border-radius: var(--r-full);
   background: var(--control-fill);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .project-dashboard-suggestions {
@@ -787,8 +787,8 @@ button.project-member-row:hover .project-member-row-open {
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-4);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .project-settings-stamps time {

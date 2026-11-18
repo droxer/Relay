@@ -31,8 +31,8 @@
   align-items: center;
   gap: var(--sp-3);
   margin: 0;
-  font: var(--type-body);
-  font-weight: 500;
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
   color: var(--ink-1);
 }
 

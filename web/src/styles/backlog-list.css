@@ -140,6 +140,16 @@ tr[data-slot="table-row"]:not([data-selected="true"]):hover {
 
 .due-overdue-mark { flex: none; }
 
+/* An assignment the task can no longer use: the chip keeps its name and this
+   mark says it needs reselecting. The sentence itself lives in the control's
+   label and the mark's tooltip — spelled into a nowrap cell it widened the
+   Assignee column to ~600px and starved the title column to nothing. */
+.assignee-reselect-mark {
+  display: inline-flex;
+  flex: none;
+  color: var(--err);
+}
+
 /* A rank that departs from the default names itself; "normal" stays a quiet
    glyph so the column is not a wall of the same word. */
 .task-table .inline-field--icon:has(.priority-glyph:not([data-priority="normal"])) .priority-label,
@@ -811,8 +821,8 @@ tr[data-selected="true"] > td:first-child {
     width: auto;
     margin-right: var(--sp-3);
     color: var(--ink-3);
-    font: var(--type-body-sm);
-    letter-spacing: var(--type-body-sm-track);
+    font: var(--type-meta);
+    letter-spacing: var(--type-meta-track);
   }
 
   .task-table > tbody > tr > td[data-slot="table-cell"].task-col-ref { order: 10; min-width: 0; }

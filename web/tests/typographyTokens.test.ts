@@ -193,6 +193,18 @@ describe("application typography roles", () => {
     // takes 500 rather than 600 because the ladder stays three rungs — see the
     // weight-ladder test in dimensionScales.test.ts.
     assert.match(roles, /--type-micro:\s+500[^;]+var\(--font-sans\);/);
+    // Meta is supporting PROSE at the caption size, so it reads at the reading
+    // weight. At 500 it was a byte-for-byte copy of micro, and a row's meta
+    // line ("Claude · Runtime default") carried the same weight as the name
+    // above it — the hierarchy fell to ink alone.
+    assert.match(roles, /--type-meta:\s+400[^;]+var\(--font-sans\);/);
+    // Supporting SENTENCES (hints, descriptions, empty-state copy) read at the
+    // one reading size; only the caption roles — meta lines and group labels —
+    // sit on the 12px rung. With body-sm at 12px too, ~45% of rendered text
+    // was 12px and every hint read as fine print.
+    assert.match(roles, /--type-body-sm:\s+400 var\(--fs-2\)\//);
+    assert.match(roles, /--type-meta:\s+400 var\(--fs-1\)\//);
+    assert.match(roles, /--type-micro:\s+500 var\(--fs-1\)\//);
     assert.doesNotMatch(roles, /--type-[a-z-]+:\s+800/, "the product ladder deliberately stops at 700");
     assert.match(roles, /--type-code:\s+400[^;]+var\(--font-mono\);/);
     assert.match(roles, /--type-body:\s+400[^;]+var\(--font-sans\);/);

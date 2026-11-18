@@ -211,8 +211,8 @@
 /* One line. The hint is a gloss on the numeral above it, and a two-line
    gloss in one tile would be the only thing setting the rail's height. */
 .adm-dash-tile-hint {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
   min-width: 0;
   /* The hint is the tile's one qualification ("excludes cache reads"), so it
@@ -407,14 +407,14 @@
    `--ink-4` ended up defined here instead of in the driver. Warn keeps its
    own rule because it is double-encoded by TEXTURE as well as hue — five
    states have to separate in an 8px bar. */
-.adm-dash-bar-seg { background: var(--tone, var(--ink-4)); }
+.adm-dash-bar-seg { background: var(--tone-mark, var(--ink-4)); }
 
 .adm-dash-bar-seg.tone-warn,
 .adm-dash-bar-seg[data-stage="review"] {
   background: repeating-linear-gradient(
     135deg,
-    var(--tone),
-    var(--tone) 2px,
+    var(--tone-mark),
+    var(--tone-mark) 2px,
     transparent 2px,
     transparent 4px
   );
@@ -464,7 +464,7 @@
    data-viz exception the bar segments below document. */
 .adm-dash-ring-arc {
   fill: none;
-  stroke: var(--tone, var(--ink-4));
+  stroke: var(--tone-mark, var(--ink-4));
 }
 
 .adm-dash-ring-center {
@@ -547,7 +547,8 @@
   width: var(--dot-sm);
   height: var(--dot-sm);
   border-radius: var(--r-full);
-  background: var(--tone, var(--ink-4));
+  /* The ring's legend swatch: it matches the arc, so it is a mark. */
+  background: var(--tone-mark, var(--ink-4));
 }
 
 /* --live is the only chromatic role on the page, and only while count > 0:
@@ -560,7 +561,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  border: 1.5px solid var(--tone);
+  border: 1.5px solid var(--tone-mark);
   border-radius: var(--r-full);
   opacity: 0.4;
   transform: scale(1.6);
@@ -572,7 +573,7 @@
    — the same shape StatusPill and the node presence dots use. */
 .adm-dash-stat.tone-bad .adm-dash-stat-dot {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--tone);
+  box-shadow: inset 0 0 0 1px var(--tone-mark);
 }
 
 /* A LIST count beside its label, so the name role with tabular figures;
@@ -770,7 +771,6 @@
 .adm-dash-range-summary {
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
-  font-weight: 400;
   color: var(--ink-3);
 }
 

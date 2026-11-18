@@ -575,8 +575,8 @@
   margin: 0;
   padding: var(--doc-inset-block) var(--doc-inset-inline);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 .artifact-viewer-error {
   color: var(--err);

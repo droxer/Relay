@@ -88,8 +88,8 @@
 
 .record-panel-count {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .record-panel-note {
@@ -152,8 +152,8 @@
 
 .record-artifacts-count {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .record-artifacts-rows {
@@ -227,8 +227,8 @@
   gap: var(--sp-2);
   min-width: 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .record-artifact-meta-text {
@@ -405,8 +405,8 @@
 .record-timeline-actor,
 .record-timeline-time {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .record-timeline-time {
@@ -428,8 +428,8 @@
   align-items: center;
   gap: var(--sp-0-5);
   justify-self: start;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-decoration: none;
 }
 
