@@ -21,6 +21,21 @@ def real_daemon(tmp_path, monkeypatch):
 
 
 @pytest.mark.integration
+def test_real_daemon_codex_reply_is_carried_into_followup_context(real_daemon):
+    h = real_daemon
+    _, session_id = h.start_task()
+    completed = h.settled(session_id, 1)
+    [first] = [item for item in h.traces() if item["kind"] == "launch"]
+    reply = f"E2E reply 7 for {first['runId']}"
+    assert reply in completed["agentRuns"][0]["agentLog"]
+    h.follow_up(session_id)
+    h.settled(session_id, 2)
+    second = [item for item in h.traces() if item["kind"] == "launch"][1]
+    assert reply in second["priorConversation"]
+    assert "<no output>" not in second["priorConversation"]
+
+
+@pytest.mark.integration
 def test_completed_task_thread_accepts_followups_and_report_replays(real_daemon):
     h = real_daemon
     task_id, session_id = h.start_task()

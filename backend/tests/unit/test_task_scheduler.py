@@ -1742,6 +1742,11 @@ def test_scheduler_records_one_failure_and_dispatches_the_next(monkeypatch, fail
                     return await original_run(node_id, request)
 
                 monkeypatch.setattr(backend, "run", dispatch)
+
+                def warning(message, **fields):
+                    assert message != "Task dispatch still waiting on the daemon backend", fields
+
+                monkeypatch.setattr("relay.tasks.scheduler.logger.warning", warning)
             else:
                 original = scheduler._materialize_legacy_assignment
 

@@ -267,6 +267,8 @@ export {
   agentTranscriptLimit,
 } from "./nodes.js";
 
+export { BoundedAgentTranscript, truncateAgentTranscript } from "./transcript.js";
+
 export {
   materializeEvents,
   newRelayId,
