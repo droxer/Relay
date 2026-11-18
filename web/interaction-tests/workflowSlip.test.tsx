@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { expect, it, vi } from "vitest";
 import type { WorkflowRun } from "relay-core";
 import { WorkflowSlip, workflowNeedsOwner } from "../src/components/composer/WorkflowSlip";
-import { WorkflowProgress } from "../src/components/workflow/WorkflowProgress";
+import { WorkflowRunLedger, WorkflowRunSummary } from "../src/components/workflow/WorkflowProgress";
 
 // Floating popups do not open under jsdom; render them inline instead.
 vi.mock("@/components/ui/dropdown-menu", () => ({
@@ -94,7 +94,7 @@ it("offers retry with the stop's reason when a step is blocked, and cancels only
 });
 
 it("reads status in words and keeps recorded outputs in the timeline", () => {
-  render(<WorkflowProgress run={run()} agentName={(id) => `name:${id}`} />);
+  render(<><WorkflowRunSummary run={run()} agentName={(id) => `name:${id}`} /><WorkflowRunLedger run={run()} agentName={(id) => `name:${id}`} /></>);
   expect(screen.getByText("workflow.status_awaiting_approval")).toBeTruthy();
   expect(screen.getByText("workflow.step_done")).toBeTruthy();
   expect(screen.getByText("workflow.step_waiting")).toBeTruthy();
@@ -112,7 +112,7 @@ it("retains a failed attempt's reason after a successful retry", () => {
         timestamp: "2026-11-16T00:01:00Z", status: "succeeded", outputs: { "design notes": "Recorded retry output" } },
     ],
   });
-  render(<WorkflowProgress run={completed} agentName={(id) => id} />);
+  render(<WorkflowRunLedger run={completed} agentName={(id) => id} />);
   expect(screen.getByText("workflow.reason.workflow_outputs_required")).toBeTruthy();
   expect(screen.getByText("Recorded retry output")).toBeTruthy();
   const attempts = screen.getAllByTestId("workflow-attempt");
@@ -125,7 +125,7 @@ it("shows recorded evidence, notes, timestamps and owner decisions in the frozen
   frozen.attemptResults![0].evidence = ["Verified against saved design"];
   frozen.attemptResults![0].note = "Design accepted";
   frozen.gateDecisions = [{ ...frozen.assignments[1], expectedRevision: 3, kind: "approve", timestamp: "2026-11-16T01:00:00Z" }];
-  render(<WorkflowProgress run={frozen} agentName={id => id} expanded />);
+  render(<WorkflowRunLedger run={frozen} agentName={id => id} />);
   expect(screen.getByText("Verified against saved design")).toBeTruthy();
   expect(screen.getByText("Design accepted")).toBeTruthy();
   expect(screen.getByText("workflow.decision_approve")).toBeTruthy();

@@ -1,0 +1,162 @@
+import { expect, test, type Page } from "@playwright/test";
+import type { WorkflowRun, WorkflowStepDefinition } from "relay-core";
+
+const stamp = "2026-11-18T00:00:00Z";
+const currentStep = "核对发布清单并确认所有必需的回归用例都已通过 · Verify the release checklist before continuing";
+const lastStep = "Record the release";
+const lastLine = "End of recorded output";
+
+function makeRun(id: string, status: WorkflowRun["status"], startedAt: string): WorkflowRun {
+  const workflowSteps: WorkflowStepDefinition[] = Array.from({ length: 20 }, (_, index) => ({
+    id: `step-${index}`,
+    name: index === 19 ? lastStep : index === 18 ? currentStep : `Release step ${index + 1}`,
+    agentId: "builder",
+    instructions: "Perform the release check.",
+    acceptanceCriteria: [],
+    requiresApproval: index === 18,
+  }));
+  const assignments = workflowSteps.map((step, index) => ({
+    workflowRunId: id, workflowStepId: step.id, workflowAttempt: 1,
+    assignmentId: `${id}-attempt-${index}`, workItemId: `${id}-item-${index}`,
+    workOwnerAgentId: step.agentId, workObjective: step.instructions, awaitApproval: step.requiresApproval,
+    expectedOutputs: [], acceptanceCriteria: [],
+  }));
+  return {
+    workflowRunId: id, status, startedAt, currentIndex: status === "completed" ? 20 : 18,
+    revision: 18, teamSnapshot: { id: "team", name: id, workflowSteps }, assignments,
+    gateDecisions: [],
+    attemptResults: status === "awaiting_approval" ? [{
+      ...assignments[17], runId: "agent-run", commandId: "command", timestamp: startedAt, status: "succeeded",
+      outputs: { "Verification log": `${"release-check-".repeat(40)}\n${"Checked deployment status\n".repeat(35)}${lastLine}` },
+    }] : [],
+  };
+}
+
+async function fixture(page: Page, language: string) {
+  const runs = [
+    makeRun("First release", "cancelled", "2026-11-18T01:00:00Z"),
+    makeRun("Earlier release", "completed", "2026-11-18T02:00:00Z"),
+    makeRun("Release checklist", "awaiting_approval", "2026-11-18T03:00:00Z"),
+  ];
+  const sessions = runs.map((run, index) => ({
+    id: `release-${index}`, title: "Release Thread", taskGoal: "Ship the release", ownerUserId: "alice",
+    ownerAgentId: "builder", projectId: "release", workspacePath: "/workspace",
+    status: index === 2 ? "running" : run.status, phase: "created", participants: ["human"],
+    agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [],
+    workflowRuns: [run], activeWorkflowRunId: run.workflowRunId,
+    eventCount: 0, artifactCount: 0, runCount: 0, createdAt: run.startedAt, updatedAt: run.startedAt,
+  }));
+  const task = {
+    id: "ship", title: "Ship the release", description: "", status: "waiting_for_human", priority: "normal",
+    projectId: "release", ownerUserId: "alice", isRoutine: false,
+    linkedSessionIds: sessions.map(session => session.id), activity: [], events: [], createdAt: stamp, updatedAt: stamp,
+    attention: { code: "workflow_blocked" as string | undefined },
+  };
+  const project = { id: "release", name: "Release", ownerUserId: "alice", computerId: "device:alice:host", enabled: true, members: [], version: 1, createdAt: stamp, updatedAt: stamp };
+  const agent = { id: "builder", displayName: "Release Builder", executorKind: "codex", enabled: true, placements: [], skills: [] };
+
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions, tasks: [task], projects: [project], agents: [agent], teams: [], nodes: [], workflows: [], skills: [] };
+    const session = sessions.find(item => path.endsWith(`/threads/${item.id}`));
+    if (session) body = session;
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "Alice", role: "user", theme: "light", language } };
+    if (path.endsWith("/projects/release")) body = { project };
+    if (path.endsWith("/tasks/ship")) body = task;
+    if (path.endsWith("/threads/release-2/workflow-decisions")) {
+      const active = sessions[2];
+      active.workflowRuns = [{ ...active.workflowRuns[0], status: "ready", revision: 19 }];
+      task.status = "running";
+      task.attention.code = undefined;
+      body = active;
+    }
+    if (path.endsWith("/events")) body = { events: [] };
+    if (path.endsWith("/runs")) body = { runs: [] };
+    if (path.endsWith("/queue")) body = { messages: [] };
+    await route.fulfill({ json: body });
+  });
+}
+
+test("approves a waiting Workflow Run in Task Activities", async ({ page }) => {
+  await fixture(page, "en");
+  await page.goto("/projects/release?task=ship&recordTab=activity");
+
+  const run = page.locator(".record-workflow-run").first();
+  const summary = run.locator(".workflow-run-summary");
+  await expect(summary.getByText("Waiting for approval", { exact: true })).toBeVisible();
+  await expect(run.getByRole("button", { name: /^Reject\b/ })).toBeVisible();
+  const decision = page.waitForRequest(request => request.url().endsWith("/threads/release-2/workflow-decisions"));
+  await run.getByRole("button", { name: /^Approve\b/ }).click();
+
+  expect((await decision).postDataJSON()).toEqual({
+    kind: "approve", workflowRunId: "Release checklist", workflowStepId: "step-18",
+    assignmentId: "Release checklist-attempt-18", workflowAttempt: 1, expectedRevision: 18,
+  });
+  await expect(summary.getByText("Running", { exact: true })).toBeVisible();
+  await expect(run.getByRole("button", { name: /^(Approve|Reject)\b/ })).toHaveCount(0);
+});
+
+for (const { width, height, language, labels } of [
+  { width: 1280, height: 900, language: "en", labels: { current: "Current run", pending: "Waiting for approval", view: "View run details", steps: "Run steps", close: "Close", approve: "Approve" } },
+  { width: 375, height: 812, language: "zh-CN", labels: { current: "当前执行", pending: "等待批准", view: "查看执行详情", steps: "执行步骤", close: "关闭", approve: "批准" } },
+]) {
+  test(`Workflow execution stays readable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await fixture(page, language);
+    await page.goto("/projects/release?task=ship&recordTab=activity");
+
+    const summary = page.locator(".record-workflow-run").first();
+    await expect(page.getByRole("heading", { name: labels.current })).toBeInViewport();
+    for (const text of [currentStep, "Release Builder", labels.pending, /18\/20/]) {
+      await expect(summary.locator(".workflow-run-summary").getByText(text)).toBeInViewport();
+    }
+    const history = page.locator(".record-workflow-history");
+    await expect(history.getByRole("article")).toHaveCount(2);
+    await expect(history.locator("details[open]")).toHaveCount(0);
+    await history.getByText(labels.steps, { exact: true }).first().click();
+    await expect(history.locator("details[open]")).toHaveCount(1);
+    await expect(history.locator("details[open]").getByText(lastStep)).toBeVisible();
+
+    await summary.getByRole("link").click();
+    const trigger = page.getByRole("button", { name: labels.view });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog");
+    const scrollRegion = dialog.getByRole("region", { name: labels.steps });
+    await expect(dialog.getByRole("heading")).toBeFocused();
+    await expect(dialog.locator(".workflow-run-summary").getByText(labels.pending)).toBeInViewport();
+    await expect(scrollRegion.locator(".workflow-timeline-step")).toHaveCount(20);
+    const scrollable = await scrollRegion.evaluate(region => [region, ...region.querySelectorAll<HTMLElement>("*")]
+      .filter(element => ["auto", "scroll"].includes(getComputedStyle(element).overflowY))
+      .map(element => element.className));
+    expect(scrollable).toEqual(["workflow-run-scroll"]);
+    expect(await scrollRegion.evaluate(region => region.scrollWidth - region.clientWidth)).toBeLessThanOrEqual(1);
+    const output = scrollRegion.locator("dd").filter({ hasText: lastLine });
+    expect(await output.evaluate((element, line) => {
+      const text = element.firstChild!;
+      const range = document.createRange();
+      range.setStart(text, element.textContent!.lastIndexOf(line));
+      range.setEndAfter(text);
+      const scroller = element.closest(".workflow-run-scroll")!;
+      scroller.scrollTop += range.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom;
+      const bounds = range.getBoundingClientRect();
+      const viewport = scroller.getBoundingClientRect();
+      return bounds.top >= viewport.top && bounds.bottom <= viewport.bottom + 1;
+    }, lastLine)).toBe(true);
+    await scrollRegion.focus();
+    await page.keyboard.press("End");
+    await expect(scrollRegion.getByText(lastStep)).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: labels.close })).toBeInViewport();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    const decision = page.waitForRequest(request => request.url().endsWith("/threads/release-2/workflow-decisions"));
+    await page.getByRole("button").filter({ has: page.getByText(labels.approve, { exact: true }) }).click();
+    expect((await decision).postDataJSON()).toEqual({
+      kind: "approve", workflowRunId: "Release checklist", workflowStepId: "step-18",
+      assignmentId: "Release checklist-attempt-18", workflowAttempt: 1, expectedRevision: 18,
+    });
+  });
+}

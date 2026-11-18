@@ -59,6 +59,15 @@ reservations retain the existing runtime behavior. Standalone runs create no
 synthetic Team and need no lead. New ledgers expose `workflowSnapshot`; the
 historical `teamSnapshot` field remains a wire alias for older clients.
 
+Task Activities shows the current Workflow Run first, or the latest one when
+none is current. Its summary shows the current step, Agent, status, and step
+count. Expand each Run to review its steps or open its Thread. The Thread owner
+can approve a waiting step from Task Activities when that Run is current.
+
+In the Thread, select **View run details** to review all steps, attempts,
+and output in one scrollable view. Press Escape to close it and return focus to
+the button.
+
 ## API
 
 All paths below are under `/api/v1`. These routes require the owner's signed-in
