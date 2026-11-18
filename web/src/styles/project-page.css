@@ -144,7 +144,7 @@ button.project-member-row:hover .project-member-row-open {
   container: project-crew / inline-size;
 }
 
-@container project-crew (max-width: 520px) {
+@container project-crew (max-width: 480px) {
   .project-member-row {
     grid-template-columns: var(--avatar-md) minmax(0, 1fr) auto;
   }
@@ -667,7 +667,7 @@ button.project-member-row:hover .project-member-row-open {
   max-width: 960px;
 }
 
-@container project-collab (min-width: 1080px) {
+@container project-collab (min-width: 1100px) {
   .project-collab {
     grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
     column-gap: var(--sp-8);
