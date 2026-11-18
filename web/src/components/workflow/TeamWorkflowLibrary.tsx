@@ -45,14 +45,18 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
   }
   const badge = (label: string) => <span className="workflow-preview-kind">{label}</span>;
 
-  return <section className="collab-style-section" aria-labelledby="team-workflows">
+  return <section className="collab-style-section workflow-library" aria-labelledby="team-workflows">
     <div className="workflow-library-head">
       <h2 id="team-workflows" className="workspace-dossier-section-title">{t("workflow.section_title")} <span className="tnum">{PREDEFINED_WORKFLOWS.length + custom.length}</span></h2>
-      {canManage ? <Button type="button" size="dense" onClick={() => setEditing({ workflow: null })}>{t("workflow.create")}</Button> : null}
-      {canManage ? <Select value="" disabled={change.isPending || !available.length} onValueChange={id => { if (id) apply(() => linkTeamWorkflow(team.id, id)); }}>
-        <SelectTrigger className="w-auto" aria-label={t("workflow.assign_workflow")}><SelectValue>{t("workflow.assign_workflow")}</SelectValue></SelectTrigger>
-        <SelectContent>{available.map(workflow => <SelectItem key={workflow.id} value={workflow.id}>{workflow.name} · {projects.find(project => project.id === workflow.projectId)?.name}</SelectItem>)}</SelectContent>
-      </Select> : null}
+      {/* One cluster on the trailing edge, like the Members head's Edit
+          button: neither control floats between the title and the edge. */}
+      {canManage ? <div className="workflow-library-actions">
+        <Select value="" disabled={change.isPending || !available.length} onValueChange={id => { if (id) apply(() => linkTeamWorkflow(team.id, id)); }}>
+          <SelectTrigger size="sm" className="w-auto" aria-label={t("workflow.assign_workflow")}><SelectValue>{t("workflow.assign_workflow")}</SelectValue></SelectTrigger>
+          <SelectContent>{available.map(workflow => <SelectItem key={workflow.id} value={workflow.id}>{workflow.name} · {projects.find(project => project.id === workflow.projectId)?.name}</SelectItem>)}</SelectContent>
+        </Select>
+        <Button type="button" variant="outline" size="sm" onClick={() => setEditing({ workflow: null })}>{t("workflow.create")}</Button>
+      </div> : null}
     </div>
     <p className="workflow-editor-note">{t("workflow.team_reference_hint")}</p>
     {failure ? <p role="alert" className="text-destructive">{failure}</p> : null}
@@ -64,8 +68,8 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
       {PREDEFINED_WORKFLOWS.map(style => <li key={style} className="workflow-team-row" data-kind="predefined">
         <span className="workflow-library-main"><span className="workflow-team-row-name"><PredefinedWorkflowIcon style={style} /><span className="workflow-library-name">{t(`collab_style.${style}`)}</span>
           {defaultWorkflowId(team) === `preset:${style}` ? badge(t("workflow.default_badge")) : null}</span><span className="workflow-library-meta">{t(`collab_style.${style}_hint`)}</span></span>
-        {canManage && defaultWorkflowId(team) !== `preset:${style}` ? <Button type="button" variant="ghost" size="dense" disabled={change.isPending}
-          onClick={() => apply(async () => { await updateTeam(team.id, { defaultWorkflowId: `preset:${style}` }); await client.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] }); })}>{t("workflow.set_default")}</Button> : null}
+        {canManage && defaultWorkflowId(team) !== `preset:${style}` ? <div className="workflow-team-actions"><Button type="button" variant="ghost" size="dense" disabled={change.isPending}
+          onClick={() => apply(async () => { await updateTeam(team.id, { defaultWorkflowId: `preset:${style}` }); await client.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] }); })}>{t("workflow.set_default")}</Button></div> : null}
       </li>)}
       {custom.map(workflow => {
         const project = projects.find(item => item.id === workflow.projectId);
@@ -75,7 +79,7 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
         return <li key={workflow.id} className="workflow-team-row workflow-project-row" data-kind="steps">
           <div className="workflow-project-row-head">
             <div className="workflow-library-main">
-              <span className="workflow-team-row-name"><span className="workflow-library-name">{workflow.name}</span>{badge(t(workflow.ownerTeamId ? "workflow.team_owned" : "workflow.project_owned"))}{isDefault ? badge(t("workflow.project_default")) : null}{!workflow.enabled ? badge(t("teams.disabled")) : null}</span>
+              <span className="workflow-team-row-name"><span className="workflow-library-name">{workflow.name}</span>{badge(t(workflow.ownerTeamId ? "workflow.team_owned" : "workflow.project_owned"))}{isDefault ? badge(t(workflow.ownerTeamId ? "workflow.default_badge" : "workflow.project_default")) : null}{!workflow.enabled ? badge(t("teams.disabled")) : null}</span>
               <span className="workflow-library-meta">{t("workflow.step_count", { count: workflow.workflowSteps.length })}{!projectOwned ? ` · ${team.name}` : null}</span>
               {projectOwned ? <span className="workflow-project-origin">
                 <NavProjects size={ICON.sm} aria-hidden="true" />

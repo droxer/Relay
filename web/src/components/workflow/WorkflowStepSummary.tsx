@@ -23,9 +23,13 @@ export function WorkflowStepSummary({ steps, agentName, label }: {
             <span className="collab-style-step-avatar tnum" aria-hidden="true">{index + 1}</span>
             <span className="collab-style-step-text">
               <span className="collab-style-step-name">{step.name}<span className="sr-only">: </span></span>
-              <span className="collab-style-step-role">{agentName(step.agentId)}</span>
+              {/* The gate shares the owner's line, so a tile never trades its
+                  name's width for the badge. */}
+              <span className="workflow-flow-owner">
+                <span className="collab-style-step-role">{agentName(step.agentId)}</span>
+                {step.requiresApproval ? <span className="workflow-step-gate">{t("workflow.gate_badge")}</span> : null}
+              </span>
             </span>
-            {step.requiresApproval ? <span className="workflow-step-gate">{t("workflow.gate_badge")}</span> : null}
           </span>
         </li>
       ))}

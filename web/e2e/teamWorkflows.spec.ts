@@ -179,6 +179,29 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
+for (const [device, width] of [["phone", 390], ["laptop", 1280]] as const) {
+  test(`team workflow library keeps one layout grammar (${device})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await fixture(page, false, "light", 1, false, true);
+    await page.goto("/teams/delivery");
+    const library = page.getByRole("region", { name: /^Workflows/ });
+    const assign = library.getByRole("combobox", { name: "Assign workflow" });
+    const create = library.getByRole("button", { name: "New workflow", exact: true });
+    await expect(create).toBeVisible();
+    // Both head controls share one cluster on the trailing edge.
+    const [assignBox, createBox, libraryBox] = await Promise.all([assign.boundingBox(), create.boundingBox(), library.boundingBox()]);
+    expect(Math.abs(assignBox!.y - createBox!.y)).toBeLessThanOrEqual(1);
+    expect(createBox!.x - (assignBox!.x + assignBox!.width)).toBeLessThanOrEqual(12);
+    expect(libraryBox!.x + libraryBox!.width - (createBox!.x + createBox!.width)).toBeLessThanOrEqual(1);
+    // The library opens a new section rather than abutting the default preview.
+    const previewBottom = await page.locator(".teams-detail .workflow-preview").evaluate((el) => el.getBoundingClientRect().bottom);
+    expect(libraryBox!.y - previewBottom).toBeGreaterThanOrEqual(32);
+    // Numbered steps carry the order, so no chevron can strand at a line start.
+    await expect(library.locator(".workflow-flow .collab-style-arrow").first()).toBeHidden();
+    expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  });
+}
+
 test("composer sends a one-message workflow then returns to the team default", async ({ page }) => {
   const { sends } = await fixture(page);
   await page.goto("/threads/style-thread");

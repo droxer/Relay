@@ -212,11 +212,16 @@
   height: var(--avatar-xs);
 }
 
+/* Row controls keep the trailing edge at every width: when the row wraps
+   they drop under the name at their own size, never stretched into wide
+   ghost targets whose labels float mid-row. */
 .workflow-team-actions {
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--sp-2);
+  margin-inline-start: auto;
 }
 
 /* ---------- thread progress ---------- */
@@ -592,6 +597,16 @@
 /* The step's ⋯ menu becomes the phone's action sheet and holds every move,
    so the row of chevrons gives its width back to the step's name. */
 @media (max-width: 640px) {
+  /* The head's two outline controls take the row under the title as equal
+     halves, rather than a ragged cluster pushed to the trailing edge. */
+  .workflow-library-actions {
+    width: 100%;
+  }
+
+  .workflow-library-actions > * {
+    flex: 1 1 0;
+  }
+
   .workflow-step-move {
     display: none;
   }
@@ -600,13 +615,6 @@
     padding-inline: var(--sp-3);
   }
 
-  .workflow-team-actions {
-    width: 100%;
-  }
-
-  .workflow-team-actions > * {
-    flex: 1 1 0;
-  }
 }
 
 /* Adapt to the thread's available width, including split desktop panes. */
@@ -647,6 +655,21 @@
 
 .workflow-library-head > .workspace-dossier-section-title {
   margin-bottom: 0;
+}
+
+/* The library follows the Team's form, outside its column gap; this restores
+   the same break the Members and Default workflow sections read with (the
+   form's --sp-5 gap plus the cards' --sp-5 trailing room). */
+.workflow-library {
+  margin-top: calc(var(--sp-5) * 2);
+}
+
+.workflow-library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-inline-start: auto;
 }
 
 .workflow-library-main {
@@ -733,14 +756,51 @@
 
 /* A saved workflow's steps reuse the role-slot tiles, numbered: one flow
    grammar for predefined and custom processes. The gate rides inside the
-   step it guards, so "approve, then this step" reads in place. */
+   step it guards, so "approve, then this step" reads in place.
+   The tiles sit on an even grid rather than a wrapping line: a wrapped line
+   strands a chevron at its start and leaves ragged tiles, while the numbers
+   already carry the order. One column on a phone, as many as fit elsewhere. */
+.workflow-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+
+.workflow-flow .collab-style-arrow {
+  display: none;
+}
+
+.workflow-flow .collab-style-step {
+  flex: 1 1 auto;
+  height: 100%;
+}
+
+/* A custom flow fills its plate so the grid has a width to divide. */
+.workflow-preview[data-kind="steps"] {
+  justify-self: stretch;
+}
+
 .workflow-flow .collab-style-step-avatar {
   width: var(--avatar-sm);
   height: var(--avatar-sm);
 }
 
+.workflow-flow-owner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-0-5) var(--sp-1-5);
+  min-width: 0;
+}
+
 .workflow-flow .workflow-step-gate {
-  margin-inline-start: var(--sp-1);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+}
+
+.workflow-flow .collab-style-step-name {
+  overflow-wrap: break-word;
 }
 
 .workflow-flow li[data-gate] .collab-style-step {
@@ -768,45 +828,4 @@
   margin: 0;
   font: var(--type-body);
   color: var(--ink-2);
-}
-
-/* A narrow row — a phone, or the Team page's side column — reads a process
-   top to bottom. Kept last so it outranks the row and flow rules above it. */
-.workflow-team-row.workflow-project-row {
-  container: workflow-row / inline-size;
-}
-
-@container workflow-row (max-width: 640px) {
-  /* The tiles stack at full width and their numbers carry the order, so no
-     chevron is stranded at a line start. */
-  .workflow-flow {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .workflow-flow .collab-style-arrow {
-    display: none;
-  }
-
-  .workflow-flow .collab-style-step {
-    flex: 1 1 auto;
-  }
-
-  .workflow-flow .workflow-step-gate {
-    margin-inline-start: auto;
-  }
-
-  /* The row's controls close the card, after the steps they act on. */
-  .workflow-project-row-head {
-    display: contents;
-  }
-
-  .workflow-project-row .workflow-team-actions {
-    order: 1;
-    width: 100%;
-  }
-
-  .workflow-project-row .workflow-team-actions > * {
-    flex: 1 1 0;
-  }
 }
