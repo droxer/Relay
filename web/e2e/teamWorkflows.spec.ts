@@ -330,3 +330,34 @@ for (const mobile of [false, true]) {
     await page.screenshot({ path: `/tmp/team-owned-workflow-${mobile ? "phone" : "desktop"}.png`, fullPage: true });
   });
 }
+
+test("the stacked Teams roster shows its rows on a tablet", async ({ page }) => {
+  for (const width of [834, 1024, 1100]) {
+    await page.setViewportSize({ width, height: 1112 });
+    await fixture(page, false, "light", 1, false, true, true);
+    await page.goto("/teams/delivery");
+    await page.getByRole("region", { name: /^Workflows/ }).waitFor();
+    // The detail below must not squeeze the roster into a scroller too short
+    // for its own rows.
+    const clipped = await page.locator(".teams-roster .teams-list").evaluate(list => {
+      const scroller = list.parentElement!;
+      return scroller.scrollHeight - scroller.clientHeight;
+    });
+    expect(clipped, `${width}px`).toBeLessThanOrEqual(1);
+  }
+});
+
+test("a wrapped default workflow never starts a line with an arrow (phone)", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await fixture(page, false, "light", 1, false, true);
+  await page.goto("/teams/delivery");
+  const sequence = page.locator(".teams-detail .workflow-preview .collab-style-sequence").first();
+  await expect(sequence).toBeVisible();
+  const stranded = await sequence.evaluate(list => {
+    const left = list.getBoundingClientRect().left;
+    return Array.from(list.querySelectorAll(".collab-style-arrow"))
+      .filter(arrow => arrow.getBoundingClientRect().left - left < 24).length;
+  });
+  expect(stranded).toBe(0);
+});
