@@ -16,7 +16,7 @@ from .state import DaemonStoreState
 
 def preferred_workspace_session(conn: Any, node_id: str, session: dict[str, Any]) -> str | None:
     layout, subpath = session.get("workspaceLayout"), session.get("workspaceSubpath")
-    if layout not in ("project", "task") or not subpath:
+    if layout != "task" or not subpath:
         return None
     threads = sessions.sessions
     previous = conn.execute(

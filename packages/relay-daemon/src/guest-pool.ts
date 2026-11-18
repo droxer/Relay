@@ -45,7 +45,7 @@ interface Guest {
  *
  * A guest only ever sees its own thread's directory, so concurrent runs on
  * different threads need different guests. Runs on the same workspace share
- * one (the daemon's WorkspaceRunGate already serializes them). An idle guest
+ * one; Project runs may use it concurrently. An idle guest
  * stays booted for reuse and is replaced, least recently used first, only
  * when another workspace needs its slot; a guest someone is using is never
  * stopped underneath them.

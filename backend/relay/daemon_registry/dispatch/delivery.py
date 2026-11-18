@@ -230,6 +230,8 @@ class AssignmentDeliveryMixin(RegistryState):
         """Whether another thread holds, is receiving, or is queued ahead for
         this run's workspace on the node."""
         session = self.store.get_session_header(run_request["sessionId"])
+        if session.get("workspaceLayout") == "project":
+            return False
         keys: dict[str, str] = {}
 
         def key_of_session(session_id: str) -> str | None:

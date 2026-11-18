@@ -47,8 +47,9 @@ on recovery. A recorded stop takes precedence over retry. Ordinary failures keep
 their existing behavior. With an older backend, the daemon retains the legacy
 failed-start behavior; deploy the backend first.
 
-Workspace locks remain authoritative. Shared Project workspaces serialize writes;
-more run capacity does not enable concurrent edits to one Project directory.
+Non-Project workspace locks remain authoritative. Project directories allow
+concurrent Tasks under the User's task limit and Computer/Runtime capacity
+(ADR-017, revised 2026-11-18); run outcomes use separate control files.
 Execution leases, journal reconciliation, and uncertain-exit reservations retain
 their existing semantics. Permission prompts continue to occupy execution capacity.
 Backend wait logs identify the runtime and distinguish workspace contention from

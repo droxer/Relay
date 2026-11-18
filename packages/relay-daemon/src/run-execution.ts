@@ -7,6 +7,7 @@ import {
   isRejectedOutputBatch,
   eventPostRetryLogger,
 } from './backend-transport.js';
+import { createHash } from "node:crypto";
 import { retryAfterMs } from "./transport-retry.js";
 import { durableWorkspaceLayout, requiredWorkspaceSubpath } from "./run-workspace.js";
 import { responseErrorDetail, transportErrorDetail } from "./http-error-detail.js";
@@ -14,13 +15,13 @@ import { join, resolve, sep } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { DaemonNodeEvent, DaemonNodeRunCommand, AgentName, AgentState, CodexCollaborationEvent } from "relay-core";
 import { diffGeneratedFiles, snapshotGeneratedFiles } from "./generated-files.js";
-import { consumeRoundResult, readRoundResult } from "./round-result.js";
+import { consumeRoundResult, readRoundResult, ROUND_RESULT_RELATIVE_PATH } from "./round-result.js";
 import { syncProjectContext } from "./project-context.js";
 import { consumeProjectSetup } from "./project-setup.js";
 import { consumeNextSteps } from "./next-steps.js";
 import { validateHandoffWorkspace } from "./handoff-validation.js";
 import { agentWorkspaceSubpath, ensureAgentWorkspaceDir } from "./agent-workspace.js";
-import { getAgent, runAgentNode, initialAgentState, mergeAgentState, agentHomePath, relayApiUrl } from "relay-core";
+import { getAgent, NEXT_STEPS_RELATIVE_PATH, runAgentNode, initialAgentState, mergeAgentState, agentHomePath, relayApiUrl } from "relay-core";
 import {
   DEFAULT_ARTIFACTS_DIR,
   THREAD_RECORDS_DIR,
@@ -56,6 +57,15 @@ export async function executeCommand(
 ): Promise<DaemonNodeEvent> {
   const eventUrl = relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`);
   const state = { ...(command.state ?? initialAgentState(command.taskGoal)), workspace_scope: command.workspaceScope, round_result_run_id: command.runId };
+  // Project runs share files concurrently. Keep their private outcomes separate
+  // so starting or finishing one run never consumes another run's verdict.
+  const controlId = createHash("sha256").update(command.runId).digest("hex");
+  const roundResultPath = command.workspaceLayout === "project"
+    ? join(".relay", `round-result-${controlId}.json`) : ROUND_RESULT_RELATIVE_PATH;
+  const nextStepsPath = command.workspaceLayout === "project"
+    ? join(".relay", `next-steps-${controlId}.json`) : NEXT_STEPS_RELATIVE_PATH;
+  if (state.round_result_file) state.round_result_file = roundResultPath;
+  if (state.next_steps_file) state.next_steps_file = nextStepsPath;
   logger.info("run starting", commandLogFields(sandboxId, command));
   if (command.workspacePath && !workspacePathsMatch(command.workspacePath, nodeWorkspacePath)) {
     throw new Error(
@@ -67,7 +77,7 @@ export async function executeCommand(
     : durableWorkspaceLayout(command.workspaceLayout)
       ? threadWorkspaces.ensureSubpath(command.sessionId, requiredWorkspaceSubpath(command))
       : threadWorkspaces.nodeRoot(command.sessionId);
-  // executeCommand is inside WorkspaceRunGate. Validate before any receiver
+  // Validate before any receiver
   // preparation, cleanup, or agent execution can change the inherited files.
   const validation = validateHandoffWorkspace(threadWorkspace.hostPath, command);
   if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
@@ -106,7 +116,7 @@ export async function executeCommand(
       : `HANDOFF-${command.sessionId}.md`;
   }
   // Discard control state from an interrupted previous run before execution.
-  consumeRoundResult(threadWorkspace.hostPath);
+  consumeRoundResult(threadWorkspace.hostPath, undefined, roundResultPath);
   syncProjectContext(threadWorkspace.hostPath, command.workspaceLayout, state.project_brief);
   consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
   // The lease pins the guest that mounts this workspace for the whole run, so
@@ -472,8 +482,8 @@ export async function executeCommand(
       patch = await runWithPermissionPrompts(runState, (promptState) => runAgentNode(command.agent, promptState, options));
     } catch (error) {
       execution.forgetAgentReady?.(command.agent);
-      consumeRoundResult(threadWorkspace.hostPath);
-      consumeNextSteps(threadWorkspace.hostPath);
+      consumeRoundResult(threadWorkspace.hostPath, undefined, roundResultPath);
+      consumeNextSteps(threadWorkspace.hostPath, nextStepsPath);
       consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
       throw error;
     } finally {
@@ -489,7 +499,7 @@ export async function executeCommand(
     if (next.last_exit_code !== 0) execution.forgetAgentReady?.(command.agent);
     const agentLog = next.agent_logs.slice(-1)[0] ?? "";
     // Consume on every terminal path, including cancellation and delivery failure.
-    const roundOutcome = readRoundResult(threadWorkspace.hostPath, command.runId);
+    const roundOutcome = readRoundResult(threadWorkspace.hostPath, command.runId, roundResultPath);
     // The reader already checked the file's runId against this command.
     // Carry that verified binding to consumers that validate structured work.
     const roundResult = roundOutcome.kind === "accepted"
@@ -503,7 +513,7 @@ export async function executeCommand(
     }
     const projectSetup = consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
     // Only a clean finish offers its person a next step.
-    const nextSteps = consumeNextSteps(threadWorkspace.hostPath);
+    const nextSteps = consumeNextSteps(threadWorkspace.hostPath, nextStepsPath);
     if (signal?.aborted) {
       logger.info("run cancelled", {
         ...commandLogFields(sandboxId, command),

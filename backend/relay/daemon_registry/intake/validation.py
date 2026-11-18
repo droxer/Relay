@@ -282,6 +282,8 @@ class RunTargetValidationMixin(NodeBackendState):
         holder exits), so it takes no slot an independent workspace needs. The
         deferred queue is bounded by the node's own capacity.
         """
+        if request.get("workspaceLayout") == "project":
+            return False
         node_id = node["id"]
         session_id = request.get("sessionId")
         node_requests = self.registry.daemon_store.list_active_run_requests(node_id)

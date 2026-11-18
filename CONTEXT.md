@@ -444,7 +444,12 @@ Reopening to Ready reacquires capacity for previously started work.
 The maximum started, unfinished Tasks a User may have across Projects, including
 review and blocked work. The control panel's Concurrent task limit defaults to
 five; extra starts enter Queued. It bounds work in progress, while a Computer's
-run capacity separately bounds simultaneous agent processes.
+run capacity separately bounds simultaneous agent processes. A process exiting,
+a blocked Task, or a Task awaiting acceptance does not release this limit. Queued
+Tasks may enter execution only after an admitted Task finishes automatically or
+its owner accepts it as done (explicit cancellation or deletion also removes work
+from the limit). Project directories impose no additional serialization limit;
+each concurrent run keeps its result and next-step control files separate.
 
 
 ### Thread message queue
@@ -453,10 +458,10 @@ Text follow-ups submitted while a Thread is running belong to its durable,
 owner-managed message queue. The backend dispatches them in order after the
 current execution exits, even when all browsers are closed. This is distinct
 from a composer draft (unsent text local to one browser) and a run waiting for
-Computer capacity (an already accepted execution). In a shared Project
-workspace, the current Thread's sendable follow-ups run before other Tasks
-waiting for that workspace, including already accepted executions that have
-not begun dispatch. This priority lasts through each admitted follow-up until
-the queue drains or pauses; human input and approval gates still apply.
+Computer capacity (an already accepted execution). Project workspaces permit
+concurrent Tasks: a Thread's follow-ups do not reserve the shared directory or
+block another Thread. Shared non-Project Task workspaces retain their current
+Thread's follow-up priority until the queue drains or pauses; human input and
+approval gates still apply.
 Stop pauses follow-ups;
 resuming or choosing a message to send next is an explicit owner action.

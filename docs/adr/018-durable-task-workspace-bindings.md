@@ -26,7 +26,8 @@ New tasks require `task-workspaces`; unsupported daemons no longer silently
 fall back to thread workspaces. Existing recorded layouts remain authoritative.
 
 The backend remains the control plane. Only the daemon accesses the execution
-workspace. Shared physical directories retain their existing serialization gate.
+workspace. Non-Project shared physical directories retain their serialization gate;
+Project directories allow concurrent runs as revised in ADR-017.
 When a backend sets `reportWorkspaceStatus` on a command, the daemon reports
 `run.workspace` wait/acquire transitions. Authenticated, lease-validated events
 record `task.workspace_wait`; the browser shows a waiting message and an

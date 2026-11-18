@@ -32,6 +32,7 @@ async function fixture(page: Page, runtimeSessionId?: string, pendingSend?: Prom
     const request = route.request();
     const path = new URL(request.url()).pathname;
     let body: unknown = { sessions: pendingSend ? [session, other] : [session], agents: [agent], teams: [], tasks: [], nodes: [node], projects: [], sandboxes: [], skills: [] };
+    if (path.endsWith("/queue")) body = { messages: [], paused: false };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/threads/resume")) body = session;
     if (path.endsWith("/threads/other")) body = other;

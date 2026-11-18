@@ -111,7 +111,8 @@ export class RunSupervisor {
       // Yield so admission is fully installed before an execution can complete.
       await Promise.resolve();
       if (preparation) await waitForPreparation(preparation, controller.signal);
-      const event = await this.options.workspaceGate.run(workspace, controller.signal,
+      const event = await this.options.workspaceGate.run(
+        command.workspaceLayout === 'project' ? undefined : workspace, controller.signal,
         () => { controller.signal.throwIfAborted(); return execute(controller.signal); },
         onWaiting ? { sessionId: command.sessionId, onWaiting: id => onWaiting(id, controller.signal) } : undefined);
       await this.options.report(event, command, controller.signal);

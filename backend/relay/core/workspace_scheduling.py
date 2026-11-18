@@ -1,10 +1,10 @@
 """Pure workspace scheduling policy shared by admission, delivery and storage.
 
-The daemon serializes runs on one physical workspace, so a run delivered
-behind another that holds it only occupies a slot it cannot use. The backend
-cannot prove two *different* workspace names are physically distinct (links and
-aliases), so it defers only on equality and leaves the daemon's canonical locks
-authoritative for everything else.
+Non-Project workspaces retain serialization, so delivering a run behind their
+holder only occupies a slot it cannot use. Project workspaces allow concurrent
+runs and bypass contention and queue preference at the call sites. For other
+layouts the backend defers on equal names and the daemon's canonical locks
+handle physical aliases.
 """
 
 from __future__ import annotations

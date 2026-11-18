@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 import os
 from pathlib import Path
 import socket
@@ -14,6 +15,7 @@ import httpx
 import uvicorn
 
 from relay.app import create_app
+from relay.bootstrap.runtime import task_scheduler_from_env
 from relay.core.computer_identity import computer_id
 from user_ids import user_id
 from daemon_connection_gate import ConnectionGate
@@ -135,6 +137,17 @@ class DaemonE2E:
             "acceptancePolicy": "automatic"}, 201)
         started = self.post(f"/tasks/{task['id']}/runs", {}, 202)
         return task["id"], started["session"]["id"]
+
+    def scheduler(self):
+        """Use production scheduler wiring without starting its background timer."""
+        ctx = self.ctx
+        return task_scheduler_from_env(
+            settings=replace(ctx.settings, task_scheduler_enabled=True),
+            session_store=ctx.session_store, automation_store=ctx.automation_store,
+            task_store=ctx.task_store, registry=ctx.registry, backend=ctx.backend,
+            team_store=ctx.team_store, project_store=ctx.project_store,
+            managed_node_store=ctx.managed_node_store, org_settings_store=ctx.org_settings_store,
+        )
 
     def session(self, session_id):
         response = self.client.get(f"/api/v1/threads/{session_id}")

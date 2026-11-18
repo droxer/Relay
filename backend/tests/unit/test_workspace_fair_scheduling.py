@@ -29,10 +29,10 @@ def terminal(command, kind="run.completed"):
                 runId=command["runId"], agent=command["agent"], leaseId=command["leaseId"], exitCode=0)
 
 
-def start(registry, workspace, goal="work"):
+def start(registry, workspace, goal="work", *, layout="task"):
     return ServerDaemonNodeBackend(registry)._run_sync("node", {
         "taskGoal": goal, "assignments": [{"agent": "codex"}],
-        "workspaceLayout": "project", "workspaceSubpath": f"projects/{workspace}",
+        "workspaceLayout": layout, "workspaceSubpath": f"{layout}s/{workspace}",
     })
 
 
@@ -88,7 +88,7 @@ def test_current_thread_queue_precedes_already_waiting_workspace_runs(runtime, c
     continuation = ServerDaemonNodeBackend(registry)._run_sync("node", {
         "sessionId": current["id"], "taskGoal": "follow up",
         "assignments": [{"agent": "codex"}],
-        "workspaceLayout": "project", "workspaceSubpath": "projects/a",
+        "workspaceLayout": "task", "workspaceSubpath": "tasks/a",
     })
     assert continuation["id"] == current["id"]
     # Queue consumption must not remove priority from an admitted continuation.
@@ -293,3 +293,37 @@ def test_logical_agents_share_computer_capacity_across_independent_runs(
     for command in [*commands[1:], next_command]:
         finish(registry, command)
     assert registry.daemon_store.list_active_runs("node") == []
+
+
+@pytest.mark.parametrize("subpath", ["projects/a", "links/repo"])
+def test_project_runs_share_workspace_without_serializing(runtime, subpath):
+    registry, payload = runtime
+    registry.register({**payload, "capabilities": [*payload["capabilities"], "project-links", "project-workspace-scope"]}, "ui")
+    backend = ServerDaemonNodeBackend(registry)
+    request = {"taskGoal": "parallel project work", "assignments": [{"agent": "codex"}],
+               "workspaceLayout": "project", "workspaceSubpath": subpath}
+    first = backend._run_sync("node", request)
+    [first_command] = poll(registry)
+    others = [backend._run_sync("node", request) for _ in range(2)]
+    assert {c["sessionId"] for c in poll(registry)} == {s["id"] for s in others}
+    assert len(registry.daemon_store.list_active_runs("node")) == 3
+    with pytest.raises(ValueError, match="capacity_exhausted"):
+        backend._run_sync("node", request)
+    finish(registry, first_command)
+    next_session = backend._run_sync("node", request)
+    assert [c["sessionId"] for c in poll(registry)] == [next_session["id"]]
+    assert first["id"] != next_session["id"]
+
+
+def test_project_follow_up_queue_does_not_block_other_threads_after_restart(runtime):
+    from relay.collaboration.queue import change_queue
+
+    registry, payload = runtime
+    current = start(registry, "a", layout="project")
+    [command] = poll(registry)
+    change_queue(registry.store, current["id"], "enqueue", message={"id": "q1", "text": "follow up"})
+    finish(registry, command)
+    replica = DaemonNodeRegistry(registry.store, registry.daemon_store, task_store=registry.task_store)
+    replica.register(payload, "ui")
+    other = start(replica, "a", layout="project")
+    assert [c["sessionId"] for c in poll(replica)] == [other["id"]]

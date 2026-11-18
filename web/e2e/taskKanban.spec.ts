@@ -130,7 +130,7 @@ async function mockQueuedTask(page: Page): Promise<string[]> {
   const writes: string[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    let body: any = { tasks: [queued], sessions: [], agents: [], teams: [], nodes: [], projects: [project], sandboxes: [], flowPolicy: { wipLimit: 5, scope: "user" } };
+    let body: any = { tasks: [queued], sessions: [], agents: [], teams: [], workflows: [], nodes: [], projects: [project], sandboxes: [], flowPolicy: { wipLimit: 5, scope: "user" } };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
     if (route.request().method() === "POST" && path.endsWith("/runs")) {
       writes.push("run");

@@ -1700,7 +1700,8 @@ def test_legacy_assignment_picks_deterministically_among_candidates() -> None:
             assert resolved["agentId"] == expected
 
 
-def test_scheduler_skips_a_malformed_task_and_dispatches_the_next(monkeypatch) -> None:
+@pytest.mark.parametrize("failure", ["malformed", "timeout"])
+def test_scheduler_records_one_failure_and_dispatches_the_next(monkeypatch, failure) -> None:
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             session_store = make_session_store(root)
@@ -1732,23 +1733,40 @@ def test_scheduler_skips_a_malformed_task_and_dispatches_the_next(monkeypatch) -
             poisoned = task_store.create_task({**fields, "title": "Malformed", "priority": "high"})
             healthy = task_store.create_task({**fields, "title": "Healthy", "priority": "low"})
             scheduler = TaskScheduler(task_store=task_store, registry=registry, backend=backend)
-            original = scheduler._materialize_legacy_assignment
+            if failure == "timeout":
+                original_run = backend.run
 
-            def materialize(task):
-                if task["id"] == poisoned["id"]:
-                    raise ValueError("corrupt row")
-                return original(task)
+                async def dispatch(node_id, request):
+                    if request["taskId"] == poisoned["id"]:
+                        raise TimeoutError("backend admission timed out")
+                    return await original_run(node_id, request)
 
-            monkeypatch.setattr(scheduler, "_materialize_legacy_assignment", materialize)
+                monkeypatch.setattr(backend, "run", dispatch)
+
+                def warning(message, **fields):
+                    assert message != "Task dispatch still waiting on the daemon backend", fields
+
+                monkeypatch.setattr("relay.tasks.scheduler.logger.warning", warning)
+            else:
+                original = scheduler._materialize_legacy_assignment
+
+                def materialize(task):
+                    if task["id"] == poisoned["id"]:
+                        raise ValueError("corrupt row")
+                    return original(task)
+
+                monkeypatch.setattr(scheduler, "_materialize_legacy_assignment", materialize)
 
             result = await scheduler.tick()
 
             # The broken task is logged and skipped; it no longer stops every
             # task queued behind it from ever being dispatched.
             assert result.dispatched == 1
-            assert result.skipped == 1
+            assert result.skipped == (1 if failure == "malformed" else 0)
             assert task_store.get_task(healthy["id"])["linkedSessionIds"]
             assert not task_store.get_task(poisoned["id"]).get("linkedSessionIds")
+            if failure == "timeout":
+                assert task_store.get_task(poisoned["id"])["status"] == "blocked"
 
     asyncio.run(run_flow())
 
@@ -1769,3 +1787,49 @@ def test_await_dispatch_keeps_waiting_and_reports_a_slow_backend(monkeypatch) ->
         assert scheduler_module._await_dispatch(future, "task_1") == "session"
 
     assert warnings and warnings[0]["task_id"] == "task_1"
+
+
+@pytest.mark.parametrize("policy", ["human", "automatic"])
+def test_queued_project_task_waits_for_task_completion_not_process_exit(monkeypatch, policy):
+    from relay.persistence.events import relay_task_event
+
+    monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
+
+    async def run_flow():
+        with TemporaryDirectory() as root:
+            tasks, registry, scheduler, task = _round_scheduler_fixture(root, max_task_rounds=3)
+            tasks.update_task(task["id"], {"acceptancePolicy": policy})
+            queued = tasks.create_task({
+                "title": "Next task in the same project", "projectId": task["projectId"],
+                "assignedAgentId": task["assignedAgentId"], "assignedAgent": "codex",
+                "assigneeUserId": "alice", "ownerUserId": "alice", "status": "assigned",
+                "priority": "low",
+            })
+            assert (await scheduler.tick()).dispatched == 1
+            [command] = registry.take_commands("sbx_alice", "node_token")
+            assert tasks.get_task(queued["id"])["status"] == "queued"
+            # A completed process with unfinished work retains its WIP slot.
+            _report_round(registry, command, "blocked")
+            assert not registry.daemon_store.list_active_runs("sbx_alice")
+            assert (await scheduler.tick()).dispatched == 0
+            assert tasks.get_task(queued["id"])["status"] == "queued"
+            assert tasks.count_wip("alice") == 1
+            # Resume the same task and report a genuinely finished outcome.
+            tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "assigned"}))
+            assert (await scheduler.tick()).dispatched == 1
+            [continuation] = registry.take_commands("sbx_alice", "node_token")
+            assert continuation["sessionId"] == command["sessionId"]
+            _report_round(registry, continuation, "done")
+            if policy == "human":
+                assert tasks.get_task(task["id"])["status"] == "review"
+                assert (await scheduler.tick()).dispatched == 0
+                assert tasks.get_task(queued["id"])["status"] == "queued"
+                tasks.append_event(task["id"], relay_task_event("task.status", task["id"], {"status": "done"}))
+            assert tasks.get_task(task["id"])["status"] == "done"
+            assert tasks.count_wip("alice") == 0
+            assert (await scheduler.tick()).dispatched == 1
+            [next_command] = registry.take_commands("sbx_alice", "node_token")
+            assert next_command["sessionId"] == tasks.get_task(queued["id"])["linkedSessionIds"][-1]
+            assert next_command["workspaceSubpath"] == command["workspaceSubpath"]
+
+    asyncio.run(run_flow())
