@@ -36,28 +36,32 @@ export function ProjectMembersPanel({
 
   return (
     <div className="project-profile project-members">
-      <section className="project-general-section" aria-labelledby="project-members-title">
-        <div className="project-general-section-head">
-          <h2 id="project-members-title" className="workspace-dossier-section-title">
-            {t("project.members")}
-            <span className="tnum">{members.length}</span>
-          </h2>
-          {canAdd ? (
-            <Button type="button" variant="outline" size="dense" onClick={onAddMember}>
-              <ActionAdd size={ICON.sm} aria-hidden="true" />
-              {t("project.member_add")}
-            </Button>
-          ) : null}
-        </div>
-        <ProjectCrew
-          project={project}
-          members={members}
-          agentsById={agentsById}
-          onAddMember={onAddMember}
-          onEditMember={onEditMember}
-        />
-      </section>
-      {children}
+      {/* Crew and workflows share one grid: stacked on a narrow pane, the
+          crew a side column beside the workflows once the pane is wide. */}
+      <div className="project-collab">
+        <section className="project-general-section project-crew" aria-labelledby="project-members-title">
+          <div className="project-general-section-head">
+            <h2 id="project-members-title" className="workspace-dossier-section-title">
+              {t("project.members")}
+              <span className="tnum">{members.length}</span>
+            </h2>
+            {canAdd ? (
+              <Button type="button" variant="outline" size="dense" onClick={onAddMember}>
+                <ActionAdd size={ICON.sm} aria-hidden="true" />
+                {t("project.member_add")}
+              </Button>
+            ) : null}
+          </div>
+          <ProjectCrew
+            project={project}
+            members={members}
+            agentsById={agentsById}
+            onAddMember={onAddMember}
+            onEditMember={onEditMember}
+          />
+        </section>
+        {children}
+      </div>
     </div>
   );
 }

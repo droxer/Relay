@@ -44,7 +44,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
     return gates ? `${steps} · ${t("workflow.approval_count", { count: gates })}` : steps;
   };
 
-  return <section className="project-profile project-general-section workflow-project-library" aria-labelledby="project-workflows-title">
+  return <section className="project-general-section workflow-project-library" aria-labelledby="project-workflows-title">
     {/* The tab's lede already says what a workflow is; the head only counts. */}
     <div className="workflow-library-head">
       <h2 id="project-workflows-title" className="workspace-dossier-section-title">{t("workflow.section_title")} <span className="tnum">{workflows.length}</span></h2>

@@ -34,8 +34,7 @@
    discoverable without hover; the trailing chevron says so. */
 .project-member-list {
   display: grid;
-  max-width: 880px;
-  margin: 0 0 var(--sp-8);
+  margin: 0;
   padding: 0;
   list-style: none;
   border: var(--hairline);
@@ -130,6 +129,37 @@ button.project-member-row:hover {
 
 button.project-member-row:hover .project-member-row-open {
   color: var(--ink-2);
+}
+
+/* Nothing exceptional to say: the state column collapses, the chevron keeps
+   its place at the trailing edge. */
+.project-member-row-state:empty {
+  display: none;
+}
+
+/* A narrow crew — a phone, or the side column beside the workflows — keeps
+   the name line whole: the state pill drops under the agent's duty instead
+   of squeezing the name and meta into a sliver. */
+.project-crew {
+  container: project-crew / inline-size;
+}
+
+@container project-crew (max-width: 520px) {
+  .project-member-row {
+    grid-template-columns: var(--avatar-md) minmax(0, 1fr) auto;
+  }
+
+  .project-member-row-state {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    margin-top: var(--sp-2);
+  }
+
+  .project-member-row-open {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
 }
 
 /* A disabled or unavailable agent recedes; its pill says why. */
@@ -617,6 +647,32 @@ button.project-member-row:hover .project-member-row-open {
 .project-members,
 .project-settings {
   flex: 1;
+}
+
+/* The collaboration tab: who works here and how they hand work along. One
+   reading column holds both sections on a narrow pane; once the pane can
+   seat a full workflow beside a roster, the crew becomes the side column
+   and the workflows take the wide track their flows need. Measured on the pane,
+   not the viewport, so a collapsed rail or split view lands correctly. */
+.project-members {
+  container: project-collab / inline-size;
+}
+
+.project-collab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-8);
+  width: 100%;
+  max-width: 960px;
+}
+
+@container project-collab (min-width: 1080px) {
+  .project-collab {
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    column-gap: var(--sp-8);
+    max-width: 1440px;
+  }
 }
 
 /* Settings is a form, so it holds a reading measure instead of the pane. */
