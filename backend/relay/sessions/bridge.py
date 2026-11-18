@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from typing import Any, Protocol
 
 from .handoff_files import HANDOFF_FILE
@@ -48,13 +49,44 @@ def extract_last_assistant_text(transcript: str) -> str | None:
 
 
 def _extract_stream_json_assistant_text(transcript: str) -> str | None:
-    """Extract the terminal answer when an agent log retained raw JSONL.
+    """Extract the last assistant reply from a completed runtime's JSONL log."""
+    events = _json_events_from_end(transcript)
+    for event in events:
+        event_type = event.get("type")
+        result = event.get("result")
+        if event_type == "result" and isinstance(result, str) and result.strip():
+            return result.strip()
+        if event_type == "text":
+            part = event.get("part")
+            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                text = part["text"]
+                if not text.strip():
+                    continue
+                if event.get("delta") is True:
+                    return _opencode_delta_reply(text, part.get("messageID"), events)
+                return text.rstrip()
+        message: Any = None
+        if event_type == "item.completed":
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                message = item
+        elif event_type == "assistant":
+            message = event.get("message")
+        elif event_type in ("message_end", "turn_end"):
+            candidate = event.get("message")
+            if isinstance(candidate, dict) and candidate.get("role") == "assistant":
+                message = candidate
+        elif event_type in ("message", "assistant_message", "agent_message"):
+            candidate = event.get("message", event)
+            if isinstance(candidate, dict) and candidate.get("role", "assistant") == "assistant":
+                message = candidate
+        text = _assistant_message_text(message)
+        if text:
+            return text
+    return None
 
-    Rendered command logs use ``●`` markers, but completed Claude logs can be
-    capped from the head while still retaining their final stream-json result.
-    Continuity must understand both forms or a successful teammate is bridged
-    as ``<no output>``.
-    """
+
+def _json_events_from_end(transcript: str) -> Iterator[dict[str, Any]]:
     for line in reversed(transcript.splitlines()):
         candidate = line.strip()
         if not candidate.startswith("{"):
@@ -63,26 +95,30 @@ def _extract_stream_json_assistant_text(transcript: str) -> str | None:
             event = json.loads(candidate)
         except json.JSONDecodeError:
             continue
-        if not isinstance(event, dict):
+        if isinstance(event, dict):
+            yield event
+
+
+def _opencode_delta_reply(last: str, message_id: Any, events: Iterator[dict[str, Any]]) -> str | None:
+    chunks = [last]
+    for event in events:
+        if event.get("type") != "text":
+            if message_id is None and event.get("type") in ("tool_use", "reasoning", "error"):
+                break
             continue
-        result = event.get("result")
-        if event.get("type") == "result" and isinstance(result, str) and result.strip():
-            return result.strip()
-        message: Any = None
-        if event.get("type") == "item.completed":
-            item = event.get("item")
-            if isinstance(item, dict) and item.get("type") == "agent_message":
-                message = item
-        elif event.get("type") == "assistant":
-            message = event.get("message")
-        elif event.get("type") in ("message", "assistant_message", "agent_message"):
-            candidate_message = event.get("message", event)
-            if isinstance(candidate_message, dict) and candidate_message.get("role", "assistant") == "assistant":
-                message = candidate_message
-        text = _assistant_message_text(message)
-        if text:
-            return text
-    return None
+        if event.get("delta") is not True:
+            break
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        if part.get("messageID") != message_id:
+            if message_id is None:
+                break
+            continue
+        text = part.get("text")
+        if isinstance(text, str):
+            chunks.append(text)
+    return "".join(reversed(chunks)).rstrip() or None
 
 
 def _assistant_message_text(message: Any) -> str | None:

@@ -10,6 +10,7 @@
 // the broker grants one approval at a time and keeps no standing rule.
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { AcpConnection, asRecord, contentText, MethodNotFound, permissionOptions, selected, withAcpChild, type JsonRpcMessage } from "./acp-connection.js";
 import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion, type PermissionQuestionKind } from "./protocol.js";
 
@@ -37,7 +38,7 @@ export interface OpenCodeAcpIo {
 }
 
 interface ToolState {
-  status: "completed" | "error";
+  status: "pending" | "running" | "completed" | "error";
   input?: unknown;
   output?: string;
   error?: string;
@@ -48,12 +49,16 @@ interface ToolState {
 export class RunJsonWriter {
   constructor(private readonly out: { write(text: string): unknown }) {}
 
-  assistantDelta(delta: string): void {
-    if (delta) this.line({ type: "text", delta: true, part: { type: "text", text: delta } });
+  assistantDelta(type: "text" | "reasoning", text: string, messageId: unknown): void {
+    if (!text) return;
+    this.line({
+      type, delta: true,
+      part: { type, text, ...(typeof messageId === "string" ? { messageID: messageId } : {}) },
+    });
   }
 
-  toolUse(tool: string, state: ToolState): void {
-    this.line({ type: "tool_use", part: { tool, state } });
+  toolUse(callID: string, tool: string, state: ToolState): void {
+    this.line({ type: "tool_use", part: { callID, tool, state } });
   }
 
   error(message: string): void {
@@ -70,7 +75,7 @@ interface KnownToolCall {
   title?: string;
   kind?: string;
   rawInput?: unknown;
-  done: boolean;
+  status: ToolState["status"];
 }
 
 /** Translates `session/update` notifications into run events, and remembers tool calls for their permission requests. */
@@ -84,39 +89,37 @@ export class SessionUpdateTranslator {
   }
 
   apply(update: Record<string, unknown>): void {
-    if (update.sessionUpdate === "agent_message_chunk") {
-      const text = contentText(update.content);
-      if (text) this.writer.assistantDelta(text);
+    if (update.sessionUpdate === "agent_message_chunk" || update.sessionUpdate === "agent_thought_chunk") {
+      const type = update.sessionUpdate === "agent_thought_chunk" ? "reasoning" : "text";
+      this.writer.assistantDelta(type, contentText(update.content), update.messageId);
       return;
     }
     if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") {
       this.applyToolCall(update);
     }
-    // Thinking, plans, usage, and command lists stay off stdout, as in `opencode run`.
   }
 
   private applyToolCall(update: Record<string, unknown>): void {
     const id = typeof update.toolCallId === "string" ? update.toolCallId : "";
     if (!id) return;
     const known = this.calls.get(id);
-    const call: KnownToolCall = known ?? {
-      name: typeof update.name === "string" && update.name ? update.name : "tool",
-      done: false,
-    };
+    if (known?.status === "completed" || known?.status === "error") return;
+    const call: KnownToolCall = known ? { ...known } : { name: "tool", status: "pending" };
+    if (typeof update.name === "string" && update.name) call.name = update.name;
     if (typeof update.title === "string" && update.title) call.title = update.title;
     if (typeof update.kind === "string") call.kind = update.kind;
     if (update.rawInput !== undefined) call.rawInput = update.rawInput;
+    if (update.status === "in_progress") call.status = "running";
+    if (update.status === "completed") call.status = "completed";
+    if (update.status === "failed") call.status = "error";
+    if (isDeepStrictEqual(known, call)) return;
     this.calls.set(id, call);
-    if (call.done) return;
-    if (update.status !== "completed" && update.status !== "failed") return;
-    call.done = true;
-    const output = outputText(update);
-    const failed = update.status === "failed";
+    const output = call.status === "completed" || call.status === "error" ? outputText(update) : "";
     // `opencode run` names a failed tool's message `error`, not `output`.
-    this.writer.toolUse(call.name, {
-      status: failed ? "error" : "completed",
+    this.writer.toolUse(id, call.name, {
+      status: call.status,
       ...(call.rawInput !== undefined ? { input: call.rawInput } : {}),
-      ...(output ? (failed ? { error: output } : { output }) : {}),
+      ...(output ? (call.status === "error" ? { error: output } : { output }) : {}),
       ...(call.title ? { title: call.title } : {}),
     });
   }

@@ -44,7 +44,6 @@ export async function runAgentNode(
 ): Promise<Partial<AgentState>> {
   const def = getAgent(agent);
   const execute = requiredExecStream(options);
-  const renderer = def.createRenderer();
   const stderrRenderer = new StderrLineRenderer();
   const collaborationStream = agent === "codex" ? new CodexCollaborationStream() : undefined;
   const runId = options.runId;
@@ -53,10 +52,13 @@ export async function runAgentNode(
   const cwd = options.workspacePath ?? agentWorkspacePath();
   const run = async (runState: AgentState) => {
     const sessionStream = new RuntimeSessionStream(agent);
+    const renderer = def.createRenderer();
+    let sawStdout = false;
     const invocation = commandExecution(def.buildCommand(runState, options.workspacePath));
-    const result = await execute(invocation.command, invocation.args, {
+    let result = await execute(invocation.command, invocation.args, {
       cwd,
       stdoutRenderer: (chunk) => {
+        sawStdout ||= Boolean(chunk);
         sessionStream.feed(chunk);
         if (runId) options.eventSink?.agentOutput(runId, agent, "stdout", chunk);
         if (runId && collaborationStream && options.eventSink?.agentCollaboration) {
@@ -77,6 +79,11 @@ export async function runAgentNode(
       // not reach Python's own buffering, so ask for it on every computer.
       env: { PYTHONUNBUFFERED: "1", ...Object.fromEntries(agentCredentialEnv(agent)), ...options.runtimeEnv },
     });
+    if (result.exit_code === 0 && !options.signal?.aborted && renderer.runFailure) {
+      if (!sawStdout) renderer.feed(result.stdout);
+      const failure = renderer.runFailure();
+      if (failure) result = { ...result, exit_code: 1, error_message: result.error_message ?? failure };
+    }
     return { result, runtimeSessionId: sessionStream.finish() ?? extractRuntimeSessionId(result.stdout, agent) };
   };
   let { result, runtimeSessionId } = await run(state);

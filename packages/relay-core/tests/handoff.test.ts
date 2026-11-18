@@ -199,6 +199,27 @@ describe("adaptive agent execution", () => {
     }
   });
 
+  it("uses Pi's last assistant outcome when JSON mode exits zero", async () => {
+    const failed = { type: "turn_end", message: { role: "assistant", stopReason: "error", errorMessage: "Provider disconnected" } };
+    const recovered = { type: "turn_end", message: { role: "assistant", stopReason: "stop" } };
+    for (const retrySucceeded of [false, true]) {
+      const patch = await runAgentNode("pi", state(), {
+        execStream: async (_cmd, _args, options) => {
+          const first = JSON.stringify(failed) + "\n";
+          options?.stdoutRenderer?.(first.slice(0, 25));
+          options?.stdoutRenderer?.(first.slice(25));
+          const stdout = retrySucceeded ? JSON.stringify(recovered) + "\n" : "";
+          if (stdout) options?.stdoutRenderer?.(stdout);
+          // The bounded log may have discarded the failure frame.
+          return { exit_code: 0, stdout, stderr: "" };
+        },
+      });
+      assert.equal(patch.last_exit_code, retrySucceeded ? 0 : 1);
+      assert.equal(patch.agent_failures?.pi, retrySucceeded ? 0 : 1);
+      if (!retrySucceeded) assert.match(patch.agent_logs?.[0] ?? "", /Provider disconnected/);
+    }
+  });
+
   it("builds commands for every agent without a verdict marker", () => withEnv({ PATH: process.env.PATH }, () => {
     const taskState = state({ task_goal: "Handle auth" });
     for (const [agent, command] of [
@@ -869,16 +890,19 @@ describe("agent stream rendering", () => {
     const renderer = new PiStreamRenderer();
     const update = (assistantMessageEvent: Record<string, unknown>) =>
       ({ type: "message_update", usage: { input: 0, output: 0, totalTokens: 3304 }, assistantMessageEvent });
+    const thinking = { type: "thinking", thinking: "Checking the workspace." };
+    const toolCall = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } };
+    const message = { role: "assistant", content: [thinking, toolCall, { type: "text", text: "Hi from Pi." }], stopReason: "stop" };
     const frames = [
       { type: "turn_start" },
       { type: "message_start", message: { role: "assistant", content: [] } },
-      update({ type: "thinking_delta", contentIndex: 0, delta: "Checking the workspace." }),
-      update({ type: "toolcall_end", contentIndex: 1, toolCall: { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } } }),
+      update({ type: "thinking_delta", contentIndex: 0, delta: thinking.thinking }),
+      update({ type: "toolcall_end", contentIndex: 1, toolCall }),
       update({ type: "text_delta", contentIndex: 2, delta: "Hi " }),
       update({ type: "text_delta", contentIndex: 2, delta: "from Pi." }),
       update({ type: "text_end", contentIndex: 2, content: "Hi from Pi." }),
-      { type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "Hi from Pi." }], stopReason: "stop" } },
-      { type: "turn_end", message: { role: "assistant", content: [{ type: "text", text: "Hi from Pi." }], stopReason: "stop" } },
+      { type: "message_end", message },
+      { type: "turn_end", message },
     ];
     const chunks = frames.map((event) => renderer.feed(`${JSON.stringify(event)}\n`));
 

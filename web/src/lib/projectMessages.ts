@@ -3,6 +3,7 @@ import type { CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-
 import type { AgentName, RelaySession, TokenUsage, Tone } from "../types.js";
 import { permissionInputSummary } from "./permissionRequests.ts";
 import { toolInput, toolTarget } from "./agent-stream/builders.ts";
+import { agentMessagePlainText } from "./agent-stream/display.ts";
 
 /** How a runtime permission prompt closed, as the turn that asked shows it:
  *  on the tool line it covered, or as its own line in the turn when no line
@@ -172,76 +173,9 @@ function appendMissingStream(current: string, fallback: string): string {
   if (!fallback.trim()) return current;
   const trimmed = fallback.trim();
   if (current.includes(fallback) || current.includes(trimmed)) return current;
+  if (fallback.includes(current)) return fallback;
   const separator = current && !current.endsWith("\n") && !fallback.startsWith("\n") ? "\n" : "";
   return `${current}${separator}${fallback}`;
-}
-
-function safeJsonLine(line: string): Record<string, unknown> | null {
-  try {
-    const value = JSON.parse(line) as unknown;
-    return value && typeof value === "object" ? value as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
-}
-
-function recordText(value: unknown): string {
-  if (!value || typeof value !== "object") return "";
-  const record = value as Record<string, unknown>;
-  if (typeof record.text === "string") return record.text;
-  if (typeof record.content === "string") return record.content;
-  if (!Array.isArray(record.content)) return "";
-  return record.content
-    .map((chunk) => {
-      if (!chunk || typeof chunk !== "object") return "";
-      const item = chunk as Record<string, unknown>;
-      if (typeof item.text === "string") return item.text;
-      if (typeof item.content === "string") return item.content;
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n");
-}
-
-function visibleLogText(stdout: string, stderr: string): string {
-  const lines = stdout.split(/\r?\n/);
-  const text: string[] = [];
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const event = safeJsonLine(line);
-    if (!event) {
-      text.push(line);
-      continue;
-    }
-    if (typeof event.type === "string" && event.type.startsWith("item.")) {
-      const item = event.item && typeof event.item === "object" ? event.item as Record<string, unknown> : {};
-      if (item.type === "agent_message" && event.type === "item.completed") {
-        const itemText = recordText(item).trim();
-        if (itemText) text.push(itemText);
-      }
-      continue;
-    }
-    if (event.type === "assistant") {
-      const messageText = recordText(event.message).trim();
-      if (messageText) text.push(messageText);
-      continue;
-    }
-    // Claude's terminal result frame can be the only record carrying the
-    // response. Count it as visible so completed-log fallback preserves the
-    // frame for AgentStream instead of treating the run as empty.
-    if (event.type === "result") {
-      const resultText = typeof event.result === "string" ? event.result.trim() : "";
-      if (resultText) text.push(resultText);
-      continue;
-    }
-    if (event.type === "message" || event.type === "assistant_message" || event.role === "assistant") {
-      const message = event.message && typeof event.message === "object" ? event.message : event;
-      const messageText = recordText(message).trim();
-      if (messageText) text.push(messageText);
-    }
-  }
-  return [...text, stderr.trim()].filter(Boolean).join("\n").trim();
 }
 
 /** How a prompt closed: a person's allow once or always, a standing grant's
@@ -265,13 +199,16 @@ type OpenPrompt = {
   target?: string;
 };
 
-function applyCompletedLogFallback(state: { stdout: string; stderr: string }, agentLog: string): void {
+function applyCompletedLogFallback(
+  state: { stdout: string; stderr: string }, agent: AgentName, agentLog: string, t: TFunction,
+): void {
   const fallback = streamsFromAgentLog(agentLog);
-  const fallbackVisible = visibleLogText(fallback.stdout, fallback.stderr);
-  if (!fallbackVisible) return;
-  const currentVisible = visibleLogText(state.stdout, state.stderr);
-  if (currentVisible.includes(fallbackVisible)) return;
-  state.stdout = appendMissingStream(state.stdout, fallback.stdout);
+  if (!state.stdout.includes(fallback.stdout.trim())) {
+    const fallbackText = agentMessagePlainText(agent, fallback.stdout, "", t);
+    if (fallbackText && !agentMessagePlainText(agent, state.stdout, "", t).includes(fallbackText)) {
+      state.stdout = appendMissingStream(state.stdout, fallback.stdout);
+    }
+  }
   state.stderr = appendMissingStream(state.stderr, fallback.stderr);
 }
 
@@ -572,7 +509,7 @@ export class ProjectMessagesAccumulator {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
         const state = this.runState.get(event.runId);
         if (!state) return ensured.created;
-        if (event.agentLog) applyCompletedLogFallback(state, event.agentLog);
+        if (event.agentLog) applyCompletedLogFallback(state, event.agent, event.agentLog, t);
         const block = this.out[ensured.index];
         if (block.kind !== "agent") return ensured.created;
         this.out[ensured.index] = {

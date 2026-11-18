@@ -18,6 +18,8 @@ import type { AgentName, AgentState } from "./state.js";
 /** Minimal contract every stream renderer satisfies: feed a chunk, get display text. */
 export interface StreamRenderer {
   feed(chunk: string): string;
+  /** Some CLIs report a final failure in their stream while exiting zero. */
+  runFailure?(): string | undefined;
 }
 
 export type SkillDelivery =

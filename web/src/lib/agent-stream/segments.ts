@@ -8,7 +8,7 @@ export type AgentSegment =
    *  {@link segmentKeys}. */
   | { kind: "tool"; name: string; target?: string; id?: string }
   | { kind: "command"; command: string; id?: string }
-  | { kind: "status"; tone: StatusTone; text: string }
+  | { kind: "status"; tone: StatusTone; text: string; scope?: "tool" | "attempt" }
   | { kind: "narration"; key: string; params?: Record<string, string | number> }
   | { kind: "raw"; text: string };
 

@@ -1,7 +1,7 @@
 import { ansi, color, status } from "./format.js";
 import { asRecord, parseJsonObject } from "./shell.js";
 import { formatOpenCodeToolError } from "./opencode-errors.js";
-import { parsePiOutputLine } from "./pi-output.js";
+import { parsePiOutputLine, PiStreamDecoder, type PiStreamEvent } from "./pi-output.js";
 
 const TEXT_MARK = "●";
 const THINK_MARK = "○";
@@ -86,64 +86,90 @@ export class PlainTextStreamRenderer extends BlockStreamRenderer {
 
 export class PiStreamRenderer {
   private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
+  private readonly thinking = new BlockStreamRenderer(THINK_MARK, ansi.dim, [ansi.dim, ansi.italic]);
   private readonly plain = new PlainTextStreamRenderer("Pi", ansi.live);
+  private readonly decoder = new PiStreamDecoder();
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
-  private sawAssistantTextInTurn = false;
+  private readonly shownTools = new Set<string>();
+  private activeBlock?: { id: number; renderer: BlockStreamRenderer };
+  private needsNewline = false;
+  private lastContentIndex = -1;
+  private needsSnapshot = false;
 
   feed(chunk: string): string {
     return this.lines.feed(chunk);
   }
 
+  runFailure(): string | undefined {
+    this.lines.feed("\n");
+    return this.decoder.failure;
+  }
+
   private formatLine(line: string): string {
     const record = parsePiOutputLine(sanitizeUntrustedText(line));
     if (!record) return "";
-    if (record.kind === "text") return this.plain.feed(`${record.text}\n`);
-    const event = record.value;
+    if (record.kind === "text") return this.closeBlock() + this.plain.feed(`${record.text}\n`);
+    if (record.value.type === "turn_start") this.shownTools.clear();
+    return this.decoder.apply(record.value).map((event) => this.render(event)).join("");
+  }
 
-    if (event.type === "turn_start") {
-      this.sawAssistantTextInTurn = false;
-      return "";
+  private render(event: PiStreamEvent): string {
+    switch (event.kind) {
+      case "thinking":
+      case "text": {
+        if (!event.delta || event.index < this.lastContentIndex) {
+          this.needsSnapshot = true;
+        }
+        if (this.needsSnapshot) return "";
+        this.lastContentIndex = event.index;
+        return this.renderBlock(event.id, event.kind, event.delta);
+      }
+      case "snapshot": {
+        const boundary = this.closeBlock();
+        const needsSnapshot = this.needsSnapshot;
+        this.needsSnapshot = false;
+        this.lastContentIndex = -1;
+        if (!needsSnapshot) return boundary;
+        // A streamed draft can already be in terminal scrollback. Print the
+        // authoritative blocks together so the corrected reply reads in order.
+        const reply = event.blocks.map((block) => this.renderBlock(block.id, block.kind, block.text)).join("");
+        return `${boundary}\n${status("info", "Pi final reply")}\n${reply}${this.closeBlock()}`;
+      }
+      case "boundary":
+        this.needsSnapshot = false;
+        this.lastContentIndex = -1;
+        return this.closeBlock();
+      case "retry":
+        return "";
+      case "tool": {
+        if (event.id && this.shownTools.has(event.id)) return "";
+        if (event.id) this.shownTools.add(event.id);
+        return this.closeBlock() + toolLine("tool", sanitizeUntrustedText(event.name));
+      }
+      case "error":
+        return `${this.closeBlock()}\n${status("error", `Pi error: ${sanitizeUntrustedText(event.message)}`)}\n`;
     }
-    if (event.type === "message_start" && asRecord(event.message).role === "assistant") {
-      this.text.resetBlock();
-      return "";
-    }
+  }
 
-    const delta = piAssistantTextDelta(event);
-    if (delta.trim()) {
-      this.sawAssistantTextInTurn = true;
-      return this.text.feed(sanitizeUntrustedText(delta));
+  private renderBlock(id: number, kind: "text" | "thinking", value: string): string {
+    const text = sanitizeUntrustedText(value);
+    if (!text) return "";
+    const renderer = kind === "text" ? this.text : this.thinking;
+    let leading = "";
+    if (id !== this.activeBlock?.id) {
+      leading = this.closeBlock();
+      renderer.resetBlock();
+      this.activeBlock = { id, renderer };
     }
+    this.needsNewline = !text.endsWith("\n");
+    return leading + renderer.feed(text);
+  }
 
-    // text_end repeats the streamed deltas' full content; render it only when
-    // no deltas were seen (non-streaming responses), never as a replay.
-    const endedText = piAssistantEndedText(event);
-    if (endedText.trim()) {
-      if (this.sawAssistantTextInTurn) return "";
-      this.sawAssistantTextInTurn = true;
-      this.text.resetBlock();
-      return this.text.feed(`${sanitizeUntrustedText(endedText.trim())}\n`);
-    }
-    // Remaining message_update subtypes (thinking, tool calls) carry the
-    // accumulated message; extracting text from them would duplicate output.
-    if (event.type === "message_update") return "";
-
-    const text = piAssistantText(event);
-    if (text.trim()) {
-      if (this.sawAssistantTextInTurn && isPiAssistantTerminalEvent(event)) return "";
-      this.sawAssistantTextInTurn = true;
-      this.text.resetBlock();
-      return this.text.feed(`${text.trim()}\n`);
-    }
-
-    if (event.type === "error") {
-      return `\n${status("error", `Pi error: ${String(event.message ?? "unknown error")}`)}\n`;
-    }
-    const piStatus = piStatusMessage(event);
-    if (piStatus) {
-      return `\n${piStatus}\n`;
-    }
-    return "";
+  private closeBlock(): string {
+    const newline = this.needsNewline ? this.activeBlock?.renderer.feed("\n") ?? "" : "";
+    this.activeBlock = undefined;
+    this.needsNewline = false;
+    return newline;
   }
 }
 
@@ -353,10 +379,13 @@ export class CodexStreamRenderer {
  * its state, an error event a failed turn. Step bookkeeping stays off screen.
  */
 export class OpenCodeStreamRenderer {
-  private streamingText = false;
+  private activeDelta?: { type: "text" | "reasoning"; messageId: unknown };
   private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
+  private readonly thinking = new BlockStreamRenderer(THINK_MARK, ansi.dim, [ansi.dim, ansi.italic]);
   private readonly plain = new PlainTextStreamRenderer("OpenCode", ansi.live);
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
+  private readonly shownTools = new Set<string>();
+  private readonly failedTools = new Set<string>();
 
   feed(chunk: string): string {
     return this.lines.feed(chunk);
@@ -364,45 +393,62 @@ export class OpenCodeStreamRenderer {
 
   private formatLine(line: string): string {
     const event = parseJsonObject(line);
-    if (!event) return this.plain.feed(`${sanitizeUntrustedText(line)}\n`);
+    if (!event) return this.closeDelta() + this.plain.feed(`${sanitizeUntrustedText(line)}\n`);
 
     if (event.type === "error") {
-      this.streamingText = false;
       const error = asRecord(event.error);
-      return `\n${status("error", `OpenCode error: ${String(error.message ?? "unknown error")}`)}\n`;
+      const message = sanitizeUntrustedText(String(error.message ?? "unknown error"));
+      return `${this.closeDelta()}\n${status("error", `OpenCode error: ${message}`)}\n`;
     }
     const part = asRecord(event.part);
-    if (event.type === "text") {
-      if (event.delta === true) {
-        const text = typeof part.text === "string" ? part.text : "";
-        if (!text) return "";
-        if (this.streamingText) return this.text.feed(text);
-        this.streamingText = true;
-        this.text.resetBlock();
-        return `\n${this.text.feed(text)}`;
-      }
-      this.streamingText = false;
-      const text = typeof part.text === "string" ? part.text.trim() : "";
-      if (!text) return "";
-      this.text.resetBlock();
-      return `\n${this.text.feed(`${text}\n`)}`;
+    if (event.type === "text" || event.type === "reasoning") {
+      return this.renderContent(event.type, part, event.delta === true);
     }
     if (event.type === "tool_use") {
-      this.streamingText = false;
-      const state = asRecord(part.state);
-      if (state.status !== "completed" && state.status !== "error") return "";
-      const target = typeof state.title === "string" && state.title ? state.title : String(part.tool ?? "tool");
-      let rendered = toolLine("tool", target);
-      if (state.status === "error") {
-        const error = [state.error, state.output].find((value) => typeof value === "string" && value.trim());
-        if (typeof error === "string") {
-          const message = formatOpenCodeToolError(String(part.tool ?? "tool"), error);
-          rendered += `${status(message.tone === "warn" ? "warn" : "error", sanitizeUntrustedText(message.text))}\n`;
-        }
-      }
-      return rendered;
+      return this.renderTool(part);
     }
     return "";
+  }
+
+  private renderContent(type: "text" | "reasoning", part: Record<string, unknown>, delta: boolean): string {
+    const text = typeof part.text === "string" ? sanitizeUntrustedText(part.text) : "";
+    const renderer = type === "text" ? this.text : this.thinking;
+    if (delta && this.activeDelta?.type === type && this.activeDelta.messageId === part.messageID) {
+      return renderer.feed(text);
+    }
+    const content = delta ? text : type === "text" ? text.replace(/^(?:[ \t]*\n)+/, "").trimEnd() : text.trim();
+    if (!content) return delta ? "" : this.closeDelta();
+    const boundary = this.closeDelta() || "\n";
+    renderer.resetBlock();
+    if (delta) this.activeDelta = { type, messageId: part.messageID };
+    return boundary + renderer.feed(delta ? content : `${content}\n`);
+  }
+
+  private renderTool(part: Record<string, unknown>): string {
+    const state = asRecord(part.state);
+    const callID = part.callID ?? part.id;
+    const id = typeof callID === "string" ? callID : undefined;
+    if (state.status !== "completed" && state.status !== "error"
+      && !(id && (state.status === "pending" || state.status === "running"))) return "";
+    let rendered = "";
+    if (!id || !this.shownTools.has(id)) {
+      if (id) this.shownTools.add(id);
+      const target = typeof state.title === "string" && state.title ? state.title : String(part.tool ?? "tool");
+      rendered = this.closeDelta() + toolLine("tool", sanitizeUntrustedText(target));
+    }
+    if (state.status !== "error" || (id && this.failedTools.has(id))) return rendered;
+    const error = [state.error, state.output].find((value) => typeof value === "string" && value.trim());
+    if (typeof error !== "string") return rendered;
+    if (id) this.failedTools.add(id);
+    const message = formatOpenCodeToolError(String(part.tool ?? "tool"), error);
+    return rendered + this.closeDelta() + `${status(message.tone === "warn" ? "warn" : "error", sanitizeUntrustedText(message.text))}\n`;
+  }
+
+  private closeDelta(): string {
+    const active = this.activeDelta;
+    this.activeDelta = undefined;
+    if (!active) return "";
+    return (active.type === "text" ? this.text : this.thinking).feed("\n");
   }
 }
 
@@ -424,54 +470,6 @@ function textFromContentRecord(record: Record<string, unknown>): string {
     })
     .filter(Boolean)
     .join("\n");
-}
-
-function piAssistantText(event: Record<string, unknown>): string {
-  const message = asRecord(event.message ?? event);
-  if (event.type !== "message" && event.type !== "assistant_message" && message.role !== "assistant") return "";
-  if (message.role && message.role !== "assistant") return "";
-  return textFromContentRecord(message);
-}
-
-// The assistant-message event a `message_update` carries. Pi only streams
-// assistant messages, and newer builds leave the `message` snapshot off every
-// update, so only a snapshot naming another role rules the frame out.
-function piAssistantUpdate(event: Record<string, unknown>): Record<string, unknown> {
-  if (event.type !== "message_update") return {};
-  if (event.message !== undefined && asRecord(event.message).role !== "assistant") return {};
-  return asRecord(event.assistantMessageEvent);
-}
-
-function piAssistantEndedText(event: Record<string, unknown>): string {
-  const assistantEvent = piAssistantUpdate(event);
-  if (assistantEvent.type !== "text_end") return "";
-  return typeof assistantEvent.content === "string" ? assistantEvent.content : "";
-}
-
-function piAssistantTextDelta(event: Record<string, unknown>): string {
-  const assistantEvent = piAssistantUpdate(event);
-  if (assistantEvent.type !== "text_delta") return "";
-  return typeof assistantEvent.delta === "string" ? assistantEvent.delta : "";
-}
-
-function piStatusMessage(event: Record<string, unknown>): string {
-  if (event.type === "auto_retry_end" && event.success === false) {
-    return status("error", `Pi error: ${String(event.finalError ?? "unknown error")}`);
-  }
-  if (event.type !== "message_end" && event.type !== "turn_end") return "";
-  const message = asRecord(event.message ?? event);
-  if (message.role !== "assistant") return "";
-  const errorMessage = message.errorMessage ?? event.errorMessage;
-  if (errorMessage || message.stopReason === "error") {
-    return status("error", `Pi error: ${String(errorMessage ?? "unknown error")}`);
-  }
-  return "";
-}
-
-function isPiAssistantTerminalEvent(event: Record<string, unknown>): boolean {
-  if (event.type !== "message_end" && event.type !== "turn_end") return false;
-  const message = asRecord(event.message ?? event);
-  return message.role === "assistant";
 }
 
 // Codex forwards an API failure's body verbatim as the message; name the
