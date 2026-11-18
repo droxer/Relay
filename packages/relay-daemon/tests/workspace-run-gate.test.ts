@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -194,6 +195,25 @@ test("the daemon tightens a pre-existing workspace lock directory", async () => 
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(lockDirectory, { recursive: true, force: true });
+  }
+});
+
+test("workspace lock cleanup retries after a temporary unlink failure", {
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-workspace-release-"));
+  const lockDirectory = workspaceLockDirectory(root);
+  const lockPath = join(lockDirectory, `${createHash("sha256").update(realpathSync(root)).digest("hex")}.lock`);
+  try {
+    await new WorkspaceRunGate(root).run(root, undefined, async () => chmodSync(lockDirectory, 0o500));
+    assert.equal(existsSync(lockPath), true);
+    chmodSync(lockDirectory, 0o700);
+    const next = await new WorkspaceRunGate(root).run(root, AbortSignal.timeout(1_500), async () => "acquired");
+    assert.equal(next, "acquired");
+  } finally {
+    chmodSync(lockDirectory, 0o700);
+    rmSync(lockDirectory, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

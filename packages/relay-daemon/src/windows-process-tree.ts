@@ -26,9 +26,9 @@ export function parseWindowsProcesses(output: string): WindowsProcess[] {
 }
 
 /** Every process on the machine; undefined when Windows could not be asked. */
-export function listWindowsProcesses(): Promise<WindowsProcess[] | undefined> {
+export function listWindowsProcesses(signal?: AbortSignal): Promise<WindowsProcess[] | undefined> {
   return new Promise((resolve) => {
-    execFile(POWERSHELL, LIST_ARGS, { encoding: "utf8", timeout: LIST_TIMEOUT_MS, maxBuffer: LIST_MAX_BUFFER, windowsHide: true }, (error, stdout) => {
+    execFile(POWERSHELL, LIST_ARGS, { encoding: "utf8", timeout: LIST_TIMEOUT_MS, maxBuffer: LIST_MAX_BUFFER, windowsHide: true, signal }, (error, stdout) => {
       resolve(error ? undefined : parseWindowsProcesses(stdout));
     });
   });

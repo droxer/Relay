@@ -61,6 +61,31 @@ test("cancellation escalates from TERM to KILL and stops retries after confirmed
   assert.equal(signals.length, count);
 });
 
+test("shutdown escalation forces guest termination before the normal grace expires", async () => {
+  const controller = new AbortController();
+  const forceStop = new AbortController();
+  const signals: number[] = [];
+  let finish!: (value: { exitCode: number }) => void;
+  const exit = new Promise<{ exitCode: number }>(resolve => { finish = resolve; });
+  let settled = false;
+  const pending = collectExecution({
+    stdout: closed, stderr: closed, wait: () => exit,
+    signal: async (signal: number) => { signals.push(signal); },
+    kill: async () => { signals.push(9); },
+  }, false, undefined, undefined, undefined, controller.signal,
+  { retryMs: 1_000, graceMs: 60_000, forceStop: forceStop.signal }).finally(() => { settled = true; });
+  try {
+    controller.abort();
+    await tick();
+    forceStop.abort();
+    assert.deepEqual(signals, [15, 9]);
+    assert.equal(settled, false);
+  } finally {
+    finish({ exitCode: 137 });
+    await pending;
+  }
+});
+
 
 test("verified exit permits bounded stream draining and preserves captured output", async () => {
   const warnings: string[] = [];

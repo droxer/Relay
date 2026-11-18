@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { syncDirectory } from "./sync-directory.js";
 import type { ExecutionEvidence } from "./exit-proof.js";
@@ -13,53 +13,131 @@ export interface ExecutionRecord extends ExecutionEvidence {
   recordedAt: string;
 }
 
-/** Admission identity survives daemon crashes. An unresolved record is never
- * exit evidence and must not cause a start to be executed again. */
+type ExecutionCommand = Pick<ExecutionRecord, "id" | "runId" | "sessionId" | "leaseId" | "agent">;
+type JournalRecord = ExecutionRecord & { prepared?: true };
+
+/** A prepared record is written before the admission fence and cannot have launched.
+ * Every other record, including legacy records, fences execution until exit is proven. */
 export class ExecutionJournal {
-  constructor(private readonly directory: string) {
+  private readonly unreadable = new Set<string>();
+
+  constructor(private readonly directory: string, private readonly onUnreadable?: (name: string, error: unknown) => void) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
   }
 
-  private path(id: string): string {
-    const key = createHash("sha256").update(id).digest("hex");
-    return join(this.directory, `${key}.json`);
+  private filename(id: string): string {
+    return `${createHash("sha256").update(id).digest("hex")}.json`;
   }
 
-  has(id: string): boolean { return existsSync(this.path(id)); }
+  has(id: string): boolean {
+    const name = this.filename(id);
+    if (this.unreadable.has(name) || statSync(join(this.directory, name), { throwIfNoEntry: false })) return true;
+    // Distinguish an absent record from an unavailable journal directory.
+    statSync(this.directory);
+    return false;
+  }
+
+  get hasUnreadableRecords(): boolean { return this.unreadable.size > 0; }
 
   pending(): ExecutionRecord[] {
-    return readdirSync(this.directory)
-      .filter(name => name.endsWith(".json"))
-      .map(name => JSON.parse(readFileSync(join(this.directory, name), "utf8")) as ExecutionRecord);
+    const records: ExecutionRecord[] = [];
+    for (const name of readdirSync(this.directory)) {
+      if (!name.endsWith(".json")) continue;
+      try {
+        const record = this.read(name);
+        if (!record.prepared) records.push(record);
+      } catch {
+        // The file still fences its command even if we cannot identify the run.
+      }
+    }
+    return records;
   }
 
-  record(command: Omit<ExecutionRecord, "recordedAt" | keyof ExecutionEvidence>): void {
-    if (this.has(command.id)) return;
+  private read(name: string): JournalRecord {
+    try {
+      const record = JSON.parse(readFileSync(join(this.directory, name), "utf8")) as Partial<JournalRecord>;
+      if (!record || typeof record.id !== "string" || this.filename(record.id) !== name
+        || typeof record.runId !== "string" || typeof record.sessionId !== "string"
+        || typeof record.agent !== "string" || typeof record.recordedAt !== "string"
+        || (record.leaseId !== undefined && typeof record.leaseId !== "string")
+        || (record.processGroup !== undefined && (!Number.isSafeInteger(record.processGroup) || record.processGroup <= 0))
+        || (record.spawnedAt !== undefined && !Number.isFinite(record.spawnedAt))
+        || (record.prepared !== undefined && (record.prepared !== true || record.processGroup !== undefined || record.spawnedAt !== undefined))) {
+        throw new Error("Invalid execution journal record.");
+      }
+      this.unreadable.delete(name);
+      return record as JournalRecord;
+    } catch (error) {
+      if (!this.unreadable.has(name)) {
+        this.unreadable.add(name);
+        this.onUnreadable?.(name, error);
+      }
+      throw error;
+    }
+  }
+
+  admissionState(command: ExecutionCommand): "new" | "prepared" | "fenced" {
+    if (!this.has(command.id)) return "new";
+    const record = this.read(this.filename(command.id));
+    return record.prepared && record.runId === command.runId && record.sessionId === command.sessionId
+      && record.agent === command.agent && record.leaseId === command.leaseId ? "prepared" : "fenced";
+  }
+
+  mayHaveExecuted(id: string): boolean {
+    return this.has(id) && !this.read(this.filename(id)).prepared;
+  }
+
+  prepare(command: ExecutionCommand): boolean {
+    if (this.has(command.id)) return false;
+    this.recordCommand(command, true);
+    return true;
+  }
+
+  record(command: ExecutionCommand): boolean {
+    if (this.has(command.id)) return false;
+    this.recordCommand(command);
+    return true;
+  }
+
+  commitPreparation(command: ExecutionCommand): boolean {
+    if (this.admissionState(command) !== "prepared") return false;
+    this.recordCommand(command);
+    return true;
+  }
+
+  discardPreparation(id: string): void {
+    if (this.has(id) && this.read(this.filename(id)).prepared) this.confirmExit(id);
+  }
+
+  private recordCommand(command: ExecutionCommand, prepared?: true): void {
     // Deliberately omit prompts, environment variables, and credentials.
     const { id, runId, sessionId, leaseId, agent } = command;
-    this.write({ id, runId, sessionId, leaseId, agent, recordedAt: new Date().toISOString() });
+    this.write({ id, runId, sessionId, leaseId, agent, recordedAt: new Date().toISOString(), prepared });
   }
 
   /** Add where the run executed, so a restarted daemon can look for it. */
   attach(id: string, evidence: ExecutionEvidence): void {
     if (!this.has(id)) return;
-    const current = JSON.parse(readFileSync(this.path(id), "utf8")) as ExecutionRecord;
+    const current = this.read(this.filename(id));
+    if (current.prepared) throw new Error("Cannot attach execution evidence before admission commits.");
     this.write({ ...current, ...evidence });
   }
 
-  private write(record: ExecutionRecord): void {
+  private write(record: JournalRecord): void {
     const temporary = join(this.directory, `${randomUUID()}.tmp`);
     const fd = openSync(temporary, "wx", 0o600);
     try {
       writeFileSync(fd, JSON.stringify(record));
       fsyncSync(fd);
     } finally { closeSync(fd); }
-    renameSync(temporary, this.path(record.id));
+    renameSync(temporary, join(this.directory, this.filename(record.id)));
     syncDirectory(this.directory);
   }
 
   confirmExit(id: string): void {
-    rmSync(this.path(id), { force: true });
+    const name = this.filename(id);
+    rmSync(join(this.directory, name), { force: true });
     syncDirectory(this.directory);
+    this.unreadable.delete(name);
   }
 }

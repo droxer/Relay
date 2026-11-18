@@ -23,7 +23,8 @@ import { RunSupervisor } from './run-supervisor.js';
 import { resourceLimit, parseRuntimeLimits, type RuntimeLimits, type AdmissionWaitReason } from "./run-admission.js";
 import { DaemonLogWriter, type DaemonLogWriterOptions } from "./daemon-log-writer.js";
 import { AdmissionLedger } from "./admission-ledger.js";
-import { withExecutionDeadline } from "./execution-deadline.js";
+import { acquireDaemonStateLock } from "./daemon-state-lock.js";
+import { ExecutionDeadlineError, withExecutionDeadline } from "./execution-deadline.js";
 import { syncDirectory } from "./sync-directory.js";
 import { retryAfterMs } from "./transport-retry.js";
 import { ReportStoragePolicy } from "./report-storage.js";
@@ -181,6 +182,8 @@ export interface DaemonRuntimeOptions {
   shutdownGraceMs?: number;
   /** Bound on the final "stopped" registration; defaults to SHUTDOWN_REGISTRATION_TIMEOUT_MS. */
   shutdownRegistrationTimeoutMs?: number;
+  /** Deadline for a journaled exit probe. BoxLite startup fails if retirement times out. */
+  exitRecoveryTimeoutMs?: number;
   /** How often a host run left over from a previous daemon is checked again for exit; defaults to EXIT_RECHECK_INTERVAL_MS. */
   exitRecheckIntervalMs?: number;
   agentHome?: string;
@@ -237,14 +240,13 @@ export interface DaemonLogger {
 export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promise<void> {
   const backendUrl = normalizeBaseUrl(options.backendUrl ?? process.env.RELAY_BACKEND_URL ?? process.env.RELAY_DAEMON_URL ?? "http://127.0.0.1:8790");
   let transportLogger = options.logger;
-  let rawFetch = options.fetchFn ?? createBackendFetch(recovery => {
+  const fetchFn = options.fetchFn ?? createBackendFetch(recovery => {
     transportLogger?.warn(recovery.protocol === 'http/1.1'
       ? 'Repeated HTTP/2 failures; falling back to HTTP/1.1 until restart'
       : recovery.cause === 'stall'
         ? 'Backend request timed out over HTTP/2; retrying with a fresh connection pool'
         : 'HTTP/2 transport failed; retrying with a fresh connection pool', { sandboxId, ...recovery });
   });
-  let fetchFn = rawFetch;
   let sandboxId = options.sandboxId ?? process.env.RELAY_SANDBOX_ID;
   let configuredUserId = options.userId ?? userIdFromEnv();
   const userId = configuredUserId ?? process.env.USER ?? "local";
@@ -290,6 +292,49 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     );
   }
   const stateDir = resolveDaemonStateDirectory(sandboxId, options.stateDir);
+  let releaseState: () => void;
+  try {
+    releaseState = await acquireDaemonStateLock(stateDir, options.signal);
+  } catch (error) {
+    if (!options.signal?.aborted) throw error;
+    configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
+    await finishDaemonCleanup(options.environment, options.logger, sandboxId, "daemon startup cleanup failed");
+    await options.logger?.close?.();
+    return;
+  }
+  try {
+    await runDaemonWithState(options, {
+      backendUrl, sandboxId, workspacePath, workspaceId, stateDir, sandboxMode,
+      configuredUserId, effectiveUserId, enrolledToken, enrolledHeartbeatSettings, fetchFn,
+      setTransportLogger: logger => { transportLogger = logger; },
+    });
+  } finally {
+    releaseState();
+  }
+}
+
+async function finishDaemonCleanup(environment: DaemonExecutionEnvironment | undefined, logger: DaemonLogger | undefined,
+  sandboxId: string, failureMessage: string): Promise<void> {
+  try { await environment?.close(); }
+  catch (error) { logger?.warn(failureMessage, { sandboxId, error: transportErrorDetail(error) }); }
+}
+
+async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
+  backendUrl: string;
+  sandboxId: string;
+  workspacePath: string;
+  workspaceId: string;
+  stateDir: string;
+  sandboxMode: DaemonSandboxMode;
+  configuredUserId?: string;
+  effectiveUserId: string;
+  enrolledToken?: string;
+  enrolledHeartbeatSettings?: DaemonNodeHeartbeatSettings;
+  fetchFn: typeof fetch;
+  setTransportLogger(logger: DaemonLogger): void;
+}): Promise<void> {
+  const { backendUrl, sandboxId, workspacePath, workspaceId, stateDir, sandboxMode,
+    configuredUserId, effectiveUserId, enrolledToken, enrolledHeartbeatSettings } = input;
   const logger = options.logger ?? createDaemonLogger({ workspacePath, sandboxId, logDir: options.logDir ?? join(stateDir, "logs") });
   let reportPersistenceFault = false;
   let pollAbort: AbortController | undefined;
@@ -299,14 +344,13 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   const observe = (action: () => void): void => {
     try { action(); } catch { reportPersistenceFault = true; }
   };
-  transportLogger = logger;
-  const upstreamFetch = rawFetch;
-  rawFetch = async (url, init) => {
+  input.setTransportLogger(logger);
+  const rawFetch: typeof fetch = async (url, init) => {
     const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url : url.url).pathname;
     const batch = path.endsWith('/reports');
     const channel = path.endsWith('/commands') ? 'poll' : path.endsWith('/events') || batch ? 'output' : path.endsWith('/heartbeat') ? 'heartbeat' : path.endsWith('/daemon-node-registrations') ? 'registration' : undefined;
     try {
-      const response = await upstreamFetch(url, init);
+      const response = await input.fetchFn(url, init);
       if (channel) observe(() => {
         if (response.ok) {
           // Batch HTTP success alone proves nothing about its individual
@@ -345,9 +389,25 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     }),
   });
   let supervisor: RunSupervisor;
-  const executionJournal = new ExecutionJournal(join(stateDir, "executions"));
+  const executionJournal = new ExecutionJournal(join(stateDir, "executions"), (file, error) => {
+    logger.error("Unreadable execution journal record; evidence preserved", { sandboxId, file, error: transportErrorDetail(error) });
+  });
+  const pendingJournalCleanup = new Set<string>();
+  const clearTerminalJournal = (id: string): boolean => {
+    try {
+      executionJournal.confirmExit(id);
+      pendingJournalCleanup.delete(id);
+      return true;
+    } catch (error) {
+      if (!pendingJournalCleanup.has(id)) {
+        logger.warn("Journal cleanup deferred; terminal evidence retained", { sandboxId, commandId: id, error: transportErrorDetail(error) });
+        pendingJournalCleanup.add(id);
+      }
+      return false;
+    }
+  };
   const terminalOutbox = new TerminalOutbox(join(stateDir, "terminal-events"), (id) => {
-    executionJournal.confirmExit(id);
+    clearTerminalJournal(id);
     // Only live run promises need a terminal marker for capacity/lease bookkeeping.
     // Orphan cancellation acknowledgements must not grow a lifetime in-memory set.
     supervisor?.terminalStored(id);
@@ -360,17 +420,26 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     logger.warn("durable output record write failed", { sandboxId, error: error.message });
   });
   terminalOutbox.setAcceptanceHandler(() => observe(() => monitor?.success('output')));
+  terminalOutbox.setTerminalCleanupHandler(id => !pendingJournalCleanup.has(id) || clearTerminalJournal(id));
   // A crash may land between durable terminal storage and journal removal.
   for (const record of terminalOutbox.terminalRecords()) {
-    if (["run.completed", "run.failed", "run.cancelled"].includes(String(record.event.type))) executionJournal.confirmExit(String(record.event.commandId));
+    clearTerminalJournal(String(record.event.commandId));
   }
-  const unconfirmedExecutions = new Set(executionJournal.pending().map(record => record.id));
+  const journaledAtStartup = executionJournal.pending().filter(record => !pendingJournalCleanup.has(record.id));
+  const unconfirmedExecutions = new Set(journaledAtStartup.map(record => record.id));
   // Retained executions the backend has not yet accounted for. Reported at
   // registration until acknowledged; unconfirmedExecutions keeps fencing them.
   const unreportedExecutions = new Set(unconfirmedExecutions);
   const admittedExecutions = new AdmissionLedger(join(stateDir, "admissions"));
-  for (const id of [...unconfirmedExecutions, ...terminalOutbox.commandIds()]) admittedExecutions.add(id);
-  fetchFn = terminalOutbox.wrapFetch(rawFetch);
+  for (const id of new Set([...unconfirmedExecutions, ...terminalOutbox.commandIds()])) {
+    try { admittedExecutions.restore(id); }
+    catch (error) {
+      logger.error("could not restore durable admission fence; command remains fenced", {
+        sandboxId, commandId: id, error: transportErrorDetail(error),
+      });
+    }
+  }
+  const fetchFn = terminalOutbox.wrapFetch(rawFetch);
   configureAgentProcessEnvironment(sandboxMode, workspacePath, options.agentHome);
   const tokenResolution = ensureDaemonNodeToken({
     credentialDirectory: join(stateDir, "credentials"),
@@ -425,19 +494,35 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   logger.info("daemon starting", { sandboxId, userId: effectiveUserId, workspacePath, backendUrl, sandboxMode });
   // Runs the machine proves ended are settled with that evidence instead of
   // waiting for a person. They stay fenced: none of them is ever run again.
-  const provenExits = await proveJournaledExits(environment, executionJournal.pending(), logger, sandboxId);
+  setHealth("starting", { userId: effectiveUserId, workspacePath, backendUrl, sandboxMode });
+  let provenExits: ExecutionRecord[];
+  try {
+    provenExits = await recoverJournaledExits(
+      environment, journaledAtStartup, logger, sandboxId,
+      options.exitRecoveryTimeoutMs ?? EXIT_RECOVERY_TIMEOUT_MS, options.signal,
+    );
+  } catch (error) {
+    // A native retirement may still be in flight. End startup before this
+    // daemon can boot new guests under the same names.
+    setHealth("stopping", { reason: transportErrorDetail(error) });
+    await finishDaemonCleanup(environment, logger, sandboxId, "daemon startup cleanup failed");
+    setHealth("stopped");
+    await logger.close?.();
+    if (options.signal?.aborted) return;
+    throw error;
+  }
   for (const record of provenExits) unreportedExecutions.delete(record.id);
   // A host run can outlive its daemon (a killed daemon never stops its
   // process groups), and usually ends soon after. Those are checked again
   // while this daemon runs; a BoxLite check retires guests, so it runs once.
-  let leftoverExecutions = executionJournal.pending()
+  let leftoverExecutions = journaledAtStartup
     .filter((execution) => !provenExits.some((record) => record.id === execution.id));
   for (const execution of leftoverExecutions) {
     logger.warn("Execution exit unconfirmed after daemon restart; retained identity requires reconciliation", {
       sandboxId, commandId: execution.id, runId: execution.runId,
       sessionId: execution.sessionId, leaseId: execution.leaseId,
       ...(environment.sandboxMode === "none" ? {
-        evidence: execution.processGroup ? `process group ${execution.processGroup} still running` : "no process group recorded",
+        evidence: execution.processGroup ? `exit of process group ${execution.processGroup} unconfirmed` : "no process group recorded",
       } : {}),
     });
   }
@@ -445,7 +530,6 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     ? leftoverExecutions.filter((execution) => execution.processGroup)
     : [];
   const exitRecheckIntervalMs = options.exitRecheckIntervalMs ?? EXIT_RECHECK_INTERVAL_MS;
-  setHealth("starting", { userId: effectiveUserId, workspacePath, backendUrl, sandboxMode });
   supervisor = new RunSupervisor({
     journal: executionJournal, ledger: admittedExecutions, watchdog: executionWatchdog,
     workspaceGate: workspaceRunGate, maxConcurrentRuns, runtimeLimits,
@@ -474,7 +558,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
   let credentialsRejected = false;
   if (runtimeSignal.aborted) {
     setHealth("stopping", { signal: "external" });
-    await environment.close();
+    await finishDaemonCleanup(environment, logger, sandboxId, "daemon startup cleanup failed");
     setHealth("stopped");
     await logger.close?.();
     return;
@@ -570,10 +654,15 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         await sendDrainingHeartbeat?.();
       }
       supervisor.stopAll(`Daemon received ${signal}.`);
-      await Promise.race([
-        supervisor.settle(),
-        delay(shutdownGraceMs),
-      ]);
+      try {
+        await withExecutionDeadline(supervisor.settle(), shutdownGraceMs, "Graceful run shutdown");
+      } catch (error) {
+        if (!(error instanceof ExecutionDeadlineError)) throw error;
+        await withExecutionDeadline(supervisor.forceStopExecuting(), SHUTDOWN_FORCE_WAIT_MS, "Forced run shutdown")
+          .catch(cleanupError => logger.warn("daemon could not settle all runs before shutdown", {
+            sandboxId, error: transportErrorDetail(cleanupError),
+          }));
+      }
       // A deleted node has no record to mark stopped, and the backend rejects
       // the registration anyway. Skip it rather than log a bogus failure.
       if (!credentialsRejected) {
@@ -592,7 +681,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           logger.warn("daemon stopped notice failed", { sandboxId, error: transportErrorDetail(error) });
         });
       }
-      await environment.close();
+      await finishDaemonCleanup(environment, logger, sandboxId, "daemon shutdown cleanup failed");
       setHealth("stopped");
       await logger.close?.();
       if (exitProcess) process.exit(0);
@@ -638,7 +727,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     observe(() => {
       monitor?.cause('storage', !storageDecision.admit);
       monitor?.cause('quarantine', status.quarantined > 0);
-      monitor?.cause('execution', unconfirmedExecutions.size > 0);
+      monitor?.cause('execution', unconfirmedExecutions.size > 0 || executionJournal.hasUnreadableRecords);
     });
     if (storageDecision.stop) supervisor.stopAll('Report storage protection stopped this run; retained reports are preserved.', false);
   };
@@ -714,7 +803,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     exitRecheckTask = (async () => {
       while (leftoverExecutions.length > 0 && !runtimeSignal.aborted) {
         await delay(exitRecheckIntervalMs, runtimeSignal);
-        const exited = await proveJournaledExits(environment, leftoverExecutions, logger, sandboxId);
+        const exited = await recoverJournaledExits(
+          environment, leftoverExecutions, logger, sandboxId,
+          options.exitRecoveryTimeoutMs ?? HOST_EXIT_RECHECK_TIMEOUT_MS, runtimeSignal,
+        );
         for (const record of exited) {
           // Not yet acknowledged means not yet reported: the cancel says it all.
           unreportedExecutions.delete(record.id);
@@ -869,7 +961,8 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     diagnosticsTask = (async () => {
       while (!runtimeSignal.aborted) {
         try {
-          const snapshot = { ...monitor?.snapshot(), ...terminalOutbox.status(), runs: [...new Set(supervisor.commands().map(command => command.runId).concat(executionJournal.pending().map(run => run.runId)))].slice(0, 200) };
+          const retainedRuns = executionJournal.pending().filter(run => !pendingJournalCleanup.has(run.id));
+          const snapshot = { ...monitor?.snapshot(), ...terminalOutbox.status(), runs: [...new Set(supervisor.commands().map(command => command.runId).concat(retainedRuns.map(run => run.runId)))].slice(0, 200) };
           writePrivateDiagnostic(join(stateDir, 'transport-diagnostics.json'), snapshot);
           if (heartbeatFeatures.has('transport-status') && diagnosticsSchedule.due(snapshot, performance.now())) {
             await postJsonRequest(rawFetch, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/transport`), snapshot, token, runtimeSignal);
@@ -955,15 +1048,16 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     // to throw into the poll loop: an event the backend refuses (409, or a 401
     // from a stale lease) is about that run, not this daemon's credential, so
     // it must not stop the daemon.
-    const queueReport = (event: Extract<DaemonNodeEvent, { type: "run.failed" | "run.cancelled" }>, failureMessage: string, fields: DaemonLogFields): void => {
-      if (terminalOutbox.quarantined(event.commandId, event.leaseId)) return;
+    const queueReport = (event: Extract<DaemonNodeEvent, { type: "run.failed" | "run.cancelled" }>, failureMessage: string, fields: DaemonLogFields): boolean => {
+      if (terminalOutbox.quarantined(event.commandId, event.leaseId)) return false;
+      const newReport = !terminalOutbox.hasPendingReport(event);
       // Capture terminal evidence even when every background sender is busy.
       // The outbox replays reports that cannot enter the bounded task queue.
       try { terminalOutbox.retain({ ...event }); }
       catch (error) {
         logger.error(failureMessage, { ...fields, error: transportErrorDetail(error) });
         protectStorage();
-        return;
+        return false;
       }
       commandTasks.submit(JSON.stringify(["report", event.commandId, event.leaseId ?? null]), async () => {
         try {
@@ -978,11 +1072,33 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           });
         }
       });
+      return newReport;
     };
-    const postRejectedStart = (command: DaemonNodeRunCommand, detail: string, reason?: AdmissionWaitReason): void => {
+    const hasUnconfirmedExecution = (commandId: string): boolean => {
+      if (pendingJournalCleanup.has(commandId)) return false;
+      if (unconfirmedExecutions.has(commandId)) return true;
+      try { return executionJournal.mayHaveExecuted(commandId); }
+      catch (error) {
+        logger.error("could not check execution journal", { sandboxId, commandId, error: transportErrorDetail(error) });
+        return true;
+      }
+    };
+    const fenceWithoutExecution = (commandId: string, fields: DaemonLogFields): boolean => {
+      try {
+        admittedExecutions.add(commandId, { syncExisting: true });
+        executionJournal.discardPreparation(commandId);
+        return true;
+      } catch (error) {
+        logger.error("could not fence command without execution", { ...fields, error: transportErrorDetail(error) });
+        return false;
+      }
+    };
+    const postRejectedStart = (command: DaemonNodeRunCommand, detail: string, reason?: AdmissionWaitReason): boolean => {
+      if (supervisor.has(command.id) || hasUnconfirmedExecution(command.id)) return false;
       // Refused ids remain fenced even if capacity opens before redelivery.
-      admittedExecutions.add(command.id);
-      queueReport({
+      const fields = commandLogFields(sandboxId, command);
+      if (!fenceWithoutExecution(command.id, fields)) return false;
+      return queueReport({
         type: "run.failed",
         commandId: command.id,
         ...commandLeaseEventFields(command),
@@ -992,7 +1108,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         error: detail,
         ...(reason && heartbeatFeatures.has("admission-retry") ? { admissionRejected: reason } : {}),
         exitCode: 1,
-      }, "rejected start report capture failed", commandLogFields(sandboxId, command));
+      }, "rejected start report capture failed", fields);
     };
     // This daemon is registered and may be running agents. A refusal that is
     // not about its credential (a proxy's 403/404 while the backend deploys)
@@ -1007,8 +1123,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         await delay(100, runtimeSignal);
         continue;
       }
-      let completedEmptyLongPoll = false;
-      let pollDeliveredCommands = false;
+      let completedLongPoll = false;
       let commandPollStartedAt = performance.now();
       let leaseObservationStartedAt = commandPollStartedAt;
       let pollHeartbeat: DaemonNodeHeartbeatSettings | undefined;
@@ -1075,17 +1190,18 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
         renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         backendUnreachable = false;
         recoveryPollPending = false;
-        pollDeliveredCommands = (parsed.commands ?? []).some(command => command.type !== 'run.cancel'
-          || !terminalOutbox.quarantined(command.commandId, command.targetLeaseId));
-        completedEmptyLongPoll = commandPollWaitMs > 0
-          && !pollDeliveredCommands
-          && performance.now() - commandPollStartedAt >= commandPollWaitMs;
+        completedLongPoll = commandPollWaitMs > 0 && elapsed >= commandPollWaitMs;
         return parsed;
       }, logger, { sandboxId, what: "command poll" }, pollControl);
       if (stopping) break;
+      let pollMadeProgress = false;
       for (const command of body.commands ?? []) {
         if (command.type === "runtime.refresh") {
-          if (runtimeRefreshCommands.has(command.id) || runtimeRefreshCommands.size < 10) runtimeRefreshCommands.set(command.id, command.leaseId);
+          if (runtimeRefreshCommands.get(command.id) !== command.leaseId
+            && (runtimeRefreshCommands.has(command.id) || runtimeRefreshCommands.size < 10)) {
+            runtimeRefreshCommands.set(command.id, command.leaseId);
+            pollMadeProgress = true;
+          }
           continue;
         }
         if (command.type === "run.start") {
@@ -1106,7 +1222,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
           } catch (error) {
             const detail = transportErrorDetail(error);
             logger.warn("command rejected for invalid workspace subpath", { ...commandLogFields(sandboxId, command), error: detail });
-            postRejectedStart(command, detail);
+            pollMadeProgress = postRejectedStart(command, detail) || pollMadeProgress;
             continue;
           }
           const preparation = environment.canProbeWithoutBooting?.() === false ? backgroundRuntimeRefresh : undefined;
@@ -1117,28 +1233,38 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
                 outputBacklogBytes: positiveIntEnv('RELAY_DAEMON_OUTPUT_BACKLOG_BYTES'),
                 outputDrainTimeoutMs: positiveIntEnv('RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS'),
               });
-          }, command.reportWorkspaceStatus ? (blockingSessionId, signal) => postJsonWithRetry(fetchFn,
-            relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
-              type: 'run.workspace', commandId: command.id, ...commandLeaseEventFields(command),
-              sessionId: command.sessionId, runId: command.runId, agent: command.agent,
-              waiting: blockingSessionId !== null, ...(blockingSessionId ? { blockingSessionId } : {}),
-            } satisfies DaemonNodeEvent, token, signal) : undefined, preparation);
+          }, command.reportWorkspaceStatus ? async (blockingSessionId, signal) => {
+            const statusSignal = AbortSignal.any([signal, runtimeSignal]);
+            if (statusSignal.aborted) return;
+            try {
+              await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+                type: 'run.workspace', commandId: command.id, ...commandLeaseEventFields(command),
+                sessionId: command.sessionId, runId: command.runId, agent: command.agent,
+                waiting: blockingSessionId !== null, ...(blockingSessionId ? { blockingSessionId } : {}),
+              } satisfies DaemonNodeEvent, token, statusSignal);
+            } catch (error) {
+              if (!statusSignal.aborted) logger.warn('workspace status delivery failed', {
+                ...commandLogFields(sandboxId, command), error: transportErrorDetail(error),
+              });
+            }
+          } : undefined, preparation);
           if (admission === 'accepted') {
+            pollMadeProgress = true;
             logger.info("command received", commandLogFields(sandboxId, command));
             setHealth("busy", commandLogFields(sandboxId, command));
           } else if (admission === 'computer-capacity' || admission === 'runtime-capacity') {
-            postRejectedStart(command, 'Daemon node has no available execution slot for this run.', admission);
-          } else {
+            pollMadeProgress = postRejectedStart(command, 'Daemon node has no available execution slot for this run.', admission) || pollMadeProgress;
+          } else if (admission !== 'admission-unavailable') {
             logger.warn('command not started', { ...commandLogFields(sandboxId, command), reason: admission });
           }
           renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         } else if (command.type === "run.cancel") {
-          admittedExecutions.add(command.commandId);
           const target = supervisor.has(command.commandId);
+          const journaled = !target && hasUnconfirmedExecution(command.commandId);
           // Keep the retained evidence and incident visible, but a redelivered
           // stop cannot make a permanently refused report retryable. Active
           // or uncertain processes must still receive cancellation handling.
-          if (!target && !unconfirmedExecutions.has(command.commandId)
+          if (!target && !journaled
             && terminalOutbox.quarantined(command.commandId, command.targetLeaseId)) continue;
           logger.info("cancel command received", {
             sandboxId,
@@ -1148,11 +1274,12 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             agent: command.agent,
           });
           if (target) {
-            supervisor.cancel(command.commandId, command.reason);
-          } else if (unconfirmedExecutions.has(command.commandId) && !supervisor.isTerminal(command.commandId)) {
+            pollMadeProgress = supervisor.cancel(command.commandId, command.reason) || pollMadeProgress;
+          } else if (journaled) {
             observe(() => monitor?.cause('execution', true));
             logger.warn('Cancellation requires exit reconciliation for a journaled execution', { sandboxId, commandId: command.commandId });
           } else {
+            if (!fenceWithoutExecution(command.commandId, { sandboxId, commandId: command.commandId })) continue;
             // Nothing to stop: the start never reached this daemon (its poll
             // response was lost) or the daemon restarted since. The daemon is
             // the only party that knows the run is not executing, so it must
@@ -1166,7 +1293,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             });
             // Retain the report before sending, and retry beside the poll loop.
             // A failed acknowledgement must not stop this computer taking work.
-            queueReport({
+            pollMadeProgress = queueReport({
               type: "run.cancelled",
               commandId: command.commandId,
               ...(command.targetLeaseId ? { leaseId: command.targetLeaseId } : {}),
@@ -1174,7 +1301,7 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
               runId: command.runId,
               agent: command.agent,
               reason: command.reason || "Run was not executing on this computer.",
-            }, "cancel acknowledgement capture failed", { sandboxId, commandId: command.commandId });
+            }, "cancel acknowledgement capture failed", { sandboxId, commandId: command.commandId }) || pollMadeProgress;
           }
         } else {
           const key = JSON.stringify([command.id, command.leaseId ?? null]);
@@ -1182,19 +1309,17 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
             ? resolve(workspacePath, command.workspaceSubpath)
             : "workspaceLayout" in command && command.workspaceLayout === "thread"
               ? resolve(workspacePath, ".threads", command.sessionId ?? "") : workspacePath;
-          commandTasks.submit(key, async () => {
+          pollMadeProgress = commandTasks.submit(key, async () => {
             const event = workspaceReply(command, workspacePath, threadWorkspaces, projectLinks);
             await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
               event, token, runtimeSignal);
-          }, { lane, lease: { commandId: command.id, leaseId: command.leaseId } });
+          }, { lane, lease: { commandId: command.id, leaseId: command.leaseId } }) || pollMadeProgress;
         }
       }
-      // A successful long-poll already supplied the idle wait, and a poll that
-      // delivered commands is followed at once so the next command in a burst
-      // (a second thread, a cancel, a refresh) is not held back a second.
-      // Preserve an explicit caller delay and the default throttle for
-      // rejected or failed polls.
-      if (options.pollIntervalMs !== undefined || !(completedEmptyLongPoll || pollDeliveredCommands)) {
+      // Progress keeps command bursts moving. A completed long poll has
+      // already supplied the idle wait, but an immediate redelivery that
+      // still cannot be admitted must not cause another immediate poll.
+      if (options.pollIntervalMs !== undefined || !(completedLongPoll || pollMadeProgress)) {
         // A poll the backend keeps refusing after a clean re-registration
         // will not be fixed by asking every second: back off like an outage.
         await delay(Math.max(pollIntervalMs, pollRejections > 2 ? backendReconnectDelayMs(pollRejections - 2) : 0), runtimeSignal);
@@ -1461,7 +1586,7 @@ export interface DaemonExecutionEnvironment {
    * longer executing. Optional: without it every journaled run waits for a
    * person to report it gone.
    */
-  proveExited?(records: ExecutionRecord[]): Promise<string[]>;
+  proveExited?(records: ExecutionRecord[], signal?: AbortSignal): Promise<string[]>;
   close(): Promise<void>;
 }
 
@@ -1586,11 +1711,11 @@ export function createBoxliteEnvironment(
     acquireWorkspace: async (hostWorkspace, signal) => workspaceExecution(await pool.acquire(hostWorkspace, signal)),
     // Agents only ever run inside this computer's guests, so once every guest
     // a previous daemon left behind is confirmed gone, so are its runs.
-    async proveExited(records) {
+    async proveExited(records, signal) {
       if (records.length === 0) return [];
       const runtime = await runtimeOwner.get() as Partial<GuestRuntime>;
       if (!runtime.listInfo || !runtime.remove) return [];
-      const retired = await retireStaleGuests(runtime as GuestRuntime, boxNameForSandbox(sandboxId));
+      const retired = await retireStaleGuests(runtime as GuestRuntime, boxNameForSandbox(sandboxId), signal);
       return retired ? records.map((record) => record.id) : [];
     },
     async close() {
@@ -1603,15 +1728,43 @@ export function createBoxliteEnvironment(
   };
 }
 
+async function recoverJournaledExits(
+  environment: DaemonExecutionEnvironment,
+  records: ExecutionRecord[],
+  logger: DaemonLogger,
+  sandboxId: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<ExecutionRecord[]> {
+  const controller = new AbortController();
+  const probeSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+  try {
+    return await withExecutionDeadline(
+      proveJournaledExits(environment, records, logger, sandboxId, probeSignal),
+      timeoutMs, "Journaled execution recovery", probeSignal,
+    );
+  } catch (error) {
+    controller.abort(error);
+    // Host probes only observe processes. A BoxLite probe can still be
+    // retiring guests, so that timeout must stop startup before new boots.
+    if (signal?.aborted || environment.sandboxMode !== "none" || !(error instanceof ExecutionDeadlineError)) throw error;
+    logger.warn("journaled host exit check timed out; keeping execution reserved", { sandboxId, error: error.message });
+    return [];
+  }
+}
+
 async function proveJournaledExits(
   environment: DaemonExecutionEnvironment,
   records: ExecutionRecord[],
   logger: DaemonLogger,
   sandboxId: string,
+  signal?: AbortSignal,
 ): Promise<ExecutionRecord[]> {
+  signal?.throwIfAborted();
   if (records.length === 0 || !environment.proveExited) return [];
   try {
-    const proven = new Set(await environment.proveExited(records));
+    const proven = new Set(await environment.proveExited(records, signal));
+    signal?.throwIfAborted();
     const exited = records.filter((record) => proven.has(record.id));
     for (const record of exited) {
       logger.info("Run admitted before the restart has provably stopped; reporting it cancelled", {
@@ -1620,6 +1773,7 @@ async function proveJournaledExits(
     }
     return exited;
   } catch (error) {
+    signal?.throwIfAborted();
     // No proof is the safe answer: those runs wait for a person instead.
     logger.warn("could not check runs admitted before the restart", {
       sandboxId, error: transportErrorDetail(error),
@@ -1757,6 +1911,8 @@ function safeLogFileName(value: string): string {
 
 /** Room for one round trip on a slow link; well inside launchd's 20 s exit timeout. */
 const SHUTDOWN_REGISTRATION_TIMEOUT_MS = 2_500;
+// A Windows force-stop may need a full process-tree enumeration before exit can be verified.
+const SHUTDOWN_FORCE_WAIT_MS = process.platform === "win32" ? 20_000 : 2_500;
 const REGISTRATION_TIMEOUT_MS = 15_000;
 const DEFAULT_REJECTION_GRACE_MS = 120_000;
 /** How soon a lone 401 on a heartbeat is checked again before it stops the daemon. */
@@ -1783,6 +1939,9 @@ const DEFAULT_COMMAND_LEASE_SECONDS = 90;
 const DEFAULT_UNREACHABLE_GRACE_MS = 300_000;
 /** Matches the backend's per-registration journal report bound. */
 const JOURNAL_REPORT_LIMIT = 200;
+const EXIT_RECOVERY_TIMEOUT_MS = 10_000;
+/** Allows a host recheck to use the full Windows process enumeration timeout. */
+const HOST_EXIT_RECHECK_TIMEOUT_MS = 20_000;
 /** How often a host run left over from a previous daemon is checked again for exit. */
 const EXIT_RECHECK_INTERVAL_MS = 15_000;
 

@@ -3,6 +3,8 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFile
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
+const CLAIM_RELEASE_RETRY_MS = 250;
+
 interface Claim {
   id: string;
   // null means the process is still choosing its ticket (including a read
@@ -90,7 +92,11 @@ function readClaims(directory: string, ownId: string): Claim[] {
 
 function removeOwnFile(path: string): void {
   try { unlinkSync(path); }
-  catch { /* Never reused: a dead owner's claim can be reclaimed safely later. */ }
+  catch (error) {
+    // Contenders still see a live PID. These filenames are unique, so only
+    // the abandoned claim or its unpublished ticket can be removed on retry.
+    if (!hasCode(error, "ENOENT")) setTimeout(() => removeOwnFile(path), CLAIM_RELEASE_RETRY_MS).unref();
+  }
 }
 
 function hasCode(error: unknown, code: string): boolean {

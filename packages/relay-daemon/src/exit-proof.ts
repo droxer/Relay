@@ -75,14 +75,19 @@ export interface GuestRuntime {
  * confirm none remain. Those guests ran only fenced runs, and the next boot of
  * any slot would remove its same-named box anyway.
  */
-export async function retireStaleGuests(runtime: GuestRuntime, baseName: string): Promise<boolean> {
+export async function retireStaleGuests(runtime: GuestRuntime, baseName: string, signal?: AbortSignal): Promise<boolean> {
   const slot = new RegExp(`^${escapeRegExp(baseName)}-\\d+$`);
   const ours = (name?: string): name is string =>
     name === baseName || (name !== undefined && slot.test(name));
+  signal?.throwIfAborted();
   for (const { name } of await runtime.listInfo()) {
+    signal?.throwIfAborted();
     if (ours(name)) await runtime.remove(name, true).catch(() => undefined);
   }
-  return !(await runtime.listInfo()).some(({ name }) => ours(name));
+  signal?.throwIfAborted();
+  const remaining = await runtime.listInfo();
+  signal?.throwIfAborted();
+  return !remaining.some(({ name }) => ours(name));
 }
 
 function escapeRegExp(value: string): string {

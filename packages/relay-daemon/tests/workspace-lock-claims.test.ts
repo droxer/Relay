@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -43,6 +43,24 @@ test("a failed wait observer releases its own claim", async () => {
       }), /observer failed/);
       assert.equal(readdirSync(directory).length, 1);
     } finally { release(); }
+  });
+});
+
+test("claim cleanup retries after a temporary unlink failure", {
+  skip: process.platform === "win32" || process.getuid?.() === 0,
+}, async () => {
+  await fixture(async (path, directory) => {
+    const release = await acquireWorkspaceLockClaim(path);
+    chmodSync(directory, 0o500);
+    try {
+      release();
+      assert.equal(readdirSync(directory).length, 1);
+    } finally {
+      chmodSync(directory, 0o700);
+    }
+    const next = await acquireWorkspaceLockClaim(path, AbortSignal.timeout(1_500));
+    next();
+    assert.deepEqual(readdirSync(directory), []);
   });
 });
 

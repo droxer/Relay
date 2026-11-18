@@ -98,6 +98,10 @@ active background tasks. Run outcomes enter the durable outbox before queue
 admission; workspace replies continue to rely on command redelivery after a
 restart. Filesystem helpers retain their existing synchronous validation and I/O;
 this scheduling change removes network retry and probe waits from polling.
+The daemon retries failed cleanup of workspace locks and queue claims in the
+background. It checks the lock's ownership token before each attempt. Poll
+responses that make no progress, including starts refused because their local
+admission state is unavailable, use the normal idle polling delay.
 
 `online` says the daemon is alive. `dispatchable` says it will take work:
 online, and its last command poll (`lastPollAt`, advanced only by
@@ -153,8 +157,11 @@ the owner that has authority to act.
   registration refresh, supporting rolling upgrades from older backends.
 - Registration refresh remains separate and slower because capability and
   inventory discovery are materially more expensive than liveness renewal.
-- A graceful shutdown drains, then reports `stopped`; an ungraceful exit is
-  detected by lease expiry.
+- A graceful shutdown drains, then reports `stopped`. When the shutdown grace
+  expires, the daemon requests forced termination and waits briefly for exit
+  evidence. Unverified exits retain their reservations. A runtime teardown
+  failure is logged before the daemon flushes its logs and finishes an explicit
+  stop. Lease expiry detects an ungraceful daemon exit.
 - A beat refused with any other 4xx is logged and tried again next tick; only
   401/410 stop the daemon — and only from registration, the heartbeat, and
   the command poll. A `410` stops it at once: that is the backend's own
@@ -354,6 +361,9 @@ Output is written to private report storage asynchronously, flushed, renamed,
 and directory-synced before transmission. Terminal evidence is written
 synchronously before its execution journal entry is cleared. Captures whose
 flush has not completed are explicitly outside the crash-survival boundary.
+If journal cleanup fails, the daemon still replays the saved outcome and keeps
+the terminal evidence until local cleanup succeeds. Once the backend accepts
+the report, subsequent retries in that daemon only perform local cleanup.
 Successful uploads remove records only after the backend returns a receipt
 binding the report identity and payload digest. The receipt and effects commit
 in one database transaction. Lost replies can therefore be retried safely on
@@ -399,15 +409,25 @@ mismatched proof keeps the report pending. Unknown-command and command-ownership
 rejections still quarantine the report. This recovery does not automatically
 unquarantine reports already retained for intervention.
 Contact loss alone neither reruns nor kills an active agent.
-An unacknowledged start may be redelivered with its original command and lease;
-the daemon's execution journal fences unresolved admission. A compact private
+Only one daemon can hold the private state directory for admission and replay.
+A second daemon using the same directory exits before registration, and a
+replacement can reclaim the lock after its prior owner exits.
+An unacknowledged start may be redelivered with its original command and lease.
+The daemon's execution journal distinguishes preparation from admission. A
+prepared entry can resume on matching redelivery or be acknowledged as
+cancelled, since no process could have launched. Once admission commits, the
+journal fences the command until exit is accounted for. Unreadable journal
+records stay on disk and fence their command by filename while other runs
+and report replay continue. A compact private
 `admissions/` ledger also preserves command hashes after completion and across
 restarts. Its hot cache is bounded to 4,096 identities; evicting a cache entry
 never removes its durable fence. Each identity uses a 32-byte SHA-256 record,
 partitioned across 4,096 shard files. Backups include this ledger along with
-`executions/` and `terminal-events/`. An uncertain process
-exit keeps the execution reservation until observed exit or a recorded human
-assertion.
+`executions/` and `terminal-events/`. If startup cannot restore a fence to a
+damaged shard, the daemon retains that command's fence in memory. Polling and
+report replay continue, and new admissions that depend on an unreadable shard
+stay blocked. An uncertain process exit keeps the execution reservation until
+observed exit or a recorded human assertion.
 
 The report budget defaults to 1 GiB (`RELAY_DAEMON_REPORT_STORAGE_BYTES`).
 Admission stops at 80%; at 90%, running agents receive a graceful stop, followed
@@ -476,6 +496,10 @@ A wall-clock boot-time estimate is historical metadata, not proof of reboot or
 process exit. A restarted local daemon confirms that the recorded process group
 is absent; a Windows daemon requires a process list showing no remaining tree
 members. Missing or inconclusive evidence continues to require reconciliation.
+If a local startup probe reaches its deadline, the daemon registers with the
+run still reserved and rechecks it in the background when it has a process ID.
+A BoxLite retirement timeout ends startup before any new guests can use the
+old guest names.
 Windows tree cleanup distinguishes a reused root PID from its older orphans:
 children created after the replacement root are excluded, while older orphans
 and their descendants remain part of the recorded run.

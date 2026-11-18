@@ -16,8 +16,7 @@ const command = (id: string, agent: 'codex' | 'claude' = 'codex') => ({
 const done = (id: string) => ({ type: 'run.completed', commandId: id, sessionId: id, runId: id, agent: 'codex' }) as DaemonNodeEvent;
 const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 
-function fixture(t: test.TestContext, capacity = 2) {
-  const root = mkdtempSync(join(tmpdir(), 'relay-supervision-'));
+function fixture(t: test.TestContext, capacity = 2, root = mkdtempSync(join(tmpdir(), 'relay-supervision-'))) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const journal = new ExecutionJournal(join(root, 'journal'));
   const ledger = new AdmissionLedger(join(root, 'fences'));
@@ -80,18 +79,22 @@ test('durable terminal handoff frees capacity before a stalled upload finishes',
   assert.equal(supervisor.accept(command('b'), 'b', async () => (done('b'))), 'accepted');
 });
 
-test('a partial admission write stays fenced and never executes on retry', async t => {
-  const { supervisor, journal, ledger } = fixture(t);
-  const original = ledger.add.bind(ledger);
-  ledger.add = () => { throw Error('disk full'); };
-  let started = false;
-  const execute = async () => { started = true; return done('a'); };
-  assert.throws(() => supervisor.accept(command('a'), 'a', execute), /disk full/);
+test('a partial admission can resume after a restart without executing twice', async t => {
+  const { supervisor, journal, ledger, root } = fixture(t);
+  const add = ledger.add.bind(ledger);
+  ledger.add = id => { add(id); throw Error('admission write reported an error'); };
+  let starts = 0;
+  const execute = async () => { starts++; return done('a'); };
+  assert.equal(supervisor.accept(command('a'), 'a', execute), 'admission-unavailable');
+  await supervisor.settle();
+  assert.equal(starts, 0);
+  const { supervisor: restarted } = fixture(t, 2, root);
+  assert.equal(restarted.accept({ ...command('a'), leaseId: 'another-lease' }, 'a', execute), 'recovery-required');
+  assert.equal(restarted.accept(command('a'), 'a', execute), 'accepted');
+  await restarted.settle();
+  assert.equal(starts, 1);
   assert.equal(journal.has('a'), true);
-  ledger.add = original;
-  assert.equal(supervisor.accept(command('a'), 'a', execute), 'recovery-required');
-  await tick();
-  assert.equal(started, false);
+  assert.equal(restarted.accept(command('a'), 'a', execute), 'recovery-required');
 });
 
 test('drain closes admission and cancels preparation without waiting for discovery', async t => {
@@ -162,3 +165,41 @@ for (const subpath of ['projects/a', 'links/repo']) {
     }
   });
 }
+test('workspace wait and clear arrive in order without delaying the next owner', { timeout: 2_000 }, async () => {
+  const gate = new WorkspaceRunGate();
+  let releaseWorkspace!: () => void;
+  const busy = new Promise<void>(resolve => { releaseWorkspace = resolve; });
+  let holdStatus!: () => void;
+  const slowPost = new Promise<void>(resolve => { holdStatus = resolve; });
+  let postedWait!: () => void;
+  const waiting = new Promise<void>(resolve => { postedWait = resolve; });
+  let postedClear!: () => void;
+  const cleared = new Promise<void>(resolve => { postedClear = resolve; });
+  const states: Array<string | null | undefined> = [];
+  const first = gate.run('workspace', undefined, () => busy, { sessionId: 'first' });
+  await new Promise<void>(resolve => setImmediate(resolve));
+  const second = gate.run('workspace', undefined, async () => 'ran', {
+    sessionId: 'second',
+    onWaiting: async id => {
+      states.push(id);
+      if (id === null) postedClear();
+      else {
+        postedWait();
+        await slowPost;
+      }
+    },
+  });
+  try {
+    await waiting;
+    releaseWorkspace();
+    assert.equal(await second, 'ran');
+    assert.deepEqual(states, ['first']);
+    holdStatus();
+    await cleared;
+    assert.deepEqual(states, ['first', null]);
+  } finally {
+    releaseWorkspace();
+    holdStatus();
+    await first;
+  }
+});

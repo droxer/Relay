@@ -1079,7 +1079,9 @@ New task runs require a daemon advertising `task-workspaces`. The run admission
 records `task.workspace_bound`; conflicting bindings are rejected. Commands with
 `reportWorkspaceStatus: true` accept a lease-validated `run.workspace` event with
 `waiting: boolean` and optional `blockingSessionId`. These transitions materialize
-as `task.workspace_wait` events; an acquire clears the matching run's wait state.
+as `task.workspace_wait` events. Acquiring the workspace queues a clear for the
+matching run's wait state. Status delivery retries transient failures while the
+run is active. Workspace access and execution proceed during those retries.
 
 ### Task flow and acceptance
 

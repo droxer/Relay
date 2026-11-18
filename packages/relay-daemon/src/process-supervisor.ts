@@ -26,7 +26,8 @@ export async function superviseLocalProcess(
     exitUnconfirmedAfterMs?: number;
   } = {},
 ): Promise<StreamExecResult> {
-  if (options.signal?.aborted) {
+  const hooks = exitHooksFor(options.signal);
+  if (options.signal?.aborted || hooks?.forceStop?.aborted) {
     return {
       exit_code: -1,
       stdout: "",
@@ -34,7 +35,6 @@ export async function superviseLocalProcess(
       error_message: "Execution cancelled before start.",
     };
   }
-  const hooks = exitHooksFor(options.signal);
   return new Promise((resolve) => {
     const windows = process.platform === "win32";
     const detached = !windows;
@@ -61,6 +61,7 @@ export async function superviseLocalProcess(
     let exitCode: number | null | undefined;
     let closed = false;
     let windowsCleanup: Promise<void> | undefined;
+    let windowsTermination: Promise<boolean | undefined> | undefined;
     let windowsTreeCleared = false;
     const scheduleExitReport = (): void => {
       if (reportTimer || reported || finished) return;
@@ -80,6 +81,7 @@ export async function superviseLocalProcess(
       if (cleanupTimer) clearTimeout(cleanupTimer);
       if (terminationRetryTimer) clearInterval(terminationRetryTimer);
       options.signal?.removeEventListener("abort", abort);
+      hooks?.forceStop?.removeEventListener("abort", forceStop);
       hooks?.release?.removeEventListener("abort", release);
       if (released) {
         // An operator assertion frees the slot even when the child or its
@@ -116,7 +118,7 @@ export async function superviseLocalProcess(
      * the run's tree, orphans included; true once none remain, undefined when
      * Windows could not list its processes.
      */
-    const killWindowsTree = async (): Promise<boolean | undefined> => {
+    const sweepWindowsTree = async (): Promise<boolean | undefined> => {
       const processes = child.pid ? await listWindowsProcesses() : undefined;
       if (!processes || !child.pid) {
         // The ChildProcess handle identifies the original root even if its
@@ -128,6 +130,10 @@ export async function superviseLocalProcess(
       if (members.length === 0) return true;
       spawnSync("taskkill", taskkillArguments(members), { stdio: "ignore", windowsHide: true });
       return false;
+    };
+    const killWindowsTree = (): Promise<boolean | undefined> => {
+      // Shutdown escalation and exit cleanup can overlap on the same tree.
+      return windowsTermination ??= sweepWindowsTree().finally(() => { windowsTermination = undefined; });
     };
     /**
      * Once bash exits on Windows, clear what it left running before reporting
@@ -163,14 +169,21 @@ export async function superviseLocalProcess(
         }, WINDOWS_PIPE_DRAIN_MS);
       })();
     };
+    const forceStop = (): void => {
+      if (finished) return;
+      if (killTimer) clearTimeout(killTimer);
+      scheduleExitReport();
+      terminate("SIGKILL");
+    };
     const abort = (): void => {
       scheduleExitReport();
       terminate("SIGTERM");
       // Escalate in case the agent ignores SIGTERM.
-      killTimer = setTimeout(() => terminate("SIGKILL"), hooks?.stopGraceMs ?? SIGKILL_DELAY_MS);
+      killTimer = setTimeout(forceStop, hooks?.stopGraceMs ?? SIGKILL_DELAY_MS);
       killTimer.unref?.();
     };
     options.signal?.addEventListener("abort", abort, { once: true });
+    hooks?.forceStop?.addEventListener("abort", forceStop, { once: true });
     hooks?.release?.addEventListener("abort", release, { once: true });
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -260,6 +273,7 @@ export async function superviseLocalProcess(
     // Register error/exit handlers before an already-aborted signal can try
     // to kill a process and synchronously emit a ChildProcess error.
     if (options.signal?.aborted) abort();
+    if (hooks?.forceStop?.aborted) forceStop();
     if (hooks?.release?.aborted) release();
   });
 }
