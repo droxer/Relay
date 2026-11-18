@@ -690,11 +690,13 @@
    reading space between the process, its participants and the run controls. */
 .workflow-project-library {
   display: grid;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
 }
 
+/* Centred like the crew's head beside or above it, so both section titles
+   and their add buttons share one line. */
 .workflow-project-library > .workflow-library-head {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .workflow-project-library .workflow-editor-note {

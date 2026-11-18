@@ -14,7 +14,8 @@
              in the building, which is why it cannot be a viewport query),
              and where the project dashboard's `project-stages` card folds
              its five stage counts to three columns, and where the `record`
-             run ledger narrows its day column
+             run ledger narrows its day column, and where a
+             `project-crew` row drops its state pill under the agent's duty
      640px   compact — dashboard, admin shell, composer, workspace panes;
              also a CONTAINER tier, where the `artifact-preview` header
              wraps a file's actions under its name, where the
@@ -38,7 +39,9 @@
      900px   dashboard + backlog medium; SHELL — below it the space panel
              stops being a column and becomes an overlay
     1040px   TABLET — the app-wide tier
-    1100px   multi-pane → single pane (agents, backlog, teams, workspace)
+    1100px   multi-pane → single pane (agents, backlog, teams, workspace);
+             also a CONTAINER tier, where `project-collab` splits crew
+             and workflows into two columns
     1200px   dashboard widest; SHELL — the narrowest viewport that can seat
              all four shell columns on their floors (1128px of them)
     1400px   thread metadata hides the computer chip as the pane narrows
