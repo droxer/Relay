@@ -413,9 +413,13 @@ calls the backend origin directly with `credentials: "include"`.
    the same computer keeps its saved token and agent settings. It pauses new
    work before checking for runs in flight and holds that pause through the
    restart. It refuses active runs or a daemon that cannot acknowledge the pause
-   unless given `--force`. Failed updates release the pause; use `relay status`
-   to check service health afterward. An update also puts the invoking shell's
-   PATH in front of the saved one, so agent CLIs installed since setup are found.
+   unless given `--force`. The update succeeds once the replacement daemon
+   registers with Relay. If the replacement fails to start or register within
+   two minutes, the updater restores the previous service. A temporary backend
+   error during credential verification can be retried. If Relay rejects the
+   saved credential, reconnect using the install command in Relay. An update
+   also puts the invoking shell's PATH in front of the saved one, so agent CLIs
+   installed since setup are found.
    On macOS and Windows, `service.log` rotates to `service.log.1` past 10 MB.
 
    **Windows** (10 version 1803 or newer, x64/arm64) gets a PowerShell twin:

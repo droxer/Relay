@@ -201,6 +201,8 @@ test('installer verifies authentication and writes a service using the real pack
     const stale = service.replace('node-install-test', 'node-stale');
     writeFileSync(stale, content.replaceAll('node-install-test', 'node-stale'));
     const savedProfile = readFileSync(profile, 'utf8');
+    const setupProfile = join(root, 'setup-profile.json');
+    writeFileSync(setupProfile, savedProfile, { mode: 0o600 });
     // Retained reports describe the old daemon, not whether a new client can install.
     const stateDir = join(home, '.relay/daemon-nodes/node-install-test');
     const diagnostics = join(stateDir, 'transport-diagnostics.json');
@@ -210,7 +212,7 @@ test('installer verifies authentication and writes a service using the real pack
     const reports = join(stateDir, 'terminal-events');
     mkdirSync(reports, { recursive: true });
     writeFileSync(join(reports, 'retained.rejected'), '409');
-    const upgrade = await exec(process.execPath, [...setupCommand, '--runtime-profile', profile], {
+    const upgrade = await exec(process.execPath, [...setupCommand, '--runtime-profile', setupProfile], {
       env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
     });
     assert.match(upgrade.stdout, /transport:.*quarantined: 2/);
@@ -228,7 +230,7 @@ test('installer verifies authentication and writes a service using the real pack
       '{unreadable',
     ]) {
       writeFileSync(diagnostics, snapshot);
-      const retried = await exec(process.execPath, [...setupCommand, '--runtime-profile', profile], {
+      const retried = await exec(process.execPath, [...setupCommand, '--runtime-profile', setupProfile], {
         env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
       });
       assert.match(retried.stdout, /transport:/);
@@ -249,7 +251,7 @@ test('installer verifies authentication and writes a service using the real pack
       '{unreadable',
     ]) {
       writeFileSync(mcpStatus, snapshot);
-      const retried = await exec(process.execPath, [...setupCommand, '--runtime-profile', profile], {
+      const retried = await exec(process.execPath, [...setupCommand, '--runtime-profile', setupProfile], {
         env: { HOME: home, PATH: installPath, SERVICE_CALLS: calls }, timeout: 30_000,
       });
       assert.match(retried.stdout, /relay-mcp:/);

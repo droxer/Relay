@@ -209,11 +209,14 @@ Use the installation command from **Connect this computer** and enter the node
 token when prompted. Successful setup prints **Connected to Relay**; the service
 runs in the background without a PATH change or another manual daemon command.
 Re-running setup for the same computer replaces its service definition.
-`relay update` does the same from the computer itself: it re-runs the backend's
-current installer with the complete saved runtime profile. It pauses admission
+`relay update` runs the backend's current installer for the selected Computer
+with its saved credentials and runtime profile. It pauses admission
 of new work through the restart and refuses while runs are in flight unless
 given `--force`. If the daemon cannot acknowledge the pause, the update aborts
-safely; failed updates release the pause.
+safely. The updater waits for the replacement daemon to register with Relay
+before reporting success. If startup or registration fails, it restores the
+previous service and releases the pause. Run the install command from Relay
+to reconnect a Computer whose credential was rejected.
 
 For troubleshooting, append `--verbose` to that installation command to print the
 log location, service stop command, and CLI location. This re-runs setup and
