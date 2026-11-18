@@ -528,8 +528,8 @@
 
 .login-vignette-meta {
   grid-area: meta;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--lg-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -552,8 +552,8 @@
 
 .login-ideas-label {
   flex-basis: 100%;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--lg-muted);
 }
 
@@ -651,7 +651,7 @@
 }
 
 .login-foot-meta {
-  font: var(--type-body-sm);
+  font: var(--type-meta);
   color: var(--lg-muted);
 }
 

@@ -74,12 +74,12 @@
 /* Completed runs are an outcome, so they take the outcome tone their failed
    neighbour already does (--err): beside the fleet card's --ok "ready", a
    teal "completed" put two greens on one page meaning the same thing. */
-.adm-series--completed { fill: var(--ok); background: var(--ok); }
+.adm-series--completed { fill: var(--ok-mark); background: var(--ok-mark); }
 .adm-series--output { fill: var(--series-1); background: var(--series-1); }
 .adm-series--input { fill: var(--series-2); background: var(--series-2); }
 .adm-series--cache { fill: var(--series-3); background: var(--series-3); }
 .adm-series--other { fill: var(--series-rest); background: var(--series-rest); }
-.adm-series--failed { fill: var(--err); background: var(--err); }
+.adm-series--failed { fill: var(--err-mark); background: var(--err-mark); }
 
 /* Hover targets: one column per bar, full plot height, so a short bar is as
    easy to point at as a tall one. */
@@ -113,8 +113,8 @@
   /* Shared floating edge and soft shadow (roles.css). */
   box-shadow: var(--shadow-2);
   pointer-events: none;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -160,8 +160,8 @@
   flex-wrap: wrap;
   gap: var(--sp-1) var(--sp-4);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .adm-chart-legend > span {

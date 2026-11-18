@@ -122,8 +122,8 @@
 .workspace-page-tab-count,
 .thread-space-tab-count {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .workspace-page .workspace-page-tab[aria-selected="true"] .workspace-page-tab-count,
@@ -374,8 +374,8 @@
 
 .workspace-pane-head > span {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .workspace-pane-head-actions {
@@ -445,8 +445,8 @@
 
 .workspace-activity-head > span {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .workspace-activity-pick {
@@ -578,8 +578,8 @@
   padding-top: var(--sp-4);
   border-top: var(--hairline-soft);
   color: var(--ink-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-wrap: pretty;
 }
 
@@ -685,8 +685,8 @@
 
 .workspace-profile .adm-cred-value {
   color: var(--ink-1);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .workspace-profile .adm-cred-note {

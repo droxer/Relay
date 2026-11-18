@@ -51,8 +51,8 @@
   display: block;
   overflow: hidden;
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

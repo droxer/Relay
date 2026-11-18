@@ -157,8 +157,8 @@
   flex-wrap: wrap;
   gap: var(--sp-1) var(--sp-4);
   margin: var(--sp-2) 0 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -219,14 +219,14 @@
 
 .skill-file-list span {
   flex: none;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
 .skill-revisions time {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -265,8 +265,8 @@
 
 .skill-revisions strong {
   min-width: 2.5ch;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -382,8 +382,8 @@
 
 .skill-target-meta {
   flex: none;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -618,8 +618,8 @@
 
 .skill-preview-bytes {
   flex: none;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 

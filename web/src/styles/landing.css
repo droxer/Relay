@@ -501,7 +501,7 @@
 }
 
 .landing-foot-meta {
-  font: var(--type-body-sm);
+  font: var(--type-meta);
   color: var(--ld-muted);
 }
 

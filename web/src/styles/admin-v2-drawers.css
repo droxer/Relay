@@ -377,8 +377,8 @@
 }
 
 .adm-assign-operator-handle {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
   line-height: var(--leading-display);
   word-break: break-all;
@@ -508,8 +508,8 @@
 }
 
 .adm-assign-node-path {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
   word-break: break-all;
   line-height: var(--leading-snug);

@@ -121,8 +121,8 @@
   align-items: center;
   gap: var(--sp-1-5);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
@@ -556,8 +556,8 @@
 
 .artifacts-empty-date {
   color: var(--ink-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* Idle-presence pulse: the tile stays the neutral relay-empty avatar plate;

@@ -23,8 +23,8 @@
 
 .task-project-label {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 @media (max-width: 820px) {

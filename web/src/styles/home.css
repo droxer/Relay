@@ -4,7 +4,6 @@
 /* One completion colour everywhere — the same --ok the "all clear" brief uses. */
 .home-page {
   --home-completed: var(--ok);
-  --home-review: var(--warn);
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -47,10 +46,12 @@
 
 /* Each status keeps one colour across the bar, the facts, and the queue:
    done is ok, review and needs-you are warn, running is live, blocked is err. */
-.home-page [data-stage="done"] { --home-stage: var(--home-completed); }
-.home-page [data-stage="review"] { --home-stage: var(--home-review); }
-.home-page [data-stage="running"] { --home-stage: var(--live); }
-.home-page [data-stage="blocked"] { --home-stage: var(--err); }
+/* The bar is an area, so its segments read the status MARKS (palette.css);
+   the facts and queue beside it keep the text inks. */
+.home-page [data-stage="done"] { --home-stage: var(--ok-mark); }
+.home-page [data-stage="review"] { --home-stage: var(--warn-mark); }
+.home-page [data-stage="running"] { --home-stage: var(--live-mark); }
+.home-page [data-stage="blocked"] { --home-stage: var(--err-mark); }
 
 /* The greeting belongs to the scrollable canvas, above its two columns. */
 .home-body > .page-header {

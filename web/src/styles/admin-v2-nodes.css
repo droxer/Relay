@@ -88,8 +88,8 @@
   justify-content: space-between;
   gap: var(--sp-1) var(--sp-3);
   min-width: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -115,8 +115,8 @@
   min-width: 0;
   max-width: 100%;
   flex: 1 1 auto;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .adm-node-owner-mark {
@@ -358,8 +358,8 @@
 }
 
 .adm-node-card-handle {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
   max-width: 100%;
   overflow: hidden;
@@ -532,8 +532,8 @@
   margin-top: auto;
   padding-top: var(--sp-3);
   border-top: var(--hairline-soft);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .adm-node-card-runtimes {

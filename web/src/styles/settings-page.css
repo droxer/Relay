@@ -58,8 +58,8 @@
   flex-wrap: wrap;
   column-gap: var(--sp-3);
   margin: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
   overflow-wrap: anywhere;
 }

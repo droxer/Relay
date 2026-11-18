@@ -218,7 +218,7 @@ describe("glyph and avatar scales", () => {
 });
 
 describe("avatar scale", () => {
-  const RUNGS = ["--avatar-xs", "--avatar-sm", "--avatar-md", "--avatar-lg", "--avatar-xl", "--avatar-2xl", "--avatar-3xl"];
+  const RUNGS = ["--avatar-xs", "--avatar-sm", "--avatar-md", "--avatar-lg", "--avatar-xl", "--avatar-2xl"];
 
   it("runs in ascending order", () => {
     const values = RUNGS.map(token);

@@ -159,8 +159,8 @@ tr.is-pulse > td:first-child::after {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-1-5);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -248,8 +248,8 @@ tr.is-pulse > td:first-child::after {
 }
 
 .adm-emp-ratio {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* `.tone-*` sets only the `--tone` variable (base.css). Do not add a broad
@@ -566,8 +566,8 @@ tr.is-pulse > td:first-child::after {
 
 .adm-emp-card-dept {
   flex: 1 1 auto;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
 }
 
@@ -609,8 +609,8 @@ tr.is-pulse > td:first-child::after {
 }
 
 .adm-emp-limit-label {
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-3);
   /* CJK labels can break at any character; keep each label one line. */
   white-space: nowrap;
@@ -624,8 +624,8 @@ tr.is-pulse > td:first-child::after {
   gap: var(--sp-1) var(--sp-2);
   margin: 0;
   min-width: 0;
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   color: var(--ink-1);
   white-space: nowrap;
 }

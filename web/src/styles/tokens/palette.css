@@ -97,12 +97,6 @@
   --line-1: #384957; /* structural hairline */
   --line-2: #2d3b46; /* soft hairline */
 
-  /* Inverted blue-grey action fill, shared with direct-fill controls.
-     The Button primitive uses --action; both remain paired per register. */
-  --cta-fill: #d3e0e9;
-  --cta-hover: #e3ebf1;
-  --cta-ink: #23313b;
-
   /* Restrained blue-grey actions. Signal blue remains exclusive to live
      execution. Selection uses a quiet wash with a clear ink marker. */
   --action: #d3e0e9;
@@ -118,7 +112,7 @@
   /* Status ink retains green, gold and crimson meanings. Every tone clears
      the small-text contrast floor on all content and navigation planes. */
   --ok: #6dd28a;   /* success — lifted for tinted selected states */
-  --warn: #dec371; /* warning — a muted gold, off the action's orange and the highlighter */
+  --warn: #dec371; /* warning — a muted gold, clear of the brand mark's orange */
   --err: #f7adbe;  /* critical — crimson, lifted for the dark canvas */
   /* Dark ink on the lifted critical fill. */
   --on-err: #23313b;
@@ -135,6 +129,24 @@
      tone draw the handoff — a --brand-lead chevron and a --live trailing
      one — so the two accents read as one story in the mark itself. */
   --live: #91b9f2; /* signal blue — never purple, which reads as generic AI styling */
+
+  /* Status MARKS — the same four meanings painted as an AREA: chart bars,
+     donut arcs, progress segments and the legend swatches beside them. The
+     inks above are tuned as text, and text and area want opposite things:
+     these dark inks are pastels (L ~0.8, low chroma) that wash out as fills
+     and blur into each other, while the light inks are deepened past 4.5:1
+     until a filled bar read near-black green and brown. A mark is judged as
+     a graphic — 3:1 against the card plane — and against its neighbours:
+     the set was validated as one palette (dataviz validate_palette.js, all
+     pairs, both registers), with green and crimson pulled apart in
+     lightness so a red-green colour-blind reader still separates done from
+     failed. Warn sits under 3:1 on purpose and is never alone: it is
+     hatched wherever it fills and labelled with its count beside a ring.
+     Small status DOTS stay on the inks; they are glyphs, not areas. */
+  --ok-mark: #3dae69;
+  --err-mark: #d2305a;
+  --warn-mark: #a98426;
+  --live-mark: #5e93e8;
 
   /* Link ink — wayfinding: anchors in prose and the focus ring. Ink, set
      apart by its underline (and the ring by its offset), never a hue. */
@@ -422,9 +434,6 @@
   --avatar-lg: 40px;
   --avatar-xl: 56px;
   --avatar-2xl: 64px;
-  /* A full-pane empty state, where the mark is the only thing on screen —
-     the transcript's, as against the 56px one inside a panel. */
-  --avatar-3xl: 80px;
 
   /* Status dot — the most repeated atom in the product, and for a long time
      the least governed one. It shipped at 6, 7, 8, 9 and 10px across 24
@@ -789,9 +798,6 @@
    and white floating surfaces. Text stays dark enough on the rail too. */
 html[data-theme="light"] {
   --field-border-strength: 56%;
-  --cta-fill: #364b59;
-  --cta-hover: #475e6d;
-  --cta-ink: #ffffff;
   /* Cool mist separates the canvas, inset fill and raised content. */
   --surface-0: #eef2f5;
   --surface-1: #fbfcfd;
@@ -838,6 +844,13 @@ html[data-theme="light"] {
   /* Live — signal blue, deepened: 5.4:1 on --surface-2 and 6.2:1 on the
      canvas, so an elapsed timer set in it is legible. */
   --live: #2457c5;
+
+  /* Light status marks — mid-tones, not the deepened text inks (see the dark
+     block). Validated against --surface-1 as one palette. */
+  --ok-mark: #2f9a5a;
+  --err-mark: #a5123f;
+  --warn-mark: #c4950f;
+  --live-mark: #3a76e0;
 
   /* Link ink is the ink; the underline marks it. */
   --link-ink: #27333b;
@@ -904,7 +917,8 @@ html:lang(zh-TW) {
   /* Compact keeps the one 14px reading size (palette.css has no rung below
      it that reads as body) and tightens only the LINE BOX: the body and name
      roles are restated locally so the snug leading applies in this scope.
-     --type-body-sm is already snug at the root, so it is not restated. */
+     --type-body-sm already sits on the one reading size with the body
+     leading, so compact leaves it alone. */
   --type-body: 400 var(--fs-4)/var(--leading-snug) var(--font-sans);
   --type-name: 500 var(--fs-4)/var(--leading-snug) var(--font-sans);
   /* Compact grids use shorter cards with the same text clamps. */
@@ -929,6 +943,6 @@ html:lang(zh-TW)[data-density="compact"] {
   --leading-loose: 1.8;
   --type-body: 400 var(--fs-4)/var(--leading-normal) var(--font-sans);
   --type-name: 500 var(--fs-4)/var(--leading-normal) var(--font-sans);
-  --type-body-sm: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
+  --type-body-sm: 400 var(--fs-2)/var(--leading-normal) var(--font-sans);
   --card-h-tile: 144px;
 }

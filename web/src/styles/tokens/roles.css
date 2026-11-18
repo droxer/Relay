@@ -190,7 +190,12 @@
   --type-page:         500 var(--fs-5)/var(--leading-tight) var(--font-display);
   --type-heading:      700 var(--fs-heading)/var(--leading-heading) var(--font-display);
   --type-body:         400 var(--fs-4)/var(--leading-normal) var(--font-sans);
-  --type-body-sm:      400 var(--fs-1)/var(--leading-normal) var(--font-sans);
+  /* Supporting SENTENCES — hints, descriptions, empty-state copy — at the
+     one reading size. It was 12px, and with meta and micro also on that
+     rung ~45% of rendered text was 12px: every hint read as fine print.
+     The caption rung now belongs to the caption roles alone (meta lines,
+     group labels); a sentence someone has to read is never a caption. */
+  --type-body-sm:      400 var(--fs-2)/var(--leading-normal) var(--font-sans);
   --type-label:        500 var(--fs-2)/var(--leading-snug) var(--font-sans);
   --type-label-strong: 700 var(--fs-2)/var(--leading-snug) var(--font-sans);
   /* Micro is STRUCTURE, not emphasis, so it does not spend the 700 tier —
@@ -251,11 +256,13 @@
   --type-name:          500 var(--fs-4)/var(--leading-normal) var(--font-sans);
   /* --type-meta  supporting text at the caption size, in SENTENCE case: row
      meta lines ("3 agents · updated 2h ago"), eyebrows, kickers. It shares the
-     box with --type-micro; micro marks structure (group and field labels),
-     meta carries prose. Six rules used to hand-roll this as `font: var(--type-label)`
-     followed by `font-size: var(--fs-1)`, which is how a role announces it is
-     missing. */
-  --type-meta:          500 var(--fs-1)/var(--leading-caps) var(--font-sans);
+     box with --type-micro; micro marks structure (group and field labels) at
+     500, meta carries prose at the reading weight. It was 500 too, a copy of
+     micro, so every row's meta line weighed what its name did and the name
+     led by ink alone — and 500 was two-thirds of all rendered text. Six rules
+     used to hand-roll this as `font: var(--type-label)` followed by
+     `font-size: var(--fs-1)`, which is how a role announces it is missing. */
+  --type-meta:          400 var(--fs-1)/var(--leading-caps) var(--font-sans);
   --type-title-content: 400 var(--fs-title)/var(--leading-tight) var(--font-sans);
 
   --type-display-track:      var(--track-display); /* the one tightened tier — see palette.css */
@@ -317,12 +324,10 @@
   }
 }
 
-/* CJK — reading roles want looser leading. */
-html:lang(zh-CN),
-html:lang(zh-TW) {
-  --type-body:   400 var(--fs-4)/var(--leading-normal) var(--font-sans);
-  --type-body-sm: 400 var(--fs-1)/var(--leading-normal) var(--font-sans);
-}
+/* CJK reading roles need no restatement here: `html` IS `:root`, so the root
+   declarations above already resolve --leading-normal against palette.css's
+   html:lang() value. Only a scope BELOW the root (the compact block) has to
+   restate a role to re-resolve it. */
 
 /* Resolve locally, including on pseudo-elements: a root composite would
    inherit an already-resolved neutral fallback instead of the consumer's tone.

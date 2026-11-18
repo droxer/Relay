@@ -153,8 +153,8 @@
   align-items: center;
   gap: var(--sp-2);
   color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   cursor: pointer;
 }
 
@@ -172,8 +172,8 @@
   gap: var(--sp-2);
   margin: 0;
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .workflow-teams-state p {
@@ -752,8 +752,8 @@
 
 .workflow-library-meta {
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .workflow-project-origin {
@@ -763,7 +763,7 @@
   gap: var(--sp-1);
   max-width: 100%;
   color: var(--ink-2);
-  font: var(--type-body-sm);
+  font: var(--type-meta);
   overflow-wrap: anywhere;
 }
 

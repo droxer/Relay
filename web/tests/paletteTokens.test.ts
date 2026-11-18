@@ -764,15 +764,58 @@ describe("accent primary and neutral CTA palette", () => {
 
   it("keeps primary labels legible in both themes at rest and on hover", () => {
     for (const register of [darkRegister, lightRegister]) {
-      const ink = tokenIn(register, "--cta-ink");
-      for (const fill of ["--cta-fill", "--cta-hover"]) {
+      const ink = tokenIn(register, "--on-action");
+      for (const fill of ["--action", "--action-hover"]) {
         const hex = tokenIn(register, fill);
         const [r, g, b] = channels(hex);
         assert.ok(b > g && g > r && b - r <= 50, `${fill} must stay blue-grey`);
         assert.ok(contrast(ink, hex) >= 4.5, `${fill} must keep its label legible`);
       }
     }
-    assert.ok(contrast(tokenIn(darkRegister, "--cta-fill"), tokenIn(darkRegister, "--surface-3")) >= 3);
-    assert.ok(contrast(tokenIn(lightRegister, "--cta-fill"), tokenIn(lightRegister, "--surface-3")) >= 3);
+    assert.ok(contrast(tokenIn(darkRegister, "--action"), tokenIn(darkRegister, "--surface-3")) >= 3);
+    assert.ok(contrast(tokenIn(lightRegister, "--action"), tokenIn(lightRegister, "--surface-3")) >= 3);
+  });
+
+  it("names the primary fill once", () => {
+    // --cta-fill/--cta-hover/--cta-ink were a second spelling of the action
+    // pair, equal to it in both registers, so a change to one silently left
+    // the composer's send disc and the profile picker on the old value.
+    assert.doesNotMatch(paletteCode, /--cta-(fill|hover|ink)\s*:/);
+    const styles = path.join(repoRoot, STYLES_DIR);
+    const stragglers = readdirSync(styles)
+      .filter((file) => file.endsWith(".css"))
+      .filter((file) => /var\(--cta-/.test(readFileSync(path.join(styles, file), "utf8")));
+    assert.deepEqual(stragglers, [], "read --action / --action-hover / --on-action instead");
+  });
+});
+
+describe("status marks", () => {
+  // The status inks are tuned as TEXT: light --ok and --warn are deepened
+  // until 12px words clear 4.5:1, which made a bar or donut painted with them
+  // read near-black green and brown. A mark is an area, judged at 3:1 as a
+  // graphic (WCAG 1.4.11), so it has its own tier per register.
+  const MARKS = ["--ok-mark", "--err-mark", "--live-mark"];
+
+  it("clears the graphic floor on the card plane in both registers", () => {
+    for (const register of [darkRegister, lightRegister]) {
+      const card = tokenIn(register, "--surface-1");
+      for (const mark of MARKS) {
+        assert.ok(contrast(tokenIn(register, mark), card) >= 3, `${mark} must clear 3:1 on --surface-1`);
+      }
+      // Warn is double-encoded by hatching wherever it fills (bar segments)
+      // and labelled with its count beside every ring, so its floor is lower.
+      assert.ok(contrast(tokenIn(register, "--warn-mark"), card) >= 2.5, "--warn-mark must stay visible on --surface-1");
+    }
+  });
+
+  it("paints chart areas from the mark tier, never the text inks", () => {
+    const charts = readStyle("admin-v2-charts.css");
+    const dashboard = readStyle("admin-v2-dashboard.css");
+    const home = readStyle("home.css");
+    assert.match(charts, /\.adm-series--completed\s*\{[^}]*var\(--ok-mark\)/);
+    assert.match(charts, /\.adm-series--failed\s*\{[^}]*var\(--err-mark\)/);
+    assert.match(dashboard, /\.adm-dash-bar-seg\s*\{\s*background:\s*var\(--tone-mark/);
+    assert.match(dashboard, /\.adm-dash-ring-arc\s*\{[^}]*stroke:\s*var\(--tone-mark/);
+    assert.match(home, /\[data-stage="done"\]\s*\{\s*--home-stage:\s*var\(--ok-mark\)/);
   });
 });

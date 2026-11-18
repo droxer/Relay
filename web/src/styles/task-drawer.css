@@ -254,7 +254,7 @@
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--ink-1);
-  font: var(--type-body-sm);
+  font: var(--type-meta);
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
 }
@@ -337,8 +337,8 @@
   gap: var(--sp-1-5);
   margin-right: auto;
   color: var(--ink-4);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
