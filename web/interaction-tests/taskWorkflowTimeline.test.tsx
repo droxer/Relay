@@ -1,39 +1,53 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import type { WorkflowRun } from "relay-core";
-import { DialogProvider } from "../src/components/ui/DialogProvider";
 import { TaskWorkflowTimeline } from "../src/components/task-record/TaskWorkflowTimeline";
+import { DialogProvider } from "../src/components/ui/DialogProvider";
 import { decideWorkflow, getSession, RelayApiError } from "../src/api";
 
-vi.mock("../src/api", async importOriginal => ({ ...await importOriginal<typeof import("../src/api")>(), getSession: vi.fn(), decideWorkflow: vi.fn() }));
-vi.mock("../src/components/workflow/WorkflowProgress", () => ({
-  WorkflowProgress: ({ run, expanded }: any) => <p>{run.teamSnapshot.name} {expanded ? "expanded" : "collapsed"} <span>{run.status ? `workflow.status_${run.status === "ready" ? "running" : run.status}` : ""}</span></p>,
+vi.mock("../src/api", async importOriginal => ({
+  ...await importOriginal<typeof import("../src/api")>(),
+  getSession: vi.fn(),
+  decideWorkflow: vi.fn(),
 }));
 
-function show(ids: string[], currentUserId = "owner") {
+function show(ids: string[], currentUserId = "owner", onOpenThread = vi.fn()) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <DialogProvider><TaskWorkflowTimeline currentUserId={currentUserId} sessionIds={ids} agentName={id => id} onOpenThread={vi.fn()} /></DialogProvider>
+    <DialogProvider>
+      <TaskWorkflowTimeline currentUserId={currentUserId} sessionIds={ids} agentName={id => id} onOpenThread={onOpenThread} />
+    </DialogProvider>
   </QueryClientProvider>);
 }
 
-it("shows frozen workflow ledgers for every linked execution, skipping ordinary Threads", async () => {
-  vi.mocked(getSession).mockImplementation(async id => ({ id, status: "completed", workflowRuns: id === "ordinary" ? [] : [
-    { workflowRunId: id, teamSnapshot: { name: `Frozen ${id}` } },
-  ] }) as any);
-  show(["old", "ordinary", "new"]);
-  expect(await screen.findByText("Frozen old expanded")).toBeTruthy();
-  expect(await screen.findByText("Frozen new expanded")).toBeTruthy();
-  expect(screen.queryByText("Frozen ordinary expanded")).toBeNull();
-  expect(screen.getAllByText("backlog.open_thread")).toHaveLength(2);
-});
+function session(id: string, status: "completed" | "ready" | "cancelled", startedAt: string) {
+  return {
+    id, status: status === "ready" ? "running" : "completed",
+    workflowRuns: id === "ordinary" ? [] : [{
+      workflowRunId: id, teamSnapshot: { name: `Frozen ${id}` },
+      startedAt, status, currentIndex: 0, gateDecisions: [], assignments: [],
+    }],
+  } as Awaited<ReturnType<typeof getSession>>;
+}
 
-it("makes a failed timeline read visible and retryable", async () => {
-  vi.mocked(getSession).mockRejectedValueOnce(new Error("Offline")).mockResolvedValue({ workflowRuns: [] } as any);
-  show(["retry"]);
-  expect(await screen.findByRole("alert")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "workspace.retry" }));
-  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+it("puts the open run before newer finished runs and keeps history folded by run", async () => {
+  const records = [
+    session("recent", "completed", "2026-11-18T03:00:00Z"),
+    session("active", "ready", "2026-11-18T01:00:00Z"),
+    session("ordinary", "completed", "2026-11-18T04:00:00Z"),
+    session("older", "cancelled", "2026-11-18T02:00:00Z"),
+  ];
+  vi.mocked(getSession).mockImplementation(async id => records.find(record => record.id === id)!);
+  const onOpenThread = vi.fn();
+  show(records.map(record => record.id), "owner", onOpenThread);
+  await screen.findByRole("heading", { name: "workflow.current_run" });
+  const cards = screen.getAllByRole("article");
+  expect(cards.map(card => card.querySelector("strong")?.textContent)).toEqual(["Frozen active", "Frozen recent", "Frozen older"]);
+  expect(cards.every(card => !card.querySelector("details")?.open)).toBe(true);
+  const threadLink = within(cards[0]).getByRole("link", { name: "backlog.open_thread" });
+  expect(threadLink.getAttribute("href")).toBe("/threads/active");
+  fireEvent.click(threadLink);
+  expect(onOpenThread).toHaveBeenCalledWith("active");
 });
 
 function approvalSession(status: WorkflowRun["status"] = "awaiting_approval", revision = 4) {
@@ -47,7 +61,7 @@ function approvalSession(status: WorkflowRun["status"] = "awaiting_approval", re
     }],
   };
   return {
-    id: "release-thread", status: "completed",
+    ...session("release-thread", "completed", run.startedAt),
     ownerUserId: "owner", activeWorkflowRunId: run.workflowRunId, events: [], workflowRuns: [run],
   };
 }
@@ -95,4 +109,23 @@ it("shows the gate status without decisions to a viewer who does not own the Thr
 
   expect(await screen.findByText("workflow.status_awaiting_approval")).toBeTruthy();
   expect(screen.queryByRole("button", { name: /^workflow\.(approve|reject) / })).toBeNull();
+});
+
+it("selects the latest run by start time when all runs are finished", async () => {
+  const records = [
+    session("latest", "cancelled", "2026-11-18T02:00:00Z"),
+    session("earliest", "completed", "2026-11-18T01:00:00Z"),
+  ];
+  vi.mocked(getSession).mockImplementation(async id => records.find(record => record.id === id)!);
+  show(records.map(record => record.id));
+  await screen.findByRole("heading", { name: "workflow.latest_run" });
+  expect(within(screen.getAllByRole("article")[0]).getByText("Frozen latest")).toBeTruthy();
+});
+
+it("makes a failed timeline read visible and retryable", async () => {
+  vi.mocked(getSession).mockRejectedValueOnce(new Error("Offline")).mockResolvedValue({ workflowRuns: [] } as any);
+  show(["retry"]);
+  expect(await screen.findByRole("alert")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "workspace.retry" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });

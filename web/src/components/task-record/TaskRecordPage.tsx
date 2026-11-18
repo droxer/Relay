@@ -270,8 +270,8 @@ export function TaskRecordPage({
             {/* Why a run is stuck, and what to do about it, before the trace
                 of how it got there. */}
             {task.status !== "review" && task.attention?.code !== "workflow_blocked" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}
-            <RecordResultLine taskId={task.id} revision={revision} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
             <TaskWorkflowTimeline currentUserId={currentUser.userId} sessionIds={task.linkedSessionIds ?? []} agentName={id => historyNames.agentName?.(id) ?? id} onOpenThread={onOpenThread} />
+            <RecordResultLine taskId={task.id} revision={revision} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
             <RecordHistory taskId={task.id} revision={revision} live={task.status === "running"} names={historyNames} currentUserId={currentUser.userId} onOpenThread={onOpenThread} />
           </TabsContent>
         )}

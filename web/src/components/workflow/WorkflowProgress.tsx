@@ -1,16 +1,23 @@
 "use client";
 
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowAttemptResult, WorkflowRun } from "relay-core";
 import {
+  currentWorkflowAssignment,
   WORKFLOW_RESULT_REASONS,
   workflowBlock,
+  workflowQuestion,
   workflowStepName,
   workflowStepStates,
   type WorkflowBlock,
   type WorkflowStepState,
 } from "../../lib/workflowRuns";
-import { ChevronDownIcon, ICON } from "../icons";
+import { Button } from "../ui/button";
+import {
+  Dialog, DialogBackdrop, DialogClose, DialogContent, DialogPortal,
+  DialogTitle, DialogTrigger, DialogViewport,
+} from "../ui/dialog";
 
 const RUN_STATUS_KEY: Record<WorkflowRun["status"], string> = {
   awaiting_approval: "workflow.status_awaiting_approval",
@@ -77,76 +84,119 @@ function AttemptResult({ result }: { result: WorkflowAttemptResult }) {
   );
 }
 
-/**
- * A workflow run at the top of its thread: one compact line — position,
- * current step, status in words — that opens to the frozen timeline with
- * each step's owner, attempt, recorded outputs and why a step stopped.
- * It reads the run's frozen definition, never the Team's latest.
- */
-export function WorkflowProgress({ run, agentName, expanded = false }: {
+type RunViewProps = {
   run: WorkflowRun;
-  expanded?: boolean;
   agentName: (agentId: string) => string;
-}) {
+};
+
+export function WorkflowRunSummary({ run, agentName }: RunViewProps) {
   const { t } = useTranslation();
-  const states = workflowStepStates(run);
-  const current = run.assignments[Math.min(run.currentIndex, run.assignments.length - 1)];
+  const current = currentWorkflowAssignment(run);
   const done = run.status === "completed" ? run.assignments.length : run.currentIndex;
-  const block = workflowBlock(run);
-  const currentName = current && run.status !== "completed" ? workflowStepName(run, current) : null;
+  const name = typeof run.workflowSnapshot?.name === "string" ? run.workflowSnapshot.name : run.teamSnapshot.name;
 
   return (
-    <details className="workflow-progress" data-state={run.status} open={expanded || undefined}>
-      <summary className="workflow-progress-summary">
-        <span className="workflow-progress-label">{run.teamSnapshot.name ?? t("workflow.section_title")}</span>
-        <span className="workflow-progress-meter" aria-hidden="true">
-          {states.map((state, position) => (
-            <span key={run.assignments[position].workItemId} className="workflow-progress-pip" data-state={state} />
-          ))}
-        </span>
-        <span className="workflow-progress-position tnum">
-          {t("workflow.progress_position", { done, total: run.assignments.length })}
-        </span>
-        {currentName ? <span className="workflow-progress-step" title={currentName}>{currentName}</span> : null}
+    <div className="workflow-run-summary" data-state={run.status}>
+      <div className="workflow-run-overview">
+        <strong className="workflow-run-name">{name || t("workflow.section_title")}</strong>
         <span className="workflow-progress-status">{t(RUN_STATUS_KEY[run.status])}</span>
-        <ChevronDownIcon className="workflow-progress-chevron" size={ICON.sm} aria-hidden="true" />
-      </summary>
-      <ol className="workflow-timeline">
-        {run.assignments.map((assignment, position) => {
-          const state = states[position];
-          const results = (run.attemptResults ?? []).filter(result => result.workflowStepId === assignment.workflowStepId);
-          const currentResult = results.find(result => result.assignmentId === assignment.assignmentId);
-          const reason = state === "blocked" && block && !currentResult ? blockKey(block) : null;
-          return (
-            <li key={assignment.workItemId} className="workflow-timeline-step" data-state={state}>
-              <div className="workflow-timeline-head">
-                <span className="workflow-step-index tnum" aria-hidden="true">{position + 1}</span>
-                <span className="workflow-timeline-name">{workflowStepName(run, assignment)}</span>
-                <span className="workflow-timeline-state">{t(STEP_STATE_KEY[state])}</span>
+        <span className="workflow-run-count tnum">{t("workflow.progress_position", { done, total: run.assignments.length })}</span>
+      </div>
+      {current && run.status !== "completed" ? (
+        <div className="workflow-run-step">
+          <span>{workflowStepName(run, current)}</span>
+          <span className="workflow-run-agent">{agentName(current.workOwnerAgentId)}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function WorkflowProgress({ run, agentName }: RunViewProps) {
+  const { t } = useTranslation();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const block = workflowBlock(run);
+  const reason = block && blockKey(block);
+  const question = workflowQuestion(run);
+
+  return (
+    <section className="workflow-progress" aria-label={t("workflow.timeline_title")}>
+      <WorkflowRunSummary run={run} agentName={agentName} />
+      <Dialog>
+        <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
+          {t("workflow.view_run_details")}
+        </DialogTrigger>
+        <DialogPortal>
+          <DialogBackdrop className="dialog-backdrop" />
+          <DialogViewport className="dialog-viewport workflow-run-viewport">
+            <DialogContent className="dialog-modal workflow-run-dialog" initialFocus={headingRef}>
+              <header className="workflow-run-dialog-header">
+                <DialogTitle ref={headingRef} tabIndex={-1} className="dialog-title">
+                  {t("workflow.timeline_title")}
+                </DialogTitle>
+                <DialogClose render={<Button type="button" variant="ghost" size="sm" />}>
+                  {t("sheet.close")}
+                </DialogClose>
+              </header>
+              <div className="workflow-run-scroll" tabIndex={0} role="region" aria-label={t("workflow.run_steps")}>
+                <div className="workflow-run-dialog-summary">
+                  <WorkflowRunSummary run={run} agentName={agentName} />
+                  {reason ? <p className="workflow-timeline-reason">{t(reason[0], reason[1])}</p> : null}
+                  {block?.kind === "result" && block.note ? <p className="workflow-timeline-meta">{block.note}</p> : null}
+                  {question?.question ? <p className="workflow-timeline-meta">{question.question}</p> : null}
+                </div>
+                <WorkflowRunLedger run={run} agentName={agentName} />
               </div>
-              <p className="workflow-timeline-meta">
-                {agentName(assignment.workOwnerAgentId)}
-                {assignment.workflowAttempt > 1 ? ` · ${t("workflow.attempt", { attempt: assignment.workflowAttempt })}` : ""}
-                {assignment.awaitApproval ? ` · ${t("workflow.gate_badge")}` : ""}
-              </p>
-              {reason ? <p className="workflow-timeline-reason">{t(reason[0], reason[1])}</p> : null}
-              {results.map(result => <AttemptResult key={result.assignmentId} result={result} />)}
-              {[...run.gateDecisions, ...(run.recoveryDecisions ?? [])]
-                .filter(decision => decision.workflowStepId === assignment.workflowStepId)
-                .map((decision, index) => <div className="workflow-timeline-decision" key={decision.id ?? `${decision.kind}-${index}`}>
-                  <span>{t(`workflow.decision_${decision.kind}`)}</span>
-                  {` · ${t("workflow.attempt", { attempt: decision.workflowAttempt })}`}
-                  <RecordedTime timestamp={decision.timestamp} lead=" · " />
-                  {decision.kind === "answer" && decision.answer ? <p className="workflow-timeline-reason">{decision.answer}</p> : null}
-                </div>)}
-              {(run.interruptions ?? []).filter(item => item.workflowStepId === assignment.workflowStepId)
-                .map((item, index) => <p className="workflow-timeline-reason" key={`interruption-${index}`}>
-                  {t("workflow.block_interrupted")}<RecordedTime timestamp={item.timestamp} lead=" · " />
-                </p>)}
-            </li>
-          );
-        })}
-      </ol>
-    </details>
+            </DialogContent>
+          </DialogViewport>
+        </DialogPortal>
+      </Dialog>
+    </section>
+  );
+}
+
+/** The run's frozen steps, attempts and decisions in their recorded order. */
+export function WorkflowRunLedger({ run, agentName }: RunViewProps) {
+  const { t } = useTranslation();
+  const states = workflowStepStates(run);
+  const block = workflowBlock(run);
+
+  return (
+    <ol className="workflow-timeline">
+      {run.assignments.map((assignment, position) => {
+        const state = states[position];
+        const results = (run.attemptResults ?? []).filter(result => result.workflowStepId === assignment.workflowStepId);
+        const currentResult = results.find(result => result.assignmentId === assignment.assignmentId);
+        const reason = state === "blocked" && block && !currentResult ? blockKey(block) : null;
+        return (
+          <li key={assignment.workItemId} className="workflow-timeline-step" data-state={state}>
+            <div className="workflow-timeline-head">
+              <span className="workflow-step-index tnum" aria-hidden="true">{position + 1}</span>
+              <span className="workflow-timeline-name">{workflowStepName(run, assignment)}</span>
+              <span className="workflow-timeline-state">{t(STEP_STATE_KEY[state])}</span>
+            </div>
+            <p className="workflow-timeline-meta">
+              {agentName(assignment.workOwnerAgentId)}
+              {assignment.workflowAttempt > 1 ? ` · ${t("workflow.attempt", { attempt: assignment.workflowAttempt })}` : ""}
+              {assignment.awaitApproval ? ` · ${t("workflow.gate_badge")}` : ""}
+            </p>
+            {reason ? <p className="workflow-timeline-reason">{t(reason[0], reason[1])}</p> : null}
+            {results.map(result => <AttemptResult key={result.assignmentId} result={result} />)}
+            {[...run.gateDecisions, ...(run.recoveryDecisions ?? [])]
+              .filter(decision => decision.workflowStepId === assignment.workflowStepId)
+              .map((decision, index) => <div className="workflow-timeline-decision" key={decision.id ?? `${decision.kind}-${index}`}>
+                <span>{t(`workflow.decision_${decision.kind}`)}</span>
+                {` · ${t("workflow.attempt", { attempt: decision.workflowAttempt })}`}
+                <RecordedTime timestamp={decision.timestamp} lead=" · " />
+                {decision.kind === "answer" && decision.answer ? <p className="workflow-timeline-reason">{decision.answer}</p> : null}
+              </div>)}
+            {(run.interruptions ?? []).filter(item => item.workflowStepId === assignment.workflowStepId)
+              .map((item, index) => <p className="workflow-timeline-reason" key={`interruption-${index}`}>
+                {t("workflow.block_interrupted")}<RecordedTime timestamp={item.timestamp} lead=" · " />
+              </p>)}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
