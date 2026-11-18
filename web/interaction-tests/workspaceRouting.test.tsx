@@ -125,6 +125,23 @@ it.each([
   expect(navigate).not.toHaveBeenCalled();
 });
 
+it('keeps a Project Automation run opened from the global Tasks list on that page', () => {
+  window.history.replaceState({}, '', '/tasks/r?tab=artifacts');
+  const occurrence = { ...task, id: 'r', sourceRoutineId: 'a' };
+  const { result } = renderHook(() => useWorkspaceRoute({ ...inputs, tasks: [occurrence], location: parseAppPath('/tasks/r') }));
+  expect(result.current).toBe(false);
+  expect(navigate).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['/automations/r', '/automations/a/runs/r'],
+])('corrects the Project run at %s without leaving the global pages', (url, destination) => {
+  window.history.replaceState({}, '', url);
+  const occurrence = { ...task, id: 'r', sourceRoutineId: 'a' };
+  renderHook(() => useWorkspaceRoute({ ...inputs, tasks: [occurrence], location: parseAppPath(window.location.pathname) }));
+  expect(navigate).toHaveBeenCalledWith(destination, { replace: true });
+});
+
 // Global collection destinations must stay accessible from the main navigation.
 it.each(['/threads', '/threads/new', '/tasks', '/automations'])(
   'keeps the global collection %s open before and after data loads', path => {

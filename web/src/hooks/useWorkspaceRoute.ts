@@ -40,14 +40,24 @@ export function useWorkspaceRoute({ location, tasks, sessions, nodes, ready, fai
       const automationId = task.sourceRoutineId ?? (task.isRoutine ? task.id : null);
       const expectedRunId = task.sourceRoutineId ? task.id : null;
       const recordRoute = automationId ? "routine" : "backlog";
-      // A project record opened from the global Tasks/Automations pages stays there.
+      // A project record opened from the global Tasks/Automations pages stays
+      // there: correcting its address never moves it into the Project.
+      const globalRecord = Boolean(task.projectId) && workRoute && !location.computerId && !location.projectId;
+      // The global Tasks list also lists Automation runs; one opened there is
+      // its own record, so it stays on the Tasks page too.
+      const globalTaskRun = globalRecord && location.route === "backlog" && Boolean(task.sourceRoutineId)
+        && parentId === task.id && !runId;
       const correctScope = task.projectId
         ? (location.route === "projects" && task.projectId === location.projectId)
-          || (!location.computerId && !location.projectId && location.route === recordRoute)
+          || (globalRecord && (location.route === recordRoute || globalTaskRun))
         : identity === (location.computerId ?? null) && location.route === (automationId ? "routine" : "backlog");
-      const correctRecord = parentId === (automationId ?? task.id) && (runId ?? null) === expectedRunId;
+      const correctRecord = globalTaskRun
+        || (parentId === (automationId ?? task.id) && (runId ?? null) === expectedRunId);
       if (!correctScope || !correctRecord) {
-        const ownedHref = taskWorkspaceHref(task, identity);
+        const ownedHref = globalRecord
+          ? pathForAppState({ route: recordRoute, mobileView: "chat", sessionId: null,
+            taskId: automationId ?? task.id, runId: expectedRunId })
+          : taskWorkspaceHref(task, identity);
         destination = relocateRecordQuery(ownedHref, location, search);
       }
     }
