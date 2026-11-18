@@ -304,7 +304,9 @@
   gap: var(--sp-1);
   min-width: 0;
   color: var(--ink-2);
-  font: var(--type-body-sm);
+  /* A status band's caption line, not a sentence to read: it stays on the
+     caption rung so the phone band holds its 100px budget. */
+  font: var(--type-meta);
   overflow-wrap: anywhere;
 }
 
