@@ -39,7 +39,6 @@ type ExecLike = (
 /** Mirrors backend/relay/core/model_policy.py and web/src/lib/agentModels.ts. */
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]+-]*$/;
 const MODEL_ID_MAX_LENGTH = 128;
-export const MAX_MODELS_PER_AGENT = 200;
 const DEFAULT_MODEL_DISCOVERY_TIMEOUT_MS = 10_000;
 const RECORD_SEPARATOR = "\t";
 const PROVIDER_LIST_TIMEOUT_SECONDS = 8;
@@ -319,7 +318,6 @@ function validModels(models: string[]): string[] {
     if (!model || model.length > MODEL_ID_MAX_LENGTH || !MODEL_ID.test(model) || seen.has(model)) continue;
     seen.add(model);
     result.push(model);
-    if (result.length === MAX_MODELS_PER_AGENT) break;
   }
   return result;
 }

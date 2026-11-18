@@ -274,10 +274,6 @@ def agent_inventory_state(
     return inventory
 
 
-# Pi lists every model its configured providers serve; keep the record bounded.
-MAX_REPORTED_MODELS = 200
-
-
 def agent_default_models_state(payload: dict[str, Any]) -> dict[str, str]:
     """Configured runtime defaults, bounded by the same rules as pinned models."""
     raw = payload.get("agentDefaultModels")
@@ -290,7 +286,7 @@ def agent_models_state(payload: dict[str, Any]) -> dict[str, list[str]]:
     """The model ids each runtime itself reports, known agents only.
 
     Untrusted daemon payload: keep only ids the model policy would accept, in
-    the runtime's order, deduped and capped, and drop runtimes that report none.
+    the runtime's order and deduped, and drop runtimes that report none.
     """
     raw = payload.get("agentModels")
     if not isinstance(raw, dict):
@@ -302,7 +298,7 @@ def agent_models_state(payload: dict[str, Any]) -> dict[str, list[str]]:
             continue
         valid = list(dict.fromkeys(entry for entry in entries if is_model_id(entry)))
         if valid:
-            models[agent] = valid[:MAX_REPORTED_MODELS]
+            models[agent] = valid
     return models
 
 

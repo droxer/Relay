@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { AgentName } from "relay-core";
 import {
-  MAX_MODELS_PER_AGENT,
   providerListModels,
   buildModelDiscoveryScript,
   claudeAccountModels,
@@ -194,15 +193,16 @@ describe("agent model discovery", () => {
     assert.deepEqual(piListedModels("No models available."), []);
   });
 
-  it("drops ids the model policy would refuse and caps the list", () => {
+  it("drops invalid ids while retaining the full list", () => {
     const catalog = codexTokens([
       { slug: "bad id" },
       { slug: "-leading-dash" },
       { slug: "x".repeat(129) },
-      ...Array.from({ length: MAX_MODELS_PER_AGENT + 5 }, (_, index) => ({ slug: `m-${index}` })),
+      ...Array.from({ length: 205 }, (_, index) => ({ slug: `m-${index}` })),
     ]);
     const models = parseAgentModels("codex", record("catalog", catalog));
-    assert.equal(models.length, MAX_MODELS_PER_AGENT);
+    assert.equal(models.length, 205);
+    assert.equal(models[204], "m-204");
     assert.equal(models[0], "m-0");
   });
 

@@ -264,7 +264,7 @@ def test_registration_keeps_only_well_formed_models_of_known_runtimes(env) -> No
     assert node["agentModels"] == {"codex": ["gpt-6-luna", "gpt-5.6-terra"]}
 
 
-def test_registration_caps_each_runtimes_model_list(env) -> None:
+def test_registration_keeps_each_runtimes_full_model_list(env) -> None:
     app, _client = env
     _register_node(
         app, ["agent-model"], agentModels={"codex": [f"m-{i}" for i in range(500)]}
@@ -272,7 +272,7 @@ def test_registration_caps_each_runtimes_model_list(env) -> None:
 
     node = app.state.registry.get("node_a")
 
-    assert len(node["agentModels"]["codex"]) == 200
+    assert node["agentModels"]["codex"] == [f"m-{i}" for i in range(500)]
 
 
 def test_create_agent_roster_keeps_models_after_registry_reload(env) -> None:
