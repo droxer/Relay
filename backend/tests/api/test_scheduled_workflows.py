@@ -92,7 +92,7 @@ def test_workflow_automation_occurrence_runs_and_completes(monkeypatch, entry):
 
 
 @pytest.mark.parametrize("scope", ["standalone", "foreign"])
-def test_workflow_automation_requires_its_teams_project(monkeypatch, scope):
+def test_workflow_team_automation_cannot_span_scopes(monkeypatch, scope):
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
         team = client.post("/api/v1/teams", json=payload).json()["team"]
         body = {"title": "Nightly", "assignedTeamId": team["id"], "isRoutine": True,
@@ -104,4 +104,6 @@ def test_workflow_automation_requires_its_teams_project(monkeypatch, scope):
             body["projectId"] = other["id"]
         response = client.post("/api/v1/tasks", json=body)
         assert response.status_code in (400, 409), response.text
-        assert "team_workflow_project" in response.text
+        # A Project never names a Team; standalone work never names a Workflow Team.
+        expected = "project_team_assignment_forbidden" if scope == "foreign" else "standalone_team_workflow"
+        assert expected in response.text

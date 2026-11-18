@@ -767,7 +767,7 @@ def _team(client: TestClient, lead: dict, *members: dict, name: str = "Crew") ->
     return response.json()["team"]
 
 
-def test_project_task_accepts_a_project_agent_or_team(
+def test_project_task_accepts_a_project_agent_and_refuses_a_team(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -802,13 +802,14 @@ def test_project_task_accepts_a_project_agent_or_team(
 
         assert patched.status_code == 200, patched.text
         assert patched.json()["assignedAgentId"] == neighbour["id"]
-        assert assigned_team.status_code == 200, assigned_team.text
-        assert assigned_team.json()["assignedTeamId"] == team["id"]
-        assert created_for_team.status_code == 201, created_for_team.text
-        assert created_for_team.json()["assignedTeamId"] == team["id"]
+        # Project work never names a Team, even one on the project's Computer.
+        assert assigned_team.status_code == 400, assigned_team.text
+        assert assigned_team.json()["detail"] == "project_team_assignment_forbidden"
+        assert created_for_team.status_code == 400, created_for_team.text
+        assert created_for_team.json()["detail"] == "project_team_assignment_forbidden"
 
 
-def test_project_task_rejects_agents_and_teams_on_another_computer(monkeypatch) -> None:
+def test_project_task_rejects_a_foreign_agent_and_a_team(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -852,46 +853,12 @@ def test_project_task_rejects_agents_and_teams_on_another_computer(monkeypatch) 
 
         assert patch_stranger.status_code == 400
         assert patch_stranger.json()["detail"] == "project_agent_off_computer"
+        # A Team is refused before its roster can be judged: no Team is a
+        # Project Task assignment at all.
         assert assign_split.status_code == 400
-        assert assign_split.json()["detail"] == "project_team_off_computer"
+        assert assign_split.json()["detail"] == "project_team_assignment_forbidden"
         assert create_split.status_code == 400
-        assert create_split.json()["detail"] == "project_team_off_computer"
-
-
-def test_project_task_assigned_to_a_team_dispatches_the_team_in_the_project_workspace(
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
-    with TemporaryDirectory() as root:
-        app = create_app(root)
-        client = TestClient(app)
-        _bootstrap(client)
-        computer = _register_computer(app, "node_alice_a", "machine-a")
-        neighbour = _agent(client, app, computer, "Neighbour", "claude")
-        _login_alice(client)
-        project = _project(client, computer, neighbour)
-        team = _team(client, neighbour, name="Solo")
-        task = client.post(
-            "/api/v1/tasks",
-            json={
-                "title": "Team task",
-                "projectId": project["id"],
-                "assignedTeamId": team["id"],
-            },
-        ).json()
-
-        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
-
-        assert started.status_code == 202, started.text
-        assert started.json()["dispatch"]["state"] == "started"
-        assert started.json()["session"]["projectId"] == project["id"]
-        # The thread stays the project's room; the team only ran this task.
-        assert started.json()["session"].get("teamId") is None
-        [command] = app.state.registry.take_commands(
-            computer["id"], f"token_{computer['id']}"
-        )
-        assert command["workspaceSubpath"] == project["workspaceSubpath"]
-        assert command["logicalAgentId"] == neighbour["id"]
+        assert create_split.json()["detail"] == "project_team_assignment_forbidden"
 
 
 def test_project_task_assigned_to_a_member_dispatches_that_agent(monkeypatch) -> None:

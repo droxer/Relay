@@ -15,7 +15,7 @@ from relay.app import create_app
 from relay.core.computer_identity import computer_id
 
 from automation_helpers import WEEKLY_TRIGGERS, fire_now
-from issue_projects import PROJECT_CAPABILITY, project_for_agents, project_for_team
+from issue_projects import PROJECT_CAPABILITY, project_for_team
 from user_ids import user_id
 from test_tasks import _setup_admin_client
 
@@ -480,7 +480,6 @@ def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> No
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
 
         team_store = client.app.state.team_store
         with team_store.engine.begin() as conn:
@@ -495,10 +494,12 @@ def test_legacy_supervisor_owned_team_can_be_assigned_to_task(monkeypatch) -> No
                 .values(snapshot=legacy)
             )
 
+        # Standalone work is computer-scoped: a Project Task may name only a
+        # roster Agent or the Project's own Workflow, never an ordinary Team.
         created = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": lead["computerId"],
                 "ownerUserId": ALICE,
                 "title": "Legacy team task",
                 "assigneeUserId": ALICE,
@@ -568,11 +569,10 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         team_task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": lead["computerId"],
                 "ownerUserId": ALICE,
                 "title": "Team task",
                 "assigneeUserId": ALICE,
@@ -583,7 +583,7 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
         individual_task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": lead["computerId"],
                 "ownerUserId": ALICE,
                 "title": "Individual task",
                 "assigneeUserId": ALICE,
@@ -789,9 +789,12 @@ def test_owner_can_patch_owner_only_task_to_owners_team(monkeypatch) -> None:
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         legacy = app.state.task_store.create_task(
-            {"title": "Owner-only task", "ownerUserId": ALICE, "projectId": project["id"]}
+            {
+                "title": "Owner-only task",
+                "ownerUserId": ALICE,
+                "computerId": lead["computerId"],
+            }
         )
 
         _login(client, "alice")
@@ -819,12 +822,11 @@ def test_team_task_cannot_bypass_lead_routing_through_pickup(monkeypatch) -> Non
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         _login(client, "alice")
         task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": lead["computerId"],
                 "ownerUserId": ALICE,
                 "title": "Keep Team routing",
                 "assigneeUserId": ALICE,
@@ -1180,11 +1182,10 @@ def test_team_task_start_has_no_execution_mode(monkeypatch) -> None:
                 "memberAgentIds": [lead["id"], support["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": computer_id(app.state.registry.get("node_alice")),
                 "ownerUserId": ALICE,
                 "title": "Review with the team",
                 "assigneeUserId": ALICE,
@@ -1366,11 +1367,10 @@ def test_team_reviewer_reviews_the_leads_work_and_carries_its_role(monkeypatch) 
                 "collaborationStyle": "lead_led",
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": computer_id(app.state.registry.get("node_alice")),
                 "ownerUserId": ALICE,
                 "title": "Build it and check it",
                 "assigneeUserId": ALICE,
@@ -1477,11 +1477,10 @@ def test_team_start_runs_on_the_placement_node_not_any_ready_node(monkeypatch) -
                 "memberAgentIds": [lead["id"], support["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": computer_id(app.state.registry.get("node_alice_team")),
                 "ownerUserId": ALICE,
                 "title": "Ship from the placement node",
                 "assigneeUserId": ALICE,
@@ -1543,11 +1542,10 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
+                "computerId": computer_id(app.state.registry.get("node_alice")),
                 "ownerUserId": ALICE,
                 "title": "Already under way",
                 "assigneeUserId": ALICE,
@@ -1581,7 +1579,7 @@ def test_start_on_an_active_team_task_leaves_its_status_alone(monkeypatch, execu
         assert app.state.registry.take_commands("node_alice", "node_token") == []
 
 
-def test_team_task_create_session_in_a_project_opens_the_project_room(
+def test_project_task_refuses_a_team_assignment_without_opening_a_room(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -1603,7 +1601,7 @@ def test_team_task_create_session_in_a_project_opens_the_project_room(
         ).json()["team"]
         project = project_for_team(client.app, ALICE, team)
 
-        task = client.post(
+        refused = client.post(
             "/api/v1/tasks",
             json={
                 "projectId": project["id"],
@@ -1613,18 +1611,15 @@ def test_team_task_create_session_in_a_project_opens_the_project_room(
                 "assignedTeamId": team["id"],
                 "createSession": True,
             },
-        ).json()
+        )
 
-        [session_id] = task["linkedSessionIds"]
-        _login(client, "alice")
-        session = client.get(f"/api/v1/threads/{session_id}").json()
-        # A team task runs in its project's room; the team never becomes the
-        # thread's team there. The team's lead still owns the thread.
-        assert not session.get("teamId")
-        assert session["projectId"] == project["id"]
-        assert session["ownerUserId"] == ALICE
-        assert session["ownerAgentId"] == lead["id"]
-        assert session["participants"] == ["human", "codex", "claude"]
+        # Project work names a roster Agent or the Project's own Workflow. The
+        # refused assignment never opens a room or links a Thread.
+        assert refused.status_code == 400
+        assert refused.json()["detail"] == "project_team_assignment_forbidden"
+        assert client.app.state.session_store.list_session_snapshots(
+            owner_user_id=ALICE
+        ) == []
 
 
 def test_linked_session_uses_team_task_assignee_lead_and_team_ownership(
@@ -1816,16 +1811,12 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
-        # The project keeps its own lead, so deleting the team's lead empties
-        # the team without emptying the project it works in.
-        keeper = _agent(client, "alice", "Keeper", "claude")
-        project = project_for_agents(client.app.state.project_store, ALICE, [keeper])
+        # Deleting the team's only agent empties and disables the team.
         assert _setup_admin_client(client).delete(f"/api/v1/admin/agents/{lead['id']}").status_code == 200
 
         create_with_thread = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
                 "ownerUserId": ALICE,
                 "title": "No lead thread",
                 "assigneeUserId": ALICE,
@@ -1842,7 +1833,6 @@ def test_empty_team_cannot_create_a_task_thread_without_lead_ownership(
         task = client.post(
             "/api/v1/tasks",
             json={
-                "projectId": project["id"],
                 "ownerUserId": ALICE,
                 "title": "No lead task",
                 "assigneeUserId": ALICE,
@@ -1869,12 +1859,11 @@ def test_assign_endpoint_rejects_unavailable_team(monkeypatch) -> None:
                 "memberAgentIds": [lead["id"]],
             },
         ).json()["team"]
-        project = project_for_team(client.app, ALICE, team)
         task = client.post(
             "/api/v1/tasks",
             json={
                 "title": "Assignable",
-                "projectId": project["id"],
+                "computerId": lead["computerId"],
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
             },

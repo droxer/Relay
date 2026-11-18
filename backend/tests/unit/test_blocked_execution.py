@@ -12,6 +12,7 @@ from store_fixtures import make_agent_placement_store
 from store_fixtures import make_agent_store
 from store_fixtures import make_daemon_store
 from relay.persistence.project.store import DatabaseProjectStore
+from relay.core.computer_identity import computer_id
 from store_fixtures import make_session_store
 from store_fixtures import make_task_store
 from relay.tasks.dispatch_failure import record_dispatch_failure
@@ -100,10 +101,13 @@ def test_missing_assignment_records_actionable_blocker(
     ctx, original, _ = execution
     # Keep only the task under test in the dispatch queue.
     ctx.task_store.update_task(original["id"], {"status": "backlog"})
-    # A missing team is found inside a real project (work outside one never
-    # dispatches); a missing project is simply a project id nobody stored.
+    # A stale Team assignment survives only on standalone work: Project Tasks
+    # never name a Team. Both kinds still owe an actionable blocker.
     fields = (
-        {"projectId": original["projectId"], "assignedTeamId": str(uuid4())}
+        {
+            "computerId": computer_id(ctx.registry.get("node")),
+            "assignedTeamId": str(uuid4()),
+        }
         if assignment == "team"
         else {"projectId": str(uuid4())}
     )

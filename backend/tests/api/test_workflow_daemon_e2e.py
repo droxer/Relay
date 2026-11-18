@@ -59,7 +59,16 @@ def wait_for(h, sid, index, status):
 @pytest.mark.parametrize("entry", ["project", "task", "independent"])
 def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workflow_daemon, entry):
     h = workflow_daemon
-    workflow = h.post("/workflows", workflow_fields(h), 201)["workflow"] if entry == "independent" else team(h)
+    if entry == "independent":
+        workflow = h.post("/workflows", workflow_fields(h), 201)["workflow"]
+    elif entry == "task":
+        workflow = h.post(
+            "/workflows",
+            {**workflow_fields(h), "projectId": h.project["id"]},
+            201,
+        )["workflow"]
+    else:
+        workflow = team(h)
     task = None
     if entry == "independent":
         assert h.ctx.team_store.list_teams() == []
@@ -68,8 +77,9 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
         }, 201)
         assert not session.get("teamId")
     elif entry == "task":
+        # A Project Task names its own Project Workflow, never a Team.
         task = h.post("/tasks", {"title": "Ship Task workflow", "projectId": h.project["id"],
-                                  "assignedTeamId": workflow["id"]}, 201)
+                                  "assignedWorkflowId": workflow["id"]}, 201)
         result = h.post(f"/tasks/{task['id']}/runs", {}, 202)
         assert result["dispatch"]["state"] == "started", result
         session = result["session"]
@@ -82,7 +92,7 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
     assert len([item for item in h.traces() if item["kind"] == "launch"]) == 3
     assert not h.ctx.daemon_store.list_active_runs(h.node_id)
 
-    edit_path = f"/api/v1/workflows/{workflow['id']}" if entry == "independent" else f"/api/v1/teams/{workflow['id']}"
+    edit_path = f"/api/v1/workflows/{workflow['id']}" if entry in ("independent", "task") else f"/api/v1/teams/{workflow['id']}"
     edited = h.client.patch(edit_path, json={
         "workflowSteps": list(reversed(workflow["workflowSteps"])),
     })

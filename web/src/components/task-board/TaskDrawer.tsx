@@ -300,7 +300,7 @@ export function TaskDrawer({
   const projectAgentIds = project?.members.filter(member => member.enabled).map(member => member.agentId);
   const teamWorkflowIssue = workflowSelectionIssue(selectedTeam,
     form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
-  const independentWorkflow = workflowQuery.data?.workflows.find(item => item.id === form.assignedWorkflowId);
+  const independentWorkflow = workflowQuery.data?.workflows?.find(item => item.id === form.assignedWorkflowId);
   const workflowIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : Boolean(form.assignedWorkflowId
     && (!project || !independentWorkflow?.enabled || independentWorkflow.projectId !== project?.id || Boolean(independentWorkflow.ownerTeamId) || workflowQuery.isError
       || !independentWorkflow.workflowSteps.every(step => projectAgentIds?.includes(step.agentId))));

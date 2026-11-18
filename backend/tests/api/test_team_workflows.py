@@ -211,18 +211,21 @@ def test_every_update_rechecks_live_roster(monkeypatch, change):
         assert app.state.team_store.events(team["id"]) == events
 
 
-def test_foreign_project_assignment_and_standalone_assignment_rejected(monkeypatch):
+def test_workflow_team_cannot_be_a_task_assignment(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
         team = client.post("/api/v1/teams", json=payload).json()["team"]
         other = project_for_agents(app.state.project_store, _admin_id(app),
                                    [app.state.agent_store.get_agent(payload["leadAgentId"])], name="Other")
-        for project_id in (other["id"], None):
+        cases = (
+            (other["id"], "project_team_assignment_forbidden"),
+            (None, "standalone_team_workflow"),
+        )
+        for project_id, expected in cases:
             response = client.post("/api/v1/tasks", json={
                 "title": "No workflow yet", "assignedTeamId": team["id"],
                 **({"projectId": project_id} if project_id else {}),
             })
             assert response.status_code in (400, 409), response.text
-            expected = "team_workflow_project_mismatch"
             assert expected in response.text
 
 

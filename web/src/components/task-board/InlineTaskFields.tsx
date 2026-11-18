@@ -212,7 +212,7 @@ function InlineAssigneeOptions({
 }) {
   const { t } = useTranslation();
   const projectAgents = new Set(project?.members.filter(member => member.enabled).map(member => member.agentId));
-  const workflows = workflowQuery?.data?.workflows.filter(workflow => workflow.projectId === project?.id && !workflow.ownerTeamId && workflow.enabled && workflow.workflowSteps.every(step => projectAgents.has(step.agentId))) ?? [];
+  const workflows = workflowQuery?.data?.workflows?.filter(workflow => workflow.projectId === project?.id && !workflow.ownerTeamId && workflow.enabled && workflow.workflowSteps.every(step => projectAgents.has(step.agentId))) ?? [];
   const chip = (
     <TaskAssignee task={task} ready={display.ready} agentDisplayName={display.name} agentImageUrl={display.imageUrl} />
   );

@@ -36,7 +36,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     staleTime: 1_000,
     // Own actions write the returned queue immediately. Only active work
     // needs a fast poll; a settled, empty queue can discover other tabs slowly.
-    refetchInterval: (query) => running || query.state.data?.messages.length || query.state.data?.sending
+    refetchInterval: (query) => running || query.state.data?.messages?.length || query.state.data?.sending
       ? 1_000 : 30_000,
     refetchOnWindowFocus: true,
   });

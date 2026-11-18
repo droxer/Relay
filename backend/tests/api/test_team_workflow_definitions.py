@@ -81,38 +81,35 @@ def test_runs_freeze_selected_workflow_and_are_idempotent_per_definition(monkeyp
         assert app.state.registry.take_commands(here['id'], 'token_node_here') == []
 
 
-def test_task_selects_workflow_without_replacing_its_team(monkeypatch):
+def test_task_selects_a_project_workflow_without_a_team(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
-        parent = create_parent(client, payload)
-        path = f"/api/v1/teams/{parent['id']}/workflows"
-        workflow = client.post(path, json={
+        workflow = client.post('/api/v1/workflows', json={
             'name': 'Feature', 'projectId': project['id'],
             'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
         }).json()['workflow']
         response = client.post('/api/v1/tasks', json={
             'title': 'Feature task', 'projectId': project['id'],
-            'assignedTeamId': parent['id'], 'assignedWorkflowId': workflow['id'],
+            'assignedWorkflowId': workflow['id'],
         })
         assert response.status_code == 201, response.text
         task = response.json()
         assert task['assignedWorkflowId'] == workflow['id']
+        assert not task.get('assignedTeamId')
         response = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert response.status_code == 202, response.text
         session = response.json()['session']
         assert session['workflowRuns'][0]['teamSnapshot']['workflowId'] == workflow['id']
-        assert session['teamId'] == parent['id']
+        assert not session.get('teamId')
 
 
 def test_task_workflow_can_be_changed_cleared_and_rejects_foreign_scope(monkeypatch):
-    with workflow_world(monkeypatch) as (_, client, _, _, project, payload):
-        parent = create_parent(client, payload)
-        path = f"/api/v1/teams/{parent['id']}/workflows"
-        workflows = [client.post(path, json={
+    with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
+        workflows = [client.post('/api/v1/workflows', json={
             'name': name, 'projectId': project['id'], 'workflowSteps': payload['workflowSteps'],
         }).json()['workflow'] for name in ('Build', 'Fix')]
         task = client.post('/api/v1/tasks', json={
             'title': 'Choose process', 'projectId': project['id'],
-            'assignedTeamId': parent['id'], 'assignedWorkflowId': workflows[0]['id'],
+            'assignedWorkflowId': workflows[0]['id'],
         }).json()
         for workflow in workflows:
             response = client.patch(f"/api/v1/tasks/{task['id']}", json={'assignedWorkflowId': workflow['id']})
@@ -121,16 +118,19 @@ def test_task_workflow_can_be_changed_cleared_and_rejects_foreign_scope(monkeypa
         response = client.patch(f"/api/v1/tasks/{task['id']}", json={'assignedWorkflowId': None})
         assert response.status_code == 200, response.text
         assert not response.json().get('assignedWorkflowId')
+        # A Project Task still names only its own Project's Workflow.
+        from issue_projects import project_for_agents
+        other = project_for_agents(app.state.project_store, project['ownerUserId'],
+                                   [app.state.agent_store.get_agent(project['leadAgentId'])], name='Other project')
+        foreign = client.post('/api/v1/workflows', json={
+            'name': 'Foreign', 'projectId': other['id'], 'workflowSteps': payload['workflowSteps'],
+        }).json()['workflow']
         response = client.post('/api/v1/tasks', json={
-            'title': 'Wrong scope', 'assignedTeamId': parent['id'], 'assignedWorkflowId': workflows[0]['id'],
+            'title': 'Wrong scope', 'projectId': project['id'],
+            'assignedWorkflowId': foreign['id'],
         })
         assert response.status_code == 409, response.text
-        other = create_parent(client, {**payload, 'name': 'Other team'})
-        response = client.post('/api/v1/tasks', json={
-            'title': 'Project workflow with another eligible Team', 'projectId': project['id'],
-            'assignedTeamId': other['id'], 'assignedWorkflowId': workflows[0]['id'],
-        })
-        assert response.status_code == 201, response.text
+        assert 'team_workflow_project_mismatch' in response.text
 
 
 def test_disabled_definitions_can_be_edited_and_enabled_again(monkeypatch):
@@ -183,15 +183,13 @@ def test_scheduler_preserves_selected_workflow(monkeypatch, entry):
     from automation_helpers import DAILY_TRIGGERS
     from test_scheduled_workflows import tick, workflow_session, occurrence_of
     with workflow_world(monkeypatch) as (app, client, here, _, project, payload):
-        parent = create_parent(client, payload)
-        path = f"/api/v1/teams/{parent['id']}/workflows"
-        workflow = client.post(path, json={
+        workflow = client.post('/api/v1/workflows', json={
             'name': 'Scheduled build', 'projectId': project['id'],
             'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
         }).json()['workflow']
         task = client.post('/api/v1/tasks', json={
             'title': 'Scheduled work', 'projectId': project['id'],
-            'assignedTeamId': parent['id'], 'assignedWorkflowId': workflow['id'],
+            'assignedWorkflowId': workflow['id'],
             **({'isRoutine': True, 'routineState': 'active', 'routineTriggers': DAILY_TRIGGERS}
                if entry == 'automation' else {'status': 'assigned'}),
         }).json()

@@ -234,7 +234,7 @@ def test_project_default_update_preserves_a_concurrently_changed_scope(monkeypat
         assert response.json()['team']['projectWorkflowDefaults'] == {project['id']: first['id'], other['id']: second['id']}
 
 
-def test_team_owned_workflow_needs_no_project_to_create_and_requires_its_team(monkeypatch):
+def test_team_owned_workflow_runs_directly_but_not_as_project_work(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
         team = create_parent(client, payload)
         response = client.post(f"/api/v1/teams/{team['id']}/workflows", json={
@@ -244,28 +244,33 @@ def test_team_owned_workflow_needs_no_project_to_create_and_requires_its_team(mo
         workflow = response.json()['workflow']
         assert workflow['ownerTeamId'] == team['id']
         assert workflow['projectId'] is None
+        # A direct Workflow Run may choose a Project and keeps its Team.
         started = client.post(f"/api/v1/workflows/{workflow['id']}/runs", json={
             'requestId': str(uuid4()), 'taskGoal': 'Use selected Project',
             'teamId': team['id'], 'projectId': project['id'],
         })
         assert started.status_code == 201, started.text
         assert started.json()['projectId'] == project['id']
-        for with_team in (False, True):
-            task = client.post('/api/v1/tasks', json={
-                'title': 'Use Team process', 'projectId': project['id'], 'assignedWorkflowId': workflow['id'],
-                **({'assignedTeamId': team['id']} if with_team else {}),
-            })
-            assert task.status_code == (201 if with_team else 409), task.text
-            if with_team:
-                run = client.post(f"/api/v1/tasks/{task.json()['id']}/runs", json={})
-                assert run.status_code == 202, run.text
-                assert run.json()['session']['projectId'] == project['id']
+        # A Project Task never names the Team, and a Team-owned Workflow is not
+        # the Project's own: neither form assigns.
+        with_team = client.post('/api/v1/tasks', json={
+            'title': 'Use Team process', 'projectId': project['id'],
+            'assignedWorkflowId': workflow['id'], 'assignedTeamId': team['id'],
+        })
+        assert with_team.status_code == 400, with_team.text
+        assert 'project_team_assignment_forbidden' in with_team.text
+        without_team = client.post('/api/v1/tasks', json={
+            'title': 'Use Team process', 'projectId': project['id'],
+            'assignedWorkflowId': workflow['id'],
+        })
+        assert without_team.status_code == 409, without_team.text
+        assert 'team_workflow_project_mismatch' in without_team.text
         other = create_parent(client, {**payload, 'name': 'Other Team'})
         assert client.put(f"/api/v1/teams/{other['id']}/workflows/{workflow['id']}/link", json={}).status_code == 409
         assert client.get(f"/api/v1/workflows/{workflow['id']}").json()['workflow']['projectId'] is None
 
 
-def test_team_workflow_default_applies_across_projects_and_automations(monkeypatch):
+def test_team_workflow_default_does_not_apply_to_project_work(monkeypatch):
     from issue_projects import project_for_agents
     from automation_helpers import DAILY_TRIGGERS
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
@@ -277,19 +282,17 @@ def test_team_workflow_default_applies_across_projects_and_automations(monkeypat
         assert response.status_code == 200, response.text
         other = project_for_agents(app.state.project_store, project['ownerUserId'],
                                    [app.state.agent_store.get_agent(aid) for aid in payload['memberAgentIds']], name='Second Project')
+        # A Team default is a Team-conversation contract; Project work names
+        # its own roster Agent or Workflow and never a Team.
         for scope in (project, other):
             result = client.post('/api/v1/tasks', json={
                 'title': 'Team work', 'projectId': scope['id'], 'assignedTeamId': team['id'],
             })
-            assert result.status_code == 201, result.text
-            run = client.post(f"/api/v1/tasks/{result.json()['id']}/runs", json={})
-            assert run.status_code == 202, run.text
-            snapshot = run.json()['session']['workflowRuns'][0]['workflowSnapshot']
-            assert snapshot['projectId'] == scope['id']
-            assert snapshot['ownerTeamId'] == team['id']
+            assert result.status_code == 400, result.text
+            assert 'project_team_assignment_forbidden' in result.text
         routine = client.post('/api/v1/tasks', json={
             'title': 'Automated Team workflow', 'projectId': other['id'], 'assignedTeamId': team['id'],
             'assignedWorkflowId': workflow['id'], 'isRoutine': True, 'routineState': 'active', 'routineTriggers': DAILY_TRIGGERS,
         })
-        assert routine.status_code == 201, routine.text
+        assert routine.status_code == 400, routine.text
         assert client.get(f"/api/v1/workflows/{workflow['id']}").json()['workflow']['projectId'] is None
