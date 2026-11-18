@@ -4039,6 +4039,7 @@
     "create_needs_project": "To create a custom workflow, add this team’s agents to one of your Projects on the team’s computer.",
     "team_owned": "Team-owned",
     "project_owned": "Project-owned",
+    "project_origin": "Project:",
     "clear_default": "Clear default"
   }
 }

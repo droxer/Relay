@@ -3966,6 +3966,7 @@
     "create_needs_project": "要建立自訂工作流程，請先將此團隊的智慧體加入你在團隊所在電腦上的某個專案。",
     "team_owned": "團隊所有",
     "project_owned": "專案所有",
+    "project_origin": "所屬專案：",
     "clear_default": "清除預設"
   }
 }

@@ -669,6 +669,19 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
+.workflow-project-origin {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: var(--sp-1);
+  max-width: 100%;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  overflow-wrap: anywhere;
+}
+
+.workflow-project-origin svg { flex: none; }
+
 .workflow-team-row[data-kind] {
   align-items: center;
 }

@@ -15,6 +15,7 @@ import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
 import { WorkflowEditor } from "./WorkflowEditor";
 import type { Workflow } from "../../types";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
+import { ICON, NavProjects } from "../icons";
 
 /** Teams reference Project processes; definitions survive unassignment. */
 export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam; agents: UserAgent[]; userId?: string }) {
@@ -70,15 +71,16 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
         const project = projects.find(item => item.id === workflow.projectId);
         const isDefault = team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id || team.defaultWorkflowId === workflow.id;
         const projectUrl = `/projects/${encodeURIComponent(workflow.projectId ?? "")}?tab=members`;
-        // A Project's name is the way to it; a Team-owned workflow names its Team.
-        const owner = workflow.ownerTeamId || !workflow.projectId
-          ? team.name
-          : <a className="record-inline-action" href={projectUrl} title={t("workflow.open_project")}>{project?.name ?? t("workflow.project_unavailable")}</a>;
+        const projectOwned = !workflow.ownerTeamId && Boolean(workflow.projectId);
         return <li key={workflow.id} className="workflow-team-row workflow-project-row" data-kind="steps">
           <div className="workflow-project-row-head">
             <div className="workflow-library-main">
               <span className="workflow-team-row-name"><span className="workflow-library-name">{workflow.name}</span>{badge(t(workflow.ownerTeamId ? "workflow.team_owned" : "workflow.project_owned"))}{isDefault ? badge(t("workflow.project_default")) : null}{!workflow.enabled ? badge(t("teams.disabled")) : null}</span>
-              <span className="workflow-library-meta">{t("workflow.step_count", { count: workflow.workflowSteps.length })} · {owner}</span>
+              <span className="workflow-library-meta">{t("workflow.step_count", { count: workflow.workflowSteps.length })}{!projectOwned ? ` · ${team.name}` : null}</span>
+              {projectOwned ? <span className="workflow-project-origin">
+                <NavProjects size={ICON.sm} aria-hidden="true" />
+                <span>{t("workflow.project_origin")} <a className="record-inline-action" href={projectUrl} title={t("workflow.open_project")}>{project?.name ?? t("workflow.project_unavailable")}</a></span>
+              </span> : null}
             </div>
             {canManage ? <div className="workflow-team-actions">
               <Button type="button" variant="ghost" size="dense" disabled={change.isPending || !workflow.enabled}
