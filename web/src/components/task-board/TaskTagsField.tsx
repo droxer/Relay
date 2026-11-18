@@ -6,15 +6,17 @@ import { useTagCatalog } from "../../hooks/useTagCatalog";
 import { mergeTagNames } from "../../lib/tagCatalog";
 import { Field } from "@/components/ui/field";
 import { ActionRemove, ICON } from "../icons";
-import { TagBadge } from "../TaskTags";
-import { MAX_TAGS, addTags, hasTag, removeTag } from "../../lib/taskTags";
+import { TagBadge, TagMark } from "../TaskTags";
+import { MAX_TAGS, addTags, hasTag, removeTag, tagTone } from "../../lib/taskTags";
+
+const MAX_OFFERED = 12;
 
 /**
  * The drawer's tag editor, as one control: an input-shaped box holding the
  * task's tag badges and, after them, the text the next tag is typed into.
  * Enter or a comma adds a tag (a pasted "a, b" adds both); Backspace in the
  * empty input removes the last one. `suggestions` — every tag already in use
- * on the page — are offered through a native datalist, so filing a task
+ * on the page — are offered as tappable chips under the field, so filing a task
  * under an existing tag never means retyping it in a slightly different
  * spelling.
  */
@@ -39,7 +41,11 @@ export function TaskTagsField({
   const [draft, setDraft] = useState("");
   const full = tags.length >= MAX_TAGS;
   const catalog = useTagCatalog();
-  const offered = mergeTagNames(suggestions, (catalog.data?.tags ?? []).map(entry => entry.name)).filter((tag) => !hasTag(tags, tag));
+  const available = mergeTagNames(suggestions, (catalog.data?.tags ?? []).map(entry => entry.name)).filter((tag) => !hasTag(tags, tag));
+  const query = draft.trim().toLowerCase();
+  // Typing narrows the list; the cap keeps a large catalog from pushing the
+  // drawer's other fields off a phone's screen.
+  const offered = (query ? available.filter((tag) => tag.toLowerCase().includes(query)) : available).slice(0, MAX_OFFERED);
 
   function commit(value: string): void {
     const next = addTags(tags, value);
@@ -98,7 +104,6 @@ export function TaskTagsField({
           name={name}
           className="tag-field-input"
           autoComplete="off"
-          list={offered.length ? listId : undefined}
           value={draft}
           disabled={disabled || full}
           placeholder={full ? t("tags.limit", { count: MAX_TAGS }) : tags.length ? t("tags.placeholder_more") : t("tags.placeholder")}
@@ -114,12 +119,29 @@ export function TaskTagsField({
             if (draft.trim()) commit(draft);
           }}
         />
-        {offered.length ? (
-          <datalist id={listId}>
-            {offered.map((tag) => <option key={tag} value={tag} />)}
-          </datalist>
-        ) : null}
       </div>
+      {offered.length && !full ? (
+        <div className="tag-offers" role="group" aria-labelledby={listId}>
+          <span id={listId} className="tag-offers-label">{t("tags.suggested")}</span>
+          <ul className="tag-offers-list">
+            {offered.map((tag) => (
+              <li key={tag}>
+                <button
+                  type="button"
+                  className="tag-badge tag-offer"
+                  data-tone={tagTone(tag)}
+                  disabled={disabled}
+                  aria-label={t("tags.add_existing", { tag })}
+                  onClick={() => { commit(tag); inputRef.current?.focus(); }}
+                >
+                  <TagMark tag={tag} />
+                  <span className="tag-badge-text">{tag}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <p id={hintId} className="m-0 text-sm leading-normal text-muted-foreground">{t("tags.hint")}</p>
     </Field>
   );

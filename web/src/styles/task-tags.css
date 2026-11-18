@@ -323,3 +323,70 @@
     outline: 2px solid Highlight;
   }
 }
+
+/* ── Existing tags, offered under the token field ───────────────────── */
+
+/* Chips, not a native datalist: a phone's datalist is a cramped system
+   popup, while a wrapped row of chips scrolls with the drawer and takes a
+   tap. */
+.tag-offers {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.tag-offers-label {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+}
+
+.tag-offers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tag-offers-list li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tag-offer {
+  height: var(--chip-h);
+  max-width: 100%;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.tag-offer:hover:not(:disabled) {
+  background: var(--control-fill-hover);
+}
+
+.tag-offer:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
+/* A finger needs 44px: the chip keeps its drawn height and the ::after
+   stretches the target, and the row's gap widens so neighbours don't share
+   a tap. */
+@media (pointer: coarse) {
+  .tag-offers-list {
+    gap: var(--sp-2);
+  }
+
+  .tag-offer {
+    position: relative;
+    height: 32px;
+    padding-inline: var(--sp-3);
+  }
+
+  .tag-offer::after {
+    content: "";
+    position: absolute;
+    inset: -6px -2px;
+  }
+}
