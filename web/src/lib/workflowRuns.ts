@@ -1,6 +1,10 @@
 import type { WorkflowAssignment, WorkflowAttemptBinding, WorkflowRun } from "relay-core";
 import type { RelaySession } from "../types.ts";
 
+export function taskWorkflowSessionQueryKey(sessionId: string) {
+  return ["task-workflow-session", sessionId] as const;
+}
+
 type RelayEvent = RelaySession["events"][number];
 type WorkflowEvent = Extract<RelayEvent, { type: `workflow.${string}` }>;
 

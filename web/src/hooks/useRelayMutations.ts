@@ -47,6 +47,7 @@ import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects } from "../lib/projectDirectory";
 import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteErrorMessage } from "../lib/projectDeletion";
 import { threadLabel } from "../lib/threads";
+import { taskWorkflowSessionQueryKey } from "../lib/workflowRuns";
 
 type TokenArg = { token?: string };
 
@@ -60,6 +61,8 @@ export function useRelayMutations() {
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
   const invalidateNodes = () => queryClient.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
   const invalidateProjects = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY, exact: true });
+  const invalidateTaskWorkflowSession = (sessionId: string) =>
+    queryClient.invalidateQueries({ queryKey: taskWorkflowSessionQueryKey(sessionId), exact: true });
   // Prefix on purpose: the teams list is keyed ["teams", userId] and nothing
   // else lives under "teams", so `exact` here would match no query at all.
   const invalidateTeams = () => queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
@@ -149,12 +152,16 @@ export function useRelayMutations() {
     onSuccess: (session) => {
       cacheSession(session);
       void invalidateTasks();
+      return invalidateTaskWorkflowSession(session.id);
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, { sessionId }) => {
+      onRelayError("Failed to record workflow decision", "errors.workflow_decision")(error);
       // A stale or already-decided attempt: refetch so the slip shows the
       // current attempt instead of offering the old one again.
-      if (error instanceof RelayApiError && error.status === 409) void invalidateSessions();
-      onRelayError("Failed to record workflow decision", "errors.workflow_decision")(error);
+      if (error instanceof RelayApiError && error.status === 409) {
+        void invalidateSessions();
+        return invalidateTaskWorkflowSession(sessionId);
+      }
     },
   });
 
