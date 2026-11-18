@@ -2,8 +2,11 @@
 from copy import deepcopy
 
 import pytest
+from loguru import logger
 
+from relay.daemon_registry.dispatch.workflow_admission import workflow_request_id, workflow_request_state
 from relay.daemon_registry.registry import DaemonNodeRegistry
+from relay.daemon_registry.runs import workflow
 from relay.persistence.events import relay_event
 from store_fixtures import make_daemon_store, make_session_store
 from test_workflow_compilation import compile_run
@@ -174,3 +177,50 @@ def test_recovery_keeps_delivered_reservation_and_can_still_request_stop(runtime
     stops = daemons.take_queued_commands("node")
     assert len(stops) == 1
     assert stops[0]["command"]["type"] == "run.cancel"
+
+
+def test_prepared_workflow_recovery_settles_session_deleted_after_admission_error(runtime, monkeypatch):
+    registry, sessions, daemons, session = runtime
+    sid = session["id"]
+    session = sessions.append_event(sid, relay_event("workflow.started", sid, {
+        "assignments": compile_run(),
+    }))
+    run = session["workflowRuns"][0]
+    request = daemons.create_run_request({
+        "id": workflow_request_id(run), "nodeId": "node", "sessionId": sid,
+        "taskGoal": "Workflow", "assignments": run["assignments"], "status": "prepared",
+        "state": workflow_request_state(run, {}),
+    })
+
+    get_header = sessions.get_session_header
+    resource_transaction = workflow.resource_transaction
+
+    def read_header_before_closure(session_id):
+        header = get_header(session_id)
+        sessions.append_event(sid, relay_event("session.status", sid, {
+            "status": "cancelled", "phase": "cancelled",
+        }))
+        return header
+
+    def delete_before_recording_admission_error(engine, key):
+        sessions.delete_session(sid)
+        return resource_transaction(engine, key)
+
+    monkeypatch.setattr(sessions, "get_session_header", read_header_before_closure)
+    monkeypatch.setattr(workflow, "resource_transaction", delete_before_recording_admission_error)
+    records = []
+    sink = logger.add(lambda message: records.append(message.record), level="INFO")
+    try:
+        registry._recover_run_request(request)
+    finally:
+        logger.remove(sink)
+
+    assert not any(record["message"] == "Run recovery failed" for record in records)
+    settled = daemons.get_run_request(request["id"])
+    assert settled["status"] == "failed"
+    assert settled["error"] == "Prepared collaboration session no longer exists."
+    recovery_log, = [record for record in records if record["extra"].get("request_id") == request["id"]]
+    assert recovery_log["level"].name == "INFO"
+    assert recovery_log["message"] == settled["error"]
+    assert recovery_log["extra"]["session_id"] == sid
+    assert recovery_log["exception"] is None

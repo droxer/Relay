@@ -68,7 +68,10 @@ class RegistryState:
         def _finalize_workflow_step(self, request: dict[str, Any], event: dict[str, Any], claim: str) -> None:
             ...
 
-        def _resume_workflow_admission(self, sid: str) -> None:
+        def _resume_workflow_admission(self, sid: str, *, recovery_request_id: str | None = None) -> None:
+            ...
+
+        def _settle_prepared_request_for_missing_session(self, request_id: str) -> None:
             ...
 
         def _delivery_sandbox(self, node_id: str) -> dict[str, Any] | None:
