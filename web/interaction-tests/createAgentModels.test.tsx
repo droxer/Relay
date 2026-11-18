@@ -28,14 +28,23 @@ vi.mock("../src/components/ComputerSelect", () => ({
   ),
 }));
 
-it("shows every reported model after selecting each runtime on a running computer", async () => {
-  const catalogs = Object.fromEntries(AGENT_NAMES.map(kind => [kind, [`${kind}/fast`, `${kind}/deep`, `${kind}/large`]]));
-  api.listDaemonNodes.mockResolvedValue({ nodes: [{
+it("shows every reported model for the selected computer and runtime", async () => {
+  const catalogs = Object.fromEntries(AGENT_NAMES.map(kind => [
+    kind,
+    Array.from({ length: kind === "opencode" ? 225 : 3 }, (_, index) => `${kind}/model-${index}`),
+  ]));
+  const computer = {
     id: "node-1", userId: "alice", workspaceId: "mac", displayName: "My computer",
     status: "running", online: true, stale: false, activeRuns: [], queuedCommandCount: 0,
     agents: Object.fromEntries(AGENT_NAMES.map(kind => [kind, "ready"])),
     capabilities: ["agent-model", "endpoint-models"],
     customModelEndpoints: ["codex", "claude"], agentModels: catalogs,
+  };
+  const otherModel = "other/provider-model";
+  api.listDaemonNodes.mockResolvedValue({ nodes: [computer, {
+    ...computer,
+    id: "node-2", workspaceId: "linux", displayName: "Other computer",
+    agents: { opencode: "ready" }, agentModels: { opencode: [otherModel] },
   }] });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const user = userEvent.setup();
@@ -56,9 +65,16 @@ it("shows every reported model after selecting each runtime on a running compute
       expect(input.value).toBe("");
       await user.click(screen.getByRole("button", { name: "agents_page.model_browse" }));
       await waitFor(() => expect(screen.getAllByRole("option").filter(option => option.closest('[role="listbox"]')).map(option => option.textContent)).toEqual(catalogs[kind]));
-      await user.click(screen.getByRole("option", { name: catalogs[kind][2] }));
-      expect(input.value).toBe(catalogs[kind][2]);
+      const lastModel = catalogs[kind].at(-1)!;
+      await user.click(screen.getByRole("option", { name: lastModel }));
+      expect(input.value).toBe(lastModel);
     }
+    fireEvent.change(screen.getByRole("combobox", { name: "agents_page.create_computer_label" }), {
+      target: { value: "device:alice:linux" },
+    });
+    expect(screen.getByRole<HTMLInputElement>("combobox", { name: "agents_page.model_label" }).value).toBe("");
+    await user.click(screen.getByRole("button", { name: "agents_page.model_browse" }));
+    expect(await screen.findByRole("option", { name: otherModel })).toBeTruthy();
   } finally {
     view.unmount();
     client.clear();

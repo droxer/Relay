@@ -1,7 +1,7 @@
 import { commandExecution, nativeWindowsExecution, shellQuote } from "relay-core";
 import { defaultModelDiscoveryScript } from "./agent-default-models.js";
 import { nativeModelDiscoveryScript } from "./native-discovery.js";
-import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentName } from "relay-core";
+import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentExecutor, type AgentName } from "relay-core";
 
 // ── Agent model discovery ───────────────────────────────────────────────────
 // Asks each runtime which models it offers, so the agent model picker lists
@@ -17,9 +17,9 @@ import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentNa
 //   codex   `codex debug models`, or the CLI's own models_cache.json; behind
 //           a custom OPENAI_BASE_URL, that endpoint's `/models` instead.
 //           The catalog carries each model's full instructions (hundreds of
-//           KB), so the sweep keeps only the slug/visibility/priority keys —
-//           process output is tail-bounded and would lose the head.
+//           KB), so the sweep keeps only the slug/visibility/priority keys.
 //   pi      `pi --list-models` — only providers it can authenticate.
+//   opencode  `opencode models` — provider-qualified ids.
 //
 // A runtime behind a custom endpoint (a proxy or a compatible provider such
 // as DeepSeek) reports only the models that endpoint lists: its vendor's ids
@@ -30,16 +30,10 @@ import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentNa
 // is best-effort and never throws: a runtime that cannot be asked reports no
 // models and the picker falls back to its default and a custom id.
 
-type ExecLike = (
-  cmd: string,
-  args?: string[],
-  options?: { signal?: AbortSignal; env?: Record<string, string> },
-) => Promise<{ exit_code: number; stdout: string; stderr: string; error_message?: string }>;
-
 /** Mirrors backend/relay/core/model_policy.py and web/src/lib/agentModels.ts. */
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]+-]*$/;
 const MODEL_ID_MAX_LENGTH = 128;
-export const MAX_MODELS_PER_AGENT = 200;
+const MAX_MODEL_DISCOVERY_OUTPUT = 4 * 1024 * 1024;
 const DEFAULT_MODEL_DISCOVERY_TIMEOUT_MS = 10_000;
 const RECORD_SEPARATOR = "\t";
 const PROVIDER_LIST_TIMEOUT_SECONDS = 8;
@@ -63,7 +57,7 @@ const CLAUDE_SAVED_LOGIN_TOKEN = [
 
 const ANTHROPIC_MODELS_REQUEST = [
   CLAUDE_SAVED_LOGIN_TOKEN,
-  'base="${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"; base="${base%/}"',
+  'base="${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"; base="${base%/}"; base="${base%/v1}"',
   `models() { curl -fsS --max-time ${PROVIDER_LIST_TIMEOUT_SECONDS} -H @- -H 'anthropic-version: 2023-06-01' "$@" "$base/v1/models?limit=1000" 2>/dev/null | emit api; }`,
   "oauth() { printf 'authorization: Bearer %s\\n' \"$1\" | models -H 'anthropic-beta: oauth-2025-04-20'; }",
   "if command -v curl >/dev/null 2>&1; then",
@@ -71,7 +65,7 @@ const ANTHROPIC_MODELS_REQUEST = [
   "  elif [ -n \"${CLAUDE_CODE_OAUTH_TOKEN:-}\" ]; then oauth \"$CLAUDE_CODE_OAUTH_TOKEN\"",
   "  elif [ -n \"${ANTHROPIC_AUTH_TOKEN:-}\" ]; then printf 'authorization: Bearer %s\\n' \"$ANTHROPIC_AUTH_TOKEN\" | models",
   // The saved login is Anthropic's; it is never sent to another endpoint.
-  '  else case "$base" in https://api.anthropic.com|https://api.anthropic.com/v1) token=$(claude_login_token); if [ -n "$token" ]; then oauth "$token"; fi;; esac',
+  '  else case "$base" in https://api.anthropic.com) token=$(claude_login_token); if [ -n "$token" ]; then oauth "$token"; fi;; esac',
   "  fi",
   "fi",
 ].join("\n");
@@ -126,7 +120,7 @@ export type ProviderListMemory = Map<AgentName, string>;
  * including runtimes without a catalog. Best-effort: never throws.
  */
 export async function discoverAgentModels(
-  execStream: ExecLike,
+  execStream: AgentExecutor,
   agents: readonly AgentName[],
   signal?: AbortSignal,
   timeoutMs = DEFAULT_MODEL_DISCOVERY_TIMEOUT_MS,
@@ -141,16 +135,26 @@ export async function discoverAgentModels(
     const discoverySignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     try {
       const invocation = commandExecution(runAsAgent(buildModelDiscoveryScript(agent)));
+      // Run transcript retention may cut a base64 catalog record in half.
+      // Read the probe stream with its own bound and discard oversized reports.
+      let output = "";
+      let overflow = false;
       const result = await execStream(invocation.command, invocation.args, {
         signal: discoverySignal,
         env: Object.fromEntries(agentCredentialEnv(agent)),
+        stdoutRenderer: (chunk) => {
+          overflow ||= output.length + chunk.length > MAX_MODEL_DISCOVERY_OUTPUT;
+          if (!overflow) output += chunk;
+          return "";
+        },
       });
-      if (result.exit_code !== 0) return [agent, []] as const;
-      const configuredDefault = decodeRecords(result.stdout).find(({ source }) => source === "default-model")?.text;
+      if (result.exit_code !== 0 || overflow) return [agent, []] as const;
+      const stdout = output || result.stdout;
+      const configuredDefault = decodeRecords(stdout).find(({ source }) => source === "default-model")?.text;
       if (configuredDefault && validModels([configuredDefault]).length) defaultModels[agent] = configuredDefault;
-      const fresh = providerListText(result.stdout);
+      const fresh = providerListText(stdout);
       if (fresh) providerLists.set(agent, fresh);
-      return [agent, parseAgentModels(agent, result.stdout, providerLists.get(agent), {
+      return [agent, parseAgentModels(agent, stdout, providerLists.get(agent), {
         customEndpoint: customEndpoints.has(agent),
       })] as const;
     } catch {
@@ -319,7 +323,6 @@ function validModels(models: string[]): string[] {
     if (!model || model.length > MODEL_ID_MAX_LENGTH || !MODEL_ID.test(model) || seen.has(model)) continue;
     seen.add(model);
     result.push(model);
-    if (result.length === MAX_MODELS_PER_AGENT) break;
   }
   return result;
 }

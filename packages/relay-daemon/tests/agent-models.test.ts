@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { AgentName } from "relay-core";
 import {
-  MAX_MODELS_PER_AGENT,
   providerListModels,
   buildModelDiscoveryScript,
   claudeAccountModels,
@@ -141,7 +140,7 @@ describe("agent model discovery", () => {
     assert.match(script, /additionalModelOptionsCache/);
   });
 
-  it("falls back to Claude Code's own saved login without exposing the token", async () => {
+  it("uses Claude Code's saved login with a versioned base URL without exposing the token", async () => {
     const script = buildModelDiscoveryScript("claude");
     assert.match(script, /\.credentials\.json/);
     assert.match(script, /security find-generic-password -s "Claude Code-credentials" -w/);
@@ -159,10 +158,10 @@ describe("agent model discovery", () => {
     mkdirSync(join(home, ".claude"), { recursive: true });
     mkdirSync(bin);
     writeFileSync(join(home, ".claude", ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "saved-login-token" } }));
-    writeFileSync(join(bin, "curl"), `#!/bin/sh\nheaders=$(cat)\ncase "$headers" in *"Bearer saved-login-token"*) printf '%s' '${ANTHROPIC_MODELS}';; esac\n`);
+    writeFileSync(join(bin, "curl"), `#!/bin/sh\nfor url do :; done\n[ "$url" = 'https://api.anthropic.com/v1/models?limit=1000' ] || exit 1\nheaders=$(cat)\ncase "$headers" in *"Bearer saved-login-token"*) printf '%s' '${ANTHROPIC_MODELS}';; esac\n`);
     chmodSync(join(bin, "curl"), 0o755);
     const stdout = execFileSync("bash", ["-c", script], {
-      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home },
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: home, ANTHROPIC_BASE_URL: "https://api.anthropic.com/v1/" },
     }).toString();
     assert.deepEqual(parseAgentModels("claude", stdout), ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]);
     assert.doesNotMatch(stdout, /saved-login-token/);
@@ -194,16 +193,27 @@ describe("agent model discovery", () => {
     assert.deepEqual(piListedModels("No models available."), []);
   });
 
-  it("drops ids the model policy would refuse and caps the list", () => {
+  it("drops ids the model policy would refuse without clipping large catalogs", () => {
     const catalog = codexTokens([
       { slug: "bad id" },
       { slug: "-leading-dash" },
       { slug: "x".repeat(129) },
-      ...Array.from({ length: MAX_MODELS_PER_AGENT + 5 }, (_, index) => ({ slug: `m-${index}` })),
+      ...Array.from({ length: 500 }, (_, index) => ({ slug: `m-${index}` })),
     ]);
     const models = parseAgentModels("codex", record("catalog", catalog));
-    assert.equal(models.length, MAX_MODELS_PER_AGENT);
-    assert.equal(models[0], "m-0");
+    assert.deepEqual(models, Array.from({ length: 500 }, (_, index) => `m-${index}`));
+  });
+
+  it("reads the whole model catalog independently of the run transcript", async () => {
+    const expected = Array.from({ length: 500 }, (_, index) => `provider/model-${index}`);
+    const stdout = record("list", expected.join("\n"));
+    const exec: Parameters<typeof discoverAgentModels>[0] = async (_cmd, _args, options) => {
+      for (let offset = 0; offset < stdout.length; offset += 1024) {
+        options?.stdoutRenderer?.(stdout.slice(offset, offset + 1024));
+      }
+      return { exit_code: 0, stdout: stdout.slice(0, 80) + "\n[... output omitted ...]\n", stderr: "" };
+    };
+    assert.deepEqual(await discoverAgentModels(exec, ["opencode"]), { opencode: expected });
   });
 
   it("reports a configured default even when the runtime has no model catalog", async () => {

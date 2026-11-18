@@ -63,8 +63,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
   const [computerId, setComputerId] = useState("");
   const [pickedExecutorKind, setExecutorKind] = useState<AgentName | "">("");
   const [defaultRole, setDefaultRole] = useState<AgentRole | "">("");
-  // A model belongs to the runtime it was picked for; switching runtimes
-  // drops it rather than sending a Claude model to Codex.
+  // A model belongs to the selected computer and runtime.
   const [modelPick, setModelPick] = useState<{ kind: AgentName | ""; model: string }>({ kind: "", model: "" });
   const [displayName, setDisplayName] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("agents"));
@@ -88,7 +87,9 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
 
   function selectRuntime(kind: AgentName) {
     setExecutorKind(kind);
+    setModelPick({ kind: "", model: "" });
     clearFieldError("executorKind");
+    clearFieldError("model");
   }
 
   const runtimeOptions = useMemo(
@@ -213,7 +214,9 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
             value={computerId}
             onChange={(value) => {
               setComputerId(value);
+              setModelPick({ kind: "", model: "" });
               clearFieldError("computerId");
+              clearFieldError("model");
             }}
             placeholder={computerPlaceholder}
             disabled={isBusy || computers.isLoading || computerOptions.length === 0}
@@ -283,7 +286,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
             errorId="create-agent-model-error"
           >
             <AgentModelField
-              key={executorKind}
+              key={`${computerId}:${executorKind}`}
               models={reportedModels}
               customEndpoint={customEndpoint}
               value={model}
