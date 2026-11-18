@@ -10,6 +10,7 @@ import { loadRuntimeProfile } from "./runtime-profile.js";
 import { serviceLogPath, watchServiceLog } from "./service-log.js";
 import { isUserIdFlag, userIdFromEnv } from "./legacy-names.js";
 import { err, out } from "./terminal-style.js";
+import { validUpdateAttempt } from "./update-startup.js";
 
 loadPackageEnv("relay-daemon");
 
@@ -68,6 +69,7 @@ export interface DaemonCliArgs {
   sandbox?: string;
   localPermissionPolicy?: "native" | "trusted";
   runtimeProfile?: string;
+  updateAttempt?: string;
   useLocalAgentHome: boolean;
   allowHostAgentExecution: boolean;
   doctor: boolean;
@@ -90,6 +92,7 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
   let sandbox: string | undefined;
   let localPermissionPolicy: "native" | "trusted" | undefined;
   let runtimeProfile: string | undefined;
+  let updateAttempt: string | undefined;
   let useLocalAgentHome = false;
   let allowHostAgentExecution = false;
   let doctor = false;
@@ -115,6 +118,10 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
       const value = argv[++i];
       if (!value || value.startsWith("--")) throw new Error("--runtime-profile requires a path.");
       runtimeProfile = value;
+    } else if (arg === "--update-attempt") {
+      const value = argv[++i];
+      if (!validUpdateAttempt(value)) throw new Error("Invalid --update-attempt.");
+      updateAttempt = value;
     } else if (arg === "--backend-url") {
       const value = argv[i + 1];
       if (!value || value.startsWith("-")) {
@@ -186,6 +193,7 @@ export function parseArgs(argv: string[]): DaemonCliArgs {
     sandbox,
     ...(localPermissionPolicy ? { localPermissionPolicy } : {}),
     ...(runtimeProfile ? { runtimeProfile } : {}),
+    ...(updateAttempt ? { updateAttempt } : {}),
     useLocalAgentHome,
     allowHostAgentExecution,
     doctor,
@@ -261,6 +269,7 @@ export async function main(argv: string[] = process.argv): Promise<void> {
     userId: args.userId ?? userIdFromEnv(),
     token: args.token ?? process.env.RELAY_DAEMON_NODE_TOKEN ?? process.env.RELAY_DAEMON_TOKEN,
     enrollmentToken,
+    updateAttempt: args.updateAttempt,
     workspacePath,
     workspaceId: args.workspaceId ?? process.env.RELAY_WORKSPACE_ID,
     sandbox: resolveSandboxMode(args.sandbox ?? process.env.RELAY_SANDBOX_MODE),

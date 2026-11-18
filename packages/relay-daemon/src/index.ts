@@ -123,6 +123,7 @@ import { configuredProjectRoots, ProjectLinkRegistry } from "./project-links.js"
 import { ExecutionWatchdog } from "./execution-watchdog.js";
 import { ExecutionJournal } from "./execution-journal.js";
 import { acknowledgeUpdatePause } from "./update-pause.js";
+import { confirmUpdateStartup } from "./update-startup.js";
 import { TerminalOutbox } from "./terminal-outbox.js";
 import { retireStaleGuests, type GuestRuntime } from "./exit-proof.js";
 import type { ExecutionRecord } from "./execution-journal.js";
@@ -173,6 +174,7 @@ export interface DaemonRuntimeOptions {
   enrollmentToken?: string;
   /** Daemon-private credentials and logs. This directory must never be mounted into an agent sandbox. */
   stateDir?: string;
+  updateAttempt?: string;
   /** Roots a project may link an existing directory beneath; defaults to `configuredProjectRoots`. */
   projectRoots?: string[];
   logDir?: string;
@@ -202,6 +204,7 @@ export interface DaemonDoctorCheck {
   name: string;
   ok: boolean;
   detail: string;
+  httpStatus?: number;
 }
 
 export interface DaemonDoctorReport {
@@ -727,6 +730,10 @@ export async function runRelayDaemon(options: DaemonRuntimeOptions = {}): Promis
     });
     logger.info("daemon registered", { sandboxId, userId: effectiveUserId, workspacePath, backendUrl, logPath: logger.logPath });
     setHealth("registered");
+    if (!runtimeSignal.aborted) {
+      try { confirmUpdateStartup(stateDir, options.updateAttempt); }
+      catch (error) { logger.warn("Could not acknowledge daemon update registration", { sandboxId, error: transportErrorDetail(error) }); }
+    }
     console.log(`${out.success(`Relay daemon registered sandbox ${sandboxId}`)} ${out.muted(`with backend at ${backendUrl} (sandbox: ${sandboxMode})`)}`);
     if (logger.logPath) console.log(`${out.muted("Relay daemon log:")} ${out.command(logger.logPath)}`);
     if (tokenResolution.source === "generated" && tokenResolution.path) {
@@ -1259,8 +1266,8 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
     logger.warn('Backend transport recovery', { sandboxId, ...recovery });
   });
   const checks: DaemonDoctorCheck[] = [];
-  const add = (name: string, ok: boolean, detail: string): void => {
-    checks.push({ name, ok, detail });
+  const add = (name: string, ok: boolean, detail: string, httpStatus?: number): void => {
+    checks.push({ name, ok, detail, ...(httpStatus === undefined ? {} : { httpStatus }) });
     logger.info("daemon doctor check", { check: name, ok, detail, sandboxId });
   };
   if (existsSync(join(stateDir, 'transport-diagnostics.json'))) {
@@ -1306,10 +1313,14 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
       const response = await fetchFn(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/auth-check`), {
         headers: { Authorization: `Bearer ${token}` }, signal: options.signal ?? AbortSignal.timeout(10_000),
       });
-      if (!response.ok) throw new Error(`Node authentication failed (HTTP ${response.status}).`);
-      const body = await response.json() as { sandboxId?: string; authenticated?: boolean };
-      if (body.sandboxId !== sandboxId || body.authenticated !== true) throw new Error("Token does not identify this enrolled node.");
-      add("authentication", true, "backend accepted the enrolled node token.");
+      if (!response.ok) {
+        await response.body?.cancel();
+        add("authentication", false, `Node authentication failed (HTTP ${response.status}).`, response.status);
+      } else {
+        const body = await response.json() as { sandboxId?: string; authenticated?: boolean };
+        if (body.sandboxId !== sandboxId || body.authenticated !== true) throw new Error("Token does not identify this enrolled node.");
+        add("authentication", true, "backend accepted the enrolled node token.");
+      }
     } catch (error) {
       add("authentication", false, transportErrorDetail(error));
     }

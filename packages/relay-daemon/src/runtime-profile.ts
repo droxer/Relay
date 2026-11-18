@@ -26,7 +26,7 @@ const RETIRED_ENV_KEYS = new Set([
   "KIMI_MODEL_THINKING_EFFORT", "KIMI_MODEL_ADAPTIVE_THINKING",
 ]);
 
-interface RuntimeProfile {
+export interface RuntimeProfile {
   version: 1;
   environment: Record<string, string>;
   environmentFile?: string;

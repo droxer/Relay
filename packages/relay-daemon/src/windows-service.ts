@@ -143,10 +143,11 @@ export function startWindowsTask(runner: TaskRunner, name: string, restart: bool
 }
 
 /** Registers (or replaces) the task and restarts it, so a reinstall runs the new release now. */
-export function registerWindowsTask(runner: TaskRunner, name: string, file: string): void {
+export function registerWindowsTask(runner: TaskRunner, name: string, file: string, start = true): void {
   const rejected = (step: string) => new Error(`Task Scheduler rejected the Relay service (schtasks ${step}).`);
   // /F replaces an earlier registration of the same computer but leaves its running instance alone.
   if (runner.run('schtasks', ['/Create', '/TN', name, '/XML', file, '/F'], { inherit: true }).status !== 0) throw rejected('/Create');
+  if (!start) return;
   if (!endWindowsTask(runner, name)) throw new Error('The previous Relay service did not stop; run "relay restart" to load the new release.');
   if (runner.run('schtasks', ['/Run', '/TN', name], { inherit: true }).status !== 0) throw rejected('/Run');
 }

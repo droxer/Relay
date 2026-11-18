@@ -29,9 +29,9 @@ async function withInstaller(body: string, status: number, test: (backend: strin
 }
 
 describe('relay update', () => {
-  it('carries the backend, workspace and permission policy but never the computer id', () => {
+  it('carries the selected computer id and its settings without passing a token', () => {
     assert.deepEqual(installerArguments(serviceArgv()), [
-      '--backend-url', 'https://api.example.test', '--workspace', '/home/me/work dir', '--local-permission-policy', 'trusted',
+      '--update-computer', 'node-1', '--backend-url', 'https://api.example.test', '--workspace', '/home/me/work dir', '--local-permission-policy', 'trusted',
     ]);
   });
 
@@ -65,7 +65,7 @@ describe('relay update', () => {
     await withInstaller('#!/bin/sh\nfor arg in "$@"; do printf "[%s]\\n" "$arg"; done\n', 200, async backend => {
       const { command, args } = updateCommand('linux', serviceArgv().map(arg => arg === 'https://api.example.test' ? backend : arg));
       const { stdout } = await run(command, args);
-      assert.equal(stdout, `[--backend-url]\n[${backend}]\n[--workspace]\n[/home/me/work dir]\n[--local-permission-policy]\n[trusted]\n`);
+      assert.equal(stdout, `[--update-computer]\n[node-1]\n[--backend-url]\n[${backend}]\n[--workspace]\n[/home/me/work dir]\n[--local-permission-policy]\n[trusted]\n`);
     });
   });
 
@@ -94,7 +94,7 @@ describe('relay update', () => {
       const install = calls.find(call => call.command === 'bash')!;
       assert.equal(install.inherit, true);
       assert.equal(install.args[2], 'https://api.example.test/install.sh');
-      assert.ok(!install.args.includes('--sandbox-id'));
+      assert.deepEqual(install.args.slice(3, 5), ['--update-computer', 'node-1']);
 
       const executions = join(home, '.relay/daemon-nodes/node-1/executions');
       mkdirSync(executions, { recursive: true });

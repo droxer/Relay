@@ -45,6 +45,7 @@ import { TerminalOutbox } from "../src/terminal-outbox.js";
 import { AgentNotInstalledError, AgentUnresponsiveError } from "../src/agent-preflight.js";
 import { askBroker } from "../src/permission-adapters/protocol.js";
 import { requestUpdatePause } from "../src/update-pause.js";
+import { requestUpdateStartup } from "../src/update-startup.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
 import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/workspace-read.js";
@@ -202,6 +203,39 @@ test("update pause accounts for an in-flight poll before acknowledging and stops
     finish();
     stop.abort();
     await daemon;
+    rmSync(stateDir, { recursive: true, force: true });
+  }
+});
+
+test("the replacement daemon acknowledges its update only after the backend accepts registration", { timeout: 10_000 }, async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "relay-update-registration-"));
+  const startup = requestUpdateStartup(stateDir);
+  const stop = new AbortController();
+  const registrationSent = Promise.withResolvers<void>();
+  const acceptRegistration = Promise.withResolvers<void>();
+  const daemon = runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "update-registration", userId: "alice", token: "fixture",
+    workspacePath: process.cwd(), stateDir, signal: stop.signal, logger: testLogger(), updateAttempt: startup.attempt,
+    environment: fakeEnvironment(), preflight: false,
+    fetchFn: async url => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith("/daemon-node-registrations")) {
+        registrationSent.resolve();
+        await acceptRegistration.promise;
+      }
+      return jsonResponse({ commands: [] });
+    },
+  });
+  try {
+    await registrationSent.promise;
+    await assert.rejects(startup.wait(AbortSignal.timeout(25)), { name: "AbortError" });
+    acceptRegistration.resolve();
+    await startup.wait(AbortSignal.timeout(5000));
+  } finally {
+    acceptRegistration.resolve();
+    stop.abort();
+    await daemon;
+    startup.release();
     rmSync(stateDir, { recursive: true, force: true });
   }
 });

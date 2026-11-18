@@ -1,5 +1,5 @@
 /** Personal-computer installer entrypoint. Included only in the downloadable client. */
-import { execFileSync, spawnSync, spawn } from 'node:child_process';
+import { spawnSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, userInfo } from 'node:os';
 import { delimiter, dirname, isAbsolute, join } from 'node:path';
@@ -8,16 +8,17 @@ import { statSync, accessSync, constants } from 'node:fs';
 import { authorizeComputer } from './device-setup.js';
 import { runRelayDaemonDoctor } from './index.js';
 import { applyLocalRuntimeEnvironment, ensureDaemonNodeToken, ensureMachineId, localRuntimeEnvironment, readDaemonNodeToken, relayApiUrl } from 'relay-core';
-import { bootoutLaunchdService, BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
+import { BRAND_ENV, brandForBackend, LOOPBACK_HOSTS, RELAY_BRAND, RELAY_DEV_BRAND, type RelayBrand } from './control.js';
 import { installedComputers, removeService, sameComputer, serviceArguments, stopService, type InstalledComputer, type ServiceRunner } from './installed-computers.js';
 import { installedServices } from './control.js';
-import { isOnPath, launchdBootstrapError, lingerNotice, macProtectedFolder, macProtectedFolderNotice, pathNotice, startupFileAddingDir } from './install-notices.js';
+import { isOnPath, lingerNotice, macProtectedFolder, macProtectedFolderNotice, pathNotice, startupFileAddingDir } from './install-notices.js';
 import { installRootOf, pruneInstallDirectories } from './install-pruning.js';
+import { activateInstalledService, updateInstalledService, writeServiceDefinition } from './install-service.js';
 import { captureRuntimeProfile, readRuntimeProfile, runtimeProfileEnvironment, withCurrentPath, writeRuntimeProfile } from './runtime-profile.js';
 import { isUserIdFlag } from './legacy-names.js';
 import { err, out } from './terminal-style.js';
 import { createBackendFetch } from './backend-fetch.js';
-import { decodeServiceFile, encodeTaskFile, powershellLiteral, registerWindowsTask, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
+import { decodeServiceFile, powershellLiteral, windowsAccount, windowsServiceDirectory, windowsTaskDefinition } from './windows-service.js';
 
 interface InstallOptions {
   backendUrl: string;
@@ -27,6 +28,7 @@ interface InstallOptions {
   foreground: boolean;
   verbose: boolean;
   deviceSetup: boolean;
+  updateComputer?: string;
   runtimeEnvFile?: string;
   runtimeProfile?: string;
   localPermissionPolicy: "native" | "trusted";
@@ -41,13 +43,20 @@ export function parseInstallArgs(args: string[]): InstallOptions {
     const key = isUserIdFlag(args[i]!) ? '--user-id' : args[i]!;
     if (key === '--foreground') { foreground = true; continue; }
     if (key === '--verbose') { verbose = true; continue; }
-    if (!['--backend-url', '--sandbox-id', '--user-id', '--workspace', '--runtime-env-file', '--runtime-profile', '--local-permission-policy'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
+    if (!['--backend-url', '--sandbox-id', '--user-id', '--workspace', '--runtime-env-file', '--runtime-profile', '--local-permission-policy', '--update-computer'].includes(key)) throw new Error(`Unknown installer option: ${key}`);
     const value = args[++i];
     if (!value || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`Invalid ${key}`);
     values.set(key, value);
   }
-  const deviceSetup = !values.has('--sandbox-id');
-  for (const key of deviceSetup ? ['--backend-url'] : ['--backend-url', '--sandbox-id', '--user-id', '--workspace']) {
+  const updateComputer = values.get('--update-computer');
+  if (updateComputer && (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(updateComputer) ||
+      foreground || values.has('--sandbox-id') || values.has('--user-id') || values.has('--runtime-env-file'))) {
+    throw new Error('Invalid options for --update-computer.');
+  }
+  const deviceSetup = !updateComputer && !values.has('--sandbox-id');
+  const required = updateComputer ? ['--backend-url', '--workspace']
+    : deviceSetup ? ['--backend-url'] : ['--backend-url', '--sandbox-id', '--user-id', '--workspace'];
+  for (const key of required) {
     if (!values.has(key)) throw new Error(`Missing ${key}`);
   }
   const backendUrl = values.get('--backend-url')!;
@@ -57,7 +66,7 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   const sandboxId = values.get('--sandbox-id') ?? '';
   const userId = values.get('--user-id') ?? '';
   for (const [key, value] of [['sandbox-id', sandboxId], ['user-id', userId]]) {
-    if (!deviceSetup && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value!)) throw new Error(`Invalid --${key}`);
+    if (!deviceSetup && !updateComputer && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value!)) throw new Error(`Invalid --${key}`);
   }
   const workspace = values.get('--workspace') ?? '';
   if ((!deviceSetup || workspace) && !isAbsolute(workspace)) throw new Error('Workspace must be an absolute path.');
@@ -68,7 +77,7 @@ export function parseInstallArgs(args: string[]): InstallOptions {
   const runtimeProfile = values.get('--runtime-profile');
   if (runtimeProfile && !isAbsolute(runtimeProfile)) throw new Error('--runtime-profile must be an absolute path.');
   if (runtimeProfile && runtimeEnvFile) throw new Error('Choose --runtime-profile or --runtime-env-file, not both.');
-  return { backendUrl, sandboxId, userId, workspace, foreground, verbose, deviceSetup, localPermissionPolicy, ...(runtimeEnvFile ? { runtimeEnvFile } : {}), ...(runtimeProfile ? { runtimeProfile } : {}) };
+  return { backendUrl, sandboxId, userId, workspace, foreground, verbose, deviceSetup, localPermissionPolicy, ...(updateComputer ? { updateComputer } : {}), ...(runtimeEnvFile ? { runtimeEnvFile } : {}), ...(runtimeProfile ? { runtimeProfile } : {}) };
 }
 
 const xml = (value: string): string => value.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -176,15 +185,15 @@ async function reusableComputer(installed: InstalledComputer[], backendUrl: stri
     const credentials = join(homedir(), '.relay', 'daemon-nodes', computer.id, 'credentials');
     const token = readDaemonNodeToken(credentials, computer.userId);
     if (!token) continue;
-    try {
-      const response = await send(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(computer.id)}/auth-check`), {
-        headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000),
-      });
-      if (response.ok) return { computer, token };
-      await response.body?.cancel();
-    } catch {
-      // An unreachable backend fails the doctor check below with a clearer message.
-      return undefined;
+    const response = await send(relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(computer.id)}/auth-check`), {
+      headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000),
+    }).catch(error => {
+      throw new Error('Could not verify the saved Computer credential. Check backend connectivity and retry.', { cause: error });
+    });
+    await response.body?.cancel();
+    if (response.ok) return { computer, token };
+    if (response.status !== 401 && response.status !== 410) {
+      throw new Error(`Could not verify the saved Computer credential (HTTP ${response.status}). Retry when the backend is available.`);
     }
   }
   return undefined;
@@ -268,7 +277,25 @@ async function install(): Promise<void> {
   // Use one host identity for browser enrollment and every installed launch,
   // including a foreground run whose shell has RELAY_WORKSPACE_ID set.
   const workspaceId = ensureMachineId().machineId;
-  const installed = installedComputers(process.platform, homedir());
+  const home = homedir();
+  const installed = installedComputers(process.platform, home);
+  // Older control launchers passed the installed service's private profile but
+  // omitted its ID. That profile still identifies the Computer to upgrade.
+  const legacyUpdate = options.deviceSetup && !options.foreground && options.runtimeProfile
+    ? installed.find(computer => options.runtimeProfile === join(home, '.relay', 'daemon-nodes', computer.id, 'runtime-profile.json'))
+    : undefined;
+  const updateTarget = options.updateComputer ? installed.find(computer => computer.id === options.updateComputer) : legacyUpdate;
+  let nodeToken = process.env.RELAY_DAEMON_NODE_TOKEN;
+  if (options.updateComputer || updateTarget) {
+    if (!updateTarget || !sameComputer(updateTarget, options.backendUrl, options.workspace)) {
+      throw new Error('The selected Computer service has changed. Run the update again to read its current settings.');
+    }
+    options.sandboxId = updateTarget.id;
+    options.userId = updateTarget.userId;
+    options.deviceSetup = false;
+    nodeToken = readDaemonNodeToken(join(home, '.relay', 'daemon-nodes', options.sandboxId, 'credentials'), options.userId);
+    if (!nodeToken) throw new Error('The selected Computer has no saved credential. Run the install command from Relay to reconnect it.');
+  }
   if (options.deviceSetup) {
     // install.sh prompts for it (reading /dev/tty from Node dies on EINTR under sudo);
     // run without one, the workspace is the directory the command ran in.
@@ -280,7 +307,7 @@ async function install(): Promise<void> {
     console.log(out.step(`${brand.product} is already installed for this workspace; upgrading it.`));
     options.sandboxId = existing.computer.id;
     options.userId = existing.computer.userId;
-    process.env.RELAY_DAEMON_NODE_TOKEN = existing.token;
+    nodeToken = existing.token;
   } else if (options.deviceSetup) {
     const authorized = await authorizeComputer({
       backendUrl: options.backendUrl, workspace: options.workspace, displayName: brand === RELAY_DEV_BRAND ? brand.product : hostname().slice(0, 80),
@@ -289,12 +316,11 @@ async function install(): Promise<void> {
     });
     options.sandboxId = authorized.sandboxId;
     options.userId = authorized.userId;
-    process.env.RELAY_DAEMON_NODE_TOKEN = authorized.token;
+    nodeToken = authorized.token;
   }
-  if (!process.env.RELAY_DAEMON_NODE_TOKEN?.trim()) throw new Error('A node token is required.');
-  const stateDir = join(homedir(), '.relay', 'daemon-nodes', options.sandboxId);
+  if (!nodeToken?.trim()) throw new Error('A node token is required.');
+  const stateDir = join(home, '.relay', 'daemon-nodes', options.sandboxId);
   process.env.RELAY_DAEMON_STATE_DIR = stateDir;
-  const nodeToken = process.env.RELAY_DAEMON_NODE_TOKEN;
   const runtimeEnv = localRuntimeEnvironment();
   runtimeEnv.PATH = [dirname(process.execPath), runtimeEnv.PATH ?? '/usr/bin:/bin'].join(delimiter);
   const profile = savedProfile ? withCurrentPath(savedProfile, runtimeEnv.PATH, delimiter) : (!options.foreground || options.runtimeEnvFile
@@ -329,11 +355,19 @@ async function install(): Promise<void> {
     if (!check.ok && retainedDiagnostics.has(check.name)) console.log(out.notice(`${check.name}: ${check.detail}`));
   }
   const failures = report.checks.filter(check => !check.ok && !check.name.startsWith('agent:') && !retainedDiagnostics.has(check.name));
+  const authentication = updateTarget && failures.find(check => check.name === 'authentication');
+  if (authentication) {
+    if (authentication.httpStatus === 401 || authentication.httpStatus === 410) {
+      throw new Error('Relay rejected the selected Computer credential. Run the install command from Relay to reconnect it.');
+    }
+    throw new Error(`Could not verify the saved Computer credential. ${authentication.detail} Check backend connectivity and retry.`);
+  }
   if (failures.length) throw new Error(failures.map(check => `${check.name}: ${check.detail}`).join('\n'));
   // Persist the already-issued token only after read-only authentication succeeds.
   // The running daemon owns registration; reinstalling never marks a live node stopped.
-  ensureDaemonNodeToken({ credentialDirectory: join(stateDir, 'credentials'), userId: options.userId, token: nodeToken });
-  const runtimeProfile = profile ? writeRuntimeProfile(stateDir, profile) : undefined;
+  if (!updateTarget) ensureDaemonNodeToken({ credentialDirectory: join(stateDir, 'credentials'), userId: options.userId, token: nodeToken });
+  const runtimeProfile = profile ? join(stateDir, 'runtime-profile.json') : undefined;
+  if (profile && !updateTarget) writeRuntimeProfile(stateDir, profile);
   delete process.env.RELAY_DAEMON_NODE_TOKEN;
   delete process.env.RELAY_DAEMON_TOKEN;
   const cli = join(dirname(fileURLToPath(import.meta.url)), 'cli.js');
@@ -341,7 +375,18 @@ async function install(): Promise<void> {
     '--workspace-id', workspaceId,
     '--user-id', options.userId, '--workspace', options.workspace, '--sandbox', 'none', '--allow-host-agent-execution',
     '--local-permission-policy', options.localPermissionPolicy, ...(runtimeProfile ? ['--runtime-profile', runtimeProfile] : [])];
-  const binDir = join(homedir(), '.local', 'bin');
+  const logDir = join(stateDir, 'logs');
+  const path = [dirname(process.execPath), process.env.PATH ?? '/usr/bin:/bin'].join(delimiter);
+  if (updateTarget) {
+    console.log(out.step('Restarting the selected Computer and waiting for it to register…'));
+    mkdirSync(logDir, { recursive: true, mode: 0o700 });
+    await updateInstalledService({
+      platform: process.platform, uid: process.getuid?.() ?? 0, service: updateTarget,
+      runner: serviceRunner(), brand, stateDir, profile,
+      definition: attempt => serviceDefinition(process.platform, options.sandboxId, [...argv, '--update-attempt', attempt], logDir, path, brand).content,
+    });
+  }
+  const binDir = join(home, '.local', 'bin');
   const wrapper = installLauncher(binDir, `${brand.command}-daemon`, cli, brand);
   const control = installLauncher(binDir, brand.command, join(dirname(cli), 'control.js'), brand);
   if (options.foreground) {
@@ -359,50 +404,21 @@ async function install(): Promise<void> {
     process.exitCode = child.status ?? 1;
     return;
   }
-  const logDir = join(stateDir, 'logs');
-  mkdirSync(logDir, { recursive: true, mode: 0o700 });
-  const path = [dirname(process.execPath), process.env.PATH ?? '/usr/bin:/bin'].join(delimiter);
-  const service = serviceDefinition(process.platform, options.sandboxId, argv, logDir, path, brand);
-  if (process.platform === 'darwin') {
-    const directory = join(homedir(), 'Library', 'LaunchAgents');
-    mkdirSync(directory, { recursive: true });
-    const file = join(directory, `${service.name}.plist`);
-    writeFileSync(file, service.content, { mode: 0o600 });
-    const domain = `gui/${process.getuid!()}`;
-    if (!bootoutLaunchdService(serviceRunner(), `${domain}/${service.name}`)) {
-      throw new Error(`The running ${brand.product} service ${service.name} did not stop; run the installer again.`);
-    }
-    // Reconnecting overrides an earlier `relay stop`, which disables the label.
-    spawnSync('launchctl', ['enable', `${domain}/${service.name}`], { stdio: 'ignore' });
-    if (spawnSync('launchctl', ['bootstrap', domain, file], { stdio: 'inherit' }).status !== 0) {
-      throw new Error(launchdBootstrapError(process.env, brand.product));
-    }
-    if (options.verbose) {
-      console.log(`${out.muted('Logs:')} ${out.command(join(logDir, 'service.log'))}`);
-    }
-  } else if (process.platform === 'win32') {
-    const directory = windowsServiceDirectory(homedir());
-    mkdirSync(directory, { recursive: true });
-    const file = join(directory, `${service.name}.xml`);
-    writeFileSync(file, encodeTaskFile(service.content));
-    registerWindowsTask(serviceRunner(), service.name, file);
-    if (options.verbose) {
-      console.log(`${out.muted('Logs:')} ${out.command(join(logDir, 'service.log'))}`);
-    }
-  } else {
-    const directory = join(homedir(), '.config', 'systemd', 'user');
-    mkdirSync(directory, { recursive: true });
-    writeFileSync(join(directory, `${service.name}.service`), service.content, { mode: 0o600 });
-    execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'inherit' });
-    execFileSync('systemctl', ['--user', 'enable', `${service.name}.service`], { stdio: 'inherit' });
-    execFileSync('systemctl', ['--user', 'restart', `${service.name}.service`], { stdio: 'inherit' });
-    if (options.verbose) {
-      console.log(`${out.muted('Logs:')} ${out.command(`journalctl --user -u ${service.name}`)}`);
-    }
+  if (!updateTarget) {
+    mkdirSync(logDir, { recursive: true, mode: 0o700 });
+    const service = serviceDefinition(process.platform, options.sandboxId, argv, logDir, path, brand);
+    const file = process.platform === 'darwin' ? join(home, 'Library', 'LaunchAgents', `${service.name}.plist`)
+      : process.platform === 'win32' ? join(windowsServiceDirectory(home), `${service.name}.xml`)
+        : join(home, '.config', 'systemd', 'user', `${service.name}.service`);
+    writeServiceDefinition(process.platform, file, service.content);
+    activateInstalledService(process.platform, process.getuid?.() ?? 0, { id: options.sandboxId, name: service.name, file }, serviceRunner(), brand);
+    removeSupersededServices(installed, options, brand);
+  }
+  if (options.verbose) {
+    const log = process.platform === 'linux' ? `journalctl --user -u build.relay.computer.${options.sandboxId}` : join(logDir, 'service.log');
+    console.log(`${out.muted('Logs:')} ${out.command(log)}`);
   }
   const notices = platformNotices(options.workspace, brand);
-  // Only after the new service started, so a failed install never leaves the computer with none.
-  removeSupersededServices(installed, options, brand);
   pruneOldInstalls(brand);
   console.log(out.success(`Connected to ${brand.product}. You can close this terminal.`));
   console.log(out.muted(`${brand.product} runs in the background and starts automatically when you log in.`));

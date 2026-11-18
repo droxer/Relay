@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { powershellLiteral } from './windows-service.js';
 import { readRuntimeProfile } from './runtime-profile.js';
 
-/** Installer options a service keeps in its argv; `--sandbox-id` stays out so the installer reuses the saved token. */
+/** Installer options a service keeps in its argv. The update ID is passed separately from enrollment flags. */
 const CARRIED_OPTIONS = ['--backend-url', '--workspace', '--local-permission-policy'];
 
 export interface UpdateCommand { command: string; args: string[] }
@@ -15,9 +15,12 @@ function option(argv: string[], name: string): string | undefined {
 }
 
 /** The installer arguments that reproduce this service's setup. */
-export function installerArguments(argv: string[]): string[] {
+export function installerArguments(argv: string[], computerId = option(argv, '--sandbox-id')): string[] {
   if (!option(argv, '--backend-url') || !option(argv, '--workspace')) {
     throw new Error('This computer\'s service does not record its backend and workspace; run the install command from Relay instead.');
+  }
+  if (!computerId || option(argv, '--sandbox-id') !== computerId) {
+    throw new Error('This service does not record the selected computer ID. Run the install command from Relay to reconnect it.');
   }
   const args = CARRIED_OPTIONS.flatMap(name => {
     const value = option(argv, name);
@@ -25,12 +28,12 @@ export function installerArguments(argv: string[]): string[] {
   });
   const profile = option(argv, '--runtime-profile');
   if (profile) readRuntimeProfile(profile);
-  return profile ? [...args, '--runtime-profile', profile] : args;
+  return ['--update-computer', computerId, ...args, ...(profile ? ['--runtime-profile', profile] : [])];
 }
 
 /** Downloads the backend's current installer and runs it with the service's own setup. */
-export function updateCommand(platform: string, argv: string[]): UpdateCommand {
-  const args = installerArguments(argv);
+export function updateCommand(platform: string, argv: string[], computerId?: string): UpdateCommand {
+  const args = installerArguments(argv, computerId);
   const backend = new URL(option(argv, '--backend-url')!).origin;
   if (platform === 'win32') {
     // Windows PowerShell 5.1 may still default to TLS 1.0 for irm.

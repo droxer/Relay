@@ -282,13 +282,12 @@ function update(deps: ControlDeps, services: InstalledService[], force: boolean)
   let ok = true;
   for (const service of services) {
     // Validate saved settings before asking the daemon to pause.
-    const { command, args } = updateCommand(deps.platform, serviceArguments(deps.platform, decodeServiceFile(readFileSync(service.file))));
+    const { command, args } = updateCommand(deps.platform, serviceArguments(deps.platform, decodeServiceFile(readFileSync(service.file))), service.id);
     deps.log((deps.style ?? PLAIN).step(services.length > 1 ? `${service.id}: updating ${product}…` : `Updating ${product}…`));
-    const state = force ? undefined : serviceState(deps, service);
-    const pause = state && !['stopped', 'failed'].includes(state.detail)
-      ? requestUpdatePause(join(deps.home, '.relay', 'daemon-nodes', service.id)) : undefined;
+    const pause = requestUpdatePause(join(deps.home, '.relay', 'daemon-nodes', service.id));
     try {
-      if (pause) {
+      const state = force ? undefined : serviceState(deps, service);
+      if (state && !['stopped', 'failed'].includes(state.detail)) {
         let acknowledged = false;
         for (let attempt = 0; attempt < 900; attempt++) {
           if (pause.acknowledged()) { acknowledged = true; break; }
@@ -302,7 +301,7 @@ function update(deps: ControlDeps, services: InstalledService[], force: boolean)
       const updated = deps.run(command, args, { inherit: true }).status === 0;
       if (!updated) deps.log((deps.style ?? PLAIN).error(`${product} could not be updated${services.length > 1 ? ` (${service.id})` : ''}. Run "${(deps.brand ?? RELAY_BRAND).command} status" to check the service.`));
       ok &&= updated;
-    } finally { pause?.release(); }
+    } finally { pause.release(); }
   }
   return ok;
 }
