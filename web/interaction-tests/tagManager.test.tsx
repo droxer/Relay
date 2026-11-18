@@ -67,8 +67,11 @@ it("requires a fresh preview after stale apply", async () => {
   expect(screen.getByRole("button", { name: "tags.manager.preview" })).toBeTruthy();
 });
 it("offers saved unused names in task pickers", async () => {
-  const { container } = render(<QueryClientProvider client={new QueryClient()}><TaskTagsField tags={[]} name="tags" suggestions={["Bug"]} onChange={vi.fn()} /></QueryClientProvider>);
-  await waitFor(() => expect(container.querySelector('option[value="Unused"]')).toBeTruthy());
+  const onChange = vi.fn();
+  render(<QueryClientProvider client={new QueryClient()}><TaskTagsField tags={[]} name="tags" suggestions={["Bug"]} onChange={onChange} /></QueryClientProvider>);
+  await waitFor(() => expect(screen.getAllByRole("button", { name: "tags.add_existing" })).toHaveLength(2));
+  fireEvent.click(screen.getAllByRole("button", { name: "tags.add_existing" })[1]);
+  expect(onChange).toHaveBeenCalledWith(["Unused"]);
 });
 it("recovers from a catalog load failure", async () => {
   vi.mocked(api.listTags).mockRejectedValueOnce(new Error("offline"));

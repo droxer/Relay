@@ -3275,6 +3275,8 @@
     "more": "+{{count}}",
     "none": "無",
     "placeholder_more": "繼續新增…",
+    "suggested": "已有標籤",
+    "add_existing": "新增標籤 {{tag}}",
     "limit_other": "每個任務最多 {{count}} 個標籤。",
     "more_label_other": "另外 {{count}} 個標籤：{{tags}}"
   },

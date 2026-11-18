@@ -3275,6 +3275,8 @@
     "more": "+{{count}}",
     "none": "无",
     "placeholder_more": "继续添加…",
+    "suggested": "已有标签",
+    "add_existing": "添加标签 {{tag}}",
     "limit_other": "每个任务最多 {{count}} 个标签。",
     "more_label_other": "另外 {{count}} 个标签：{{tags}}"
   },

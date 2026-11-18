@@ -3344,6 +3344,8 @@
     "more": "+{{count}}",
     "none": "None",
     "placeholder_more": "Add another…",
+    "suggested": "Existing tags",
+    "add_existing": "Add tag {{tag}}",
     "limit_one": "A task holds at most {{count}} tag.",
     "limit_other": "A task holds at most {{count}} tags.",
     "more_label_one": "{{count}} more tag: {{tags}}",
