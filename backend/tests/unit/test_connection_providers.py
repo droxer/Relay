@@ -10,10 +10,10 @@ from relay.core.connections import ConnectionConfig, ConnectionError, connection
 from relay.persistence.connection.store import DatabaseConnectionStore
 
 
-@pytest.mark.parametrize("provider", ["slack", "google-drive", "gmail"])
+@pytest.mark.parametrize("provider", ["slack", "google-drive"])
 def test_unsupported_providers_cannot_authorize_or_execute(tmp_path, provider):
     service = ConnectionService(DatabaseConnectionStore(f"sqlite:///{tmp_path}/db"), {}, Fernet.generate_key().decode())
-    assert [item["id"] for item in service.catalog()] == ["github"]
+    assert not any(item["configured"] for item in service.catalog())
     with pytest.raises(ConnectionError, match="connection_provider_not_configured"):
         service.start("owner", "session", provider, "/settings/connections")
     with pytest.raises(ConnectionError, match="connection_access_denied"):
@@ -51,7 +51,7 @@ def test_configuration_requires_complete_credentials_and_valid_callback(monkeypa
         connections_config_from_env()
 
 
-@pytest.mark.parametrize("provider", ["slack", "google-drive", "gmail"])
+@pytest.mark.parametrize("provider", ["slack", "google-drive", "gmail", "outlook"])
 def test_retired_records_are_unavailable_but_remain_removable(tmp_path, provider):
     config = ConnectionConfig(provider, "id", "secret", "https://relay.example")
     service = ConnectionService(DatabaseConnectionStore(f"sqlite:///{tmp_path}/db"),
@@ -61,8 +61,9 @@ def test_retired_records_are_unavailable_but_remain_removable(tmp_path, provider
     service.store.save("owner", record, service._seal({"access_token": "old-secret"}))
     assert service.list("owner") == []
     assert not service.catalog()[0]["configured"]
-    with pytest.raises(ConnectionError, match="connection_provider_not_configured"):
-        service.start("owner", "session", provider, "/settings/connections")
+    error = "connection_identity_mismatch" if provider in {"gmail", "outlook"} else "connection_provider_not_configured"
+    with pytest.raises(ConnectionError, match=error):
+        service.start("owner", "session", provider, "/settings/connections", "retired")
     with pytest.raises(ConnectionError, match="connection_unavailable"):
         service.token("owner", "retired")
     with pytest.raises(ConnectionError, match="connection_grants_invalid"):

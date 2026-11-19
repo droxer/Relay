@@ -1748,6 +1748,9 @@ actions. `GET /api/v1/connections` returns only the signed-in User's redacted
 identities. `POST /api/v1/connections/authorizations` accepts `provider`, a safe
 local `returnTo`, and optionally `reconnectId`. The browser follows its `url`;
 the provider callback validates the initiating session and single-use state.
+Gmail and Outlook callbacks append a `connectionResult` to the validated return
+URL and include `connectionResultId` on success. Fetch the Connection list to
+confirm the connected identity.
 
 Work access is read and replaced through
 `/api/v1/connection-grants/{thread|task|automation}/{id}` (GET/PUT). A PUT body
@@ -1762,6 +1765,14 @@ cannot recover a removed permission when it is added back later. Disconnect
 removes saved credentials and pauses dependent active Automations without
 claiming that an executing agent has exited. Run-scoped MCP calls use
 `POST /api/v1/connection-tools`; browser sessions cannot authorize those calls.
+
+Gmail and Outlook expose the `inbox` resource and provider-prefixed
+`list_messages` and `get_message` actions. The body-read action requires the
+list action in the same Grant. Lists accept optional `unreadOnly`,
+`receivedAfter` (RFC 3339), `limit` (1–25, default 20), and `cursor`. Reuse the
+same filters with `nextCursor`. `get_message` takes a `messageId` from the same
+run's list result and returns a plain-text body capped at 16 KiB with a
+`truncated` flag. Message references and cursors expire after 15 minutes.
 
 See [Connections](guides/connections.md) for all routes, resource pagination, provider
 configuration, supported runtime adapters, and deployment verification limits.

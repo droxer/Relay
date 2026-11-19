@@ -3,12 +3,13 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
-from ...connections.service import ConnectionService
-from ...core.connections import ConnectionError
+from ...connections.service import ConnectionService, MailAuthorizationError
+from ...core.connections import ConnectionError, MAIL_PROVIDERS
 from ...security.request_auth import require_user_session, user_session_token_from_request
 from ..actors import get_session_for_actor, get_task_for_actor, request_actor
 from ..bodies import JsonBodyDep
@@ -66,11 +67,37 @@ def start(request: Request, ctx: AppContextDep, *, body: JsonBodyDep) -> dict[st
 @router.get("/connections/callback/{provider}")
 def callback(provider: str, request: Request, ctx: AppContextDep) -> RedirectResponse:
     user = owner(request, ctx)
+    params = request.query_params
+    error = params.get("error", "")
+    organization_policy = error == "admin_policy_enforced" or (provider == "outlook" and any(
+        code in params.get("error_description", "") for code in ("AADSTS65001:", "AADSTS90094:", "AADSTS900941:")))
+    record = None
     with connection_errors():
-        _record, return_to = service(ctx).complete(user, user_session_token_from_request(request) or "", provider,
-            request.query_params.get("state", ""), code=request.query_params.get("code"),
-            denied=bool(request.query_params.get("error")))
+        try:
+            record, return_to = service(ctx).complete(user, user_session_token_from_request(request) or "", provider,
+                params.get("state", ""), code=params.get("code"), denied=bool(error), organization_policy=organization_policy)
+            result = "connected" if record else "cancelled" if error == "access_denied" else "failed"
+        except MailAuthorizationError as failure:
+            return_to = failure.return_to
+            result = _MAIL_CALLBACK_ERRORS.get(failure.code, "failed")
+    if provider in MAIL_PROVIDERS:
+        url = urlsplit(return_to)
+        query = [(key, value) for key, value in parse_qsl(url.query, keep_blank_values=True)
+                 if key not in {"connectionResult", "connectionResultId"}]
+        query.append(("connectionResult", result))
+        if record:
+            query.append(("connectionResultId", record["id"]))
+        return_to = urlunsplit(url._replace(query=urlencode(query)))
     return RedirectResponse(return_to, status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+
+
+_MAIL_CALLBACK_ERRORS = {
+    "connection_organization_policy": "organization_policy",
+    "connection_mailbox_unavailable": "mailbox_unavailable",
+    "connection_identity_mismatch": "identity_mismatch",
+    "connection_offline_access_required": "offline_access_required",
+    "connection_permissions_invalid": "permissions_required",
+}
 
 
 @router.get("/connections/{connection_id}/resources")

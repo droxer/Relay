@@ -1,4 +1,5 @@
 """Signal evidence must survive the normal Uvicorn shutdown path."""
+import logging
 import signal
 from unittest.mock import Mock
 
@@ -22,3 +23,16 @@ def test_server_preserves_nonzero_exit_on_startup_failure(monkeypatch):
     with pytest.raises(SystemExit) as error:
         server.run_server("unused:app")
     assert error.value.code == 3
+
+
+def test_access_logs_omit_connection_oauth_callback_parameters():
+    filter_ = server.ConnectionCallbackLogFilter()
+    for path, expected in (
+        ("/api/v1/connections/callback/gmail?code=private&state=private", "/api/v1/connections/callback/gmail"),
+        ("/api/v1/connections/callback/outlook?error_description=private", "/api/v1/connections/callback/outlook"),
+        ("/api/v1/tasks?view=summary", "/api/v1/tasks?view=summary"),
+    ):
+        entry = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d',
+            ("127.0.0.1", "GET", path, "1.1", 303), None)
+        assert filter_.filter(entry)
+        assert entry.args[2] == expected

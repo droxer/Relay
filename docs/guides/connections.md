@@ -6,11 +6,19 @@ the resources and actions a Thread, Task, or Automation may use. Open
 Automation’s **Connections** section. The chat input box does not expose a
 Connections picker. Multiple external accounts are supported.
 
-GitHub is the only supported provider for now:
-
 | Service | Actions | Resources |
 | --- | --- | --- |
 | GitHub | Read up to 50 issues per call; optional open/closed/all filter | Selected repositories |
+| Gmail | List messages and optionally read message bodies | Inbox of a personal Gmail or Google Workspace mailbox |
+| Outlook | List messages and optionally read message bodies | Inbox of an Outlook.com or Microsoft 365 work/school mailbox |
+
+For Gmail and Outlook, choose the mailbox and Inbox in the work's **Connections**
+section. Grant **List messages** for sender, subject, received time, and unread
+status. Grant **Read message bodies** as well to let work retrieve the plain-text
+body. Mail data returned to an Agent is visible to its runtime and model provider
+and can appear in work history or runtime session logs. The email tools support
+read-only Inbox access. Sending, replying, attachments, and mail triggers are
+outside the available access.
 
 Agents receive a per-run MCP tool through Codex or Claude. Other runtimes are
 refused when work selects Connections. Computers must advertise the
@@ -34,33 +42,105 @@ external requests cannot be recalled.
 
 ## Deployment setup
 
-Run database migrations before deploying this code (`make backend-migrate`).
-Revision `20261106_0114` adds service Connections, authorization attempts, Grants,
-and their event records. New Computers need the updated installer bundle.
+### Backend variables
 
-Set `RELAY_CONNECTIONS_ENCRYPTION_KEY` to a Fernet key in your secret manager.
-Keep it stable across restarts. Changing it without migrating encrypted records
-requires Users to reconnect. Never commit this key or provider client secrets.
+For the Railway deployment, set the variables in **Production → relay-backend →
+Variables**. The release script makes `relay-worker` reference the backend
+variables. For a manual deployment with a separate worker, give it the same
+values through service variable references. Store the OAuth credentials and
+encryption key on the backend and worker. [Railway deployment](../../deploy/README.md#railway-service-configuration).
 
-For each service to enable, configure all three settings:
+Reuse the existing `RELAY_CONNECTIONS_ENCRYPTION_KEY` if GitHub Connections are
+already configured. For a fresh installation, generate a Fernet key once and
+save it in your secret manager. Changing it without migrating the encrypted
+records requires Users to reconnect.
 
-```text
-RELAY_CONNECTIONS_GITHUB_CLIENT_ID
-RELAY_CONNECTIONS_GITHUB_CLIENT_SECRET
-RELAY_CONNECTIONS_GITHUB_CALLBACK_URL
+```bash
+uv run --project backend python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 ```
 
-The callback URL must be the deployment's public HTTPS origin followed by
-`/api/v1/connections/callback/github`. HTTP is accepted only for localhost
-development. Register the exact URL with GitHub. An incomplete or invalid
-configuration fails startup; GitHub appears unavailable until configured.
+The example uses Relay's production API origin, `https://api.get-relay.cc`.
+For a different deployment, use its public HTTPS API origin and register the
+exact same URL with the provider. HTTP is accepted only for localhost
+development. Exclude OAuth callback query strings from proxy access logs as
+they contain short-lived authorization codes.
+
+```dotenv
+RELAY_CONNECTIONS_ENCRYPTION_KEY=<existing-or-new-Fernet-key>
+
+RELAY_CONNECTIONS_GMAIL_CLIENT_ID=<Google-OAuth-client-ID>
+RELAY_CONNECTIONS_GMAIL_CLIENT_SECRET=<Google-OAuth-client-secret>
+RELAY_CONNECTIONS_GMAIL_CALLBACK_URL=https://api.get-relay.cc/api/v1/connections/callback/gmail
+
+RELAY_CONNECTIONS_OUTLOOK_CLIENT_ID=<Entra-application-client-ID>
+RELAY_CONNECTIONS_OUTLOOK_CLIENT_SECRET=<Entra-client-secret-value>
+RELAY_CONNECTIONS_OUTLOOK_CALLBACK_URL=https://api.get-relay.cc/api/v1/connections/callback/outlook
+```
+
+Set all three variables for each provider you enable. Leave that provider's
+three variables unset when deferring its launch. It will appear unavailable in
+Settings. An incomplete or invalid configuration fails startup.
+
+### OAuth app registration
 
 Use a GitHub **OAuth App** for the new provider-neutral flow. It requests
 `read:user repo offline_access`; GitHub's repository consent is broader than
 Relay's exposed tools. Relay permits only issue reads on explicitly selected
-repositories. This is separate from the older, disabled Account GitHub App
-installation flow and never reuses its saved credentials. See
-[GitHub's authorization documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps).
+repositories. Set `RELAY_CONNECTIONS_GITHUB_CLIENT_ID`,
+`RELAY_CONNECTIONS_GITHUB_CLIENT_SECRET`, and
+`RELAY_CONNECTIONS_GITHUB_CALLBACK_URL`. Register the public API origin plus
+`/api/v1/connections/callback/github` as the callback. This is separate from the
+older Account GitHub App installation flow and uses its own credentials.
+[GitHub OAuth App authorization](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps).
+
+For **Gmail**, enable the Gmail API in Google Cloud. Configure the consent screen
+in Google Auth Platform, choose **External** for personal Gmail accounts, and
+add `https://www.googleapis.com/auth/gmail.readonly` under **Data Access**.
+Create a **Web application** OAuth client with the Gmail callback as an
+authorized redirect URI. Relay also requests `openid email` and offline access.
+[Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes).
+
+An External app in **Testing** can authorize listed test Users. Refresh tokens
+issued for the Gmail scope in this mode expire after seven days. Before public
+enablement, complete Google's restricted-scope verification and required server
+security assessment. Review transfers of Gmail data to Agent runtimes and model
+providers under Google's Limited Use requirements.
+[Google token expiration](https://developers.google.com/identity/protocols/oauth2#expiration),
+[Restricted scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification),
+[Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy).
+
+For **Outlook**, register a Microsoft Entra application for accounts in any
+organizational directory and personal Microsoft accounts. In **Authentication**,
+add the Outlook callback under the **Web** platform. In **API permissions**,
+add Microsoft Graph delegated `Mail.Read`. Copy the **Application (client) ID**
+from **Overview** and the client secret's **Value** from **Certificates &
+secrets**. Relay also requests `openid profile offline_access` for identity and
+token refresh. An organization can require administrator approval. Verify that
+the test identity has a mailbox on the global Microsoft Graph service.
+[Microsoft app registration](https://learn.microsoft.com/en-us/graph/auth-register-app-v2),
+[Microsoft supported account types](https://learn.microsoft.com/en-us/entra/identity-platform/v2-supported-account-types),
+[Microsoft Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread).
+
+### Release and smoke test
+
+Publish the release from the configured GitHub branch, normally `main`.
+The Railway pre-deploy command runs the database migrations. For a manual
+installation, run `make backend-migrate` before starting the new backend.
+Gmail and Outlook use the existing Connections tables from revision
+`20261106_0114`.
+
+```bash
+deploy/deploy.sh release
+deploy/deploy.sh verify
+```
+
+For each enabled provider, connect a real mailbox in **Settings → Connections**.
+Create a Task or Automation with that mailbox's Inbox selected, grant **List
+messages** and **Read message bodies**, and ask a Codex or Claude Agent to read
+one message. Use a Computer that advertises `service-connections`. For an
+Automation, verify it can run again after the provider access token expires.
+Disconnect the mailbox and verify that subsequent reads are denied and any
+dependent active Automations pause.
 
 ## Work and recovery
 
@@ -77,8 +157,7 @@ installation flow and never reuses its saved credentials. See
   to a replaced Automation Grant require a new Automation occurrence to use
   the new access. Submitted Grant IDs and revisions are checked for stale edits.
 - Schedules, Relay events, generic webhooks, and Run now can all use Connections.
-  Native provider-event subscriptions are future work; connecting GitHub does
-  not create a service-event trigger.
+  Native provider-event subscriptions are future work.
 - Unavailable required access pauses an Automation before another occurrence is
   created. Reconnect the same external identity, then explicitly Resume. Resume
   checks access and uses the existing schedule cutoff instead of replaying
@@ -130,11 +209,9 @@ the runtime's stdio MCP proxy. A browser session never grants broker access.
 ## Verification boundaries
 
 Automated tests use deterministic provider HTTP transports and actual database,
-HTTP-route, command-delivery, and stdio transport paths. They do not prove that
-an operator's registered OAuth applications, consent policies, network routes,
-or real accounts are configured correctly. Perform a deployment smoke test for
-each enabled provider: authenticate, select a resource on work, run the Agent,
-check the external result, disconnect, and confirm that further calls fail.
+HTTP-route, command-delivery, and stdio transport paths. The
+[deployment smoke test](#release-and-smoke-test) verifies registered OAuth apps,
+consent policies, network routes, and real accounts.
 
 See [the proposal](../proposals/connections-design.md) for unfinished provider
 and management extensions, and [local development](../local-development.md)

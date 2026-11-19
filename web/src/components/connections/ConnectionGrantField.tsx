@@ -3,16 +3,18 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { AdminConnect, ChevronDownIcon, ICON } from "../icons";
+import { AdminConnect, AdminInbox, ChevronDownIcon, ICON } from "../icons";
 import { GithubMark } from "../landing/GithubMark";
 import { connectionResources, getConnectionGrants, listConnections,
   type ConnectionGrant, type ConnectionTarget, type ServiceConnection } from "../../api-client/connections";
+import { mailProviderName } from "../../domain-types/connections";
 
 interface Props {
   value?: ConnectionGrant[];
   targetType?: ConnectionTarget;
   targetId?: string;
   disabled?: boolean;
+  mailOnly?: boolean;
   onChange: (grants: ConnectionGrant[]) => void;
 }
 
@@ -20,10 +22,11 @@ export function ConnectionGrantField(props: Props) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const connections = useQuery({ queryKey: ["connections", "list"], queryFn: listConnections });
+  const records = (connections.data?.connections ?? []).filter(record => !props.mailOnly || mailProviderName(record.provider));
   // Nothing to grant until the person connects a service in Settings. A failed
   // load still shows the field, so its body can say the list did not load; a
   // draft that already holds grants stays visible so they can be removed.
-  const nothingToGrant = connections.isPending || (connections.isSuccess && !connections.data.connections.length);
+  const nothingToGrant = connections.isPending || (connections.isSuccess && !records.length);
   if (nothingToGrant && !props.value?.length) return null;
   return <details className="connection-grants" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>
@@ -34,19 +37,21 @@ export function ConnectionGrantField(props: Props) {
       : t(props.targetId && props.value === undefined ? "connections.review_access" : "connections.none_selected")}</span>
       <ChevronDownIcon size={ICON.sm} className="connection-grants-chevron" aria-hidden="true" />
     </summary>
-    {expanded && <ConnectionGrantContent {...props} />}
+    {expanded && <ConnectionGrantContent {...props} records={records}
+      connectionsPending={connections.isPending} connectionsFailed={connections.isError} />}
   </details>;
 }
 
-function ConnectionGrantContent({ value, targetType = "thread", targetId, disabled, onChange }: Props) {
+function ConnectionGrantContent({ value, targetType = "thread", targetId, disabled, onChange, records,
+  connectionsPending, connectionsFailed }: Props & {
+  records: ServiceConnection[]; connectionsPending: boolean; connectionsFailed: boolean;
+}) {
   const { t } = useTranslation();
-  const connections = useQuery({ queryKey: ["connections", "list"], queryFn: listConnections });
   const saved = useQuery({ queryKey: ["connections", "grants", targetType, targetId],
     queryFn: () => getConnectionGrants(targetType, targetId!), enabled: Boolean(targetId) });
   const selected = value ?? saved.data?.grants ?? [];
   const readonly = disabled || (Boolean(targetId) && (saved.isPending || Boolean(saved.error)))
     || saved.data?.readOnly || (saved.data?.targetType === "task" && targetType === "thread");
-  const records = connections.data?.connections ?? [];
   const update = (connectionId: string, patch: Partial<ConnectionGrant> | null) => {
     if (readonly) return;
     const others = selected.filter(grant => grant.connectionId !== connectionId);
@@ -57,52 +62,69 @@ function ConnectionGrantContent({ value, targetType = "thread", targetId, disabl
       <p className="connections-hint">{t("connections.grant_hint")}</p>
       {saved.data?.readOnly && <p>{t("connections.inherited")}</p>}
       {saved.data?.targetType === "task" && targetType === "thread" && <p>{t("connections.task_managed")}</p>}
-      {(connections.isPending || (targetId && saved.isPending)) && <p role="status">{t("connections.loading")}</p>}
-      {(connections.error || saved.error) && <p role="alert">{t("connections.load_failed")}</p>}
-      {selected.filter(grant => !records.some(c => c.id === grant.connectionId)).map(grant => <p key={grant.connectionId} role="alert">{t("connections.missing")}
+      {(connectionsPending || (targetId && saved.isPending)) && <p role="status">{t("connections.loading")}</p>}
+      {(connectionsFailed || saved.error) && <p role="alert">{t("connections.load_failed")}</p>}
+      {!connectionsPending && !connectionsFailed && selected.filter(grant => !records.some(c => c.id === grant.connectionId)).map(grant => <p key={grant.connectionId} role="alert">{t("connections.missing")}
         <Button type="button" variant="ghost" disabled={readonly} onClick={() => update(grant.connectionId, null)}>{t("connections.remove")}</Button>
       </p>)}
       {records.map(connection => {
         const grant = selected.find(item => item.connectionId === connection.id);
+        const mailName = mailProviderName(connection.provider);
         return <div className="connection-grant" key={connection.id} data-selected={Boolean(grant) || undefined}>
           <label className="connection-choice connection-account"><Checkbox checked={Boolean(grant)} disabled={readonly || connection.status !== "connected"}
-            onCheckedChange={checked => update(connection.id, checked ? { actions: connection.actions } : null)} />
+            onCheckedChange={checked => update(connection.id, checked ? { actions: mailName ? [] : connection.actions } : null)} />
             {connection.provider === "github" && <GithubMark size={ICON.lg} className="connection-account-mark" />}
-            <span className="connection-account-copy"><span>{connection.label}</span><span className="connection-account-identity">{connection.identity}</span></span>
+            {mailName && <AdminInbox size={ICON.lg} className="connection-account-mark" aria-hidden="true" />}
+            <span className="connection-account-copy"><span>{mailName ? `${mailName} · ${connection.label}` : connection.label}</span>
+              {(!mailName || connection.identity !== connection.label) && <span className="connection-account-identity">{connection.identity}</span>}
+              {connection.tenantLabel && <span className="connection-account-identity">{t("connections.organization", { tenant: connection.tenantLabel })}</span>}
+            </span>
           </label>
-          {connection.status !== "connected" && <p role="alert">{t("connections.status.reconnect_required")}</p>}
-          {grant && <GrantOptions connection={connection} grant={grant} disabled={Boolean(readonly)}
-            onChange={patch => update(connection.id, patch)} expanded />}
+          {connection.status !== "connected" && <p role="alert">{t("connections.status.reconnect_required")}
+            {grant && <Button type="button" variant="ghost" disabled={readonly} onClick={() => update(connection.id, null)}>{t("connections.remove")}</Button>}
+          </p>}
+          {grant && connection.status === "connected" && <GrantOptions connection={connection} grant={grant} disabled={Boolean(readonly)}
+            onChange={patch => update(connection.id, patch)} />}
         </div>;
       })}
       <a href="/settings/connections" target="_blank" rel="noopener noreferrer">{t("connections.connect_new_tab")}</a>
   </div>;
 }
 
-function GrantOptions({ connection, grant, onChange, disabled, expanded }: {
-  connection: ServiceConnection; grant: ConnectionGrant; onChange: (patch: Partial<ConnectionGrant>) => void; disabled: boolean; expanded: boolean;
+function GrantOptions({ connection, grant, onChange, disabled }: {
+  connection: ServiceConnection; grant: ConnectionGrant; onChange: (patch: Partial<ConnectionGrant>) => void; disabled: boolean;
 }) {
   const { t } = useTranslation();
   const resources = useInfiniteQuery({ queryKey: ["connections", "resources", connection.id],
     queryFn: ({ pageParam }) => connectionResources(connection.id, pageParam), initialPageParam: "",
-    getNextPageParam: page => page.nextCursor ?? undefined, enabled: expanded && connection.status === "connected" });
+    getNextPageParam: page => page.nextCursor ?? undefined });
   const items = [...new Map((resources.data?.pages.flatMap(page => page.resources) ?? []).map(r => [r.id, r])).values()];
   const toggle = (values: string[], id: string) => values.includes(id) ? values.filter(v => v !== id) : [...values, id];
+  const isMail = Boolean(mailProviderName(connection.provider));
+  const listAction = `${connection.provider}.list_messages`;
+  const bodyAction = `${connection.provider}.get_message`;
+  const resourceName = (id: string, name: string) => isMail && id === "inbox" ? t("connections.inbox") : name;
+  const toggleAction = (action: string) => {
+    const actions = toggle(grant.actions, action);
+    onChange({ actions: isMail && !actions.includes(listAction) ? actions.filter(value => value !== bodyAction) : actions });
+  };
   return <div className="connection-grant-options">
+    {isMail && <p className="connections-hint">{t("connections.mail_shared_with_agent")}</p>}
     <fieldset disabled={disabled}><legend>{t("connections.resources")}</legend>
       {resources.isPending && <p role="status">{t("connections.loading")}</p>}
       {resources.error && <p role="alert">{t("connections.resources_failed")} <Button type="button" variant="outline" onClick={() => void resources.refetch()}>{t("connections.retry")}</Button></p>}
       {!resources.isPending && !resources.error && !items.length && <p>{t("connections.no_resources")}</p>}
       {grant.resources.filter(id => !items.some(item => item.id === id)).map(id => <label className="connection-choice" key={id}>
-        <Checkbox checked disabled={disabled} onCheckedChange={() => onChange({ resources: toggle(grant.resources, id) })} />{id}
+        <Checkbox checked disabled={disabled} onCheckedChange={() => onChange({ resources: toggle(grant.resources, id) })} />{resourceName(id, id)}
       </label>)}
       {items.map(item => <label className="connection-choice" key={item.id}><Checkbox checked={grant.resources.includes(item.id)} disabled={disabled}
-        onCheckedChange={() => onChange({ resources: toggle(grant.resources, item.id) })} />{item.name}</label>)}
+        onCheckedChange={() => onChange({ resources: toggle(grant.resources, item.id) })} />{resourceName(item.id, item.name)}</label>)}
       {resources.hasNextPage && <Button type="button" variant="ghost" disabled={resources.isFetchingNextPage} onClick={() => void resources.fetchNextPage()}>{t("connections.load_more")}</Button>}
     </fieldset>
     <fieldset disabled={disabled}><legend>{t("connections.actions")}</legend>
-      {connection.actions.map(action => <label className="connection-choice" key={action}><Checkbox checked={grant.actions.includes(action)} disabled={disabled}
-        onCheckedChange={() => onChange({ actions: toggle(grant.actions, action) })} />{t(`connections.action.${action.replaceAll(".", "_")}`)}</label>)}
+      {connection.actions.map(action => <label className="connection-choice" key={action}><Checkbox checked={grant.actions.includes(action)}
+        disabled={disabled || (isMail && action === bodyAction && !grant.actions.includes(listAction))}
+        onCheckedChange={() => toggleAction(action)} />{t(`connections.action.${action.replaceAll(".", "_")}`)}</label>)}
     </fieldset>
     {(!grant.resources.length || !grant.actions.length) && <p role="alert">{t("connections.selection_required")}</p>}
   </div>;

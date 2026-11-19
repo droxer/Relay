@@ -1,10 +1,10 @@
 # Connections
 
-Status: design reference with the core authentication and work-access flow
-implemented for GitHub only. Additional providers are deferred. [Connections setup](../guides/connections.md) documents the actual provider
-scopes, supported runtimes, deployment requirements, and implementation limits.
-Native provider-event subscriptions, provider-side revocation jobs, and the
-remaining management extensions below remain proposed.
+Status: GitHub, [Gmail and Outlook](#gmail-and-outlook) are available when their
+provider OAuth applications are configured. Native provider-event
+subscriptions, provider-side revocation jobs, and management extensions remain
+proposed. [Connections setup](../guides/connections.md) documents the shipped
+provider, runtime, and deployment contract.
 
 ## Outcome
 
@@ -293,8 +293,8 @@ return re-fetches authoritative status rather than trusting a query-string flag.
 2. Implement and verify GitHub authentication and bounded read actions through
    Thread, Task, and scheduled Automation. Preserve anonymous public issue import.
    Do not reactivate the old Account-scoped route merely because code exists.
-3. Keep the current release limited to GitHub. Additional provider adapters,
-   resource selectors, and consent copy are deferred until explicitly requested.
+3. Serve [Gmail and Outlook](#gmail-and-outlook) with independent deployment
+   availability and a shared read-only Inbox contract.
 4. Add service-event subscriptions using the same Connection/Grant model after
    the scheduled/manual path works. This is a separate capability of a provider,
    not a prerequisite for using that provider in Automations.
@@ -308,6 +308,123 @@ accurate until the new behavior is actually enabled. Roll out backend/schema,
 then daemon adapters, then UI availability; capability checks guard older clients.
 Rollback disables new authorizations and dispatch access while preserving history
 and allowing disconnect; it must not restore revoked credentials.
+
+## Gmail and Outlook
+
+The first release lets a User give work read-only access to the Inbox of a
+selected mailbox. A Task can summarize recent unread mail, and a scheduled
+Automation can produce a morning digest. Reply, send, mailbox edits, attachments,
+other folders or labels, shared mailboxes, and incoming-mail triggers are outside
+this release.
+
+### Settings and work selection
+
+- Add Gmail and Outlook rows under **Settings → Connections → Available
+  services**. Each row says “Read messages from your Inbox” and shows **Connect**
+  when enabled. An unconfigured service has the existing deployment-unavailable
+  state. **Your connections** shows the provider, mailbox address or sign-in
+  identifier, and status. Show tenant context for work/school Outlook identities
+  when available. Support adding another mailbox and reconnecting an existing one.
+- Before redirecting, explain that Google or Microsoft grants mailbox-wide read
+  permission and Relay limits work access to the selected Inbox. After the
+  callback, refresh the list and show the verified mailbox or the reason the
+  connection failed. Distinguish cancelled consent, an organization blocking
+  consent, and a Microsoft identity without a supported mailbox.
+- In the existing Task and Automation picker, select the connected mailbox,
+  **Inbox**, and the permitted actions **List messages** and **Read message
+  bodies**. Leave mail actions unchecked until the User selects them. Enable
+  **Read message bodies** only with **List messages**, and enforce that dependency
+  in Grant validation. The saved summary identifies the mailbox, Inbox, and
+  selected actions. Standalone Threads use the existing API Grant flow. Match
+  the existing settings rows and picker controls, with English, Simplified
+  Chinese, and Traditional Chinese copy.
+- Reuse the disconnect impact flow. Disconnect blocks future tool calls and
+  pauses dependent active Automations. Reconnecting the same identity restores
+  the Connection when valid. The User explicitly resumes a paused Automation.
+
+### Authorization and provider mapping
+
+| Provider | Consent and identity | Inbox enforcement |
+| --- | --- | --- |
+| `gmail` | Personal Gmail and Google Workspace Gmail. Request `openid email` and `https://www.googleapis.com/auth/gmail.readonly` with `access_type=offline`. Verify the Google ID token and use `sub` for identity matching. | List messages for `users/me` with `labelIds=INBOX`. Verify the fetched message still carries `INBOX` before returning metadata or text. Apply checks to individual messages even when Gmail groups them in the same thread. |
+| `outlook` | Outlook.com and Microsoft 365 work/school mailboxes on Microsoft Graph's global endpoint. Register for both personal and organizational accounts. Request `openid profile offline_access` and delegated `https://graph.microsoft.com/Mail.Read`. Verify the Microsoft ID token and use `tid` and `oid` together. | List and read through `/me/mailFolders/inbox/messages`. Verify `parentFolderId` against the resolved Inbox folder ID before returning a message. Use the same Graph ID format when listing, reading, and comparing IDs. |
+
+Verify the mailbox is accessible before saving. Gmail can use `users/me/profile`
+for the displayed address. Outlook can display `preferred_username` as a
+sign-in identifier when no verified mailbox address is available. Verify OIDC
+signatures, issuer, audience, expiry, and nonce. Reuse session-bound, single-use
+state and S256 PKCE. Reconnect matches stable provider identity and keeps the
+existing Connection ID. Email addresses are display values and may change.
+Require durable refresh access before marking the mailbox connected. Preserve a
+still-valid refresh token when the same verified identity reauthorizes and the
+provider omits a replacement. Validate provider-specific granted scopes at
+authorization and any scope changes reported during refresh. Store rotated
+tokens atomically under the existing Connection lock. Map confirmed revocation
+to **Reconnect needed** and distinguish it from throttling, provider outages,
+mailbox errors, and organization policy errors.
+[Google OAuth](https://developers.google.com/identity/protocols/oauth2/web-server),
+[Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect),
+[Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes),
+[Microsoft account types](https://learn.microsoft.com/en-us/entra/identity-platform/v2-supported-account-types),
+[Microsoft authorization flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow),
+[Microsoft identity claims](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference),
+[Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread).
+
+### Work tools and data access
+
+The resources endpoint returns one resource, `inbox`, per mail Connection. Use
+the existing Grant shape and `/api/v1/connection-tools` broker. Expose the input
+contract for the granted actions in the run's tool description.
+
+| Action | Input | Result |
+| --- | --- | --- |
+| `gmail.list_messages`, `outlook.list_messages` | Optional `unreadOnly`, `receivedAfter` (RFC 3339), `limit` (1–25, default 20), and `cursor` | Message references, sender, subject, received time, unread status, and optional next cursor. Gmail hydrates the listed IDs with bounded metadata reads. |
+| `gmail.get_message`, `outlook.get_message` | One `messageId` from the same Connection's list | The same metadata and normalized plain-text body, capped at 16 KiB of UTF-8 with a truncation flag. |
+
+Generate provider queries from typed filters. Keep Gmail pagination tokens and
+Graph next links inside opaque, expiring Relay cursors bound to the run,
+Connection, resource, action, and filters. Accept Graph next links only from the
+provider and within the expected HTTPS host and Inbox collection path. Bind
+message references to the Connection and recheck current Inbox membership at
+read time, including after a message is moved. Show moved or unavailable messages
+as outside the current selection. Reuse the broker's checks for owner, lease,
+snapshot, and current Grant on each request.
+[Gmail list](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list),
+[Gmail get](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/get),
+[Graph list](https://learn.microsoft.com/en-us/graph/api/user-list-messages?view=graph-rest-1.0),
+[Graph get](https://learn.microsoft.com/en-us/graph/api/message-get?view=graph-rest-1.0).
+
+Normalize message content as untrusted data. Strip markup, skip attachment parts,
+and avoid fetching remote resources. Keep mail content out of Connection events,
+diagnostics, and analytics. Before granting access, explain that the selected
+work's Agent runtime and model provider receive the returned data and that Agent
+output can quote it in the work transcript. Confirm data handling and retention
+for each runtime enabled for mail, including local logs and transcripts.
+
+### Enablement and acceptance
+
+Reuse the existing Connection tables, command snapshot, and daemon transport.
+Add `RELAY_CONNECTIONS_GMAIL_*` and `RELAY_CONNECTIONS_OUTLOOK_*` client settings
+using the existing `CLIENT_ID`, `CLIENT_SECRET`, and `CALLBACK_URL` convention.
+Register each provider's `/api/v1/connections/callback/{provider}` callback and
+enable each provider independently after its deployment checks pass.
+
+Outlook can enter a pilot independently. For Gmail, `gmail.readonly` is a
+restricted scope. Before enabling a public deployment, complete Google's
+restricted-scope verification and the required security assessment for server
+handling. Validate the mailbox-to-Agent data flow against Google's Limited Use
+requirements, including permitted transfers and use of data by model providers.
+[Restricted scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification),
+[Google Workspace user data policy](https://developers.google.com/workspace/workspace-api-user-data-developer-policy),
+[Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy).
+
+Acceptance requires a real-account connection and Inbox read for each supported
+account class, with a scheduled run after token expiry. Verify reconnect rejects
+another identity or tenant, moved and cross-mailbox messages are denied, a Task
+cannot call actions it lacks, and disconnect stops live calls and pauses the next
+Automation occurrence. Verify cancellation, missing mailbox, tenant refusal,
+transient provider failure, and unchanged GitHub issue access through the same
+Settings and work flows.
 
 ## Acceptance evidence required for implementation
 

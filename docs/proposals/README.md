@@ -10,7 +10,7 @@ for implemented contracts.
 | [Daemon reliability and runtime scaling](daemon-runtime-scaling.md) | Remaining lifecycle extraction, persistence offloading, production telemetry, and scale-validation gates |
 | [Agent runtime](agent-first-runtime-design.md) | Placement reconciliation, artifact transfer, and compatibility retirement |
 | [Managed computer provisioning](managed-node-provisioning.md) | Remaining provisioning workflow and provider design; the local-process and Fly Machines providers already exist |
-| [Connections](connections-design.md) | Providers beyond GitHub, native event subscriptions, and management extensions |
+| [Connections](connections-design.md) | Native event subscriptions and management extensions |
 | [Project-owned tasks](project-task-ownership-design.md) | Backend-wide required ownership, legacy migration, and deferred computer setup |
 | [Project Team workflows](project-team-workflows.md) | Owner-approved sequential steps, Project isolation, per-step approval, execution snapshots and editor |
 
