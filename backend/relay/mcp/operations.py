@@ -2,7 +2,7 @@
 
 from typing import Any
 from ..core.computer_identity import computer_id
-from ..projects.manager import ManagerError, ensure_manager_thread
+from ..projects.manager import ManagerError
 from ..projects.manager_reads import read_manager_tool
 from ..projects.manager_proposals import stage_proposal
 from ..projects.runtime import project_work_error
@@ -51,15 +51,10 @@ def invoke(ctx: Any, grant: dict[str, Any], project_id: str, tool: str, argument
                 raise ManagerError(code)
             if not project.get("managerAgentId"):
                 raise ManagerError("manager_unconfigured")
-            command: dict[str, Any]
-            if grant.get("commandId"):
-                active_command = ctx.daemon_store.get_command(grant["commandId"])
-                if not active_command:
-                    raise McpError(401, "This Relay run has ended.")
-                command = {**active_command["command"], "mcpTokenId": grant["id"]}
-            else:
-                project, thread_id = ensure_manager_thread(ctx, project)
-                command = {"sessionId": thread_id, "runId": None, "mcpTokenId": grant["id"]}
+            active_command = ctx.daemon_store.get_command(grant["commandId"])
+            if not active_command:
+                raise McpError(401, "This Relay run has ended.")
+            command = {**active_command["command"], "mcpTokenId": grant["id"]}
             return {"proposal": stage_proposal(ctx, project, command, arguments.get("operations"))}
         return read_manager_tool(ctx, project, tool, arguments)
     except ManagerError as error:

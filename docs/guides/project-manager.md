@@ -19,21 +19,19 @@ Automations it runs in the Project. The Dashboard names it as one line above
 the Project's numbers (`ProjectManagerLine`) — the Agent, its role, whether it
 can work, and a way to the Agents tab where the role changes hands — drawn from
 the project and agents the page already loaded. For day-to-day management the
-owner of an active Project whose lead is enabled also gets **Discuss** there: it opens the
-Project's lead Thread (`useProjectLeadDiscussion` →
-`POST /projects/{id}/manager/conversation`), and its menu offers everyday
+owner of an active Project whose lead is enabled also gets **Discuss** there.
+Each click starts a new Project Conversation (`useProjectLeadDiscussion` →
+`POST /projects/{id}/manager/conversation`). The menu offers everyday
 topics (`web/src/lib/projectLeadTopics.ts`: project update over the last seven
-days, what needs me, next tasks, plan work) that open the same Thread with the
-question drafted in the composer. A topic never sends anything and never
-overwrites a draft already there. There is no manager chat drawer, dedicated
-message route or alternate Relay persona.
+days, what needs me, next tasks, plan work) that open a new Thread with an
+unsent question drafted in its composer.
 
-The lead Thread is started on first use and reused afterwards. It is an
-ordinary Project Conversation that no Agent owns: each message goes to whoever
-it addresses, and the composer defaults to the current holder. Reassigning the
-lead changes its Project assignment. It writes nothing to any Thread, and the former
-holder stays an ordinary Agent that can still be addressed, without the
-manager tools.
+Each discussion appears in Threads, where the owner can reopen it and continue
+the conversation. A new discussion starts with the current lead as its first
+participant, and the dashboard opens its composer with that Agent selected.
+Each message goes to whoever it addresses. After a handover, new discussions
+start with the new lead and earlier Threads retain their history. The former
+holder can still be addressed as an ordinary Agent.
 
 The role reads fresh Project records, explains progress and the backlog, and
 manages Project Tasks and Automations through Relay MCP. It may also stage batch
@@ -69,9 +67,9 @@ Holding the role never stops an Agent from running. On a Computer that does not
 advertise `project-manager-mcp`, the holder runs without the tools and the
 manager view reports `project_manager_update_required` to the owner.
 
-`GET /projects/{id}/manager` only reads. It reports the holder, candidates,
-availability reason, the manager Thread (absent if it was deleted; opening the
-conversation starts a new one) and proposals.
+`GET /projects/{id}/manager` reports the holder, candidates, availability reason
+and proposals. Its historical Thread ID refers to the Project's original shared
+lead discussion when that record exists.
 
 ## Local Agent Runtimes
 

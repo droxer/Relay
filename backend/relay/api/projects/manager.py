@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 from fastapi import APIRouter, HTTPException, Request
-from ...projects.manager import ManagerError, ensure_manager_thread, manager_candidates, manager_role_patch, manager_view
+from ...projects.manager import ManagerError, create_manager_conversation, manager_candidates, manager_role_patch, manager_view
 from ...projects.manager_reads import manager_overview, read_manager_tool
 from ...projects.manager_proposals import apply_proposal, stage_proposal
 from ...core.project_roles import command_project_access
@@ -64,17 +64,17 @@ def overview(project_id: str, request: Request, ctx: AppContextDep) -> dict[str,
 
 
 @router.post("/projects/{project_id}/manager/conversation")
-def manager_conversation(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    """Open (or start) the Project's manager Thread. It never dispatches a run:
-    the owner talks to the role holder through the ordinary Thread composer."""
-    project = _owned(ctx, request, project_id)
-    if not project.get("managerAgentId") and not project.get("managerThreadId"):
-        raise HTTPException(409, "manager_unconfigured")
+def manager_conversation(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, str]:
+    """Start a new Thread for the owner's discussion with the Project Lead."""
+    _owned(ctx, request, project_id)
     try:
-        _, thread_id = ensure_manager_thread(ctx, project)
+        return create_manager_conversation(ctx, project_id)
     except ManagerError as error:
         raise HTTPException(error.status, error.code) from error
-    return {"threadId": thread_id}
+    except KeyError as error:
+        if error.args != (project_id,):
+            raise
+        raise HTTPException(404, "project_not_found") from error
 
 
 @router.post("/projects/{project_id}/manager/proposals/{proposal_id}/apply")

@@ -303,8 +303,8 @@ Project Tasks and Automations through Relay MCP. It may also stage batch Task
 proposals for owner review. Other enabled Project Agents have read-only access
 to Project records and work. Agents in a standalone run may manage only standalone Tasks and Automations
 on that run's Computer. Project runs may access only their admitted Project. The lead does not gain acceptance or execution authority.
-The dashboard names it; there is no separate
-chat to open there. Historical `managerAgentId` and member `projectManager`
+The dashboard names it and lets the owner start a new Project Conversation
+with it each time they choose Discuss. Historical `managerAgentId` and member `projectManager`
 wire fields are derived aliases of the lead for client compatibility.
 _Avoid_: Project Manager, Project Owner, global Agent Role
 

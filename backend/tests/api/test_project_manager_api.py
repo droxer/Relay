@@ -80,7 +80,7 @@ def test_manager_read_never_assigns_the_role_or_writes(setup_env):
     assert client.post(f"{url}/conversation").status_code == 409
 
 
-def test_manager_conversation_is_an_ordinary_thread_and_is_reused(managed_env):
+def test_each_manager_discussion_is_a_separate_project_thread(managed_env):
     app, client, node, project, planner, _ = managed_env
     result, command = _start(managed_env)
     assert command["state"]["project_manager"]["projectId"] == project["id"]
@@ -89,7 +89,20 @@ def test_manager_conversation_is_an_ordinary_thread_and_is_reused(managed_env):
     _complete(app, node, command, result["threadId"])
     transcript = client.get(f"/api/v1/threads/{result['threadId']}").json()
     assert any(event.get("text") == "What should we do next?" for event in transcript["events"])
-    assert client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()["threadId"] == result["threadId"]
+    response = client.post(f"/api/v1/projects/{project['id']}/manager/conversation")
+    assert response.status_code == 200, response.text
+    new_thread_id = response.json()["threadId"]
+    assert new_thread_id != result["threadId"]
+    assert response.json()["agentId"] == planner["id"]
+    new_thread = client.get(f"/api/v1/threads/{new_thread_id}").json()
+    assert new_thread["projectId"] == project["id"]
+    assert new_thread["participantAgentIds"] == [planner["id"]]
+    assert new_thread["title"] == f"{project['name']} · Project Lead"
+    assert new_thread["taskGoal"] == ""
+    assert not new_thread["agentRuns"]
+    assert not any(event["type"] == "user.message" for event in new_thread["events"])
+    assert {session["id"] for session in app.state.session_store.list_sessions()} == {result["threadId"], new_thread_id}
+    assert app.state.project_store.get_project(project["id"])["version"] == project["version"]
     second = _say(client, result["threadId"], "And now?", planner["id"], "manager-second")
     assert second.status_code == 202, second.text
     assert _take_command(app, node)["state"]["project_manager"]["agentId"] == planner["id"]
@@ -224,7 +237,9 @@ def test_existing_foreign_task_and_thread_are_inaccessible(managed_env):
     assert _tool(managed_env, command, 'thread', {'threadId':'missing'}).status_code == 404
     thread = _tool(managed_env, command, 'thread', {'threadId':started['threadId']})
     assert thread.status_code == 200
-    assert any(message.get('text') == 'What should we do next?' for message in thread.json()['messages'])
+    assert [message['text'] for message in thread.json()['messages'] if message['kind'] == 'user'] == [
+        'What should we do next?',
+    ]
     assert _tool(managed_env, command, 'threads').status_code == 200
 
 
@@ -246,15 +261,22 @@ def test_cycle_apply_rolls_back_metadata_and_rejects_dismissed_proposal(managed_
     assert client.post(f'{url}/apply',json={'idempotencyKey':'dismissed'}).status_code == 409
 
 
-def test_canonical_thread_creation_and_application_are_serialized(managed_env):
+def test_concurrent_manager_discussions_each_create_a_thread(managed_env):
     from concurrent.futures import ThreadPoolExecutor
-    from relay.projects.manager import ensure_manager_thread
+
     app, client, _, project, *_ = managed_env
-    project = client.get(f"/api/v1/projects/{project['id']}/manager").json()['project']
+    url = f"/api/v1/projects/{project['id']}/manager/conversation"
     with ThreadPoolExecutor(max_workers=4) as pool:
-        threads = list(pool.map(lambda _: ensure_manager_thread(app.state.context, project)[1], range(4)))
-    assert len(set(threads)) == 1
-    assert len(app.state.session_store.list_sessions()) == 1
+        responses = list(pool.map(lambda _: client.post(url), range(4)))
+    assert all(response.status_code == 200 for response in responses)
+    assert len({response.json()["threadId"] for response in responses}) == 4
+    assert len(app.state.session_store.list_sessions()) == 4
+
+
+def test_concurrent_manager_proposal_applications_are_serialized(managed_env):
+    from concurrent.futures import ThreadPoolExecutor
+
+    _, client, _, project, *_ = managed_env
     _, command = _start(managed_env)
     staged = _tool(managed_env,command,'propose',{'operations':[{'kind':'create','fields':{'title':'Exactly once'}}]}).json()['proposal']
     url=f"/api/v1/projects/{project['id']}/manager/proposals/{staged['id']}/apply"
@@ -275,7 +297,8 @@ def test_archived_history_remains_readable_and_new_work_is_refused(managed_env):
     url=f"/api/v1/projects/{project['id']}/manager"
     assert client.get(url).status_code == 200
     assert client.get(f'{url}/overview').status_code == 200
-    assert client.post(f'{url}/conversation').json()['threadId'] == started['threadId']
+    assert client.post(f'{url}/conversation').status_code == 409
+    assert client.get(f"/api/v1/threads/{started['threadId']}").status_code == 200
     assert _say(client, started['threadId'], 'More work', project['managerAgentId'], 'archived').status_code in (404, 409)
 
 
@@ -390,7 +413,6 @@ def test_open_manager_uses_a_normal_agent_thread_without_dispatch(managed_env):
     assert session.get('ownerAgentId') is None
     assert session['participantAgentIds'] == [planner['id']]
     assert not session['agentRuns']
-    assert client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()['threadId'] == thread_id
     _ready(app,node)
     message=client.post(f'/api/v1/threads/{thread_id}/messages',json={
         'text':'What changed in the project?','intent':'accomplish','idempotencyKey':'normal-manager-message',
@@ -428,7 +450,12 @@ def test_handover_keeps_the_thread_and_roles_and_the_former_manager_stays_normal
     command = _take_command(app,node)
     assert command['logicalAgentId'] == first['id']
     assert 'project_manager' not in command['state']
-    assert client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()['threadId'] == thread_id
+    response = client.post(f"/api/v1/projects/{project['id']}/manager/conversation")
+    assert response.status_code == 200, response.text
+    assert response.json()['threadId'] != thread_id
+    assert response.json()['agentId'] == second['id']
+    new_thread = client.get(f"/api/v1/threads/{response.json()['threadId']}").json()
+    assert new_thread['participantAgentIds'] == [second['id']]
 
 
 def test_manager_role_grants_run_context_outside_canonical_thread(managed_env):

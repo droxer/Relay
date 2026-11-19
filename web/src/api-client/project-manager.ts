@@ -8,8 +8,8 @@ export function getProjectManager(id: string, signal?: AbortSignal): Promise<Pro
 export function setProjectManager(id: string, agentId: string, expectedVersion: number): Promise<ProjectManagerResponse> {
   return apiJson(path(id), { method: "PUT", body: { agentId, expectedVersion } });
 }
-/** The Project's lead Thread, started on first use; it never dispatches a run. */
-export function openProjectLeadConversation(id: string): Promise<{ threadId: string }> {
+/** Starts a new Project Conversation with the current lead as its first Agent. */
+export function openProjectLeadConversation(id: string): Promise<{ threadId: string; agentId: string }> {
   return apiJson(`${path(id)}/conversation`, { method: "POST", body: {} });
 }
 export function applyManagerProposal(id: string, proposalId: string, body: ApplyManagerInput): Promise<AppliedManagerProposal> {

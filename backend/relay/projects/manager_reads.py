@@ -157,8 +157,8 @@ def read_manager_tool(ctx: Any, project: dict[str, Any], tool: str, arguments: d
 def _thread_messages(session: dict[str, Any], project: dict[str, Any]) -> list[dict[str, Any]]:
     """Conversation facts come from events, not a nonexistent messages field."""
     messages = []
-    if session["id"] != project.get("managerThreadId"):
-        messages.append({"id": f"{session['id']}:goal", "kind": "user", "timestamp": session["createdAt"], "text": session.get("taskGoal", "")})
+    if session["id"] != project.get("managerThreadId") and (goal := session.get("taskGoal")):
+        messages.append({"id": f"{session['id']}:goal", "kind": "user", "timestamp": session["createdAt"], "text": goal})
     output: dict[str, list[str]] = {}
     complete = set()
     for event in session.get("events", []):

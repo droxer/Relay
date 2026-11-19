@@ -1,4 +1,4 @@
-"""Project Lead management and its ordinary Project conversation.
+"""Project Lead management and ordinary Project conversations.
 
 Legacy manager API names remain compatible; assigning through them changes the
 Project Lead. The lead keeps its Agent identity and execution role.
@@ -11,7 +11,6 @@ from ..core.project_roles import manager_roster
 from ..persistence.events import relay_event
 from ..agents.routing import AgentRoutingError, resolve_agent_assignments
 from ..agents.location import agent_placed_on_computer
-from ..persistence.resource_lock import resource_transaction
 from .runtime import project_work_error
 
 PROJECT_MEMBER_MAX_COUNT = 32
@@ -83,7 +82,7 @@ def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
             header = ctx.session_store.get_session_header(thread_id)
             historical_ids = {run["logicalAgentId"] for run in header.get("agentRuns", []) if run.get("logicalAgentId")}
         except KeyError:
-            thread_id = None  # Deleted; opening the conversation starts a new one.
+            thread_id = None
     candidates = manager_candidates(ctx, project)
     names = {a["id"]: a["displayName"] for a in candidates}
     for agent_id in historical_ids - names.keys():
@@ -104,31 +103,20 @@ def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
                   if team.get("projectId", project["id"]) == project["id"] and team.get("computerId") == project["computerId"] and team.get("enabled", True)]}
 
 
-def ensure_manager_thread(ctx: Any, project: dict[str, Any]) -> tuple[dict[str, Any], str]:
-    """The Project's manager conversation, started on first use.
-
-    It is an ordinary Project Thread: no Agent owns it, and the current role
-    holder is simply its first participant. Who answers a later message is the
-    message's own address, as in any Project Thread.
-    """
-    with resource_transaction(ctx.project_store.engine, f"project-manager:{project['id']}"):
-        project = ctx.project_store.get_project(project["id"])
-        thread_id = project.get("managerThreadId")
-        if thread_id:
-            try:
-                ctx.session_store.get_session_header(thread_id)
-                return project, thread_id
-            except KeyError:
-                pass  # A deleted conversation is replaced below.
+def create_manager_conversation(ctx: Any, project_id: str) -> dict[str, str]:
+    """Start an independent Project Conversation with the current lead."""
+    with ctx.project_store.manager_transaction(project_id) as project:
         if code := project_work_error(project):
             raise ManagerError(code)
+        agent_id = project.get("managerAgentId")
+        if not agent_id:
+            raise ManagerError("manager_unconfigured")
         session = ctx.session_store.create_session({
             "workspacePath": "", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
             "ownerUserId": project["ownerUserId"], "computerId": project["computerId"], "projectId": project["id"],
-            "taskGoal": f"{project['name']} · Project Lead", "participants": ["human"],
+            "title": f"{project['name']} · Project Lead", "taskGoal": "", "participants": ["human"],
         })
-        agent_id = project.get("managerAgentId")
-        if agent_id:
-            ctx.session_store.append_event(session["id"], relay_event("thread.participants_joined", session["id"], {"agentIds": [agent_id], "actorUserId": project["ownerUserId"]}))
-        project = ctx.project_store.mutate_manager(project["id"], lambda _latest: {"managerThreadId": session["id"]})
-        return project, session["id"]
+        ctx.session_store.append_event(session["id"], relay_event("thread.participants_joined", session["id"], {
+            "agentIds": [agent_id], "actorUserId": project["ownerUserId"],
+        }))
+        return {"threadId": session["id"], "agentId": agent_id}
