@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from .models import AGENT_NAMES
+
 LIVE_NODE_STATUSES = frozenset({"ready", "busy", "running"})
 
 
@@ -36,4 +38,4 @@ def ready_runtimes(nodes: Iterable[Mapping[str, Any]]) -> set[str]:
             kind for kind, status in (node.get("agents") or {}).items() if status == "ready"
         }
         disabled |= set(node.get("disabledAgents") or [])
-    return supported - disabled
+    return (supported - disabled).intersection(AGENT_NAMES)

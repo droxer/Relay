@@ -168,14 +168,11 @@ endpoint authenticates the daemon and checks that the digest belongs to that
 specific command.
 
 Each run gets an immutable skill view. Claude and Codex receive isolated config
-directories; Pi receives explicit `--skill` paths with discovery disabled;
-Kimi receives an isolated `--skills-dir`. Codex skill delivery is supported.
+directories. Pi receives explicit `--skill` paths with discovery disabled.
 Unassigned node-local skills remain separate inventory and are never presented
 as Relay-managed assignments.
 Local Claude and Codex runs preserve their native configuration and receive
-instruction paths in their prompt. Kimi's local permission-enabled ACP flow
-also receives individual instruction paths; its trusted and cloud flows keep
-the directory flag. OpenCode receives instruction paths in all environments.
+instruction paths in their prompt. OpenCode receives instruction paths in all environments.
 
 ## Authorization and governance boundary
 

@@ -16,6 +16,7 @@ from typing import Any
 from ..automations.model import TriggerError
 from ..automations.service import automation_triggers_enabled, routine_fields_v2
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
+from ..core.permission_requests import TASK_PERMISSION_MODES
 from ..core.task_tags import normalize_tags
 from .claims import TaskExecutionActiveError
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
@@ -47,6 +48,15 @@ def acceptance_policy_field(body: dict[str, Any]) -> Any:
     value = body.get("acceptancePolicy")
     if "acceptancePolicy" in body and value not in ACCEPTANCE_POLICIES:
         raise TaskRequestError(400, "acceptancePolicy must be human or automatic.")
+    return value
+
+
+def permission_mode_field(body: dict[str, Any]) -> str | None:
+    if "permissionMode" not in body:
+        return None
+    value = body["permissionMode"]
+    if not isinstance(value, str) or value not in TASK_PERMISSION_MODES:
+        raise TaskRequestError(400, "permissionMode must be ask or yolo.")
     return value
 
 

@@ -78,7 +78,7 @@ for name, workspace, workspace_id in (
             "workspacePath": workspace,
             "workspaceId": workspace_id,
             "sandboxMode": "none",
-            "supportedAgents": ["claude", "codex", "kimi", "pi"],
+            "supportedAgents": ["claude", "codex", "opencode", "pi"],
             "maxConcurrentRuns": 4,
             "status": "ready",
         },
@@ -99,8 +99,8 @@ existing_agents = {
 for display, kind, role, computer in (
     ("Aria", "claude", "implementer", "Ada's MacBook Pro"),
     ("Cascade", "codex", "reviewer", "Ada's MacBook Pro"),
-    ("Pixel", "kimi", "tester", "Ada's MacBook Pro"),
-    ("Kimi Ops", "kimi", "fixer", "Ada's MacBook Pro"),
+    ("Pixel", "opencode", "tester", "Ada's MacBook Pro"),
+    ("Release Ops", "pi", "fixer", "Ada's MacBook Pro"),
 ):
     if display in existing_agents:
         agents[display] = existing_agents[display]["id"]
@@ -128,7 +128,7 @@ existing_teams = {
 for name, lead, members in (
     ("Platform Guild", "Aria", ["Aria", "Cascade"]),
     ("Infra Response", "Cascade", ["Cascade", "Aria", "Pixel"]),
-    ("Growth Pod", "Pixel", ["Pixel", "Kimi Ops"]),
+    ("Growth Pod", "Pixel", ["Pixel", "Release Ops"]),
 ):
     if name in existing_teams:
         teams[name] = existing_teams[name]["id"]

@@ -173,6 +173,7 @@ class _TaskFields(RequestSchema):
     assigned_agent_id: TrimmedStr = Field(None, alias="assignedAgentId")
     assigned_team_id: TrimmedStr = Field(None, alias="assignedTeamId")
     acceptance_policy: CheckedStr = Field(None, alias="acceptancePolicy")
+    permission_mode: CheckedStr = Field(None, alias="permissionMode")
     collaboration_style: CheckedStr = Field(None, alias="collaborationStyle")
     is_routine: LenientBool = Field(None, alias="isRoutine")
     routine_triggers: LenientList = Field(None, alias="routineTriggers")

@@ -195,6 +195,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       projectId: task.projectId,
       title: task.title,
       acceptancePolicy: taskAcceptancePolicy(task),
+      permissionMode: task.permissionMode ?? "ask",
       description: task.description,
       priority: task.priority,
       tags: task.tags ?? [],
@@ -217,6 +218,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       const payload: import("../types").TaskMutationInput & { title: string } = {
         title: form.title.trim(),
         acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
+        ...(form.permissionMode !== formBaseline?.permissionMode ? { permissionMode: form.permissionMode } : {}),
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         description: form.description,
         ...(form.connectionGrants !== undefined ? { connectionGrants: form.connectionGrants } : {}),

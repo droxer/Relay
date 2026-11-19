@@ -39,6 +39,7 @@ from .requests import (
     TaskRequestReader,
     acceptance_policy_field,
     collaboration_style_field,
+    permission_mode_field,
     tags_field,
     update_task_unless_dispatching,
 )
@@ -78,6 +79,7 @@ class _Fields:
     tags: list[str] | None
     status: str | None
     acceptance_policy: Any
+    permission_mode: str | None
     collaboration_style: str | None
     unblock: bool
     unblocked_wait: dict[str, Any]
@@ -150,6 +152,7 @@ def update_task(
         **({"tags": fields.tags} if fields.tags is not None else {}),
         "status": following.status,
         "acceptancePolicy": fields.acceptance_policy,
+        **({"permissionMode": fields.permission_mode} if fields.permission_mode is not None else {}),
         "collaborationStyle": fields.collaboration_style,
         "blockerReason": fields.blocker_reason,
         **fields.unblocked_wait,
@@ -221,6 +224,7 @@ def _read_fields(current: dict[str, Any], request: TaskPatchRequest) -> _Fields:
         tags=tags_field(body),
         status=status,
         acceptance_policy=acceptance_policy,
+        permission_mode=permission_mode_field(body),
         collaboration_style=collaboration_style,
         unblock=unblock,
         unblocked_wait=_unblocked_wait(current, unblock=unblock, status=status),
@@ -349,6 +353,7 @@ def _ensure_patch_not_empty(
         and "assignedWorkflowId" not in body
         and not routine
         and fields.acceptance_policy is None
+        and fields.permission_mode is None
         and fields.collaboration_style is None
         and not move_project
         and "connectionGrants" not in body

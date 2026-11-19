@@ -109,7 +109,9 @@ function entryFor(event: RelayTaskEvent, ownerTaskId: string): TaskHistoryEntry 
          the activity's message carries the raw id — "Assigned to team
          29d9e677-…". The structured sibling renders the same fact with a
          resolved name, so the id-bearing duplicate is dropped here. */
-      if (DUPLICATE_ACTIVITY_PATTERNS.some((pattern) => pattern.test(event.activity.message))) return undefined;
+      const { message, agent } = event.activity;
+      if ((agent && message === `Assigned to ${agent}.`)
+          || DUPLICATE_ACTIVITY_PATTERNS.some((pattern) => pattern.test(message))) return undefined;
       return {
         ...base,
         kind: "activity",
@@ -129,7 +131,6 @@ function entryFor(event: RelayTaskEvent, ownerTaskId: string): TaskHistoryEntry 
 const DUPLICATE_ACTIVITY_PATTERNS = [
   /^Assigned to team .+\.$/,
   /^Assigned to logical agent .+\.$/,
-  /^Assigned to (claude|pi|codex|kimi)\.$/,
   /^Agent assignment cleared\.$/,
   /^Linked session .+\.$/,
 ];

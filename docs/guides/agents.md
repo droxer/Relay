@@ -16,7 +16,7 @@ ownership.
 user (identity and ownership)
   -> agent (product identity and policy)
     -> placement (scheduler decision)
-      -> agent runtime (Claude/Codex/Pi/Kimi capability)
+      -> agent runtime (Claude/Codex/Pi/OpenCode capability)
         -> computer (stable execution host)
           -> daemon node (replaceable runtime process)
 ```

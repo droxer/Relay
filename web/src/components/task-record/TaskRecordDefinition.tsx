@@ -55,6 +55,11 @@ export function TaskRecordDefinition({
       label: t("backlog.acceptance_policy"),
       value: t(taskAcceptancePolicy(task) === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human"),
     },
+    {
+      key: "permissions",
+      label: t("backlog.permission_mode"),
+      value: t(task.permissionMode === "yolo" ? "backlog.permission_yolo" : "backlog.permission_ask"),
+    },
   ];
   if (variant === "routine") {
     // Routine settings use the same collaboration override as tasks.

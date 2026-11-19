@@ -411,6 +411,13 @@ on one broker.
 _Avoid_: approval request, pending approval (both read as a turn decision),
 Wait
 
+**Task Permission Mode**:
+A Task setting that controls tool Permission Prompts for its Agent runs.
+`ask` uses the normal prompt flow. `yolo` automatically allows tool requests
+and records each decision in the Thread. Questions still go to a person.
+Each dispatched Agent run takes the current setting. An Automation supplies
+the setting to each new occurrence when it is created.
+
 **Task Review**:
 A view of the newest linked Thread's recorded work for one Task: the requested
 outcome, available acceptance criteria, attributed Agent reports, and exact

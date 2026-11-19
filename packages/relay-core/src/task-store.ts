@@ -119,9 +119,12 @@ export interface TaskExternalSource {
   url: string;
 }
 
+export type TaskPermissionMode = "ask" | "yolo";
+
 export interface RelayTask {
   collaborationStyle?: CollaborationStyle;
   acceptancePolicy?: "human" | "automatic";
+  permissionMode?: TaskPermissionMode;
   workflowStage?: "backlog" | "assigned" | "queued" | "running" | "review" | "done" | "cancelled";
   startedAt?: string;
   finishedAt?: string;
@@ -281,6 +284,7 @@ export type RelayTaskEvent =
       priority: TaskPriority;
       tags?: string[];
       acceptancePolicy?: "human" | "automatic";
+      permissionMode?: TaskPermissionMode;
       ownerUserId?: string;
       projectId?: string;
       computerId?: string;
@@ -311,6 +315,7 @@ export type RelayTaskEvent =
       /** Present only when changed; an empty list clears them. */
       tags?: string[];
       acceptancePolicy?: "human" | "automatic";
+      permissionMode?: TaskPermissionMode;
       assigneeUserId?: string;
       dueDate?: string;
       isRoutine?: boolean;
@@ -465,6 +470,7 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
     status: "backlog",
     workflowStage: "backlog",
     acceptancePolicy: created.acceptancePolicy ?? "automatic",
+    permissionMode: created.permissionMode ?? "ask",
     ...(created.collaborationStyle ? { collaborationStyle: created.collaborationStyle } : {}),
     isRoutine: Boolean(created.isRoutine),
     ...(created.routineTriggerKind ? { routineTriggerKind: created.routineTriggerKind } : {}),
@@ -490,6 +496,7 @@ export function materializeTaskEvents(events: RelayTaskEvent[]): RelayTask {
         else delete task.collaborationStyle;
       }
       if (event.acceptancePolicy != null) task.acceptancePolicy = event.acceptancePolicy;
+      if (event.permissionMode != null) task.permissionMode = event.permissionMode;
       if (event.title !== undefined) task.title = event.title;
       if (event.description !== undefined) task.description = event.description;
       if (event.priority !== undefined) task.priority = event.priority;

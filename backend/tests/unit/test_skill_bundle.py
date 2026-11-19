@@ -196,32 +196,6 @@ def test_unsupported_policy_is_reported():
     assert skipped == [{"skillId": "b", "slug": "b", "reason": "unsupported-policy"}]
 
 
-def test_kimi_same_name_candidates_keep_deterministic_slug_winner():
-    ctx = _ctx()
-    ctx.skill_store.skills["a"].update(name="review", slug="team-a/review")
-    ctx.skill_store.skills["b"].update(name="review", slug="team-b/review")
-    agent = {**_agent([_grant("b"), _grant("a")]), "executorKind": "kimi"}
-
-    bundle, skipped = resolve_bundle(ctx, agent)
-
-    assert [skill["skillId"] for skill in bundle["skills"]] == ["a"]
-    assert skipped == [
-        {"skillId": "b", "slug": "team-b/review", "reason": "name-conflict"}
-    ]
-
-
-def test_kimi_different_names_do_not_conflict():
-    ctx = _ctx()
-    ctx.skill_store.skills["a"].update(name="review", slug="team/review")
-    ctx.skill_store.skills["b"].update(name="testing", slug="team/testing")
-    agent = {**_agent([_grant("b"), _grant("a")]), "executorKind": "kimi"}
-
-    bundle, skipped = resolve_bundle(ctx, agent)
-
-    assert [skill["skillId"] for skill in bundle["skills"]] == ["a", "b"]
-    assert skipped == []
-
-
 def test_user_assignment_is_resolved_without_legacy_agent_policy():
     ctx = _ctx()
     ctx.skill_store.assignments.append(

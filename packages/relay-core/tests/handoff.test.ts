@@ -1608,9 +1608,9 @@ describe("credential scoping", () => {
     withEnv(allProviderEnv, () => {
       const claudeCommand = buildClaudeCommand(state());
       const codexCommand = buildCodexCommand(state());
-      const kimiCommand = buildOpenCodeCommand(state());
+      const openCodeCommand = buildOpenCodeCommand(state());
       const piCommand = buildPiCommand(state());
-      for (const command of [claudeCommand, codexCommand, piCommand, kimiCommand]) {
+      for (const command of [claudeCommand, codexCommand, piCommand, openCodeCommand]) {
         for (const secret of Object.values(allProviderEnv)) {
           assert.ok(!command.includes(secret), `agent command exposed ${secret}`);
         }

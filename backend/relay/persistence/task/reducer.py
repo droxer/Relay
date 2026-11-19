@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ...automations.model import LEGACY_FIELDS, STATES, upgrade_legacy
+from ...core.permission_requests import DEFAULT_TASK_PERMISSION_MODE
 from ...tasks.flow import LEGACY_ACCEPTANCE_POLICY, apply_flow_status
 from ...tasks.prerequisites import PREREQUISITES_EVENT, apply_prerequisites_set
 from .numbering import NUMBERED_EVENT, apply_task_number
@@ -25,6 +26,7 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         "status": "backlog",
         "workflowStage": "backlog",
         "acceptancePolicy": created.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY),
+        "permissionMode": created.get("permissionMode", DEFAULT_TASK_PERMISSION_MODE),
         "isRoutine": bool(created.get("isRoutine")),
         "linkedSessionIds": [],
         "occurrenceIds": [],
@@ -99,6 +101,7 @@ def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
         "computerId",
         "dueDate",
         "acceptancePolicy",
+        "permissionMode",
         "collaborationStyle",
     ):
         if key not in event or event[key] is None:

@@ -13,7 +13,7 @@ vi.mock("../src/api", () => api);
 function node(id: string, extra: Partial<DaemonNodeMonitorRecord> = {}): DaemonNodeMonitorRecord {
   return {
     id, userId: "alice", displayName: id, status: "ready",
-    agents: { claude: "ready", codex: "unknown", pi: "unknown", kimi: "unknown" },
+    agents: { claude: "ready", codex: "unknown", pi: "unknown", opencode: "unknown" },
     online: true, stale: false, activeRuns: [], queuedCommandCount: 0,
     createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
     ...extra,
@@ -47,7 +47,7 @@ it("uses the preferred daemon's name and runtimes while keeping offline computer
     node("old", { workspaceId: "mac", online: false, stale: true, status: "stopped" }),
     node("current", {
       workspaceId: "mac", displayName: "My laptop",
-      agents: { claude: "unknown", codex: "ready", pi: "ready", kimi: "unknown" },
+      agents: { claude: "unknown", codex: "ready", pi: "ready", opencode: "unknown" },
       disabledAgents: ["pi"],
     }),
     node("offline", { online: false, stale: true, status: "stopped" }),

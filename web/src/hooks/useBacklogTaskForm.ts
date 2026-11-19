@@ -73,6 +73,7 @@ export function useBacklogTaskForm({
       tags: task.tags ?? [],
       status: task.status,
       acceptancePolicy: taskAcceptancePolicy(task),
+      permissionMode: task.permissionMode ?? "ask",
       collaborationStyle: null,
       startedAt: task.startedAt,
       dueDate: task.dueDate ?? "",
@@ -126,6 +127,7 @@ export function useBacklogTaskForm({
         tags: form.tags,
         ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
         acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
+        ...(form.permissionMode !== formBaseline?.permissionMode ? { permissionMode: form.permissionMode } : {}),
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         dueDate: form.dueDate,
         /* Intake takes no agent or team. Clearing is still sent for a legacy

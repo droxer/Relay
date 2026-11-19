@@ -1770,7 +1770,7 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
-                "supportedAgents": ["codex"],
+                "supportedAgents": ["codex", "kimi"],
                 "capabilities": ["workspace-scope", "thread-workspaces"],
                 "agentHealth": {
                     "codex": {
@@ -1778,11 +1778,12 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
                         "detail": "Codex preflight passed.",
                         "adapter": "cli",
                     },
-                    "kimi": {
+                    "opencode": {
                         "status": "failed",
-                        "detail": "Kimi is not logged in.",
+                        "detail": "OpenCode is not logged in.",
                         "adapter": "cli",
                     },
+                    "kimi": {"status": "ready", "adapter": "cli"},
                 },
                 "status": "ready",
             },
@@ -1792,15 +1793,17 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
         assert response.status_code == 200
         body = response.json()
         assert body["agents"]["codex"] == "ready"
-        assert body["agents"]["kimi"] == "failed"
-        assert body["agentDetails"]["kimi"]["detail"] == "Kimi is not logged in."
+        assert body["agents"]["opencode"] == "failed"
+        assert body["agentDetails"]["opencode"]["detail"] == "OpenCode is not logged in."
+        assert "kimi" not in body["agents"]
+        assert "kimi" not in body["agentDetails"]
 
         public = _legacy_ui_client(client).get(
             "/api/v1/daemon-nodes", headers={"Authorization": "Bearer ui_token"}
         )
         assert public.status_code == 200
         public_node = public.json()["nodes"][0]
-        assert public_node["agentDetails"]["kimi"]["adapter"] == "cli"
+        assert public_node["agentDetails"]["opencode"]["adapter"] == "cli"
         assert "nodeToken" not in public_node
 
         admin = client.get("/api/v1/admin/daemon-nodes")
@@ -1810,13 +1813,19 @@ def test_daemon_registration_stores_agent_health_and_rejects_unready_runs(
         run = _legacy_ui_client(client).post(
             "/api/v1/sandboxes/sbx_alice/runs",
             json={
-                "taskGoal": "try kimi",
-                "assignments": [{"agent": "kimi"}],
+                "taskGoal": "try OpenCode",
+                "assignments": [{"agent": "opencode"}],
             },
             headers={"Authorization": "Bearer ui_token"},
         )
         assert run.status_code == 409
         assert "does not have ready agent" in run.json()["detail"]
+        retired_run = _legacy_ui_client(client).post(
+            "/api/v1/sandboxes/sbx_alice/runs",
+            json={"taskGoal": "try legacy runtime", "assignments": [{"agent": "kimi"}]},
+            headers={"Authorization": "Bearer ui_token"},
+        )
+        assert retired_run.status_code == 400
 
 
 def test_admin_creates_user_login_and_assigns_unassigned_node(monkeypatch) -> None:

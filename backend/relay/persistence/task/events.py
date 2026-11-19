@@ -8,6 +8,7 @@ from typing import Any
 from ...automations.model import is_active
 from ...core.human_waits import ensure_wait_record
 from ...core.ids import new_relay_id
+from ...core.permission_requests import DEFAULT_TASK_PERMISSION_MODE
 from ...tasks.flow import LEGACY_ACCEPTANCE_POLICY, NEW_TASK_ACCEPTANCE_POLICY
 from ...tasks.issue_triage import project_move_error
 from ...core.models import AgentName
@@ -57,6 +58,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "description": payload.get("description", ""),
         "priority": payload.get("priority", "normal"),
         "acceptancePolicy": payload.get("acceptancePolicy", NEW_TASK_ACCEPTANCE_POLICY),
+        "permissionMode": payload.get("permissionMode", DEFAULT_TASK_PERMISSION_MODE),
     }
     if payload.get("tags"):
         created_payload["tags"] = list(payload["tags"])
@@ -193,6 +195,7 @@ def task_update_events(
     for field in (
         "tags",
         "computerId",
+        "permissionMode",
         "routineTriggers",
         "routineState",
         "routinePauseReason",
@@ -281,6 +284,7 @@ def routine_occurrence_events(
                 "priority": routine.get("priority", "normal"),
                 **({"tags": list(routine["tags"])} if routine.get("tags") else {}),
                 "acceptancePolicy": routine.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY),
+                "permissionMode": routine.get("permissionMode", DEFAULT_TASK_PERMISSION_MODE),
                 "dueDate": occurrence_date,
                 "sourceRoutineId": routine["id"],
                 **({"computerId": routine["computerId"]} if routine.get("computerId") else {}),

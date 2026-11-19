@@ -12,7 +12,7 @@ def test_only_ready_runtimes_count_and_disabled_ones_are_removed():
         _node(agents={"codex": "ready", "claude": "missing"}, disabledAgents=["pi"]),
         _node(supportedAgents=["pi", "kimi"]),
     ]
-    assert ready_runtimes(nodes) == {"codex", "kimi"}
+    assert ready_runtimes(nodes) == {"codex"}
 
 
 def test_no_nodes_means_no_runtimes():

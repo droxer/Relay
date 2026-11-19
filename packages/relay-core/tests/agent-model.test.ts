@@ -12,7 +12,7 @@ function withEnv(env: Record<string, string>, action: () => void): void {
 
 const pinned = { ...initialAgentState("task"), agent_model: "pinned-model" };
 const MANAGED_ENV = {
-  OPENAI_MODEL: "env-openai", ANTHROPIC_MODEL: "env-claude", PI_MODEL: "env-pi", KIMI_MODEL: "env-kimi",
+  OPENAI_MODEL: "env-openai", ANTHROPIC_MODEL: "env-claude", PI_MODEL: "env-pi",
 };
 
 test("a pinned agent model replaces the daemon's env default on every runtime", () => withEnv(MANAGED_ENV, () => {
@@ -20,7 +20,7 @@ test("a pinned agent model replaces the daemon's env default on every runtime", 
   assert.match(buildClaudeCommand(pinned), /--model'? '?pinned-model/);
   assert.match(buildPiCommand(pinned), /--model'? '?pinned-model/);
   for (const build of [buildCodexCommand, buildClaudeCommand, buildPiCommand, buildOpenCodeCommand]) {
-    assert.doesNotMatch(build(pinned), /env-(openai|claude|pi|kimi)/);
+    assert.doesNotMatch(build(pinned), /env-(openai|claude|pi)/);
   }
 }));
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
-AgentName = Literal["claude", "pi", "codex", "kimi", "opencode"]
+AgentName = Literal["claude", "pi", "codex", "opencode"]
+# Older daemons can register and finish reporting runs they already own.
+DaemonWireAgentName = Literal[AgentName, "kimi"]
+DAEMON_WIRE_AGENT_NAMES = get_args(DaemonWireAgentName)
 SessionStatus = Literal[
     "running", "waiting_for_human", "completed", "failed", "cancelled"
 ]
@@ -14,7 +17,7 @@ TaskStatus = Literal[
 ]
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
 
-AGENT_NAMES: tuple[str, ...] = ("claude", "pi", "codex", "kimi", "opencode")
+AGENT_NAMES: tuple[str, ...] = get_args(AgentName)
 # Offered in stage order (`ROLE_STAGE` in collaboration/styles.py), the order a
 # Pipeline round takes them in.
 AGENT_ROLES: tuple[str, ...] = (
@@ -80,7 +83,7 @@ class DaemonNodeRegistration(RelayModel):
     # Release identity is optional for older daemons; unrelated to wire version.
     client_version: str | None = Field(default=None, max_length=128, pattern=CLIENT_VERSION_PATTERN)
     protocol_version: int
-    supported_agents: list[AgentName] = []
+    supported_agents: list[DaemonWireAgentName] = []
     executor_capabilities: list[dict[str, Any]] | None = None
     agent_health: dict[str, dict[str, Any]] | None = None
     max_concurrent_runs: int | None = None

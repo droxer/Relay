@@ -76,8 +76,8 @@ conversation starts a new one) and proposals.
 ## Local Agent Runtimes
 
 After registering a local Computer (`sandboxMode: none`), the daemon installs
-Relay MCP into each ready Codex, Claude Code, OpenCode, Kimi or Pi runtime.
-Codex uses its TOML `mcp_servers`; Claude and Kimi use `mcpServers`; OpenCode uses
+Relay MCP into each ready Codex, Claude Code, OpenCode, or Pi runtime.
+Codex uses its TOML `mcp_servers`; Claude uses `mcpServers`; OpenCode uses
 its local `mcp` configuration. Pi receives a user extension that connects to the
 same stdio MCP server and registers its advertised tools. Restart an already open
 Agent Runtime to load the configuration. Direct local CLI sessions can use it,
@@ -163,7 +163,7 @@ Relay-managed native processes receive daemon-owned `RELAY_MCP_RUN_CONTEXT`
 metadata in their execution environment. It contains an optional Project ID and a path to
 the run's host transport, never a credential. Codex configuration explicitly
 forwards that environment variable, and Claude configuration expands it into the
-MCP child's environment. Kimi and OpenCode inherit the process environment; Pi's
+MCP child's environment. OpenCode inherits the process environment; Pi's
 extension spawns its MCP process with the same environment. Before each managed
 launch, Relay checks its owned runtime configuration independently of standalone
 token health. Revoking a standalone token does not substitute a new broad grant
@@ -192,7 +192,6 @@ account; host filesystem isolation requires a sandbox rather than file modes
 alone. Configuration forwarding is checked against the runtime sources:
 [Codex](https://github.com/openai/codex/blob/main/codex-rs/rmcp-client/src/utils.rs),
 [Claude](https://code.claude.com/docs/en/mcp),
-[Kimi](https://github.com/MoonshotAI/kimi-code/blob/main/packages/agent-core-v2/src/mcpCore/client-stdio.ts),
 [OpenCode](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/mcp/index.ts).
 
 ## MCP tools

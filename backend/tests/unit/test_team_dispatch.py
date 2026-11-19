@@ -209,7 +209,7 @@ def test_accomplish_orders_delegated_execution_before_test_and_review() -> None:
         _agent("lead", "codex", defaultRole="planner"),
         _agent("reviewer", "claude", defaultRole="reviewer"),
         _agent("tester", "pi", defaultRole="tester"),
-        _agent("builder", "kimi", defaultRole="implementer"),
+        _agent("builder", "opencode", defaultRole="implementer"),
     ]
 
     assignments = team_member_assignments(agents, mode="action", team=team)

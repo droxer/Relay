@@ -54,7 +54,7 @@ Thread's Computer.
 - Scheduling one agent run across several nodes simultaneously.
 - Transparent workspace replication in the first release.
 - Autoscaling provider infrastructure from queue depth in the first release.
-- Allowing arbitrary executor kinds beyond `claude`, `pi`, `codex`, and `kimi`
+- Allowing arbitrary executor kinds beyond `claude`, `pi`, `codex`, and `opencode`
   during this migration.
 - Removing manual daemon-node registration.
 
@@ -62,7 +62,7 @@ Thread's Computer.
 
 | Term | Meaning |
 | :- | :- |
-| Executor kind | Runtime implementation: `claude`, `pi`, `codex`, or `kimi`. This replaces the ambiguous use of agent name for a CLI type. |
+| Executor kind | Runtime implementation: `claude`, `pi`, `codex`, or `opencode`. This replaces the ambiguous use of agent name for a CLI type. |
 | Logical agent | User-owned identity with a name, executor kind, role, instructions, and policy. |
 | Runtime capability | A daemon's report that it can execute an executor kind, including health and capacity. |
 | Placement | Binding that allows one logical agent to execute through one Agent Runtime on one stable Computer. |
@@ -115,7 +115,7 @@ workspace to move or reuse across threads.
 | `id` | string | Stable `agent_...` identity. |
 | `userId` | string | Owning user. |
 | `displayName` | string | User-facing name such as `Researcher`. |
-| `executorKind` | enum | `claude`, `pi`, `codex`, or `kimi`. |
+| `executorKind` | enum | `claude`, `pi`, `codex`, or `opencode`. |
 | `defaultRole` | enum | Existing Relay role vocabulary. |
 | `instructions` | string, nullable | Agent-specific control-plane instructions. |
 | `skillPolicy` | JSON | Reserved for a future enforced skill policy. Non-empty values are rejected and legacy values block dispatch. |
@@ -161,7 +161,7 @@ Computer capabilities, not Agent identities:
 
 ```ts
 interface DaemonExecutorCapability {
-  executorKind: "claude" | "pi" | "codex" | "kimi";
+  executorKind: "claude" | "pi" | "codex" | "opencode";
   status: "ready" | "failed";
   adapter: "cli" | "service";
   maxConcurrentRuns: number;
@@ -180,7 +180,7 @@ New assignments carry logical identity and retain executor kind for compatibilit
 ```ts
 interface AgentAssignment {
   agentId?: string;
-  agent: "claude" | "pi" | "codex" | "kimi";
+  agent: "claude" | "pi" | "codex" | "opencode";
   role?: AgentRole;
 }
 ```

@@ -1124,6 +1124,19 @@ releasing WIP only after execution is settled. Cancelled tasks do not contribute
 to delivery metrics; explicitly reopen to Ready to continue them. See [the task lifecycle](guides/task-lifecycle.md) for
 transition, capacity, history compatibility, and migration policies.
 
+### Task tool permissions
+
+`POST /tasks` and `PATCH /tasks/{id}` accept `permissionMode` with the value
+`ask` (default) or `yolo`. Task records created before this field existed may
+omit it. Only the Task owner can opt into YOLO. Each dispatched Agent run
+takes the current mode. New Automation occurrences inherit it from the
+definition when they are created.
+
+YOLO answers Relay tool Permission Prompts with `allow` and records
+`permissionMode: "yolo"` on the Thread's `agent.permission_resolved` event.
+Questions still wait for a human answer. Runtime sandbox rules, Connection
+Grants, Workflow approval steps, and Task acceptance use their own settings.
+
 ### Task review
 
 `GET /tasks/{id}/review` uses the same Task access rule as its detail route.

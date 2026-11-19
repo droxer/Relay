@@ -148,7 +148,7 @@ class LateOutputLeaseMismatchError(CommandEventMismatchError):
 
 
 def public_sandbox_record(sandbox: dict[str, Any]) -> dict[str, Any]:
-    return {
+    public = {
         k: v
         for k, v in sandbox.items()
         if k
@@ -163,6 +163,22 @@ def public_sandbox_record(sandbox: dict[str, Any]) -> dict[str, Any]:
         )
         and v is not None
     }
+    # Persisted node snapshots can predate the current runtime registry.
+    for key in (
+        "agents", "agentDetails", "agentInventory", "agentModels", "agentDefaultModels",
+        "agentRoleDefaults", "agentRoleOverrides",
+    ):
+        if isinstance(values := public.get(key), dict):
+            public[key] = {kind: values[kind] for kind in AGENT_NAMES if kind in values}
+    for key in ("supportedAgents", "disabledAgents", "customModelEndpoints"):
+        if isinstance(values := public.get(key), list):
+            public[key] = [kind for kind in values if kind in AGENT_NAMES]
+    if isinstance(capabilities := public.get("executorCapabilities"), list):
+        public["executorCapabilities"] = [
+            item for item in capabilities
+            if isinstance(item, dict) and item.get("executorKind") in AGENT_NAMES
+        ]
+    return public
 
 
 def provisioned_sandbox_record(sandbox: dict[str, Any]) -> dict[str, Any]:

@@ -57,7 +57,7 @@ Optional:
   process is running. Relay keeps its own ownership marker until process exit
   so an in-process restart fails early with the owning daemon's details.
 - `RELAY_AGENT_HOME`: override the home inspected by local mode. By default,
-  local mode detects this user's existing Codex/Claude/Pi/OpenCode/Kimi installations,
+  local mode detects this user's existing Codex/Claude/Pi/OpenCode installations,
   logins, skills, and MCP configuration under `HOME`.
 - `RELAY_USE_LOCAL_AGENT_HOME`: deprecated compatibility flag; local mode now
   uses this user's home by default.
@@ -94,7 +94,6 @@ Agent credentials:
 - Pi uses `PI_API_KEY`, `OPENAI_API_KEY`/`CODEX_API_KEY`, or
   `ANTHROPIC_API_KEY`, plus `PI_MODEL`/`OPENAI_MODEL` when required.
 - OpenCode uses the installed OpenCode CLI authentication (`opencode auth login`).
-- Kimi uses the installed Kimi CLI authentication.
 
 ## Operations
 
@@ -114,7 +113,7 @@ relay-daemon --sandbox-id "$RELAY_SANDBOX_ID"
 ```
 
 Run a daemon that is already inside an agent box against a specific workspace
-using that box's installed Claude, Codex, and Kimi CLIs:
+using the Agent Runtimes installed in the box:
 
 ```sh
 relay-daemon \

@@ -55,8 +55,20 @@ def _run_start_command(
         or (workspace_layout == "thread" and run_request.get("taskId"))
     ) else None
     # A discussion uses the same directory without claiming Task execution.
-    workspace_task_id = run_request.get("taskId") or (
+    task_id = run_request.get("taskId")
+    workspace_task_id = task_id or (
         task_snapshot.get("id") if task_snapshot and workspace_layout == "task" else None
+    )
+    # A conversation can share a Task Workspace without executing the Task.
+    # Only a Task run can carry its owner's consent into a command.
+    task_owner = (task_snapshot or {}).get("ownerUserId")
+    task_yolo = (
+        task_id
+        and task_snapshot is not None
+        and task_id == task_snapshot.get("id")
+        and task_owner
+        and task_owner == session_snapshot.get("ownerUserId")
+        and task_snapshot.get("permissionMode") == "yolo"
     )
     return {
         "id": new_database_id(),
@@ -98,6 +110,7 @@ def _run_start_command(
         "state": state,
         **({"attachments": images} if images else {}),
         "_runRequestId": run_request["id"],
+        **({"_permissionMode": "yolo"} if task_yolo else {}),
         "reportWorkspaceStatus": True,
         **(
             {"reportExecutionStarted": True}

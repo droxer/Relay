@@ -12,6 +12,7 @@ from typing import Any
 
 from ...core.computer_identity import computer_id
 from ...core.daemon_records import ComputerRunCapacityError
+from ...core.models import AGENT_NAMES
 from ..scheduling import node_accepts_run, normalize_run_capacity
 from ...core.workspace_scheduling import session_workspace_key, workspace_is_contended, workspace_key
 from ...core.daemon_capabilities import DAEMON_CAPABILITY_WORK_RESULTS, has_capability
@@ -254,7 +255,7 @@ class RunTargetValidationMixin(NodeBackendState):
                     f"Sandbox {node_id} daemon node has disabled agent(s): {executor_kind}. "
                     "Re-enable them from the admin console to dispatch work."
                 )
-            if node.get("agents", {}).get(executor_kind) != "ready":
+            if executor_kind not in AGENT_NAMES or node.get("agents", {}).get(executor_kind) != "ready":
                 raise ValueError(
                     f"Sandbox {node_id} does not have ready agent {executor_kind}."
                 )

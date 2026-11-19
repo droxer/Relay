@@ -319,6 +319,7 @@ export {
   type TaskWaitKind,
   type TaskWaitingRequest,
   type TaskPriority,
+  type TaskPermissionMode,
   type RoutineOccurrenceTriggerKind,
   type RoutinePauseReason,
   type RoutineSchedule,
