@@ -21,8 +21,11 @@ beforeEach(() => {
     return structuredClone(saved) as any;
   });
 });
-function open(queueKey = "owner:thread", running = true) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function open(
+  queueKey = "owner:thread",
+  running = true,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   const composer = { getText: () => "draft", setText: vi.fn(), focus: vi.fn(), send: vi.fn(), clear: vi.fn() };
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const hook = renderHook(() => useThreadQueue({ queueKey, threadId: "thread", running, awaitsPerson: false,
@@ -133,4 +136,70 @@ it("localizes failed loading without exposing server details", async () => {
   vi.mocked(apiJson).mockRejectedValue(new Error("Private error"));
   const hook = open();
   await waitFor(() => expect(hook.result.current.error).toBe("queue.errors.unavailable"));
+});
+
+it("publishes the acknowledged queue while a poll with older state is still outstanding", async () => {
+  const hook = open();
+  const queryKey = ["thread-queue", "owner:thread"];
+  await waitFor(() => expect(hook.client.isFetching()).toBe(0));
+
+  let stalePollSignal: AbortSignal | undefined;
+  const readers: (() => void)[] = [];
+  vi.mocked(apiJson).mockImplementation(async (_path, options) => {
+    if (options?.method === "POST") {
+      return { messages: [{ id: "canonical", text: "Next step" }], paused: false } as never;
+    }
+    stalePollSignal ??= options?.signal;
+    return new Promise(resolve => { readers.push(() => resolve(saved as never)); });
+  });
+
+  let accepted: boolean | undefined;
+  await act(async () => {
+    void hook.client.refetchQueries({ queryKey, exact: true });
+    void hook.result.current.enqueue("Next step").then(result => { accepted = result; });
+  });
+  expect(stalePollSignal?.aborted).toBe(true);
+  expect(accepted).toBe(true);
+  expect(hook.client.getQueryData(queryKey)).toEqual({ messages: [{ id: "canonical", text: "Next step" }], paused: false });
+
+  await act(async () => { readers[0]?.(); });
+  expect(hook.client.getQueryData(queryKey)).toMatchObject({ messages: [{ id: "canonical" }] });
+  hook.unmount();
+  hook.client.clear();
+  readers.slice(1).forEach(resolve => resolve());
+});
+
+it("keeps the enqueue locked and consumes the saved draft when the composer remounts", async () => {
+  const first = open();
+  const queueKey = "owner:thread";
+  const draftKey = "relay-web.draft:owner:thread";
+  const text = "Submit once";
+  sessionStorage.setItem(draftKey, text);
+  await waitFor(() => expect(first.client.isFetching()).toBe(0));
+
+  let confirm!: () => void;
+  const post = vi.fn(() => new Promise(resolve => {
+    confirm = () => resolve({ messages: [{ id: "saved", text }], paused: false });
+  }));
+  vi.mocked(apiJson).mockImplementation(async (_path, options) => (
+    options?.method === "POST" ? await post() : saved
+  ) as never);
+
+  let sent!: Promise<boolean>;
+  await act(async () => { sent = first.result.current.enqueue(text); });
+  first.unmount();
+  const reopened = open(queueKey, false, first.client);
+  let duplicate!: Promise<boolean>;
+  act(() => { duplicate = reopened.result.current.enqueue(text); });
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(reopened.result.current.pending).toBe(true);
+  await expect(duplicate).resolves.toBe(false);
+
+  await act(async () => {
+    confirm();
+    expect(await sent).toBe(true);
+  });
+  expect(sessionStorage.getItem(draftKey)).toBeNull();
+  reopened.unmount();
+  first.client.clear();
 });

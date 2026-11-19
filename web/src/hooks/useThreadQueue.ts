@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ComposerHandle } from "../components/composer/Composer";
-import { restoreComposerDraft } from "./useComposer";
+import { clearComposerDraft, restoreComposerDraft } from "./useComposer";
 import { apiJson } from "../api-client/client";
 import { THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress } from "../lib/threadQueue";
 import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 
 type QueueState = { messages: QueuedMessage[]; paused: boolean; sending?: string; error?: string; removed?: { message: QueuedMessage; beforeId: string | null; removedAt?: string } };
+type QueueChange = {
+  queueKey: string;
+  threadId: string;
+  action: string;
+  id?: string;
+  text?: string;
+  address?: QueueAddress;
+};
 const EMPTY: QueueState = { messages: [], paused: false };
 
 /** The server owns ordering and dispatch; no open browser is required. */
@@ -23,10 +31,26 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const [errorState, setErrorState] = useState<{ key: string; message: string | null } | null>(null);
   const error = errorState?.key === queueKey ? errorState.message : null;
   const setError = useCallback((message: string | null) => setErrorState({ key: queueKey, message }), [queueKey]);
-  const [pending, setPending] = useState(false);
-  const busy = useRef(false);
   const unsaved = useRef(new Map<string, QueuedMessage>());
   const key = [...THREAD_QUEUE_QUERY_KEY, queueKey];
+  const mutationKey = [...key, "change"];
+  const pending = useIsMutating({ mutationKey, exact: true }) > 0;
+  const { mutateAsync: mutateQueue } = useMutation({
+    mutationKey,
+    mutationFn: ({ threadId, action, id, text, address }: QueueChange) => apiJson<QueueState>(
+      `/threads/${encodeURIComponent(threadId)}/queue`,
+      { method: "POST", body: { action, id, text, ...address } },
+    ),
+    onSuccess: async (updated, { queueKey, action, text }) => {
+      const queryKey = [...THREAD_QUEUE_QUERY_KEY, queueKey];
+      // A GET started before this write can still carry a pre-mutation queue.
+      // Publish the receipt, then reconcile other writers in the background.
+      await client.cancelQueries({ queryKey, exact: true });
+      client.setQueryData(queryKey, updated);
+      if (action === "enqueue" && text !== undefined) clearComposerDraft(queueKey, text);
+      void client.invalidateQueries({ queryKey, exact: true });
+    },
+  });
   const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue`;
   const query = useQuery({
     queryKey: key,
@@ -43,19 +67,18 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const activeKey = useRef(queueKey);
   useLayoutEffect(() => { activeKey.current = queueKey; }, [queueKey]);
   const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress) => {
-    if (!threadId || busy.current) return false;
-    busy.current = true;
-    setPending(true);
+    // The account's mutation cache owns the lock, so navigating away and back
+    // to this Thread cannot start a second write while its first is pending.
+    if (!threadId || client.isMutating({ mutationKey: [...THREAD_QUEUE_QUERY_KEY, queueKey, "change"], exact: true })) return false;
     try {
-      await apiJson<QueueState>(path, { method: "POST", body: { action, id, text, ...address } });
-      await client.invalidateQueries({ queryKey: [...THREAD_QUEUE_QUERY_KEY, queueKey] });
+      await mutateQueue({ threadId, queueKey, action, id, text, address });
       if (activeKey.current === queueKey) setError(null);
       return true;
     } catch (cause) {
       if (activeKey.current === queueKey) setError(queueErrorKey(cause));
       return false;
-    } finally { busy.current = false; setPending(false); }
-  }, [threadId, path, queueKey, client, setError]);
+    }
+  }, [threadId, queueKey, client, mutateQueue, setError]);
 
   // Transfer legacy unsent text only after server acknowledgement. Stable IDs
   // make retries safe if the tab closes halfway through migration.

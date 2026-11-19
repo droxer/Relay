@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { act, createRef } from "react";
+import { createRef } from "react";
 import { expect, it, vi } from "vitest";
 import { Composer } from "../src/components/composer/Composer";
 import type { MentionCandidate } from "../src/lib/mentions";
@@ -22,7 +22,7 @@ const AGENTS = [
 ] as unknown as UserAgent[];
 
 function setup(overrides: Partial<React.ComponentProps<typeof Composer>> = {}) {
-  render(
+  const composer = (props: Partial<React.ComponentProps<typeof Composer>>) => (
     <Composer
       ref={createRef()}
       logicalAgents={AGENTS}
@@ -40,10 +40,14 @@ function setup(overrides: Partial<React.ComponentProps<typeof Composer>> = {}) {
       mentionCandidates={CANDIDATES}
       onSend={vi.fn()}
       onCancelRun={vi.fn()}
-      {...overrides}
-    />,
+      {...props}
+    />
   );
-  return { field: screen.getByRole("textbox") as HTMLTextAreaElement };
+  const view = render(composer(overrides));
+  return {
+    field: screen.getByRole("textbox") as HTMLTextAreaElement,
+    rerender: (props: Partial<React.ComponentProps<typeof Composer>>) => view.rerender(composer({ ...overrides, ...props })),
+  };
 }
 
 it.each([
@@ -133,4 +137,43 @@ it.each([
   await user.type(field, "Continue");
   await user.click(screen.getByRole("button", { name: /queue/i }));
   expect(onQueue).toHaveBeenCalledWith("Continue", expected);
+});
+
+it("keeps a queue submission locked when the current run finishes before acknowledgement", async () => {
+  let accept!: (value: boolean) => void;
+  const onQueue = vi.fn(() => new Promise<boolean>((resolve) => { accept = resolve; }));
+  const onSend = vi.fn();
+  const { field, rerender } = setup({ running: true, onQueue, onSend });
+  fireEvent.change(field, { target: { value: "One follow-up" } });
+  fireEvent.keyDown(field, { key: "Enter" });
+  expect(onQueue).toHaveBeenCalledTimes(1);
+
+  rerender({ running: false });
+  fireEvent.keyDown(field, { key: "Enter" });
+  expect(onSend).not.toHaveBeenCalled();
+
+  await act(async () => { accept(true); });
+  expect(field.value).toBe("");
+});
+
+it("keeps direct send locked until a slow request settles", async () => {
+  vi.useFakeTimers();
+  try {
+    let reject!: (value: boolean) => void;
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => { reject = resolve; }));
+    const { field } = setup({ onSend });
+    fireEvent.change(field, { target: { value: "One message" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await act(() => vi.advanceTimersByTimeAsync(4_001));
+
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledTimes(1);
+
+    await act(async () => { reject(false); });
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledTimes(2);
+    await act(async () => { reject(false); });
+  } finally {
+    vi.useRealTimers();
+  }
 });

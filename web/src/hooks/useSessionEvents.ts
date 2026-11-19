@@ -59,6 +59,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
     const scheduler = createFrameScheduler(browserFrameSchedulerHost());
 
     const flush = () => {
+      if (pending.length === 0) return;
       const events = pending;
       pending = [];
       queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, (sessions) => {
@@ -73,6 +74,15 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
         return result.sessions;
       });
       for (const event of events) queued.delete(event.id);
+    };
+
+    const close = () => {
+      source.close();
+      // Frames already received belong to the cache even if the Thread
+      // settles or the reader leaves before the browser paints.
+      scheduler.cancel();
+      flush();
+      setSessionStreamConnected(false);
     };
 
     const enqueue = (events: RelayEvent[]) => {
@@ -113,13 +123,11 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
         status = data.status;
       } catch {
         // Unknown control frames should not loop forever.
-        source.close();
-        setSessionStreamConnected(false);
+        close();
         return;
       }
       if (isTerminalSessionStatus(status)) {
-        source.close();
-        setSessionStreamConnected(false);
+        close();
       }
     });
 
@@ -129,8 +137,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
     let stableTimer: ReturnType<typeof setTimeout> | undefined;
     source.onerror = () => {
       clearTimeout(stableTimer);
-      source.close();
-      setSessionStreamConnected(false);
+      close();
       if (reconnectTimer !== undefined) return;
       const delay = retryDelay.current.milliseconds;
       retryDelay.current.milliseconds = Math.min(MAX_RETRY_MS, delay * 2);
@@ -155,9 +162,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
 
     return () => {
       controller.abort();
-      source.close();
-      setSessionStreamConnected(false);
-      scheduler.cancel();
+      close();
       if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
       clearTimeout(stableTimer);
     };

@@ -109,13 +109,23 @@ const ComposerView = forwardRef<ComposerHandle, {
   /** Takes a draft written while the run is going. Without it, the box
    *  cannot send until the run ends. */
   onQueue?: (text: string, address: QueueAddress) => boolean | void | Promise<boolean>;
+  queuePending?: boolean;
   /** Docked on the card's top edge — what the thread is waiting to hear. */
   prompt?: ReactNode;
   /** Docked under `prompt` — the messages waiting for the next round. */
   queue?: ReactNode;
   /** Replaces the default placeholder, e.g. to name who is being answered. */
   placeholder?: string;
-}>(function Composer({ draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, contextPending = false, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, permissionMode, permissionModePending, onPermissionModeChange, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
+}>(function Composer({
+  draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked,
+  teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser,
+  initializingThread, contextPending = false, projectName, projectRoom = null,
+  projectRoomSelected = false, onProjectRoomPicked, readOnly = false,
+  runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange,
+  running, permissionMode, permissionModePending, onPermissionModeChange,
+  mentionCandidates = [], onSend, onCancelRun, onQueue, queuePending = false,
+  prompt, queue, placeholder,
+}, ref) {
   const { t } = useTranslation();
   const mounted = useRef(true);
   useEffect(() => {
@@ -201,9 +211,11 @@ const ComposerView = forwardRef<ComposerHandle, {
     [t],
   );
 
-  // Interim state between submit and the run actually starting, so the send
-  // button can't double-fire while the dispatch is still being validated.
-  const [sendPending, setSendPending] = useState(false);
+  // Both keyboard and form submission share one lock for the lifetime of the
+  // request, even when the Thread switches between running and idle.
+  const sending = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const sendPending = submitting || queuePending;
   // One answer to "can this draft be sent?", read by both the button's
   // `disabled` and the keyboard path. They were written separately and had
   // already drifted: the button also refused a staged thread with no computer
@@ -219,41 +231,37 @@ const ComposerView = forwardRef<ComposerHandle, {
   // upload bound to this box, so a draft carrying one waits here instead.
   const canQueue = running && !!onQueue && !readOnly && !!composerText.trim() && !imageInput.images.length && !imageInput.busy;
   const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false, userMessageId?: string): Promise<boolean> => {
-    if (running && !literal && canQueue && onQueue) {
-      if (sendPending) return false;
-      const address = resolveThreadMessageAddress({
-        text: composerText,
-        candidates: mentionCandidates,
-        defaultAgentId: roomSelected || targetTeam ? undefined : activeLogicalAgentId,
-      });
-      if (address.blocked) return false;
-      const queuedAddress: QueueAddress = address.addressAgentIds.length
-        ? { addressAgentIds: address.addressAgentIds }
-        : targetTeam ? { addressTeamId: targetTeam.id } : {};
-      setSendPending(true);
-      let accepted: boolean | void;
-      try { accepted = await onQueue(composerText, queuedAddress); } finally { setSendPending(false); }
-      if (accepted === false) {
-        return false;
-      }
-      if (currentDraft.current.key === draftKey && currentDraft.current.text === composerText) setComposerText("");
-      return true;
+    if (sending.current || queuePending || !mounted.current) return false;
+    const enqueue = !literal && canQueue ? onQueue : undefined;
+    if (!enqueue) {
+      if (running) return false;
+      if (literal ? cannotSendAsWritten : cannotSend) return false;
     }
-    if (running || sendPending) return false;
-    // The send button is disabled on a mention that resolves to nobody, and on
-    // a staged thread with no computer, but the keyboard shortcut bypasses the
-    // button — a blocked draft sent anyway would address the whole room instead
-    // of the agent the author named, and one with no computer has nowhere to run.
-    // A picked answer names nobody, so only the second half applies to it.
-    if (literal ? cannotSendAsWritten : cannotSend) return false;
-    setSendPending(true);
+    sending.current = true;
+    setSubmitting(true);
     try {
+      if (enqueue) {
+        const address = resolveThreadMessageAddress({
+          text: composerText,
+          candidates: mentionCandidates,
+          defaultAgentId: roomSelected || targetTeam ? undefined : activeLogicalAgentId,
+        });
+        if (address.blocked) return false;
+        const queuedAddress: QueueAddress = address.addressAgentIds.length
+          ? { addressAgentIds: address.addressAgentIds }
+          : targetTeam ? { addressTeamId: targetTeam.id } : {};
+        if (await enqueue(composerText, queuedAddress) === false) return false;
+        if (mounted.current && currentDraft.current.key === draftKey && currentDraft.current.text === composerText) {
+          setComposerText("");
+        }
+        return true;
+      }
+
       // A style shapes team work; a question hands out none.
       const addressed = literal ? null : addressedLogicalAgentId;
       const teamStyle = activeTeamId && !projectName && !addressed && (intent ?? "accomplish") === "accomplish"
         ? style ?? undefined
         : undefined;
-      if (!mounted.current) return false;
       const sent = await onSend(teamStyle, intent, {
         ...(userMessageId ? { userMessageId } : {}),
         ...(literal ? { literal: true } : {}),
@@ -269,21 +277,10 @@ const ComposerView = forwardRef<ComposerHandle, {
       // Dispatch owns error reporting; preserve the override for retry.
       return false;
     } finally {
-      if (mounted.current) setSendPending(false);
+      sending.current = false;
+      if (mounted.current) setSubmitting(false);
     }
   };
-  useEffect(() => {
-    if (!sendPending) return;
-    if (running) {
-      setSendPending(false);
-      return;
-    }
-    // The run starting clears pending; if dispatch failed upstream (validation,
-    // error toast) `running` never flips, so fall back to a timeout instead of
-    // leaving the send button stuck disabled.
-    const timer = setTimeout(() => setSendPending(false), 4000);
-    return () => clearTimeout(timer);
-  }, [sendPending, running]);
 
   // A picked answer lands in the box first, then sends once the box (and the
   // handle dispatch reads it through) holds it.
@@ -308,6 +305,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     getText: () => composerText,
     setText: (text: string) => setComposerText(text),
     send: (text: string, options?: ComposerSendOptions) => {
+      if (sending.current || queuePending) return Promise.resolve(false);
       queuedSendRef.current?.resolve(false);
       queuedSendRef.current = null;
       const intent = options?.intent;
@@ -333,7 +331,7 @@ const ComposerView = forwardRef<ComposerHandle, {
         return ok;
       });
     },
-  }), [composerText, setComposerText, textareaRef]);
+  }), [composerText, queuePending, setComposerText, textareaRef]);
 
   // A project room owns its computer and its workspace, so the room names
   // itself here instead of offering a machine; a thread that has started names

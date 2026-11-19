@@ -1,12 +1,26 @@
 import { act, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import type { RelaySession } from "../src/types";
 import { afterEach, expect, it, vi } from "vitest";
 import { useSessionEvents } from "../src/hooks/useSessionEvents";
 import { getSession, RelayApiError } from "../src/api";
 import { isSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 vi.mock("../src/api", () => ({ getSession: vi.fn(), RelayApiError: class extends Error { constructor(message: string, public status: number) { super(message); } } }));
-vi.mock("../src/lib/frameScheduler", () => ({ browserFrameSchedulerHost: () => ({}), createFrameScheduler: () => ({ request: (callback: () => void) => callback(), cancel: vi.fn() }) }));
+const { deferFrame } = vi.hoisted(() => ({ deferFrame: { current: false } }));
+vi.mock("../src/lib/frameScheduler", () => ({
+  browserFrameSchedulerHost: () => ({}),
+  createFrameScheduler: () => {
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    return {
+      request: (callback: () => void) => {
+        if (!deferFrame.current) callback();
+        else handle ??= setTimeout(callback, 16);
+      },
+      cancel: () => clearTimeout(handle),
+    };
+  },
+}));
 const key = ["relay", "sessions"];
 const initial = { id: "live", status: "running", events: [], agentRuns: [], artifacts: [] };
 class Source {
@@ -29,7 +43,7 @@ function setup(enabled = true) {
   const view = renderHook(({ id }) => useSessionEvents(id, enabled), { wrapper, initialProps: { id: "live" } });
   return { client, view };
 }
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { deferFrame.current = false; vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 it("merges frames and batches once, tolerates malformed frames, and closes terminal streams", () => {
   const { client, view } = setup();
@@ -112,5 +126,21 @@ it("reports the stream connected from open until it errors, closes, or unmounts"
   act(() => sources[1].onopen());
   view.unmount();
   expect(isSessionStreamConnected()).toBe(false);
+  client.clear();
+});
+
+it("commits buffered messages in arrival order before a closing stream is detached", () => {
+  deferFrame.current = true;
+  const { client, view } = setup();
+  act(() => {
+    for (const id of ["first", "second"]) {
+      sources[0].onmessage({ data: JSON.stringify({
+        id, type: "user.message", sessionId: "live", timestamp: "2026-09-09T00:00:00Z", text: id,
+      }) });
+    }
+    sources[0].listeners.get("done")!({ data: JSON.stringify({ status: "completed" }) });
+  });
+  expect(client.getQueryData<RelaySession[]>(key)?.[0].events.map(event => event.id)).toEqual(["first", "second"]);
+  view.unmount();
   client.clear();
 });

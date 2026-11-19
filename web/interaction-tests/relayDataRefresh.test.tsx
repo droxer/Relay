@@ -2,8 +2,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { RelaySession, SessionSummariesResponse } from "../src/types";
+import { applySessionEvent } from "../src/lib/sessionEvents";
 import { useRelayData } from "../src/hooks/useRelayData";
-import { listDaemonNodes, listSandboxes, listTasks } from "../src/api";
+import { listDaemonNodes, listSandboxes, listSessionSummaries, listTasks } from "../src/api";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
 
@@ -104,4 +106,39 @@ it("slows task reconciliation off task surfaces and refreshes when they become v
   await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(before + 1));
   expect(taskQuery()?.observers[0]?.options.refetchInterval).toBe(RELAY_POLL_INTERVALS_MS.tasks);
   view.unmount(); client.clear();
+});
+
+it("commits a summary poll over the event history already written by SSE", async () => {
+  vi.mocked(listSandboxes).mockResolvedValue({ sandboxes: [] } as never);
+  const key = ["relay", "sessions"];
+  const timestamp = "2026-10-01T00:00:00Z";
+  const message = (id: string): RelaySession["events"][number] =>
+    ({ id, type: "user.message", sessionId: "thread", timestamp, text: id });
+  const base = {
+    id: "thread", taskGoal: "Opening", createdAt: timestamp, updatedAt: timestamp,
+    status: "running", phase: "created", events: [message("first")],
+    agentRuns: [], artifacts: [], decisions: [],
+  } as unknown as RelaySession;
+  const { client, view } = setup();
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  client.setQueryData(key, [base]);
+
+  let finish!: (page: SessionSummariesResponse) => void;
+  vi.mocked(listSessionSummaries).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const pushMessage = (id: string) => client.setQueryData<RelaySession[]>(key, current =>
+    [applySessionEvent(current![0], message(id))]);
+  await act(async () => {
+    const polling = client.refetchQueries({ queryKey: key, exact: true });
+    finish({ sessions: [{ ...base, artifactCount: 0, runCount: 0, eventCount: 1 }] });
+    // The SSE flush commits after the poll reads its response and before
+    // TanStack Query stores the resolved value.
+    queueMicrotask(() => pushMessage("second"));
+    await polling;
+    pushMessage("third");
+  });
+
+  expect(client.getQueryData<RelaySession[]>(key)?.[0].events.map(event => event.id))
+    .toEqual(["first", "second", "third"]);
+  view.unmount();
+  client.clear();
 });
