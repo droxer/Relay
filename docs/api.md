@@ -1324,6 +1324,23 @@ is terminal, because there is no request left to finalize that result into.
 the execution status and fails if any overdue deletion has neither a person's
 action nor automatic progress; extend its axes when adding a phase or status.
 
+### Thread tool permissions
+
+`PUT /api/v1/threads/{id}/permission-mode` accepts an object with `mode` set
+to `ask` or `yolo` and returns the updated Thread. It requires the Thread
+owner's signed-in session. The selection is recorded in
+`session.permission_mode` with the owner's ID and appears as
+`permissionMode` on Thread snapshots and summaries. While a run's command
+is active, `execution.permissionMode` reports its effective mode.
+
+An explicit Thread selection overrides the mode inherited at dispatch from
+the Task, with `ask` as the default for other runs. The new selection
+applies to the current run and subsequent runs in the Thread. Switching to
+`yolo` also answers open tool approvals and records the owner's ID on those
+decisions. Questions still require an answer, and existing standing grants
+continue to apply in Ask mode. The setting governs requests sent through
+Relay's Permission Prompt broker.
+
 ## Team responsibilities and work acceptance
 
 ### Collaboration styles

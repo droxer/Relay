@@ -87,6 +87,63 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
 }
 
 for (const touch of [false, true]) {
+  for (const theme of ["light", "dark"] as const) {
+    test(`Chat Input switches live tool permissions (${touch ? "touch" : "pointer"}, ${theme})`, async ({ browser }) => {
+      const running = {
+        ...session, status: "running", phase: "claude",
+        agentRuns: [{ ...session.agentRuns[0], status: "running", completedAt: undefined }],
+        events: session.events.slice(0, 2) as Record<string, unknown>[], eventCount: 2,
+        execution: { phase: "running", executionConfirmed: true, permissionMode: "ask" },
+      };
+      const page = await openPage(browser, "/threads/review-thread", touch, undefined, running, { sessions: [running] });
+      await page.route("**/auth/me", (route) => route.fulfill({ json: { authenticated: true, user: { ...USER, theme } } }));
+      let current = { ...running, permissionMode: undefined as "ask" | "yolo" | undefined };
+      let nextMode: "ask" | "yolo" = "yolo";
+      await page.route("**/api/v1/threads/review-thread", (route) => route.fulfill({ json: current }));
+      await page.route("**/api/v1/threads/review-thread/permission-mode", (route) => {
+        expect(route.request().method()).toBe("PUT");
+        expect(route.request().postDataJSON()).toEqual({ mode: nextMode });
+        current = {
+          ...current, eventCount: current.eventCount + 1, permissionMode: nextMode,
+          execution: { ...current.execution, permissionMode: nextMode },
+          events: [...current.events, {
+            id: `permission-mode-${nextMode}`, type: "session.permission_mode", sessionId: session.id,
+            timestamp: stamp, mode: nextMode, actorUserId: USER.userId,
+          }],
+        };
+        return route.fulfill({ json: current });
+      });
+      await page.reload();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      if (touch) await page.setViewportSize({ width: 320, height: 720 });
+      const mode = page.getByRole("combobox", { name: "Tool permissions" });
+      const stop = page.locator(".composer-footer .send-button");
+      await expect(stop).toHaveText("Stop");
+      await expect(mode).toContainText("Ask");
+      if (touch) await mode.tap(); else await mode.press("Enter");
+      const option = page.getByRole("option", { name: "YOLO · Auto-approve tool requests" });
+      await expect(option).toBeVisible();
+      const menu = (await page.getByRole("listbox").boundingBox())!;
+      expect(menu.x).toBeGreaterThanOrEqual(0);
+      expect(menu.x + menu.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      if (touch) await option.tap(); else await option.click();
+      await expect(mode).toContainText("YOLO");
+      await expect(stop).toHaveText("Stop");
+      if (touch) expect((await mode.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const control = (await mode.boundingBox())!;
+      const send = (await stop.boundingBox())!;
+      expect(control.x + control.width).toBeLessThanOrEqual(send.x);
+      nextMode = "ask";
+      if (touch) await mode.tap(); else await mode.press("Enter");
+      const ask = page.getByRole("option", { name: "Ask for approval" });
+      if (touch) await ask.tap(); else await ask.click();
+      await expect(mode).toContainText("Ask");
+      await page.context().close();
+    });
+  }
+}
+
+for (const touch of [false, true]) {
   test(`new agent exposes runtime model choices ${touch ? "touch" : "desktop"}`, async ({ browser }) => {
     const page = await openPage(browser, "/agents", touch, undefined, undefined, {
       nodes: [{ ...computer, capabilities: ["agent-model", "endpoint-models"],

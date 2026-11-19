@@ -26,6 +26,30 @@ function session(partial: Partial<RelaySession> = {}): RelaySession {
 }
 
 describe("applySessionEvent", () => {
+  it("replays Thread permission changes and keeps a newer mode over a stale response", () => {
+    const created = relayEvent("session.created", "work", { workspacePath: "/workspace", taskGoal: "Resolve", participants: ["human", "codex"] });
+    const yolo = relayEvent("session.permission_mode", "work", { mode: "yolo", actorUserId: "owner" });
+    const ask = relayEvent("session.permission_mode", "work", { mode: "ask", actorUserId: "owner" });
+    const initial = materializeEvents([created]);
+    const enabled = applySessionEvent(initial, yolo);
+    const restored = applySessionEvent(enabled, ask);
+    assert.equal(initial.permissionMode, undefined);
+    assert.equal(enabled.permissionMode, "yolo");
+    assert.equal(restored.permissionMode, "ask");
+    assert.equal(restored.permissionMode, materializeEvents([created, yolo, ask]).permissionMode);
+    assert.equal(mergeSessionSnapshotIntoSessions([restored], enabled, applySessionEvent)[0].permissionMode, "ask");
+  });
+
+  it("keeps a newer permission mode while the event stream catches up to the summary", () => {
+    const [summary] = mergeSessionSummaries([], [{
+      id: "work", workspacePath: "/workspace", taskGoal: "Resolve", status: "running",
+      phase: "codex", createdAt: "2026-06-20T00:00:00.000Z", updatedAt: "2026-06-20T00:00:00.000Z",
+      permissionMode: "ask", eventCount: 3, runCount: 1, artifactCount: 0,
+    }]);
+    const earlier = relayEvent("session.permission_mode", "work", { mode: "yolo", actorUserId: "owner" });
+    assert.equal(applySessionEvent(summary, earlier).permissionMode, "ask");
+  });
+
   it("keeps work outcome separate from process completion in replay and SSE", () => {
     const created = relayEvent("session.created", "work", { workspacePath: "/workspace", taskGoal: "Resolve", participants: ["human", "codex"] });
     const completed = { ...relayEvent("session.completed", "work", { outcome: "Needs a fixture" }), workOutcome: "blocked" as const };

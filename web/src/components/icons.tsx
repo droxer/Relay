@@ -251,6 +251,7 @@ export const ComposerStop = forwardRef<SVGSVGElement, LucideProps>((props, ref) 
   <Square ref={ref} fill="currentColor" stroke="none" strokeWidth={0} aria-hidden="true" {...props} />
 ));
 ComposerStop.displayName = "ComposerStop";
+export const ComposerPermissionShield = withStandardStroke(ShieldCheck, "ComposerPermissionShield");
 export const ActionRemove = withStandardStroke(X, "ActionRemove");
 export const NavBack = withStandardStroke(ArrowLeft, "NavBack");
 export const ActionSearch = withStandardStroke(Search, "ActionSearch");

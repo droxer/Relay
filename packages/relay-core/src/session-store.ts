@@ -120,6 +120,7 @@ export interface PermissionRequest {
 }
 
 export type PermissionDecisionKind = "allow" | "deny" | "expired";
+export type ThreadPermissionMode = "ask" | "yolo";
 
 /** How a permission prompt closed; `expired` when its run ended first. */
 export interface PermissionDecision {
@@ -285,6 +286,8 @@ export interface CollaborationRoundManifest {
 export interface ExecutionStatus {
   phase: "queued" | "running" | "stopping" | "unresponsive" | "finalizing" | "terminal" | "recovery_required";
   executionConfirmed: boolean;
+  /** Effective mode for the command currently associated with this execution. */
+  permissionMode?: ThreadPermissionMode;
   /** Daemon heartbeat liveness; independent of execution ownership or exit. */
   computerOnline?: boolean | null;
   deletionRequested: boolean;
@@ -439,6 +442,8 @@ export interface RelaySession {
   updatedAt: string;
   currentAgent?: AgentName;
   pendingDecision?: "feedback";
+  /** The owner's Thread override. An unset mode inherits the run's Task policy. */
+  permissionMode?: ThreadPermissionMode;
   /** Runtime permission prompts a live run is waiting on. */
   permissionRequests?: PermissionRequest[];
   /** How recent prompts closed, newest last. */
@@ -649,9 +654,17 @@ export type RelayEvent =
       always?: boolean;
       /** Closed by a standing grant rather than a person. */
       grant?: boolean;
-      /** Automatically allowed by the Task's permission mode. */
+      /** Automatically allowed by the Thread or Task permission mode. */
       permissionMode?: "yolo";
       actorUserId?: string;
+    }
+  | {
+      id: string;
+      type: "session.permission_mode";
+      sessionId: string;
+      timestamp: string;
+      mode: ThreadPermissionMode;
+      actorUserId: string;
     }
   | {
       id: string;
@@ -928,6 +941,8 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
         delete session.pendingDecision;
         expirePermissionRequests(session, event.timestamp);
       }
+    } else if (event.type === "session.permission_mode") {
+      session.permissionMode = event.mode;
     } else if (event.type === "agent.permission_requested") {
       const id = event.request.id;
       const known = (session.permissionRequests ?? []).some((item) => item.id === id)

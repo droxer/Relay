@@ -324,6 +324,14 @@
   gap: var(--sp-1-5);
 }
 
+.composer-targets [data-slot="select-trigger"].composer-permission-mode[data-mode="yolo"] {
+  color: var(--warn);
+}
+
+.composer-permission-mode > [data-slot="select-value"] {
+  color: inherit;
+}
+
 .composer-targets .agent-state {
   width: var(--avatar-xs);
   height: var(--avatar-xs);

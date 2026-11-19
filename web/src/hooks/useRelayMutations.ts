@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import {
   assignTask,
   answerPermissionRequest,
+  setThreadPermissionMode,
   archiveProject,
   unarchiveProject,
   deleteProject,
@@ -34,7 +35,7 @@ setTaskPrerequisites,
 } from "../api";
 import type { AgentRunInput, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
-import type { WorkflowAttemptBinding } from "relay-core";
+import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
@@ -179,6 +180,13 @@ export function useRelayMutations() {
         : "errors.answer_permission";
       onRelayError("Failed to answer permission request", messageKey)(error);
     },
+  });
+
+  const threadPermissionModeMutation = useMutation({
+    mutationFn: ({ sessionId, mode }: { sessionId: string; mode: ThreadPermissionMode }) =>
+      setThreadPermissionMode(sessionId, mode),
+    onSuccess: cacheSession,
+    onError: onRelayError("Failed to set Thread permission mode", "errors.thread_permission_mode"),
   });
 
   const runLogicalAgentsMutation = useMutation({
@@ -573,6 +581,7 @@ export function useRelayMutations() {
     recordDecisionMutation,
     decideWorkflowMutation,
     answerPermissionMutation,
+    threadPermissionModeMutation,
     runLogicalAgentsMutation,
     submitThreadMessageMutation,
     requestThreadRecoveryMutation,

@@ -109,6 +109,7 @@
     "unarchive_project_name_taken": "已有另一个进行中的项目使用此名称。请先重命名该项目，再取消归档此项目。",
     "start_project_setup": "无法让智能体起草项目设置。你可以手动设置项目。",
     "answer_permission": "无法发送你的答复。运行仍在等待，请重试。",
+    "thread_permission_mode": "无法更新工具权限，请重试。",
     "permission_request_closed": "该请求已关闭：已在别处答复，或其运行已结束。",
     "save_prerequisites": "无法保存前置任务。请检查连接后重试。",
     "go_home": "返回主页",
@@ -557,6 +558,11 @@
     "queue_cancel": "取消运行"
   },
   "composer": {
+    "permission_mode": "工具权限",
+    "permission_ask": "询问",
+    "permission_yolo": "YOLO",
+    "permission_ask_option": "每次请求批准",
+    "permission_yolo_option": "YOLO · 自动批准工具请求",
     "upload_client_outdated": "更新此电脑上的 Relay 客户端后，即可上传图片或文件。",
     "attach_image": "添加图片",
     "image_limits": "最多添加 4 张 PNG、JPEG 或 WebP 图片，每张不超过 10 MB。",

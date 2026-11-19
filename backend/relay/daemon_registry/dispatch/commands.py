@@ -6,10 +6,10 @@ A mixin of ``DaemonNodeRegistry``: it shares the registry's state and locks
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from typing import Any
 from loguru import logger
 from ...core.permission_requests import (
+    effective_permission_mode,
     may_grant_always,
     open_permission_request,
     permission_request_node,
@@ -139,18 +139,23 @@ class CommandQueueMixin(RegistryState):
             ),
         }
         session_id = event["sessionId"]
-        auto_approve = command.get("_permissionMode") == "yolo" and may_grant_always(request)
-        # Commit both events together so no reader sees an open YOLO approval.
-        with self.store.mutation_scope(session_id) if auto_approve else nullcontext():
-            known = permission_request_status(self.store.get_session_header(session_id), request["id"])
-            if auto_approve and known is not None:
+        # Serialize with mode changes and commit automatic decisions together
+        # with their request so no reader sees an open YOLO approval.
+        with self.store.mutation_scope(session_id):
+            session = self.store.get_session_header(session_id)
+            known = permission_request_status(session, request["id"])
+            if known is not None and known["status"] != "pending":
                 return
-            session = self.store.append_event(
-                session_id,
-                relay_event("agent.permission_requested", session_id, {"request": request}),
-                hydrate_events=False,
-            )
-            if auto_approve:
+            if known is None:
+                session = self.store.append_event(
+                    session_id,
+                    relay_event("agent.permission_requested", session_id, {"request": request}),
+                    hydrate_events=False,
+                )
+            opened = open_permission_request(session, request["id"])
+            if not opened:
+                return
+            if effective_permission_mode(session, command) == "yolo" and may_grant_always(opened):
                 self.store.append_event(
                     session_id,
                     relay_event("agent.permission_resolved", session_id, {
@@ -159,15 +164,12 @@ class CommandQueueMixin(RegistryState):
                     hydrate_events=False,
                 )
                 return
-        opened = open_permission_request(session, request["id"])
-        if not opened:
-            return
         if standing_grant(session, opened):
             # The person already answered this one: they allowed the tool
             # always for this agent in this thread. Close it now, unannounced.
             # Retry this even for a known prompt: its first resolution write
             # may have failed after the request was committed.
-            self._apply_standing_grant(event["sessionId"], opened)
+            self._apply_standing_grant(session_id, opened)
             return
         if known is None:
             logger.info(
@@ -181,47 +183,52 @@ class CommandQueueMixin(RegistryState):
             self.notification_store.add(permission_request_rows(session, opened))
 
     def _apply_standing_grant(self, session_id: str, request: dict[str, Any]) -> None:
-        logger.info(
-            "Permission request allowed by a standing grant",
-            session_id=session_id,
-            request_id=request["id"],
-            tool=request["toolName"],
-        )
-        self.store.append_event(
-            session_id,
-            relay_event(
-                "agent.permission_resolved",
+        with self.store.mutation_scope(session_id):
+            session = self.store.get_session_header(session_id)
+            if not open_permission_request(session, request["id"]):
+                return
+            logger.info(
+                "Permission request allowed by a standing grant",
+                session_id=session_id,
+                request_id=request["id"],
+                tool=request["toolName"],
+            )
+            self.store.append_event(
                 session_id,
-                {"requestId": request["id"], "decision": "allow", "grant": True},
-            ),
-            hydrate_events=False,
-        )
+                relay_event(
+                    "agent.permission_resolved",
+                    session_id,
+                    {"requestId": request["id"], "decision": "allow", "grant": True},
+                ),
+                hydrate_events=False,
+            )
 
     def _withdraw_permission_request(self, sandbox_id: str, event: dict[str, Any]) -> None:
         """The run stopped waiting on its prompt: close it so nobody answers a
         question no one is waiting on. Only the asking computer may."""
-        session = self.store.get_session(event["sessionId"])
+        session_id = event["sessionId"]
         request_id = event["requestId"]
-        if permission_request_node(session, request_id) != sandbox_id:
-            return
-        if not open_permission_request(session, request_id):
-            return
-        logger.info(
-            "Run withdrew its permission request",
-            session_id=event["sessionId"],
-            run_id=event["runId"],
-            request_id=request_id,
-            reason=event["reason"],
-        )
-        self.store.append_event(
-            event["sessionId"],
-            relay_event(
-                "agent.permission_resolved",
-                event["sessionId"],
-                {"requestId": request_id, "decision": "expired", "note": event["reason"]},
-            ),
-            hydrate_events=False,
-        )
+        with self.store.mutation_scope(session_id):
+            session = self.store.get_session_header(session_id)
+            request = open_permission_request(session, request_id)
+            if not request or request.get("daemonNodeId") != sandbox_id:
+                return
+            logger.info(
+                "Run withdrew its permission request",
+                session_id=session_id,
+                run_id=event["runId"],
+                request_id=request_id,
+                reason=event["reason"],
+            )
+            self.store.append_event(
+                session_id,
+                relay_event(
+                    "agent.permission_resolved",
+                    session_id,
+                    {"requestId": request_id, "decision": "expired", "note": event["reason"]},
+                ),
+                hydrate_events=False,
+            )
 
     def permission_request_status(
         self, sandbox_id: str, token: str | None, session_id: str, request_id: str

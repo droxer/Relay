@@ -9,6 +9,7 @@ import {
 import { RelayMark } from "./RelayMark";
 import type { AgentName, AgentTeam, CurrentUser, DaemonNodeMonitorRecord, UserAgent, ProjectRecord, RelayArtifact, RelaySession, RelayTaskListItem } from "../types";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
+import type { ThreadPermissionMode } from "relay-core";
 import {
   buildExecutorDisplayNameMap,
   buildLogicalAgentImageMap,
@@ -198,6 +199,8 @@ type ThreadsViewProps = {
   sendHandoff: () => Promise<void>;
   /** Answer a live run's runtime permission prompt. */
   onAnswerPermission: (requestId: string, answer: PermissionAnswerInput) => Promise<void>;
+  onPermissionModeChange?: (mode: ThreadPermissionMode) => void;
+  permissionModePending?: boolean;
   onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"], options?: import("./composer/Composer").ComposerDispatchOptions) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
@@ -292,6 +295,8 @@ export function ThreadsView({
   sendDecision,
   sendHandoff,
   onAnswerPermission,
+  onPermissionModeChange,
+  permissionModePending,
   onSend,
   onCancelRun,
   onRetryAgent,
@@ -767,6 +772,13 @@ export function ThreadsView({
           mentionCandidates={mentionCandidates}
           onRuntimeNodeChange={onRuntimeNodeChange}
           running={running}
+          permissionMode={activeSession
+            ? activeSession.permissionMode ?? activeSession.execution?.permissionMode ?? "ask"
+            : undefined}
+          permissionModePending={permissionModePending}
+          onPermissionModeChange={!activeSession?.deletionRequestedAt
+            && activeSession?.ownerUserId === (currentUser.userId ?? currentUser.username)
+            ? onPermissionModeChange : undefined}
           onSend={sendAnswering}
           onCancelRun={onCancelRun}
           onQueue={queueEnabled ? threadQueue.enqueue : undefined}

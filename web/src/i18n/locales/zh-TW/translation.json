@@ -109,6 +109,7 @@
     "unarchive_project_name_taken": "已有另一個進行中的專案使用此名稱。請先重新命名該專案，再取消歸檔此專案。",
     "start_project_setup": "無法讓智慧體起草專案設定。你可以手動設定專案。",
     "answer_permission": "無法傳送你的答覆。執行仍在等待，請重試。",
+    "thread_permission_mode": "無法更新工具權限，請重試。",
     "permission_request_closed": "該請求已關閉：已在別處答覆，或其執行已結束。",
     "save_prerequisites": "無法儲存前置任務。請檢查連線後重試。",
     "go_home": "返回主頁",
@@ -557,6 +558,11 @@
     "queue_cancel": "取消執行"
   },
   "composer": {
+    "permission_mode": "工具權限",
+    "permission_ask": "詢問",
+    "permission_yolo": "YOLO",
+    "permission_ask_option": "每次請求核准",
+    "permission_yolo_option": "YOLO · 自動核准工具請求",
     "upload_client_outdated": "更新此電腦上的 Relay 客戶端後，即可上傳圖片或檔案。",
     "attach_image": "新增圖片",
     "image_limits": "最多新增 4 張 PNG、JPEG 或 WebP 圖片，每張不超過 10 MB。",
