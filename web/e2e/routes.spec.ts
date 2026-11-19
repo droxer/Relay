@@ -145,6 +145,10 @@ for (const mobile of [false, true]) {
           await expect(rail.locator(".conversation-name strong")).toHaveText(routeThreads.map(thread => thread.title));
           // Task threads lead with their task's number, never its raw id.
           await expect(rail.locator(".conversation-ref")).toHaveText(["#1", "#2", "#3", "#4"]);
+          // Automation runs are numbered like issues, so their ref carries the
+          // Automations glyph to read apart from hand-filed work.
+          await expect(rail.locator('.conversation-ref[data-kind="routine"] svg')).toHaveCount(2);
+          await expect(rail.locator('.conversation-ref[data-kind="backlog"] svg')).toHaveCount(0);
         }
         if (surface.selected === "threads") {
           await expect(rail.locator(".computer-workspace-nav")).toHaveCount(0);
