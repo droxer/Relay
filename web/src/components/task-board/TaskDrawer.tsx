@@ -235,6 +235,8 @@ export function TaskDrawer({
   const priorityLabelId = useId();
   const fieldPrefix = form.variant;
   const acceptanceLabelId = useId();
+  const permissionLabelId = useId();
+  const permissionHintId = useId();
   const assignmentFieldId = `${fieldPrefix}-assignment`;
   const assignmentSummaryId = `${fieldPrefix}-assignment-summary`;
   const busy = saving || deleting;
@@ -526,6 +528,28 @@ export function TaskDrawer({
               </Select>
             </Field>
           </div>
+          <Field
+            label={t("backlog.permission_mode")}
+            labelId={permissionLabelId}
+            hint={<span id={permissionHintId}>{t("backlog.permission_mode_hint")}</span>}
+            wrapper="div"
+          >
+            <Select
+              value={form.permissionMode ?? "ask"}
+              disabled={busy}
+              onValueChange={(value) => {
+                if (value === "ask" || value === "yolo") updateBase({ permissionMode: value });
+              }}
+            >
+              <SelectTrigger className="w-full" aria-labelledby={permissionLabelId} aria-describedby={permissionHintId}>
+                <SelectValue>{(value: string) => t(value === "yolo" ? "backlog.permission_yolo" : "backlog.permission_ask")}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ask">{t("backlog.permission_ask")}</SelectItem>
+                <SelectItem value="yolo">{t("backlog.permission_yolo")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           <TaskTagsField
             name={`${fieldPrefix}-tags`}
             tags={form.tags}

@@ -384,7 +384,7 @@ Content-Type: application/json
     "provider": "local-process",
     "instanceId": "relay-managed-node-..."
   },
-  "supportedAgents": ["claude", "codex", "pi", "kimi"],
+  "supportedAgents": ["claude", "codex", "pi", "opencode"],
   "maxConcurrentRuns": 1
 }
 ```

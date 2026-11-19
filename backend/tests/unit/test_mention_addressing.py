@@ -15,7 +15,7 @@ from fastapi import HTTPException
 from relay.api.threads.messages import _leading_mention_agent_ids
 
 AGENTS: list[dict[str, Any]] = [
-    {"id": "kimi", "displayName": "Kimi", "enabled": True},
+    {"id": "oracle", "displayName": "Oracle", "enabled": True},
     {"id": "support", "displayName": "Support Bot", "enabled": True},
 ]
 
@@ -23,16 +23,16 @@ AGENTS: list[dict[str, Any]] = [
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        ("@Kimi do it", ("kimi",)),
-        ("  @Kimi do it", ("kimi",)),
-        ("\u00a0@Kimi do it", ("kimi",)),
-        ("@Kimi @Support Bot do it", ("kimi", "support")),
+        ("@Oracle do it", ("oracle",)),
+        ("  @Oracle do it", ("oracle",)),
+        ("\u00a0@Oracle do it", ("oracle",)),
+        ("@Oracle @Support Bot do it", ("oracle", "support")),
         ("@Support Bot do it", ("support",)),
         # The composer treats these as prose, so the backend must too.
         ("@ hello everyone", ()),
         ("@", ()),
-        ("\n@Kimi hi", ()),
-        ("hi @Kimi", ()),
+        ("\n@Oracle hi", ()),
+        ("hi @Oracle", ()),
         ("email me at @ the office", ()),
     ],
 )
@@ -42,7 +42,7 @@ def test_addressing_matches_the_composer_grammar(
     assert _leading_mention_agent_ids(text, AGENTS) == expected
 
 
-@pytest.mark.parametrize("text", ["@nobody hi", "@Kimi, do it", "@here look"])
+@pytest.mark.parametrize("text", ["@nobody hi", "@Oracle, do it", "@here look"])
 def test_an_unresolvable_leading_name_is_refused(text: str) -> None:
     """The composer blocks these locally; the backend must not fail open."""
     with pytest.raises(HTTPException) as error:

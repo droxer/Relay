@@ -165,7 +165,8 @@ export function allAgentCredentialEnvNames(): string[] {
     ...Object.values(NATIVE_CREDENTIAL_ENV_NAMES).flat(),
     "CLAUDE_API_KEY", "CLAUDE_BASE_URL", "CLAUDE_MODEL",
     "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
-    "KIMI_API_KEY", "KIMI_BASE_URL", "KIMI_MODEL", "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
+    // Strip retired runtime credentials that may still be set on the host.
+    "KIMI_BASE_URL", "KIMI_MODEL", "MOONSHOT_API_KEY", "MOONSHOT_BASE_URL", "MOONSHOT_MODEL",
     "KIMI_MODEL_NAME", "KIMI_MODEL_API_KEY", "KIMI_MODEL_BASE_URL",
   ])];
 }

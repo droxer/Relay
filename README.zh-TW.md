@@ -12,7 +12,7 @@
   <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
-在自己的電腦上執行 AI 智慧體，將它們組織為團隊，並隨時透過桌面或手機追蹤工作。Relay 支援 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi、OpenCode 和 Kimi。
+在自己的電腦上執行 AI 智慧體，將它們組織為團隊，並隨時透過桌面或手機追蹤工作。Relay 支援 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi 和 OpenCode。
 
 後端負責協調工作，常駐程式在個人或受管理的電腦上執行，可直接使用主機環境，也可執行於 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中。
 

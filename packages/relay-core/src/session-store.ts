@@ -649,6 +649,8 @@ export type RelayEvent =
       always?: boolean;
       /** Closed by a standing grant rather than a person. */
       grant?: boolean;
+      /** Automatically allowed by the Task's permission mode. */
+      permissionMode?: "yolo";
       actorUserId?: string;
     }
   | {

@@ -28,6 +28,12 @@ def run(event_type: str, **extra: Any) -> dict[str, Any]:
     }
 
 
+def test_retired_runtime_terminal_event_is_still_readable() -> None:
+    parsed = daemon_node_event(run("run.completed", agent="kimi", exitCode=0))
+    assert parsed["agent"] == "kimi"
+    assert parsed["exitCode"] == 0
+
+
 def ws(event_type: str, **extra: Any) -> dict[str, Any]:
     return {
         "type": event_type,

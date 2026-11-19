@@ -6,9 +6,11 @@ A mixin of ``DaemonNodeRegistry``: it shares the registry's state and locks
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Any
 from loguru import logger
 from ...core.permission_requests import (
+    may_grant_always,
     open_permission_request,
     permission_request_node,
     permission_request_status,
@@ -136,17 +138,27 @@ class CommandQueueMixin(RegistryState):
                 else {}
             ),
         }
-        # A retried post reopens nothing (the reducer dedupes), so it must
-        # not notify twice either: only a prompt this write opens does.
-        known = permission_request_status(self.store.get_session(event["sessionId"]), request["id"])
-        # Only snapshot fields are read below; the event log is not needed.
-        session = self.store.append_event(
-            event["sessionId"],
-            relay_event(
-                "agent.permission_requested", event["sessionId"], {"request": request}
-            ),
-            hydrate_events=False,
-        )
+        session_id = event["sessionId"]
+        auto_approve = command.get("_permissionMode") == "yolo" and may_grant_always(request)
+        # Commit both events together so no reader sees an open YOLO approval.
+        with self.store.mutation_scope(session_id) if auto_approve else nullcontext():
+            known = permission_request_status(self.store.get_session_header(session_id), request["id"])
+            if auto_approve and known is not None:
+                return
+            session = self.store.append_event(
+                session_id,
+                relay_event("agent.permission_requested", session_id, {"request": request}),
+                hydrate_events=False,
+            )
+            if auto_approve:
+                self.store.append_event(
+                    session_id,
+                    relay_event("agent.permission_resolved", session_id, {
+                        "requestId": request["id"], "decision": "allow", "permissionMode": "yolo",
+                    }),
+                    hydrate_events=False,
+                )
+                return
         opened = open_permission_request(session, request["id"])
         if not opened:
             return

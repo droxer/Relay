@@ -52,7 +52,7 @@ organizational-memory, or company-wide analytics integrations.
   interactive work, tasks for tracked work, automations for recurring or
   triggered work, and projects for a shared workspace and agent roster.
 - Agents run through supported runtimes such as Codex, Claude Code, Pi,
-  OpenCode, and Kimi. Availability depends on the connected computer and its
+  and OpenCode. Availability depends on the connected computer and its
   reported runtime readiness.
 - A project and a team have a computer context. Designs must preserve that
   context when assigning work or presenting execution state.

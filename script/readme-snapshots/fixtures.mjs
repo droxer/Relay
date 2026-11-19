@@ -32,7 +32,7 @@ const AGENT_VERSIONS = {
   claude: { version: "2.1.4", adapter: "cli" },
   codex: { version: "0.52.0", adapter: "cli" },
   pi: { version: "0.9.3", adapter: "cli" },
-  kimi: { version: "1.6.0", adapter: "cli" },
+  opencode: { version: "1.6.0", adapter: "cli" },
 };
 
 function node({ id, displayName, userId, workspaceId, managedNodeId, online = true, status = "ready", activeRuns = [], seenMs = 4_000, createdDays = 40 }) {
@@ -45,7 +45,7 @@ function node({ id, displayName, userId, workspaceId, managedNodeId, online = tr
     ...(managedNodeId ? { managedNodeId, nodeLocation: "managed", sandboxMode: "boxlite" } : { nodeLocation: "user-device", sandboxMode: "none" }),
     capabilities: CAPABILITIES,
     status: online ? status : "stopped",
-    agents: { claude: "ready", pi: "ready", codex: "ready", kimi: "ready" },
+    agents: { claude: "ready", pi: "ready", codex: "ready", opencode: "ready" },
     agentDetails: AGENT_VERSIONS,
     maxConcurrentRuns: 4,
     createdAt: ago(createdDays * DAY),
@@ -124,7 +124,7 @@ export const agents = [
     instructions: "You own backend changes for the billing platform. Prefer small, reviewable diffs and always add a regression test for a bug fix." }),
   agent({ id: "agent_cascade", displayName: "Cascade", executorKind: "codex", defaultRole: "reviewer", avatar: "lorelei-23", availability: "busy", skills: [SKILL_REVIEW],
     instructions: "Review for correctness under concurrency, migration safety, and rollback. Block on missing tests." }),
-  agent({ id: "agent_pixel", displayName: "Pixel", executorKind: "kimi", defaultRole: "tester", avatar: "lorelei-19", availability: "ready",
+  agent({ id: "agent_pixel", displayName: "Pixel", executorKind: "opencode", defaultRole: "tester", avatar: "lorelei-19", availability: "ready",
     instructions: "Write and run end-to-end checks. Report the exact command and its output." }),
   agent({ id: "agent_scout", displayName: "Scout", executorKind: "pi", defaultRole: "planner", avatar: "lorelei-37", availability: "ready",
     instructions: "Break a goal into ordered, verifiable steps before anyone writes code." }),
@@ -353,7 +353,7 @@ export const sessions = [
   summary({ id: "thread_alert_thresholds", title: "Tune infra alert thresholds", status: "running", minutes: 6, agentKind: "pi", ownerAgentId: "agent_scout", projectId: "project_infra", teamId: "team_infra_response", runCount: 2, artifactCount: 1 }),
   summary({ id: "thread_chart_slowdown", title: "Investigate dashboard chart slowdown", status: "completed", minutes: 52, agentKind: "codex", ownerAgentId: "agent_cascade", projectId: "project_infra", runCount: 1, artifactCount: 2 }),
   summary({ id: "thread_onboarding", title: "Redesign onboarding checklist flow", status: "completed", minutes: 3 * 60, agentKind: "pi", ownerAgentId: "agent_scout", projectId: "project_onboarding", runCount: 4, artifactCount: 5 }),
-  summary({ id: "thread_dependency_audit", title: "Weekly dependency audit", status: "completed", minutes: 5 * 60, agentKind: "kimi", ownerAgentId: "agent_pixel", runCount: 1, artifactCount: 1 }),
+  summary({ id: "thread_dependency_audit", title: "Weekly dependency audit", status: "completed", minutes: 5 * 60, agentKind: "opencode", ownerAgentId: "agent_pixel", runCount: 1, artifactCount: 1 }),
   summary({ id: "thread_capacity_plan", title: "Draft Q4 capacity plan for shared runners", status: "completed", minutes: 22 * 60, agentKind: "pi", ownerAgentId: "agent_scout", projectId: "project_infra", runCount: 2, artifactCount: 1 }),
   summary({ id: "thread_ci_cache", title: "Migrate CI cache to the shared runner", status: "failed", minutes: 26 * 60, agentKind: "claude", ownerAgentId: "agent_forge", projectId: "project_infra", runCount: 1 }),
   summary({ id: "thread_invoice_pdf", title: "Invoice PDF totals are off by one cent", status: "completed", minutes: 30 * 60, agentKind: "claude", ownerAgentId: "agent_aria", projectId: "project_billing", runCount: 2, artifactCount: 2 }),
@@ -701,6 +701,7 @@ export function routeBody(pathname, params, language, theme = "dark") {
   if (path === "/agents/default-offers") return { offers: [] };
   if (head === "agents" && id) return { agent: byId(agents, id) };
   if (path === "/teams") return { teams };
+  if (path === "/workflows") return { workflows: [] };
   if (head === "teams" && id) return { team: byId(teams, id) };
 
   if (path === "/projects") return { projects };

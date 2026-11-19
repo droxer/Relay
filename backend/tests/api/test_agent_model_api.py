@@ -255,7 +255,7 @@ def test_registration_keeps_only_well_formed_models_of_known_runtimes(env) -> No
             "codex": ["gpt-6-luna", "bad id", 7, "gpt-6-luna", "gpt-5.6-terra"],
             "gpt": ["gpt-6-luna"],
             "pi": "openai/gpt-5",
-            "kimi": [],
+            "kimi": ["legacy-model"],
         },
     )
 

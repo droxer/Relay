@@ -597,7 +597,9 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert active["workflowStage"] == "running"
 
 
-def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
+@pytest.mark.parametrize("permission_mode", ["ask", "yolo"])
+@pytest.mark.parametrize("executor_kind", ["claude", "codex", "opencode", "pi"])
+def test_task_start_uses_agent_selected_execution(monkeypatch, permission_mode, executor_kind) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         client = TestClient(create_app(root))
@@ -611,14 +613,15 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
                 "token": "node_token",
                 "workspacePath": "/workspace/alice",
                 "protocolVersion": 1,
-                "supportedAgents": ["codex"],
+                "supportedAgents": [executor_kind],
+                "sandboxMode": "none",
                 "capabilities": ["task-workspaces", "workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
                 "status": "ready",
             },
             headers={"Authorization": "Bearer ui_token"},
         )
         assert registered.status_code == 200
-        agent = _create_agent(client, ALICE, node_id="sbx_alice")
+        agent = _create_agent(client, ALICE, executor_kind=executor_kind, node_id="sbx_alice")
         project = project_for_agents(client.app.state.project_store, ALICE, [agent])
         created = client.post(
             "/api/v1/tasks",
@@ -631,9 +634,16 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
             },
         )
         assert created.status_code == 201
+        task_id = created.json()["id"]
 
         _login(client, "alice")
-        started = client.post(f"/api/v1/tasks/{created.json()['id']}/runs", json={})
+        assert created.json()["permissionMode"] == "ask"
+        task_path = f"/api/v1/tasks/{task_id}"
+        assert client.patch(task_path, json={"permissionMode": "invalid"}).status_code == 400
+        updated = client.patch(task_path, json={"permissionMode": permission_mode})
+        assert updated.status_code == 200, updated.text
+        assert client.get(task_path).json()["permissionMode"] == permission_mode
+        started = client.post(f"{task_path}/runs", json={})
         assert started.status_code == 202
 
         commands = client.get(
@@ -642,9 +652,50 @@ def test_task_start_uses_agent_selected_execution(monkeypatch) -> None:
         )
         assert commands.status_code == 200
         [command] = commands.json()["commands"]
-        assert command["agent"] == "codex"
+        assert command["agent"] == executor_kind
         assert "mode" not in command
         assert command["state"]["task_goal"] == "Explain backlog"
+
+        headers = {"Authorization": "Bearer node_token"}
+        command_scope = {
+            "type": "run.permission_requested",
+            "commandId": command["id"],
+            "leaseId": command["leaseId"],
+            "sessionId": command["sessionId"],
+            "runId": command["runId"],
+            "agent": command["agent"],
+        }
+        for questions, expected in (
+            ([], "allow" if permission_mode == "yolo" else "pending"),
+            ([{"id": "q1", "text": "Which draft?", "options": []}], "pending"),
+        ):
+            request_id = f"perm_{1 + bool(questions):016x}"
+            event = {
+                **command_scope,
+                "request": {"id": request_id, "toolName": "test-tool", "input": "{}", "questions": questions},
+            }
+            for _ in range(2):
+                prompt = client.post("/api/v1/daemon-nodes/sbx_alice/events", json=event, headers=headers)
+                assert prompt.status_code == 200, prompt.text
+            answer = client.get(
+                f"/api/v1/daemon-nodes/sbx_alice/permission-requests/{request_id}",
+                params={"sessionId": command["sessionId"]},
+                headers=headers,
+            )
+            assert answer.json()["status"] == expected
+        thread = client.get(f"/api/v1/threads/{command['sessionId']}").json()
+        pending_count = 1 if permission_mode == "yolo" else 2
+        assert len(thread["permissionRequests"]) == pending_count
+        notices = client.get("/api/v1/notifications").json()["notifications"]
+        assert sum(item["kind"] == "permission_requested" for item in notices) == pending_count
+        if permission_mode == "yolo":
+            approvals = [
+                event for event in thread["events"]
+                if event["type"] == "agent.permission_resolved" and event.get("permissionMode") == "yolo"
+            ]
+            assert len(approvals) == 1
+            assert approvals[0]["decision"] == "allow"
+            assert not thread.get("permissionGrants")
 
 
 def test_task_start_requests_managed_capacity_when_no_node_is_ready(
@@ -1231,13 +1282,16 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         assert registered.status_code == 200
         agent = _create_agent(client, ALICE, node_id="sbx_alice")
 
+        identity = computer_for_automation(client, agent=agent)
+        _login(client, "alice")
         created = client.post(
             "/api/v1/tasks",
-            json={"computerId": computer_for_automation(client, agent=agent),
+            json={"computerId": identity,
                 "title": "Weekly report",
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
+                "permissionMode": "yolo",
                 "isRoutine": True,
                 "routineTriggers": WEEKLY_TRIGGERS,
                 "routineState": "active",
@@ -1249,7 +1303,6 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         assert task["status"] == "backlog"
         assert task["linkedSessionIds"] == []
 
-        _login(client, "alice")
         start = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert start.status_code == 202
         assert start.json()["session"]["id"]
@@ -1261,6 +1314,7 @@ def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None
         # coalesces into the same run and the clock advances past it.
         assert occurrence["dueDate"] == occurrence["scheduledFor"]
         assert occurrence["sourceRoutineId"] == task["id"]
+        assert occurrence["permissionMode"] == "yolo"
 
         updated_definition = client.get(f"/api/v1/tasks/{task['id']}").json()
         assert updated_definition["status"] == "backlog"

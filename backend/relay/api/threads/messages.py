@@ -32,8 +32,8 @@ def _leading_mention_agent_ids(
 
     Browser addressing metadata is authoritative when there is no textual
     mention. A leading mention is also durable user intent, though, and older or
-    partially loaded clients may omit the metadata. Resolve that intent here so
-    ``@Kimi`` can never silently become a room message.
+    partially loaded clients may omit the metadata. Resolve that intent here
+    so a named mention cannot silently address the room.
 
     The grammar mirrors ``parseMentions`` in ``web/src/lib/mentions.ts`` line
     for line: only horizontal whitespace may precede the run, and a bare ``@``

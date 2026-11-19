@@ -12,7 +12,7 @@ from ...core.permission_requests import (
     is_permission_request_id,
     parse_permission_request,
 )
-from ...core.validation import valid_agent
+from ...core.models import DAEMON_WIRE_AGENT_NAMES
 from ...collaboration.policy import ROUND_RESULT_REJECTIONS
 from ..bodies import raw_string_field, string_field, token_usage_field
 
@@ -111,8 +111,8 @@ def _workspace_envelope(value: dict[str, Any], event_type: str, command_id: str)
 def _run_envelope(value: dict[str, Any], event_type: str, command_id: str) -> EventFields:
     session_id = string_field(value, "sessionId")
     run_id = string_field(value, "runId")
-    agent = valid_agent(value.get("agent"))
-    if not command_id or not session_id or not run_id or not agent:
+    agent = value.get("agent")
+    if not command_id or not session_id or not run_id or agent not in DAEMON_WIRE_AGENT_NAMES:
         raise ValueError("daemon node event requires commandId, sessionId, runId, and agent.")
     replayed = event_type in REPLAYABLE_EVENTS and value.get("replayed") is True
     return {

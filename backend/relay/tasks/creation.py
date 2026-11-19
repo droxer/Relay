@@ -29,6 +29,7 @@ from .requests import (
     TaskRequestReader,
     acceptance_policy_field,
     collaboration_style_field,
+    permission_mode_field,
     tags_field,
 )
 from ..teams.dispatch import TeamDispatchError, task_thread_assignments, task_thread_ownership
@@ -70,6 +71,9 @@ class _Plan:
 
 
 def create_task(ctx: Any, actor: Actor, request: TaskCreateRequest) -> dict[str, Any]:
+    permission_mode = permission_mode_field(request.body)
+    if permission_mode == "yolo" and actor["userId"] != request.owner:
+        raise TaskRequestError(403, "task_permission_mode_owner_required")
     identity = request.reader.string(request.body, "computerId")
     if identity:
         if request.project:
@@ -79,7 +83,7 @@ def create_task(ctx: Any, actor: Actor, request: TaskCreateRequest) -> dict[str,
     if identity:
         validate_computer_assignment(ctx, identity, assignment.agent_id, assignment.team_id)
     plan = _plan_creation(ctx, request, assignment)
-    task = _create_record(ctx, request, assignment, plan)
+    task = _create_record(ctx, request, assignment, plan, permission_mode=permission_mode)
     if plan.creates_thread:
         task = _open_task_thread(ctx, task, request)
     return task
@@ -165,7 +169,8 @@ def _plan_creation(
 
 
 def _create_record(
-    ctx: Any, request: TaskCreateRequest, assignment: _Assignment, plan: _Plan
+    ctx: Any, request: TaskCreateRequest, assignment: _Assignment, plan: _Plan,
+    *, permission_mode: str | None,
 ) -> dict[str, Any]:
     body, project, agent = request.body, request.project, assignment.agent
     task = ctx.task_store.create_task(
@@ -181,6 +186,7 @@ def _create_record(
             "dueDate": request.reader.date(body, "dueDate"),
             "status": plan.status,
             "acceptancePolicy": plan.acceptance_policy or NEW_TASK_ACCEPTANCE_POLICY,
+            **({"permissionMode": permission_mode} if permission_mode else {}),
             **(
                 {"collaborationStyle": plan.collaboration_style}
                 if plan.collaboration_style

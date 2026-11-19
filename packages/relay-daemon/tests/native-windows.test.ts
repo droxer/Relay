@@ -98,11 +98,11 @@ test('Windows model and inventory discovery use native execution', async () => {
 
 test('Windows resolves npm .cmd files instead of adjacent POSIX shims and preserves argv', () => {
   const entry = 'C:\\npm\\node_modules\\cli\\bin.js';
-  const present = new Set(['C:\\npm\\codex', 'C:\\npm\\codex.cmd', entry, 'C:\\native\\kimi.exe']);
+  const present = new Set(['C:\\npm\\codex', 'C:\\npm\\codex.cmd', entry, 'C:\\native\\opencode.exe']);
   const lookup = { path: 'C:\\npm;C:\\native', exists: (file: string) => present.has(file), read: () => '"%_prog%" "%dp0%\\node_modules\\cli\\bin.js" %*' };
   const args = ['--config', 'x="a b" & %PATH%'];
   assert.deepEqual(windowsCommand('codex', args, lookup), { command: process.execPath, args: [entry, ...args] });
-  assert.deepEqual(windowsCommand('kimi', args, lookup), { command: 'C:\\native\\kimi.exe', args });
+  assert.deepEqual(windowsCommand('opencode', args, lookup), { command: 'C:\\native\\opencode.exe', args });
   assert.throws(() => windowsCommand('missing', [], lookup), /command not found/);
   assert.throws(() => windowsCommand('codex', [], { ...lookup, read: () => '@echo off' }), /batch wrapper/);
 });

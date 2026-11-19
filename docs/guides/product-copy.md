@@ -25,7 +25,7 @@ Translation keys and wire names may retain historical wording.
 - Use **Request changes** for review feedback. Use **Accept** for task
   acceptance and **Approve** for a held team step. Permission prompts retain
   their separate Allow and Deny actions.
-- Call Codex, Claude Code, Pi, OpenCode, and Kimi **agent runtimes**. A runtime
+- Call Codex, Claude Code, Pi, and OpenCode **agent runtimes**. A runtime
   executes an agent; it is not an agent identity. Keep Placement where the
   binding itself is being managed.
 - Use **Prerequisites** for tasks that must finish first, **Waiting on** for

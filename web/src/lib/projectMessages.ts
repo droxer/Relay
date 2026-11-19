@@ -15,7 +15,7 @@ export type PermissionAudit = {
   toolUseId?: string;
   /** The tool line's target (`toolTarget`) the prompt covered. */
   target?: string;
-  outcome: "allow" | "allow_always" | "allow_granted" | "deny" | "expired" | "answered" | "skipped";
+  outcome: "allow" | "allow_always" | "allow_granted" | "allow_yolo" | "deny" | "expired" | "answered" | "skipped";
   tone: Tone;
   label: string;
   detail?: string;
@@ -181,10 +181,11 @@ function appendMissingStream(current: string, fallback: string): string {
 /** How a prompt closed: a person's allow once or always, a standing grant's
  *  allow, a deny, or an expiry — for a question, answered or skipped. */
 function permissionOutcome(
-  event: { decision: string; always?: boolean; grant?: boolean },
+  event: { decision: string; always?: boolean; grant?: boolean; permissionMode?: "yolo" },
   question: boolean,
 ): PermissionAudit["outcome"] {
   if (question) return event.decision === "allow" ? "answered" : event.decision === "deny" ? "skipped" : "expired";
+  if (event.decision === "allow" && event.permissionMode === "yolo") return "allow_yolo";
   if (event.decision === "allow" && event.grant) return "allow_granted";
   if (event.decision === "allow" && event.always) return "allow_always";
   return event.decision === "deny" ? "deny" : event.decision === "allow" ? "allow" : "expired";

@@ -128,7 +128,6 @@ def resolve_bundle(
         files = ctx.skill_store.revision_files(revision_id)
         resolved.append(
             {
-                "_catalogName": skill.get("name") or skill_id,
                 "skillId": skill_id,
                 "revisionId": revision_id,
                 "slug": slug,
@@ -141,26 +140,6 @@ def resolve_bundle(
             }
         )
     resolved.sort(key=lambda item: (item["slug"], item["skillId"]))
-    if agent.get("executorKind") == "kimi":
-        kimi_resolved = []
-        names = set()
-        for item in resolved:
-            name_key = item["_catalogName"].casefold()
-            if name_key in names:
-                skipped.append(
-                    _skipped(
-                        item["skillId"],
-                        item.get("slug"),
-                        "name-conflict",
-                        item.get("assignmentMode"),
-                    )
-                )
-                continue
-            names.add(name_key)
-            kimi_resolved.append(item)
-        resolved = kimi_resolved
-    for item in resolved:
-        item.pop("_catalogName", None)
     skipped.sort(
         key=lambda item: (item.get("slug") or "", item["skillId"], item["reason"])
     )

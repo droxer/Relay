@@ -9,6 +9,7 @@ import type {
   RoutineState,
   RoutineTrigger,
   TaskPriority,
+  TaskPermissionMode,
   TaskStatus,
 } from "relay-core";
 import type { ArtifactIndexItem, ProducedFile } from "./artifacts.ts";
@@ -95,6 +96,7 @@ export interface TaskMutationInput {
   reviewRevision?: string;
   collaborationStyle?: CollaborationStyle | "" | null;
   acceptancePolicy?: "human" | "automatic";
+  permissionMode?: TaskPermissionMode;
   blockerReason?: string;
   action?: "unblock";
   title?: string;

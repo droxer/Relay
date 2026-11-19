@@ -59,7 +59,7 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><style>
     <path d="M230 6 C300 6 330 34 400 34" fill="none" stroke="${line}" stroke-width="1.5" stroke-dasharray="3 5"/>
   </svg>
   <h1>${escapeHtml(headline)}</h1>
-  <div class="meta">Open source · Claude Code · Codex · Pi · Kimi</div>
+  <div class="meta">Open source · Claude Code · Codex · Pi · OpenCode</div>
 </body></html>`;
 
 const browser = await chromium.launch();

@@ -340,7 +340,7 @@ def test_placement_availability_is_derived_from_agent_and_node_health(
     assert result["conditions"] == []
 
 
-@pytest.mark.parametrize("executor_kind", ["claude", "codex", "pi", "opencode", "kimi"])
+@pytest.mark.parametrize("executor_kind", ["claude", "codex", "pi", "opencode"])
 def test_busy_status_belongs_only_to_the_running_logical_agents(executor_kind: str) -> None:
     node = {
         "online": True,

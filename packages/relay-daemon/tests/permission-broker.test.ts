@@ -361,14 +361,12 @@ describe("permission adapter launch", () => {
 
 describe("permissionPromptsApply", () => {
   it("follows the registry: runtimes with an adapter, on a local computer, under the native policy", () => {
-    assert.equal(permissionPromptsApply("claude", "none", {}), true);
-    assert.equal(permissionPromptsApply("claude", "none", { RELAY_LOCAL_PERMISSION_POLICY: "native" }), true);
-    assert.equal(permissionPromptsApply("claude", "none", { RELAY_LOCAL_PERMISSION_POLICY: "trusted" }), false);
-    assert.equal(permissionPromptsApply("claude", "boxlite", {}), false);
-    assert.equal(permissionPromptsApply("codex", "none", {}), true);
-    assert.equal(permissionPromptsApply("opencode", "none", {}), true);
-    assert.equal(permissionPromptsApply("pi", "none", {}), true);
-    assert.equal(permissionPromptsApply("pi", "boxlite", {}), false);
+    for (const agent of AGENT_NAMES) {
+      assert.equal(permissionPromptsApply(agent, "none", {}), true, `${agent} uses native permissions by default`);
+      assert.equal(permissionPromptsApply(agent, "none", { RELAY_LOCAL_PERMISSION_POLICY: "native" }), true, agent);
+      assert.equal(permissionPromptsApply(agent, "none", { RELAY_LOCAL_PERMISSION_POLICY: "trusted" }), false, agent);
+      assert.equal(permissionPromptsApply(agent, "boxlite", {}), false, agent);
+    }
   });
 });
 

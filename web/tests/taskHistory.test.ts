@@ -98,6 +98,20 @@ describe("taskHistoryEntries", () => {
     // The assignment entry carries its target so the label can print a name.
     assert.equal(entries[2]?.teamId, "team_9");
   });
+
+  it("drops redundant assignment activity for current and retired runtimes", () => {
+    for (const agent of ["opencode", "kimi"]) {
+      const timestamp = "2026-06-01T00:00:00.000Z";
+      const entries = taskHistoryEntries([
+        event({ id: "assigned", type: "task.assigned", timestamp, agent } as never),
+        event({
+          id: "activity", type: "task.activity", timestamp,
+          activity: { id: "act_1", createdAt: timestamp, message: `Assigned to ${agent}.`, agent },
+        } as never),
+      ], "task_1");
+      assert.deepEqual(entries.map((entry) => entry.kind), ["assigned"]);
+    }
+  });
 });
 
 describe("status moves", () => {

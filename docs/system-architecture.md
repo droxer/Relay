@@ -113,7 +113,7 @@ authority in the Python control plane while Agent Runtimes execute on Computers.
 
 | Surface | Purpose | Backend boundary | Runtime access |
 | --- | --- | --- | --- |
-| Relay MCP | Manage standalone Tasks/Automations; Project roster reads and lead-only work management; optional owner-reviewed Task proposals | `backend/relay/mcp/`, `POST /api/v1/mcp` | Codex, Claude Code, OpenCode, Kimi and Pi through the local bridge or daemon run proxy |
+| Relay MCP | Manage standalone Tasks/Automations; Project roster reads and lead-only work management; optional owner-reviewed Task proposals | `backend/relay/mcp/`, `POST /api/v1/mcp` | Codex, Claude Code, OpenCode, and Pi through the local bridge or daemon run proxy |
 | Service Connections | Call external services within explicitly selected work Grants; currently GitHub issue reads | `backend/relay/api/connections/tools.py`, `POST /api/v1/connection-tools` | Per-run stdio proxy for Codex and Claude; requires `service-connections` |
 
 These endpoints have separate catalogs, credentials and authorization rules.

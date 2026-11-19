@@ -22,7 +22,7 @@ service commands, data layout, and test organization.
 | Backend | [FastAPI](https://github.com/fastapi/fastapi), [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy), [Pydantic](https://github.com/pydantic/pydantic), [Alembic](https://github.com/sqlalchemy/alembic), [uv](https://github.com/astral-sh/uv) |
 | Web | [Next.js](https://github.com/vercel/next.js), [React](https://github.com/facebook/react), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss), [TanStack Query](https://github.com/TanStack/query), [Zustand](https://github.com/pmndrs/zustand) |
 | Sandboxing | [BoxLite](https://github.com/boxlite-ai/boxlite) |
-| Agents | Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, [OpenCode](https://opencode.ai), Kimi |
+| Agents | Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, [OpenCode](https://opencode.ai) |
 
 ## Environment Files
 
@@ -82,26 +82,22 @@ OPENAI_MODEL=...          # optional
 PI_API_KEY=...            # optional override
 PI_BASE_URL=...           # optional override
 PI_MODEL=...              # optional override
-KIMI_API_KEY=...          # optional; Kimi agent via Moonshot API
-KIMI_BASE_URL=...         # optional override
-KIMI_MODEL=...            # required model ID when using an API key
-MOONSHOT_API_KEY=...      # alternative Moonshot credential
 ```
 
 Local computers (`--sandbox none`) run the user's installed agent CLI from
 `PATH`, using its existing login, provider, model, and configuration. Log in and
-configure Codex, Claude, Pi, OpenCode, or Kimi directly with that CLI before connecting the
-computer. Relay does not generate local agent credentials or provider config,
+configure Codex, Claude, Pi, or OpenCode directly with that CLI before connecting
+the computer. Relay does not generate local agent credentials or provider config,
 translate Relay credential aliases, select a model/provider, or install shared
 skills into the user's agent directories. Native launch-environment settings,
-including custom `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, and
-`KIMI_CODE_HOME`, remain available. Relay's automatically loaded `.env` values do
+including custom `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `PI_CODING_AGENT_DIR`,
+remain available. Relay's automatically loaded `.env` values do
 not override these local runtime settings.
 
 Local execution defaults to `--local-permission-policy native`: Relay does not
-add Codex's approval/sandbox bypass, Claude's `bypassPermissions`, or OpenCode's and
-Kimi's `--auto`. The CLI's own policy still applies; this is not an OS sandbox, and
-headless tasks needing interactive approval may fail or wait until cancelled.
+add Codex's approval/sandbox bypass, Claude's `bypassPermissions`, or OpenCode's
+`--auto`. Relay forwards supported tool permission requests through its
+permission broker and the CLI's own sandbox policy applies.
 For an explicitly trusted computer, pass `--local-permission-policy trusted`
 (or set `RELAY_LOCAL_PERMISSION_POLICY=trusted`) to opt into those flags.
 `--allow-host-agent-execution` remains required independently. BoxLite keeps its
@@ -110,7 +106,7 @@ permission override in either policy.
 
 For local Claude/Codex tasks with assigned Relay skills, materialized skill paths
 are included in the task instructions instead of replacing the CLI's auth/config
-home. Local Pi/Kimi use their explicit skill-path options. The user's native
+home. Local Pi uses explicit skill-path options. The user's native
 skills and runtime configuration otherwise remain under that runtime's control.
 
 BoxLite guests are provisioned separately from the environment variables above:
@@ -119,10 +115,6 @@ BoxLite guests are provisioned separately from the environment variables above:
 - Codex requires an API key and uses the native provider when `OPENAI_BASE_URL`
   is empty; a custom endpoint selects Relay's `dashscope` provider.
 - Pi receives generated auth and model files for the selected provider.
-- Kimi accepts copied login/configuration files or `KIMI_API_KEY` plus
-  `KIMI_MODEL` (also accepting Moonshot aliases). Relay maps these to Kimi's
-  native temporary-model variables. This model requirement applies to guest
-  API-key provisioning, not to local CLI logins.
 
 Provider keys and aliases are stripped from subprocess inheritance, then only
 the selected runtime's native launch credentials (local) or provisioned
@@ -226,7 +218,7 @@ Setup saves a private `~/.relay/daemon-nodes/<id>/runtime-profile.json`. It
 preserves selected native configuration directories, PATH, proxy and certificate
 settings; the daemon loads it through `--runtime-profile <absolute-path>`.
 Preflight uses the same selected environment. Agent discovery honors the active
-Codex/Claude/Pi/OpenCode/Kimi configuration directories, including custom homes.
+Codex/Claude/Pi/OpenCode configuration directories, including custom homes.
 
 Prefer each CLI's saved login for background services. If a runtime needs native
 environment credentials, place the required key/value pairs in a private JSON

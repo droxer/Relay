@@ -948,7 +948,7 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
-                "supportedAgents": ["claude", "kimi"],
+                "supportedAgents": ["claude", "opencode"],
                 "capabilities": ["workspace-scope", "thread-workspaces"],
                 "status": "ready",
             }
@@ -963,11 +963,11 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
                 "computerId": computer,
             },
         )
-        kimi = app.state.agent_store.create_agent(
+        opencode = app.state.agent_store.create_agent(
             admin_id,
             {
-                "displayName": "Kimi",
-                "executorKind": "kimi",
+                "displayName": "OpenCode",
+                "executorKind": "opencode",
                 "defaultRole": "implementer",
                 "computerId": computer,
             },
@@ -986,7 +986,7 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
         response = client.post(
             f"/api/v1/threads/{session['id']}/messages",
             json={
-                "text": f"@{kimi['displayName']} what do you think?",
+                "text": f"@{opencode['displayName']} what do you think?",
                 "intent": "accomplish",
             },
         )
@@ -998,7 +998,7 @@ def test_leading_named_mention_cannot_silently_dispatch_to_the_room(
         )
         assert commands.status_code == 200
         [command] = commands.json()["commands"]
-        assert command["logicalAgentId"] == kimi["id"]
+        assert command["logicalAgentId"] == opencode["id"]
 
 
 def test_mentioning_two_agents_dispatches_one_round_with_both(monkeypatch) -> None:

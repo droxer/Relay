@@ -2,6 +2,7 @@ import type {
   AgentName, CollaborationStyle, CurrentUser, RelayTaskListItem, RoutinePauseReason, RoutineState, RoutineTrigger,
   TaskMutationInput, TaskPriority, TaskStatus,
 } from "../types.js";
+import type { TaskPermissionMode } from "relay-core";
 
 import { defaultSchedule } from "./automationSchedule.ts";
 import { normalizeTriggerForSave, triggersEqual, triggersOf } from "./automationTrigger.ts";
@@ -39,6 +40,7 @@ export type TaskBoardFormBase = {
   assignedTeamId?: string;
   assignedWorkflowId?: string;
   acceptancePolicy?: AcceptancePolicy;
+  permissionMode?: TaskPermissionMode;
   collaborationStyle?: CollaborationStyle | null;
   startedAt?: string;
 };
@@ -136,6 +138,7 @@ export function taskBoardFormsEqual(a: TaskBoardFormState, b: TaskBoardFormState
     || a.assignedTeamId !== b.assignedTeamId
     || a.assignedWorkflowId !== b.assignedWorkflowId
     || a.acceptancePolicy !== b.acceptancePolicy
+    || (a.permissionMode ?? "ask") !== (b.permissionMode ?? "ask")
     || (a.collaborationStyle ?? null) !== (b.collaborationStyle ?? null)
   ) {
     return false;
