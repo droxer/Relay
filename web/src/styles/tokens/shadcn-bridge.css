@@ -213,7 +213,7 @@
   --destructive-foreground: var(--on-err);
   --border: var(--line-1);
   --input: var(--control-border);
-  --ring: var(--link); /* focus rings are link ink, never the accent action:
-                          a focused primary button must not ring in more of
-                          its own fill */
+  --ring: var(--signature); /* focus rings are the signature orange, never
+                               the action: a focused primary button must not
+                               ring in more of its own fill */
 }

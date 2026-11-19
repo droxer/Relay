@@ -574,9 +574,9 @@ describe("focus contract", () => {
     // A box-shadow ring is painted inside the nearest overflow:hidden ancestor
     // and gets sliced off by it. This app is built out of scrollers and clipped
     // rows, so the ring silently lost an edge against container boundaries.
-    // The ring is LINK INK, not the action fill, so a focused primary button
-    // rings in a visibly different shade than its own plate.
-    assert.match(roles, /--focus-outline:\s*var\(--focus-w\) solid var\(--link\);/);
+    // The ring is the SIGNATURE orange, not the action fill, so a focused
+    // primary button rings in a visibly different colour than its own plate.
+    assert.match(roles, /--focus-outline:\s*var\(--focus-w\) solid var\(--signature\);/);
     assert.match(roles, /--focus-offset:\s*\d+px;/);
     assert.doesNotMatch(roles, /--focus-ring\s*:/, "the box-shadow ring contract was replaced by outline");
 

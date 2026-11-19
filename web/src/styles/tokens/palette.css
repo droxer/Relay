@@ -64,9 +64,9 @@
 :root {
   /* Dark register — blue charcoal. Cards and floating surfaces lift in
      small steps; floating chrome also receives the shared soft shadow. */
-  --surface-0: #171d22; /* blue-charcoal canvas */
-  --surface-1: #1f282f; /* cards and panels */
-  --surface-2: #28323a; /* fills, search, hover */
+  --surface-0: #12171b; /* blue-charcoal canvas */
+  --surface-1: #1c242a; /* cards and panels */
+  --surface-2: #26313a; /* fills, search, hover */
   --surface-3: #2b3842; /* floating surfaces and selected segments */
 
   /* Zone surfaces — the three-pane shell (rail → list → canvas) reads as a
@@ -75,27 +75,27 @@
      surface-1 in dark, but the light register's raised-is-lighter ladder then
      puts the list ABOVE the rail (see the light block). These roles pin the
      zone order explicitly. Dark: rail is the lightest step, canvas darkest. */
-  /* Literal hexes, equal to surface-2/surface-1 here but not in the light
+  /* Literal hexes, between surface-1 and surface-2 here but not in the light
      register: paletteTokens.test.ts computes contrast from each register's
      literals, so a role that differs by register stays a literal. */
-  --surface-rail: #28323a;
-  --surface-list: #1f282f;
+  --surface-rail: #222c33;
+  --surface-list: #1c242a;
   /* A phone list's group band: one step off the page it sits on. */
-  --surface-band: #1f282f;
+  --surface-band: #222c33;
 
   /* Ink — every tier that can carry TEXT clears WCAG 1.4.3 (4.5:1) against
      the worst plane it can land on, which is --surface-3, not the canvas.
      Soft off-whites balanced against the charcoal canvas so the register reads as
      one material.
      Each tier is checked against every surface by paletteTokens.test.ts. */
-  --ink-1: #e3ebf1; /* headings, emphasis */
+  --ink-1: #edf2f6; /* headings, emphasis */
   --ink-2: #ccd8e1; /* body */
   --ink-3: #b2c3d0; /* secondary labels */
-  --ink-4: #a0b2c0; /* timestamps, meta, disabled */
+  --ink-4: #93a5b2; /* timestamps, meta, disabled — recedes, still AA on --surface-3 */
 
   /* Cool-grey structural and soft hairlines. */
-  --line-1: #384957; /* structural hairline */
-  --line-2: #2d3b46; /* soft hairline */
+  --line-1: #405361; /* structural hairline */
+  --line-2: #2f3d48; /* soft hairline */
 
   /* Restrained blue-grey actions. Signal blue remains exclusive to live
      execution. Selection uses a quiet wash with a clear ink marker. */
@@ -104,16 +104,17 @@
   --action-soft: color-mix(in srgb, #d3e0e9 8%, transparent);
   --on-action: #23313b;
 
-  /* The brand mark's lead chevron — a person handing work on. Only the
-     logo, the favicon, and the email's handoff bar draw with it; it is
-     never a control, link, or status colour. */
+  /* The brand mark's lead chevron — a person handing work on. The logo,
+     the favicon and the email's handoff bar draw with it, and roles.css
+     lends it to --signature: the focus ring and the selected-item bar.
+     It is never a fill, a link, or a status colour. */
   --brand-lead: #ff8a3d;
 
   /* Status ink retains green, gold and crimson meanings. Every tone clears
      the small-text contrast floor on all content and navigation planes. */
-  --ok: #6dd28a;   /* success — lifted for tinted selected states */
+  --ok: #7adb95;   /* success — lifted for tinted selected states */
   --warn: #dec371; /* warning — a muted gold, clear of the brand mark's orange */
-  --err: #f7adbe;  /* critical — crimson, lifted for the dark canvas */
+  --err: #ffabbd;  /* critical — crimson, lifted for the dark canvas */
   /* Dark ink on the lifted critical fill. */
   --on-err: #23313b;
 
@@ -148,9 +149,9 @@
   --warn-mark: #a98426;
   --live-mark: #5e93e8;
 
-  /* Link ink — wayfinding: anchors in prose and the focus ring. Ink, set
-     apart by its underline (and the ring by its offset), never a hue. */
-  --link-ink: #e3ebf1;
+  /* Link ink — wayfinding: anchors in prose. Ink, set apart by its
+     underline, never a hue. */
+  --link-ink: #edf2f6;
   --link-ink-strong: #ffffff;
 
   /* Code tokens — the ONE place hue is allowed to carry structure rather
@@ -216,13 +217,13 @@
      a hex that nothing proves still matches the register it mirrors, which is
      the exact drift these tokens exist to prevent. Add a tier when something
      paints it. */
-  --dark-canvas: #171d22;
-  --dark-surface: #1f282f;
-  --dark-ink: #e3ebf1;
+  --dark-canvas: #12171b;
+  --dark-surface: #1c242a;
+  --dark-ink: #edf2f6;
   --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
   --dark-action: #d3e0e9;
 
-  --light-canvas: #eef2f5;
+  --light-canvas: #e9eef2;
   --light-action: #364b59;
 
   /* Document paper — artifact/file previews assume a white page in every
@@ -236,12 +237,12 @@
 
   /* ----- Register-invariant scales ----- */
 
-  /* Cool Mist corners: micro 8px, controls 12px, containers 16px.
+  /* Tool-grade corners: micro 4px, controls 6px, containers 10px.
      Keep three roles so dense controls and their containers stay distinct.
      Full radii remain reserved for circles and capsules. */
-  --r-1: 8px;   /* micro: inline code, kbd, tags, swatches, nav items */
-  --r-2: 12px;   /* controls: buttons, inputs, chips, badges, tabs, segments */
-  --r-3: 16px;   /* containers: cards, drawers, modals, panels, popovers */
+  --r-1: 4px;   /* micro: inline code, kbd, tags, swatches, nav items */
+  --r-2: 6px;   /* controls: buttons, inputs, chips, badges, tabs, segments */
+  --r-3: 10px;  /* containers: cards, drawers, modals, panels, popovers */
   --r-full: 9999px; /* true circles and capsules only: dots, pips, avatars, bars */
   --r-pill: 9999px; /* marketing CTAs only (eveland's capsule button); never an app control */
 
@@ -799,26 +800,26 @@
 html[data-theme="light"] {
   --field-border-strength: 56%;
   /* Cool mist separates the canvas, inset fill and raised content. */
-  --surface-0: #eef2f5;
-  --surface-1: #fbfcfd;
-  --surface-2: #e8eef2; /* recessed fill — see the note above */
+  --surface-0: #e9eef2;
+  --surface-1: #fdfeff;
+  --surface-2: #e2e9ee; /* recessed fill — see the note above */
   --surface-3: #ffffff; /* top plane: the source system's canvas white */
 
   /* Navigation recedes through two subtle neutral-grey steps. */
-  --surface-rail: #e5ebef;
-  --surface-list: #f4f7f9;
+  --surface-rail: #e1e8ed;
+  --surface-list: #f6f9fa;
   /* Group bands sit below the near-white list plane. */
-  --surface-band: #e8eef2;
+  --surface-band: #edf2f5;
 
   /* Neutral text; every tier clears AA on the recessed fill. */
-  --ink-1: #27333b; /* blue-charcoal ink */
-  --ink-2: #3d4c56; /* ink */
-  --ink-3: #4b5c66; /* charcoal */
-  --ink-4: #5c6b75; /* steel, deepened for AA */
+  --ink-1: #141f27; /* blue-charcoal ink */
+  --ink-2: #33424c; /* ink */
+  --ink-3: #4c5c66; /* charcoal */
+  --ink-4: #58676f; /* steel, deepened for AA */
 
   /* Cool-grey hairlines, with a visible structural edge on the mist canvas. */
-  --line-1: #c1ccd4; /* hairline */
-  --line-2: #dce4e9; /* hairline-soft */
+  --line-1: #b7c3cc; /* hairline */
+  --line-2: #d6dfe5; /* hairline-soft */
 
   /* Blue-charcoal action with white ink; selection is a restrained wash. */
   --action: #364b59;
@@ -853,8 +854,8 @@ html[data-theme="light"] {
   --live-mark: #3a76e0;
 
   /* Link ink is the ink; the underline marks it. */
-  --link-ink: #27333b;
-  --link-ink-strong: #17232c;
+  --link-ink: #141f27;
+  --link-ink-strong: #0b141a;
 
   /* Light code tokens — the same five roles inked for a light page. Deepened,
      not derived: the dark register's tints measure ~1.5:1 here. Ratios on
@@ -880,7 +881,7 @@ html[data-theme="light"] {
   --tag-8: #26709a;
 
 
-  --elevation-shadow: rgba(37, 60, 80, 0.10);
+  --elevation-shadow: rgba(37, 60, 80, 0.16);
   --scrim: rgba(23, 35, 44, 0.24);
 }
 
