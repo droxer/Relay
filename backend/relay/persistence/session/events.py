@@ -10,7 +10,10 @@ import time
 from typing import Any
 from loguru import logger
 from sqlalchemy import (
+    LargeBinary,
+    Text,
     bindparam,
+    cast,
     delete,
     func,
     insert,
@@ -244,6 +247,39 @@ class SessionEventRows(SessionStoreState):
                 "version": int(session["version"] or 0),
                 "status": session["status"],
             }
+
+    def read_transcript_page(
+        self, session_id: str, *, before: int, limit: int, max_bytes: int,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        """Read a contiguous suffix before an exclusive sequence boundary."""
+        sequence, payload = self.events.c.sequence, self.events.c.payload
+        size = (
+            func.octet_length(cast(payload, Text))
+            if self.engine.dialect.name == "postgresql"
+            else func.length(cast(payload, LargeBinary))
+        )
+        candidates = (
+            select(sequence, size.label("bytes"))
+            .where(self.events.c.session_id == session_id, sequence < before)
+            .order_by(sequence.desc()).limit(limit).subquery()
+        )
+        sized = select(
+            candidates.c.sequence,
+            func.sum(candidates.c.bytes).over(
+                order_by=candidates.c.sequence.desc(), rows=(None, 0),
+            ).label("total_bytes"),
+        ).subquery()
+        # Always make progress even when an individual event exceeds the budget.
+        statement = (
+            select(sequence, payload)
+            .join(sized, sized.c.sequence == sequence)
+            .where(self.events.c.session_id == session_id,
+                   or_(sized.c.total_bytes <= max_bytes, sequence == before - 1))
+            .order_by(sequence)
+        )
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).all()
+        return (int(rows[0].sequence) if rows else before), [row.payload for row in rows]
 
     def run_output_sequences(self, session_id: str, run_id: str) -> dict[str, int]:
         """The highest streamed sequence per stream one run has already logged.

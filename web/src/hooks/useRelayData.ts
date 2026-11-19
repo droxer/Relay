@@ -10,6 +10,7 @@ import { shareSessions } from "../lib/sessionEvents";
 import { isSessionStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 import { useKeyChange } from "./useKeyChange";
 import type { TaskListCache } from "../api-client/tasks";
+import type { SessionHeadCache } from "../api-client/sessions";
 
 export const RELAY_QUERY_KEY = ["relay"] as const;
 const RELAY_KEY = RELAY_QUERY_KEY;
@@ -111,6 +112,7 @@ export function useRelayData(
 ): RelayDataResult {
   const queryClient = useQueryClient();
   const taskListCache = useRef<TaskListCache>({});
+  const sessionHeadCache = useRef<SessionHeadCache>({});
   // Background reconciliation must stay visually silent. Only a user/app
   // initiated refresh drives page-level refresh chrome.
   const [manualRefreshPending, setManualRefreshPending] = useState(false);
@@ -182,7 +184,7 @@ export function useRelayData(
         // stay in the cache below it (mergeSessionHeadPage).
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelaySession[]> => {
           const atRequestStart = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY) ?? [];
-          const page = await listSessionSummaries(signal, { limit: THREAD_PAGE_SIZE });
+          const page = await listSessionSummaries(signal, { limit: THREAD_PAGE_SIZE }, sessionHeadCache.current);
           const next = typeof page.nextCursor === "string" ? page.nextCursor : null;
           setHeadCursor(next);
           // The first page is the whole list: nothing older is left to load.
@@ -251,6 +253,7 @@ export function useRelayData(
   useEffect(() => {
     if (!enabled) {
       taskListCache.current = {};
+      sessionHeadCache.current = {};
       void queryClient.resetQueries({ queryKey: RELAY_KEY });
     }
   }, [enabled, queryClient]);
@@ -288,7 +291,9 @@ export function useRelayData(
     const previous = previousTokenRef.current;
     previousTokenRef.current = token;
     if (enabled && previous !== token) {
-      void queryClient.refetchQueries({ queryKey: RELAY_KEY, type: "active" });
+      for (const queryKey of [SANDBOXES_KEY, NODES_KEY]) {
+        void queryClient.refetchQueries({ queryKey, exact: true, type: "active" });
+      }
     }
   }, [token, enabled, queryClient]);
 

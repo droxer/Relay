@@ -40,6 +40,35 @@ it("independent clients read the persisted queue without dispatching from the br
   await waitFor(() => expect(phone.result.current.messages.map(m => m.text)).toEqual(["Next step"]));
   expect(phone.composer.send).not.toHaveBeenCalled();
 });
+
+it("renders the acknowledged queue without a second GET after enqueue", async () => {
+  const hook = open();
+  await waitFor(() => expect(hook.client.isFetching()).toBe(0));
+  const reads = () => vi.mocked(apiJson).mock.calls.filter(([, options]) => !options?.method).length;
+  const before = reads();
+  await act(async () => { expect(await hook.result.current.enqueue("Next step")).toBe(true); });
+  await waitFor(() => expect(hook.result.current.messages.map(m => m.text)).toEqual(["Next step"]));
+  expect(reads()).toBe(before);
+});
+
+it("backs off an empty queue during a run and picks up work queued elsewhere", async () => {
+  vi.useFakeTimers();
+  vi.mocked(apiJson).mockClear();
+  const hook = open();
+  await act(async () => {});
+  expect(apiJson).toHaveBeenCalledTimes(1);
+
+  saved.messages.push({ id: "remote", text: "From another tab" });
+  await act(() => vi.advanceTimersByTimeAsync(4_000));
+  expect(apiJson).toHaveBeenCalledTimes(1);
+  await act(() => vi.advanceTimersByTimeAsync(1_010));
+  expect(hook.result.current.messages.map(message => message.id)).toEqual(["remote"]);
+
+  saved.messages = [];
+  await act(() => vi.advanceTimersByTimeAsync(1_010));
+  expect(hook.result.current.messages).toEqual([]);
+  hook.unmount(); hook.client.clear();
+});
 it("failed saving returns false and exposes a recoverable error", async () => {
   const hook = open();
   await waitFor(() => expect(apiJson).toHaveBeenCalled());
@@ -140,7 +169,7 @@ it("localizes failed loading without exposing server details", async () => {
 
 it("publishes the acknowledged queue while a poll with older state is still outstanding", async () => {
   const hook = open();
-  const queryKey = ["thread-queue", "owner:thread"];
+  const queryKey = ["thread-queue", "thread"];
   await waitFor(() => expect(hook.client.isFetching()).toBe(0));
 
   let stalePollSignal: AbortSignal | undefined;

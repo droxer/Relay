@@ -44,7 +44,7 @@ it("refreshes the rejected message's thread when a run starts before the compose
     expect(rows?.find(row => row.id === stale.id)?.execution).toEqual(busy.execution);
     expect(rows?.find(row => row.id === other.id)).toEqual(other);
   });
-  expect(getSession).toHaveBeenCalledWith(stale.id, expect.any(AbortSignal));
+  expect(getSession).toHaveBeenCalledWith(stale.id, expect.any(AbortSignal), expect.any(Object));
   client.clear();
 });
 

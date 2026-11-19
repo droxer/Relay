@@ -68,6 +68,9 @@ class SessionStore(Protocol):
         after_sequence: int | None = None,
         limit: int = 256,
     ) -> dict[str, Any]: ...
+    def read_transcript_page(
+        self, session_id: str, *, before: int, limit: int, max_bytes: int,
+    ) -> tuple[int, list[dict[str, Any]]]: ...
     def delete_session(
         self, session_id: str, *, deleted_by: str | None = None
     ) -> None: ...

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RelaySession } from "../types";
-import { mergeSessionSnapshotIntoSessions, sessionTrailsSummary, summaryEventCountOf } from "../lib/sessionPollMerge";
+import { mergeSessionSnapshotIntoSessions, observedSessionEventCount, sessionTrailsSummary, summaryEventCountOf } from "../lib/sessionPollMerge";
 import { isSessionStreamConnected } from "../lib/sessionStreamStatus";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
@@ -9,6 +9,7 @@ import { isTerminalSessionStatus } from "../lib/sessionEventStream";
 import { readSessionDetails, removeSessionDetail, writeSessionDetail } from "../lib/sessionDetailCache";
 import { workflowSnapshotDue } from "../lib/workflowRuns";
 import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
+import { THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
@@ -45,11 +46,17 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
     type Hydration = { status: RelaySession["status"]; hydratedAt: number };
     let initial = queryClient.getQueryData<Hydration>(hydrationKey);
     let current = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)?.find(s => s.id === sessionId);
+    const primeQueue = (snapshot: RelaySession, updatedAt: number) => {
+      const key = [...THREAD_QUEUE_QUERY_KEY, sessionId];
+      if (snapshot.transcriptRevision && queryClient.getQueryData(key) === undefined) {
+        queryClient.setQueryData(key, snapshot.messageQueue ?? { messages: [], paused: false }, { updatedAt });
+      }
+    };
     if (!initial && ownerId) {
       const saved = readSessionDetails(ownerId).find(row => row.snapshot.id === sessionId);
       // A fresh list observation takes precedence over an older stored detail.
       if (saved && (!current || (saved.snapshot.updatedAt >= current.updatedAt
-        && saved.snapshot.events.length >= (summaryEventCountOf(current) ?? 0)))) {
+        && observedSessionEventCount(saved.snapshot) >= (summaryEventCountOf(current) ?? 0)))) {
         queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, rows =>
           mergeSessionSnapshotIntoSessions(rows ?? [], current && summaryEventCountOf(current) !== undefined
             ? { ...saved.snapshot, execution: current.execution } : saved.snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
@@ -60,6 +67,7 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
     }
     // Metadata alone is insufficient if the list evicted the actual detail.
     if (!current || sessionTrailsSummary(current)) initial = undefined;
+    if (current && initial) primeQueue(current, initial.hydratedAt);
     let hydratedStatus = forceRetry.current ? undefined : initial?.status;
     forceRetry.current = false;
     setReadySessionId(hydratedStatus === undefined ? undefined : sessionId);
@@ -96,6 +104,7 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
         if (controller.signal.aborted) return;
         hydratedStatus = snapshot.status;
         hydratedAt = Date.now();
+        primeQueue(snapshot, hydratedAt);
         queryClient.setQueryData(hydrationKey, { status: snapshot.status, hydratedAt });
         setFailure(null);
         setReadySessionId(sessionId);

@@ -354,6 +354,20 @@ DELETE /api/v1/admin/managed-nodes/{id}/record
 
 Full `GET /api/v1/threads` responses remain complete for the authenticated owner.
 
+The browser hydrates individual threads with
+`GET /api/v1/threads/{id}?view=transcript`. It receives the thread fields and
+a recent event window starting at the zero-based `eventStart`. At most 160
+events are read, with a 384 KiB event budget that always admits the newest
+event. `eventCount` is the exclusive end sequence. To read earlier events,
+send `before=<eventStart>` to get the preceding window without the thread
+fields. A subsequent snapshot request can send
+`X-Relay-Thread-Events: <start>:<count>:<eventsRevision>` to reuse the matching
+prefix of a window. `eventOffset` identifies the first event returned. The
+server sends a new window starting at `eventStart` if older events changed
+or the window moved. An `If-None-Match` matching the whole snapshot returns
+`304` after access is checked. Transcript responses use `no-store` and the
+browser retains validators in its per-Account query cache.
+
 Thread message dispatch can return HTTP 409 with a structured `detail.code`.
 `thread_run_active` means the thread already has an execution reservation.
 `node_not_accepting_commands` means the Computer is online and its last command

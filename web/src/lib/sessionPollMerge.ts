@@ -12,10 +12,14 @@ type RelayEvent = RelaySession["events"][number];
  */
 type PolledSession = RelaySession & { summaryEventCount?: number };
 
+export function observedSessionEventCount(session: RelaySession): number {
+  return (session.eventStart ?? 0) + session.events.length;
+}
+
 /** Whether the poll has seen events this cached session does not hold yet. */
 export function sessionTrailsSummary(session: RelaySession | undefined): boolean {
   const count = (session as PolledSession | undefined)?.summaryEventCount;
-  return session !== undefined && count !== undefined && count > session.events.length;
+  return session !== undefined && count !== undefined && count > observedSessionEventCount(session);
 }
 
 /** The summary's event count, kept so a stale session can be refetched. */
@@ -59,7 +63,7 @@ export function mergeSessionSummaries(
       workOutcome: summary.workOutcome ?? undefined,
       // A newer summary has no outcome text. Do not pair its new result with
       // an earlier round's reason while the detailed event stream catches up.
-      finalOutcome: summary.eventCount > existing.events.length ? undefined : existing.finalOutcome,
+      finalOutcome: summary.eventCount > observedSessionEventCount(existing) ? undefined : existing.finalOutcome,
       workspaceArtifactCount: artifactCount,
     } as PolledSession;
   });
@@ -117,12 +121,28 @@ export function mergeSessionSnapshotIntoSessions(
 ): RelaySession[] {
   const index = current.findIndex((session) => session.id === snapshot.id);
   if (index < 0) return [snapshot, ...current];
+  if (current[index] === snapshot) return current;
 
   const existing = current[index];
-  const snapshotIds = new Set(snapshot.events.map((event) => event.id));
-  const missing = existing.events.filter((event) => !snapshotIds.has(event.id));
+  const snapshotEnd = observedSessionEventCount(snapshot);
+  let prefix: RelayEvent[] = [];
+  let missing: RelayEvent[];
+  if (snapshot.eventStart !== undefined) {
+    const previousStart = existing.eventStart ?? 0;
+    const previousEnd = observedSessionEventCount(existing);
+    if (previousStart > snapshotEnd) return current;
+    if (previousStart < snapshot.eventStart && previousEnd >= snapshot.eventStart) {
+      prefix = existing.events.slice(0, snapshot.eventStart - previousStart);
+    }
+    // Events before the HTTP window were already projected by the server.
+    // Replay only the SSE tail received since the snapshot was read.
+    missing = existing.events.slice(snapshotEnd - previousStart);
+  } else {
+    const snapshotIds = new Set(snapshot.events.map((event) => event.id));
+    missing = existing.events.filter((event) => !snapshotIds.has(event.id));
+  }
   // Neither detail response nor local events cover the newest summary yet.
-  if (snapshot.events.length + missing.length < knownEventCount(existing)) return current;
+  if (snapshotEnd + missing.length < knownEventCount(existing)) return current;
   // Replay the entire suffix together: per-event replay copies the growing
   // event array once per delta when a slow snapshot trails the live stream.
   let merged = missing.length === 0 ? snapshot : applyEvents
@@ -130,15 +150,17 @@ export function mergeSessionSnapshotIntoSessions(
     : applyEvent ? missing.reduce(applyEvent, snapshot)
     : { ...snapshot, updatedAt: missing.at(-1)!.timestamp, events: [...snapshot.events, ...missing] };
   // A replayed start can clear execution, which was already current in the summary.
-  if (missing.length > 0 && summaryEventCountOf(existing) === merged.events.length) {
+  if (missing.length > 0 && summaryEventCountOf(existing) === observedSessionEventCount(merged)) {
     merged = { ...merged, execution: existing.execution };
   }
   if (merged === existing) return current;
   const next = [...current];
-  next[index] = merged;
+  next[index] = prefix.length > 0
+    ? { ...merged, eventStart: existing.eventStart ?? 0, events: [...prefix, ...merged.events] }
+    : merged;
   return next;
 }
 
 function knownEventCount(session: RelaySession): number {
-  return Math.max(session.events.length, summaryEventCountOf(session) ?? 0);
+  return Math.max(observedSessionEventCount(session), summaryEventCountOf(session) ?? 0);
 }

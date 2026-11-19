@@ -2,7 +2,7 @@ import type { RelaySession } from "../types.js";
 import { mergeTokenUsage } from "./tokenUsage.ts";
 import { withPermissionRequested, withPermissionResolved, withPermissionsExpired } from "./permissionRequests.ts";
 import { applyWorkflowEvent, cancelOpenWorkflowRuns, isWorkflowEvent, workflowSnapshotDue } from "./workflowRuns.ts";
-import { summaryEventCountOf } from "./sessionPollMerge.ts";
+import { observedSessionEventCount, summaryEventCountOf } from "./sessionPollMerge.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
@@ -24,7 +24,8 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
     events: [...session.events, ...events],
   };
   const summaryCount = summaryEventCountOf(session) ?? 0;
-  const replayCount = Math.min(events.length, Math.max(0, summaryCount - session.events.length));
+  const observedCount = observedSessionEventCount(session);
+  const replayCount = Math.min(events.length, Math.max(0, summaryCount - observedCount));
   if (replayCount > 0) {
     // Hydrate history through the summary's cursor, retaining its observed
     // activity. Later events in this same batch can then advance that state.
@@ -35,7 +36,7 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
       status: session.status,
       phase: session.phase,
       workOutcome: session.workOutcome,
-      finalOutcome: session.events.length + replayCount === summaryCount ? next.finalOutcome : session.finalOutcome,
+      finalOutcome: observedCount + replayCount === summaryCount ? next.finalOutcome : session.finalOutcome,
       execution: session.execution,
       currentAgent: session.currentAgent,
       pendingDecision: session.pendingDecision,
@@ -311,6 +312,8 @@ function sameSessionShape(a: RelaySession, b: RelaySession): boolean {
     && (a as RelaySession & { summaryEventCount?: number }).summaryEventCount
       === (b as RelaySession & { summaryEventCount?: number }).summaryEventCount
     && a.events.length === b.events.length
+    && a.eventStart === b.eventStart
+    && a.transcriptRevision === b.transcriptRevision
     && a.status === b.status
     && a.phase === b.phase
     && a.title === b.title

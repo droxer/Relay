@@ -87,7 +87,7 @@ it("reduces actual empty-queue requests but keeps pending messages responsive", 
   expect(apiJson).toHaveBeenCalledTimes(2);
   const pending = { messages: [{ id: "pending", text: "Next" }], paused: false };
   vi.mocked(apiJson).mockResolvedValue(pending);
-  act(() => client.setQueryData(["thread-queue", "owner:thread"], pending));
+  act(() => client.setQueryData(["thread-queue", "thread"], pending));
   await act(() => vi.advanceTimersByTimeAsync(3_000));
   expect(apiJson).toHaveBeenCalledTimes(5);
   view.unmount(); client.clear(); focusManager.setFocused(undefined);

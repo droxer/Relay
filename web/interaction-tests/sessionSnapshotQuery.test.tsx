@@ -20,3 +20,14 @@ it("deduplicates hydration and stream fallback per account without hiding later 
   expect(getSession).toHaveBeenCalledTimes(3);
   client.clear(); other.clear();
 });
+
+it("reuses a just-validated snapshot during a stream reconnect", async () => {
+  vi.mocked(getSession).mockClear();
+  const client = new QueryClient();
+  const snapshot = { id: "thread" } as never;
+  vi.mocked(getSession).mockResolvedValue(snapshot);
+  await fetchSessionSnapshot(client, "thread");
+  expect(await fetchSessionSnapshot(client, "thread", { reuseRecent: true })).toEqual(snapshot);
+  expect(getSession).toHaveBeenCalledTimes(1);
+  client.clear();
+});

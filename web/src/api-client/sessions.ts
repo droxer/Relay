@@ -6,25 +6,108 @@ import type {
   ThreadMessageInput,
   ThreadRecoveryInput,
 } from "../types.ts";
-import { apiJson, fetchWithSession, RelayApiError, readApiResponse } from "./client.ts";
+import { apiJson, fetchWithSession, RelayApiError, RelayApiShapeError, readApiResponse } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
 /** One page of the thread list, newest first. Without a page this is the
  *  backend's default-sized first page. */
-export function listSessionSummaries(
+export type SessionHeadCache = { etag?: string; page?: SessionSummariesResponse };
+
+export async function listSessionSummaries(
   signal?: AbortSignal,
   page?: { limit: number; cursor?: string },
+  headCache?: SessionHeadCache,
 ): Promise<SessionSummariesResponse> {
   const params = new URLSearchParams({ view: "summary" });
   if (page) params.set("limit", String(page.limit));
   if (page?.cursor) params.set("cursor", page.cursor);
-  return apiJson<SessionSummariesResponse>(`/threads?${params}`, { signal, guard: sessionSummariesGuard });
+  const path = `/threads?${params}`;
+  if (!headCache) return apiJson(path, { signal, guard: sessionSummariesGuard });
+  const cached = headCache.page;
+  const validator = cached ? headCache.etag : undefined;
+  const response = await fetchWithSession(relayApiEndpoint(path), {
+    signal,
+    credentials: "include",
+    cache: validator ? "no-store" : "default",
+    headers: validator ? { "If-None-Match": validator } : {},
+  });
+  if (response.status === 304 && cached) return cached;
+  const result = await readApiResponse(response, `GET ${path}`, sessionSummariesGuard);
+  if (!signal?.aborted) {
+    headCache.page = result;
+    headCache.etag = response.headers.get("etag") ?? undefined;
+  }
+  return result;
 }
 
-export function getSession(sessionId: string, signal?: AbortSignal): Promise<RelaySession> {
-  return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}`, { signal, guard: sessionGuard });
+/** One thread's last server-validated snapshot, owned by its Account's QueryClient. */
+export type SessionSnapshotCache = { snapshot?: RelaySession; etag?: string; eventsRevision?: string };
+
+export async function getSession(sessionId: string, signal?: AbortSignal, cache?: SessionSnapshotCache): Promise<RelaySession> {
+  const path = `/threads/${encodeURIComponent(sessionId)}`;
+  if (!cache) return apiJson(path, { signal, guard: sessionGuard });
+
+  const previous = cache.snapshot?.id === sessionId ? cache.snapshot : undefined;
+  const endpoint = `${path}?view=transcript`;
+  const response = await fetchWithSession(relayApiEndpoint(endpoint), {
+    signal,
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      ...(previous && cache.etag ? { "If-None-Match": cache.etag } : {}),
+      ...(previous && cache.eventsRevision
+        ? { "X-Relay-Thread-Events": `${previous.eventStart ?? 0}:${previous.events.length}:${cache.eventsRevision}` }
+        : {}),
+    },
+  });
+  if (response.status === 304 && previous) return previous;
+
+  const { eventOffset, eventsRevision, ...snapshot } = await readApiResponse(
+    response, `GET ${endpoint}`, sessionGuard,
+  ) as RelaySession & { eventOffset?: number; eventsRevision?: string; eventCount?: number };
+  if (eventsRevision !== undefined || eventOffset !== undefined) {
+    const start = snapshot.eventStart;
+    const previousEnd = previous ? (previous.eventStart ?? 0) + previous.events.length : undefined;
+    if (typeof eventsRevision !== "string" || !/^[0-9a-f]{64}$/.test(eventsRevision)
+      || typeof start !== "number" || !Number.isSafeInteger(start) || start < 0
+      || typeof eventOffset !== "number"
+      || (eventOffset !== start && (start !== (previous?.eventStart ?? 0) || eventOffset !== previousEnd))
+      || eventOffset + snapshot.events.length !== snapshot.eventCount) {
+      throw new RelayApiShapeError(`GET ${endpoint}`, "events", "the event suffix does not match the cached prefix", response.status);
+    }
+    if (eventOffset > start && previous) {
+      snapshot.events = snapshot.events.length ? [...previous.events, ...snapshot.events] : previous.events;
+    }
+    snapshot.transcriptRevision = eventsRevision;
+    const logs = new Map<string, string>();
+    for (const event of snapshot.events) {
+      if (event.type === "agent.completed" && event.agentLog !== undefined) logs.set(event.runId, event.agentLog);
+    }
+    snapshot.agentRuns = snapshot.agentRuns.map(run => {
+      const agentLog = logs.get(run.id);
+      return run.agentLog === undefined && agentLog !== undefined ? { ...run, agentLog } : run;
+    });
+  }
+  if (!signal?.aborted) {
+    cache.snapshot = snapshot;
+    cache.etag = response.headers.get("etag") ?? undefined;
+    cache.eventsRevision = eventsRevision;
+  }
+  return snapshot;
+}
+
+export type TranscriptPage = { eventStart: number; eventCount: number; events: RelaySession["events"] };
+
+export async function readOlderTranscript(sessionId: string, before: number, signal?: AbortSignal): Promise<TranscriptPage> {
+  const path = `/threads/${encodeURIComponent(sessionId)}?view=transcript&before=${before}`;
+  const page = await apiJson<TranscriptPage>(path, { signal });
+  if (!page || !Number.isSafeInteger(page.eventStart) || page.eventStart < 0 || page.eventStart >= before
+    || page.eventCount !== before || !Array.isArray(page.events) || page.eventStart + page.events.length !== before) {
+    throw new RelayApiShapeError(`GET ${path}`, "events", "the older page is not contiguous", 200);
+  }
+  return page;
 }
 
 export async function readArtifactText(

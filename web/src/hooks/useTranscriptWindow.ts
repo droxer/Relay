@@ -6,10 +6,11 @@ import {
   transcriptWindowStart,
 } from "../lib/transcriptWindow";
 
-type WindowState = { sessionId: string | undefined; total: number; visible: number };
+type WindowState = { sessionId: string | undefined; total: number; visible: number; eventStart: number };
 
 const SETTLED_FRAMES = 2;
 const MAX_SETTLE_FRAMES = 30;
+const PREFETCH_SCROLL_TOP = 600;
 
 /** The oldest mounted turn, which sits just below the sentinel. A turn is
  *  `display: contents`, so the box to measure is its first child. */
@@ -27,36 +28,42 @@ function readingAnchor(sentinel: HTMLDivElement | null): Element | null {
  * `content-visibility` placeholder height for their real one. A single
  * restore left the reader shoved down by however much those heights grew.
  */
-export function useTranscriptWindow(sessionId: string | undefined, total: number): {
+export function useTranscriptWindow(sessionId: string | undefined, total: number, eventStart = 0): {
   start: number;
   sentinelRef: (node: HTMLDivElement | null) => void;
+  pinOldest: () => void;
 } {
-  const [state, setState] = useState<WindowState>({ sessionId, total, visible: TRANSCRIPT_PAGE_SIZE });
+  const [state, setState] = useState<WindowState>({ sessionId, total, visible: TRANSCRIPT_PAGE_SIZE, eventStart });
 
   // Derived from props during render, not in an effect: an effect would
   // mount the whole transcript for one frame before cutting it back.
   let current = state;
   if (state.sessionId !== sessionId) {
-    current = { sessionId, total, visible: TRANSCRIPT_PAGE_SIZE };
-  } else if (state.total !== total) {
-    current = { sessionId, total, visible: transcriptVisibleAfter(state.total, state.visible, total) };
+    current = { sessionId, total, visible: TRANSCRIPT_PAGE_SIZE, eventStart };
+  } else if (state.total !== total || state.eventStart !== eventStart) {
+    const visible = eventStart < state.eventStart
+      ? total : transcriptVisibleAfter(state.total, state.visible, total);
+    current = { sessionId, total, visible, eventStart };
   }
   if (current !== state) setState(current);
 
   const scroller = useRef<HTMLElement | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
-  const anchor = useRef<{ element: Element; top: number } | null>(null);
-  const grow = useCallback(() => {
+  const anchor = useRef<{ scroller: HTMLElement; element: Element; top: number } | null>(null);
+  const pinOldest = useCallback(() => {
     const element = scroller.current;
     const reading = readingAnchor(sentinel.current);
-    if (element && reading) anchor.current = { element: reading, top: reading.getBoundingClientRect().top };
-    setState((previous) => ({ ...previous, visible: nextTranscriptWindow(previous.visible, previous.total) }));
+    if (element && reading) anchor.current = { scroller: element, element: reading, top: reading.getBoundingClientRect().top };
   }, []);
+  const grow = useCallback(() => {
+    pinOldest();
+    setState((previous) => ({ ...previous, visible: nextTranscriptWindow(previous.visible, previous.total) }));
+  }, [pinOldest]);
 
   useLayoutEffect(() => {
-    const element = scroller.current;
     const pinned = anchor.current;
-    if (!element || !pinned) return;
+    if (!pinned) return;
+    const element = pinned.scroller;
     anchor.current = null;
     const restore = () => {
       if (!pinned.element.isConnected) return 0;
@@ -83,24 +90,30 @@ export function useTranscriptWindow(sessionId: string | undefined, total: number
       element.removeEventListener("wheel", release);
       element.removeEventListener("touchstart", release);
     };
-  }, [current.visible]);
+  }, [current.visible, current.eventStart]);
 
-  const observer = useRef<IntersectionObserver | null>(null);
+  const start = transcriptWindowStart(current.total, current.visible);
+  const hasLocalOlder = start > 0;
+  const removeScrollListener = useRef<(() => void) | null>(null);
   const sentinelRef = useCallback((node: HTMLDivElement | null) => {
-    observer.current?.disconnect();
-    observer.current = null;
+    removeScrollListener.current?.();
+    removeScrollListener.current = null;
     sentinel.current = node;
-    if (!node || typeof IntersectionObserver === "undefined") return;
-    scroller.current = node.closest<HTMLElement>(".transcript");
-    observer.current = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) grow();
-      },
-      // Load a screen early so scrolling up rarely meets the edge.
-      { root: scroller.current, rootMargin: "600px 0px 0px 0px" },
-    );
-    observer.current.observe(node);
-  }, [grow]);
+    const element = node?.closest<HTMLElement>(".transcript") ?? null;
+    scroller.current = element;
+    if (!hasLocalOlder || !element) return;
+    let previousTop = element.scrollTop;
+    const onScroll = () => {
+      const top = element.scrollTop;
+      const approachingOlderTurns = top < previousTop && top <= PREFETCH_SCROLL_TOP;
+      previousTop = top;
+      if (approachingOlderTurns) grow();
+    };
+    // Initial hydration can expose the sentinel before the transcript pins to
+    // the bottom. Grow only as the reader moves toward the older turns.
+    element.addEventListener("scroll", onScroll, { passive: true });
+    removeScrollListener.current = () => element.removeEventListener("scroll", onScroll);
+  }, [grow, hasLocalOlder]);
 
-  return { start: transcriptWindowStart(current.total, current.visible), sentinelRef };
+  return { start, sentinelRef, pinOldest };
 }

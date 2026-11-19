@@ -116,7 +116,12 @@ reuses hydrated QueryClient entries and a bounded, account-scoped
 `sessionStorage` cache (`lib/sessionDetailCache.ts`) across reloads in the same
 tab; stale details still reconcile through the existing fallback intervals.
 The initial snapshot precedes the SSE subscription, and detail hydration and
-SSE recovery share `lib/sessionSnapshotQuery.ts` for in-flight HTTP deduplication.
+SSE recovery share `lib/sessionSnapshotQuery.ts` for in-flight HTTP deduplication
+and event-prefix revalidation. The last HTTP snapshot is a bounded recent window
+held separately from the session advanced by SSE. Earlier windows load on
+request and prepend without replaying their events into current state. The
+thread list retains its parsed head page on `304`, including the cursor used to
+fetch older pages.
 
 All signed-in surfaces use `lib/personalQueryCache.ts`, installed on each
 Account's own QueryClient by `PersonalSpaceProvider`. The policy applies to
@@ -137,8 +142,9 @@ retain thread paging cursors with the cached rows. On unrelated pages, session
 and computer reads back off to 60 seconds; returning reconciles stale caches
 without forcing fresh ones to reload. `AuthenticatedApp` owns the Agent and
 Team roster polling timers, while page observers reuse those queries. Empty,
-settled message queues poll every 30 seconds; active runs or queued messages
-retain their one-second cadence. Manual refresh refetches active readers only,
+settled message queues poll every 30 seconds. Empty queues during a run poll
+every five seconds, and pending messages poll every second. Queue writes use the
+acknowledged response to update the cache. Manual refresh refetches active readers only,
 so cache metadata and unmounted detail queries do not become network work.
 
 Never replace a cache entry with an older snapshot after SSE has advanced it.
