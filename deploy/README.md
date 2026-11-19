@@ -282,6 +282,11 @@ origin, which makes the landing page indexable) are baked into the export at
 build time (build arguments for the Worker, service variables with
 `WEB_HOSTING=railway`).
 
+For Gmail, Outlook, or GitHub OAuth, add the provider variables and the shared
+Fernet key to `relay-backend` in Railway. The release script carries their
+references into `relay-worker`. See [Connections deployment setup](../docs/guides/connections.md#deployment-setup)
+for the exact variable names, callback URLs, and provider setup.
+
 **Cloudflare:** a proxied CNAME for the API host and a proxied record plus
 Worker route for the web host, DNS-only ACME and ownership records, SSL *Full
 (strict)*, *Always Use HTTPS*, HTTP/3, 0-RTT, Early Hints, Smart Tiered Cache,
