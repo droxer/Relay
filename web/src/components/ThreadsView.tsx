@@ -341,11 +341,12 @@ export function ThreadsView({
   });
   const taskStatusActions = useTaskStatusActions(lifecycle.task?.id);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
-  const { start: transcriptStart, sentinelRef, pinOldest } = useTranscriptWindow(
-    activeSessionId, displayMessages.length, activeSession?.eventStart,
-  );
   const olderTranscript = useOlderTranscript(transcriptVisible ? activeSessionId : undefined);
   const hasEarlierMessages = (activeSession?.eventStart ?? 0) > 0;
+  const { start: transcriptStart, sentinelRef, pinOldest } = useTranscriptWindow(
+    activeSessionId, displayMessages.length, activeSession?.eventStart,
+    transcriptVisible && hasEarlierMessages && !olderTranscript.failed ? olderTranscript.load : undefined,
+  );
   // A thread is about to render markdown: start the pipeline download now so
   // the first turn rarely shows its plain-text fallback. A brand-new empty
   // thread renders none, so it waits for its first turn (or the run that
@@ -673,9 +674,7 @@ export function ThreadsView({
                   </div>
                 ) : null}
                 {transcriptStart > 0 || hasEarlierMessages ? (
-                  // Keyed by the window start so each page mounts a fresh
-                  // sentinel, and the observer reports it again if the new
-                  // page still leaves it in range.
+                  // Keyed by the window start to track the new oldest turn.
                   <div key={`older-${transcriptStart}`} ref={sentinelRef} className="transcript-older-sentinel" aria-hidden="true" />
                 ) : null}
                 {displayMessages.slice(transcriptStart).map((msg, offset) => {
@@ -883,7 +882,8 @@ export function ThreadsView({
       </section>
       )}
 
-      {!showProjectOverview && !showProjectDirectoryEmpty && spaceOpen && activeSession ? (
+      {!showProjectOverview && !showProjectDirectoryEmpty && spaceOpen && activeSession
+        && (!spaceArtifactId || threadDetailsReady) ? (
         <ThreadSpacePanel
           sessionId={activeSession.id}
           artifactIndexStatus={activeSession.artifactIndexStatus}

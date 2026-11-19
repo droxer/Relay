@@ -120,22 +120,17 @@ function ArtifactCard({ artifact, sessionId, allArtifacts, onOpenArtifact, agent
   return <ArtifactChip artifact={artifact} sessionId={sessionId} allArtifacts={allArtifacts} onOpenArtifact={onOpenArtifact} />;
 }
 
-// Chips only fetch bodies small enough that the stat is worth the transfer;
-// beyond this the chip shows byte size and the drawer fetches on demand.
-const ARTIFACT_STAT_FETCH_MAX_BYTES = 256 * 1024;
+const ARTIFACT_STAT_MAX_BYTES = 256 * 1024;
 
 function ArtifactChip({ artifact, sessionId, allArtifacts, onOpenArtifact }: { artifact: RelayArtifact; sessionId: string; allArtifacts?: RelayArtifact[]; onOpenArtifact?: (artifact: RelayArtifact) => void }) {
   const { t, i18n } = useTranslation();
   const viewer = useArtifactViewer();
   const locale = i18n.language || undefined;
-  const shouldLoadBody =
-    artifact.kind !== "workspace_file" &&
-    (artifact.bytes === undefined || artifact.bytes <= ARTIFACT_STAT_FETCH_MAX_BYTES);
-
-  // The body is loaded once (shared with the viewer drawer) so the chip can
-  // show a semantic stat — +/−, pass/fail — instead of raw byte size.
-  const body = useArtifactBody(sessionId, artifact.id, { enabled: shouldLoadBody });
-  const stat = shouldLoadBody && body.isSuccess ? summarizeArtifact(artifact.kind, body.data ?? "") : null;
+  // The file viewer owns the request. A chip can derive a stat once its
+  // body has already been opened and cached.
+  const body = useArtifactBody(sessionId, artifact.id, { enabled: false });
+  const stat = artifact.kind !== "workspace_file" && body.isSuccess && body.data.length <= ARTIFACT_STAT_MAX_BYTES
+    ? summarizeArtifact(artifact.kind, body.data) : null;
   const kindLabel = t(`artifact.kind.${artifact.kind}`, { defaultValue: artifact.kind });
   return (
     <article className="artifact-chip" data-kind={artifact.kind}>
