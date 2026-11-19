@@ -192,8 +192,8 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
             <HomeQueue
               items={items}
               contextLinks={<nav className="home-mobile-context" aria-label={t("home.plan.jump_to")}>
-                {readyRest.length ? <a href="#home-ready-title">{t("home.plan.ready_jump", { count: readyRest.length })}</a> : null}
                 {running.length ? <a href="#home-running-title">{t("home.plan.running_jump", { count: running.length })}</a> : null}
+                {readyRest.length ? <a href="#home-ready-title">{t("home.plan.ready_jump", { count: readyRest.length })}</a> : null}
                 <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", { count: upcoming.length })}</a>
                 {blockers.length ? <a href="#home-blockers-title">{t("home.plan.blockers_jump", { count: blockers.length })}</a> : null}
               </nav>}
@@ -209,8 +209,21 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
               needsMeHref={tasksPath("?queue=needs_me")}
               onOpenNeedsMe={() => void navigateToAppPath(tasksPath("?queue=needs_me"))}
             />
-            {/* Startable work sits right under what needs the person, before
-                anything they can only watch. */}
+            {/* Work already in progress comes before work that can only be
+                started, so it leads in both columns and the stacked phone
+                layout. */}
+            <RunningPanel
+              rows={running}
+              title={runTitle}
+              agentName={runAgent}
+              computerName={runComputer}
+              elapsed={runningFor}
+              hrefFor={(row) => threadPath(row.session.id)}
+              onOpen={(row) => onOpenThread(row.session.id)}
+              allHref={hrefForRoute("main")}
+              onOpenAll={() => void navigateToAppPath(hrefForRoute("main"))}
+            />
+
             {readyRest.length ? <section className="home-section" aria-labelledby="home-ready-title">
               <header className="home-section-header">
                 <h2 id="home-ready-title" className="home-section-title">{t("home.plan.ready_work")}</h2>
@@ -235,17 +248,6 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
               agentsHref={hrefForRoute("agents")}
               onOpenComputers={() => void navigateToAppPath(hrefForRoute("computers"))}
               onOpenAgents={() => void navigateToAppPath(hrefForRoute("agents"))}
-            />
-            <RunningPanel
-              rows={running}
-              title={runTitle}
-              agentName={runAgent}
-              computerName={runComputer}
-              elapsed={runningFor}
-              hrefFor={(row) => threadPath(row.session.id)}
-              onOpen={(row) => onOpenThread(row.session.id)}
-              allHref={hrefForRoute("main")}
-              onOpenAll={() => void navigateToAppPath(hrefForRoute("main"))}
             />
             <UpcomingPanel rows={upcoming} today={today}
               hrefFor={row => row.task.isRoutine ? pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: row.task.id }) : taskPath(row.task.id)}
