@@ -4,16 +4,16 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 
 from fastapi import APIRouter, HTTPException, Request, Response
-
-from ...collaboration.queue import change_queue
 from loguru import logger
 
+from ...collaboration.queue import change_queue, stop_and_send
 from ...core.computer_identity import computer_id as resolve_computer_id
 from ...execution.session_deletion import delete_thread
 from ...core.daemon_records import (
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
 )
+from ...security.actor import Actor
 from ...sessions.controller import SessionController
 from ...sessions.errors import SessionArchivedError, SessionRunInFlightError
 from ...sessions.task_scope import thread_task_scope
@@ -26,6 +26,7 @@ from ...teams.dispatch import (
 )
 from ..actors import (
     get_session_for_actor,
+    get_session_header_for_actor,
     get_task_for_actor,
     owner_user_id_for_create,
     request_actor,
@@ -304,12 +305,32 @@ def cancel_session_run(
     session_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
 ) -> dict[str, Any]:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    session = get_session_for_actor(ctx.session_store, session_id, actor)
+    session = get_session_header_for_actor(ctx.session_store, session_id, actor)
     assert_workflow_owner_session(request, ctx, session)
-    body = _request_body
-    reason = string_field(body, "reason") or "Cancelled by user."
-    if body.get("preserveQueue") is not True and session.get("messageQueue"):
-        change_queue(ctx.session_store, session_id, "pause")
+    reason = string_field(_request_body, "reason") or "Cancelled by user."
+    with ctx.registry.dispatch_lock:
+        if _request_body.get("preserveQueue") is not True:
+            change_queue(ctx.session_store, session_id, "pause")
+        return _cancel_thread_execution(ctx, session_id, actor, reason)
+
+
+def steer_thread_queue(
+    request: Request, ctx: AppContext, session: dict[str, Any], actor: Actor, message_id: str,
+) -> dict[str, Any]:
+    assert_workflow_owner_session(request, ctx, session)
+    session_id = session["id"]
+    with ctx.registry.dispatch_lock:
+        return stop_and_send(
+            ctx.session_store, session_id, message_id,
+            lambda: _cancel_thread_execution(ctx, session_id, actor, "Send queued message first."),
+        )
+
+
+def _cancel_thread_execution(
+    ctx: AppContext, session_id: str, actor: Actor, reason: str,
+) -> dict[str, Any]:
+    session = ctx.session_store.get_session(session_id)
+    daemon_store = ctx.registry.daemon_store
     node = next(
         (
             item
@@ -320,15 +341,8 @@ def cancel_session_run(
         ),
         None,
     )
-    run_request = ctx.registry.daemon_store.active_run_request_for_session_any_node(
-        session_id
-    )
+    run_request = daemon_store.active_run_request_for_session_any_node(session_id)
     node_id = node["id"] if node else run_request.get("nodeId") if run_request else None
-    # Resolved before cancelling: an undelivered request stops being active,
-    # and its task must still be released or the scheduler starts it again.
-    task_id, task_owner = thread_task_scope(
-        session, run_request, ctx.task_store, ctx.registry.daemon_store
-    )
     if node_id:
         cancelled = ctx.backend.cancel_run(
             node_id,
@@ -345,6 +359,9 @@ def cancel_session_run(
         # never be a dead end that leaves a thread stuck running forever.
     if session.get("status") in ("completed", "failed", "cancelled"):
         return session
+    task_id, task_owner = thread_task_scope(
+        session, run_request, ctx.task_store, daemon_store
+    )
     return SessionController(
         ctx.session_store,
         task_store=ctx.task_store,

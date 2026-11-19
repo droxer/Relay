@@ -40,7 +40,8 @@ export function canCancelThreadRun(input: {
   session: Pick<RelaySession, "id" | "status" | "execution" | "deletionRequestedAt"> | undefined;
 }): boolean {
   if (input.session?.deletionRequestedAt) return false;
-  if (input.session?.execution) return ["queued", "running", "unresponsive"].includes(input.session.execution.phase);
+  // Stop can pause follow-ups even while an earlier stop is settling.
+  if (input.session?.execution) return input.session.execution.phase !== "terminal";
   return Boolean(input.activeRun || input.session?.status === "running");
 }
 

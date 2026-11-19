@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -28,6 +29,61 @@ def queue_state(session: dict[str, Any]) -> dict[str, Any]:
     return deepcopy(session.get("messageQueue") or {"messages": [], "paused": False})
 
 
+def _save_queue(store: Any, thread_id: str, state: dict[str, Any], receipt_id: str | None = None) -> None:
+    event = relay_event("session.queue", thread_id, {"queue": state})
+    if receipt_id:
+        event["id"] = f"queue.accepted:{receipt_id}"
+    store.append_event(thread_id, event, hydrate_events=False)
+
+
+def _steering(state: dict[str, Any]) -> bool:
+    return state.get("steeringUntil", "") > datetime.now(UTC).isoformat()
+
+
+def _promote(state: dict[str, Any], message_id: str) -> None:
+    if state.get("sending") or _steering(state):
+        raise ValueError("This message is being sent. Wait for it to finish.")
+    messages = state["messages"]
+    index = next((i for i, message in enumerate(messages) if message["id"] == message_id), None)
+    if index is None:
+        raise ValueError("This message was already changed on another device.")
+    messages.insert(0, messages.pop(index))
+    state.update(paused=False, sendRequested=True)
+    state.pop("error", None)
+    state.pop("steeringUntil", None)
+
+
+def stop_and_send(
+    store: Any, thread_id: str, message_id: str, cancel: Callable[[], Any],
+) -> dict[str, Any]:
+    # Commit a pause before asking the Computer to stop. If the old run exits
+    # during cancellation, another dispatcher must still wait before sending.
+    with store.mutation_scope(thread_id):
+        session = store.get_session_header(thread_id)
+        if session.get("deletionRequestedAt") or session.get("archived"):
+            raise ValueError("This thread is archived or being deleted.")
+        state = queue_state(session)
+        _promote(state, message_id)
+        lease = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
+        state.update(paused=True, steeringUntil=lease)
+        _save_queue(store, thread_id, state)
+    stopped = False
+    try:
+        cancel()
+        stopped = True
+    finally:
+        with store.mutation_scope(thread_id):
+            state = queue_state(store.get_session_header(thread_id))
+            if state.get("steeringUntil") == lease:
+                state.pop("steeringUntil")
+                if stopped and state.get("sendRequested"):
+                    _promote(state, message_id)
+                else:
+                    state.pop("sendRequested", None)
+                _save_queue(store, thread_id, state)
+    return state
+
+
 def change_queue(
     store: Any, thread_id: str, action: str, *, message: dict[str, Any] | None = None, message_id: str = ""
 ) -> dict[str, Any]:
@@ -51,6 +107,7 @@ def change_queue(
             messages.append(message)
             if action == "import":
                 state["paused"] = True
+                state.pop("sendRequested", None)
         elif action == "undo_remove":
             removed = state.get("removed")
             if not removed or removed["message"]["id"] != message_id:
@@ -61,8 +118,10 @@ def change_queue(
                 index = next((i for i, item in enumerate(messages) if item["id"] == removed.get("beforeId")), len(messages))
                 messages.insert(index, removed["message"])
             state.pop("removed", None)
-        elif action in ("remove", "edit", "promote"):
-            if state.get("sending") == message_id:
+        elif action == "promote":
+            _promote(state, message_id)
+        elif action in ("remove", "edit"):
+            if state.get("sending") == message_id or _steering(state):
                 raise ValueError("This message is being sent. Wait for it to finish.")
             picked = next((m for m in messages if m["id"] == message_id), None)
             if not picked:
@@ -74,20 +133,16 @@ def change_queue(
                 state["removed"] = {"message": picked, "beforeId": messages[index + 1]["id"] if index + 1 < len(messages) else None,
                                     "removedAt": datetime.now(UTC).isoformat()}
             state["messages"] = [m for m in messages if m["id"] != message_id]
-            if action == "promote":
-                state["messages"].insert(0, picked)
-                state["paused"] = False
-                state["sendRequested"] = True
-                state.pop("error", None)
         elif action in ("pause", "resume"):
+            if action == "resume" and _steering(state):
+                raise ValueError("This message is being sent. Wait for it to finish.")
             state["paused"] = action == "pause"
             state.pop("error", None)
+            if action == "pause" or state.pop("steeringUntil", None):
+                state.pop("sendRequested", None)
         else:
             raise ValueError("Unknown queue action.")
-        event = relay_event("session.queue", thread_id, {"queue": state})
-        if action in ("enqueue", "import"):
-            event["id"] = f"queue.accepted:{message['id']}"  # type: ignore[index]
-        store.append_event(thread_id, event, hydrate_events=False)
+        _save_queue(store, thread_id, state, message["id"] if message is not None else None)
         return state
 
 

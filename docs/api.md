@@ -1888,7 +1888,8 @@ without the tools, and the manager view reports
 
 Thread follow-up queues are database-backed `session.queue` events. The owner
 may `enqueue` text with a stable message `id`, `remove`, `edit` (take the message
-back into a local draft), `promote` a message to send next, `pause`, or `resume`.
+back into a local draft), `promote` a message to send next, `steer` to stop the
+current execution and send a message next, `pause`, or `resume`.
 `import` accepts legacy browser messages in a paused queue. The response is
 `{ messages: [{ id, text, addressAgentIds? }], paused, sending?, error? }`.
 Enqueue retries use durable receipts, including after a message has been sent.
@@ -1900,10 +1901,13 @@ The existing task scheduler dispatches one queued message per thread per tick,
 through ordinary collaboration admission. It requires confirmed execution exit
 and holds automatic dispatch while the thread needs human input. Failed
 admission retains the message and pauses the queue. An interrupted dispatch
-retries with the same idempotency key after a five-minute claim lease. Disabling
-`RELAY_TASK_SCHEDULER_ENABLED` also disables queue advancement. Queue writes and
-reads remain available. Cancellations pause the queue by default;
-`preserveQueue: true` is used by the explicit “send this next” action.
+retries with the same idempotency key after a five-minute claim lease. A
+`steer` request holds the queue until the stop is recorded. The chosen message
+then waits for confirmed exit. An execution that never reached a Computer is
+cancelled immediately. Explicit `promote` and `steer` requests have a short-lived
+dispatcher that checks for exit between scheduler ticks. Disabling
+`RELAY_TASK_SCHEDULER_ENABLED` disables the regular sweep. Cancellations pause
+the queue by default. Clients may pass `preserveQueue: true` to keep its state.
 
 ### Legacy Project Team workflow definitions
 

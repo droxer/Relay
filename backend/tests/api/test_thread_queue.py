@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 
@@ -121,8 +122,6 @@ def test_queue_receipts_survive_removal_and_import_pauses(tmp_path):
     change_queue(store, tid, "remove", message_id="old")
     # A lost enqueue response retried after dispatch/removal cannot send twice.
     assert change_queue(store, tid, "enqueue", message=message)["messages"] == []
-    import pytest
-
     with pytest.raises(ValueError, match="another message"):
         change_queue(store, tid, "enqueue", message={"id": "old", "text": "different"})
 
@@ -278,6 +277,113 @@ def test_a_steered_message_is_sent_as_soon_as_the_stopped_run_settles(tmp_path, 
     assert sent == ["steer"]
     assert [m["id"] for m in store.get_session(tid)["messageQueue"]["messages"]] == ["q1"]
     assert thread_queue._followers == {}
+
+
+@pytest.mark.parametrize("run_state", ["queued", "running", "exit_during_stop"])
+def test_stop_and_send_dispatches_the_selected_message_after_exit(monkeypatch, run_state):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+    from relay.api.threads import lifecycle
+    from relay.collaboration.queue import ThreadQueueDispatcher
+
+    # In these cases we advance the dispatcher explicitly. The separate
+    # follower test covers advancing between scheduler ticks.
+    monkeypatch.setattr(ThreadQueueDispatcher, "follow_requested_send", lambda *_: None)
+    with _world(monkeypatch) as (app, client, here, _):
+        solo = _agent(app, here, "Solo", "codex")
+        selected = _agent(app, here, "Selected", "claude")
+        _sync(app, here)
+        tid = _thread(app, here, solo)["id"]
+        path = f"/api/v1/threads/{tid}"
+        token = "token_node_here"
+        registry = app.state.registry
+        dispatcher = ThreadQueueDispatcher(app.state.context)
+        assert client.post(f"{path}/messages", json={"text": "First turn"}).status_code == 202
+        if run_state == "queued":
+            request = registry.daemon_store.active_run_request_for_session_any_node(tid)
+            original = registry.daemon_store.get_command(request["currentCommandId"])["command"]
+        else:
+            [original] = registry.take_commands(here["id"], token)
+
+        def report_exit():
+            registry.handle_event(here["id"], {
+                "type": "run.cancelled", "commandId": original["id"], "runId": original["runId"],
+                "sessionId": tid, "agent": original["agent"], "reason": "Stopped",
+            }, token)
+
+        if run_state == "exit_during_stop":
+            cancel = lifecycle._cancel_thread_execution
+
+            def exit_before_cancel(*args):
+                report_exit()
+                # Even with confirmed exit, another dispatcher cannot claim
+                # the replacement until this cancellation request is settled.
+                assert dispatcher._claim(tid) is None
+                return cancel(*args)
+
+            monkeypatch.setattr(lifecycle, "_cancel_thread_execution", exit_before_cancel)
+
+        for message in (
+            {"id": "q_later", "text": "Later"},
+            {"id": "q_next", "text": "Send this next", "addressAgentIds": [selected["id"]]},
+        ):
+            response = client.post(f"{path}/queue", json={"action": "enqueue", **message})
+            assert response.status_code == 200, response.text
+
+        response = client.post(f"{path}/queue", json={"action": "steer", "id": "q_next"})
+        assert response.status_code == 200, response.text
+        assert [m["id"] for m in response.json()["messages"]] == ["q_next", "q_later"]
+        if run_state == "running":
+            [stop] = registry.take_commands(here["id"], token)
+            assert stop["type"] == "run.cancel"
+            assert stop["commandId"] == original["id"]
+            asyncio.run(dispatcher.dispatch(tid))
+            assert registry.take_commands(here["id"], token) == []
+            report_exit()
+        else:
+            if run_state == "queued":
+                assert registry.daemon_store.get_command(original["id"])["status"] == "cancelled"
+            assert registry.take_commands(here["id"], token) == []
+        stopped = app.state.session_store.get_session(tid)
+        assert stopped["status"] == "cancelled"
+        assert stopped["agentRuns"][-1]["status"] == "cancelled"
+
+        asyncio.run(dispatcher.dispatch(tid))
+        [next_run] = registry.take_commands(here["id"], token)
+        assert next_run["type"] == "run.start"
+        assert next_run["logicalAgentId"] == selected["id"]
+        thread = app.state.session_store.get_session(tid)
+        assert [event["text"] for event in thread["events"] if event["type"] == "user.message"] == [
+            "First turn", "Send this next",
+        ]
+        assert [m["id"] for m in client.get(f"{path}/queue").json()["messages"]] == ["q_later"]
+
+
+def test_plain_stop_pauses_the_queue_and_keeps_the_messages(monkeypatch):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+    from relay.collaboration.queue import ThreadQueueDispatcher
+
+    with _world(monkeypatch) as (app, client, here, _):
+        solo = _agent(app, here, "Solo", "codex")
+        _sync(app, here)
+        tid = _thread(app, here, solo)["id"]
+        path = f"/api/v1/threads/{tid}"
+        assert client.post(f"{path}/messages", json={"text": "First turn"}).status_code == 202
+        queued = {"id": "q_next", "text": "Save for later"}
+        assert client.post(f"{path}/queue", json={"action": "enqueue", **queued}).status_code == 200
+
+        missing = client.post(f"{path}/queue", json={"action": "steer", "id": "q_missing"})
+        assert missing.status_code == 409
+        assert missing.json()["detail"]["code"] == "queue_changed"
+        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(tid)
+
+        stopped = client.post(f"{path}/cancellations", json={})
+        assert stopped.status_code == 202
+        assert stopped.json()["status"] == "cancelled"
+        asyncio.run(ThreadQueueDispatcher(app.state.context).dispatch(tid))
+        assert app.state.registry.take_commands(here["id"], "token_node_here") == []
+        assert client.get(f"{path}/queue").json() == {"messages": [queued], "paused": True}
 
 
 def test_steer_keeps_the_selected_agent_instead_of_the_whole_room(monkeypatch):

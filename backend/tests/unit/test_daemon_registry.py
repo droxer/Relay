@@ -3705,8 +3705,8 @@ def test_cancelling_a_prepared_request_prevents_later_reaper_activation() -> Non
             session["id"], manifest
         )
 
-        assert backend.cancel_run("sbx_alice", session["id"], "stop") is None
-        SessionController(session_store).cancel_session(session["id"], "stop")
+        stopped = backend.cancel_run("sbx_alice", session["id"], "stop")
+        assert stopped and stopped["status"] == "cancelled"
         registry.reap_stale_runs()
 
         assert daemon_store.get_run_request(prepared["id"])["status"] == "cancelled"
@@ -3912,7 +3912,8 @@ def test_stale_activation_cannot_publish_after_persistent_cancellation_fence() -
             }
         )
 
-        assert backend.cancel_run("sbx_alice", session["id"], "stop") is None
+        stopped = backend.cancel_run("sbx_alice", session["id"], "stop")
+        assert stopped and stopped["status"] == "cancelled"
         registry._enqueue_current_assignment(stale_running)
 
         assert daemon_store.get_run_request(stale_running["id"])["status"] == (

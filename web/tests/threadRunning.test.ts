@@ -115,3 +115,8 @@ it("uses backend lifecycle over a stale session label", () => {
   assert.equal(isThreadRunInFlight({ session: settled, activeRun: undefined, pendingSend: false, dispatchingRun: false }), false);
   assert.equal(canCancelThreadRun({ session: settled, activeRun: undefined }), false);
 });
+
+it("allows Stop to pause follow-ups while the current execution is stopping", () => {
+  const stopping = { ...session("running"), execution: { phase: "stopping" } } as RelaySession;
+  assert.equal(canCancelThreadRun({ session: stopping, activeRun: undefined }), true);
+});
