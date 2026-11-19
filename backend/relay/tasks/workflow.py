@@ -8,9 +8,10 @@ from __future__ import annotations
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-from ..agents.routing import resolve_agent_assignments
+from ..agents.routing import AgentRoutingError, resolve_agent_assignments
 from ..collaboration.workflow_compilation import compile_workflow
 from ..core.computer_identity import computer_id
+from ..core.daemon_records import ComputerRunCapacityError
 from ..daemon_registry.dispatch.workflow_tasks import sync_workflow_task
 from ..persistence.engine import store_transaction
 from ..persistence.protocols import TaskDispatchAssignment
@@ -21,7 +22,7 @@ from .claims import dispatch_claim_active
 from .dispatch_outcome import TaskDispatchContext, DispatchResult, _result, _record_result
 from .placement import task_goal_text
 from .requests import TaskRequestError
-from .dispatch_failure import record_dispatch_failure
+from .dispatch_failure import record_computer_capacity_wait, record_dispatch_failure
 
 
 def dispatch_task_workflow(
@@ -95,22 +96,33 @@ def dispatch_task_workflow(
     except (ValueError, TaskRequestError) as error:
         if not record_pending:
             raise
+        if isinstance(error, ComputerRunCapacityError):
+            return _record_pending_failure(ctx, source, "capacity_exhausted")
+        if isinstance(error, AgentRoutingError):
+            return _record_pending_failure(ctx, source, error.code, message=str(error))
         code = error.detail if isinstance(error, TaskRequestError) else str(error)
         return _record_pending_failure(ctx, source, code)
 
 
-def _record_pending_failure(ctx: TaskDispatchContext, source: dict[str, Any], code: str) -> DispatchResult:
-    """Block a refused scheduled start; record a computer wait only when it changes."""
+def _record_pending_failure(
+    ctx: TaskDispatchContext, source: dict[str, Any], code: str, *, message: str | None = None,
+) -> DispatchResult:
+    """Record a retryable wait or a refusal that requires a manual start."""
     registry = ctx.registry
     with registry.dispatch_lock, ctx.task_store.task_write_scope(source["id"]) as current:
         if (not TaskDispatchAssignment.capture(source).matches(current)
             or current.get("status") not in ("backlog", "assigned", "queued")
+            or current.get("deletedAt")
+            or dispatch_claim_active(current)
             or registry.daemon_store.active_run_request_for_task(source["id"])):
             return _result(current, "queued", code="dispatch_superseded")
+        if code == "capacity_exhausted":
+            queued = record_computer_capacity_wait(ctx.task_store, current)
+            return _result(queued, "queued", code=code, message=queued["dispatchOutcome"]["message"])
         if code == "workflow_computer_unavailable":
             if current.get("dispatchOutcome") == {"state": "queued", "code": code, "message": code}:
                 return _result(current, "queued", code=code, message=code)
             return _record_result(ctx, source["id"], "queued", code=code, message=code)
-        updated = record_dispatch_failure(ctx.task_store, current, code=code, message=code)
+        updated = record_dispatch_failure(ctx.task_store, current, code=code, message=message or code)
         return _result(updated, updated["dispatchOutcome"]["state"], code=code,
                        message=updated["dispatchOutcome"].get("message"))

@@ -17,10 +17,10 @@ describe("queuedRun", () => {
     assert.equal(queuedRun(session({ phase: "terminal" })), null);
   });
 
-  it("waits for a slot on a computer that is online or not yet known", () => {
-    assert.deepEqual(queuedRun(session({ phase: "queued", computerOnline: true, queuedAt: "2026-11-08T11:58:00.000Z" })),
-      { cause: "slot", queuedAt: "2026-11-08T11:58:00.000Z" });
-    assert.deepEqual(queuedRun(session({ phase: "queued", computerOnline: null })), { cause: "slot", queuedAt: null });
+  it("reports a dispatch wait when the backend has not identified a more specific cause", () => {
+    assert.deepEqual(queuedRun(session({ phase: "queued", computerOnline: true, blockingReason: "awaiting_dispatch", queuedAt: "2026-11-08T11:58:00.000Z" }), { now: NOW }),
+      { cause: "dispatch", queuedAt: "2026-11-08T11:58:00.000Z" });
+    assert.deepEqual(queuedRun(session({ phase: "queued", computerOnline: null })), { cause: "dispatch", queuedAt: null });
   });
 
   it("waits for the computer itself once it is known to be offline", () => {
@@ -38,7 +38,7 @@ describe("queue grace", () => {
     const run = session({ phase: "queued", computerOnline: true, queuedAt: admittedAt });
     assert.equal(queuedRun(run, { now: admitted + QUEUE_GRACE_MS - 1 }), null);
     assert.equal(shownExecutionPhase(run, { now: admitted + 2_000 }), "running");
-    assert.deepEqual(queuedRun(run, { now: admitted + QUEUE_GRACE_MS }), { cause: "slot", queuedAt: admittedAt });
+    assert.deepEqual(queuedRun(run, { now: admitted + QUEUE_GRACE_MS }), { cause: "dispatch", queuedAt: admittedAt });
     assert.equal(shownExecutionPhase(run, { now: admitted + QUEUE_GRACE_MS }), "queued");
   });
 
@@ -53,8 +53,8 @@ describe("queue grace", () => {
   });
 
   it("gives no grace without an admission time or a clock", () => {
-    assert.equal(queuedRun(session({ phase: "queued", computerOnline: true }), { now: NOW })?.cause, "slot");
-    assert.equal(queuedRun(session({ phase: "queued", computerOnline: true, queuedAt: admittedAt }))?.cause, "slot");
+    assert.equal(queuedRun(session({ phase: "queued", computerOnline: true }), { now: NOW })?.cause, "dispatch");
+    assert.equal(queuedRun(session({ phase: "queued", computerOnline: true, queuedAt: admittedAt }))?.cause, "dispatch");
   });
 
   it("leaves every other phase as the backend says", () => {

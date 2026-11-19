@@ -117,7 +117,8 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
     || (task.status === "blocked" && task.attention ? task.attention.sessionId : taskWaitingThreadId(task) ?? task.linkedSessionIds.at(-1));
   const sessionId = linked && linked !== excludeSessionId ? linked : undefined;
   if (task.status === "blocked") return <TaskBlockerPanel task={task} guide={guide} sessionId={sessionId} onOpenThread={onOpenThread} />;
-  const reason = taskRecoveryReason(task);
+  const waitingForCapacity = task.status === "queued" && guide.key === "capacity";
+  const reason = waitingForCapacity ? undefined : taskRecoveryReason(task);
   // Waiting on a person: quote what the agent asked, and make answering it
   // the one primary action — the reply is what resumes the task.
   const waiting = task.status === "waiting_for_human" ? taskWaitingPrompt(task) : null;
@@ -126,7 +127,7 @@ export function TaskRecoveryPanel({ task, excludeSessionId, onOpenThread }: {
     {reason ? <p className="recovery-context">{reason}</p> : null}
     {waiting?.text ? <blockquote className="awaiting-input-quote">{waiting.text}</blockquote> : null}
     {waiting?.notes.length ? <AwaitingInputNotes notes={waiting.notes} /> : null}
-    <p>{t(`recovery.${guide.key}.body`)}</p>
+    <p>{t(waitingForCapacity ? "backlog.computer_capacity_wait" : `recovery.${guide.key}.body`)}</p>
     <div className="recovery-actions">
       <RecoveryDestination guide={guide} />
       {sessionId ? (

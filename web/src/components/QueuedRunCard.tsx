@@ -58,7 +58,7 @@ export function QueuedRunCard({ queued, node, onCancel }: {
         ))}
       </ol>
       <p className="queued-run-cause" role="status">
-        {t(offline ? "thread.queue_cause_offline" : "thread.queue_cause_slot", { computer })}
+        {t(offline ? "thread.queue_cause_offline" : "thread.queue_cause_dispatch", { computer })}
       </p>
       <div className="queued-run-actions">
         {onCancel ? (

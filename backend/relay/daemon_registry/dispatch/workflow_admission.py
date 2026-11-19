@@ -9,10 +9,12 @@ from uuid import NAMESPACE_URL, uuid5
 
 from ...core.computer_identity import computer_id
 from ...core.daemon_capabilities import has_capability
+from ...core.daemon_records import ComputerRunCapacityError
 from ...core.workflows import snapshot_team_id
 from ...core.ids import new_database_id
 from ...persistence.resource_lock import resource_transaction
 from ...sessions.agent_state import initial_agent_state
+from ..scheduling import node_accepts_run
 from ..state import RegistryState
 from .run_state import _DeliveryRefused
 from .workflow_tasks import assert_workflow_task_owner, sync_workflow_task
@@ -156,10 +158,17 @@ class WorkflowAdmissionMixin(RegistryState):
                     or first["executorKind"] in (sandbox.get("disabledAgents") or [])
                 ):
                     raise ValueError("workflow_computer_unavailable")
+                active_runs = self.daemon_store.list_active_runs(node_id)
                 if not self._placement_admits_run(
                     request, first, sandbox, node_id=node_id, index=index,
-                    active_runs=None, validate_logical_assignment=False,
+                    active_runs=active_runs, validate_logical_assignment=False,
                 ):
+                    if not node_accepts_run(
+                        sandbox, active_runs=active_runs, session_id=session_id,
+                        executor_kind=first["executorKind"],
+                    ):
+                        # Preserve the existing workflow decision response.
+                        raise ComputerRunCapacityError("workflow_computer_unavailable")
                     raise ValueError("workflow_computer_unavailable")
                 request = self.daemon_store.update_run_request(request["id"], {
                     "status": "running", "state": {**request["state"],

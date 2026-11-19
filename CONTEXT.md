@@ -437,10 +437,10 @@ _Avoid_: public image URL, artifact (an agent-produced deliverable)
 
 
 **Queued Task**:
-A Task whose start is waiting for its responsible User's work-in-progress capacity
-across Projects (`status=queued`). It consumes no WIP slot and the scheduler starts
-it automatically when capacity opens. It differs from Ready (`assigned`), which
-has not yet encountered this capacity wait, and Blocked, which requires action.
+A Task whose start is waiting for its responsible User's work-in-progress
+capacity across Projects or an execution slot on its Computer
+(`status=queued`). The scheduler retries when capacity opens. A first start
+reserves a Task Capacity slot on admission.
 
 **Cancelled Task**:
 An abandoned Task (`status=cancelled`) whose history remains readable. Cancellation

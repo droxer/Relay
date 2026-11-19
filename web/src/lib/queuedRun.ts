@@ -1,9 +1,8 @@
 import type { RelaySession } from "../types.js";
 import { formatRunDuration } from "./taskRuns.ts";
 
-/** Why an admitted run has not started: the computer is not there to take
- *  it, or it is there and every slot it runs work in is taken. */
-export type QueueCause = "offline" | "slot";
+/** The backend reports a dispatch wait; liveness can confirm an offline computer. */
+export type QueueCause = "offline" | "dispatch";
 
 export type QueuedRun = {
   cause: QueueCause;
@@ -23,8 +22,7 @@ export type QueueReading = {
  * How long a run on a live computer may sit in `queued` before it is shown
  * as queued. A computer long-polls, so it takes a run almost at once, but the
  * web only learns that from the next session poll or the agent's first
- * output — seconds later. Inside this window the run reads as starting; only
- * a wait that outlasts it is a real queue (every slot taken).
+ * output — seconds later. Inside this window the run reads as starting.
  */
 export const QUEUE_GRACE_MS = 10_000;
 
@@ -89,7 +87,7 @@ export function queuedRun(
   const execution = session.execution;
   if (execution?.phase !== "queued" || inQueueGrace(session, reading)) return null;
   const offline = execution.computerOnline === false || Boolean(reading.nodeOffline);
-  return { cause: offline ? "offline" : "slot", queuedAt: execution.queuedAt ?? null };
+  return { cause: offline ? "offline" : "dispatch", queuedAt: execution.queuedAt ?? null };
 }
 
 /**
