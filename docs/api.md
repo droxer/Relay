@@ -2005,6 +2005,12 @@ answer or recovery action. Its JSON body must contain exactly `kind` (`approve`,
 `assignmentId`, and `expectedRevision` (nonnegative integer); an `answer` also
 carries `answer` (1–4,000 characters after trimming). The server supplies
 the audit actor, event identity and timestamp. Unknown fields are rejected.
+The response includes the updated Thread with its current `execution` phase,
+so clients can show an admitted retry or answer immediately.
+When a Workflow awaits approval, awaits input, or is blocked, its prepared
+request has no live attempt. Thread reads report `execution.phase: "terminal"`
+with `workflow_waiting_for_human` or `workflow_blocked` as the blocking reason.
+Stop and delete cancels the prepared request before removing the Thread.
 
 A step that stops with a blocked round result carrying a question (`note`,
 optionally `options`) records an attempt result with status `question` and parks

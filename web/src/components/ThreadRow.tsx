@@ -72,19 +72,19 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
   const label = threadLabel(session);
   const stamp = formatThreadStamp(session.updatedAt, i18n.language, now);
   const offlineLabel = item.nodeOffline ? t("thread.node_offline") : "";
-  // Task lifecycle can remain in Review after execution has finished.
-  const iconStatus: TaskStatus = item.origin?.status ?? (
-    tone === "err" || session.status === "failed" ? "blocked"
-      : queued ? "queued"
+  // Live Thread execution can advance before the linked Task is refreshed.
+  const activePhase = executionPhase && executionPhase !== "terminal" ? executionPhase
+    : !executionPhase && tone === "run" ? "running" : undefined;
+  const iconStatus: TaskStatus = activePhase
+    ? tone === "err" ? "blocked" : tone === "attn" ? "waiting_for_human" : activePhase === "queued" ? "queued" : "running"
+    // The settled row still shows the linked Task's own lifecycle (e.g. Review).
+    : item.origin?.status ?? (session.status === "failed" ? "blocked"
       : tone === "attn" ? "waiting_for_human"
-      : tone === "run" ? "running"
-      : session.status === "cancelled" ? "cancelled" : "done"
-  );
-  const stateLabel = item.origin?.status ? t(`backlog.statuses.${item.origin.status}`)
-    : !hasLifecycle ? t(threadStatusLabelKey(session, reading))
-    : executionPhase && executionPhase !== "terminal" ? t(`thread.execution_${executionPhase}`)
-    : tone === "attn" ? t("thread.group_needs_you")
-    : tone === "run" ? t("thread.group_running") : t("thread.group_idle");
+      : session.status === "cancelled" ? "cancelled" : "done");
+  const stateLabel = !hasLifecycle ? t(threadStatusLabelKey(session, reading))
+    : activePhase ? t(`thread.execution_${activePhase}`)
+    : item.origin?.status ? t(`backlog.statuses.${item.origin.status}`)
+    : tone === "attn" ? t("thread.group_needs_you") : t("thread.group_idle");
   const projectName = item.projectName ?? session.projectId;
   const projectLabel = projectName ? t("thread.project_indicator", { name: projectName }) : "";
   // A backlog task's thread inside a project already carries the project

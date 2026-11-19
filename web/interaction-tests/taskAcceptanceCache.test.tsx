@@ -10,7 +10,7 @@ import { useRelayMutations } from "../src/hooks/useRelayMutations";
 import { TASKS_QUERY_KEY } from "../src/hooks/useRelayData";
 import { TASK_RECORD_QUERY_KEY } from "../src/hooks/useTaskRecord";
 import { taskSummaryFromTask } from "../src/lib/taskSummary";
-import type { RelayTask } from "../src/types";
+import type { RelaySession, RelayTask } from "../src/types";
 
 const task = { id: "task", title: "Export", status: "review", updatedAt: "2026-11-15T00:00:00Z", events: [], activity: [] } as unknown as RelayTask;
 
@@ -47,6 +47,30 @@ it("preserves review in both caches after a stale acceptance is refused", async 
   });
   expect(client.getQueryData<RelayTask[]>(TASKS_QUERY_KEY)?.[0].status).toBe("review");
   expect(client.getQueryData<RelayTask>([TASK_RECORD_QUERY_KEY, task.id])?.status).toBe("review");
+  client.clear();
+});
+
+it("refreshes the linked Task caches when a Workflow attempt resumes", async () => {
+  const { client, result } = setup();
+  const blocked: RelayTask = { ...task, status: "blocked", linkedSessionIds: ["thread"] };
+  const unrelated = { ...task, id: "unrelated" };
+  const detailOnly = { ...blocked, id: "outside-list" };
+  const thread = { id: "thread", status: "running", events: [], execution: { phase: "queued" } } as unknown as RelaySession;
+  client.setQueryData(TASKS_QUERY_KEY, [taskSummaryFromTask(blocked), taskSummaryFromTask(unrelated)]);
+  client.setQueryData([TASK_RECORD_QUERY_KEY, blocked.id], blocked);
+  client.setQueryData([TASK_RECORD_QUERY_KEY, unrelated.id], unrelated);
+  client.setQueryData([TASK_RECORD_QUERY_KEY, detailOnly.id], detailOnly);
+  vi.spyOn(api, "decideWorkflow").mockResolvedValue(thread);
+  await act(async () => {
+    await result.current.decideWorkflowMutation.mutateAsync({
+      sessionId: thread.id, kind: "retry",
+      binding: { workflowRunId: "run", workflowStepId: "step", workflowAttempt: 1, assignmentId: "a", expectedRevision: 2 },
+    });
+  });
+  expect(client.getQueryState(TASKS_QUERY_KEY)?.isInvalidated).toBe(true);
+  expect(client.getQueryState([TASK_RECORD_QUERY_KEY, blocked.id])?.isInvalidated).toBe(true);
+  expect(client.getQueryState([TASK_RECORD_QUERY_KEY, detailOnly.id])?.isInvalidated).toBe(true);
+  expect(client.getQueryState([TASK_RECORD_QUERY_KEY, unrelated.id])?.isInvalidated).toBe(false);
   client.clear();
 });
 

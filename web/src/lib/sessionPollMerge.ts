@@ -49,9 +49,8 @@ export function mergeSessionSummaries(
   return summaries.map((summary) => {
     const existing = byId.get(summary.id);
     if (!existing) return inflateSessionSummary(summary);
-    // A summary request can start before an SSE frame is committed and return
-    // afterward. Never roll event-derived state backward in that race.
-    if (summary.eventCount < existing.events.length) return existing;
+    // A request can return after SSE or another summary advanced the cache.
+    if (summary.eventCount < knownEventCount(existing)) return existing;
     const { artifactCount, ...fields } = omit(summary, "eventCount", "runCount");
     return {
       ...existing,
@@ -119,16 +118,27 @@ export function mergeSessionSnapshotIntoSessions(
   const index = current.findIndex((session) => session.id === snapshot.id);
   if (index < 0) return [snapshot, ...current];
 
+  const existing = current[index];
   const snapshotIds = new Set(snapshot.events.map((event) => event.id));
-  const missing = current[index].events.filter((event) => !snapshotIds.has(event.id));
+  const missing = existing.events.filter((event) => !snapshotIds.has(event.id));
+  // Neither detail response nor local events cover the newest summary yet.
+  if (snapshot.events.length + missing.length < knownEventCount(existing)) return current;
   // Replay the entire suffix together: per-event replay copies the growing
   // event array once per delta when a slow snapshot trails the live stream.
-  const merged = missing.length === 0 ? snapshot : applyEvents
+  let merged = missing.length === 0 ? snapshot : applyEvents
     ? applyEvents(snapshot, missing)
     : applyEvent ? missing.reduce(applyEvent, snapshot)
     : { ...snapshot, updatedAt: missing.at(-1)!.timestamp, events: [...snapshot.events, ...missing] };
-  if (merged === current[index]) return current;
+  // A replayed start can clear execution, which was already current in the summary.
+  if (missing.length > 0 && summaryEventCountOf(existing) === merged.events.length) {
+    merged = { ...merged, execution: existing.execution };
+  }
+  if (merged === existing) return current;
   const next = [...current];
   next[index] = merged;
   return next;
+}
+
+function knownEventCount(session: RelaySession): number {
+  return Math.max(session.events.length, summaryEventCountOf(session) ?? 0);
 }

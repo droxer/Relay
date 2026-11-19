@@ -161,7 +161,7 @@ async def submit_thread_message(
         except CollaborationStyleError as error:
             raise HTTPException(400, {"code": "style_invalid", "message": str(error)}) from error
     try:
-        return await CollaborationConductor(ctx).submit(
+        session = await CollaborationConductor(ctx).submit(
             MessageIntent(
                 thread_id=thread_id,
                 text=text,
@@ -177,6 +177,7 @@ async def submit_thread_message(
             ),
             actor,
         )
+        return {**session, "execution": await run_in_threadpool(ctx.execution_lifecycle.status, session)}
     except CollaborationError as error:
         if error.status == 409:
             logger.info(
@@ -204,7 +205,7 @@ async def request_thread_recovery(
     if mode not in MODES:
         raise HTTPException(400, "mode must be action, ask, or review.")
     try:
-        return await CollaborationConductor(ctx).submit(
+        session = await CollaborationConductor(ctx).submit(
             RecoveryIntent(
                 thread_id=thread_id,
                 kind=kind,  # type: ignore[arg-type]
@@ -216,6 +217,7 @@ async def request_thread_recovery(
             ),
             actor,
         )
+        return {**session, "execution": await run_in_threadpool(ctx.execution_lifecycle.status, session)}
     except CollaborationError as error:
         raise HTTPException(
             error.status, {"code": error.code, "message": str(error)}

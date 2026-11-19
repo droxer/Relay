@@ -105,6 +105,7 @@ def test_owner_retry_allocates_attempt_and_stale_decision_cannot_duplicate(monke
         body = decision(session, "retry")
         response = client.post(url, json=body)
         assert response.status_code == 200, response.text
+        assert response.json()["execution"]["phase"] == "queued"
         assert client.post(url, json=body).status_code == 409
         retried, = take(app.state.registry, node)
         assert retried["assignmentId"] != command["assignmentId"]
@@ -403,6 +404,7 @@ def test_step_question_waits_for_owner_and_resumes_with_answer(monkeypatch):
         body = answer(session, "Staging")
         response = client.post(url, json=body)
         assert response.status_code == 200, response.text
+        assert response.json()["execution"]["phase"] == "queued"
         assert client.post(url, json=body).status_code == 409
         resumed, = take(app.state.registry, node)
         assert resumed["assignmentId"] != command["assignmentId"]

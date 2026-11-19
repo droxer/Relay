@@ -64,6 +64,25 @@ it("shows no task number on a plain chat row", () => {
   expect(container.querySelector(".conversation-ref")).toBeNull();
 });
 
+it("updates a blocked task thread's icon and accessible status as soon as it resumes", () => {
+  const item: ThreadItem = {
+    session: session("retry", "running", { execution: { phase: "terminal" } as never }),
+    origin: { kind: "backlog", taskId: "task", ref: "#1", title: "Task", status: "blocked" },
+  };
+  const row = (value: ThreadItem, tone: "idle" | "run" | "queued") => (
+    <ul><ThreadRow item={value} tone={tone} selected={false} onSelect={vi.fn()} now={0} /></ul>
+  );
+  const { container, rerender } = render(row(item, "idle"));
+  const iconStatus = () => container.querySelector(".task-status-icon")?.getAttribute("data-status");
+  expect(iconStatus()).toBe("blocked");
+
+  for (const [phase, tone] of [["queued", "queued"], ["running", "run"]] as const) {
+    rerender(row({ ...item, session: { ...item.session, execution: { phase } as never } }, tone));
+    expect(iconStatus()).toBe(phase);
+    expect(screen.getByRole("button", { name: /Thread retry/ }).getAttribute("aria-label")).toContain(`thread.execution_${phase}`);
+  }
+});
+
 it("marks a task thread's state, including when it is settled", () => {
   for (const [status, iconStatus] of [
     ["waiting_for_human", "waiting_for_human"],

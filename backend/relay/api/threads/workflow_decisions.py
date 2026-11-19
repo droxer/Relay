@@ -88,9 +88,10 @@ def workflow_decision(
             raise HTTPException(403, "workflow_owner_required")
         if _request_body["kind"] in ("retry", "cancel", "answer"):
             try:
-                return ctx.registry.decide_workflow_recovery(session_id, {**_request_body, "actorUserId": owner})
+                result = ctx.registry.decide_workflow_recovery(session_id, {**_request_body, "actorUserId": owner})
             except ValueError as error:
                 raise HTTPException(409, str(error)) from error
+            return {**result, "execution": ctx.execution_lifecycle.status(result)}
         project_id = session.get("projectId")
         project = ctx.project_store.get_project(project_id) if project_id else None
         if not project or project.get("ownerUserId") != owner:
@@ -116,12 +117,13 @@ def workflow_decision(
                 {**_request_body, "actorUserId": owner},
             ))
             if _request_body["kind"] == "approve":
-                return ctx.registry.admit_workflow_first_step(
+                result = ctx.registry.admit_workflow_first_step(
                     session_id, validate=lambda snapshot: validate_workflow_write(ctx, owner, snapshot),
                 )
-            workflow_request = ctx.registry.daemon_store.get_run_request(workflow_request_id(run))
-            if workflow_request:
-                sync_workflow_task(ctx.registry, workflow_request, result)
-            return result
+            else:
+                workflow_request = ctx.registry.daemon_store.get_run_request(workflow_request_id(run))
+                if workflow_request:
+                    sync_workflow_task(ctx.registry, workflow_request, result)
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
+        return {**result, "execution": ctx.execution_lifecycle.status(result)}

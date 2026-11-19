@@ -2,6 +2,7 @@ import type { RelaySession } from "../types.js";
 import { mergeTokenUsage } from "./tokenUsage.ts";
 import { withPermissionRequested, withPermissionResolved, withPermissionsExpired } from "./permissionRequests.ts";
 import { applyWorkflowEvent, cancelOpenWorkflowRuns, isWorkflowEvent, workflowSnapshotDue } from "./workflowRuns.ts";
+import { summaryEventCountOf } from "./sessionPollMerge.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
@@ -22,7 +23,27 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
     ...session,
     events: [...session.events, ...events],
   };
-  for (const event of events) next = applySessionEventProjection(next, event);
+  const summaryCount = summaryEventCountOf(session) ?? 0;
+  const replayCount = Math.min(events.length, Math.max(0, summaryCount - session.events.length));
+  if (replayCount > 0) {
+    // Hydrate history through the summary's cursor, retaining its observed
+    // activity. Later events in this same batch can then advance that state.
+    for (let i = 0; i < replayCount; i++) next = applySessionEventProjection(next, events[i]);
+    next = {
+      ...next,
+      updatedAt: session.updatedAt,
+      status: session.status,
+      phase: session.phase,
+      workOutcome: session.workOutcome,
+      finalOutcome: session.events.length + replayCount === summaryCount ? next.finalOutcome : session.finalOutcome,
+      execution: session.execution,
+      currentAgent: session.currentAgent,
+      pendingDecision: session.pendingDecision,
+      permissionRequests: session.permissionRequests,
+      nextSteps: session.nextSteps,
+    };
+  }
+  for (let i = replayCount; i < events.length; i++) next = applySessionEventProjection(next, events[i]);
   return next;
 }
 

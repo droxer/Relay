@@ -9,7 +9,10 @@ import {
   sessionTrailsSummary,
   summaryEventCountOf,
 } from "../src/lib/sessionPollMerge.js";
+import { mergeSessionEventsIntoSessions } from "../src/lib/sessionEventMerge.js";
 import type { RelaySession, SessionSummary } from "../src/types.js";
+import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../src/lib/sessionEvents.js";
+import { threadAwaitsHuman } from "../src/lib/awaitingInput.js";
 
 function session(partial: Partial<RelaySession> = {}): RelaySession {
   return {
@@ -46,6 +49,53 @@ function summary(partial: Partial<SessionSummary> = {}): SessionSummary {
 }
 
 describe("session poll merging", () => {
+  it("keeps a resumed summary when a pre-resume detail or summary arrives late", () => {
+    const blocked = session({ status: "completed", workOutcome: "blocked", events: [
+      { id: "ended", type: "session.completed", sessionId: "ses_1", timestamp: "2026-06-20T00:00:01.000Z", outcome: "Needs input", workOutcome: "blocked" },
+    ] });
+    const running = mergeSessionSummaries([blocked], [summary({ eventCount: 2 })]);
+    const afterDetail = mergeSessionSnapshotIntoSessions(running, blocked, applySessionEventUnchecked, applySessionEventsUnchecked);
+    const afterSummary = mergeSessionSummaries(running, [summary({ status: "completed", workOutcome: "blocked", eventCount: 1 })]);
+
+    for (const [current] of [afterDetail, afterSummary]) {
+      assert.equal(current.status, "running");
+      assert.equal(threadAwaitsHuman(current, []), false);
+      assert.equal(sessionTrailsSummary(current), true);
+    }
+  });
+  it("keeps a resumed summary visible while SSE replays an earlier blocked event", () => {
+    const execution = { phase: "running" } as RelaySession["execution"];
+    const running = mergeSessionSummaries([], [summary({ eventCount: 2, execution })]);
+    const blocked: RelaySession["events"][number] = {
+      id: "ended", type: "session.completed", sessionId: "ses_1", timestamp: "2026-06-20T00:00:01Z", outcome: "Needs input", workOutcome: "blocked",
+    };
+    const replay = (current: RelaySession[] | undefined, event: RelaySession["events"][number]) =>
+      mergeSessionEventsIntoSessions(current, "ses_1", [event], applySessionEventUnchecked, applySessionEventsUnchecked).sessions!;
+    const partial = replay(running, blocked);
+    assert.deepEqual(partial[0].events, [blocked]);
+    assert.equal(threadAwaitsHuman(partial[0], []), false);
+    assert.equal(partial[0].status, "running");
+    const complete = replay(partial, { id: "resumed", type: "session.status", sessionId: "ses_1", timestamp: "2026-06-20T00:00:02Z", status: "running", phase: "pi:action" });
+    assert.equal(complete[0].status, "running");
+    assert.equal(sessionTrailsSummary(complete[0]), false);
+    assert.deepEqual(complete[0].execution, execution);
+
+    const lateDetail = session({ status: "completed", workOutcome: "blocked", events: [blocked] });
+    const [merged] = mergeSessionSnapshotIntoSessions(complete, lateDetail, applySessionEventUnchecked, applySessionEventsUnchecked);
+    assert.deepEqual(merged.execution, execution);
+  });
+  it("applies new events after hydrating a replay in the same SSE batch", () => {
+    const execution = { phase: "running" } as RelaySession["execution"];
+    const [observed] = mergeSessionSummaries([], [summary({ eventCount: 1, execution })]);
+    const updated = applySessionEventsUnchecked(observed, [
+      { id: "resumed", type: "session.status", sessionId: "ses_1", timestamp: "2026-06-20T00:00:01Z", status: "running", phase: "pi:action" },
+      { id: "renamed", type: "session.renamed", sessionId: "ses_1", timestamp: "2026-06-20T00:00:03Z", title: "New title" },
+    ]);
+    assert.deepEqual(updated.execution, execution);
+    assert.equal(updated.title, "New title");
+    assert.equal(updated.updatedAt, "2026-06-20T00:00:03Z");
+    assert.equal(updated.events.length, 2);
+  });
   it("retains newer streamed outcomes and clears the old outcome when execution resumes", () => {
     const current = session({ status: "completed", workOutcome: "blocked", finalOutcome: "Old blocker", events: [
       { id: "ended", type: "session.completed", sessionId: "ses_1", timestamp: "now", outcome: "Needs input", workOutcome: "blocked" },
@@ -97,7 +147,10 @@ describe("session poll merging", () => {
 
   it("clears the trailing mark when a fetched snapshot replaces the session", () => {
     const polled = mergeSessionSummaries([session()], [summary({ eventCount: 2 })]);
-    const snapshot = session({ events: [] });
+    const snapshot = session({ events: [
+      { id: "e1", type: "session.status", status: "waiting_for_human", phase: "feedback", sessionId: "ses_1", timestamp: "2026-06-20T00:00:01Z" },
+      { id: "e2", type: "session.status", status: "running", phase: "pi:action", sessionId: "ses_1", timestamp: "2026-06-20T00:00:02Z" },
+    ] });
     const [refetched] = mergeSessionSnapshotIntoSessions(polled, snapshot);
     assert.equal(sessionTrailsSummary(refetched), false);
   });

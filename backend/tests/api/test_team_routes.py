@@ -2841,6 +2841,7 @@ def test_resuming_a_rerun_reopens_the_agents_runtime_conversation(recovery_team_
     })
 
     assert response.status_code == 202, response.text
+    assert response.json()["execution"]["phase"] == "queued"
     command = client.app.state.registry.take_commands("test_node_alice", "node_token")[0]
     if resume:
         assert command["state"]["resume_session_id"] == "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d"
@@ -3129,6 +3130,7 @@ def test_a_blocked_round_offers_its_answers_as_choices(recovery_team_thread):
         json={"text": "Staging only", "idempotencyKey": "answer-2", "questionId": question_id},
     )
     assert response.status_code == 202, response.text
+    assert response.json()["execution"]["phase"] == "queued"
     assert "inputOptions" not in sessions.get_session(session["id"])
     assert client.get(f"/api/v1/tasks/{task['id']}").json()["awaiting"] is None
 
