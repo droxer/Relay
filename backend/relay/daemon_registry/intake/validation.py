@@ -11,7 +11,7 @@ from typing import Any
 
 
 from ...core.computer_identity import computer_id
-from ...core.daemon_records import ComputerRunCapacityError
+from ...core.daemon_records import ComputerNotDispatchableError, ComputerRunCapacityError
 from ...core.models import AGENT_NAMES
 from ..scheduling import node_accepts_run, normalize_run_capacity
 from ...core.workspace_scheduling import session_workspace_key, workspace_is_contended, workspace_key
@@ -244,9 +244,9 @@ class RunTargetValidationMixin(NodeBackendState):
             if assignment.get("agentId"):
                 self._validate_logical_assignment(assignment)
             if not self.registry.is_live(node_id):
-                raise ValueError(f"Sandbox {node_id} daemon node heartbeat expired.")
+                raise ComputerNotDispatchableError(node_id, online=False)
             if not self.registry.is_dispatchable(node_id):
-                raise ValueError(f"Sandbox {node_id} is online but not taking commands.")
+                raise ComputerNotDispatchableError(node_id, online=True)
             executor_kind = assignment["executorKind"]
             if executor_kind in set(node.get("disabledAgents") or []):
 
@@ -262,13 +262,16 @@ class RunTargetValidationMixin(NodeBackendState):
             workspace_deferred = self._deferrable_for_workspace(
                 node, request, active_runs_by_node[node_id]
             )
+            session_id = request.get("sessionId")
+            active_runs = active_runs_by_node[node_id]
             if not node_accepts_run(
                 node,
-                active_runs=active_runs_by_node[node_id],
-                session_id=request.get("sessionId"),
+                active_runs=active_runs,
+                session_id=session_id,
             ) and not workspace_deferred:
                 raise ComputerRunCapacityError(
-                    f"capacity_exhausted: Sandbox {node_id} has no available execution slot."
+                    f"capacity_exhausted: Sandbox {node_id} has no available execution slot.",
+                    thread_active=bool(session_id) and any(run.get("sessionId") == session_id for run in active_runs),
                 )
 
     def _deferrable_for_workspace(

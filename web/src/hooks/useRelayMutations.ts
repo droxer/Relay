@@ -49,6 +49,7 @@ import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteError
 import { threadLabel } from "../lib/threads";
 import { THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
 import { taskWorkflowSessionQueryKey } from "../lib/workflowRuns";
+import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
 
 type TokenArg = { token?: string };
 
@@ -197,10 +198,16 @@ export function useRelayMutations() {
       // An answer moves its task off the wait; show that without a poll.
       if (input.questionId) void invalidateTasks();
     },
-    onError: (error) => {
+    onError: (error, { sessionId }) => {
+      if (!(error instanceof RelayApiError)) return;
       // The question was answered or replaced elsewhere: fetch the one the
       // task waits on now, so the prompt stops offering the stale one.
-      if (error instanceof RelayApiError && error.code === "question_superseded") void invalidateTasks();
+      if (error.code === "question_superseded") void invalidateTasks();
+      // A background task or another tab started a run before the composer
+      // saw it. Refresh this thread so the next send can use its queue.
+      if (error.code === "thread_run_active") {
+        void fetchSessionSnapshot(queryClient, sessionId).then(cacheSession, () => undefined);
+      }
     },
   });
 

@@ -50,7 +50,8 @@ const PLACEMENT_REJECTION_KEYS: Record<string, string> = {
 };
 
 export function formatDispatchError(error: unknown, t: TFunction): string | undefined {
-  if (errorCode(error) === "question_superseded") return t("errors.question_superseded");
+  const code = errorCode(error);
+  if (code === "question_superseded") return t("errors.question_superseded");
   const message = errorMessage(error);
   const match = message.match(NOT_READY_AGENTS_RE);
   if (match) {
@@ -67,5 +68,12 @@ export function formatDispatchError(error: unknown, t: TFunction): string | unde
     const key = PLACEMENT_REJECTION_KEYS[noPlacement[2].toLowerCase()];
     if (key) return t(key, { agent: noPlacement[1].trim() });
   }
-  return undefined;
+  switch (code) {
+    case "thread_run_active": return t("errors.thread_run_active");
+    case "node_not_accepting_commands": return t("errors.node_not_accepting_commands");
+    case "node_offline": return t("errors.computer_offline");
+    case "capacity_exhausted": return t("errors.computer_capacity_exhausted");
+    case "agent_not_on_thread_node": return t("errors.agent_not_on_thread_node");
+    default: return undefined;
+  }
 }

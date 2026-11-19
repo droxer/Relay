@@ -125,9 +125,11 @@ def resolve_agent_assignments(
     required_node_id: str | None = None,
     daemon_store: Any | None = None,
     session_store: Any | None = None,
+    defer_thread_run_check: bool = False,
 ) -> list[dict[str, Any]]:
     nodes = {node["id"]: node for node in daemon_nodes}
     resolved: list[dict[str, Any]] = []
+    session_id = (session or {}).get("id") if defer_thread_run_check else None
     selected_node_ids = _session_affinity(session, placement_store, nodes, daemon_store)
     if required_node_id:
         required_node = nodes.get(required_node_id)
@@ -187,10 +189,12 @@ def resolve_agent_assignments(
                     condition["reason"] for condition in view.get("conditions", [])
                 )
                 continue
-            if not node_accepts_run(
-                node,
-                active_runs=node.get("activeRuns") or [],
-            ):
+            # Admission checks the Thread's durable reservation separately.
+            # Counting its own run here would report a full Computer first.
+            active_runs = node.get("activeRuns") or []
+            if session_id:
+                active_runs = [run for run in active_runs if run.get("sessionId") != session_id]
+            if not node_accepts_run(node, active_runs=active_runs):
                 rejection_reasons.add("capacity_exhausted")
                 continue
             if selected_node_ids and node["id"] not in selected_node_ids:

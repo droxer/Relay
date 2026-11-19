@@ -9,6 +9,26 @@ from typing import Any
 class ComputerRunCapacityError(ValueError):
     """Admission refused a run before it could reserve execution."""
 
+    def __init__(self, message: str, *, thread_active: bool = False) -> None:
+        super().__init__(message)
+        self.thread_active = thread_active
+
+
+class ThreadRunActiveError(ValueError):
+    """A different run request already holds the Thread's execution."""
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__(f"Session {session_id} already has an active daemon run.")
+
+
+class ComputerNotDispatchableError(ValueError):
+    """The Computer could not accept a run at admission."""
+
+    def __init__(self, node_id: str, *, online: bool) -> None:
+        self.code = "node_not_accepting_commands" if online else "node_offline"
+        reason = "is online but not taking commands" if online else "daemon node heartbeat expired"
+        super().__init__(f"Sandbox {node_id} {reason}.")
+
 
 TERMINAL_DAEMON_STATUSES = frozenset({"completed", "failed", "cancelled"})
 DISPATCH_CLAIM_ID_STATE_KEY = "_relay_dispatch_claim_id"

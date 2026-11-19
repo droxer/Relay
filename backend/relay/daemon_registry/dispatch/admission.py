@@ -20,6 +20,7 @@ from ...collaboration.work import (
     WORK_PROTOCOL,
 )
 from ...core.daemon_records import (
+    ThreadRunActiveError,
     TERMINAL_DAEMON_STATUSES, STOP_ACK_GRACE_SECONDS, STOP_ACK_LOST_STATE_KEY,
 )
 from ...core.ids import new_database_id
@@ -193,7 +194,7 @@ class RunAdmissionMixin(RegistryState):
         if active and request_id and active.get("id") == request_id:
             return active
         if active:
-            raise ValueError(f"Session {session_id} already has an active daemon run.")
+            raise ThreadRunActiveError(session_id)
         return self.daemon_store.create_run_request(
             {
                 **({"id": request_id} if request_id else {}),

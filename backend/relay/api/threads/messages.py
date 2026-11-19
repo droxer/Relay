@@ -6,6 +6,7 @@ from typing import Any
 from starlette.concurrency import run_in_threadpool
 
 from fastapi import APIRouter, HTTPException, Request
+from loguru import logger
 
 from ...core.thread_attachments import attachment_ids
 from ...core.workflow_selection import requested_workflow_style
@@ -177,6 +178,11 @@ async def submit_thread_message(
             actor,
         )
     except CollaborationError as error:
+        if error.status == 409:
+            logger.info(
+                "Thread message dispatch rejected",
+                session_id=thread_id, message_id=body.user_message_id, status=409, reason=error.code,
+            )
         raise HTTPException(
             error.status, {"code": error.code, "message": str(error)}
         ) from error

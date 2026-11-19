@@ -9,12 +9,15 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from io import StringIO
 from tempfile import TemporaryDirectory
 from typing import Any
 
 from fastapi.testclient import TestClient
+from loguru import logger
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.core.logging_config import _format_record
 from relay.computer.node_agents import sync_node_agents
 
 
@@ -103,6 +106,45 @@ def _world(monkeypatch) -> Iterator[tuple[Any, TestClient, dict[str, Any], dict[
 def _sync(app, *nodes: dict[str, Any]) -> None:
     for node in nodes:
         sync_node_agents(app.state, node)
+
+
+def test_message_can_be_retried_when_an_online_computer_resumes_polling(monkeypatch):
+    with _world(monkeypatch) as (app, client, here, _):
+        solo = _agent(app, here, "Solo", "codex")
+        _sync(app, here)
+        thread_id = _thread(app, here, solo)["id"]
+        registry = app.state.registry
+        token = "token_node_here"
+        assert registry.take_commands(here["id"], token) == []
+        stale = {**registry.sandboxes[here["id"]], "lastPollAt": "2020-01-01T00:00:00.000Z"}
+        registry.sandboxes[here["id"]] = stale
+        registry.daemon_store.register_node(stale)
+        registry.heartbeat(here["id"], token)
+        assert registry.is_live(here["id"])
+        assert not registry.is_dispatchable(here["id"])
+        path = f"/api/v1/threads/{thread_id}/messages"
+        message_id = "evt_d5bf9d08-b40f-4a90-9753-cf3dae4087f7"
+        payload = {"text": "Continue", "userMessageId": message_id}
+
+        logs = StringIO()
+        sink = logger.add(logs, format=_format_record)
+        try:
+            response = client.post(path, json=payload)
+        finally:
+            logger.remove(sink)
+        assert response.status_code == 409, response.text
+        assert response.json()["detail"]["code"] == "node_not_accepting_commands"
+        rejected = next(line for line in logs.getvalue().splitlines() if "Thread message dispatch rejected" in line)
+        assert all(value in rejected for value in (thread_id, message_id, "node_not_accepting_commands"))
+        assert payload["text"] not in rejected
+        assert registry.take_commands(here["id"], token) == []
+        for _ in range(2):
+            response = client.post(path, json=payload)
+            assert response.status_code == 202, response.text
+        [command] = registry.take_commands(here["id"], token)
+        assert command["type"] == "run.start"
+        events = app.state.session_store.get_session(thread_id)["events"]
+        assert sum(event["id"] == message_id for event in events) == 1
 
 
 def test_agent_thread_hands_a_round_to_a_team_on_its_computer(monkeypatch) -> None:

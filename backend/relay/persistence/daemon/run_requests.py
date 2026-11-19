@@ -30,6 +30,7 @@ from ...core.daemon_records import (
     TERMINAL_CLAIM_ID_STATE_KEY,
     TERMINAL_DAEMON_STATUSES,
     TERMINAL_EVENT_STATE_KEY,
+    ThreadRunActiveError,
 )
 from .rows import (
     lease_expires_at,
@@ -104,9 +105,7 @@ class RunRequestRows(DaemonStoreState):
                 if any(
                     item["sessionId"] == record["sessionId"] for item in active_requests
                 ):
-                    raise ValueError(
-                        f"Session {record['sessionId']} already has an active daemon run."
-                    )
+                    raise ThreadRunActiveError(record["sessionId"])
                 _assert_node_run_request_capacity(
                     row_to_node(node_row), active_requests, record
                 )
@@ -131,9 +130,7 @@ class RunRequestRows(DaemonStoreState):
             if existing:
                 return existing
             if self.active_run_request_for_session_any_node(record["sessionId"]):
-                raise ValueError(
-                    f"Session {record['sessionId']} already has an active daemon run."
-                ) from error
+                raise ThreadRunActiveError(record["sessionId"]) from error
             if record.get("taskId") and self.active_run_request_for_task(record["taskId"]):
                 raise ValueError("task_ownership_conflict: this task already has an active daemon run.") from error
             raise
