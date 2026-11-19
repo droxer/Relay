@@ -18,6 +18,7 @@ from ..deps import AppContextDep
 from ..actors import get_session_for_actor, get_session_header_for_actor, request_actor
 from ..bodies import json_body, string_field
 from ..schemas import ThreadMessageBody, openapi_body, parse_request_body
+from .lifecycle import steer_thread_queue
 
 router = APIRouter()
 
@@ -232,7 +233,7 @@ async def update_thread_queue(thread_id: str, request: Request, ctx: AppContextD
     action = string_field(body, "action")
     message_id = string_field(body, "id")
     message: dict[str, Any] | None = None
-    if action in ("enqueue", "import", "remove", "edit", "promote", "undo_remove") and (not message_id or len(message_id) > 100):
+    if action in ("enqueue", "import", "remove", "edit", "promote", "steer", "undo_remove") and (not message_id or len(message_id) > 100):
         raise HTTPException(400, "A message ID of at most 100 characters is required.")
     if action in ("enqueue", "import"):
         text = string_field(body, "text").strip()
@@ -255,7 +256,10 @@ async def update_thread_queue(thread_id: str, request: Request, ctx: AppContextD
         if team_id:
             message["addressTeamId"] = team_id
     try:
-        state = await run_in_threadpool(change_queue, ctx.session_store, thread_id, action, message=message, message_id=message_id)
+        if action == "steer":
+            state = await run_in_threadpool(steer_thread_queue, request, ctx, session, actor, message_id)
+        else:
+            state = await run_in_threadpool(change_queue, ctx.session_store, thread_id, action, message=message, message_id=message_id)
     except ValueError as error:
         codes = {
             "This thread is archived or being deleted.": "queue_thread_closed",
@@ -264,6 +268,6 @@ async def update_thread_queue(thread_id: str, request: Request, ctx: AppContextD
             "This message was already changed on another device.": "queue_changed",
         }
         raise HTTPException(409, {"code": codes.get(str(error), "queue_change_failed"), "message": str(error)}) from error
-    if action == "promote" and state.get("sendRequested"):
+    if action in ("promote", "steer") and state.get("sendRequested"):
         ThreadQueueDispatcher(ctx).follow_requested_send(thread_id)
     return state

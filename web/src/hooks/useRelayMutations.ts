@@ -47,6 +47,7 @@ import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects } from "../lib/projectDirectory";
 import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteErrorMessage } from "../lib/projectDeletion";
 import { threadLabel } from "../lib/threads";
+import { THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
 import { taskWorkflowSessionQueryKey } from "../lib/workflowRuns";
 
 type TokenArg = { token?: string };
@@ -121,6 +122,7 @@ export function useRelayMutations() {
       cancelRun(sessionId, token, reason),
     onSuccess: (session) => {
       cacheSession(session);
+      void queryClient.invalidateQueries({ queryKey: THREAD_QUEUE_QUERY_KEY });
       void invalidateNodes();
       void invalidateTasks();
     },

@@ -21,14 +21,13 @@ beforeEach(() => {
     return structuredClone(saved) as any;
   });
 });
-function open(queueKey = "owner:thread") {
+function open(queueKey = "owner:thread", running = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const composer = { getText: () => "draft", setText: vi.fn(), focus: vi.fn(), send: vi.fn(), clear: vi.fn() };
-  const cancel = vi.fn();
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  const hook = renderHook(() => useThreadQueue({ queueKey, threadId: "thread", running: true, awaitsPerson: false,
-    composerRef: { current: composer }, onCancelRun: cancel }), { wrapper });
-  return { ...hook, client, composer, cancel };
+  const hook = renderHook(() => useThreadQueue({ queueKey, threadId: "thread", running, awaitsPerson: false,
+    composerRef: { current: composer } }), { wrapper });
+  return { ...hook, client, composer };
 }
 it("independent clients read the persisted queue without dispatching from the browser", async () => {
   const laptop = open();
@@ -44,13 +43,6 @@ it("failed saving returns false and exposes a recoverable error", async () => {
   vi.mocked(apiJson).mockRejectedValueOnce(new Error("Offline"));
   await act(async () => { expect(await hook.result.current.enqueue("Keep this draft")).toBe(false); });
   expect(hook.result.current.error).toBe("queue.errors.change_failed");
-});
-it("pauses durably before requesting Stop", async () => {
-  const hook = open();
-  await act(async () => { await hook.result.current.stop(); });
-  expect(saved.paused).toBe(true);
-  const { cancelRun } = await import("../src/api-client/sessions");
-  expect(cancelRun).toHaveBeenCalledWith("thread");
 });
 it("only removes an edited message after acknowledgment and preserves the draft", async () => {
   saved.messages.push({ id: "q1", text: "queued" });
@@ -103,15 +95,27 @@ it.each([
   expect(hook.result.current.error).toBe(key);
 });
 
-it("promotes explicitly before cancelling the running turn and localizes cancellation failures", async () => {
+it("requests Stop & send next in one action and localizes failures", async () => {
   const hook = open();
   await waitFor(() => expect(apiJson).toHaveBeenCalled());
   const { cancelRun } = await import("../src/api-client/sessions");
   await act(async () => { await hook.result.current.steer("q1"); });
-  expect(cancelRun).toHaveBeenCalledWith("thread", undefined, "Send queued message first.", true);
-  vi.mocked(cancelRun).mockRejectedValueOnce(new Error("Private server error"));
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({
+    body: expect.objectContaining({ action: "steer", id: "q1" }),
+  }));
+  expect(cancelRun).not.toHaveBeenCalled();
+  vi.mocked(apiJson).mockRejectedValueOnce(new Error("Private server error"));
   await act(async () => { await hook.result.current.steer("q1"); });
   expect(hook.result.current.error).toBe("queue.errors.change_failed");
+});
+
+it("promotes a message without requesting Stop when the thread is idle", async () => {
+  const hook = open("owner:thread", false);
+  await waitFor(() => expect(apiJson).toHaveBeenCalled());
+  await act(async () => { await hook.result.current.steer("q1"); });
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({
+    body: expect.objectContaining({ action: "promote", id: "q1" }),
+  }));
 });
 
 it("offers persisted undo and resumes through the same server queue", async () => {

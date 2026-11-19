@@ -27,6 +27,7 @@ from .registry import DaemonNodeRegistry
 from ..tasks.execution import request_execution_owner
 from ..persistence.events import relay_task_event
 from ..sessions.controller import SessionController
+from ..sessions.task_scope import thread_task_scope
 from .intake.idempotency import RunIdempotencyMixin
 from .intake.intent import RunIntentMixin
 from .intake.ownership import RunOwnershipMixin, assert_session_owned_by_user
@@ -363,8 +364,19 @@ class ServerDaemonNodeBackend(
         request = self.registry.daemon_store.active_run_request_for_session_any_node(
             session_id
         )
-        if request:
-            self.registry.cancel_run_request_before_delivery(request["id"], reason)
+        if request and self.registry.cancel_run_request_before_delivery(request["id"], reason):
+            # Nothing reached the daemon, so settle the thread and any linked
+            # task immediately without waiting for a daemon exit.
+            session = self.registry.store.get_session(session_id)
+            if session.get("status") in ("completed", "failed", "cancelled"):
+                return session
+            task_id, task_owner = thread_task_scope(
+                session, request, self.registry.task_store, self.registry.daemon_store
+            )
+            return SessionController(
+                self.registry.store, task_store=self.registry.task_store, task_id=task_id,
+                task_execution_owner=task_owner,
+            ).cancel_session(session_id, reason, actor_user_id=actor_user_id)
         active = self.registry.cancel_active_run(
             sandbox_id, session_id, reason, actor_user_id=actor_user_id,
         )

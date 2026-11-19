@@ -78,7 +78,7 @@ it("reduces actual empty-queue requests but keeps pending messages responsive", 
   vi.useFakeTimers();
   focusManager.setFocused(true);
   const { client, wrapper } = setup();
-  const view = renderHook(() => useThreadQueue({ queueKey: "owner:thread", threadId: "thread", running: false, awaitsPerson: false, composerRef: { current: null }, onCancelRun: () => {} }), { wrapper });
+  const view = renderHook(() => useThreadQueue({ queueKey: "owner:thread", threadId: "thread", running: false, awaitsPerson: false, composerRef: { current: null } }), { wrapper });
   await act(async () => {});
   expect(apiJson).toHaveBeenCalledTimes(1);
   await act(() => vi.advanceTimersByTimeAsync(29_000));

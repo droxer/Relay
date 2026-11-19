@@ -399,7 +399,6 @@ export function ThreadsView({
     awaitsPerson: (waiting !== null && !followUpWait) || awaitingDecision
       || openPermissionRequests(activeSession).length > 0,
     composerRef,
-    onCancelRun,
   });
   // A run admitted but not yet taken by a computer: the transcript holds its
   // place in line where the reply will stream. Inside its queue grace a run
@@ -711,7 +710,7 @@ export function ThreadsView({
                   <QueuedRunCard
                     queued={activeQueuedRun}
                     node={activeRuntimeNode}
-                    onCancel={!activeSession?.deletionRequestedAt && !projectReadOnly ? (queueEnabled ? threadQueue.stop : onCancelRun) : undefined}
+                    onCancel={!activeSession?.deletionRequestedAt && !projectReadOnly ? onCancelRun : undefined}
                   />
                 ) : running && !displayMessages.some((message) => message.kind === "agent")
                   ? <RunStartingCue node={activeRuntimeNode} />
@@ -769,7 +768,7 @@ export function ThreadsView({
           onRuntimeNodeChange={onRuntimeNodeChange}
           running={running}
           onSend={sendAnswering}
-          onCancelRun={queueEnabled ? threadQueue.stop : onCancelRun}
+          onCancelRun={onCancelRun}
           onQueue={queueEnabled ? threadQueue.enqueue : undefined}
           queue={queueEnabled ? (
             <MessageQueue

@@ -342,7 +342,7 @@ class RunAdmissionMixin(RegistryState):
         request = self.daemon_store.get_run_request(request_id)
         if not request:
             return None
-        with self.dispatch_scope([request["nodeId"]]):
+        with self.dispatch_scope([request["nodeId"]]), self.store.mutation_scope(request["sessionId"]):
             request = self.daemon_store.get_run_request(request_id)
             if not request or request.get("status") not in (
                 "prepared",
@@ -367,8 +367,16 @@ class RunAdmissionMixin(RegistryState):
                 if command_id
                 else self.daemon_store.pending_command_for_run_request(request_id)
             )
-            if staged and staged.get("status") == "pending":
-                self.daemon_store.discard_staged_command(staged["id"])
+            if staged:
+                command = staged["command"]
+                event = {
+                    "type": "run.cancelled", "commandId": command["id"],
+                    "sessionId": command["sessionId"], "runId": command["runId"],
+                    "agent": command["agent"], "reason": reason, "_requireUndelivered": True,
+                }
+                if self.daemon_store.mark_command_cancelled(request["nodeId"], event):
+                    self._close_terminal_session_agent(event)
+                self.active_commands.pop(command["id"], None)
             return cancelled
 
     def _cancel_active_run_unlocked(

@@ -3,21 +3,20 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ComposerHandle } from "../components/composer/Composer";
 import { restoreComposerDraft } from "./useComposer";
-import { cancelRun } from "../api-client/sessions";
 import { apiJson } from "../api-client/client";
-import type { QueuedMessage, QueueAddress } from "../lib/threadQueue";
+import { THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress } from "../lib/threadQueue";
+import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 
 type QueueState = { messages: QueuedMessage[]; paused: boolean; sending?: string; error?: string; removed?: { message: QueuedMessage; beforeId: string | null; removedAt?: string } };
 const EMPTY: QueueState = { messages: [], paused: false };
 
 /** The server owns ordering and dispatch; no open browser is required. */
-export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, composerRef, onCancelRun }: {
+export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, composerRef }: {
   queueKey: string;
   threadId?: string;
   running: boolean;
   awaitsPerson: boolean;
   composerRef: RefObject<ComposerHandle | null>;
-  onCancelRun: () => void;
 }) {
   const { t } = useTranslation();
   const client = useQueryClient();
@@ -27,14 +26,14 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const [pending, setPending] = useState(false);
   const busy = useRef(false);
   const unsaved = useRef(new Map<string, QueuedMessage>());
-  const key = ["thread-queue", queueKey];
+  const key = [...THREAD_QUEUE_QUERY_KEY, queueKey];
   const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue`;
   const query = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => apiJson<QueueState>(path, { signal }),
     enabled: !!threadId,
     staleTime: 1_000,
-    // Own actions write the returned queue immediately. Only active work
+    // Own actions refetch the queue immediately. Only active work
     // needs a fast poll; a settled, empty queue can discover other tabs slowly.
     refetchInterval: (query) => running || query.state.data?.messages?.length || query.state.data?.sending
       ? 1_000 : 30_000,
@@ -49,7 +48,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     setPending(true);
     try {
       await apiJson<QueueState>(path, { method: "POST", body: { action, id, text, ...address } });
-      await client.invalidateQueries({ queryKey: ["thread-queue", queueKey] });
+      await client.invalidateQueries({ queryKey: [...THREAD_QUEUE_QUERY_KEY, queueKey] });
       if (activeKey.current === queueKey) setError(null);
       return true;
     } catch (cause) {
@@ -100,23 +99,13 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     composer.focus();
   }, [state.messages, composerRef, change, queueKey]);
   const steer = useCallback(async (id: string) => {
-    if (await change("promote", id)) {
-      // Cancellation preserves the queue for this explicit replacement.
-      if (running && threadId) {
-        try { await cancelRun(threadId, undefined, "Send queued message first.", true); }
-        catch (cause) { setError(queueErrorKey(cause)); }
-        await client.invalidateQueries();
-      }
+    if (await change(running ? "steer" : "promote", id)) {
+      void client.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
+      void client.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
+      void client.invalidateQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
     }
-  }, [change, running, threadId, client, setError]);
-  const stop = useCallback(async () => {
-    if (!(await change("pause"))) return;
-    if (!threadId) { onCancelRun(); return; }
-    try { await cancelRun(threadId); }
-    catch (cause) { setError(queueErrorKey(cause)); }
-    await client.invalidateQueries();
-  }, [change, onCancelRun, threadId, client, setError]);
-  return { messages: state.messages, enqueue, steer, edit, remove, stop,
+  }, [change, running, client]);
+  return { messages: state.messages, enqueue, steer, edit, remove,
     removedAt: state.removed?.removedAt, undoRemove,
     pending, paused: state.paused, sending: state.sending, waiting: awaitsPerson && !running,
     error: error ? t(error) : state.error ? t("queue.errors.dispatch") : query.isError ? t("queue.errors.unavailable") : null,
