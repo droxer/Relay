@@ -402,7 +402,7 @@ button[data-danger]:focus-visible,
   width: var(--accent-bar-w);
   /* Rounded ends, not a radius rung: half the bar's own width. */
   border-radius: calc(var(--accent-bar-w) / 2);
-  background: var(--action);
+  background: var(--signature);
 }
 
 /* Meta ink on a selected or highlighted row. The 10% selection wash and the

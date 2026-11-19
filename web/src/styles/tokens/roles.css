@@ -48,7 +48,12 @@
      the active item in a list or drawer section, in the accent action.
      Full-height, drawn as an inset shadow; the rail variant that stops short
      of the row's top and bottom edges is `.rail-row` in base.css. */
-  --accent-bar: inset 2px 0 0 var(--action);
+  /* Signature — the mark's orange, lent to exactly two jobs: the focus ring
+     and the selected-item marker (this bar, the rail and nav markers). It is
+     a line, never a fill: buttons, links and status keep their own colours,
+     so the brand reads in precise details rather than as one more hue. */
+  --signature: var(--brand-lead);
+  --accent-bar: inset 2px 0 0 var(--signature);
   /* Two widths, because a bar beside one ROW and a bar beside a BLOCK of
      prose are different jobs: the row marker rides the height of a single
      line and must not read as a border, while the block stripe sits beside
@@ -144,16 +149,16 @@
      container. `outline` is never clipped by an ancestor's overflow, and it is
      the one ring property forced-colors mode preserves.
 
-     The ring is LINK INK rather than the accent action, so a focused
+     The ring is the SIGNATURE orange rather than the action, so a focused
      primary button shows a ring that is visibly not more of its own fill;
-     --link clears 4.8:1 on every solid plane in both registers (and on the
-     selected-row wash), well past the 3:1 indicator floor. The danger ring differs by BOTH colour (--err, the
+     --signature clears 4.3:1 on every solid plane in both registers (and on
+     the selected-row wash), well past the 3:1 indicator floor. The danger ring differs by BOTH colour (--err, the
      critical red) and shape (dashed) — the shape half is kept from the
      monochrome era because forced-colors mode drops the hue and the dashed
      stroke survives it. */
   --focus-w: 2px;
   --focus-offset: 2px;
-  --focus-outline: var(--focus-w) solid var(--link);
+  --focus-outline: var(--focus-w) solid var(--signature);
   --focus-outline-danger: var(--focus-w) dashed var(--err);
 
   /* Type roles — the platform UI face carries every tier. Hierarchy

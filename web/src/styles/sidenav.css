@@ -291,7 +291,7 @@
   /* Rounded ends, not a radius rung: half the bar's own width (as base.css
      .rail-row does). */
   border-radius: calc(var(--accent-bar-w) / 2);
-  background: var(--action);
+  background: var(--signature);
 }
 
 .sidenav-toggle { color: var(--ink-3); }

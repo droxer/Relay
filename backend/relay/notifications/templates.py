@@ -88,8 +88,8 @@ BRAND_ACTION = "#364b59"
 BRAND_ON_ACTION = "#ffffff"
 BRAND_LEAD = "#b84400"
 BRAND_LIVE = "#2457c5"
-BRAND_INK = "#27333b"
-BRAND_MUTED = "#4b5c66"
+BRAND_INK = "#141f27"
+BRAND_MUTED = "#4c5c66"
 
 _FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 

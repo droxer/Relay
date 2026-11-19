@@ -589,7 +589,7 @@ tr[data-selected="true"] {
    <tr> is not a reliable positioning context, so the bar is an inset shadow
    on the leading cell instead — same stripe, same inset. */
 tr[data-selected="true"] > td:first-child {
-  box-shadow: inset var(--accent-bar-w) 0 0 var(--action);
+  box-shadow: inset var(--accent-bar-w) 0 0 var(--signature);
 }
 
 /* A card is the one selectable object that keeps a ring instead of the bar:

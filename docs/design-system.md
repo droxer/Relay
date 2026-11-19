@@ -8,7 +8,8 @@
 
 Relay uses **Cool Mist**, selected on 2026-11-10: low-saturation mist-grey-blue
 light surfaces, blue-charcoal dark surfaces, rounded controls and soft floating
-elevation. The executable source of truth is `web/src/styles/tokens/`; this
+elevation, with the brand's orange drawn as a signature line on focus and
+selection. The executable source of truth is `web/src/styles/tokens/`; this
 is the canonical specification. [DESIGN.md](../DESIGN.md) is an entry point to
 this document. Cool Mist supersedes the previous black/white, 4/6/8px, flat-only
 visual direction. The [source-system appendix](#appendix--the-source-system)
@@ -17,22 +18,26 @@ records historical inspiration, not an alternative component specification.
 - **Materials stay quiet; status stays distinct.** Blue-grey surfaces, text and
   controls have restrained chroma. Signal blue means live execution; green,
   gold and crimson retain success, attention and failure meanings. Baton orange
-  remains exclusive to the brand mark's lead chevron. The brand geometry is
-  unchanged; static assets follow the current palette.
+  is the brand mark's lead chevron and, as `--signature`, the one line that
+  marks focus and selection: the focus ring, the selected-row bar and the
+  rail and nav markers. It is never a fill, a link or a status colour. The
+  brand geometry is unchanged; static assets follow the current palette.
 - **One primary action per view.** `--primary` reads `--action`: a pale-mist
   plate with dark ink in dark mode, a blue-charcoal plate with white ink in
-  light mode. Secondary actions use outline or ghost treatments. Direct-fill
-  controls such as composer send use the paired `--cta-*` tokens.
+  light mode. Secondary actions use outline or ghost treatments.
 - **Selection stays calm.** `--action-soft` is an 8% action wash in dark and
-  6% in light, accompanied by the selection marker. Links and focus use the
+  6% in light, accompanied by the orange `--signature` marker. Links use the
   text ramp; underlines distinguish links from ordinary text.
+- **Meta recedes.** The ink ramp spends its range: timestamps and metadata
+  (`--ink-4`) sit well below body text while still clearing 4.5:1 on the
+  worst plane, so a row reads as name first, details second.
 - **Contrast includes the painted state.** Text clears 4.5:1 on all content
   and navigation planes. Status badges also clear 4.5:1 after their 8% tint
   and the row's selection wash are composited. Field boundaries clear 3:1
   after mixing with their background, at rest and on hover. Disabled controls
   retain their separate opacity contract.
-- **Rounded, with familiar density.** Micro details use 8px (`--r-1`),
-  controls and rows 12px (`--r-2`), containers 16px (`--r-3`). Ordinary content
+- **Tool-grade corners.** Micro details use 4px (`--r-1`), controls and rows
+  6px (`--r-2`), containers 10px (`--r-3`). Ordinary content
   stays flat. Floating chrome uses the shared hairline plus soft shadow.
   Full radii remain reserved for circles and capsules.
 - **Keep the existing type and interaction system.** The platform UI sans
@@ -73,8 +78,8 @@ Tailwind `@theme` machinery:
    family is named `--action`, not `--accent`. `--accent` points at
    `--control-fill-hover`, a translucent ink wash, never a fixed surface: menus
    paint on `--popover` (`--surface-3`), and a fixed plane matched it in light
-   (white on white) and sank below it in dark. `--ring` points at `--link`:
-   a focused control must not ring in its own fill.
+   (white on white) and sank below it in dark. `--ring` points at
+   `--signature`: a focused control must not ring in its own fill.
 
    The `text-*` utilities map one name per rung: `text-xs` → `--fs-1`
    (12px), `text-sm` → `--fs-2` (14px), `text-dense` → `--fs-3`,
@@ -132,34 +137,31 @@ Dark register / light register, matching `palette.css`:
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--surface-0` | `#171d22` | `#eef2f5` | canvas |
-| `--surface-1` | `#1f282f` | `#fbfcfd` | cards and panels |
-| `--surface-2` | `#28323a` | `#e8eef2` | inset fills and hover wells |
+| `--surface-0` | `#12171b` | `#e9eef2` | canvas |
+| `--surface-1` | `#1c242a` | `#fdfeff` | cards and panels |
+| `--surface-2` | `#26313a` | `#e2e9ee` | inset fills and hover wells |
 | `--surface-3` | `#2b3842` | `#ffffff` | floating surfaces |
-| `--surface-rail` | `#28323a` | `#e5ebef` | navigation rail |
-| `--surface-list` | `#1f282f` | `#f4f7f9` | list pane |
-| `--surface-band` | `#1f282f` | `#e8eef2` | group bands |
-| `--ink-1` | `#e3ebf1` | `#27333b` | headings and emphasis |
-| `--ink-2` | `#ccd8e1` | `#3d4c56` | body |
-| `--ink-3` | `#b2c3d0` | `#4b5c66` | secondary labels and neutral notices |
-| `--ink-4` | `#a0b2c0` | `#5c6b75` | timestamps and metadata |
-| `--line-1` | `#384957` | `#c1ccd4` | structural hairline |
-| `--line-2` | `#2d3b46` | `#dce4e9` | soft hairline |
-| `--cta-fill` | `#d3e0e9` | `#364b59` | direct-fill controls |
-| `--cta-hover` | `#e3ebf1` | `#475e6d` | direct-fill hover |
-| `--cta-ink` | `#23313b` | `#ffffff` | direct-fill label |
-| `--action` | `#d3e0e9` | `#364b59` | primary action and selection marker |
+| `--surface-rail` | `#222c33` | `#e1e8ed` | navigation rail |
+| `--surface-list` | `#1c242a` | `#f6f9fa` | list pane |
+| `--surface-band` | `#222c33` | `#edf2f5` | group bands |
+| `--ink-1` | `#edf2f6` | `#141f27` | headings and emphasis |
+| `--ink-2` | `#ccd8e1` | `#33424c` | body |
+| `--ink-3` | `#b2c3d0` | `#4c5c66` | secondary labels and neutral notices |
+| `--ink-4` | `#93a5b2` | `#58676f` | timestamps and metadata |
+| `--line-1` | `#405361` | `#b7c3cc` | structural hairline |
+| `--line-2` | `#2f3d48` | `#d6dfe5` | soft hairline |
+| `--action` | `#d3e0e9` | `#364b59` | primary action |
 | `--action-hover` | `#e3ebf1` | `#475e6d` | primary action hover |
 | `--on-action` | `#23313b` | `#ffffff` | primary action label |
-| `--link-ink` | `#e3ebf1` | `#27333b` | links and focus |
-| `--link-ink-strong` | `#ffffff` | `#17232c` | link hover |
-| `--brand-lead` | `#ff8a3d` | `#b84400` | brand mark lead only |
-| `--ok` | `#6dd28a` | `#0b6424` | success |
+| `--link-ink` | `#edf2f6` | `#141f27` | links |
+| `--link-ink-strong` | `#ffffff` | `#0b141a` | link hover |
+| `--brand-lead` | `#ff8a3d` | `#b84400` | brand mark lead; `--signature` (focus ring, selection marker) |
+| `--ok` | `#7adb95` | `#0b6424` | success |
 | `--warn` | `#dec371` | `#705400` | attention |
-| `--err` | `#f7adbe` | `#ab0d40` | failure and destructive intent |
+| `--err` | `#ffabbd` | `#ab0d40` | failure and destructive intent |
 | `--on-err` | `#23313b` | `#ffffff` | critical fill label |
 | `--live` | `#91b9f2` | `#2457c5` | live execution |
-| `--elevation-shadow` | `rgba(8, 16, 23, 0.32)` | `rgba(37, 60, 80, 0.10)` | floating shadow color |
+| `--elevation-shadow` | `rgba(8, 16, 23, 0.32)` | `rgba(37, 60, 80, 0.16)` | floating shadow color |
 | `--scrim` | `rgba(8, 16, 23, 0.6)` | `rgba(23, 35, 44, 0.24)` | overlay scrim |
 
 ### The surface ladder runs both ways
@@ -413,8 +415,8 @@ stacks.
 
 ## Geometry, elevation, motion
 
-- **Radii:** `--r-1` 8px for micro details; `--r-2` 12px for controls,
-  tabs, and badges; `--r-3` 16px for cards, drawers, dialogs, and panels.
+- **Radii:** `--r-1` 4px for micro details; `--r-2` 6px for controls,
+  tabs, and badges; `--r-3` 10px for cards, drawers, dialogs, and panels.
   `--r-full` is 9999px for actual circles/capsules. `--r-pill` (also
   9999px) is the marketing CTA capsule — the landing page's
   `.landing-button`, as eveland.ai draws it — and never an app control; a
@@ -1203,7 +1205,7 @@ to look before "fixing" something that looks unspecified:
    cadences (`--t-pulse`, `--t-pulse-calm`, `--t-tick`, `--t-draw`,
    `--t-stagger`) which the source has no equivalent for.
 3. **No dark-mode tokens** are published. Relay's dark register is derived —
-   a blue-charcoal `#171d22` canvas, restrained blue-grey elevation above
+   a blue-charcoal `#12171b` canvas, restrained blue-grey elevation above
    it, and a pale-mist action plate (`#d3e0e9`) carrying dark ink. Every
    derived value is documented at its token in `palette.css`.
 4. **Pastel decorative tints** behind accessory cutouts are photographic

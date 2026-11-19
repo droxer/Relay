@@ -18,7 +18,7 @@ export type FaviconState = "idle" | "running" | "waiting";
  * subtle hairline.
  * The colored half identifies activity. Keep the static favicon in sync. */
 export const FAVICON_INK = {
-  canvas: "#171d22",
+  canvas: "#12171b",
   outline: "#52606b",
   action: "#ff8a3d",
   live: "#91b9f2",
