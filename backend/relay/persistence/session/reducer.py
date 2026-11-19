@@ -11,6 +11,7 @@ from ...collaboration.workflow_events import (
     apply_workflow_recovery_decided, apply_workflow_interrupted, apply_workflow_admission_blocked,
 )
 from ...core.permission_requests import (
+    apply_permission_mode,
     apply_permission_requested,
     apply_permission_resolved,
     expire_permission_requests,
@@ -356,6 +357,7 @@ SESSION_EVENT_HANDLERS: dict[str, SessionEventHandler] = {
     "thread.project_manager_assigned": _apply_project_manager_assigned,
     "agent.permission_requested": apply_permission_requested,
     "agent.permission_resolved": apply_permission_resolved,
+    "session.permission_mode": apply_permission_mode,
 }
 
 # Streamed run output has no reducer: it changes nothing in the projection, so

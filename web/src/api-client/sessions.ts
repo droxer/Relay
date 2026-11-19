@@ -8,7 +8,7 @@ import type {
 } from "../types.ts";
 import { apiJson, fetchWithSession, RelayApiError, readApiResponse } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
-import type { WorkflowAttemptBinding } from "relay-core";
+import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
 /** One page of the thread list, newest first. Without a page this is the
@@ -180,6 +180,14 @@ export function answerPermissionRequest(
       body: { decision, ...(note ? { note } : {}), ...(answers ? { answers } : {}), ...(always ? { always: true } : {}) },
     },
   );
+}
+
+export function setThreadPermissionMode(sessionId: string, mode: ThreadPermissionMode): Promise<RelaySession> {
+  return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/permission-mode`, {
+    method: "PUT",
+    body: { mode },
+    guard: sessionGuard,
+  });
 }
 
 export function archiveSession(sessionId: string, token?: string): Promise<RelaySession> {

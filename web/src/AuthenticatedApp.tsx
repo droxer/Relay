@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { logout, reconcileExecution, retryExecutionRecovery } from "./api";
 import type { AgentName, AgentTeam, CollaborationStyle, CurrentUser, UserAgent, RelayArtifact, ThreadMessageInput } from "./types";
 import type { PermissionAnswerInput } from "./lib/permissionRequests";
+import type { ThreadPermissionMode } from "relay-core";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { WorkRoutePage, showsWorkRoutePage, skipLinkTarget } from "./components/WorkRoutePage";
 import { useRelayData } from "./hooks/useRelayData";
@@ -93,6 +94,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const { reportMutationError } = useMutationError();
   const {
     answerPermissionMutation,
+    threadPermissionModeMutation,
     cancelRunMutation,
     recordDecisionMutation,
     runLogicalAgentsMutation,
@@ -611,6 +613,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       // mutation onError surfaces a toast.
     }
   });
+  const handlePermissionModeChange = useStableEvent((mode: ThreadPermissionMode) => {
+    if (activeSession) threadPermissionModeMutation.mutate({ sessionId: activeSession.id, mode });
+  });
   const handleRetryAgent = useStableEvent((agent: AgentName, agentId?: string) => { void retryAgentMessage(agent, agentId); });
   const handleResumeAgent = useStableEvent((agent: AgentName, agentId?: string) => { void resumeAgentMessage(agent, agentId); });
   const handleOpenThreadSpace = useStableEvent((artifact?: RelayArtifact) => space.openSpace(artifact?.id ?? null));
@@ -861,6 +866,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             sendDecision={sendDecision}
             sendHandoff={sendHandoff}
             onAnswerPermission={handleAnswerPermission}
+            onPermissionModeChange={handlePermissionModeChange}
+            permissionModePending={threadPermissionModeMutation.isPending && threadPermissionModeMutation.variables?.sessionId === activeSession?.id}
             onSend={handleComposerSend}
             onCancelRun={handleCancelRun}
             onRetryAgent={handleRetryAgent}

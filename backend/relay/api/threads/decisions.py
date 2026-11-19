@@ -6,8 +6,13 @@ from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 
 from ...core.models import AGENT_NAMES
-from ...core.permission_requests import PERMISSION_DECISIONS, PERMISSION_NOTE_MAX_CHARS
+from ...core.permission_requests import (
+    PERMISSION_DECISIONS,
+    PERMISSION_NOTE_MAX_CHARS,
+    TASK_PERMISSION_MODES,
+)
 from ...core.validation import valid_agent
+from ...security.request_auth import require_user_session
 from ...sessions.controller import SessionController
 from ...sessions.task_scope import (
     IN_FLIGHT_TASK_STATUSES,
@@ -170,6 +175,30 @@ def answer_permission_request(
     if result is None:
         raise HTTPException(409, "permission_request_closed")
     return result
+
+
+@router.put("/threads/{session_id}/permission-mode")
+def set_permission_mode(
+    session_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep,
+) -> dict[str, Any]:
+    account = require_user_session(request, ctx.auth_store)
+    owner = account.get("userId") or account.get("username") or account["id"]
+    try:
+        with ctx.session_store.mutation_scope(session_id):
+            session = ctx.session_store.get_session_header(session_id)
+            if session.get("ownerUserId") != owner:
+                raise HTTPException(403, "Session access denied.")
+            if session.get("deletionRequestedAt"):
+                raise HTTPException(409, "thread_deletion_pending")
+            mode = _request_body.get("mode")
+            if mode not in TASK_PERMISSION_MODES:
+                raise HTTPException(400, "mode must be ask or yolo.")
+            session = SessionController(ctx.session_store).set_permission_mode(
+                session, mode, actor_user_id=owner,
+            )
+    except KeyError as error:
+        raise HTTPException(404, "Session not found.") from error
+    return {**session, "execution": ctx.execution_lifecycle.status(session)}
 
 
 @router.post("/threads/{session_id}/handoffs")

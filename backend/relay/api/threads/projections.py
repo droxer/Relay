@@ -84,6 +84,7 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "computerId": session.get("computerId"),
         "currentAgent": session.get("currentAgent"),
         "pendingDecision": session.get("pendingDecision"),
+        **({"permissionMode": session["permissionMode"]} if session.get("permissionMode") else {}),
         "permissionRequests": session.get("permissionRequests") or [],
         # A finished turn's suggestions, so Home can offer them without
         # opening each thread; bounded to three short lines by the reducer.

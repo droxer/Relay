@@ -420,6 +420,13 @@ and records each decision in the Thread. Questions still go to a person.
 Each dispatched Agent run takes the current setting. An Automation supplies
 the setting to each new occurrence when it is created.
 
+**Thread Permission Mode**:
+The Thread owner's choice of `ask` or `yolo` for tool Permission Prompts,
+available in the chat input during a run. An explicit choice applies to
+current and later runs in that Thread. Without one, a Task run uses its
+dispatch-time mode and other runs use `ask`. Switching to `yolo` also allows
+open tool approvals. Runtime questions still require a person's answer.
+
 **Task Review**:
 A view of the newest linked Thread's recorded work for one Task: the requested
 outcome, available acceptance criteria, attributed Agent reports, and exact

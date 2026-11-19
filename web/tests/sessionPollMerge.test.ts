@@ -96,10 +96,22 @@ describe("session poll merging", () => {
   });
 
   it("clears the trailing mark when a fetched snapshot replaces the session", () => {
-    const polled = mergeSessionSummaries([session()], [summary({ eventCount: 2 })]);
-    const snapshot = session({ events: [] });
+    const polled = mergeSessionSummaries([session()], [summary({ eventCount: 1, permissionMode: "ask" })]);
+    const snapshot = session({ permissionMode: "ask", events: [
+      { id: "e1", type: "session.permission_mode", mode: "ask", actorUserId: "owner", sessionId: "ses_1", timestamp: "now" },
+    ] });
     const [refetched] = mergeSessionSnapshotIntoSessions(polled, snapshot);
     assert.equal(sessionTrailsSummary(refetched), false);
+  });
+
+  it("keeps the newer permission mode when an earlier detail or summary returns late", () => {
+    const polled = mergeSessionSummaries([], [summary({ eventCount: 2, permissionMode: "ask" })]);
+    const earlier = session({ permissionMode: "yolo", events: [
+      { id: "e1", type: "session.permission_mode", mode: "yolo", actorUserId: "owner", sessionId: "ses_1", timestamp: "now" },
+    ] });
+
+    assert.equal(mergeSessionSnapshotIntoSessions(polled, earlier)[0].permissionMode, "ask");
+    assert.equal(mergeSessionSummaries(polled, [summary({ eventCount: 1, permissionMode: "yolo" })])[0].permissionMode, "ask");
   });
 
   it("inflates a newly discovered summary until its detail is fetched", () => {

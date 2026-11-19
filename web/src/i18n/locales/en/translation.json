@@ -109,6 +109,7 @@
     "unarchive_project_name_taken": "Another active project already uses this name. Rename that project, then unarchive this one.",
     "start_project_setup": "Could not ask an agent to draft the setup. You can set the project up manually.",
     "answer_permission": "Could not send your answer. The run is still waiting. Try again.",
+    "thread_permission_mode": "Could not update tool permissions. Try again.",
     "permission_request_closed": "This request is closed. It was answered elsewhere or its run ended.",
     "save_prerequisites": "Could not save the prerequisites. Check the connection and try again.",
     "go_home": "Go to Home",
@@ -563,6 +564,11 @@
     "queue_cancel": "Cancel run"
   },
   "composer": {
+    "permission_mode": "Tool permissions",
+    "permission_ask": "Ask",
+    "permission_yolo": "YOLO",
+    "permission_ask_option": "Ask for approval",
+    "permission_yolo_option": "YOLO · Auto-approve tool requests",
     "upload_client_outdated": "Update the Relay client on this Computer to upload images or files.",
     "attach_image": "Attach images",
     "image_limits": "Choose up to 4 PNG, JPEG, or WebP images, at most 10 MB each.",

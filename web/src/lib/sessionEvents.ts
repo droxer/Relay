@@ -2,6 +2,7 @@ import type { RelaySession } from "../types.js";
 import { mergeTokenUsage } from "./tokenUsage.ts";
 import { withPermissionRequested, withPermissionResolved, withPermissionsExpired } from "./permissionRequests.ts";
 import { applyWorkflowEvent, cancelOpenWorkflowRuns, isWorkflowEvent, workflowSnapshotDue } from "./workflowRuns.ts";
+import { summaryEventCountOf } from "./sessionPollMerge.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
@@ -23,6 +24,17 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
     events: [...session.events, ...events],
   };
   for (const event of events) next = applySessionEventProjection(next, event);
+  const summaryCount = summaryEventCountOf(session);
+  if (summaryCount !== undefined && next.events.length <= summaryCount) {
+    // The summary already covers these events. Keep its current permission
+    // mode and prompt state while the transcript catches up.
+    return {
+      ...next,
+      permissionMode: session.permissionMode ?? next.permissionMode,
+      permissionRequests: session.permissionRequests ?? next.permissionRequests,
+      execution: session.execution?.permissionMode ? session.execution : next.execution,
+    };
+  }
   return next;
 }
 
@@ -167,6 +179,12 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         return withPermissionsExpired(updated, event.timestamp, event.runId);
       }
     }
+    case "session.permission_mode":
+      return {
+        ...next,
+        permissionMode: event.mode,
+        ...(next.execution?.permissionMode ? { execution: { ...next.execution, permissionMode: event.mode } } : {}),
+      };
     case "agent.permission_requested":
       return withPermissionRequested(next, event.request, event.timestamp);
     case "agent.permission_resolved":
@@ -288,6 +306,7 @@ function sameSessionShape(a: RelaySession, b: RelaySession): boolean {
     && a.title === b.title
     && a.archived === b.archived
     && a.deletionRequestedAt === b.deletionRequestedAt
+    && a.permissionMode === b.permissionMode
     && a.execution === b.execution
     && a.agentRuns.length === b.agentRuns.length
     && a.artifacts.length === b.artifacts.length

@@ -24,6 +24,8 @@ import { ThreadRuntimeReadout, ThreadRuntimeSelect } from "./ThreadRuntimeSelect
 import { Textarea } from "@/components/ui/textarea";
 import { resolveThreadMessageAddress } from "../../lib/messageRouting";
 import type { QueueAddress } from "../../lib/threadQueue";
+import type { ThreadPermissionMode } from "relay-core";
+import { ComposerPermissionMode } from "./ComposerPermissionMode";
 
 
 export type ComposerHandle = {
@@ -96,6 +98,9 @@ const ComposerView = forwardRef<ComposerHandle, {
   activeRuntimeNode: DaemonNodeMonitorRecord | null;
   onRuntimeNodeChange: (nodeId: string) => void;
   running: boolean;
+  permissionMode?: ThreadPermissionMode;
+  permissionModePending?: boolean;
+  onPermissionModeChange?: (mode: ThreadPermissionMode) => void;
   /** Agents `@` may name in this thread — the ones on its computer. Empty
    *  while staging a new thread, where the footer picker chooses the target. */
   mentionCandidates?: MentionCandidate[];
@@ -110,7 +115,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   queue?: ReactNode;
   /** Replaces the default placeholder, e.g. to name who is being answered. */
   placeholder?: string;
-}>(function Composer({ draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, contextPending = false, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
+}>(function Composer({ draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked, teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser, initializingThread, contextPending = false, projectName, projectRoom = null, projectRoomSelected = false, onProjectRoomPicked, readOnly = false, runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange, running, permissionMode, permissionModePending, onPermissionModeChange, mentionCandidates = [], onSend, onCancelRun, onQueue, prompt, queue, placeholder }, ref) {
   const { t } = useTranslation();
   const mounted = useRef(true);
   useEffect(() => {
@@ -488,6 +493,13 @@ const ComposerView = forwardRef<ComposerHandle, {
                   team={teams?.find(team => team.id === activeTeamId)}
                   value={style ? `preset:${style}` : null} onChange={value => setStyle(predefinedStyle(value) ?? null)}
                   disabled={running || sendPending || readOnly} />
+              ) : null}
+              {permissionMode ? (
+                <ComposerPermissionMode
+                  mode={permissionMode}
+                  pending={permissionModePending}
+                  onChange={onPermissionModeChange}
+                />
               ) : null}
             </div>
             {/* Mid-run, Enter queues the draft; the button says so beside
