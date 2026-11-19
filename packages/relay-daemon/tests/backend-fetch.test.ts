@@ -315,7 +315,7 @@ test('a request deadline replaces a stalled HTTP/2 pool without spending the fal
   // A caller that gives up is not evidence about the connection.
   const controller = new AbortController();
   const cancelled = assert.rejects(send('https://one.test/commands', { signal: controller.signal }));
-  controller.abort('Transport recovery probe superseded a stalled poll.');
+  controller.abort(new Error('Computer resumed after a pause; reconnecting.'));
   await cancelled;
   assert.equal(recoveries.length, 4);
 });

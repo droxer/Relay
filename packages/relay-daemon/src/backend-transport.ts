@@ -72,7 +72,7 @@ export class Wakeup {
 }
 
 /** A status the backend (or something in front of it) answered that a retry may outlast. */
-function isTransientStatus(status: number): boolean {
+export function isTransientStatus(status: number): boolean {
   return status >= 500 || status === 408 || status === 429;
 }
 
@@ -85,6 +85,8 @@ export async function withBackendReconnect<T>(
     shouldStop?: () => boolean;
     onTransientFailure?: () => void;
     onCredentialRejected?: () => void;
+    /** A caller-requested reconnect leaves retry and error accounting untouched. */
+    retryImmediately?: (error: unknown) => boolean;
     /** Ends ordinary backoff early; a server's Retry-After remains a minimum. */
     wake?: Wakeup;
     /**
@@ -119,6 +121,7 @@ export async function withBackendReconnect<T>(
       return result;
     } catch (error) {
       if (control.signal?.aborted || control.shouldStop?.()) throw new DaemonStoppedError();
+      if (control.retryImmediately?.(error)) continue;
       let minimumDelayMs = error instanceof DaemonHttpError ? error.retryAfterMs : 0;
       if (error instanceof DaemonHttpError && !isTransientStatus(error.status)) {
         // Only the backend itself revoking credentials speaks for ownership. A
@@ -291,15 +294,6 @@ export async function postJsonWithRetry(
     }
   }
 }
-
-export async function getJson(fetchFn: typeof fetch, url: string, token?: string, signal?: AbortSignal, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
-  return fetchFn(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    signal: requestSignal(signal, timeoutMs),
-  });
-}
-
-
 
 export function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
