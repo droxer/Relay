@@ -3,9 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { readArtifactText } from "../api";
 
 /**
- * Loads an artifact body, cached by (session, artifact) so the inline chip's
- * stat derivation and the full viewer drawer share a single fetch. The body is
- * immutable once written, so it never needs refetching within a session.
+ * Caches the immutable body by (session, artifact). The viewer fetches it on
+ * open, and a chip can observe that result with its own fetch disabled.
  */
 export function useArtifactBody(
   sessionId: string,

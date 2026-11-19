@@ -369,6 +369,22 @@ describe("projectMessages artifact projection", () => {
     assert.equal(system.kind === "system" ? system.artifact?.id : undefined, "art_summary");
   });
 
+  it("associates generated files after the transcript has loaded their producing turn", () => {
+    const created = {
+      id: "ev_file", type: "artifact.created", sessionId: "ses_1", timestamp,
+      artifact: {
+        id: "f", kind: "workspace_file", title: "report.md", path: "/workspace/report.md",
+        createdAt: timestamp, agentRunId: "run_a",
+      },
+    } as const;
+    assert.deepEqual(projectMessages({ ...session([created]), eventStart: 2 }, t), []);
+    const hydrated = projectMessages(session([
+      { id: "started", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_a", agent: "codex" },
+      created,
+    ]), t);
+    assert.deepEqual(hydrated.find(message => message.kind === "agent")?.attachments, [created.artifact]);
+  });
+
   it("carries runless plan artifacts so the plan card can render", () => {
     // Assignment plans are created before any agent run exists (no
     // agentRunId); they must still reach the UI as artifacts, not just as a

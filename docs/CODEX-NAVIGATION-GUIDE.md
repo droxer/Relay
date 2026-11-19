@@ -118,10 +118,13 @@ tab; stale details still reconcile through the existing fallback intervals.
 The initial snapshot precedes the SSE subscription, and detail hydration and
 SSE recovery share `lib/sessionSnapshotQuery.ts` for in-flight HTTP deduplication
 and event-prefix revalidation. The last HTTP snapshot is a bounded recent window
-held separately from the session advanced by SSE. Earlier windows load on
-request and prepend without replaying their events into current state. The
-thread list retains its parsed head page on `304`, including the cursor used to
-fetch older pages.
+held separately from the session advanced by SSE. Earlier windows load as the
+reader scrolls near the oldest visible messages or uses the load button. They
+prepend without replaying their events into current state. After a failure the
+button can retry the same page. The thread list retains its parsed head page on
+`304`, including the cursor used to fetch older pages.
+Transcript file chips use metadata and can reuse a body already in the cache.
+Opening a file in the viewer starts its body request.
 
 All signed-in surfaces use `lib/personalQueryCache.ts`, installed on each
 Account's own QueryClient by `PersonalSpaceProvider`. The policy applies to

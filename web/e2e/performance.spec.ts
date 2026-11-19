@@ -314,6 +314,71 @@ test("a cold conversation opens on its latest window and requests older messages
   expect(historyReads).toBe(2);
 });
 
+test("scrolling toward older messages fetches one history page without moving the reading position", async ({ page }) => {
+  const original = session("scroll-history", 0, 15);
+  const review = { id: "review", kind: "review", title: "Generated review", path: "/w/review.md", createdAt: hoursAgo(1) };
+  const thread = {
+    ...original, artifacts: [review], artifactCount: 1, eventCount: original.eventCount + 1,
+    events: [...original.events, {
+      id: "review-created", type: "artifact.created", sessionId: original.id, timestamp: review.createdAt, artifact: review,
+    }],
+  };
+  const eventStart = 27;
+  let historyReads = 0;
+  let artifactReads = 0;
+  let releaseHistory!: () => void;
+  const historyGate = new Promise<void>(resolve => { releaseHistory = resolve; });
+  await page.route("**/api/**", async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/threads/scroll-history/artifacts/review")) {
+      artifactReads++;
+      await route.fulfill({ contentType: "text/plain", body: "Generated review body" });
+      return;
+    }
+    let body: unknown = { sessions: [thread], agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
+    if (url.pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    else if (url.pathname.endsWith("/threads/scroll-history")) {
+      if (url.searchParams.has("before")) {
+        historyReads++;
+        expect(url.searchParams.get("before")).toBe(String(eventStart));
+        await historyGate;
+        body = { eventStart: 0, eventCount: eventStart, events: thread.events.slice(0, eventStart) };
+      } else {
+        body = { ...thread, eventStart, eventOffset: eventStart, eventsRevision: "b".repeat(64), events: thread.events.slice(eventStart) };
+      }
+    }
+    await route.fulfill({ json: body });
+  });
+  try {
+    await page.goto("/threads/scroll-history");
+    const transcript = page.locator(".transcript");
+    const output = transcript.locator(".agent-code");
+    await expect(output).toHaveCount(8);
+    await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeGreaterThan(600);
+    expect(historyReads).toBe(0);
+    expect(artifactReads).toBe(0);
+
+    await transcript.evaluate(element => { element.scrollTop = 120; });
+    await expect.poll(() => historyReads).toBe(1);
+    await transcript.evaluate(element => { element.scrollTop = 0; });
+    const turn = output.filter({ hasText: /\bturn7 =/ });
+    const offset = () => turn.evaluate(element =>
+      element.getBoundingClientRect().top - element.closest(".transcript")!.getBoundingClientRect().top);
+    const before = await offset();
+    releaseHistory();
+    await expect(output).toHaveCount(15);
+    await expect(output.first()).toContainText("turn0");
+    await expect.poll(async () => Math.abs(await offset() - before)).toBeLessThan(400);
+    expect(historyReads).toBe(1);
+    expect(artifactReads).toBe(0);
+    await page.getByRole("button", { name: /view generated review/i }).click();
+    await expect(page.getByText("Generated review body")).toBeVisible();
+    expect(artifactReads).toBe(1);
+  } finally {
+    releaseHistory();
+  }
+});
+
 test("the eager bundle ships no markdown pipeline, syntax grammars or unused locales", async ({ page, request }) => {
   const html = await (await request.get("/")).text();
   const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"(?![^>]*noModule)/gi)].map((match) => match[1]);

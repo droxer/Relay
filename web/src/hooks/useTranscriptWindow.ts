@@ -11,6 +11,7 @@ type WindowState = { sessionId: string | undefined; total: number; visible: numb
 const SETTLED_FRAMES = 2;
 const MAX_SETTLE_FRAMES = 30;
 const PREFETCH_SCROLL_TOP = 600;
+const BOTTOM_SLACK = 24;
 
 /** The oldest mounted turn, which sits just below the sentinel. A turn is
  *  `display: contents`, so the box to measure is its first child. */
@@ -28,7 +29,12 @@ function readingAnchor(sentinel: HTMLDivElement | null): Element | null {
  * `content-visibility` placeholder height for their real one. A single
  * restore left the reader shoved down by however much those heights grew.
  */
-export function useTranscriptWindow(sessionId: string | undefined, total: number, eventStart = 0): {
+export function useTranscriptWindow(
+  sessionId: string | undefined,
+  total: number,
+  eventStart = 0,
+  loadEarlier?: (beforeInsert: () => void) => Promise<void>,
+): {
   start: number;
   sentinelRef: (node: HTMLDivElement | null) => void;
   pinOldest: () => void;
@@ -101,19 +107,24 @@ export function useTranscriptWindow(sessionId: string | undefined, total: number
     sentinel.current = node;
     const element = node?.closest<HTMLElement>(".transcript") ?? null;
     scroller.current = element;
-    if (!hasLocalOlder || !element) return;
+    if (!element || (!hasLocalOlder && !loadEarlier)) return;
     let previousTop = element.scrollTop;
     const onScroll = () => {
       const top = element.scrollTop;
       const approachingOlderTurns = top < previousTop && top <= PREFETCH_SCROLL_TOP;
       previousTop = top;
-      if (approachingOlderTurns) grow();
+      if (!approachingOlderTurns) return;
+      if (hasLocalOlder) {
+        grow();
+      } else if (element.scrollHeight - element.clientHeight - top > BOTTOM_SLACK) {
+        void loadEarlier?.(pinOldest);
+      }
     };
     // Initial hydration can expose the sentinel before the transcript pins to
-    // the bottom. Grow only as the reader moves toward the older turns.
+    // the bottom. Only expand history as the reader scrolls upward.
     element.addEventListener("scroll", onScroll, { passive: true });
     removeScrollListener.current = () => element.removeEventListener("scroll", onScroll);
-  }, [grow, hasLocalOlder]);
+  }, [grow, hasLocalOlder, loadEarlier, pinOldest]);
 
   return { start, sentinelRef, pinOldest };
 }

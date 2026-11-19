@@ -91,7 +91,8 @@ for (const theme of ["light", "dark"] as const) for (const language of ["en", "z
     await expect(b.locator(".message-queue")).toContainText(copy.saved.replace("{{count}}", "1"));
     await b.getByRole("button", { name: (language === "en" ? en : language === "zh-CN" ? zhCN : zhTW).composer.stop, exact: true }).click();
     await expect(b.locator(".message-queue")).toContainText(("paused" in copy ? copy.paused : copy.paused_one).replace("{{count}}", "1"));
-    await expect(a.locator(".message-queue")).toContainText(("paused" in copy ? copy.paused : copy.paused_one).replace("{{count}}", "1"));
+    // The desktop just saw an empty queue, which polls every five seconds.
+    await expect(a.locator(".message-queue")).toContainText(("paused" in copy ? copy.paused : copy.paused_one).replace("{{count}}", "1"), { timeout: 7_000 });
     await b.getByRole("button", { name: copy.resume, exact: true }).click();
     await expect(b.locator(".message-queue")).toContainText(copy.saved.replace("{{count}}", "1"));
     for (const [name, page] of [["desktop", a], ["phone", b]] as const) {

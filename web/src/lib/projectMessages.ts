@@ -459,6 +459,9 @@ export class ProjectMessagesAccumulator {
           }
           return false;
         }
+        // A recent transcript window can hold a file event before the reader
+        // has loaded its producing turn. Its entry is already in Files.
+        if (this.eventStart && runId && event.artifact.kind === "workspace_file") return false;
         this.out.push({
           kind: "system",
           id: event.id,
