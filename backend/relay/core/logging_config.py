@@ -69,6 +69,7 @@ CONTEXT_KEYS = frozenset({
     "duration_ms", "artifact_count", "run_completed_count", "batches", "items", "pending",
     "method", "path", "status", "response_complete", "pid", "signal", "reason",
     "deployment_id", "revision", "max_rss_bytes",
+    "routine_id", "count", "next_run_at",
 })
 
 _MESSAGE_ID = re.compile(r"(?:evt_(?:q_)?)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
