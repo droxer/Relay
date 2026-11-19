@@ -5,6 +5,7 @@ import type { DaemonExecutionEnvironment } from "./index.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
 import { exitHooksFor, watchExecutionExit } from "./execution-capture.js";
 import { localExitProven, windowsExitProven } from "./exit-proof.js";
+import { cleanupLinuxRunCgroup } from "./linux-run-cgroup.js";
 import { listWindowsProcesses } from "./windows-process-tree.js";
 import { runNativeScript, nativeCommand } from "./native-command.js";
 import { runBoundedPreflight } from "./agent-preflight.js";
@@ -67,9 +68,13 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
       };
     },
     proveExited: async (records, signal) => {
-      if (process.platform !== "win32") return records.filter((record) => localExitProven(record)).map((record) => record.id);
-      const processes = records.length ? await listWindowsProcesses(signal) : undefined;
-      return records.filter((record) => windowsExitProven(record, processes)).map((record) => record.id);
+      const windows = process.platform === "win32";
+      const processes = windows && records.length ? await listWindowsProcesses(signal) : undefined;
+      return records.filter((record) => {
+        signal?.throwIfAborted();
+        if (record.cgroup) return cleanupLinuxRunCgroup(record.cgroup, record.stopRequested === true);
+        return windows ? windowsExitProven(record, processes) : localExitProven(record);
+      }).map((record) => record.id);
     },
     close: async () => undefined,
   };

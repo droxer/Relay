@@ -41,6 +41,7 @@ test('installed services restart failures but leave deleted-node clean exits sto
   assert.match(mac.content, /<key>KeepAlive<\/key><dict><key>SuccessfulExit<\/key><false\/><\/dict>/);
   const linux = serviceDefinition('linux', 'node-1', command, '/tmp/log', '/usr/bin');
   assert.match(linux.content, /^Restart=on-failure$/m);
+  assert.match(linux.content, /^Delegate=yes$/m);
 });
 
 import { execFile } from 'node:child_process';

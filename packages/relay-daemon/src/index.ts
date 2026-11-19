@@ -524,13 +524,13 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
     logger.warn("Execution exit unconfirmed after daemon restart; retained identity requires reconciliation", {
       sandboxId, commandId: execution.id, runId: execution.runId,
       sessionId: execution.sessionId, leaseId: execution.leaseId,
-      ...(environment.sandboxMode === "none" ? {
-        evidence: execution.processGroup ? `exit of process group ${execution.processGroup} unconfirmed` : "no process group recorded",
-      } : {}),
+      ...(environment.sandboxMode === "none" ? { evidence: execution.cgroup
+        ? `exit of Linux cgroup ${execution.cgroup.name} unconfirmed`
+        : execution.processGroup ? `exit of process group ${execution.processGroup} unconfirmed` : "no process group recorded" } : {}),
     });
   }
   leftoverExecutions = environment.sandboxMode === "none"
-    ? leftoverExecutions.filter((execution) => execution.processGroup)
+    ? leftoverExecutions.filter((execution) => execution.cgroup || execution.processGroup)
     : [];
   const exitRecheckIntervalMs = options.exitRecheckIntervalMs ?? EXIT_RECHECK_INTERVAL_MS;
   supervisor = new RunSupervisor({
@@ -783,10 +783,8 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
     heartbeatFeatures = new Set(initialHeartbeatSettings?.features ?? enrolledHeartbeatSettings?.features ?? []);
     terminalOutbox.negotiate(heartbeatFeatures.has("durable-reports"), heartbeatFeatures.has("report-batches"));
     let lastRegisteredAt = Date.now();
-    const reportProvenExit = (record: ExecutionRecord, reason: string): void => {
-      // Persisted to the outbox before sending, so delivery survives another
-      // restart; the outbox clears the journal record once it holds the event.
-      void postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`), {
+    const reportProvenExit = (record: ExecutionRecord, reason: string): boolean => {
+      const event = {
         type: "run.cancelled",
         commandId: record.id,
         ...(record.leaseId ? { leaseId: record.leaseId } : {}),
@@ -794,28 +792,41 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
         runId: record.runId,
         agent: record.agent as AgentName,
         reason,
-      } satisfies DaemonNodeEvent, token, runtimeSignal).catch((error: unknown) => {
+      } satisfies DaemonNodeEvent;
+      // Keep retrying the proof while its terminal evidence cannot be stored.
+      // After capture the outbox owns delivery and clears the journal.
+      try { terminalOutbox.retain(event); }
+      catch (error) {
+        logger.warn("could not capture proven-exit report", { sandboxId, commandId: record.id, error: transportErrorDetail(error) });
+        return false;
+      }
+      void postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
+        event, token, runtimeSignal).catch((error: unknown) => {
         logger.warn("proven-exit report failed; the outbox will retry", {
           sandboxId, commandId: record.id, error: transportErrorDetail(error),
         });
       });
+      return true;
     };
     for (const record of provenExits) {
-      reportProvenExit(record, "The computer restarted, and this run's process had already stopped.");
+      if (!reportProvenExit(record, "The computer's daemon restarted, and this run's processes are gone.")
+        && environment.sandboxMode === "none" && (record.cgroup || record.processGroup)) leftoverExecutions.push(record);
     }
     exitRecheckTask = (async () => {
       while (leftoverExecutions.length > 0 && !runtimeSignal.aborted) {
         await delay(exitRecheckIntervalMs, runtimeSignal);
+        const leftoverIds = new Set(leftoverExecutions.map(record => record.id));
+        const currentRecords = executionJournal.pending().filter(record => leftoverIds.has(record.id));
         const exited = await recoverJournaledExits(
-          environment, leftoverExecutions, logger, sandboxId,
+          environment, currentRecords, logger, sandboxId,
           options.exitRecoveryTimeoutMs ?? HOST_EXIT_RECHECK_TIMEOUT_MS, runtimeSignal,
         );
         for (const record of exited) {
           // Not yet acknowledged means not yet reported: the cancel says it all.
           unreportedExecutions.delete(record.id);
-          reportProvenExit(record, "The computer restarted while this run was going; its process has since stopped.");
+          reportProvenExit(record, "The computer's daemon restarted while this run was active; its processes have since stopped.");
         }
-        leftoverExecutions = leftoverExecutions.filter((execution) => !exited.some((record) => record.id === execution.id));
+        leftoverExecutions = leftoverExecutions.filter((execution) => unconfirmedExecutions.has(execution.id));
       }
     })().catch((error: unknown) => {
       if (!runtimeSignal.aborted) logger.warn("leftover run check stopped", { sandboxId, error: String(error) });
@@ -1280,11 +1291,24 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
             runId: command.runId,
             agent: command.agent,
           });
+          let recoveryStop = false;
+          if ((target || journaled) && environment.sandboxMode === "none") {
+            try { recoveryStop = executionJournal.requestStop(command); }
+            catch (error) {
+              logger.warn("Could not persist stop for execution recovery", {
+                sandboxId, commandId: command.commandId, error: transportErrorDetail(error),
+              });
+            }
+          }
           if (target) {
             pollMadeProgress = supervisor.cancel(command.commandId, command.reason) || pollMadeProgress;
           } else if (journaled) {
             observe(() => monitor?.cause('execution', true));
-            logger.warn('Cancellation requires exit reconciliation for a journaled execution', { sandboxId, commandId: command.commandId });
+            if (recoveryStop) {
+              logger.info("Stop recorded for a journaled Linux execution", { sandboxId, commandId: command.commandId });
+            } else {
+              logger.warn('Cancellation requires exit reconciliation for a journaled execution', { sandboxId, commandId: command.commandId });
+            }
           } else {
             if (!fenceWithoutExecution(command.commandId, { sandboxId, commandId: command.commandId })) continue;
             // Nothing to stop: the start never reached this daemon (its poll
@@ -1756,8 +1780,8 @@ async function recoverJournaledExits(
     );
   } catch (error) {
     controller.abort(error);
-    // Host probes only observe processes. A BoxLite probe can still be
-    // retiring guests, so that timeout must stop startup before new boots.
+    // Host recovery targets unique, fenced executions. BoxLite may still
+    // retire a reusable guest name after the deadline, so prevent new boots.
     if (signal?.aborted || environment.sandboxMode !== "none" || !(error instanceof ExecutionDeadlineError)) throw error;
     logger.warn("journaled host exit check timed out; keeping execution reserved", { sandboxId, error: error.message });
     return [];

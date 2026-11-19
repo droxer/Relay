@@ -1,6 +1,7 @@
 import { uptime } from "node:os";
 import { windowsProcessTree, type WindowsProcess } from "./windows-process-tree.js";
 import { processGroupAlive } from "./process-group.js";
+import type { LinuxRunCgroup } from "./linux-run-cgroup.js";
 
 /**
  * Proving that a run admitted before a daemon restart is no longer executing.
@@ -13,6 +14,8 @@ import { processGroupAlive } from "./process-group.js";
 
 /** What the journal knows about where a run executed. */
 export interface ExecutionEvidence {
+  /** A Linux cgroup created and journaled before a local subprocess may enter it. */
+  cgroup?: LinuxRunCgroup;
   /** Process group id of a host-mode run (its leader's pid); on Windows, the tree's root pid. */
   processGroup?: number;
   /** When the run's root process spawned, in epoch ms; Windows tells pid reuse apart by it. */
