@@ -181,9 +181,20 @@ errors, `5xx`, `408`, and `429` retry forever with equal jitter and honor
 covers a backend restart or deploy; after that the ceiling doubles to 15
 seconds, so a fleet does not hammer a backend that has been down for minutes.
 
-A heartbeat that gets through after a failure ends the poll loop's ordinary
-backoff at once. An explicit `Retry-After` remains a minimum for the failed
-request even when heartbeats succeed; shutdown can still interrupt that wait.
+A heartbeat gets the advertised interval to complete, capped at one third of
+the command lease and with a one-second minimum request deadline. An isolated
+transient heartbeat failure is logged and retried on the next tick. Two
+consecutive transient failures mark the heartbeat channel as retrying, and a
+successful heartbeat clears it. An open command poll keeps its own deadline
+through heartbeat failures and recoveries.
+
+A command poll's deadline covers headers and the full response body, allowing
+two seconds beyond its requested server wait. After a transient poll failure,
+the daemon retries with zero server wait and a two-second deadline until a poll
+succeeds. A heartbeat that gets through after a failure ends the poll loop's
+ordinary backoff. An explicit `Retry-After` remains a minimum for the failed
+request even when heartbeats succeed. Shutdown can interrupt that wait.
+
 The daemon also watches for its own timers arriving late
 (`wake-detector.ts`: a tick more than 20 seconds
 overdue), which is what a laptop waking from sleep looks like. On a resume it
@@ -282,10 +293,8 @@ Every daemon call to the backend — the daemon loop, `relay doctor`, computer
 setup, and the Relay MCP forwarder — goes through one dedicated dispatcher per
 origin. It speaks HTTP/1.1 by default, on every Node version: each request has
 its own connection, so a cancelled or timed-out request closes its socket and
-the next attempt reconnects. The daemon cancels requests routinely (deadlines,
-and the recovery probe below); over HTTP/2 each cancellation is a stream reset
-on the one shared connection, a pattern peer protections count against the
-client.
+the next attempt reconnects. Over HTTP/2 a request cancellation resets a stream
+on the shared connection, which peer protections can count against the client.
 
 `RELAY_DAEMON_HTTP_PROTOCOL=http2` opts a computer in to HTTP/2 when the server
 negotiates it; any other value keeps HTTP/1.1. With it on:
@@ -322,10 +331,9 @@ with an HTTP/2-resetting peer that successfully serves HTTP/1.1. This demonstrat
 the compatibility failure, but does not identify which proxy or server caused a
 particular production incident.
 
-`Transport recovery probe superseded a stalled poll` is a separate, locally
-generated cancellation: after a transient failure, the daemon aborts an outstanding
-poll. It does not indicate that a new connection or protocol was selected.
-Errors retain the numeric `http2ErrorCode` when Node supplies one and the known
+Older clients logged `Transport recovery probe superseded a stalled poll` when
+a heartbeat failure cancelled an outstanding command poll. Current clients let
+the poll finish or reach its own deadline. Errors retain the numeric `http2ErrorCode` when Node supplies one and the known
 `http2Reset` name when a wrapper preserves only the message. Pool replacement and
 HTTP/1.1 fallback each log the origin, path (without query), method, request
 size when known, elapsed time, cause (`reset` or `stall`), failure count, and

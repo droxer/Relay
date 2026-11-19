@@ -6613,33 +6613,170 @@ test('negotiated output uses durable batches while terminal evidence stays indep
   } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
 });
 
-test('a healthy recovery heartbeat completes a fresh poll without waiting for new work', { timeout: 5000 }, async () => {
-  const root = mkdtempSync(join(tmpdir(), 'relay-recovery-probe-'));
-  const stop = new AbortController();
-  let beats = 0, probes = 0, heldPollAborted = false;
-  const deadline = setTimeout(() => stop.abort(), 4000);
-  const heartbeat = { intervalMs: 1000, timeoutMs: 5000, features: ['durable-reports', 'state'] };
-  try {
-    await runRelayDaemon({ backendUrl: 'http://relay.test', sandboxId: 'recovery-probe', token: 'fixture',
-      workspacePath: root, stateDir: root, signal: stop.signal, logger: testLogger(), environment: fakeEnvironment(),
+for (const { statuses, attempts } of [
+  { statuses: [503, 200], attempts: 0 },
+  { statuses: [503, 200, 503, 200], attempts: 0 },
+  { statuses: [503, 503, 200], attempts: 1 },
+]) {
+  test(`heartbeat statuses ${statuses.join(', ')} leave a healthy command poll intact`, { timeout: 5000 }, async t => {
+    const root = mkdtempSync(join(tmpdir(), 'relay-healthy-poll-'));
+    const stop = new AbortController();
+    const recovered = Promise.withResolvers<void>();
+    const command = runCommand('held-through-heartbeat-recovery');
+    const heartbeat = { intervalMs: 40, timeoutMs: 200, features: ['durable-reports', 'state'] };
+    const warnings: Array<{ message: string; error: unknown }> = [];
+    let beats = 0, polls = 0, received = 0;
+    let cancellation: unknown;
+    const deadline = setTimeout(() => stop.abort(), 4000);
+    t.after(() => { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); });
+
+    await runRelayDaemon({
+      backendUrl: 'http://relay.test', sandboxId: 'healthy-poll', token: 'fixture',
+      workspacePath: root, stateDir: root, signal: stop.signal, shutdownGraceMs: 50, environment: fakeEnvironment(),
+      logger: {
+        ...testLogger(),
+        info: message => { if (message === 'command received') received++; },
+        warn: (message, fields) => warnings.push({ message, error: fields?.error }),
+      },
       fetchFn: async (url, init) => {
-        const parsed = new URL(String(url));
-        if (parsed.pathname.endsWith('/daemon-node-registrations')) return jsonResponse({ heartbeat });
-        if (parsed.pathname.endsWith('/heartbeat')) return ++beats === 1 ? jsonResponse({}, 503) : jsonResponse({ heartbeat });
-        if (parsed.pathname.endsWith('/commands')) {
-          if (parsed.searchParams.get('waitSeconds') === '0') { probes++; stop.abort(); return jsonResponse({ commands: [], heartbeat }); }
-          return await new Promise<Response>((_resolve, reject) => {
-            const abort = () => { heldPollAborted = true; reject(new Error('Injected held poll aborted')); };
-            if (init?.signal?.aborted) abort(); else init?.signal?.addEventListener('abort', abort, { once: true });
-          });
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith('/daemon-node-registrations')) return jsonResponse({ heartbeat });
+        if (path.endsWith('/heartbeat')) {
+          if ((await jsonBody<{ state?: string }>(init)).state) return jsonResponse({ heartbeat });
+          const status = statuses[beats++] ?? 200;
+          if (beats >= statuses.length) recovered.resolve();
+          return jsonResponse({ heartbeat }, status);
         }
-        return jsonResponse({ ok: true });
+        if (path.endsWith('/commands')) {
+          if (++polls > 1) {
+            stop.abort();
+            return jsonResponse({ commands: [], heartbeat });
+          }
+          const signal = init!.signal!;
+          await new Promise<void>((resolve, reject) => {
+            const abort = () => {
+              cancellation = signal.reason;
+              reject(cancellation);
+            };
+            signal.addEventListener('abort', abort, { once: true });
+            // Let the heartbeat finish consuming its successful response first.
+            void recovered.promise.then(() => setImmediate(() => {
+              signal.removeEventListener('abort', abort);
+              resolve();
+            }));
+          });
+          return jsonResponse({ commands: [command], heartbeat });
+        }
+        const headers = new Headers(init?.headers);
+        return new Response('{}', { headers: {
+          'X-Relay-Report-Id': headers.get('X-Relay-Report-Id') ?? '',
+          'X-Relay-Report-Digest': headers.get('X-Relay-Report-Digest') ?? '',
+        } });
       },
     });
-    assert.equal(probes, 1);
-    assert.equal(heldPollAborted, true);
-  } finally { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); }
+
+    assert.equal(cancellation, undefined, JSON.stringify(warnings));
+    assert.ok(beats >= statuses.length, 'the heartbeat must fail and recover during the held poll');
+    assert.equal(received, 1, 'the held poll must still deliver its command');
+    assert.ok(warnings.some(({ message, error }) => message === 'liveness heartbeat failed; next beat retries' && String(error).includes('503')));
+    assert.ok(!warnings.some(({ message }) => message === 'command poll failed; retrying'));
+    const path = join(root, 'transport.json');
+    const state = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : { attempts: 0, failed: {} };
+    assert.equal(state.attempts, attempts, 'only consecutive transient beat failures count against transport health');
+    assert.deepEqual(state.failed, {}, 'the successful heartbeat clears the recorded failure');
+  });
+}
+
+test('a heartbeat can take longer than the default HTTP request timeout', { timeout: 8000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-heartbeat-deadline-'));
+  const stop = new AbortController();
+  const heartbeat = { intervalMs: 3000, timeoutMs: 15000, features: ['durable-reports', 'state'] };
+  let finished = false;
+  let failure: unknown;
+  const deadline = setTimeout(() => stop.abort(), 6500);
+  t.after(() => { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); });
+
+  await runRelayDaemon({
+    backendUrl: 'http://relay.test', sandboxId: 'slow-heartbeat', token: 'fixture',
+    workspacePath: root, stateDir: root, signal: stop.signal, shutdownGraceMs: 50, environment: fakeEnvironment(),
+    logger: {
+      ...testLogger(),
+      warn: (message, fields) => {
+        if (message === 'liveness heartbeat failed; next beat retries') {
+          failure = fields?.error;
+          stop.abort();
+        }
+      },
+    },
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path.endsWith('/commands')) return jsonResponse({ commands: [], heartbeat });
+      if (path.endsWith('/heartbeat') && !(await jsonBody<{ state?: string }>(init)).state) {
+        await sleep(2100, undefined, { signal: init?.signal ?? undefined });
+        finished = true;
+        setImmediate(() => stop.abort());
+      }
+      return jsonResponse({ heartbeat });
+    },
+  });
+
+  assert.equal(failure, undefined);
+  assert.equal(finished, true);
 });
+
+for (const stalledPart of ['headers', 'body'] as const) {
+  test(`a poll stalled in its ${stalledPart} times out and retries without a long wait`, { timeout: 5000 }, async t => {
+    const root = mkdtempSync(join(tmpdir(), 'relay-stalled-poll-'));
+    const stop = new AbortController();
+    const heartbeat = { intervalMs: 6000, timeoutMs: 30000, features: ['durable-reports', 'poll-liveness'] };
+    const waits: Array<string | null> = [];
+    const pollErrors: unknown[] = [];
+    const deadline = setTimeout(() => stop.abort(), 4000);
+    t.after(() => { clearTimeout(deadline); stop.abort(); rmSync(root, { recursive: true, force: true }); });
+
+    await runRelayDaemon({
+      backendUrl: 'http://relay.test', sandboxId: 'stalled-poll', token: 'fixture',
+      workspacePath: root, stateDir: root, signal: stop.signal, commandPollWaitMs: 25, pollIntervalMs: 1,
+      shutdownGraceMs: 50, environment: fakeEnvironment(),
+      logger: {
+        ...testLogger(),
+        warn: (message, fields) => {
+          if (message === 'command poll failed; retrying') pollErrors.push(fields?.error);
+        },
+      },
+      fetchFn: async (url, init) => {
+        const parsed = new URL(String(url));
+        if (parsed.pathname.endsWith('/commands')) {
+          waits.push(parsed.searchParams.get('waitSeconds'));
+          if (waits.length === 1) {
+            const signal = init!.signal!;
+            if (stalledPart === 'headers') {
+              return await new Promise<Response>((_resolve, reject) => {
+                signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+              });
+            }
+            return new Response(new ReadableStream({
+              start(controller) {
+                controller.enqueue(Buffer.from('{"commands":'));
+                signal.addEventListener('abort', () => controller.error(signal.reason), { once: true });
+              },
+            }));
+          }
+          if (waits.length === 3) stop.abort();
+          return jsonResponse({ commands: [], heartbeat });
+        }
+        return jsonResponse({ heartbeat });
+      },
+    });
+
+    assert.deepEqual(waits, ['0.025', '0', '0.025']);
+    assert.equal(pollErrors.length, 1);
+    assert.match(String(pollErrors[0]), /timeout/i);
+    const { attempts, failed } = JSON.parse(readFileSync(join(root, 'transport.json'), 'utf8'));
+    assert.equal(attempts, 1);
+    assert.deepEqual(failed, {});
+  });
+}
 
 test("an environment-configured zero outage grace stops execution", async () => {
   const prior = process.env.RELAY_DAEMON_UNREACHABLE_GRACE_SECONDS;
