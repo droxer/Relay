@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from typing import Any
 
@@ -70,14 +71,21 @@ CONTEXT_KEYS = frozenset({
     "deployment_id", "revision", "max_rss_bytes",
 })
 
+_MESSAGE_ID = re.compile(r"(?:evt_(?:q_)?)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+
 
 def _format_record(record: Any) -> str:
     # Operational identifiers are useful; arbitrary bound payloads can contain
     # credentials or user content and must not be dumped into production logs.
-    record["extra"]["relay_context"] = {
+    context = {
         key: value for key, value in record["extra"].items()
         if key in CONTEXT_KEYS
     }
+    # The API accepts legacy client IDs. Only log IDs with Relay's generated shape.
+    message_id = record["extra"].get("message_id")
+    if isinstance(message_id, str) and _MESSAGE_ID.fullmatch(message_id):
+        context["message_id"] = message_id
+    record["extra"]["relay_context"] = context
     return "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message} | {extra[relay_context]}\n{exception}"
 
 

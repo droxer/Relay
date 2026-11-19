@@ -53,7 +53,7 @@ def _login_alice(client: TestClient) -> None:
     )
 
 
-def _register_node(app, node_id: str, machine_id: str, capabilities: list[str]) -> dict:
+def _register_node(app, node_id: str, machine_id: str, capabilities: list[str], *, capacity: int = 1) -> dict:
     return app.state.registry.register(
         {
             "sandboxId": node_id,
@@ -65,6 +65,7 @@ def _register_node(app, node_id: str, machine_id: str, capabilities: list[str]) 
             "status": "ready",
             "workspacePath": "/workspace/relay",
             "workspaceId": machine_id,
+            "maxConcurrentRuns": capacity,
         }
     )
 
@@ -542,6 +543,29 @@ def test_followup_message_keeps_standalone_workspace_scope(client, automation, s
     request = app.state.daemon_store.active_run_request_for_session_any_node(session["id"])
     assert not request.get("taskId")  # Workspace identity never claims execution.
     assert app.state.task_store.get_task(task["id"]) == before
+
+
+@pytest.mark.parametrize("capacity", [1, 5])
+def test_followup_distinguishes_the_same_threads_active_task_run(client, capacity):
+    app = client.app
+    node = _register_node(app, "task-node", "task-machine", ["task-workspaces"], capacity=capacity)
+    agent = _agent(client, node)
+    app.state.task_store.create_task({
+        "title": "Scheduled work", "ownerUserId": ALICE, "assigneeUserId": ALICE,
+        "assignedAgentId": agent["id"], "assignedAgent": "codex", "status": "assigned",
+        "computerId": computer_id(node),
+    })
+    assert asyncio.run(app.state.task_scheduler.tick()).dispatched == 1
+    [command] = app.state.registry.take_commands(node["id"], "token_task-node")
+    assert app.state.registry.is_dispatchable(node["id"])
+    thread_id = command["sessionId"]
+    payload = {"text": "Explain the result", "intent": "discuss", "userMessageId": "evt_followup"}
+
+    response = client.post(f"/api/v1/threads/{thread_id}/messages", json=payload)
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "thread_run_active"
+    assert all(event["id"] != "evt_followup" for event in app.state.session_store.get_session(thread_id)["events"])
 
 
 def test_task_admission_rejects_another_computer_even_without_dispatch_helper(client, task_with_run):

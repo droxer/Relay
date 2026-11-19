@@ -148,3 +148,15 @@ def test_completion_and_process_diagnostics_survive_production_formatter():
         "artifact_count": 150, "duration_ms": 6000, "response_complete": False,
         "pid": 2, "signal": "SIGTERM", "reason": "signal",
     }
+
+
+def test_thread_message_diagnostics_only_expose_recognized_message_ids():
+    message_id = "evt_d5bf9d08-b40f-4a90-9753-cf3dae4087f7"
+    extra = {"status": 409, "reason": "thread_run_active", "message_id": message_id}
+    record = {"extra": extra.copy()}
+    logging_config._format_record(record)
+    assert record["extra"]["relay_context"] == extra
+
+    record["extra"]["message_id"] = "user-supplied arbitrary text"
+    logging_config._format_record(record)
+    assert "message_id" not in record["extra"]["relay_context"]

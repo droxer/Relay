@@ -89,6 +89,7 @@ class AssignmentsMixin(ConductorState):
             required_node_id=required_node_id,
             daemon_store=self.ctx.registry.daemon_store,
             session_store=self.ctx.session_store,
+            defer_thread_run_check=True,
         )
         return compile_assignment_work_graph(
             resolved,

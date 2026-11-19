@@ -33,6 +33,7 @@ from .roster import RosterMixin, _room_agent_ids
 from .task_scope import TaskScopeMixin
 from ..security.actor import Actor
 from ..core.connections import ConnectionError
+from ..core.daemon_records import ComputerNotDispatchableError, ComputerRunCapacityError, ThreadRunActiveError
 
 
 @dataclass(frozen=True)
@@ -94,8 +95,14 @@ class CollaborationConductor(
             return await self._submit_prepared(prepared, actor, fingerprint)
         except TeamDispatchError as error:
             raise CollaborationError(error.code) from error
-        except AgentRoutingError as error:
+        except (AgentRoutingError, ComputerNotDispatchableError) as error:
             raise CollaborationError(error.code, str(error)) from error
+        except ThreadRunActiveError as error:
+            raise CollaborationError("thread_run_active", str(error)) from error
+        except ComputerRunCapacityError as error:
+            if error.thread_active:
+                raise CollaborationError("thread_run_active", "This thread already has an active run.") from error
+            raise CollaborationError("capacity_exhausted", str(error)) from error
         except PermissionError as error:
             raise CollaborationError("forbidden", str(error), status=403) from error
         except CollaborationIdempotencyError as error:

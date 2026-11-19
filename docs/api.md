@@ -354,6 +354,13 @@ DELETE /api/v1/admin/managed-nodes/{id}/record
 
 Full `GET /api/v1/threads` responses remain complete for the authenticated owner.
 
+Thread message dispatch can return HTTP 409 with a structured `detail.code`.
+`thread_run_active` means the thread already has an execution reservation.
+`node_not_accepting_commands` means the Computer is online and its last command
+poll is stale or its daemon is draining. `node_offline` indicates an unavailable Computer,
+and `capacity_exhausted` indicates that admission found no execution capacity.
+Reuse the original message ID and idempotency key when retrying the same send.
+
 Queue `enqueue` and `import` actions retain `addressAgentIds` or
 `addressTeamId` until dispatch, including when a message is promoted with
 “Stop & send next”. A leading `@Agent` mention takes precedence over supplied Agent ids.

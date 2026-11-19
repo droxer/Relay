@@ -12,6 +12,7 @@ from typing import Any
 from ...collaboration.models import (
     COLLABORATION_MANIFEST_STATE_KEY,
 )
+from ...core.daemon_records import ThreadRunActiveError
 from ...core.ids import now_iso
 from ...persistence.protocols import SessionStore
 from .state import NodeBackendState
@@ -63,7 +64,7 @@ class RunOwnershipMixin(NodeBackendState):
             session_id
         )
         if active and active.get("id") != run_request_id:
-            raise ValueError(f"Session {session_id} already has an active daemon run.")
+            raise ThreadRunActiveError(session_id)
 
     def _validate_source_ownership(
         self, run_request: dict[str, Any], session: dict[str, Any]

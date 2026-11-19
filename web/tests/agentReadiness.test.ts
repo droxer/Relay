@@ -8,6 +8,7 @@ import {
   formatDispatchError,
   isAgentDispatchReady,
 } from "../src/lib/agentReadiness.js";
+import { readApiResponse } from "../src/api-client/client.js";
 
 describe("Relay web agent readiness", () => {
   const node = {
@@ -78,5 +79,23 @@ describe("Relay web agent readiness", () => {
       ),
       undefined,
     );
+  });
+
+  it("uses structured dispatch errors when there is no agent name to interpolate", async () => {
+    const t = ((key: string) => key) as never;
+    const cases = [
+      ["thread_run_active", "thread_run_active"],
+      ["node_not_accepting_commands", "node_not_accepting_commands"],
+      ["node_offline", "computer_offline"],
+      ["capacity_exhausted", "computer_capacity_exhausted"],
+      ["agent_not_on_thread_node", "agent_not_on_thread_node"],
+    ];
+    for (const [code, key] of cases) {
+      const response = Response.json({ detail: { code, message: "Dispatch rejected." } }, { status: 409 });
+      await assert.rejects(
+        readApiResponse(response, "POST /threads/id/messages"),
+        (error: unknown) => formatDispatchError(error, t) === `errors.${key}`,
+      );
+    }
   });
 });
