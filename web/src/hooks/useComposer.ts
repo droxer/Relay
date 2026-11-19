@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { resizeComposerTextarea } from "../lib/composerResize";
 
-const DRAFT_RESTORED_EVENT = "relay:composer-draft-restored";
+const DRAFT_UPDATED_EVENT = "relay:composer-draft-updated";
 
 // Composer text and textarea sizing stay local so every keystroke does not
 // re-render the full application shell and transcript.
@@ -25,15 +25,15 @@ export function useComposer(draftKey?: string): {
   }, [draftKey]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // A rejected send may return after its author left and reopened this
-  // thread. Update only the composer whose persisted draft was restored.
+  // A send can settle after its author leaves and reopens the Thread.
+  // Update only the composer that owns the persisted draft.
   useLayoutEffect(() => {
-    const restored = (event: Event) => {
+    const onDraftUpdate = (event: Event) => {
       const { key, text } = (event as CustomEvent<{ key: string; text: string }>).detail;
       if (key === draftKey) setDraft({ key, text });
     };
-    window.addEventListener(DRAFT_RESTORED_EVENT, restored);
-    return () => window.removeEventListener(DRAFT_RESTORED_EVENT, restored);
+    window.addEventListener(DRAFT_UPDATED_EVENT, onDraftUpdate);
+    return () => window.removeEventListener(DRAFT_UPDATED_EVENT, onDraftUpdate);
   }, [draftKey]);
 
   const resizeTextarea = useCallback(() => {
@@ -67,9 +67,18 @@ export function restoreComposerDraft(key: string, text: string): void {
   if (!text.trim()) return;
   const current = readDraft(key);
   const restored = current.trim() && current !== text ? `${text}\n\n${current}` : text;
-  writeDraft(key, restored);
+  syncComposerDraft(key, restored);
+}
+
+/** Clear an acknowledged draft even if its composer was closed during the send. */
+export function clearComposerDraft(key: string, acknowledged: string): void {
+  if (readDraft(key) === acknowledged) syncComposerDraft(key, "");
+}
+
+function syncComposerDraft(key: string, text: string): void {
+  writeDraft(key, text);
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(DRAFT_RESTORED_EVENT, { detail: { key, text: restored } }));
+    window.dispatchEvent(new CustomEvent(DRAFT_UPDATED_EVENT, { detail: { key, text } }));
   }
 }
 

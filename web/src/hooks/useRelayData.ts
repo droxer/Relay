@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { Dispatch, SetStateAction } from "react";
 import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { listDaemonNodes, listProjects, listSandboxes, listSessionSummaries, listTasks } from "../api";
-import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SandboxRecord } from "../types";
+import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SandboxRecord, SessionSummary } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
 import { appendOlderSessionPage, mergeSessionHeadPage, THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
@@ -20,6 +20,13 @@ const SESSIONS_KEY = ["relay", "sessions"] as const;
 export const SESSIONS_QUERY_KEY = SESSIONS_KEY;
 const SESSION_PAGES_KEY = ["relay", "session-pages"] as const;
 type SessionPages = { headCursor: string | null; olderCursor?: string | null };
+// A poll hands its page to structuralSharing, where the merge reads the
+// cache at the moment of commit. Other writes already supply merged rows.
+const sessionHeadPages = new WeakMap<RelaySession[], {
+  summaries: SessionSummary[];
+  hasOlder: boolean;
+  atRequestStart: RelaySession[];
+}>();
 const TASKS_KEY = ["relay", "tasks"] as const;
 export const PROJECTS_QUERY_KEY = ["relay", "projects"] as const;
 const PROJECTS_KEY = PROJECTS_QUERY_KEY;
@@ -163,8 +170,14 @@ export function useRelayData(
         refetchInterval: workspaceVisible ? sessionsPollIntervalMs(streamConnected) : 60_000,
         // Keep an unchanged session's identity across polls without walking
         // its events, so an identical poll re-renders no row.
-        structuralSharing: (previous: unknown, next: unknown) =>
-          shareSessions(previous as RelaySession[] | undefined, next as RelaySession[]),
+        structuralSharing: (previous: unknown, next: unknown) => {
+          const current = previous as RelaySession[] | undefined;
+          const rows = next as RelaySession[];
+          const head = sessionHeadPages.get(rows);
+          return shareSessions(current, head
+            ? mergeSessionHeadPage(current ?? [], head.summaries, head.hasOlder, head.atRequestStart)
+            : rows);
+        },
         // The poll reads only the first page; older pages load on demand and
         // stay in the cache below it (mergeSessionHeadPage).
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelaySession[]> => {
@@ -174,12 +187,9 @@ export function useRelayData(
           setHeadCursor(next);
           // The first page is the whole list: nothing older is left to load.
           if (next === null) setOlderCursor(undefined);
-          return mergeSessionHeadPage(
-            queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY) ?? [],
-            page.sessions ?? [],
-            next !== null,
-            atRequestStart,
-          );
+          const result: RelaySession[] = [];
+          sessionHeadPages.set(result, { summaries: page.sessions ?? [], hasOlder: next !== null, atRequestStart });
+          return result;
         },
       },
       {

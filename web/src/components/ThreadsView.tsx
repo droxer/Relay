@@ -782,6 +782,7 @@ export function ThreadsView({
           onSend={sendAnswering}
           onCancelRun={onCancelRun}
           onQueue={queueEnabled ? threadQueue.enqueue : undefined}
+          queuePending={threadQueue.pending}
           queue={queueEnabled ? (
             <MessageQueue
               messages={threadQueue.messages}
