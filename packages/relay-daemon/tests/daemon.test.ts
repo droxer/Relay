@@ -6113,6 +6113,62 @@ test("a host run that outlived its daemon is settled once its process group is g
   } finally { rmSync(root, {recursive: true, force: true}); }
 });
 
+test("a restarted daemon persists a stop for the matching contained run and reports only its exit", { timeout: 5_000 }, async t => {
+  const root = mkdtempSync(join(tmpdir(), "relay-contained-recovery-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const stop = new AbortController();
+  const journal = new ExecutionJournal(join(root, "executions"));
+  const target = { ...runCommand("contained-target"), leaseId: "target-lease" };
+  const other = { ...runCommand("contained-other"), leaseId: "other-lease" };
+  journal.record(target);
+  journal.record(other);
+  const cgroup = { parent: "/sys/fs/cgroup/relay-test", bootId: "fixture", namespace: "1", mountInode: "2" };
+  journal.attach(target.id, { cgroup: { ...cgroup, name: "relay-run-a1234567-0000-0000-0000-000000000000", inode: "3" } });
+  journal.attach(other.id, { cgroup: { ...cgroup, name: "relay-run-b1234567-0000-0000-0000-000000000000", inode: "4" } });
+  const events: DaemonNodeEvent[] = [];
+  const observedStops = new Set<string>();
+  let polls = 0;
+  let delivery = 0;
+  const timeout = setTimeout(() => stop.abort(), 3000);
+  try {
+    await runRelayDaemon({
+      backendUrl: "http://relay.test", sandboxId: "contained-recovery", userId: "alice", token: "fixture",
+      workspacePath: root, stateDir: root, preflight: false, pollIntervalMs: 5, shutdownGraceMs: 50,
+      exitRecheckIntervalMs: 5, signal: stop.signal, logger: testLogger(),
+      environment: { ...fakeEnvironment(), proveExited: async records => records.flatMap(record => {
+        if (!record.stopRequested) return [];
+        observedStops.add(record.id);
+        assert.equal(journal.pending().find(run => run.id === record.id)?.stopRequested, true);
+        return [record.id];
+      }) },
+      fetchFn: async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith("/commands")) {
+          if (polls++ === 0) return jsonResponse({ commands: [
+            { ...other, type: "run.cancel", id: "bad-stop", commandId: other.id, targetLeaseId: "wrong-lease" },
+            { ...target, type: "run.cancel", id: "stop-target", commandId: target.id, targetLeaseId: target.leaseId },
+          ] });
+          return jsonResponse({ commands: [] });
+        }
+        if (path.endsWith("/events")) {
+          const event = await jsonBody<DaemonNodeEvent>(init);
+          if (event.type === "run.cancelled" && event.commandId === target.id) {
+            if (delivery++ === 0) return new Response("retry", { status: 503 });
+            setImmediate(() => stop.abort());
+          }
+          events.push(event);
+        }
+        return jsonResponse({});
+      },
+    });
+  } finally { clearTimeout(timeout); }
+  assert.deepEqual([...observedStops], [target.id]);
+  assert.deepEqual(events.filter(event => event.type === "run.cancelled").map(event => event.commandId), [target.id]);
+  assert.equal(delivery, 2);
+  assert.equal(journal.has(target.id), false);
+  assert.equal(journal.has(other.id), true);
+});
+
 test("a leftover host run is still rechecked after a second daemon restart", async () => {
   const root = mkdtempSync(join(tmpdir(), "relay-leftover-restarts-"));
   const leftover = { ...runCommand("cmd_leftover_restarts"), leaseId: "lease_leftover" };

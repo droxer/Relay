@@ -105,6 +105,7 @@ export class RunSupervisor {
       () => controller.abort('Execution lease expired; stopping until ownership can be confirmed.'));
     watchExecutionExit(controller.signal, {
       release: release.signal, forceStop: forceStop.signal, stopGraceMs: 10_000,
+      onCgroup: (cgroup) => this.options.journal.attach(command.id, { cgroup }),
       onSpawn: (processGroup, spawnedAt) => {
         try { this.options.journal.attach(command.id, { processGroup, spawnedAt, bootAt: hostBootAt() }); }
         catch (error) { this.options.logger.warn('could not record the run\'s process group', this.fields(command, error)); }

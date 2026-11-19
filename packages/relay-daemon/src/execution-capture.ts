@@ -1,5 +1,6 @@
 import type { AgentOutputSink, StreamExecResult } from "relay-core";
 import { BoundedTextCapture } from "./bounded-text.js";
+import type { LinuxRunCgroup } from "./linux-run-cgroup.js";
 type StreamRenderer = (chunk: string) => string;
 
 export interface ExecutionExitHooks {
@@ -8,6 +9,8 @@ export interface ExecutionExitHooks {
   forceStop?: AbortSignal;
   /** A host-mode run started as this process group (on Windows, this root pid) at `spawnedAt`. */
   onSpawn?: (processGroup: number, spawnedAt: number) => void;
+  /** Must durably record the cgroup before its launcher starts. */
+  onCgroup?: (cgroup: LinuxRunCgroup) => void;
   /** Called once when a stop has gone unconfirmed for `unconfirmedAfterMs`. */
   onExitUnconfirmed?: () => void;
   /**

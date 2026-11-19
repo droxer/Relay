@@ -4,12 +4,13 @@ import { BoundedTextCapture } from "./bounded-text.js";
 import { RELEASED_EXIT_MESSAGE, exitHooksFor } from "./execution-capture.js";
 import { listWindowsProcesses, taskkillArguments, windowsProcessTree } from "./windows-process-tree.js";
 import { processGroupAlive } from "./process-group.js";
+import { cleanupLinuxRunCgroup, createLinuxRunCgroup, linuxRunInvocation } from "./linux-run-cgroup.js";
 
 const SIGKILL_DELAY_MS = 5_000;
 /** Between Windows tree sweeps while descendants remain. */
 const WINDOWS_SWEEP_MS = 1_000;
-/** How long verified-empty Windows trees may keep their pipes open. */
-const WINDOWS_PIPE_DRAIN_MS = 2_000;
+/** How long output may drain after all designated processes have exited. */
+const VERIFIED_PIPE_DRAIN_MS = 2_000;
 
 export async function superviseLocalProcess(
   cmd: string,
@@ -35,20 +36,36 @@ export async function superviseLocalProcess(
       error_message: "Execution cancelled before start.",
     };
   }
+  const recordGroup = hooks?.onCgroup;
+  const group = recordGroup && createLinuxRunCgroup();
+  if (group && recordGroup) {
+    try { recordGroup(group); }
+    catch (error) {
+      cleanupLinuxRunCgroup(group, false);
+      throw error;
+    }
+  }
+  const invocation = group ? linuxRunInvocation(group, cmd, args) : { command: cmd, args };
   return new Promise((resolve) => {
     const windows = process.platform === "win32";
     const detached = !windows;
-    const child = spawn(cmd, args, {
-      cwd: options.cwd,
-      env: options.env,
-      stdio: ["ignore", "pipe", "pipe"],
-      detached,
-      windowsHide: true,
-    });
+    let child;
+    try {
+      child = spawn(invocation.command, invocation.args, {
+        cwd: options.cwd,
+        env: options.env,
+        stdio: ["ignore", "pipe", "pipe"],
+        detached,
+        windowsHide: true,
+      });
+    } catch (error) {
+      if (group) cleanupLinuxRunCgroup(group, false);
+      throw error;
+    }
     const spawnedAt = Date.now();
     // POSIX records the process group; Windows the tree's root pid, which its
     // descendants keep naming as parent even after it exits.
-    if (child.pid) hooks?.onSpawn?.(child.pid, spawnedAt);
+    if (!group && child.pid) hooks?.onSpawn?.(child.pid, spawnedAt);
     const stdoutCapture = new BoundedTextCapture();
     const stderrCapture = new BoundedTextCapture();
     let finished = false;
@@ -62,7 +79,7 @@ export async function superviseLocalProcess(
     let closed = false;
     let windowsCleanup: Promise<void> | undefined;
     let windowsTermination: Promise<boolean | undefined> | undefined;
-    let windowsTreeCleared = false;
+    let descendantsCleared = false;
     const scheduleExitReport = (): void => {
       if (reportTimer || reported || finished) return;
       reportTimer = setTimeout(() => {
@@ -99,6 +116,11 @@ export async function superviseLocalProcess(
     };
     const release = (): void => settle(-1, RELEASED_EXIT_MESSAGE, true);
     const terminate = (signal: NodeJS.Signals): void => {
+      if (group) {
+        if (signal === "SIGKILL") cleanupLinuxRunCgroup(group, true);
+        else if (exitCode === undefined) child.kill(signal);
+        return;
+      }
       if (detached && child.pid) {
         try {
           process.kill(-child.pid, signal);
@@ -135,6 +157,22 @@ export async function superviseLocalProcess(
       // Shutdown escalation and exit cleanup can overlap on the same tree.
       return windowsTermination ??= sweepWindowsTree().finally(() => { windowsTermination = undefined; });
     };
+    const finishVerifiedRun = (): void => {
+      descendantsCleared = true;
+      if (closed) { settle(exitCode ?? -1); return; }
+      // Verified exit means any remaining pipe holders cannot hold the run.
+      cleanupTimer = setTimeout(() => {
+        child.stdout.destroy();
+        child.stderr.destroy();
+        settle(exitCode ?? -1);
+      }, VERIFIED_PIPE_DRAIN_MS);
+    };
+    const finishContainedRun = (): void => {
+      if (!group || finished || descendantsCleared) return;
+      if (cleanupLinuxRunCgroup(group, true)) { finishVerifiedRun(); return; }
+      scheduleExitReport();
+      cleanupTimer = setTimeout(finishContainedRun, 100);
+    };
     /**
      * Once bash exits on Windows, clear what it left running before reporting
      * the run finished, as the POSIX path does for its process group. A
@@ -148,7 +186,7 @@ export async function superviseLocalProcess(
           if (finished) return;
           const cleared = await killWindowsTree();
           if (finished) return;
-          if (cleared === true) { windowsTreeCleared = true; break; }
+          if (cleared === true) break;
           scheduleExitReport();
           if (!warned) {
             process.stderr.write(cleared === undefined
@@ -158,15 +196,7 @@ export async function superviseLocalProcess(
           }
           await new Promise((resolve) => { cleanupTimer = setTimeout(resolve, WINDOWS_SWEEP_MS); });
         }
-        if (closed) { settle(exitCode ?? -1); return; }
-        // Every process of the tree is gone, so whatever still holds the pipes
-        // is not part of this run. Stop waiting for them.
-        cleanupTimer = setTimeout(() => {
-          if (finished) return;
-          child.stdout.destroy();
-          child.stderr.destroy();
-          settle(exitCode ?? -1);
-        }, WINDOWS_PIPE_DRAIN_MS);
+        finishVerifiedRun();
       })();
     };
     const forceStop = (): void => {
@@ -174,6 +204,10 @@ export async function superviseLocalProcess(
       if (killTimer) clearTimeout(killTimer);
       scheduleExitReport();
       terminate("SIGKILL");
+      if (group && !terminationRetryTimer) {
+        terminationRetryTimer = setInterval(() => terminate("SIGKILL"), 1_000);
+        terminationRetryTimer.unref();
+      }
     };
     const abort = (): void => {
       scheduleExitReport();
@@ -204,17 +238,22 @@ export async function superviseLocalProcess(
     child.on("exit", (code) => {
       exitCode = code;
       if (finished) return;
-      if (windows) finishWindowsRun();
+      if (group) finishContainedRun();
+      else if (windows) finishWindowsRun();
       else if (child.pid) terminate("SIGKILL");
     });
     child.on("close", (code) => {
       closed = true;
       exitCode ??= code;
       if (finished) return;
+      if (group) {
+        if (descendantsCleared) settle(exitCode ?? -1);
+        return;
+      }
       if (windows && child.pid) {
         if (killTimer) clearTimeout(killTimer);
         options.signal?.removeEventListener("abort", abort);
-        if (windowsTreeCleared) settle(exitCode ?? -1);
+        if (descendantsCleared) settle(exitCode ?? -1);
         else finishWindowsRun();
         return;
       }
@@ -257,7 +296,11 @@ export async function superviseLocalProcess(
     child.on("error", (error) => {
       // Spawn failure means there was no execution. A later error (including
       // EPERM from kill) says nothing about whether the process is still alive.
-      if (!child.pid) { settle(-1, error.message); return; }
+      if (!child.pid) {
+        if (group) cleanupLinuxRunCgroup(group, false);
+        settle(-1, error.message);
+        return;
+      }
       if (finished) return;
       scheduleExitReport();
       if (!processErrorReported) {

@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { DaemonNodeCommand } from "relay-core";
 import { syncDirectory } from "./sync-directory.js";
 import type { ExecutionEvidence } from "./exit-proof.js";
+import { isLinuxRunCgroup } from "./linux-run-cgroup.js";
 
 export interface ExecutionRecord extends ExecutionEvidence {
   id: string;
@@ -11,6 +13,7 @@ export interface ExecutionRecord extends ExecutionEvidence {
   leaseId?: string;
   agent: string;
   recordedAt: string;
+  stopRequested?: true;
 }
 
 type ExecutionCommand = Pick<ExecutionRecord, "id" | "runId" | "sessionId" | "leaseId" | "agent">;
@@ -62,7 +65,10 @@ export class ExecutionJournal {
         || (record.leaseId !== undefined && typeof record.leaseId !== "string")
         || (record.processGroup !== undefined && (!Number.isSafeInteger(record.processGroup) || record.processGroup <= 0))
         || (record.spawnedAt !== undefined && !Number.isFinite(record.spawnedAt))
-        || (record.prepared !== undefined && (record.prepared !== true || record.processGroup !== undefined || record.spawnedAt !== undefined))) {
+        || (record.cgroup !== undefined && !isLinuxRunCgroup(record.cgroup))
+        || (record.stopRequested !== undefined && record.stopRequested !== true)
+        || (record.prepared !== undefined && (record.prepared !== true || record.processGroup !== undefined
+          || record.spawnedAt !== undefined || record.cgroup !== undefined || record.stopRequested !== undefined))) {
         throw new Error("Invalid execution journal record.");
       }
       this.unreadable.delete(name);
@@ -117,10 +123,27 @@ export class ExecutionJournal {
 
   /** Add where the run executed, so a restarted daemon can look for it. */
   attach(id: string, evidence: ExecutionEvidence): void {
-    if (!this.has(id)) return;
+    if (!this.has(id)) {
+      if (evidence.cgroup) throw new Error("Cannot launch a contained execution without its journal record.");
+      return;
+    }
     const current = this.read(this.filename(id));
     if (current.prepared) throw new Error("Cannot attach execution evidence before admission commits.");
-    this.write({ ...current, ...evidence });
+    if (evidence.cgroup) {
+      this.write({ ...current, processGroup: undefined, spawnedAt: undefined, bootAt: undefined, ...evidence });
+    } else {
+      this.write({ ...current, cgroup: undefined, ...evidence });
+    }
+  }
+
+  requestStop(command: Extract<DaemonNodeCommand, { type: "run.cancel" }>): boolean {
+    if (!this.has(command.commandId)) return false;
+    const record = this.read(this.filename(command.commandId));
+    if (!record.cgroup || record.runId !== command.runId || record.sessionId !== command.sessionId
+      || record.agent !== command.agent
+      || (command.targetLeaseId !== undefined && record.leaseId !== command.targetLeaseId)) return false;
+    if (!record.stopRequested) this.write({ ...record, stopRequested: true });
+    return true;
   }
 
   private write(record: JournalRecord): void {

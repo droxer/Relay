@@ -112,6 +112,7 @@ export function serviceDefinition(platform: string, id: string, argv: string[], 
 Description=${brand.product} personal computer ${id}
 [Service]
 Type=simple
+Delegate=yes
 ExecStart=${argv.map(systemd).join(' ')}
 Environment=${systemd(`PATH=${path}`).replace(/\$\$/g, '$')}
 Environment=${systemd(`RELAY_DAEMON_STATE_DIR=${dirname(logDir)}`).replace(/\$\$/g, '$')}

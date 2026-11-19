@@ -492,12 +492,32 @@ smoke result does not establish the reference SLO.
 
 ### Restart exit evidence
 
-A wall-clock boot-time estimate is historical metadata, not proof of reboot or
-process exit. A restarted local daemon confirms that the recorded process group
-is absent; a Windows daemon requires a process list showing no remaining tree
-members. Missing or inconclusive evidence continues to require reconciliation.
-If a local startup probe reaches its deadline, the daemon registers with the
-run still reserved and rechecks it in the background when it has a process ID.
+A wall-clock boot-time estimate is historical metadata. For older records and
+host runs without cgroup support, a restarted local daemon checks whether the
+recorded process group is absent. A Windows daemon requires a process list
+showing no remaining tree members.
+
+On Linux, a local Daemon Node uses a separate cgroup v2 for each run's agent
+process when its own service has a writable delegated subtree and the kernel
+provides `cgroup.kill`. Installed Linux services request `Delegate=yes`; an
+existing service needs its unit updated as well as a new executable. Relay
+records the cgroup identity before starting the agent. Descendants inherit
+membership even if they start a new session. Upon receiving a Stop request
+for a matching run, the Daemon Node records the request locally. If it later
+restarts, it checks the recorded cgroup and retries cleanup for that run
+without signalling process IDs from the journal. A different active run has
+its own cgroup. Relay reports cancellation only when the cgroup is empty and
+removed, or its absence can be verified in the same cgroup hierarchy.
+
+This isolation applies to Relay's run-level cleanup. The systemd unit keeps
+systemd's default service-wide cleanup, so a service stop or restart can
+terminate other runs under the same unit.
+
+Missing or inconclusive evidence continues to require reconciliation. If a
+local startup probe reaches its deadline, the Daemon Node registers with the
+run still reserved and rechecks it in the background when it has a cgroup or
+process identifier. This recovery covers descendants within the run's cgroup;
+processes explicitly launched in another service or cgroup are outside it.
 A BoxLite retirement timeout ends startup before any new guests can use the
 old guest names.
 Windows tree cleanup distinguishes a reused root PID from its older orphans:
