@@ -15,9 +15,10 @@ const STAGE: Record<string, number> = {
   tester: 4,
   writer: 4,
   devops: 4,
+  operations: 4,
   reviewer: 5,
 };
-const SPECIALIST_ROLES = new Set(["researcher", "designer", "writer", "devops"]);
+const SPECIALIST_ROLES = new Set(["researcher", "designer", "writer", "devops", "operations"]);
 const stageOf = (role: string | undefined) => STAGE[role ?? ""] ?? STAGE.implementer;
 export interface SlotMember { id: string; role?: string; onRequest?: boolean }
 type Slot = { slot: "builder" | "reviewer" | "member" | "lead"; memberId: string };
@@ -80,7 +81,7 @@ export function styleForRun(run: Pick<AgentRun, "assignmentId" | "teamSnapshot">
   return round?.style ?? (round?.teamSnapshot || run.teamSnapshot ? "lead_led" : undefined);
 }
 
-const TURN_ROLES = new Set(["planner", "tester", "researcher", "designer", "writer", "devops"]);
+const TURN_ROLES = new Set(["planner", "tester", ...SPECIALIST_ROLES]);
 
 export function turnSlot(run: { role?: string; coordinator?: boolean; synthesizer?: boolean; workResult?: { status?: string; findings?: unknown[] } }, style?: CollaborationStyle): string | null {
   if (!style) return null;

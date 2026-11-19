@@ -24,6 +24,7 @@
     "turn_designer": "Interaction Designer",
     "turn_writer": "Technical Writer",
     "turn_devops": "DevOps Engineer",
+    "turn_operations": "Operations",
     "turn_lead": "Lead",
     "turn_lead_summary": "Lead · summary",
     "review_cycle": "Review round {{cycle}} of {{max}}",
@@ -232,6 +233,7 @@
       "designer": "Interaction Designer",
       "writer": "Technical Writer",
       "devops": "DevOps Engineer",
+      "operations": "Operations",
       "project_manager": "Project Lead"
     },
     "unclassified": "Unclassified",
@@ -1531,7 +1533,8 @@
         "researcher": "Research Analyst",
         "designer": "Interaction Designer",
         "writer": "Technical Writer",
-        "devops": "DevOps Engineer"
+        "devops": "DevOps Engineer",
+        "operations": "Operations"
       },
       "section_runtime": "Runtime",
       "runtime_placement": "Placement",
@@ -2625,6 +2628,7 @@
     "tester": "Verifies the work and reports what fails.",
     "writer": "Documents the result for its readers.",
     "devops": "Ships it: config, pipeline, deployment, rollback.",
+    "operations": "Plans launch communications, tracks adoption, and gathers feedback.",
     "reviewer": "Reviews the finished work and approves or asks for changes."
   },
   "team_work": {
@@ -2640,6 +2644,7 @@
     "role_designer": "Interaction Designer",
     "role_writer": "Technical Writer",
     "role_devops": "DevOps Engineer",
+    "role_operations": "Operations",
     "responsibility": "Responsibility",
     "scope_example": "Own the API and its tests",
     "outputs": "Expected outputs",

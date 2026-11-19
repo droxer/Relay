@@ -93,7 +93,10 @@ def test_single_member_has_no_reviewer() -> None:
 
 
 def test_a_specialist_never_reviews() -> None:
-    agents = [_agent("lead", "designer"), _agent("doc", "writer"), _agent("ops", "devops")]
+    agents = [
+        _agent("lead", "designer"), _agent("doc", "writer"),
+        _agent("deploy", "devops"), _agent("ops", "operations"),
+    ]
     slots = fill_build_review_slots(agents, "lead")
     assert slots.builder["id"] == "lead"
     assert slots.reviewer is None
@@ -109,9 +112,10 @@ def test_pipeline_researches_before_planning_and_designs_before_building() -> No
     agents = [
         _agent("dev", "implementer"), _agent("plan", "planner"), _agent("doc", "writer"),
         _agent("ux", "designer"), _agent("rev", "reviewer"), _agent("res", "researcher"),
+        _agent("ops", "operations"),
     ]
     assert [agent["id"] for agent in pipeline_order(agents)] == [
-        "res", "plan", "ux", "dev", "doc", "rev",
+        "res", "plan", "ux", "dev", "doc", "ops", "rev",
     ]
 
 

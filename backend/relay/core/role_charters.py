@@ -69,6 +69,11 @@ ROLE_CHARTERS: dict[str, str] = {
         "and operational checks it needs. Verify the path in the environment it ships to and "
         "report how to roll it back. Do not redesign the product or rewrite teammates' work."
     ),
+    "operations": (
+        "Plan the rollout for the people who will use or support the result. Prepare launch "
+        "communications, guidance, and a way to measure adoption and collect feedback. "
+        "Coordinate follow-up and leave infrastructure deployment to DevOps."
+    ),
 }
 
 COORDINATOR_CHARTER = (
