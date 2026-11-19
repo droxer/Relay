@@ -23,18 +23,28 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
     ...session,
     events: [...session.events, ...events],
   };
-  for (const event of events) next = applySessionEventProjection(next, event);
-  const summaryCount = summaryEventCountOf(session);
-  if (summaryCount !== undefined && next.events.length <= summaryCount) {
-    // The summary already covers these events. Keep its current permission
-    // mode and prompt state while the transcript catches up.
-    return {
+  const summaryCount = summaryEventCountOf(session) ?? 0;
+  const replayCount = Math.min(events.length, Math.max(0, summaryCount - session.events.length));
+  if (replayCount > 0) {
+    // Hydrate history through the summary's cursor, retaining its observed
+    // activity. Later events in this same batch can then advance that state.
+    for (let i = 0; i < replayCount; i++) next = applySessionEventProjection(next, events[i]);
+    next = {
       ...next,
+      updatedAt: session.updatedAt,
+      status: session.status,
+      phase: session.phase,
+      workOutcome: session.workOutcome,
+      finalOutcome: session.events.length + replayCount === summaryCount ? next.finalOutcome : session.finalOutcome,
+      execution: session.execution,
+      currentAgent: session.currentAgent,
+      pendingDecision: session.pendingDecision,
       permissionMode: session.permissionMode ?? next.permissionMode,
       permissionRequests: session.permissionRequests ?? next.permissionRequests,
-      execution: session.execution?.permissionMode ? session.execution : next.execution,
+      nextSteps: session.nextSteps,
     };
   }
+  for (let i = replayCount; i < events.length; i++) next = applySessionEventProjection(next, events[i]);
   return next;
 }
 

@@ -48,6 +48,16 @@ def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _parked_workflow_reason(session: dict[str, Any]) -> str | None:
+    runs = session.get("workflowRuns") or []
+    status = session.get("workflowStatus") or (runs[0].get("status") if runs else None)
+    if status == "blocked":
+        return "workflow_blocked"
+    if status in ("awaiting_approval", "awaiting_input"):
+        return "workflow_waiting_for_human"
+    return None
+
+
 def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                      command: dict[str, Any] | None, *, now: datetime | None = None,
                      computer_online: bool | None = None) -> dict[str, Any]:
@@ -55,6 +65,7 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
     state = (request or {}).get("state") or {}
     phase, reason = "terminal", None
     confirmed = False
+    parked_workflow = None
     lease = (command or {}).get("leaseExpiresAt")
     live = False
     lease_dead_for = None
@@ -95,7 +106,15 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
             else:
                 phase, reason = "running", "execution_active"
         else:
-            phase, reason = "queued", "awaiting_dispatch"
+            if (request.get("status") == "prepared" and state.get("_relay_workflow_admission")
+                    and not request.get("currentCommandId") and not command
+                    and not session.get("hasRunningAgent")
+                    and not any(run.get("status") == "running" for run in session.get("agentRuns", []))):
+                parked_workflow = _parked_workflow_reason(session)
+            if parked_workflow:
+                reason = parked_workflow
+            else:
+                phase, reason = "queued", "awaiting_dispatch"
     elif session.get("hasRunningAgent") or any(
         run.get("status") == "running" for run in session.get("agentRuns", [])
     ):
@@ -130,7 +149,9 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         "phase": phase, "executionConfirmed": confirmed,
         "computerOnline": computer_online,
         "deletionRequested": bool(session.get("deletionRequestedAt")),
-        "canDelete": phase == "terminal", "blockingReason": reason,
+        # A parked workflow still owns its prepared request. Stop and delete
+        # must cancel it through the usual path even though no agent is live.
+        "canDelete": phase == "terminal" and not parked_workflow, "blockingReason": reason,
         "canRetrySave": phase == "recovery_required" and request is not None and not evidence_lost
         and request.get("status") == "finalizing" and bool(state.get(TERMINAL_CLAIM_ID_STATE_KEY)),
         "canReportGone": phase == "recovery_required" and reason != "finalization_failed"

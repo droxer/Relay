@@ -59,6 +59,12 @@ def test_owner_records_bound_gate_once(monkeypatch, kind, status):
         body["kind"] = kind
         response = client.post(endpoint(sid), json=body)
         assert response.status_code == 200, response.text
+        execution = response.json()["execution"]
+        assert execution["phase"] == ("queued" if kind == "approve" else "terminal")
+        assert not execution["canDelete"]
+        assert execution["blockingReason"] == ("awaiting_dispatch" if kind == "approve" else "workflow_blocked")
+        summary = next(item for item in client.get("/api/v1/threads?view=summary").json()["sessions"] if item["id"] == sid)
+        assert summary["execution"] == execution
         session = app.state.session_store.get_session(sid)
         run = session["workflowRuns"][0]
         assert run["status"] == status

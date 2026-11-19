@@ -92,9 +92,13 @@ export function threadAwaitsHuman(
   tasks: ThreadWaitSource,
 ): boolean {
   if (!session) return false;
-  if (session.status === "waiting_for_human") return true;
-  // A live run paused on a runtime permission prompt needs its person too.
+  // A runtime permission prompt can pause an active run. Older work outcomes
+  // and Task waits only apply once the Thread has settled.
   if (session.permissionRequests?.length) return true;
+  if (session.execution && session.execution.phase !== "terminal") return false;
+  if (session.execution?.blockingReason === "workflow_blocked"
+    || session.execution?.blockingReason === "workflow_waiting_for_human") return true;
+  if (session.status === "waiting_for_human") return true;
   return session.status === "completed" && threadWait(session, tasks) !== null;
 }
 

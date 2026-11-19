@@ -212,6 +212,7 @@ class SessionReadRows(SessionStoreState):
             self.sessions.c.version,
             self.sessions.c.updated_at.label(_POSITION_COLUMN),
             *(self.sessions.c.snapshot[field].label(field) for field in fields),
+            self.sessions.c.snapshot["workflowRuns"][0]["status"].as_string().label("workflowStatus"),
             literal_column(f"COALESCE({array_length}({runs}), 0)").label("runCount"),
             literal_column(
                 f"EXISTS (SELECT 1 FROM {elements}({runs}) a WHERE {value('status')} = 'running')"

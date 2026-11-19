@@ -62,6 +62,17 @@ export function useRelayMutations() {
 
   const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
+  const invalidateThreadTasks = (sessionId: string) => {
+    const tasks = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY) ?? [];
+    const linkedIds = new Set(tasks.filter(task => task.linkedSessionIds?.includes(sessionId)).map(task => task.id));
+    // A deep-linked record can be cached before its list row is available.
+    for (const [key, record] of queryClient.getQueriesData<RelayTask>({ queryKey: [TASK_RECORD_QUERY_KEY] })) {
+      if (record?.linkedSessionIds?.includes(sessionId) || (typeof key[1] === "string" && linkedIds.has(key[1]))) {
+        void queryClient.invalidateQueries({ queryKey: key, exact: true });
+      }
+    }
+    return invalidateTasks();
+  };
   const invalidateNodes = () => queryClient.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
   const invalidateProjects = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY, exact: true });
   const invalidateTaskWorkflowSession = (sessionId: string) =>
@@ -155,7 +166,7 @@ export function useRelayMutations() {
     }) => decideWorkflow(sessionId, kind, binding, answer),
     onSuccess: (session) => {
       cacheSession(session);
-      void invalidateTasks();
+      void invalidateThreadTasks(session.id);
       return invalidateTaskWorkflowSession(session.id);
     },
     onError: (error: unknown, { sessionId }) => {
@@ -204,13 +215,13 @@ export function useRelayMutations() {
       cacheSession(session);
       void invalidateNodes();
       // An answer moves its task off the wait; show that without a poll.
-      if (input.questionId) void invalidateTasks();
+      if (input.questionId) void invalidateThreadTasks(session.id);
     },
     onError: (error, { sessionId }) => {
       if (!(error instanceof RelayApiError)) return;
       // The question was answered or replaced elsewhere: fetch the one the
       // task waits on now, so the prompt stops offering the stale one.
-      if (error.code === "question_superseded") void invalidateTasks();
+      if (error.code === "question_superseded") void invalidateThreadTasks(sessionId);
       // A background task or another tab started a run before the composer
       // saw it. Refresh this thread so the next send can use its queue.
       if (error.code === "thread_run_active") {
@@ -225,7 +236,7 @@ export function useRelayMutations() {
     onSuccess: (session) => {
       cacheSession(session);
       void invalidateNodes();
-      void invalidateTasks();
+      void invalidateThreadTasks(session.id);
     },
   });
 
