@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import type { WorkflowAttemptResult, WorkflowRun } from "relay-core";
 import {
@@ -13,6 +13,10 @@ import {
   type WorkflowBlock,
   type WorkflowStepState,
 } from "../../lib/workflowRuns";
+import { OVERLAY_TAKEOVER_QUERY } from "../../lib/breakpoints";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useSheetDrag } from "../../hooks/useSheetDrag";
+import { DisclosureChevron, ICON } from "../icons";
 import { Button } from "../ui/button";
 import {
   Dialog, DialogBackdrop, DialogClose, DialogContent, DialogPortal,
@@ -36,6 +40,18 @@ const STEP_STATE_KEY: Record<WorkflowStepState, string> = {
   cancelled: "workflow.step_cancelled",
   pending: "workflow.step_pending",
 };
+
+/** A phone held in the hand: the run details are a sheet pulled up from the
+ *  band and dismissed by pulling it back down (mobile-native.css). */
+const TOUCH_SHEET_QUERY = `${OVERLAY_TAKEOVER_QUERY} and (pointer: coarse)`;
+
+/** The step the run is on — or stopped at. The ledger marks it as the
+ *  current step and highlights it (workflow.css). */
+const LIVE_STATES: ReadonlySet<WorkflowStepState> = new Set(["current", "waiting", "blocked"]);
+
+/** That step is what a person opened the sheet to see; a 20-step ledger
+ *  otherwise opens on step 1. */
+const LIVE_STEP = '.workflow-timeline-step[aria-current="step"]';
 
 function blockKey(block: WorkflowBlock): [string, Record<string, string>?] {
   switch (block.kind) {
@@ -115,22 +131,43 @@ export function WorkflowRunSummary({ run, agentName }: RunViewProps) {
 export function WorkflowProgress({ run, agentName }: RunViewProps) {
   const { t } = useTranslation();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [open, setOpen] = useState(false);
+  const touchSheet = useMediaQuery(TOUCH_SHEET_QUERY);
+  const { offset: dragY, handlers: dragHandlers, reset: resetDrag } = useSheetDrag(() => setOpen(false), touchSheet);
   const block = workflowBlock(run);
   const reason = block && blockKey(block);
   const question = workflowQuestion(run);
+  const done = run.status === "completed" ? run.assignments.length : run.currentIndex;
+
+  const revealLiveStep = useCallback((scroller: HTMLDivElement | null) => {
+    if (!scroller || !touchSheet) return;
+    const step = scroller.querySelector<HTMLElement>(LIVE_STEP);
+    if (!step) return;
+    /* Below the sticky summary, a third of the way down: the steps before it
+       stay a pull away, the ones after it in view. */
+    const offset = step.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    scroller.scrollTop += offset - scroller.clientHeight / 3;
+  }, [touchSheet]);
 
   return (
     <section className="workflow-progress" aria-label={t("workflow.timeline_title")}>
       <WorkflowRunSummary run={run} agentName={agentName} />
-      <Dialog>
-        <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
-          {t("workflow.view_run_details")}
+      {/* The phone band's progress: one segment per step, so how far the run
+          has come reads before any number. Decorative; the count says it. */}
+      <span className="workflow-progress-meter" aria-hidden="true"
+        style={{ "--done": done, "--total": Math.max(run.assignments.length, 1) } as CSSProperties} />
+      <Dialog open={open} onOpenChange={setOpen} onOpenChangeComplete={next => { if (!next) resetDrag(); }}>
+        <DialogTrigger className="workflow-progress-open" render={<Button type="button" variant="outline" size="sm" />}>
+          <span className="workflow-progress-open-label">{t("workflow.view_run_details")}</span>
+          <DisclosureChevron size={ICON.md} aria-hidden="true" />
         </DialogTrigger>
         <DialogPortal>
           <DialogBackdrop className="dialog-backdrop" />
           <DialogViewport className="dialog-viewport workflow-run-viewport">
-            <DialogContent className="dialog-modal workflow-run-dialog" initialFocus={headingRef}>
-              <header className="workflow-run-dialog-header">
+            <DialogContent className="dialog-modal workflow-run-dialog" initialFocus={headingRef}
+              data-dragging={dragY > 0 || undefined}
+              style={dragY > 0 ? ({ transform: `translateY(${dragY}px)`, "--sheet-drag": `${dragY}px` } as CSSProperties) : undefined}>
+              <header className="workflow-run-dialog-header" {...dragHandlers}>
                 <DialogTitle ref={headingRef} tabIndex={-1} className="dialog-title">
                   {t("workflow.timeline_title")}
                 </DialogTitle>
@@ -138,7 +175,7 @@ export function WorkflowProgress({ run, agentName }: RunViewProps) {
                   {t("sheet.close")}
                 </DialogClose>
               </header>
-              <div className="workflow-run-scroll" tabIndex={0} role="region" aria-label={t("workflow.run_steps")}>
+              <div ref={revealLiveStep} className="workflow-run-scroll" tabIndex={0} role="region" aria-label={t("workflow.run_steps")}>
                 <div className="workflow-run-dialog-summary">
                   <WorkflowRunSummary run={run} agentName={agentName} />
                   {reason ? <p className="workflow-timeline-reason">{t(reason[0], reason[1])}</p> : null}
@@ -169,7 +206,8 @@ export function WorkflowRunLedger({ run, agentName }: RunViewProps) {
         const currentResult = results.find(result => result.assignmentId === assignment.assignmentId);
         const reason = state === "blocked" && block && !currentResult ? blockKey(block) : null;
         return (
-          <li key={assignment.workItemId} className="workflow-timeline-step" data-state={state}>
+          <li key={assignment.workItemId} className="workflow-timeline-step" data-state={state}
+            aria-current={LIVE_STATES.has(state) ? "step" : undefined}>
             <div className="workflow-timeline-head">
               <span className="workflow-step-index tnum" aria-hidden="true">{position + 1}</span>
               <span className="workflow-timeline-name">{workflowStepName(run, assignment)}</span>

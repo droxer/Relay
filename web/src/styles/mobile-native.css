@@ -223,4 +223,178 @@
   .adm-drawer[data-dragging][data-ending-style] {
     animation: sheet-swipe-out var(--t-fast) var(--ease) forwards;
   }
+
+  /* ── Workflow progress band is one row ─────────────────────────────
+     The whole band opens the run, as a "now playing" bar does: its button
+     keeps its name for a screen reader, draws only the chevron, and its own
+     box is laid over the band — a stretched ::after is not enough, since
+     Chromium's tap targeting hands the click to the text under the finger.
+     A meter under the summary says how far the run has come. */
+  .chat-panel > .workflow-progress {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-2);
+    transition: background-color var(--t-fast) var(--ease);
+  }
+
+  .chat-panel > .workflow-progress:has(> .workflow-progress-open:active) {
+    background: var(--control-fill);
+  }
+
+  /* Room on the trailing edge for the chevron drawn over it. */
+  .chat-panel > .workflow-progress > .workflow-run-summary {
+    grid-area: 1 / 1;
+    padding-inline-end: calc(var(--sp-4) + var(--sp-3));
+  }
+
+  .chat-panel > .workflow-progress > .workflow-progress-meter {
+    display: block;
+    grid-area: 2 / 1;
+    height: var(--sp-0-5);
+    border-radius: var(--r-full);
+    background:
+      linear-gradient(var(--tone, var(--live)) 0 0) 0 0 / calc(100% * var(--done) / var(--total)) 100% no-repeat,
+      var(--line-2);
+  }
+
+  .chat-panel > .workflow-progress:has(> .workflow-run-summary:is([data-state="awaiting_approval"], [data-state="awaiting_input"])) { --tone: var(--warn); }
+  .chat-panel > .workflow-progress:has(> .workflow-run-summary[data-state="blocked"]) { --tone: var(--err); }
+  .chat-panel > .workflow-progress:has(> .workflow-run-summary[data-state="completed"]) { --tone: var(--ok); }
+  .chat-panel > .workflow-progress:has(> .workflow-run-summary[data-state="cancelled"]) { --tone: var(--ink-4); }
+
+  /* Spans both rows and, by a negative margin matching the band's padding,
+     the band's whole border box. */
+  .chat-panel > .workflow-progress > .workflow-progress-open {
+    position: relative;
+    z-index: 1;
+    grid-area: 1 / 1 / 3 / 2;
+    justify-content: flex-end;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    margin: calc(-1 * var(--sp-2)) calc(-1 * var(--sp-3));
+    padding: 0 var(--sp-3);
+    border: 0;
+    border-radius: var(--r-3);
+    background: none;
+    color: var(--ink-3);
+  }
+
+  .chat-panel > .workflow-progress > .workflow-progress-open > svg {
+    display: block;
+  }
+
+  .workflow-progress-open-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* ── Run details are a pulled sheet ────────────────────────────────
+     Not a full-screen page with a Close bar: the sheet rises from the band's
+     edge, sizes to a short run, and its header is the drag strip (useSheetDrag
+     in WorkflowProgress) — pull down to dismiss, a short pull springs back.
+     The summary stays pinned while twenty steps scroll under it. */
+  .dialog-viewport.workflow-run-viewport {
+    align-items: flex-end;
+    padding: max(env(safe-area-inset-top), var(--sp-8)) 0 0;
+  }
+
+  .dialog-modal.workflow-run-dialog {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    border-radius: var(--r-3) var(--r-3) 0 0;
+    animation: more-sheet-in var(--t-slow) var(--ease) both;
+    transition: transform var(--t-fast) var(--ease);
+  }
+
+  .dialog-modal.workflow-run-dialog[data-ending-style] {
+    animation: more-sheet-out var(--t-slow) var(--ease) forwards;
+  }
+
+  .dialog-modal.workflow-run-dialog[data-dragging] {
+    transition: none;
+  }
+
+  .dialog-modal.workflow-run-dialog[data-dragging][data-ending-style] {
+    animation: sheet-swipe-out var(--t-fast) var(--ease) forwards;
+  }
+
+  .workflow-run-dialog-header {
+    position: relative;
+    padding: var(--sp-5) var(--sp-4) var(--sp-2);
+    border-bottom: 0;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .workflow-run-dialog-header::before {
+    content: "";
+    position: absolute;
+    top: var(--sp-1-5);
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    border-radius: var(--r-full);
+    background: var(--line-strong);
+    translate: -50% 0;
+  }
+
+  .workflow-run-scroll {
+    padding-bottom: max(env(safe-area-inset-bottom), var(--sp-4));
+  }
+
+  .workflow-run-dialog-summary {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: var(--sp-2) var(--sp-4) var(--sp-3);
+    border-bottom: var(--hairline);
+    background: var(--surface-3);
+  }
+
+  .workflow-run-dialog .workflow-timeline {
+    padding-inline: var(--sp-4);
+    border-top: 0;
+  }
+
+  /* ── A task's run steps open from a row ────────────────────────────
+     The disclosure is a full-width row with a chevron that turns, not a
+     text triangle: the grouped-list row a phone settings page has. */
+  .record-workflow-details > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    padding-block: 0;
+    list-style: none;
+    transition: background-color var(--t-fast) var(--ease);
+  }
+
+  .record-workflow-details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .record-workflow-details > summary:active {
+    background: var(--control-fill);
+  }
+
+  .record-workflow-details:not([open]) > summary {
+    border-radius: 0 0 var(--r-3) var(--r-3);
+  }
+
+  .record-workflow-chevron {
+    display: block;
+    color: var(--ink-3);
+    transition: rotate var(--t-fast) var(--ease);
+  }
+
+  .record-workflow-details[open] .record-workflow-chevron {
+    rotate: 90deg;
+  }
 }

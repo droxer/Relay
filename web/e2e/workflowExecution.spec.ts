@@ -192,6 +192,18 @@ test("the workflow ledger survives forced colours and two-digit steps", async ({
   });
   expect(rail).toEqual({ drawn: true, style: "solid" });
 
+  // Only the step the run stopped at is current, and its band's leading
+  // edge is a border too, so the highlight survives forced colours.
+  const current = timeline.locator('.workflow-timeline-step[aria-current="step"]');
+  await expect(current).toHaveCount(1);
+  await expect(current).toHaveAttribute("data-state", "waiting");
+  await expect(current).toContainText(currentStep);
+  const edge = await current.evaluate(step => {
+    const style = getComputedStyle(step);
+    return { drawn: parseFloat(style.borderInlineStartWidth) > 0, style: style.borderInlineStartStyle };
+  });
+  expect(edge).toEqual({ drawn: true, style: "solid" });
+
   // Every number, "20" included, sits inside its ring.
   const overflowing = await timeline.locator(".workflow-step-index").evaluateAll(marks => marks.filter(mark => {
     const range = document.createRange();
@@ -210,4 +222,63 @@ test("a task's workflow run keeps a full-size thread link", async ({ page }) => 
   const link = page.locator(".record-workflow-actions .record-inline-action").first();
   await expect(link).toBeVisible();
   expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(24);
+});
+
+test.describe("on a phone held in the hand", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test("the workflow band opens its run as a pulled sheet", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await fixture(page, "en");
+    await page.goto("/threads/release-2");
+
+    // The band is the control: its button keeps the name but draws a chevron,
+    // and a tap anywhere on the band opens the run.
+    const progress = page.locator(".chat-panel > .workflow-progress");
+    const trigger = progress.getByRole("button", { name: "View run details" });
+    await expect(trigger).toBeVisible();
+    await expect(progress.locator(".workflow-progress-meter")).toBeVisible();
+    expect((await progress.boundingBox())!.height).toBeLessThanOrEqual(100);
+    const name = (await progress.locator(".workflow-run-name").boundingBox())!;
+    await page.touchscreen.tap(name.x + name.width / 2, name.y + name.height / 2);
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await page.evaluate(() => Promise.allSettled(document.getAnimations().map(animation => animation.finished)));
+    const sheet = (await dialog.boundingBox())!;
+    expect(sheet.y).toBeGreaterThan(0);
+    expect(Math.round(sheet.y + sheet.height)).toBe(844);
+
+    // It opens on the step the run is waiting at, not on step 1.
+    const scrollRegion = dialog.getByRole("region", { name: "Run steps" });
+    await expect(scrollRegion.locator('.workflow-timeline-step[data-state="waiting"]')).toBeInViewport();
+    // The summary stays pinned while the ledger scrolls under it.
+    await scrollRegion.evaluate(region => { region.scrollTop = region.scrollHeight; });
+    await expect(dialog.locator(".workflow-run-dialog-summary")).toBeInViewport();
+
+    // Pulling the header down dismisses the sheet.
+    const header = (await dialog.locator(".workflow-run-dialog-header").boundingBox())!;
+    const x = header.x + header.width / 2;
+    await page.mouse.move(x, header.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(x, header.y + 60, { steps: 4 });
+    await page.mouse.move(x, header.y + 160, { steps: 4 });
+    await page.mouse.up();
+    await expect(dialog).toBeHidden();
+  });
+
+  test("a task's run steps open from a full-height row", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await fixture(page, "en");
+    await page.goto("/projects/release?task=ship&recordTab=activity");
+
+    const details = page.locator(".record-workflow-history .record-workflow-details").first();
+    const row = details.locator("summary");
+    expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    const chevron = details.locator(".record-workflow-chevron");
+    await expect(chevron).toBeVisible();
+    await row.tap();
+    await expect(details).toHaveAttribute("open", "");
+    await expect(chevron).toHaveCSS("rotate", "90deg");
+  });
 });
