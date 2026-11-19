@@ -180,6 +180,7 @@ class SessionReadRows(SessionStoreState):
             "computerId",
             "currentAgent",
             "pendingDecision",
+            "permissionMode",
             "permissionRequests",
             "nextSteps",
             "archived",

@@ -24,6 +24,32 @@ def _decided_by(actor_user_id: str | None) -> dict[str, str]:
 
 
 class SessionDecisionMixin(SessionControllerState):
+    def set_permission_mode(
+        self, session: dict[str, Any], mode: str, *, actor_user_id: str,
+    ) -> dict[str, Any]:
+        """Record the owner's mode and settle approvals under the caller's Thread lock."""
+        session_id = session["id"]
+        if session.get("permissionMode") != mode:
+            session = self._append(
+                session_id,
+                relay_event("session.permission_mode", session_id, {
+                    "mode": mode, "actorUserId": actor_user_id,
+                }),
+                hydrate=False,
+            )
+            if mode == "yolo":
+                for request in session.get("permissionRequests") or []:
+                    if may_grant_always(request):
+                        self._append(
+                            session_id,
+                            relay_event("agent.permission_resolved", session_id, {
+                                "requestId": request["id"], "decision": "allow",
+                                "permissionMode": "yolo", "actorUserId": actor_user_id,
+                            }),
+                            hydrate=False,
+                        )
+        return self.store.get_session(session_id)
+
     def cancel_session(
         self, session_id: str, note: str = "Cancelled by human.",
         *, actor_user_id: str | None = None,

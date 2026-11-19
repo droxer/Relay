@@ -25,6 +25,7 @@ from ..core.daemon_records import (
     TERMINAL_CLAIM_ID_STATE_KEY,
     TERMINAL_EVENT_STATE_KEY,
 )
+from ..core.permission_requests import effective_permission_mode
 from ..persistence.events import relay_event
 from ..sessions.controller import SessionController
 from ..sessions.task_scope import thread_task_scope
@@ -160,6 +161,11 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         # long it has waited; absent once the computer has taken it.
         "queuedAt": (request or {}).get("createdAt") if phase == "queued" else None,
         "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
+        **(
+            {"permissionMode": effective_permission_mode(session, command.get("command") or {})}
+            if request and command and command.get("status") not in TERMINAL
+            else {}
+        ),
     }
 
 

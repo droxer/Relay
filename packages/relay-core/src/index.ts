@@ -282,6 +282,7 @@ export {
   type PermissionDecisionKind,
   type PermissionGrant,
   type PermissionRequest,
+  type ThreadPermissionMode,
   PERMISSION_GRANTS_LIMIT,
   PERMISSION_HISTORY_LIMIT,
   permissionGrantAgent,

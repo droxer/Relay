@@ -1,11 +1,14 @@
 """Runtime permission prompts: a live run asks a person before a tool runs.
 
-On a local computer with the native permission policy, the daemon gives Claude
-a permission-prompt tool. Each prompt reaches the backend as a
-`run.permission_requested` daemon event and is recorded on the thread as
+On a local computer with the native permission policy, the runtime's adapter
+forwards prompts through the daemon's permission broker. Each prompt reaches the
+backend as a `run.permission_requested` daemon event and is recorded as
 `agent.permission_requested`; a person answers through
 `POST /threads/{id}/permission-requests/{requestId}` (`agent.permission_resolved`),
 and the daemon polls for that answer while the run waits.
+
+The Thread owner may select a mode through `PUT /threads/{id}/permission-mode`.
+YOLO answers tool approvals while runtime questions still require a person.
 
 The snapshot keeps the open prompts (`permissionRequests`) and a bounded
 history of how each closed (`permissionDecisions`). A prompt closes once: a
@@ -221,6 +224,20 @@ def standing_grant(session: dict[str, Any], request: dict[str, Any]) -> dict[str
         ),
         None,
     )
+
+
+def apply_permission_mode(session: dict[str, Any], event: dict[str, Any]) -> None:
+    """The thread's own Permission Mode, which outranks its Task's from now on."""
+    session["permissionMode"] = event["mode"]
+
+
+def effective_permission_mode(session: dict[str, Any], command: dict[str, Any]) -> str:
+    """How a prompt arriving now is answered: the thread's mode when its owner
+    picked one, else the mode its Task carried into the run's command."""
+    mode = session.get("permissionMode")
+    if mode in TASK_PERMISSION_MODES:
+        return str(mode)
+    return "yolo" if command.get("_permissionMode") == "yolo" else DEFAULT_TASK_PERMISSION_MODE
 
 
 def apply_permission_resolved(session: dict[str, Any], event: dict[str, Any]) -> None:

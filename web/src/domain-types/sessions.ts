@@ -22,6 +22,7 @@ export interface SessionSummary {
   computerId?: string;
   currentAgent?: AgentName;
   pendingDecision?: RelaySession["pendingDecision"];
+  permissionMode?: RelaySession["permissionMode"];
   permissionRequests?: RelaySession["permissionRequests"];
   archived?: boolean;
   artifactCount: number;

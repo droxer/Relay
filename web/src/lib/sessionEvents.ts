@@ -39,7 +39,8 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
       execution: session.execution,
       currentAgent: session.currentAgent,
       pendingDecision: session.pendingDecision,
-      permissionRequests: session.permissionRequests,
+      permissionMode: session.permissionMode ?? next.permissionMode,
+      permissionRequests: session.permissionRequests ?? next.permissionRequests,
       nextSteps: session.nextSteps,
     };
   }
@@ -188,6 +189,12 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
         return withPermissionsExpired(updated, event.timestamp, event.runId);
       }
     }
+    case "session.permission_mode":
+      return {
+        ...next,
+        permissionMode: event.mode,
+        ...(next.execution?.permissionMode ? { execution: { ...next.execution, permissionMode: event.mode } } : {}),
+      };
     case "agent.permission_requested":
       return withPermissionRequested(next, event.request, event.timestamp);
     case "agent.permission_resolved":
@@ -309,6 +316,7 @@ function sameSessionShape(a: RelaySession, b: RelaySession): boolean {
     && a.title === b.title
     && a.archived === b.archived
     && a.deletionRequestedAt === b.deletionRequestedAt
+    && a.permissionMode === b.permissionMode
     && a.execution === b.execution
     && a.agentRuns.length === b.agentRuns.length
     && a.artifacts.length === b.artifacts.length

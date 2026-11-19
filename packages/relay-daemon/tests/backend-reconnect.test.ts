@@ -129,6 +129,25 @@ test('a wake ends the backoff wait and recovery is logged once', async () => {
   assert.equal(logger.infos[0]!.fields.attempts, 1);
 });
 
+test('resuming from a pause replaces the interrupted request without counting a failure', async () => {
+  const resume = new Error('Computer resumed after a pause.');
+  const logger = recordingLogger();
+  let calls = 0;
+  let failures = 0;
+  const result = await withBackendReconnect(async () => {
+    if (++calls === 1) throw resume;
+    return 'ok';
+  }, logger, context, {
+    retryImmediately: error => error === resume,
+    onTransientFailure: () => { failures += 1; },
+  });
+  assert.equal(result, 'ok');
+  assert.equal(calls, 2);
+  assert.equal(failures, 0);
+  assert.deepEqual(logger.warnings, []);
+  assert.deepEqual(logger.infos, []);
+});
+
 for (const status of [429, 503]) {
   test(`a healthy heartbeat cannot shorten Retry-After for ${status}`, async () => {
     const wake = new Wakeup();

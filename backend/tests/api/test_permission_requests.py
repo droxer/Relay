@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from tempfile import TemporaryDirectory
 
+import pytest
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
@@ -41,20 +42,20 @@ def _create_session(client: TestClient) -> str:
     return response.json()["id"]
 
 
-def _dispatched_run(app, session_id: str) -> dict:
+def _dispatched_run(app, session_id: str, agent: str = "claude", **command_fields: object) -> dict:
     registry = app.state.registry
     registry.register({
         "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
-        "protocolVersion": 1, "supportedAgents": ["claude"], "status": "ready",
+        "protocolVersion": 1, "supportedAgents": [agent], "status": "ready",
     })
     request = registry.daemon_store.create_run_request({
         "nodeId": "sbx_alice", "sessionId": session_id, "taskGoal": "work",
-        "assignments": [{"executorKind": "claude"}], "state": {},
+        "assignments": [{"executorKind": agent}], "state": {},
     })
     command = {
         "id": new_database_id(), "type": "run.start", "sessionId": session_id,
-        "runId": new_database_id(), "agent": "claude", "taskGoal": "work",
-        "_runRequestId": request["id"],
+        "runId": new_database_id(), "agent": agent, "taskGoal": "work",
+        "_runRequestId": request["id"], **command_fields,
     }
     registry.daemon_store.update_run_request(request["id"], {
         "currentCommandId": command["id"], "currentRunId": command["runId"],
@@ -62,7 +63,7 @@ def _dispatched_run(app, session_id: str) -> dict:
     registry.daemon_store.enqueue_command("sbx_alice", command)
     registry.daemon_store.take_queued_commands("sbx_alice", lease_seconds=60)
     SessionController(app.state.session_store).record_agent_started(session_id, {
-        "runId": command["runId"], "agent": "claude",
+        "runId": command["runId"], "agent": agent,
     })
     return command
 
@@ -75,7 +76,7 @@ def _ask(client: TestClient, command: dict, **request: object) -> None:
             "commandId": command["id"],
             "sessionId": command["sessionId"],
             "runId": command["runId"],
-            "agent": "claude",
+            "agent": command["agent"],
             "request": {
                 "id": REQUEST_ID,
                 "toolName": "Bash",
@@ -375,6 +376,109 @@ def _thread(client: TestClient, session_id: str) -> dict:
 def _prompt_notices(client: TestClient) -> list[dict]:
     inbox = client.get("/api/v1/notifications").json()
     return [item for item in inbox["notifications"] if item["kind"] == "permission_requested"]
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex", "opencode", "pi"])
+def test_thread_owner_switches_mode_inside_a_run(monkeypatch, agent) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id, agent)
+        endpoint = f"/api/v1/threads/{session_id}/permission-mode"
+        question = "perm_1111111111111111"
+        later = "perm_2222222222222222"
+        resumed = "perm_3333333333333333"
+
+        assert _thread(client, session_id)["execution"]["permissionMode"] == "ask"
+        _ask(client, command)
+        _ask(client, command, id=question, toolName="Question", questions=QUESTIONS)
+        assert _poll(client, session_id).json() == {"status": "pending"}
+        switched = client.put(endpoint, json={"mode": "yolo"})
+        assert switched.status_code == 200, switched.text
+        assert switched.json()["permissionMode"] == "yolo"
+        assert _poll(client, session_id).json() == {"status": "allow"}
+        assert _poll(client, session_id, question).json() == {"status": "pending"}
+
+        _ask(client, command, id=later)
+        _ask(client, command, id=later)
+        assert _poll(client, session_id, later).json() == {"status": "allow"}
+        assert {notice["data"]["requestId"] for notice in _prompt_notices(client)} == {REQUEST_ID, question}
+        thread = _thread(client, session_id)
+        [mode_event] = [item for item in thread["events"] if item["type"] == "session.permission_mode"]
+        assert mode_event["actorUserId"] == thread["ownerUserId"]
+        decisions = [item for item in thread["events"] if item["type"] == "agent.permission_resolved"]
+        assert [(item["requestId"], item["permissionMode"]) for item in decisions] == [
+            (REQUEST_ID, "yolo"), (later, "yolo"),
+        ]
+        assert decisions[0]["actorUserId"] == thread["ownerUserId"]
+        assert client.put(endpoint, json={"mode": "yolo"}).json()["events"] == thread["events"]
+
+        assert client.put(endpoint, json={"mode": "ask"}).status_code == 200
+        _ask(client, command, id=resumed)
+        assert _poll(client, session_id, resumed).json() == {"status": "pending"}
+        assert _poll(client, session_id, later).json() == {"status": "allow"}
+        [summary] = client.get("/api/v1/threads?view=summary").json()["sessions"]
+        assert summary["permissionMode"] == "ask"
+        assert summary["execution"]["permissionMode"] == "ask"
+
+
+def test_thread_ask_overrides_the_inherited_task_yolo_and_requires_its_owner(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id, _permissionMode="yolo")
+        endpoint = f"/api/v1/threads/{session_id}/permission-mode"
+        thread = _thread(client, session_id)
+        assert "permissionMode" not in thread
+        assert thread["execution"]["permissionMode"] == "yolo"
+        assert TestClient(app).put(endpoint, json={"mode": "ask"}, headers=NODE_AUTH).status_code == 401
+        assert client.post("/api/v1/admin/accounts", json={
+            "username": "alice", "email": "alice@example.com", "password": "kestrel-vault-8820", "role": "user",
+        }).status_code == 201
+        other = TestClient(app)
+        assert other.post("/api/v1/auth/login", json={
+            "username": "alice", "password": "kestrel-vault-8820",
+        }).status_code == 200
+        assert other.put(endpoint, json={"mode": "ask"}).status_code == 403
+        assert client.put(endpoint, json={"mode": "trusted"}).status_code == 400
+
+        _ask(client, command)
+        assert _poll(client, session_id).json() == {"status": "allow"}
+        assert client.put(endpoint, json={"mode": "ask"}).json()["permissionMode"] == "ask"
+        next_request = "perm_4444444444444444"
+        _ask(client, command, id=next_request)
+        assert _poll(client, session_id, next_request).json() == {"status": "pending"}
+
+
+def test_thread_mode_and_pending_approvals_commit_together(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app, raise_server_exceptions=False)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        _ask(client, _dispatched_run(app, session_id))
+        endpoint = f"/api/v1/threads/{session_id}/permission-mode"
+        append_event = app.state.session_store.append_event
+
+        def fail_resolution(session_id, event, **kwargs):
+            if event["type"] == "agent.permission_resolved":
+                raise RuntimeError("interrupted automatic approval write")
+            return append_event(session_id, event, **kwargs)
+
+        with monkeypatch.context() as failure:
+            failure.setattr(app.state.session_store, "append_event", fail_resolution)
+            assert client.put(endpoint, json={"mode": "yolo"}).status_code == 500
+        assert "permissionMode" not in _thread(client, session_id)
+        assert _poll(client, session_id).json() == {"status": "pending"}
+        assert client.put(endpoint, json={"mode": "yolo"}).json()["permissionMode"] == "yolo"
+        assert _poll(client, session_id).json() == {"status": "allow"}
 
 
 def test_always_allow_answers_later_prompts_for_that_tool_in_the_thread(monkeypatch) -> None:

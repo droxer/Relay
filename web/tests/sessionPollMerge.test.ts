@@ -96,6 +96,15 @@ describe("session poll merging", () => {
     assert.equal(updated.updatedAt, "2026-06-20T00:00:03Z");
     assert.equal(updated.events.length, 2);
   });
+  it("preserves the summary permission during replay and applies a newer permission in the same batch", () => {
+    const [observed] = mergeSessionSummaries([], [summary({ eventCount: 1, permissionMode: "ask" })]);
+    const updated = applySessionEventsUnchecked(observed, [
+      { id: "old", type: "session.permission_mode", mode: "yolo", actorUserId: "owner", sessionId: "ses_1", timestamp: "2026-06-20T00:00:01Z" },
+      { id: "new", type: "session.permission_mode", mode: "yolo", actorUserId: "owner", sessionId: "ses_1", timestamp: "2026-06-20T00:00:03Z" },
+    ]);
+    assert.equal(applySessionEventsUnchecked(observed, [updated.events[0]]).permissionMode, "ask");
+    assert.equal(updated.permissionMode, "yolo");
+  });
   it("retains newer streamed outcomes and clears the old outcome when execution resumes", () => {
     const current = session({ status: "completed", workOutcome: "blocked", finalOutcome: "Old blocker", events: [
       { id: "ended", type: "session.completed", sessionId: "ses_1", timestamp: "now", outcome: "Needs input", workOutcome: "blocked" },
@@ -146,13 +155,23 @@ describe("session poll merging", () => {
   });
 
   it("clears the trailing mark when a fetched snapshot replaces the session", () => {
-    const polled = mergeSessionSummaries([session()], [summary({ eventCount: 2 })]);
-    const snapshot = session({ events: [
-      { id: "e1", type: "session.status", status: "waiting_for_human", phase: "feedback", sessionId: "ses_1", timestamp: "2026-06-20T00:00:01Z" },
+    const polled = mergeSessionSummaries([session()], [summary({ eventCount: 2, permissionMode: "ask" })]);
+    const snapshot = session({ permissionMode: "ask", events: [
+      { id: "e1", type: "session.permission_mode", mode: "ask", actorUserId: "owner", sessionId: "ses_1", timestamp: "2026-06-20T00:00:01Z" },
       { id: "e2", type: "session.status", status: "running", phase: "pi:action", sessionId: "ses_1", timestamp: "2026-06-20T00:00:02Z" },
     ] });
     const [refetched] = mergeSessionSnapshotIntoSessions(polled, snapshot);
     assert.equal(sessionTrailsSummary(refetched), false);
+  });
+
+  it("keeps the newer permission mode when an earlier detail or summary returns late", () => {
+    const polled = mergeSessionSummaries([], [summary({ eventCount: 2, permissionMode: "ask" })]);
+    const earlier = session({ permissionMode: "yolo", events: [
+      { id: "e1", type: "session.permission_mode", mode: "yolo", actorUserId: "owner", sessionId: "ses_1", timestamp: "now" },
+    ] });
+
+    assert.equal(mergeSessionSnapshotIntoSessions(polled, earlier)[0].permissionMode, "ask");
+    assert.equal(mergeSessionSummaries(polled, [summary({ eventCount: 1, permissionMode: "yolo" })])[0].permissionMode, "ask");
   });
 
   it("inflates a newly discovered summary until its detail is fetched", () => {

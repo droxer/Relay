@@ -10,7 +10,7 @@ import {
   postJsonResponse,
   postJsonRequest,
   postJsonWithRetry,
-  getJson,
+  isTransientStatus,
   eventPostRetryLogger,
   delay,
   backendReconnectDelayMs,
@@ -351,7 +351,8 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
   const rawFetch: typeof fetch = async (url, init) => {
     const path = new URL(typeof url === 'string' ? url : url instanceof URL ? url : url.url).pathname;
     const batch = path.endsWith('/reports');
-    const channel = path.endsWith('/commands') ? 'poll' : path.endsWith('/events') || batch ? 'output' : path.endsWith('/heartbeat') ? 'heartbeat' : path.endsWith('/daemon-node-registrations') ? 'registration' : undefined;
+    // Poll and heartbeat health depend on their complete responses and retry policy.
+    const channel = path.endsWith('/events') || batch ? 'output' : path.endsWith('/daemon-node-registrations') ? 'registration' : undefined;
     try {
       const response = await input.fetchFn(url, init);
       if (channel) observe(() => {
@@ -364,8 +365,7 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
             (response.headers.get('X-Relay-Report-Id') === headers.get('X-Relay-Report-Id') && response.headers.get('X-Relay-Report-Digest') === headers.get('X-Relay-Report-Digest'));
           if (verified) monitor?.success(channel); else monitor?.failure(channel);
         }
-        else if (response.status >= 500 || [408, 429].includes(response.status)) monitor?.failure(channel);
-        else if (channel !== 'output' && [401, 410].includes(response.status)) monitor?.cause('revoked', true);
+        else if (isTransientStatus(response.status)) monitor?.failure(channel);
       });
       return response;
     } catch (error) {
@@ -377,7 +377,7 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
   // response or a 401/410 rejection. Registration alone cannot renew a run.
   let backendUnreachable = false;
   let heartbeatFeatures = new Set<DaemonNodeHeartbeatFeature>();
-  let pollInFlightSince: number | undefined;
+  let pollRenewsUntil = 0;
   let sendDrainingHeartbeat: (() => Promise<void>) | undefined;
   let sendStoppedHeartbeat: (() => Promise<void>) | undefined;
   const configuredUnreachableGraceMs = options.unreachableGraceMs
@@ -752,13 +752,17 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
   // resume from sleep ends both waits, so recovery never sits out a delay.
   const reconnectWake = new Wakeup();
   const beatWake = new Wakeup();
+  const resumePoll = new Error("Computer resumed after a pause; reconnecting.");
   let stopWakeWatch: (() => void) | undefined;
   try {
     const reconnectControl = {
       signal: runtimeSignal,
       shouldStop: () => stopping,
-      onTransientFailure: () => { backendUnreachable = true; if (heartbeatFeatures.has("durable-reports")) pollAbort?.abort("Transport recovery probe superseded a stalled poll."); },
-      onCredentialRejected: () => { backendUnreachable = false; },
+      onTransientFailure: () => { backendUnreachable = true; },
+      onCredentialRejected: () => {
+        backendUnreachable = false;
+        observe(() => monitor?.cause("revoked", true));
+      },
       wake: reconnectWake,
       confirmUnauthorized: true,
     };
@@ -769,7 +773,7 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
       if (stopping || runtimeSignal.aborted) return;
       logger.info("computer resumed after a pause; reconnecting now", { sandboxId, pausedMs });
       recoveryPollPending = true;
-      pollAbort?.abort("Computer resumed after a pause; reconnecting.");
+      pollAbort?.abort(resumePoll);
       reconnectWake.notify();
       beatWake.notify();
     });
@@ -858,8 +862,7 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
     // leases from it, a beat would only repeat what the poll already says.
     // A poll held past its own wait is not trusted to be doing that.
     const pollRenewsLiveness = (): boolean => backendHeartbeatSupports("poll-liveness")
-      && pollInFlightSince !== undefined
-      && performance.now() - pollInFlightSince < commandPollWaitMs;
+      && performance.now() < pollRenewsUntil;
     const renewExecutionLeases = (settings: DaemonNodeHeartbeatSettings | undefined, sentAt: number): void => {
       // A run the backend already settled while this daemon could not verify
       // its exit was reported gone by a person; only that frees its slot.
@@ -896,7 +899,8 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
           // A beat gets one interval, never the shared request timeout: a
           // request that black-holes must not hold the schedule past the
           // liveness window it exists to renew.
-          AbortSignal.any([signal, AbortSignal.timeout(heartbeatRequestTimeoutMs())]),
+          signal,
+          heartbeatRequestTimeoutMs(),
         );
         updateHeartbeatSettings(validHeartbeatSettings(response.heartbeat));
         if (response.heartbeat.commandLeases) {
@@ -906,11 +910,8 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
           for (const { command } of renewing) executionWatchdog.renew(command.id,
             commandLeaseSeconds * 1000 - (performance.now() - sentAt));
         }
-        if (backendUnreachable && heartbeatFeatures.has('durable-reports')) {
-          recoveryPollPending = true;
-          pollAbort?.abort('Healthy heartbeat requests an immediate recovery poll.');
-        }
-        // The backend answered: a poll loop waiting out a long backoff retries now.
+        // Wake a retry that is already waiting. An open poll may be about to
+        // deliver a leased command and keeps its own deadline.
         if (backendUnreachable) reconnectWake.notify();
         backendUnreachable = false;
       } catch (error) {
@@ -1010,6 +1011,7 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
       let nextBeatAt = performance.now() + heartbeatPeriodMs();
       let unauthorizedBeats = 0;
       let failedBeats = 0;
+      let consecutiveTransientFailures = 0;
       while (!stopping && !runtimeSignal.aborted) {
         await beatWake.wait(Math.max(0, nextBeatAt - performance.now()), runtimeSignal);
         nextBeatAt = performance.now() + jittered(heartbeatPeriodMs());
@@ -1017,12 +1019,23 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
         if (pollRenewsLiveness() && !heartbeatFeatures.has("durable-reports")) continue;
         try {
           await sendHeartbeat();
+          observe(() => monitor?.success("heartbeat"));
+          consecutiveTransientFailures = 0;
           if (failedBeats > 0) logger.info("liveness heartbeat recovered", { sandboxId, missedBeats: failedBeats });
           unauthorizedBeats = 0;
           failedBeats = 0;
         } catch (error) {
           if (stopping || runtimeSignal.aborted) return;
           failedBeats += 1;
+          const transient = !(error instanceof DaemonHttpError) || isTransientStatus(error.status);
+          // Preserve grace for leases that may expire before the next beat.
+          if (transient) reconnectControl.onTransientFailure();
+          consecutiveTransientFailures = transient ? consecutiveTransientFailures + 1 : 0;
+          // Let the next scheduled beat confirm a transient failure before
+          // publishing a change in heartbeat health.
+          if (consecutiveTransientFailures >= HEARTBEAT_TRANSIENT_FAILURE_THRESHOLD) {
+            observe(() => monitor?.failure("heartbeat"));
+          }
           if (error instanceof DaemonHttpError && (error.status === 401 || error.status === 410)) {
             // Gone is the backend's own tombstone. A lone 401 may be an auth
             // proxy or a lagging replica, and stopping is permanent: ask again.
@@ -1036,11 +1049,6 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
             throw error;
           }
           unauthorizedBeats = 0;
-          const transient = !(error instanceof DaemonHttpError)
-            || error.status >= 500 || error.status === 408 || error.status === 429;
-          // Only an unreachable backend starts an execution grace; a refusal
-          // the backend itself answered is logged and tried again next beat.
-          if (transient) reconnectControl.onTransientFailure();
           if (error instanceof DaemonHttpError) nextBeatAt = Math.max(nextBeatAt, performance.now() + error.retryAfterMs);
           logger.warn("liveness heartbeat failed; next beat retries", {
             sandboxId, error: transportErrorDetail(error),
@@ -1132,7 +1140,39 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
     // not about its credential (a proxy's 403/404 while the backend deploys)
     // is retried for a deploy's length: failing at once would stop every run
     // over one answer. One that outlasts the grace is still fatal.
-    const pollControl = { ...reconnectControl, rejectionGraceMs: options.rejectionGraceMs ?? DEFAULT_REJECTION_GRACE_MS };
+    const pollControl = {
+      ...reconnectControl,
+      rejectionGraceMs: options.rejectionGraceMs ?? DEFAULT_REJECTION_GRACE_MS,
+      retryImmediately: (error: unknown) => error === resumePoll,
+      onTransientFailure: () => {
+        reconnectControl.onTransientFailure();
+        recoveryPollPending = true;
+        observe(() => monitor?.failure("poll"));
+      },
+    };
+    const requestCommands = async (url: string, startedAt: number, waitMs: number) => {
+      pollAbort = new AbortController();
+      pollRenewsUntil = startedAt + waitMs;
+      const signal = requestSignal(AbortSignal.any([runtimeSignal, pollAbort.signal]),
+        waitMs + COMMAND_POLL_RESPONSE_TIMEOUT_MS);
+      try {
+        const response = await fetchFn(url, { headers: { Authorization: `Bearer ${token}` }, signal });
+        // The server has left the long-poll loop once headers arrive.
+        pollRenewsUntil = 0;
+        if (!response.ok) {
+          const detail = `Command poll failed: ${response.status} ${await responseErrorDetail(response)}`;
+          throw new DaemonHttpError(detail, response.status, retryAfterMs(response.headers.get("Retry-After")));
+        }
+        return await response.json() as { commands?: DaemonNodeCommand[]; heartbeat?: DaemonNodeHeartbeatSettings; processingMs?: number };
+      } catch (error) {
+        // Fetch can report a generic abort while reading a response body.
+        if (signal.aborted && !(error instanceof DaemonHttpError)) throw signal.reason;
+        throw error;
+      } finally {
+        pollRenewsUntil = 0;
+        pollAbort = undefined;
+      }
+    };
     let pollRejections = 0;
     let pollRejectionLoggedAt: number | undefined;
     while (!stopping) {
@@ -1142,8 +1182,7 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
         continue;
       }
       let completedLongPoll = false;
-      let commandPollStartedAt = performance.now();
-      let leaseObservationStartedAt = commandPollStartedAt;
+      let leaseObservationStartedAt = performance.now();
       let pollHeartbeat: DaemonNodeHeartbeatSettings | undefined;
       const body = await withBackendReconnect(async () => {
         if (stopping) return { commands: [] };
@@ -1156,31 +1195,21 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
         if (runtimeRefreshDue && (canProbeNow || supervisor.size === 0) && !backgroundRuntimeRefresh) {
           backgroundRuntimeRefresh = refreshIdleRuntimesInBackground().finally(() => { backgroundRuntimeRefresh = undefined; });
         }
-        pollAbort = new AbortController();
-        commandPollStartedAt = performance.now();
-        pollInFlightSince = commandPollStartedAt;
-        const response = await getJson(
-          fetchFn,
-          daemonCommandsUrl(backendUrl, sandboxId, {
-            waitSeconds: recoveryPollPending ? 0 : commandPollWaitMs / 1000,
+        const waitMs = recoveryPollPending ? 0 : commandPollWaitMs;
+        const commandPollStartedAt = performance.now();
+        let parsed: Awaited<ReturnType<typeof requestCommands>>;
+        try {
+          parsed = await requestCommands(daemonCommandsUrl(backendUrl, sandboxId, {
+            waitSeconds: waitMs / 1000,
             admitRuns: storageDecision.admit && (canProbeNow || !backgroundRuntimeRefresh),
             leaseSeconds: commandLeaseSeconds,
             activeCommandLeases: activeCommandLeases(),
-          }),
-          token,
-          AbortSignal.any([runtimeSignal, pollAbort.signal]),
-          commandPollWaitMs + 2000,
-        ).finally(() => { pollInFlightSince = undefined; pollAbort = undefined; });
-        if (!response.ok) {
-          const detail = `Command poll failed: ${response.status} ${await responseErrorDetail(response)}`;
-          // A healthy registration route cannot renew execution ownership.
-          // Retry transient poll failures directly so they retain outage grace.
-          if (response.status >= 500 || response.status === 408 || response.status === 429) {
-            throw new DaemonHttpError(detail, response.status, retryAfterMs(response.headers.get("Retry-After")));
-          }
-          // Gone is permanent: use the same clean shutdown as a deleted-node
-          // registration instead of trying to bring the node back.
-          if (response.status === 410 || response.status === 401) throw new DaemonHttpError(detail, response.status, retryAfterMs(response.headers.get("Retry-After")));
+          }), commandPollStartedAt, waitMs);
+        } catch (error) {
+          // Retry network errors and transient responses on the command
+          // endpoint itself. Credential rejection has its own confirmation.
+          if (!(error instanceof DaemonHttpError) || isTransientStatus(error.status)
+            || error.status === 410 || error.status === 401) throw error;
           // The backend may have restarted with fresh state or demoted this node;
           // re-register before treating the rejection as fatal.
           pollRejections += 1;
@@ -1188,7 +1217,7 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
             || performance.now() - pollRejectionLoggedAt >= POLL_REJECTION_LOG_INTERVAL_MS;
           if (logRejection) {
             pollRejectionLoggedAt = performance.now();
-            logger.warn("command poll rejected; re-registering", { sandboxId, error: detail, rejections: pollRejections });
+            logger.warn("command poll rejected; re-registering", { sandboxId, error: error.message, rejections: pollRejections });
           }
           await register();
           lastRegisteredAt = Date.now();
@@ -1197,7 +1226,6 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
         }
         pollRejections = 0;
         pollRejectionLoggedAt = undefined;
-        const parsed = await response.json() as { commands?: DaemonNodeCommand[]; heartbeat?: DaemonNodeHeartbeatSettings; processingMs?: number };
         // Exclude the backend's long-poll wait from transport latency. Otherwise
         // a new one-second lease returned after a 25-second poll looks expired.
         const elapsed = performance.now() - commandPollStartedAt;
@@ -1208,7 +1236,8 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
         renewExecutionLeases(pollHeartbeat, leaseObservationStartedAt);
         backendUnreachable = false;
         recoveryPollPending = false;
-        completedLongPoll = commandPollWaitMs > 0 && elapsed >= commandPollWaitMs;
+        observe(() => monitor?.success("poll"));
+        completedLongPoll = waitMs > 0 && elapsed >= waitMs;
         return parsed;
       }, logger, { sandboxId, what: "command poll" }, pollControl);
       if (stopping) break;
@@ -1956,6 +1985,8 @@ const CREDENTIAL_CONFIRM_BEAT_MS = 1_000;
 const POLL_REJECTION_LOG_INTERVAL_MS = 30_000;
 const DEFAULT_COMMAND_POLL_WAIT_MS = 25_000;
 const MAX_COMMAND_POLL_WAIT_MS = 25_000;
+const COMMAND_POLL_RESPONSE_TIMEOUT_MS = 2_000;
+const HEARTBEAT_TRANSIENT_FAILURE_THRESHOLD = 2;
 const DEFAULT_LIVENESS_HEARTBEAT_MS = 6_000;
 // A beat's own request timeout is its period, but never so short that a
 // test-sized interval or a slow first byte fails every beat.
