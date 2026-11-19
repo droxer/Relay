@@ -4,6 +4,7 @@ import {
   AdminDelete,
   ICON,
   NavMore,
+  NavRoutine,
 } from "./icons";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
@@ -171,7 +172,19 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
                  tinted mark: spelling it twice cost the title its width. */
               : <ThreadStatusBadge session={session} reading={reading} compact iconOnly={Boolean(subline && status)} />}
             <span className="conversation-name">
-              {item.origin ? <span className="conversation-ref tnum">{item.origin.ref}</span> : null}
+              {item.origin ? (
+                /* An automation run carries the Automations nav glyph on its
+                   ref: an occurrence is numbered like any issue (`#12`), so
+                   without it a scheduled run reads as hand-filed work. */
+                <span
+                  className="conversation-ref tnum"
+                  data-kind={item.origin.kind}
+                  title={item.origin.kind === "routine" ? originKind : undefined}
+                >
+                  {item.origin.kind === "routine" ? <NavRoutine size={ICON.xs} aria-hidden="true" /> : null}
+                  {item.origin.ref}
+                </span>
+              ) : null}
               <strong title={label}>{label}</strong>
               {/* A property of the thread itself, so it rides the title and
                   survives the hover swap that hides the timestamp. */}

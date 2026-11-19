@@ -398,6 +398,19 @@
   color: var(--ink-3);
 }
 
+/* An automation run's ref leads with the Automations glyph, so scheduled
+   work reads apart from hand-filed issues by shape, not hue. */
+.conversation-ref[data-kind="routine"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--ink-2);
+}
+
+.conversation-ref[data-kind="routine"] svg {
+  flex: none;
+}
+
 .conversation-topline {
   min-width: 0;
   display: flex;
