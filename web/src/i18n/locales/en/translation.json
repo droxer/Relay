@@ -3774,10 +3774,32 @@
       "reconnect_required": "Reconnect needed",
       "disconnected": "Disconnected"
     },
+    "mail_consent_title": "Connect {{provider}}",
+    "continue_to_provider": "Continue to {{provider}}",
+    "mail_consent": "Your provider grants read access to the mailbox. Relay limits work to the Inbox and the actions you allow.",
+    "mail_shared_with_agent": "Mail data you allow is shared with the Agent runtime and its model provider for this work. The Agent may quote it in the work history.",
+    "inbox": "Inbox",
+    "organization": "Organization {{tenant}}",
+    "authorization_result": {
+      "connected": "Connected as {{identity}}.",
+      "cancelled": "Mailbox authorization was cancelled.",
+      "failed": "The mailbox could not be connected. Try again.",
+      "organization_policy": "Your organization blocked access. Ask your administrator to allow Relay.",
+      "mailbox_unavailable": "This account has no supported mailbox. Choose a different account.",
+      "identity_mismatch": "Choose the original mailbox to reconnect it, or add this mailbox as a new connection.",
+      "offline_access_required": "Relay could not obtain ongoing mailbox access. Try authorizing again.",
+      "permissions_required": "Allow read access when authorizing the mailbox."
+    },
     "provider_hint": {
+      "gmail": "Read messages from your Inbox.",
+      "outlook": "Read messages from your Inbox.",
       "github": "Authorize GitHub repository access. Relay exposes issue reads only for the repositories you choose."
     },
     "action": {
+      "gmail_list_messages": "List messages",
+      "gmail_get_message": "Read message bodies",
+      "outlook_list_messages": "List messages",
+      "outlook_get_message": "Read message bodies",
       "github_list_issues": "Read issues"
     },
     "targets": {

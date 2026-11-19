@@ -365,7 +365,9 @@ _Avoid_: Sync, mirror, GitHub task
 **Connection**:
 A User-owned authorization to use one external service identity and
 its permitted resources. Connecting a service makes it available for explicit
-use by work; it does not give every Agent access.
+use by work; it does not give every Agent access. A Gmail or Outlook Connection
+gives work read-only access to an external mailbox's Inbox through an explicit
+Connection Grant.
 _Avoid_: Integration (the existing administrative chat-client configuration),
 Account (the User's Relay login credential)
 

@@ -6,11 +6,19 @@ the resources and actions a Thread, Task, or Automation may use. Open
 Automation’s **Connections** section. The chat input box does not expose a
 Connections picker. Multiple external accounts are supported.
 
-GitHub is the only supported provider for now:
-
 | Service | Actions | Resources |
 | --- | --- | --- |
 | GitHub | Read up to 50 issues per call; optional open/closed/all filter | Selected repositories |
+| Gmail | List messages and optionally read message bodies | Inbox of a personal Gmail or Google Workspace mailbox |
+| Outlook | List messages and optionally read message bodies | Inbox of an Outlook.com or Microsoft 365 work/school mailbox |
+
+For Gmail and Outlook, choose the mailbox and Inbox in the work's **Connections**
+section. Grant **List messages** for sender, subject, received time, and unread
+status. Grant **Read message bodies** as well to let work retrieve the plain-text
+body. Mail data returned to an Agent is visible to its runtime and model provider
+and can appear in work history or runtime session logs. The email tools support
+read-only Inbox access. Sending, replying, attachments, and mail triggers are
+outside the available access.
 
 Agents receive a per-run MCP tool through Codex or Claude. Other runtimes are
 refused when work selects Connections. Computers must advertise the
@@ -42,18 +50,19 @@ Set `RELAY_CONNECTIONS_ENCRYPTION_KEY` to a Fernet key in your secret manager.
 Keep it stable across restarts. Changing it without migrating encrypted records
 requires Users to reconnect. Never commit this key or provider client secrets.
 
-For each service to enable, configure all three settings:
+For each service to enable, set `CLIENT_ID`, `CLIENT_SECRET`, and `CALLBACK_URL`
+with the provider's environment variable prefix. Register the exact callback URL
+with the provider. Use the deployment's public HTTPS origin. HTTP is accepted
+only for localhost development. An incomplete or invalid configuration fails
+startup. Services without configuration appear unavailable in Settings.
+Exclude OAuth callback query strings from proxy access logs as they contain
+short-lived authorization codes.
 
-```text
-RELAY_CONNECTIONS_GITHUB_CLIENT_ID
-RELAY_CONNECTIONS_GITHUB_CLIENT_SECRET
-RELAY_CONNECTIONS_GITHUB_CALLBACK_URL
-```
-
-The callback URL must be the deployment's public HTTPS origin followed by
-`/api/v1/connections/callback/github`. HTTP is accepted only for localhost
-development. Register the exact URL with GitHub. An incomplete or invalid
-configuration fails startup; GitHub appears unavailable until configured.
+| Service | Environment variable prefix | Callback path |
+| --- | --- | --- |
+| GitHub | `RELAY_CONNECTIONS_GITHUB_` | `/api/v1/connections/callback/github` |
+| Gmail | `RELAY_CONNECTIONS_GMAIL_` | `/api/v1/connections/callback/gmail` |
+| Outlook | `RELAY_CONNECTIONS_OUTLOOK_` | `/api/v1/connections/callback/outlook` |
 
 Use a GitHub **OAuth App** for the new provider-neutral flow. It requests
 `read:user repo offline_access`; GitHub's repository consent is broader than
@@ -61,6 +70,22 @@ Relay's exposed tools. Relay permits only issue reads on explicitly selected
 repositories. This is separate from the older, disabled Account GitHub App
 installation flow and never reuses its saved credentials. See
 [GitHub's authorization documentation](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps).
+
+For **Gmail**, enable the Gmail API in Google Cloud and register a web OAuth
+client. Relay requests `openid email` and `gmail.readonly` with offline access.
+Complete restricted-scope verification and the required server security
+assessment before public enablement. Review the transfer of Gmail data to each
+enabled runtime and model provider under Google's Limited Use requirements.
+[Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes),
+[Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy).
+
+For **Outlook**, register a Microsoft Entra web application for organizational
+directories and personal Microsoft accounts. Configure Microsoft Graph delegated
+`Mail.Read`. Relay also requests `openid profile offline_access` for identity and
+token refresh. An organization can require administrator approval. Verify that
+the test identity has a mailbox on the global Microsoft Graph service.
+[Microsoft supported account types](https://learn.microsoft.com/en-us/entra/identity-platform/v2-supported-account-types),
+[Microsoft Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread).
 
 ## Work and recovery
 
@@ -77,8 +102,7 @@ installation flow and never reuses its saved credentials. See
   to a replaced Automation Grant require a new Automation occurrence to use
   the new access. Submitted Grant IDs and revisions are checked for stale edits.
 - Schedules, Relay events, generic webhooks, and Run now can all use Connections.
-  Native provider-event subscriptions are future work; connecting GitHub does
-  not create a service-event trigger.
+  Native provider-event subscriptions are future work.
 - Unavailable required access pauses an Automation before another occurrence is
   created. Reconnect the same external identity, then explicitly Resume. Resume
   checks access and uses the existing schedule cutoff instead of replaying

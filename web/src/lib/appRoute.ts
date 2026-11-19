@@ -2,6 +2,7 @@ import { shouldReloadOnNavigation } from "./buildFreshness.ts";
 import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
 import { DEFAULT_PROJECT_PAGE_TAB, PROJECT_PAGE_TAB_ALIASES, PROJECT_PAGE_TABS } from "./projectPage.ts";
+import { readConnectionResult } from "../domain-types/connections.ts";
 import {
   DEFAULT_ADMIN_SECTION,
   DEFAULT_SETTINGS_SECTION,
@@ -630,6 +631,13 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
   if (githubImportSurface || (head === "settings" && entityId === "account")) {
     const result = source.get("githubConnection");
     if (result && ["connected", "cancelled", "failed", "permissions"].includes(result)) target.set("githubConnection", result);
+  }
+  if (head === "settings" && entityId === "connections" && rest.length === 0) {
+    const outcome = readConnectionResult(source);
+    if (outcome) {
+      target.set("connectionResult", outcome.result);
+      if (outcome.id) target.set("connectionResultId", outcome.id);
+    }
   }
   const encoded = target.toString();
   return encoded ? `?${encoded}` : "";

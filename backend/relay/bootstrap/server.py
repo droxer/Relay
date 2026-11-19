@@ -1,6 +1,7 @@
 """Uvicorn process diagnostics; a signal is evidence, not a platform cause."""
 from __future__ import annotations
 
+import logging
 import os
 import signal
 import sys
@@ -37,14 +38,30 @@ class DiagnosticServer(uvicorn.Server):
         super().handle_exit(sig, frame)
 
 
+class ConnectionCallbackLogFilter(logging.Filter):
+    """Keep single-use OAuth codes and state out of Uvicorn access logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
+            path = args[2].partition("?")[0]
+            if path.startswith("/api/v1/connections/callback/"):
+                record.args = (*args[:2], path, *args[3:])
+        return True
+
+
 def run_server(app: Any, **options: Any) -> None:
     server = DiagnosticServer(uvicorn.Config(app, **options))
+    access_logger = logging.getLogger("uvicorn.access")
+    callback_filter = ConnectionCallbackLogFilter()
+    access_logger.addFilter(callback_filter)
     logger.info("Backend server process starting", **_process_fields())
     try:
         server.run()
     except KeyboardInterrupt:
         pass
     finally:
+        access_logger.removeFilter(callback_filter)
         logger.info("Backend server process exited", **_process_fields())
     # Match uvicorn.run: a failed ASGI startup must fail the container.
     if not server.started:

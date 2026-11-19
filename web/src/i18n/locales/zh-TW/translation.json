@@ -3704,10 +3704,32 @@
       "reconnect_required": "需要重新連線",
       "disconnected": "已斷開"
     },
+    "mail_consent_title": "連接 {{provider}}",
+    "continue_to_provider": "繼續前往 {{provider}}",
+    "mail_consent": "信箱服務會授予讀取整個信箱的權限。Relay 僅允許工作存取收件匣並執行你授權的操作。",
+    "mail_shared_with_agent": "你授權讀取的郵件資料會提供給執行此工作的 Agent 執行環境及其模型供應商。Agent 可能在工作記錄中引用這些內容。",
+    "inbox": "收件匣",
+    "organization": "組織 {{tenant}}",
+    "authorization_result": {
+      "connected": "已連接 {{identity}}。",
+      "cancelled": "已取消信箱授權。",
+      "failed": "無法連接信箱。請再試一次。",
+      "organization_policy": "你的組織已封鎖存取。請聯絡管理員，讓 Relay 取得存取權限。",
+      "mailbox_unavailable": "此帳號沒有支援的信箱。請選擇其他帳號。",
+      "identity_mismatch": "請選擇原本的信箱以重新連接，或將此信箱新增為連接。",
+      "offline_access_required": "Relay 無法取得持續存取信箱的權限。請重新授權。",
+      "permissions_required": "授權信箱時，請允許讀取郵件。"
+    },
     "provider_hint": {
+      "gmail": "讀取收件匣中的郵件。",
+      "outlook": "讀取收件匣中的郵件。",
       "github": "授權 GitHub 倉庫訪問。Relay 僅開放所選倉庫的議題讀取操作。"
     },
     "action": {
+      "gmail_list_messages": "列出郵件",
+      "gmail_get_message": "讀取郵件內文",
+      "outlook_list_messages": "列出郵件",
+      "outlook_get_message": "讀取郵件內文",
       "github_list_issues": "讀取議題"
     },
     "targets": {

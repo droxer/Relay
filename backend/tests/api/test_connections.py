@@ -1,12 +1,14 @@
 """Public connection routes authenticate, scope grants, and keep secrets private."""
 
+import json
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
 from cryptography.fernet import Fernet
 
-from relay.connections import providers
+from relay.connections import mail_oauth, providers
+from relay.core.connections import ConnectionConfig, PROVIDERS
 from relay.core.ids import new_database_id
 from relay.automations.service import automation_service
 from datetime import datetime, UTC
@@ -76,12 +78,93 @@ def test_grants_require_real_owned_targets(context):
     assert client.put("/api/v1/connection-grants/computer/missing", json={"grants": []}).status_code == 400
 
 
-def test_catalog_advertises_only_configured_providers(context):
+def test_catalog_distinguishes_configured_and_unconfigured_providers(context):
     _app, client, _project = context
     response = client.get("/api/v1/connection-providers")
     assert response.status_code == 200
     assert {p["id"]: p["configured"] for p in response.json()["providers"]} == {
-        "github": True}
+        "github": True, "gmail": False, "outlook": False}
+
+
+@pytest.mark.parametrize("provider", ["gmail", "outlook"])
+def test_mail_callback_and_run_broker(context, monkeypatch, provider):
+    app, client, project = context
+    callback_path = f"/api/v1/connections/callback/{provider}"
+    app.state.connections.configs[provider] = ConnectionConfig(provider, "client", "secret", "https://relay.example" + callback_path)
+    monkeypatch.setattr(mail_oauth, "verify_identity", lambda *_:
+        {"subject": "mailbox-1", "identity": "mail@example.com", "tenant": "tenant-1"})
+
+    def reply(request):
+        if request.method == "POST":
+            return httpx.Response(200, json={"access_token": "private-access", "refresh_token": "private-refresh",
+                "expires_in": 3600, "scope": PROVIDERS[provider].required_scope})
+        path = request.url.path
+        if path.endswith("/mailFolders/inbox"):
+            return httpx.Response(200, json={"id": "inbox-folder"})
+        if provider == "outlook" and path.endswith(("/messages", "/messages/msg1")):
+            item = {"id": "msg1", "parentFolderId": "inbox-folder", "subject": "Meeting",
+                "receivedDateTime": "2026-11-19T00:00:00Z", "isRead": False,
+                "body": {"contentType": "text", "content": "Private agenda"}}
+            return httpx.Response(200, json={"value": [item]} if path.endswith("/messages") else item)
+        if path.endswith("/messages"):
+            return httpx.Response(200, json={"messages": [{"id": "msg1"}]})
+        if path.endswith("/messages/msg1"):
+            return httpx.Response(200, json={"id": "msg1", "labelIds": ["INBOX"], "internalDate": "1710000000000",
+                "payload": {"mimeType": "text/plain", "headers": [{"name": "Subject", "value": "Meeting"}],
+                    "body": {"data": "UHJpdmF0ZSBhZ2VuZGE"}}})
+        raise AssertionError(str(request.url))
+
+    monkeypatch.setattr(providers, "transport", httpx.MockTransport(reply))
+
+    def start_callback(**params):
+        start = client.post("/api/v1/connections/authorizations", json={"provider": provider})
+        assert start.status_code == 200, start.text
+        state = parse_qs(urlsplit(start.json()["url"]).query)["state"][0]
+        return client.get(callback_path, params={"state": state, **params}, follow_redirects=False)
+
+    cancelled = start_callback(error="access_denied")
+    assert cancelled.headers["location"] == "/settings/connections?connectionResult=cancelled"
+    blocked = start_callback(error="admin_policy_enforced", error_description="Provider-only text")
+    assert blocked.headers["location"] == "/settings/connections?connectionResult=organization_policy"
+    callback = start_callback(code="oauth-code")
+    assert callback.status_code == 303, callback.text
+    [connection] = client.get("/api/v1/connections").json()["connections"]
+    connection_id = connection["id"]
+    assert callback.headers["location"] == f"/settings/connections?connectionResult=connected&connectionResultId={connection_id}"
+    assert "private-" not in str(connection)
+
+    grant = {"connectionId": connection_id, "resources": ["inbox"], "actions": list(PROVIDERS[provider].actions)}
+    node = app.state.registry.monitor_nodes()[0]
+    app.state.registry.register({**node, "sandboxId": node["id"], "token": "token_node_alice_github",
+        "protocolVersion": 2, "supportedAgents": ["codex", "claude"],
+        "capabilities": [*node["capabilities"], "service-connections", "work-results", "task-workspaces"]})
+    thread = client.post("/api/v1/agent-runs", json={"taskGoal": "Summarize Inbox", "projectId": project["id"],
+        "connectionGrants": [grant]})
+    assert thread.status_code == 202, thread.text
+    lease = next(row for row in app.state.daemon_store.take_queued_commands(node["id"]) if row["command"].get("connections"))
+    credential = client.post(f"/api/v1/daemon-nodes/{node['id']}/commands/{lease['id']}/connections",
+        json={"leaseId": lease["leaseId"]}, headers={"Authorization": "Bearer token_node_alice_github"})
+    assert credential.status_code == 200, credential.text
+    headers = {"Authorization": f"Bearer {credential.json()['token']}"}
+
+    def tool(method, params=None):
+        response = client.post("/api/v1/connection-tools", headers=headers,
+            json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+        assert response.status_code == 200, response.text
+        return response.json()["result"]
+
+    def call(action, arguments):
+        return tool("tools/call", {"name": "connection_call", "arguments": {
+            "connectionId": connection_id, "resource": "inbox", "action": f"{provider}.{action}", "arguments": arguments}})
+
+    assert "receivedAfter" in tool("tools/list")["tools"][0]["description"]
+    listed = json.loads(call("list_messages", {})["content"][0]["text"])
+    assert "Private agenda" not in str(listed)
+    assert listed["messages"][0]["subject"] == "Meeting"
+    body = json.loads(call("get_message", {"messageId": listed["messages"][0]["id"]})["content"][0]["text"])
+    assert body["body"] == "Private agenda"
+    assert client.delete(f"/api/v1/connections/{connection_id}").status_code == 200
+    assert call("list_messages", {})["content"][0]["text"] == "connection_unavailable"
 
 
 def test_automation_occurrence_snapshots_grants_and_cannot_expand_them(context):

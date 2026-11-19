@@ -3704,10 +3704,32 @@
       "reconnect_required": "需要重新连接",
       "disconnected": "已断开"
     },
+    "mail_consent_title": "连接 {{provider}}",
+    "continue_to_provider": "继续前往 {{provider}}",
+    "mail_consent": "邮箱服务会授予读取整个邮箱的权限。Relay 仅允许工作访问收件箱并执行你授权的操作。",
+    "mail_shared_with_agent": "你授权读取的邮件数据会提供给执行此工作的 Agent 运行时及其模型供应商。Agent 可能在工作记录中引用这些内容。",
+    "inbox": "收件箱",
+    "organization": "组织 {{tenant}}",
+    "authorization_result": {
+      "connected": "已连接 {{identity}}。",
+      "cancelled": "已取消邮箱授权。",
+      "failed": "无法连接邮箱。请重试。",
+      "organization_policy": "你的组织阻止了访问。请让管理员允许 Relay 访问。",
+      "mailbox_unavailable": "此账号没有受支持的邮箱。请选择其他账号。",
+      "identity_mismatch": "请选择原邮箱重新连接，或将此邮箱添加为新连接。",
+      "offline_access_required": "Relay 无法获得持续的邮箱访问权限。请重新授权。",
+      "permissions_required": "授权邮箱时，请允许读取邮件。"
+    },
     "provider_hint": {
+      "gmail": "读取收件箱中的邮件。",
+      "outlook": "读取收件箱中的邮件。",
       "github": "授权 GitHub 仓库访问。Relay 仅开放所选仓库的议题读取操作。"
     },
     "action": {
+      "gmail_list_messages": "列出邮件",
+      "gmail_get_message": "读取邮件正文",
+      "outlook_list_messages": "列出邮件",
+      "outlook_get_message": "读取邮件正文",
       "github_list_issues": "读取议题"
     },
     "targets": {

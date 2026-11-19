@@ -30,13 +30,23 @@ class Provider:
     token_url: str
     scopes: str
     actions: tuple[str, ...]
+    required_scope: str
     pkce: bool = True
 
 
+MAIL_PROVIDERS = frozenset({"gmail", "outlook"})
+MAIL_AUTHORIZATION_VERSION = 1
+GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+OUTLOOK_READ_SCOPE = "https://graph.microsoft.com/Mail.Read"
+
 PROVIDERS = {
     "github": Provider("GitHub", "https://github.com/login/oauth/authorize",
-        "https://github.com/login/oauth/access_token", "read:user repo offline_access", ("github.list_issues",)),
-
+        "https://github.com/login/oauth/access_token", "read:user repo offline_access", ("github.list_issues",), "repo"),
+    "gmail": Provider("Gmail", "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token",
+        f"openid email {GMAIL_READ_SCOPE}", ("gmail.list_messages", "gmail.get_message"), GMAIL_READ_SCOPE),
+    "outlook": Provider("Outlook", "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+        "https://login.microsoftonline.com/common/oauth2/v2.0/token", f"openid profile offline_access {OUTLOOK_READ_SCOPE}",
+        ("outlook.list_messages", "outlook.get_message"), OUTLOOK_READ_SCOPE),
 }
 
 
