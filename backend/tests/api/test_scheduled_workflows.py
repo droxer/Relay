@@ -6,7 +6,7 @@ import pytest
 
 from automation_helpers import DAILY_TRIGGERS
 from relay.daemon_registry.dispatch.workflow_admission import workflow_request_id
-from test_task_workflows import take, task_workflow
+from test_task_workflows import start_task, take, task_workflow
 from test_team_workflows import workflow_world
 from test_workflow_progression import decision, finish
 
@@ -59,6 +59,55 @@ def test_scheduler_parks_a_gated_first_step_without_a_command(monkeypatch):
         response = client.post(f"/api/v1/threads/{session['id']}/workflow-decisions", json=decision(session, "approve"))
         assert response.status_code == 200, response.text
         assert len(take(app.state.registry, node)) == 1
+
+
+@pytest.mark.parametrize("entry", ["manual", "scheduler"])
+@pytest.mark.parametrize("limit", ["computer", "runtime"])
+def test_workflow_waits_for_execution_capacity_and_starts_automatically(monkeypatch, entry, limit):
+    monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "5")
+    with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
+        registry = app.state.registry
+        node = registry.register({
+            **node, "sandboxId": node["id"], "token": "token_node_here",
+            "protocolVersion": 2, "supportedAgents": ["codex", "claude"],
+            "maxConcurrentRuns": 1 if limit == "computer" else 3,
+            "executorCapabilities": [
+                {"executorKind": "codex", "adapter": "cli", "status": "ready", "maxConcurrentRuns": 1},
+            ],
+        })
+        first, workflow = task_workflow(client, project, payload)
+        start_task(client, first)
+        command, = take(registry, node)
+
+        response = client.post("/api/v1/tasks", json={
+            "title": "Second workflow task", "projectId": project["id"],
+            "assignedWorkflowId": workflow["id"],
+            "status": "assigned" if entry == "scheduler" else "backlog",
+        })
+        assert response.status_code == 201, response.text
+        task_id = response.json()["id"]
+        if entry == "scheduler":
+            assert tick(app).dispatched == 0
+        else:
+            response = client.post(f"/api/v1/tasks/{task_id}/runs", json={})
+            assert response.status_code == 202, response.text
+            assert response.json()["dispatch"]["code"] == "capacity_exhausted", response.text
+
+        queued = app.state.task_store.get_task(task_id)
+        assert queued["status"] == "queued", queued["dispatchOutcome"]
+        assert queued["dispatchOutcome"]["code"] == "capacity_exhausted"
+        assert not queued.get("linkedSessionIds")
+        assert not queued.get("dispatchClaim")
+        assert app.state.daemon_store.active_run_request_for_task(task_id) is None
+        assert app.state.task_store.count_wip(project["ownerUserId"]) == 1
+        assert tick(app).dispatched == 0
+
+        finish(registry, node, command, {"Design": "design artifact"})
+        assert tick(app).dispatched == 1
+        current, session = workflow_session(app, task_id)
+        assert current["dispatchOutcome"]["state"] == "started"
+        next_command, = take(registry, node)
+        assert next_command["sessionId"] == session["id"]
 
 
 @pytest.mark.parametrize("entry", ["schedule", "manual"])

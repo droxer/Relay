@@ -9,7 +9,7 @@ deliverable; ending an attempt does not necessarily finish the task.
 | --- | --- | --- |
 | Backlog | `status=backlog` | Uncommitted demand. Assignment may be recorded without starting work. |
 | Ready | `status=assigned` | Selected or admitted demand waiting for an agent to start. The scheduler pulls when runtime and WIP capacity permit. |
-| Queued | `status=queued` | Waiting for WIP capacity after a start request; starts automatically when a slot opens. Does not consume WIP. |
+| Queued | `status=queued` | Waiting for user WIP or Computer execution capacity. The scheduler retries automatically. A first start reserves WIP when admitted. |
 | In progress | `workflowStage=running` | An agent has started executing. Human waits remain on this stage until review or another queued continuation. |
 | Review | `workflowStage=review` | Work awaits acceptance by a person with access to the task. Entering Review frees the WIP slot. Rework requires capacity again. |
 | Done | `status=done` | Accepted delivery. Automatic acceptance frees the WIP slot at this stage. |
@@ -44,9 +44,10 @@ rather than reopening accepted work with new scope.
 
 ## WIP and scheduling
 
-Tasks sharing a Project workspace execute serially. When the current Thread
-has queued follow-up messages, those messages take priority over other Tasks
-already waiting for that workspace. The workspace remains with that Thread
+Tasks in a Project workspace can execute concurrently within the user's task
+limit and the Computer's execution limits. In other shared workspaces, the
+current Thread's queued follow-up messages take priority over Tasks already
+waiting for that workspace. The workspace remains with that Thread
 through its admitted follow-up rounds until the queue drains. Paused queues,
 archived or deleting Threads, and queues held for human input or approval do
 not reserve this priority (an explicit send overrides the human-wait gate).
@@ -60,9 +61,10 @@ FIFO waiting order. `persistence/daemon/workspace_queue.py` reads the durable
 facts; admission, delivery, and database dispatch claims use the shared policy.
 
 The Admin control panel sets each user's **Concurrent task limit** (1–100),
-default **5**. It limits started, unfinished work, including review and blocked
-tasks. `maxConcurrentTasks` is a per-user override; clearing it restores the
-server default (`RELAY_TASK_WIP_LIMIT`, a positive integer defaulting to 5).
+default **5**. It limits admitted work, including tasks blocked during execution.
+Entering Review releases the slot. Clearing the per-user `maxConcurrentTasks`
+override restores the server default (`RELAY_TASK_WIP_LIMIT`, a positive integer
+defaulting to 5).
 The effective value is read from the database at admission, so changes apply
 across backend replicas without restarting them. Lowering a user's limit does
 not cancel admitted tasks. Scope is the task's human assignee, falling back to
@@ -100,9 +102,9 @@ Runtime on that Computer. A full execution pool or durable run queue records
 `dispatch.code=capacity_exhausted` and leaves the Task queued for automatic
 retry. Durable admissions are bounded to twice the Computer's run capacity.
 The board explains Computer capacity waits separately from user WIP waits.
-Runs sharing one physical workspace execute one at a time; team participants
-also execute sequentially on one Computer. Independent workspaces can run the
-same Logical Agent concurrently. Direct Thread work without a linked Task
+Runs sharing a non-Project workspace execute one at a time. Team participants
+within one run execute sequentially on one Computer. Independent workspaces
+can run the same Logical Agent concurrently. Direct Thread work without a linked Task
 uses Computer capacity but does not acquire a task WIP slot.
 
 Run `npm run test:e2e:concurrency -w web` to exercise the browser, a real local

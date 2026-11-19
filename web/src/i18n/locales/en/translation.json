@@ -553,7 +553,7 @@
     "queue_step_sent": "Sent",
     "queue_step_queued": "In queue",
     "queue_step_running": "Running",
-    "queue_cause_slot": "Queued on {{computer}}. It starts automatically when capacity is available — no need to send it again.",
+    "queue_cause_dispatch": "Waiting for the run to start on {{computer}}.",
     "queue_cause_offline": "{{computer}} is offline. The run is held in the queue and starts when the computer reconnects.",
     "queue_cancel": "Cancel run"
   },
@@ -910,7 +910,7 @@
     "work_age_other": "Age: {{count}} days",
     "wip_limit": "Work-in-progress limit per user",
     "unblock": "Unblock",
-    "ready_policy": "Ready tasks start automatically when there’s capacity. Tasks in review or blocked still count toward the work-in-progress limit.",
+    "ready_policy": "Ready tasks start automatically when capacity is available. Entering Review frees a task slot. Blocked execution still holds its slot.",
     "wip_wait": "Queued: this task will start automatically when work-in-progress capacity opens.",
     "computer_capacity_wait": "Queued: this task will start automatically when an execution slot opens on its Computer.",
     "error_active": "Stop or finish the active run before changing this task’s status.",
@@ -2800,7 +2800,7 @@
     },
     "wip": {
       "title": "Work-in-progress limit reached",
-      "body": "This task is queued and will start automatically when capacity opens. Finish, accept, or cancel existing work to free a slot. Review and blocked work still count toward the limit."
+      "body": "This task will start automatically when a slot opens. Entering Review, finishing, or cancelling a task frees its slot. Blocked execution or waiting for input during execution still holds the slot."
     },
     "ownership": {
       "title": "Another run owns this work",
