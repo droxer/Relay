@@ -3,8 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { GithubMark } from "../landing/GithubMark";
-import { AdminInbox, ICON } from "../icons";
+import { ConnectionProviderMark } from "../connections/ConnectionProviderMark";
+import { ICON } from "../icons";
 import { mailProviderName, readConnectionResult } from "../../domain-types/connections";
 import { TASKS_QUERY_KEY } from "../../hooks/useRelayData";
 import { TASK_RECORD_QUERY_KEY } from "../../hooks/useTaskRecord";
@@ -79,7 +79,7 @@ export function ConnectionsSection() {
       {!records.length && <p className="connections-hint">{t("connections.empty")}</p>}
       {records.map(connection => <div className="connection-row" key={connection.id}>
         <div className="connection-overview">
-          <ProviderMark provider={connection.provider} />
+          <ConnectionProviderMark provider={connection.provider} size={ICON.xl} className="connection-provider-mark" />
           <div className="connection-identity">
             <span className="pref-option-label">{providers.data?.providers.find(p => p.id === connection.provider)?.name} · {connection.label}</span>
             {(!mailProviderName(connection.provider) || connection.identity !== connection.label) &&
@@ -115,7 +115,7 @@ export function ConnectionsSection() {
       <h3 id="available-connections" className="pref-group-label">{t("connections.available")}</h3>
       {providers.data?.providers.map(provider => <div className="connection-row" key={provider.id}>
         <div className="connection-overview">
-          <ProviderMark provider={provider.id} />
+          <ConnectionProviderMark provider={provider.id} size={ICON.xl} className="connection-provider-mark" />
           <div className="connection-identity"><span className="pref-option-label">{provider.name}</span>
             <span className="pref-option-sub">{t(provider.configured ? `connections.provider_hint.${provider.id}` : "connections.not_configured")}</span>
           </div>
@@ -127,9 +127,4 @@ export function ConnectionsSection() {
       </div>)}
     </section>
   </div>;
-}
-
-function ProviderMark({ provider }: { provider: string }) {
-  if (provider === "github") return <GithubMark size={ICON.xl} className="connection-provider-mark" />;
-  return mailProviderName(provider) ? <AdminInbox size={ICON.xl} className="connection-provider-mark" aria-hidden="true" /> : null;
 }

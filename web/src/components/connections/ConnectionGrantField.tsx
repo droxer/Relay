@@ -3,11 +3,11 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { AdminConnect, AdminInbox, ChevronDownIcon, ICON } from "../icons";
-import { GithubMark } from "../landing/GithubMark";
+import { AdminConnect, ChevronDownIcon, ICON } from "../icons";
 import { connectionResources, getConnectionGrants, listConnections,
   type ConnectionGrant, type ConnectionTarget, type ServiceConnection } from "../../api-client/connections";
 import { mailProviderName } from "../../domain-types/connections";
+import { ConnectionProviderMark } from "./ConnectionProviderMark";
 
 interface Props {
   value?: ConnectionGrant[];
@@ -73,8 +73,7 @@ function ConnectionGrantContent({ value, targetType = "thread", targetId, disabl
         return <div className="connection-grant" key={connection.id} data-selected={Boolean(grant) || undefined}>
           <label className="connection-choice connection-account"><Checkbox checked={Boolean(grant)} disabled={readonly || connection.status !== "connected"}
             onCheckedChange={checked => update(connection.id, checked ? { actions: mailName ? [] : connection.actions } : null)} />
-            {connection.provider === "github" && <GithubMark size={ICON.lg} className="connection-account-mark" />}
-            {mailName && <AdminInbox size={ICON.lg} className="connection-account-mark" aria-hidden="true" />}
+            <ConnectionProviderMark provider={connection.provider} size={ICON.lg} className="connection-account-mark" />
             <span className="connection-account-copy"><span>{mailName ? `${mailName} · ${connection.label}` : connection.label}</span>
               {(!mailName || connection.identity !== connection.label) && <span className="connection-account-identity">{connection.identity}</span>}
               {connection.tenantLabel && <span className="connection-account-identity">{t("connections.organization", { tenant: connection.tenantLabel })}</span>}

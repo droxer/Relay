@@ -3,9 +3,11 @@ import { expect, test, type Page } from "@playwright/test";
 const connection = { id: "github-1", provider: "github", label: "Personal GitHub", identity: "octocat", status: "connected", actions: ["github.list_issues"] };
 const mailbox = { id: "10aaf069-13fe-40a2-87b9-59b22bf47b78", provider: "gmail", label: "mail@example.com",
   identity: "mail@example.com", status: "connected", actions: ["gmail.list_messages", "gmail.get_message"] };
+const outlookMailbox = { id: "c2b1c25b-dc8a-4ba8-9362-60216664d76e", provider: "outlook", label: "outlook@example.net",
+  identity: "outlook@example.net", status: "connected", actions: ["outlook.list_messages", "outlook.get_message"] };
 const mailProviders = [
   { id: "gmail", name: "Gmail", actions: mailbox.actions },
-  { id: "outlook", name: "Outlook", actions: ["outlook.list_messages", "outlook.get_message"] },
+  { id: "outlook", name: "Outlook", actions: outlookMailbox.actions },
 ];
 const stamp = "2026-11-06T00:00:00Z";
 
@@ -31,7 +33,7 @@ async function serve(page: Page, theme = "light", language = "en", runs: Record<
       { id: "github", name: "GitHub", configured: true, actions: connection.actions },
       ...mailProviders.map(provider => ({ ...provider, configured: withMail })),
     ] };
-    if (path.endsWith("/connections")) body = { connections: [...(connected ? [connection] : []), ...(withMail ? [mailbox] : [])] };
+    if (path.endsWith("/connections")) body = { connections: [...(connected ? [connection] : []), ...(withMail ? [mailbox, outlookMailbox] : [])] };
     if (path.endsWith("/connections/github-1") && method === "DELETE") { connected = false; body = { disconnected: true }; }
     if (path.endsWith("/connections/github-1/usage")) body = { usage: [{ targetType: "automation", targetId: "routine-1" }] };
     if (path.endsWith("/connections/github-1/resources")) body = { resources: [{ id: "octo/hello", name: "octo/hello" }], nextCursor: null };
@@ -63,6 +65,11 @@ for (const [name, viewport, theme, language] of [
   await expect(page.getByText("Slack", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Gmail", { exact: true })).toBeVisible();
   await expect(page.getByText("Outlook", { exact: true })).toBeVisible();
+  for (const provider of mailProviders) {
+    const icon = page.locator(`img[src="/brand/${provider.id}.svg"]`);
+    await expect(icon).toBeVisible();
+    await expect.poll(() => icon.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  }
   await expect(page.getByRole("button", { name: /Gmail|Outlook/ })).toHaveCount(0);
   const panel = page.locator("#settings-panel");
   const overflow = await panel.evaluate(el => el.scrollWidth > el.clientWidth + 1);
@@ -128,6 +135,8 @@ for (const automation of [false, true]) test(`Inbox access in a new ${automation
   const form = page.getByRole("dialog", { name, exact: true });
   await form.getByRole("textbox", { name: "Title", exact: true }).fill("Summarize the Inbox");
   await form.locator("summary").filter({ hasText: "Connections" }).click();
+  await expect(form.getByRole("checkbox", { name: /outlook@example\.net/ })).toBeVisible();
+  for (const provider of mailProviders) await expect(form.locator(`img[src="/brand/${provider.id}.svg"]`)).toBeVisible();
   await form.getByRole("checkbox", { name: /mail@example\.com/ }).check();
   await form.getByRole("checkbox", { name: "Inbox", exact: true }).check();
   const list = form.getByRole("checkbox", { name: "List messages", exact: true });
