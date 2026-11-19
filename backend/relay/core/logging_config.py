@@ -68,6 +68,7 @@ CONTEXT_KEYS = frozenset({
     "duration_ms", "artifact_count", "run_completed_count", "batches", "items", "pending",
     "method", "path", "status", "response_complete", "pid", "signal", "reason",
     "deployment_id", "revision", "max_rss_bytes",
+    "routine_id", "count", "next_run_at",
 })
 
 

@@ -1,8 +1,13 @@
-from datetime import datetime, UTC
+from ast import literal_eval
+from datetime import datetime, timedelta, UTC
+from io import StringIO
 from tempfile import TemporaryDirectory
 
 import pytest
+from loguru import logger
 from relay.automations.clock import ScheduleClock
+from relay.automations.firing import AutomationFiring
+from relay.core.logging_config import _format_record
 from relay.persistence.automation.store import DatabaseAutomationStore
 from relay.persistence.engine import store_transaction
 from relay.persistence.task.store import DatabaseTaskStore
@@ -52,6 +57,38 @@ def test_due_schedule_marks_pending_and_advances(world):
     assert state["pending"] and state["pending_events"][0]["eventType"] == "schedule"
     assert state["pending_events"][0]["summary"] == "Daily at 09:00 (UTC)"
     assert tasks.get_task(routine["id"])["routineNextRunAt"] == "2026-10-14T09:00:00+00:00"
+
+
+def test_automation_schedule_and_expiry_logs_identify_the_automation(world):
+    tasks, automations, clock = world
+    routine = _routine(tasks, routineNextRunAt="2026-10-13T09:00:00+00:00")
+    routine_id = routine["id"]
+    now = datetime(2026, 10, 13, 9, 1, tzinfo=UTC)
+    firing = AutomationFiring(task_store=tasks, automation_store=automations)
+    sink = StringIO()
+    sink_id = logger.add(sink, level="INFO", format=_format_record)
+    try:
+        with logger.contextualize(token="private-token", body="private-body"):
+            assert clock.run(now) == 1
+            assert firing.expire_pending(routine_id, now + timedelta(hours=24, seconds=1))
+    finally:
+        logger.remove(sink_id)
+
+    output = sink.getvalue()
+    contexts = {}
+    for line in output.splitlines():
+        message, context = line.rsplit(" | ", 1)
+        contexts[message.rsplit(" - ", 1)[-1]] = literal_eval(context)
+    assert contexts["Automation schedule due"] == {
+        "routine_id": routine_id, "next_run_at": "2026-10-14T09:00:00+00:00",
+    }
+    assert contexts["Automation pending events expired"] == {"routine_id": routine_id, "count": 1}
+    assert "private-token" not in output
+    assert "private-body" not in output
+    assert any(
+        activity["message"] == "Automation dropped 1 pending events after 24 hours without a run."
+        for activity in tasks.get_task(routine_id)["activity"]
+    )
 
 
 def test_missed_slots_collapse_to_one(world):
