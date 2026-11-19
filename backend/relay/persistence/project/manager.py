@@ -1,7 +1,6 @@
-"""Project manager conversation pointer and event-authoritative proposals."""
+"""Project manager transactions and event-authoritative proposals."""
 from __future__ import annotations
 
-from collections.abc import Callable
 from contextlib import contextmanager
 from collections.abc import Iterator
 from typing import Any
@@ -37,9 +36,6 @@ class ManagerRows:
             if task_ids:
                 conn.execute(select(tasks.c.id).where(tasks.c.id.in_(task_ids)).order_by(tasks.c.id).with_for_update()).all()
             yield project_with_manager(dict(project))
-
-    def mutate_manager(self, project_id: str, change: Callable[[dict[str, Any]], dict[str, Any] | None]) -> dict[str, Any]:
-        return self._mutate_current(project_id, "project.manager_changed", change)  # type: ignore[attr-defined]
 
     def manager_proposals(self, project_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:

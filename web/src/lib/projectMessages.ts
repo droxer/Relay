@@ -289,13 +289,14 @@ export class ProjectMessagesAccumulator {
     this.lastEventId = undefined;
     this.runState.clear();
     this.prompts.clear();
-    this.out = [{
+    const attachments = session.events.find(event => event.type === "session.created")?.attachments;
+    this.out = session.taskGoal || attachments?.length ? [{
       kind: "user",
       id: `${session.id}:goal`,
       timestamp: session.createdAt,
       text: session.taskGoal,
-      attachments: session.events.find(event => event.type === "session.created")?.attachments,
-    }];
+      attachments,
+    }] : [];
     this.snapshot = [...this.out];
   }
 

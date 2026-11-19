@@ -1805,7 +1805,7 @@ and daemon credentials do not confer owner authority. Wire names remain
 unchanged for compatibility.
 
 - `GET /api/v1/projects/{id}/manager` returns the binding, eligible candidates,
-  availability reason, existing Thread ID, and recent proposal cards. Reading
+  availability reason, the historical shared Thread ID if present, and recent proposal cards. Reading
   writes nothing: it never assigns the role and creates no Thread or run.
   Archived history remains readable.
 - `PUT /api/v1/projects/{id}/manager` accepts `agentId` and `expectedVersion`
@@ -1813,10 +1813,10 @@ unchanged for compatibility.
   outside the roster joins with its default role. Project creation accepts
   legacy `managerAgentId` as a lead choice; omitted or `null`, the supplied
   lead holds management responsibility.
-- `POST /api/v1/projects/{id}/manager/conversation` returns the Project's
-  manager Thread, starting it (with the holder as its first participant) on
-  first use. It dispatches nothing. The web app no longer calls it; the
-  manager works through the Tasks and Automations it runs.
+- `POST /api/v1/projects/{id}/manager/conversation` creates a new Project
+  Conversation on each request and returns `threadId` and `agentId`. The current
+  Project Lead joins as its first Agent participant. The owner sends messages
+  through the ordinary Thread composer.
 - `GET /api/v1/projects/{id}/manager/overview` returns live Project context,
   complete task counts, recent tasks, capacity, and retrieval coverage.
 - `POST /api/v1/projects/{id}/manager/proposals/{proposalId}/apply` accepts an
@@ -1892,7 +1892,7 @@ which delegate to the same Python authorization and operations:
 | --- | --- |
 | `GET /api/v1/mcp/projects` | List only Projects in token scope. |
 | `POST /api/v1/mcp/projects/{id}/tools` | `{tool, arguments}` for overview, tasks, task, review, activity, threads, thread, workspace metadata, or propose. Scope and ownership checked on every call. |
-| `POST /api/v1/projects/{id}/manager/conversation` | Owner session: open the canonical ordinary Agent Thread without dispatching a run. |
+| `POST /api/v1/projects/{id}/manager/conversation` | Owner session: create a new Project Conversation without dispatching a run. |
 
 `propose` accepts `arguments.operations` with the same validated operation format
 as manager proposals. Direct MCP proposals have `source: "mcp"`, token provenance

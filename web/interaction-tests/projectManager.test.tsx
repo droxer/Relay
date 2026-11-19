@@ -7,7 +7,8 @@ import {ProjectDashboard} from '../src/components/ProjectDashboard';
 import {ManagerProposalCard} from '../src/components/ManagerProposalCard';
 import {useProjectLeadDiscussion} from '../src/hooks/useProjectLeadDiscussion';
 import {threadDraftKey} from '../src/hooks/useComposer';
-import {PROJECTS_QUERY_KEY} from '../src/hooks/useRelayData';
+import {SESSIONS_QUERY_KEY} from '../src/hooks/useRelayData';
+import {useComposerTargetStore} from '../src/lib/composerTargetStore';
 import type {RelayTaskListItem} from '../src/types';
 
 // Floating popups do not open under jsdom; render the topic menu inline.
@@ -83,31 +84,44 @@ const owner={id:'u',userId:'u',username:'owner',role:'user'} as any;
 const hookWrapper=(client:QueryClient)=>({children}:{children:React.ReactNode})=>
  <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 
-it('opens the lead Thread only after the project list names it, with a topic drafted',async()=>{
+it('opens each discussion independently and saves the topic draft on its own Thread',async()=>{
  sessionStorage.clear();
  const client=new QueryClient({defaultOptions:{mutations:{retry:false}}});
- const order:string[]=[];
- const invalidate=vi.spyOn(client,'invalidateQueries').mockImplementation(async(filters:any)=>{
-  if(filters?.queryKey===PROJECTS_QUERY_KEY) order.push('projects');
- });
- api.open.mockResolvedValue({threadId:'lead-thread'});
- const onOpenThread=vi.fn(()=>order.push('open'));
- const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(client)});
+ const invalidate=vi.spyOn(client,'invalidateQueries');
+ let finishFirst!: (value: {threadId:string;agentId:string})=>void;
+ const firstRequest=new Promise<{threadId:string;agentId:string}>(resolve=>{finishFirst=resolve;});
+ api.open.mockReturnValueOnce(firstRequest)
+  .mockResolvedValueOnce({threadId:'plain-thread',agentId:'a'});
+ const onOpenThread=vi.fn();
+ const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,agents:[ada],onOpenThread}),{wrapper:hookWrapper(client)});
  act(()=>result.current.discuss('next'));
- await waitFor(()=>expect(onOpenThread).toHaveBeenCalledWith('lead-thread'));
- expect(api.open).toHaveBeenCalledWith('p');
- expect(order).toEqual(['projects','open']);
- expect(sessionStorage.getItem(`relay-web.draft:${threadDraftKey(owner,'lead-thread')}`)).toBe('project_manager.prompt_next');
- invalidate.mockRestore();
+ await waitFor(()=>expect(result.current.pending).toBe(true));
+ act(()=>result.current.discuss());
+ expect(api.open).toHaveBeenCalledOnce();
+ finishFirst({threadId:'topic-thread',agentId:'a'});
+ await waitFor(()=>expect(onOpenThread).toHaveBeenLastCalledWith('topic-thread'));
+ await waitFor(()=>expect(result.current.pending).toBe(false));
+ act(()=>result.current.discuss());
+ await waitFor(()=>expect(onOpenThread).toHaveBeenLastCalledWith('plain-thread'));
+ expect(api.open.mock.calls).toEqual([['p'],['p']]);
+ expect(invalidate.mock.calls).toEqual([
+  [{queryKey:SESSIONS_QUERY_KEY,exact:true}],
+  [{queryKey:SESSIONS_QUERY_KEY,exact:true}],
+ ]);
+ for(const threadId of ['topic-thread','plain-thread']) {
+  expect(useComposerTargetStore.getState().threadPicks[threadId]).toEqual({kind:'agent',agent:{id:'a',executorKind:'codex'}});
+ }
+ expect(sessionStorage.getItem(`relay-web.draft:${threadDraftKey(owner,'topic-thread')}`)).toBe('project_manager.prompt_next');
+ expect(sessionStorage.getItem(`relay-web.draft:${threadDraftKey(owner,'plain-thread')}`)).toBeNull();
 });
 
 it('never overwrites a draft the person already left in the lead Thread',async()=>{
  sessionStorage.clear();
  const key=`relay-web.draft:${threadDraftKey(owner,'lead-thread')}`;
  sessionStorage.setItem(key,'my own question');
- api.open.mockResolvedValue({threadId:'lead-thread'});
+ api.open.mockResolvedValue({threadId:'lead-thread',agentId:'a'});
  const onOpenThread=vi.fn();
- const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(new QueryClient())});
+ const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,agents:[ada],onOpenThread}),{wrapper:hookWrapper(new QueryClient())});
  act(()=>result.current.discuss('plan'));
  await waitFor(()=>expect(onOpenThread).toHaveBeenCalled());
  expect(sessionStorage.getItem(key)).toBe('my own question');
@@ -116,7 +130,7 @@ it('never overwrites a draft the person already left in the lead Thread',async()
 it('reports a failed open and stays on the dashboard',async()=>{
  api.open.mockRejectedValue(new Error('manager_unconfigured'));
  const onOpenThread=vi.fn();
- const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(new QueryClient({defaultOptions:{mutations:{retry:false}}}))});
+ const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,agents:[ada],onOpenThread}),{wrapper:hookWrapper(new QueryClient({defaultOptions:{mutations:{retry:false}}}))});
  act(()=>result.current.discuss());
  await waitFor(()=>expect(announce).toHaveBeenCalledWith(expect.objectContaining({message:'errors.open_project_lead',tone:'error'})));
  expect(onOpenThread).not.toHaveBeenCalled();
