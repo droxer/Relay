@@ -229,6 +229,8 @@ export class ProjectMessagesAccumulator {
   private translator: TFunction | undefined;
   private processedEvents = 0;
   private lastEventId: string | undefined;
+  private eventStart: number | undefined;
+  private transcriptRevision: string | undefined;
   private out: DerivedMessage[] = [];
   private snapshot: DerivedMessage[] = [];
   private readonly runState = new Map<string, RunProjectionState>();
@@ -244,6 +246,8 @@ export class ProjectMessagesAccumulator {
     next.translator = this.translator;
     next.processedEvents = this.processedEvents;
     next.lastEventId = this.lastEventId;
+    next.eventStart = this.eventStart;
+    next.transcriptRevision = this.transcriptRevision;
     next.out = [...this.out];
     next.snapshot = this.snapshot;
     for (const [requestId, prompt] of this.prompts) next.prompts.set(requestId, prompt);
@@ -265,6 +269,8 @@ export class ProjectMessagesAccumulator {
     const appendOnly = this.sessionId === session.id
       && this.taskGoal === session.taskGoal
       && this.createdAt === session.createdAt
+      && this.eventStart === session.eventStart
+      && this.transcriptRevision === session.transcriptRevision
       && this.translator === t
       && this.processedEvents <= session.events.length
       && (this.processedEvents === 0 || session.events[this.processedEvents - 1]?.id === this.lastEventId);
@@ -287,10 +293,12 @@ export class ProjectMessagesAccumulator {
     this.translator = t;
     this.processedEvents = 0;
     this.lastEventId = undefined;
+    this.eventStart = session.eventStart;
+    this.transcriptRevision = session.transcriptRevision;
     this.runState.clear();
     this.prompts.clear();
     const attachments = session.events.find(event => event.type === "session.created")?.attachments;
-    this.out = session.taskGoal || attachments?.length ? [{
+    this.out = !session.eventStart && (session.taskGoal || attachments?.length) ? [{
       kind: "user",
       id: `${session.id}:goal`,
       timestamp: session.createdAt,

@@ -802,6 +802,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             threadKindFilter={threadKindFilter}
             onThreadKindFilterChange={setThreadKindFilter}
             activeSession={activeSession}
+            transcriptVisible={transcriptVisible}
+            threadDetailsReady={threadDetail.ready}
             threadLoadError={!activeSession ? threadDetail.error : null}
             onRetryThread={threadDetail.retry}
             pendingUserMessage={pendingUserMessage}

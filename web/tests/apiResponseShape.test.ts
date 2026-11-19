@@ -84,6 +84,52 @@ describe("API response shape validation", () => {
     globalThis.fetch = originalFetch;
   });
 
+  it("uses a cached list page on 304, including its older-page cursor", async () => {
+    const cache = {};
+    const page = { sessions: [sessionSummary()], nextCursor: "older" };
+    globalThis.fetch = async () => new Response(JSON.stringify(page), { headers: { ETag: 'W/"head"' } });
+    const first = await listSessionSummaries(undefined, { limit: 20 }, cache);
+    globalThis.fetch = async (_input, init) => {
+      assert.equal(new Headers(init?.headers).get("If-None-Match"), 'W/"head"');
+      return new Response(null, { status: 304 });
+    };
+    assert.equal(await listSessionSummaries(undefined, { limit: 20 }, cache), first);
+    assert.equal(first.nextCursor, "older");
+  });
+
+  it("reconstructs a compact transcript from cached events and retains it on 304", async () => {
+    const cache = {};
+    const firstEvent = { id: "one", type: "agent.completed", runId: "run", agentLog: "previous output" };
+    const secondEvent = { id: "two", type: "session.queue" };
+    const firstRevision = "a".repeat(64);
+    const secondRevision = "b".repeat(64);
+    const snapshot = session({ agentRuns: [{ id: "run" }] });
+    globalThis.fetch = async (input) => {
+      assert.match(String(input), /\?view=transcript$/);
+      return new Response(JSON.stringify({
+        ...snapshot, events: [firstEvent], eventCount: 51, eventStart: 50, eventOffset: 50, eventsRevision: firstRevision,
+      }), { headers: { ETag: 'W/"first"' } });
+    };
+    const first = await getSession("ses_1", undefined, cache);
+    assert.equal(first.agentRuns[0].agentLog, "previous output");
+
+    globalThis.fetch = async (_input, init) => {
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get("If-None-Match"), 'W/"first"');
+      assert.equal(headers.get("X-Relay-Thread-Events"), `50:1:${firstRevision}`);
+      return new Response(JSON.stringify({
+        ...snapshot, events: [secondEvent], eventCount: 52, eventStart: 50, eventOffset: 51, eventsRevision: secondRevision,
+      }), { headers: { ETag: 'W/"second"' } });
+    };
+    const second = await getSession("ses_1", undefined, cache);
+    assert.deepEqual(second.events, [firstEvent, secondEvent]);
+    assert.equal(second.events[0], first.events[0]);
+    assert.equal(second.agentRuns[0].agentLog, "previous output");
+
+    globalThis.fetch = async () => new Response(null, { status: 304 });
+    assert.equal(await getSession("ses_1", undefined, cache), second);
+  });
+
   describe("session list", () => {
     it("accepts a valid list, including items without optional fields", async () => {
       const body = { sessions: [sessionSummary(), sessionSummary({ id: "ses_2", title: "Named", archived: true })] };

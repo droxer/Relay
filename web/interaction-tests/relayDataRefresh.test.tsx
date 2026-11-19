@@ -86,6 +86,21 @@ it("backs the sessions poll off while the session stream is connected", async ()
   view.unmount(); client.clear();
 });
 
+it("does not refetch the cookie-scoped thread list when the sandbox token changes", async () => {
+  vi.mocked(listDaemonNodes).mockResolvedValue({ nodes: [] });
+  vi.mocked(listSandboxes).mockResolvedValue({ sandboxes: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const view = renderHook(({ token }) => useRelayData(token, true), { wrapper, initialProps: { token: "original" } });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  const before = vi.mocked(listSessionSummaries).mock.calls.length;
+  view.rerender({ token: "replaced" });
+  await waitFor(() => expect(listDaemonNodes).toHaveBeenLastCalledWith("replaced", expect.any(AbortSignal)));
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  expect(listSessionSummaries).toHaveBeenCalledTimes(before);
+  view.unmount(); client.clear();
+});
+
 it("slows task reconciliation off task surfaces and refreshes when they become visible", async () => {
   vi.mocked(listSandboxes).mockResolvedValue({ sandboxes: [] } as never);
   vi.mocked(listTasks).mockClear();

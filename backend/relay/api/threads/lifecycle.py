@@ -41,6 +41,7 @@ from ..projects.access import (
 )
 from ..schemas import ThreadCreateBody, ThreadCreateBodyDep, openapi_body
 from .projections import ensure_session_managed_affinity
+from .transcript import read_transcript_page, transcript_response
 from .workflow_decisions import assert_workflow_owner_session
 
 router = APIRouter()
@@ -201,16 +202,24 @@ def _selected_thread_node(
     return node
 
 
-@router.get("/threads/{session_id}")
+@router.get("/threads/{session_id}", response_model=dict[str, Any])
 def get_session(
     session_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
+) -> dict[str, Any] | Response:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    session = ensure_session_managed_affinity(
-        ctx, get_session_for_actor(ctx.session_store, session_id, actor)
-    )
+    transcript = request.query_params.get("view") == "transcript"
+    if transcript:
+        session = get_session_header_for_actor(ctx.session_store, session_id, actor)
+        before = request.query_params.get("before")
+        page = read_transcript_page(ctx.session_store, session, before)
+        if before is not None:
+            return page
+        session = {**session, **page}
+    else:
+        session = get_session_for_actor(ctx.session_store, session_id, actor)
+    session = ensure_session_managed_affinity(ctx, session)
     index_status = getattr(ctx.session_store, "artifact_index_status", None)
-    return {
+    snapshot = {
         **session,
         "execution": ctx.execution_lifecycle.status(session),
         **(
@@ -219,6 +228,9 @@ def get_session(
             else {}
         ),
     }
+    if transcript:
+        return transcript_response(request, snapshot)
+    return snapshot
 
 
 @router.get("/threads/{session_id}/execution")

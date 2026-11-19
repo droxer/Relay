@@ -20,6 +20,7 @@ import {
 import { preloadMarkdown } from "./LazyMarkdown";
 import { threadAgentName } from "../lib/threadBand";
 import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
+import { useOlderTranscript } from "../hooks/useOlderTranscript";
 import { useRelayStore } from "../lib/store";
 import { threadSendKey } from "../lib/threadSendStore";
 import { threadDraftKey } from "../hooks/useComposer";
@@ -128,6 +129,8 @@ type ThreadsViewProps = {
   threadKindFilter: ThreadKindFilter;
   onThreadKindFilterChange: (filter: ThreadKindFilter) => void;
   activeSession: RelaySession | undefined;
+  transcriptVisible?: boolean;
+  threadDetailsReady?: boolean;
   pendingUserMessage: { id: string; text: string } | null;
   displayMessages: DerivedMessage[];
   awaitingDecision: boolean;
@@ -236,6 +239,8 @@ export function ThreadsView({
   threadKindFilter,
   onThreadKindFilterChange,
   activeSession,
+  transcriptVisible = true,
+  threadDetailsReady = true,
   pendingUserMessage,
   displayMessages,
   awaitingDecision,
@@ -336,7 +341,11 @@ export function ThreadsView({
   });
   const taskStatusActions = useTaskStatusActions(lifecycle.task?.id);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
-  const { start: transcriptStart, sentinelRef } = useTranscriptWindow(activeSession?.id, displayMessages.length);
+  const { start: transcriptStart, sentinelRef, pinOldest } = useTranscriptWindow(
+    activeSessionId, displayMessages.length, activeSession?.eventStart,
+  );
+  const olderTranscript = useOlderTranscript(transcriptVisible ? activeSessionId : undefined);
+  const hasEarlierMessages = (activeSession?.eventStart ?? 0) > 0;
   // A thread is about to render markdown: start the pipeline download now so
   // the first turn rarely shows its plain-text fallback. A brand-new empty
   // thread renders none, so it waits for its first turn (or the run that
@@ -396,7 +405,7 @@ export function ThreadsView({
   );
   // What the person writes mid-run waits for the next round; a started
   // thread only — staging a new one has no run to wait on.
-  const queueEnabled = Boolean(activeSession) && !initializingThread && !projectReadOnly;
+  const queueEnabled = transcriptVisible && threadDetailsReady && Boolean(activeSession) && !initializingThread && !projectReadOnly;
   const threadQueue = useThreadQueue({
     queueKey: threadDraftKey(currentUser, activeSession?.id),
     threadId: queueEnabled ? activeSession?.id : undefined,
@@ -654,7 +663,16 @@ export function ThreadsView({
               </div>
             ) : transcriptPending ? null : activeSession || pendingUserMessage ? (
               <>
-                {transcriptStart > 0 ? (
+                {transcriptStart === 0 && hasEarlierMessages ? (
+                  <div className="transcript-history">
+                    <Button type="button" variant="outline" size="sm" loading={olderTranscript.pending}
+                      onClick={() => void olderTranscript.load(pinOldest)}>
+                      {t("thread.load_earlier_messages")}
+                    </Button>
+                    {olderTranscript.failed ? <div role="alert">{t("thread.earlier_messages_failed")}</div> : null}
+                  </div>
+                ) : null}
+                {transcriptStart > 0 || hasEarlierMessages ? (
                   // Keyed by the window start so each page mounts a fresh
                   // sentinel, and the observer reports it again if the new
                   // page still leaves it in range.

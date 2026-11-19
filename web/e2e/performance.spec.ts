@@ -192,6 +192,16 @@ function installCommitCounter() {
 test("identical polls do not re-render the app or the thread rail", async ({ page }) => {
   await page.addInitScript(installCommitCounter);
   await mockApi(page);
+  let revalidations = 0;
+  const etag = 'W/"thread-list"';
+  await page.route("**/api/v1/threads?*", async (route) => {
+    if (route.request().headers()["if-none-match"] === etag) {
+      revalidations++;
+      await route.fulfill({ status: 304, headers: { ETag: etag } });
+      return;
+    }
+    await route.fulfill({ json: { sessions: THREADS }, headers: { ETag: etag } });
+  });
   await page.goto(`${workPath}/threads`);
   await expect(page.locator(".conversation-name").first()).toBeVisible();
   // Let first-load commits settle, then watch 10s of identical polls: two
@@ -203,6 +213,7 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
   await page.waitForTimeout(10_000);
   const { commits, rowRenders } = await page.evaluate(() => (window as unknown as { __commits: { commits: number; rowRenders: number } }).__commits);
   expect({ commits, rowRenders }, "thread rows re-rendered on unchanged data").toMatchObject({ rowRenders: 0 });
+  expect(revalidations).toBeGreaterThan(0);
   // Before: ~18 app-wide commits in 10s, one per fetch start and end.
   expect(commits, "app-wide commits while idle").toBeLessThanOrEqual(2);
 });
@@ -252,6 +263,55 @@ test("a long transcript mounts its newest turns and reveals older ones on scroll
   // It was at the top edge when the page landed; it must not have been
   // shoved a page down (or up) by the turns mounted above it.
   expect(Math.abs(offset), "the turn the reader was looking at stays in view").toBeLessThan(400);
+});
+
+test("a cold conversation opens on its latest window and requests older messages on demand", async ({ page }) => {
+  const thread = session("paged-history", 0, 2);
+  const eventStart = 3;
+  let historyReads = 0;
+  let queueReads = 0;
+  await page.route("**/api/**", async route => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    let body: unknown = { sessions: [thread], agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    else if (path.endsWith("/threads/paged-history/queue")) {
+      queueReads++;
+      body = { messages: [], paused: false };
+    } else if (path.endsWith("/threads/paged-history")) {
+      expect(url.searchParams.get("view")).toBe("transcript");
+      if (url.searchParams.get("before")) {
+        historyReads++;
+        expect(url.searchParams.get("before")).toBe(String(eventStart));
+        if (historyReads === 1) {
+          await route.fulfill({ status: 503, json: { detail: "Try again" } });
+          return;
+        }
+        body = { eventStart: 0, eventCount: eventStart, events: thread.events.slice(0, eventStart) };
+      } else {
+        body = {
+          ...thread, eventStart, eventOffset: eventStart, eventsRevision: "a".repeat(64),
+          events: thread.events.slice(eventStart), messageQueue: { messages: [], paused: false },
+        };
+      }
+    }
+    await route.fulfill({ json: body });
+  });
+  await page.goto("/threads/paged-history");
+  const output = page.locator(".agent-code");
+  await expect(output).toHaveCount(1);
+  await expect(output.first()).toContainText("turn1");
+  const older = page.getByRole("button", { name: "Load earlier messages" });
+  await expect(older).toBeVisible();
+  expect({ historyReads, queueReads }).toEqual({ historyReads: 0, queueReads: 0 });
+  await older.click();
+  await expect(page.locator(".transcript-history [role=alert]")).toBeVisible();
+  await older.click();
+  await expect(output).toHaveCount(2);
+  await expect(output.first()).toContainText("turn0");
+  await expect(output.last()).toContainText("turn1");
+  await expect(older).toHaveCount(0);
+  expect(historyReads).toBe(2);
 });
 
 test("the eager bundle ships no markdown pipeline, syntax grammars or unused locales", async ({ page, request }) => {

@@ -105,6 +105,39 @@ describe("session poll merging", () => {
     assert.equal(applySessionEventsUnchecked(observed, [updated.events[0]]).permissionMode, "ask");
     assert.equal(updated.permissionMode, "yolo");
   });
+  it("keeps earlier pages and replays only events newer than a recent snapshot window", () => {
+    const event = (id: string): RelaySession["events"][number] => ({
+      id, type: "session.status", sessionId: "ses_1", timestamp: "now", status: "running", phase: "created",
+    });
+    const earlier = event("older-page");
+    const overlap = event("overlap");
+    const streamed = event("streamed");
+    const current = session({ eventStart: 20, events: [earlier, overlap, streamed] });
+    const snapshot = session({ eventStart: 21, events: [overlap] });
+    const merged = mergeSessionSnapshotIntoSessions([current], snapshot, undefined, (base, suffix) => {
+      assert.deepEqual(suffix, [streamed]);
+      return { ...base, events: [...base.events, ...suffix] };
+    })[0];
+    assert.equal(merged.eventStart, 20);
+    assert.deepEqual(merged.events, [earlier, overlap, streamed]);
+    assert.equal(sessionTrailsSummary(mergeSessionSummaries([merged], [summary({ eventCount: 23 })])[0]), false);
+    assert.equal(sessionTrailsSummary(mergeSessionSummaries([merged], [summary({ eventCount: 24 })])[0]), true);
+  });
+
+  it("counts omitted history when replaying events through an observed summary", () => {
+    const ended: RelaySession["events"][number] = {
+      id: "ended", type: "session.completed", sessionId: "ses_1",
+      timestamp: "2026-06-20T00:00:01Z", outcome: "Needs input", workOutcome: "blocked",
+    };
+    const [observed] = mergeSessionSummaries([session({ eventStart: 20 })], [summary({ eventCount: 21 })]);
+    const updated = applySessionEventsUnchecked(observed, [ended, {
+      id: "newer", type: "session.status", sessionId: "ses_1",
+      timestamp: "2026-06-20T00:00:03Z", status: "failed", phase: "done",
+    }]);
+    assert.equal(updated.status, "failed");
+    assert.equal(sessionTrailsSummary(updated), false);
+  });
+
   it("retains newer streamed outcomes and clears the old outcome when execution resumes", () => {
     const current = session({ status: "completed", workOutcome: "blocked", finalOutcome: "Old blocker", events: [
       { id: "ended", type: "session.completed", sessionId: "ses_1", timestamp: "now", outcome: "Needs input", workOutcome: "blocked" },

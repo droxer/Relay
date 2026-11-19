@@ -224,6 +224,11 @@
   margin-block-end: calc(-1 * var(--sp-7));
 }
 
+.transcript-history {
+  align-self: center;
+  text-align: center;
+}
+
 /* The new-thread landing centres the composer itself: equal flexible rows
    above and below hold it in the middle of the panel, and the greeting rides
    the bottom of the row above it. Sending the first message drops the class

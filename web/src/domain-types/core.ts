@@ -14,7 +14,7 @@ import type {
   RelayTaskEvent,
   RelayTaskListItem,
   RelayTaskSummary,
-  RelaySession,
+  RelaySession as CoreSession,
   SandboxRecord,
   SessionStatus,
   TaskPriority,
@@ -47,7 +47,6 @@ export type {
   RelayTaskEvent,
   RelayTaskListItem,
   RelayTaskSummary,
-  RelaySession,
   SandboxRecord,
   SessionStatus,
   TaskPriority,
@@ -62,6 +61,13 @@ export type {
   RoutineTriggerFilters,
   TaskStatus,
   TokenUsage,
+};
+
+export type RelaySession = CoreSession & {
+  /** Number of earlier transcript events available to load. */
+  eventStart?: number;
+  /** Revision of the most recent HTTP transcript window. */
+  transcriptRevision?: string;
 };
 
 /**

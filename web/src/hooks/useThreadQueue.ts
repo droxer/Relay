@@ -17,6 +17,9 @@ type QueueChange = {
   address?: QueueAddress;
 };
 const EMPTY: QueueState = { messages: [], paused: false };
+const ACTIVE_QUEUE_POLL_MS = 1_000;
+const EMPTY_RUNNING_QUEUE_POLL_MS = 5_000;
+const IDLE_QUEUE_POLL_MS = 30_000;
 
 /** The server owns ordering and dispatch; no open browser is required. */
 export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, composerRef }: {
@@ -32,7 +35,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const error = errorState?.key === queueKey ? errorState.message : null;
   const setError = useCallback((message: string | null) => setErrorState({ key: queueKey, message }), [queueKey]);
   const unsaved = useRef(new Map<string, QueuedMessage>());
-  const key = [...THREAD_QUEUE_QUERY_KEY, queueKey];
+  const key = [...THREAD_QUEUE_QUERY_KEY, threadId ?? null];
   const mutationKey = [...key, "change"];
   const pending = useIsMutating({ mutationKey, exact: true }) > 0;
   const { mutateAsync: mutateQueue } = useMutation({
@@ -41,14 +44,13 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
       `/threads/${encodeURIComponent(threadId)}/queue`,
       { method: "POST", body: { action, id, text, ...address } },
     ),
-    onSuccess: async (updated, { queueKey, action, text }) => {
-      const queryKey = [...THREAD_QUEUE_QUERY_KEY, queueKey];
+    onSuccess: async (updated, { threadId, queueKey, action, text }) => {
+      const queryKey = [...THREAD_QUEUE_QUERY_KEY, threadId];
       // A GET started before this write can still carry a pre-mutation queue.
-      // Publish the receipt, then reconcile other writers in the background.
+      // Publish the receipt immediately. Later polls reconcile other writers.
       await client.cancelQueries({ queryKey, exact: true });
       client.setQueryData(queryKey, updated);
       if (action === "enqueue" && text !== undefined) clearComposerDraft(queueKey, text);
-      void client.invalidateQueries({ queryKey, exact: true });
     },
   });
   const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue`;
@@ -56,12 +58,15 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     queryKey: key,
     queryFn: ({ signal }) => apiJson<QueueState>(path, { signal }),
     enabled: !!threadId,
-    staleTime: 1_000,
-    // Own actions refetch the queue immediately. Only active work
-    // needs a fast poll; a settled, empty queue can discover other tabs slowly.
-    refetchInterval: (query) => running || query.state.data?.messages?.length || query.state.data?.sending
-      ? 1_000 : 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: ACTIVE_QUEUE_POLL_MS,
+    // Own actions write the acknowledged state into the cache. The shorter
+    // interval is for a message that can dispatch, not just a running Agent.
+    refetchInterval: ({ state }) => {
+      if (pending) return false;
+      if (state.data?.messages?.length || state.data?.sending) return ACTIVE_QUEUE_POLL_MS;
+      return running ? EMPTY_RUNNING_QUEUE_POLL_MS : IDLE_QUEUE_POLL_MS;
+    },
+    refetchOnWindowFocus: !pending,
   });
   const state = query.data?.messages ? query.data : EMPTY;
   const activeKey = useRef(queueKey);
@@ -69,7 +74,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress) => {
     // The account's mutation cache owns the lock, so navigating away and back
     // to this Thread cannot start a second write while its first is pending.
-    if (!threadId || client.isMutating({ mutationKey: [...THREAD_QUEUE_QUERY_KEY, queueKey, "change"], exact: true })) return false;
+    if (!threadId || client.isMutating({ mutationKey: [...THREAD_QUEUE_QUERY_KEY, threadId, "change"], exact: true })) return false;
     try {
       await mutateQueue({ threadId, queueKey, action, id, text, address });
       if (activeKey.current === queueKey) setError(null);
