@@ -5,11 +5,12 @@ import { describe, it } from "node:test";
 
 import { AGENT_ROLE_OPTIONS } from "../src/domain-types/agents.js";
 import { PROJECT_ROLE_OPTIONS } from "../src/domain-types/projects.js";
-import { previewSlots } from "../src/lib/collaborationStyle.js";
+import { previewSlots, turnSlot } from "../src/lib/collaborationStyle.js";
 
 const LOCALES = ["en", "zh-CN", "zh-TW"];
 
 interface Strings {
+  collab_style: Record<string, string>;
   role_hints: Record<string, string>;
   admin: { v2: { agent_role: Record<string, string> } };
   project: { roles: Record<string, string> };
@@ -25,6 +26,23 @@ function strings(locale: string): Strings {
 describe("agent role vocabulary", () => {
   it("offers an Agent, a Team and a Project the same roles in the same order", () => {
     assert.deepEqual(PROJECT_ROLE_OPTIONS, AGENT_ROLE_OPTIONS);
+  });
+
+  it("offers development, design, testing, DevOps and operations as Project roles", () => {
+    const labels = strings("zh-CN").project.roles;
+    assert.deepEqual(
+      ["implementer", "designer", "tester", "devops", "operations"].map((role) =>
+        PROJECT_ROLE_OPTIONS.some((option) => option === role) ? labels[role] : undefined,
+      ),
+      ["开发", "设计", "测试", "运维", "运营"],
+    );
+  });
+
+  it("gives Operations a Pipeline turn and keeps it out of the reviewer slot", () => {
+    const members = [{ id: "ops", role: "operations" }, { id: "dev", role: "implementer" }];
+    assert.deepEqual(previewSlots(members, undefined, "pipeline").slots.map(({ memberId }) => memberId), ["dev", "ops"]);
+    assert.deepEqual(previewSlots(members, undefined, "build_review").slots, [{ slot: "builder", memberId: "dev" }]);
+    assert.equal(turnSlot({ role: "operations" }, "pipeline"), "operations");
   });
 
   it("offers roles in the order a Pipeline round takes them", () => {
@@ -51,6 +69,7 @@ describe("agent role vocabulary", () => {
         assert.equal(typeof copy.admin.v2.agent_role[role], "string", `${locale} admin.v2.agent_role.${role}`);
         assert.equal(typeof copy.role_hints[role], "string", `${locale} role_hints.${role}`);
       }
+      assert.equal(typeof copy.collab_style.turn_operations, "string", `${locale} collab_style.turn_operations`);
     }
   });
 });

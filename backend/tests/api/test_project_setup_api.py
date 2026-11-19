@@ -88,7 +88,8 @@ def _proposal(planner, builder) -> dict:
     }
 
 
-def test_setup_drafts_a_proposal_the_owner_applies(setup_env, database_io_off_event_loop):
+@pytest.mark.parametrize(("proposed_role", "saved_role"), [("wizard", "implementer"), ("operations", "operations")])
+def test_setup_drafts_a_proposal_the_owner_applies(setup_env, database_io_off_event_loop, proposed_role, saved_role):
     app, client, node, project, planner, builder = setup_env
 
     started = client.post(f"/api/v1/projects/{project['id']}/setup", json={
@@ -104,15 +105,18 @@ def test_setup_drafts_a_proposal_the_owner_applies(setup_env, database_io_off_ev
     assert setup_state["file"] == f".relay/project-setup-{command['runId']}.json"
     assert setup_state["intent"] == "Launch our marketing site with a pricing page"
     assert {c["agentId"] for c in setup_state["candidates"]} == {planner["id"], builder["id"]}
+    assert "operations" in setup_state["roles"]
     assert command["workspaceSubpath"] == project["workspaceSubpath"]
 
-    _complete(app, node, command, thread_id, proposal=_proposal(planner, builder))
+    proposal = _proposal(planner, builder)
+    proposal["members"][1]["role"] = proposed_role
+    _complete(app, node, command, thread_id, proposal=proposal)
 
     setup = client.get(f"/api/v1/projects/{project['id']}/setup").json()["setup"]
     assert setup["state"] == "proposed"
     assert client.get(f"/api/v1/projects/{project['id']}").json()["project"]["name"] == "Spring site launch"
     members = {m["agentId"]: m for m in setup["proposal"]["members"]}
-    assert members[builder["id"]]["role"] == "implementer", "an unknown role is normalized"
+    assert members[builder["id"]]["role"] == saved_role
     assert members["agent-from-nowhere"]["issue"] == "agent_not_found"
     assert "issue" not in members[planner["id"]]
     assert "Every page listed" in setup["proposal"]["tasks"][0]["description"]
@@ -135,6 +139,7 @@ def test_setup_drafts_a_proposal_the_owner_applies(setup_env, database_io_off_ev
     assert record["setup"]["state"] == "applied"
     assert record["name"] == "Spring site launch"
     assert [m["agentId"] for m in record["members"]] == [planner["id"], builder["id"]]
+    assert record["members"][1]["role"] == saved_role
 
 
 def test_a_run_without_a_proposal_marks_the_setup_failed(setup_env):

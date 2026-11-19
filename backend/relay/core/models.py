@@ -26,6 +26,7 @@ AGENT_ROLES: tuple[str, ...] = (
     "tester",
     "writer",
     "devops",
+    "operations",
     "reviewer",
 )
 # Version 2 adds ordered run.output.batch delivery. Keep version 1 accepted so

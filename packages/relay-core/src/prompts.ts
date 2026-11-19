@@ -14,6 +14,7 @@ const ROLE_TITLES: Record<string, string> = {
   designer: "Interaction Designer",
   writer: "Technical Writer",
   devops: "DevOps Engineer",
+  operations: "Operations",
 };
 
 export function roleTitle(role: string): string {

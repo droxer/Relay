@@ -24,6 +24,7 @@
     "turn_designer": "互動設計師",
     "turn_writer": "技術文件工程師",
     "turn_devops": "DevOps 工程師",
+    "turn_operations": "營運",
     "turn_lead": "負責人",
     "turn_lead_summary": "負責人 · 彙總",
     "review_cycle": "評審第 {{cycle}} 輪，共 {{max}} 輪",
@@ -199,15 +200,16 @@
     "instructions": "專案指令（可選）",
     "member_fields_required": "每個專案智慧體都必須填寫職責。",
     "roles": {
-      "implementer": "軟體工程師",
+      "implementer": "開發",
       "reviewer": "程式碼評審員",
       "planner": "架構師",
-      "tester": "測試工程師",
+      "tester": "測試",
       "fixer": "缺陷修復工程師",
       "researcher": "研究分析師",
-      "designer": "互動設計師",
+      "designer": "設計",
       "writer": "技術文件工程師",
-      "devops": "DevOps 工程師",
+      "devops": "維運",
+      "operations": "營運",
       "project_manager": "專案負責人"
     },
     "unclassified": "未分類",
@@ -1497,7 +1499,8 @@
         "researcher": "研究分析師",
         "designer": "互動設計師",
         "writer": "技術文件工程師",
-        "devops": "DevOps 工程師"
+        "devops": "DevOps 工程師",
+        "operations": "營運"
       },
       "section_runtime": "執行時",
       "runtime_placement": "部署",
@@ -2566,6 +2569,7 @@
     "tester": "驗證成果，回報失敗項目。",
     "writer": "為讀者寫好結果的文件。",
     "devops": "讓變更上線：設定、管線、部署與回滾。",
+    "operations": "規劃發布溝通，追蹤使用者採用情況並蒐集回饋。",
     "reviewer": "評審完成的工作，通過或要求修改。"
   },
   "team_work": {
@@ -2581,6 +2585,7 @@
     "role_designer": "互動設計師",
     "role_writer": "技術文件工程師",
     "role_devops": "DevOps 工程師",
+    "role_operations": "營運",
     "responsibility": "職責範圍",
     "scope_example": "負責 API 及其測試",
     "outputs": "預期產出",

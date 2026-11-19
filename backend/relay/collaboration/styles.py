@@ -27,11 +27,12 @@ ROLE_STAGE: dict[str, int] = {
     "tester": 4,
     "writer": 4,
     "devops": 4,
+    "operations": 4,
     "reviewer": 5,
 }
 # Specialists hand their work to the builders; Build and review never casts
 # one as the reviewer, and a team of them is better served by Pipeline.
-SPECIALIST_ROLES = frozenset({"researcher", "designer", "writer", "devops"})
+SPECIALIST_ROLES = frozenset({"researcher", "designer", "writer", "devops", "operations"})
 
 
 def role_stage(role: str | None) -> int:

@@ -930,7 +930,8 @@ def test_project_thread_rejects_another_computer(monkeypatch) -> None:
         assert response.json()["detail"] == "project_computer_mismatch"
 
 
-def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeypatch) -> None:
+@pytest.mark.parametrize("role", ["planner", "operations"])
+def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeypatch, role) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -940,7 +941,7 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
         lead = _agent(client, app, computer, "Lead", "codex")
         reviewer = _agent(client, app, computer, "Reviewer", "claude")
         _login_alice(client)
-        project = client.post(
+        created = client.post(
             "/api/v1/projects",
             json={
                 "name": "Dispatch roles",
@@ -949,7 +950,7 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
                 "members": [
                     {
                         "agentId": lead["id"],
-                        "role": "planner",
+                        "role": role,
                         "responsibilities": "先定义边界与实现顺序",
                         "instructions": "不要直接跳过计划阶段。",
                     },
@@ -960,7 +961,9 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
                     },
                 ],
             },
-        ).json()["project"]
+        )
+        assert created.status_code == 201, created.text
+        project = created.json()["project"]
         task = client.post(
             "/api/v1/tasks",
             json={"title": "Ship project", "projectId": project["id"]},
@@ -978,7 +981,7 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
         )
         assert command["workspaceSubpath"] == project["workspaceSubpath"]
         assert command["logicalAgentId"] == lead["id"]
-        assert command["role"] == "planner"
+        assert command["role"] == role
         assert "先定义边界与实现顺序" in command["state"]["assignment_brief"]
         assert "不要直接跳过计划阶段" in command["state"]["assignment_brief"]
 

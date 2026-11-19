@@ -40,6 +40,7 @@ export const AGENT_ROLE_OPTIONS: readonly AgentRole[] = [
   "tester",
   "writer",
   "devops",
+  "operations",
   "reviewer",
 ];
 
