@@ -9,6 +9,7 @@ import { pathForAppState } from "../../lib/appRoute";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { taskWorkflowSessionQueryKey } from "../../lib/workflowRuns";
 import { ThreadWorkflowSlip } from "../composer/WorkflowSlip";
+import { DisclosureChevron, ICON } from "../icons";
 import { WorkflowRunLedger, WorkflowRunSummary } from "../workflow/WorkflowProgress";
 import { RecordFailure } from "./RecordFailure";
 
@@ -98,7 +99,10 @@ function TaskWorkflowRun({ run, sessionId, showApproval, agentName, onOpenThread
         <ThreadWorkflowSlip key={run.revision} sessionId={sessionId} run={run} focusOnMount={false} />
       ) : null}
       <details className="record-workflow-details">
-        <summary>{t("workflow.run_steps")}</summary>
+        <summary>
+          <span>{t("workflow.run_steps")}</span>
+          <DisclosureChevron size={ICON.sm} className="record-workflow-chevron" aria-hidden="true" />
+        </summary>
         <WorkflowRunLedger run={run} agentName={agentName} />
       </details>
     </article>

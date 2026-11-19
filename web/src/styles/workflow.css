@@ -299,6 +299,14 @@
   flex: 1 1 17rem;
 }
 
+/* The segmented meter and the row chevron belong to the phone band, where
+   the band itself is the control (mobile-native.css). */
+.workflow-progress-meter,
+.workflow-progress-open > svg,
+.record-workflow-chevron {
+  display: none;
+}
+
 .workflow-run-summary {
   display: grid;
   gap: var(--sp-1);
@@ -408,6 +416,9 @@
 }
 
 .workflow-timeline-step {
+  /* The current step's band insets: zero on every other step. */
+  --band: 0px;
+  --band-edge: 0px;
   position: relative;
   display: grid;
   gap: var(--sp-1);
@@ -423,9 +434,30 @@
 .workflow-timeline-step:not(:last-child)::before {
   content: "";
   position: absolute;
-  inset-block: calc(var(--mark) + var(--sp-1)) calc(var(--sp-1) - var(--sp-4));
-  inset-inline-start: calc(var(--mark) / 2 - var(--sp-hairline) / 2);
+  inset-block: calc(var(--band) + var(--mark) + var(--sp-1)) calc(var(--sp-1) - var(--sp-4) + var(--band));
+  inset-inline-start: calc(var(--band) - var(--band-edge) + var(--mark) / 2 - var(--sp-hairline) / 2);
   border-inline-start: var(--hairline);
+}
+
+/* The step the run is on, or stopped at, is where the eye lands: a quiet
+   band whose leading edge carries the step's tone, bled into the row gap so
+   its text keeps the ledger's left edge. Live blue stays an edge and a ring,
+   never a fill (palette.css). */
+.workflow-timeline-step[aria-current="step"] {
+  --band: var(--sp-2);
+  --band-edge: var(--sp-0-5);
+  margin: calc(-1 * var(--band));
+  padding: var(--band);
+  padding-inline-start: calc(var(--band) - var(--band-edge));
+  border-inline-start: var(--band-edge) solid var(--tone);
+  border-start-end-radius: var(--r-2);
+  border-end-end-radius: var(--r-2);
+  background: var(--action-soft);
+}
+
+.workflow-timeline-step[aria-current="step"] .workflow-timeline-state {
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
 /* Index · name · state: the state keeps its column however long the name. */
@@ -448,9 +480,30 @@
 .workflow-timeline-step[data-state="waiting"] { --tone: var(--warn); }
 .workflow-timeline-step[data-state="blocked"] { --tone: var(--err); }
 
-.workflow-timeline-step:is([data-state="current"], [data-state="waiting"], [data-state="blocked"]) .workflow-step-index {
+.workflow-timeline-step[aria-current="step"] .workflow-step-index {
+  position: relative;
   border-color: var(--tone);
   color: var(--tone);
+}
+
+/* A stopped step's mark fills with its tone's tint; a running one keeps a
+   ring and wears the shared live-ring (tokens/base.css), the beat every
+   live dot in Relay shares. */
+.workflow-timeline-step:is([data-state="waiting"], [data-state="blocked"]) .workflow-step-index {
+  background: var(--tone-tint);
+}
+
+.workflow-timeline-step[data-state="current"] .workflow-step-index::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-full);
+  border: 1.5px solid var(--tone);
+  /* The settled halo reduced motion rests on. */
+  opacity: var(--opacity-ghost);
+  transform: scale(1.6);
+  animation: live-ring var(--t-pulse) var(--ease) infinite;
+  pointer-events: none;
 }
 
 .workflow-timeline-step[data-state="done"] .workflow-step-index {
