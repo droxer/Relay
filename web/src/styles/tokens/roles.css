@@ -30,7 +30,7 @@
      spelling, so a sheet never has to choose between 0.5px, --sp-hairline and
      1px again; --hairline-soft is the quieter rule inside a framed group.
      A deliberate full-pixel edge (the composer card, the markdown table
-     frame) writes `1px solid` and says why beside it. */
+     frame) writes `var(--stroke-w) solid` and says why beside it. */
   --hairline: var(--sp-hairline) solid var(--line-1);
   --hairline-soft: var(--sp-hairline) solid var(--line-2);
 
@@ -44,16 +44,16 @@
      read the same. The only state allowed above the hover tier. */
   --line-drag: color-mix(in srgb, var(--ink-1) 30%, var(--line-1));
 
-  /* Selected-row accent bar — the 2px inset marker down the leading edge of
-     the active item in a list or drawer section, in the accent action.
-     Full-height, drawn as an inset shadow; the rail variant that stops short
-     of the row's top and bottom edges is `.rail-row` in base.css. */
   /* Signature — the mark's orange, lent to exactly two jobs: the focus ring
      and the selected-item marker (this bar, the rail and nav markers). It is
      a line, never a fill: buttons, links and status keep their own colours,
      so the brand reads in precise details rather than as one more hue. */
   --signature: var(--brand-lead);
-  --accent-bar: inset 2px 0 0 var(--signature);
+  /* Selected-row accent bar — the inset marker down the leading edge of the
+     active item in a list or drawer section, in the signature.
+     Full-height, drawn as an inset shadow; the rail variant that stops short
+     of the row's top and bottom edges is `.rail-row` in base.css. */
+  --accent-bar: inset var(--accent-bar-w) 0 0 var(--signature);
   /* Two widths, because a bar beside one ROW and a bar beside a BLOCK of
      prose are different jobs: the row marker rides the height of a single
      line and must not read as a border, while the block stripe sits beside
@@ -138,7 +138,7 @@
   /* The edge of an empty well — a dashed frame that says "something goes
      here". Four recipes had grown (line-2, ink-4, two line-1/ink mixes); the
      dash is 1px because a 0.5px dash rasterises as a dotted grey smear. */
-  --well-dashed: 1px dashed var(--line-1);
+  --well-dashed: var(--stroke-w) dashed var(--line-1);
 
   /* Focus — 2px ring at a 2px offset (WCAG 1.4.11), drawn with `outline`.
 

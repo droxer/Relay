@@ -573,7 +573,7 @@
    — the same shape StatusPill and the node presence dots use. */
 .adm-dash-stat.tone-bad .adm-dash-stat-dot {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--tone-mark);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--tone-mark);
 }
 
 /* A LIST count beside its label, so the name role with tabular figures;

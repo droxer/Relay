@@ -102,7 +102,7 @@
 .task-assignment-summary[data-tone="warn"] .task-assignment-summary-mark::after { background: var(--warn); }
 .task-assignment-summary[data-tone="bad"] .task-assignment-summary-mark::after {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--err);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--err);
 }
 
 .task-assignment-summary.is-empty .task-assignment-summary-mark {

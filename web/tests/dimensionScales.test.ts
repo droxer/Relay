@@ -407,4 +407,49 @@ describe("edges and corners", () => {
     }
     assert.deepEqual(offenders, [], `use var(--hairline) / var(--hairline-soft):\n  ${offenders.join("\n  ")}`);
   });
+
+  it("spells the full-pixel stroke with --stroke-w", () => {
+    /* 0.5px is --sp-hairline and 1px is --stroke-w: two widths, both named,
+       so a sheet never re-chooses between them by typing a number. */
+    const offenders: string[] = [];
+    for (const sheet of appSheets) {
+      for (const m of stripComments(sheet.text).matchAll(/(?<![\w-])(?:border[a-z-]*|box-shadow|outline|--focus-outline):[^;{}]*(?<![\w.-])1px\b[^;{}]*;/g)) {
+        offenders.push(`${sheet.rel}: ${m[0]}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `raw 1px strokes:\n  ${offenders.join("\n  ")}`);
+  });
+
+  it("frames every empty well with --well-dashed", () => {
+    const offenders: string[] = [];
+    for (const sheet of appSheets) {
+      for (const m of stripComments(sheet.text).matchAll(/(?<![\w-])border:\s*[^;]*dashed var\(--line-[12]\)[^;]*;/g)) {
+        offenders.push(`${sheet.rel}: ${m[0]}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `use var(--well-dashed):\n  ${offenders.join("\n  ")}`);
+  });
+});
+
+describe("ambient loops", () => {
+  it("breathes every symmetric loop on --ease-breathe", () => {
+    /* blink and breathe return to where they started; palette.css gives such
+       loops the symmetric in-out, and keeps --ease (ease-out) for arrivals and
+       for the one-way rings (pulse-ring, live-ring). A metronome blink on
+       steps() is mechanical, not a breath, and is exempt. */
+    const offenders: string[] = [];
+    for (const sheet of surfaceSheets) {
+      for (const m of stripComments(sheet.text).matchAll(/animation:\s*(?:blink|breathe)\b[^;]*;/g)) {
+        if (!/--ease-breathe|steps\(/.test(m[0])) offenders.push(`${sheet.rel}: ${m[0]}`);
+      }
+    }
+    assert.deepEqual(offenders, [], `use var(--ease-breathe):\n  ${offenders.join("\n  ")}`);
+  });
+
+  it("keeps one ring keyframe and tints it through --pulse-color", () => {
+    const rings = surfaceSheets.flatMap((s) =>
+      [...stripComments(s.text).matchAll(/@keyframes\s+([\w-]+)\s*\{[^@]*?box-shadow:\s*0 0 0 0/g)].map((m) => `${s.rel}: ${m[1]}`)
+    );
+    assert.deepEqual(rings, [], `use pulse-ring with --pulse-color:\n  ${rings.join("\n  ")}`);
+  });
 });

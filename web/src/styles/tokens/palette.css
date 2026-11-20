@@ -318,6 +318,12 @@
      border show past a fill, or the hairline channel between segments that
      reads as a drawn divider. Never use it to separate content. */
   --sp-hairline: 0.5px;
+  /* --stroke-w (1px) is the hairline's one sanctioned sibling: a full-pixel
+     edge for strokes a 0.5px line cannot carry — tone rings on state badges,
+     dashes (a 0.5px dash rasterises as a dotted smear), rotated or
+     illustrative marks, and the few frames that say why beside them.
+     Structural dividers and card frames stay on --hairline. */
+  --stroke-w: 1px;
   --sp-0-5: 2px;
   --sp-1-5: 6px;
   --sp-1: 4px;

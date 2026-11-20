@@ -198,7 +198,7 @@
 .agent-thinking.is-live .agent-thinking-headline {
   --blink-from: 0.55;
 
-  animation: blink var(--t-pulse) var(--ease) infinite;
+  animation: blink var(--t-pulse) var(--ease-breathe) infinite;
 }
 
 /* Off-scale optical values, both derived from the header above it: 6px is the

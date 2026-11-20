@@ -241,7 +241,7 @@ button.github-import-row-state:hover {
   align-self: stretch;
   margin: 0;
   padding: var(--sp-6) var(--sp-4);
-  border: 1px dashed var(--line-2);
+  border: var(--well-dashed);
   border-radius: var(--r-2);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
@@ -252,7 +252,8 @@ button.github-import-row-state:hover {
   margin: 0;
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-2);
-  background: color-mix(in srgb, var(--err) 8%, transparent);
+  --tone: var(--err);
+  background: var(--tone-tint);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
   color: var(--err);

@@ -100,7 +100,7 @@
   /* WebKit's native picker does not honor min-height alone. */
   height: max(var(--control-h), calc(1lh + var(--sp-2) + var(--sp-0-5)));
   padding: var(--sp-1) var(--sp-3);
-  border: 1px solid var(--field-border);
+  border: var(--stroke-w) solid var(--field-border);
   border-radius: var(--r-2);
   background: var(--surface-0);
   color: var(--ink-1);

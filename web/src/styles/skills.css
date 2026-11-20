@@ -729,7 +729,7 @@
   height: 100%;
   border-radius: inherit;
   background: var(--ink-3);
-  animation: skill-import-sweep 1.6s var(--ease) infinite;
+  animation: skill-import-sweep var(--t-draw) var(--ease) infinite;
 }
 
 @keyframes skill-import-sweep {

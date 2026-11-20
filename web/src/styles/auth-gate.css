@@ -24,7 +24,7 @@
   /* Passive readiness, not work in flight — the calm cadence, not the
      --t-pulse active-work tempo. The ▌ caret has no channel of its own; it
      rides this breathe, so there is no --t-tick split to make. */
-  animation: blink var(--t-pulse-calm) var(--ease) infinite;
+  animation: blink var(--t-pulse-calm) var(--ease-breathe) infinite;
 }
 
 .login-checking-text::after {

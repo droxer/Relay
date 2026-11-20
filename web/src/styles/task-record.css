@@ -255,7 +255,8 @@
   margin: 0;
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--r-2);
-  background: color-mix(in srgb, var(--err) 8%, transparent);
+  --tone: var(--err);
+  background: var(--tone-tint);
   color: var(--err);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);

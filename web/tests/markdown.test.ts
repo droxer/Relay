@@ -235,7 +235,7 @@ describe("markdown stylesheet", () => {
     assert.equal((block.match(/no-repeat local/g) ?? []).length, 2);
     assert.equal((block.match(/no-repeat scroll/g) ?? []).length, 2);
     // The clipped edge needs a legible frame, not the soft hairline.
-    assert.match(block, /border: 1px solid var\(--line-1\)/);
+    assert.match(block, /border: var\(--stroke-w\) solid var\(--line-1\)/);
   });
 
   it("keeps the streaming caret matching through the new wrappers", () => {

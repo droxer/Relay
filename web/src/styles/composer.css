@@ -357,7 +357,7 @@
   position: relative;
   width: min(100%, var(--thread-measure));
   margin: 0 auto;
-  border: 1px solid var(--line-1);
+  border: var(--stroke-w) solid var(--line-1);
   border-radius: var(--composer-radius);
   background: var(--surface-3);
   transition:
@@ -384,7 +384,7 @@
    the action orange would read as "act". Send→stop carries the state change. */
 .composer-input-wrap[data-running] {
   --tone: var(--live);
-  box-shadow: 0 0 0 1px var(--tone-line);
+  box-shadow: 0 0 0 var(--stroke-w) var(--tone-line);
 }
 
 .composer-input {
@@ -684,7 +684,7 @@
   width: 5rem;
   height: 5rem;
   object-fit: cover;
-  border: 1px solid var(--line-1);
+  border: var(--stroke-w) solid var(--line-1);
   border-radius: var(--r-2);
 }
 .composer-images { padding: var(--sp-3) var(--composer-inline) 0; }

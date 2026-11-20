@@ -199,8 +199,8 @@
   height: var(--avatar-md);
   border-radius: var(--r-2);
   color: var(--ink-1);
-  background: color-mix(in srgb, var(--ink-3) 12%, transparent);
-  border: var(--sp-hairline) solid color-mix(in srgb, var(--ink-3) 22%, transparent);
+  background: var(--control-fill);
+  border: var(--sp-hairline) solid var(--control-border);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -228,8 +228,8 @@
   width: var(--avatar-2xl);
   height: var(--avatar-2xl);
   border-radius: var(--r-3);
-  background: color-mix(in srgb, var(--ink-3) 12%, transparent);
-  border-color: color-mix(in srgb, var(--ink-3) 22%, transparent);
+  background: var(--control-fill);
+  border-color: var(--control-border);
   color: var(--ink-1);
 }
 

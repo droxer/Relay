@@ -43,7 +43,7 @@
   position: absolute;
   top: 50%;
   inset-inline: 0;
-  border-top: 1px dashed var(--line-1);
+  border-top: var(--stroke-w) dashed var(--line-1);
   z-index: 0;
 }
 
@@ -51,7 +51,7 @@
   position: relative;
   width: var(--sp-3);
   height: var(--sp-3);
-  border: 1px solid var(--line-1);
+  border: var(--stroke-w) solid var(--line-1);
   border-radius: var(--r-full);
   background: var(--surface-0);
 }
@@ -62,7 +62,7 @@
   place-items: center;
   width: var(--avatar-xl);
   height: var(--avatar-xl);
-  border: 1px solid var(--line-1);
+  border: var(--stroke-w) solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-1);
   color: var(--ink-2);
@@ -167,7 +167,7 @@
   place-items: center;
   width: var(--avatar-xl);
   height: var(--avatar-xl);
-  border: 1px solid var(--line-1);
+  border: var(--hairline);
   border-radius: var(--r-3);
 }
 

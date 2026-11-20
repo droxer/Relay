@@ -64,7 +64,7 @@
   border: 0;
   border-radius: var(--r-1);
   background: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tag-tone, var(--ink-4)) 42%, transparent);
+  box-shadow: inset 0 0 0 var(--stroke-w) color-mix(in srgb, var(--tag-tone, var(--ink-4)) 42%, transparent);
   color: var(--ink-2);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
@@ -93,7 +93,7 @@
 
 .tag-badge--toggle[aria-pressed="true"] {
   background: color-mix(in srgb, var(--tag-tone) 12%, transparent);
-  box-shadow: inset 0 0 0 1px var(--tag-tone);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--tag-tone);
   color: var(--ink-1);
 }
 
@@ -191,7 +191,7 @@
   /* A text field, so the text-field border (--field-border, held to 3:1),
      not the button-chrome --control-border it used to draw — it read as the
      one faint box in a form of firm ones. */
-  border: 1px solid var(--field-border);
+  border: var(--stroke-w) solid var(--field-border);
   border-radius: var(--r-2);
   background: var(--surface-0);
   cursor: text;
@@ -305,7 +305,7 @@
 @media (forced-colors: active) {
   /* System borders replace keylines because forced colours drop shadows. */
   .tag-badge {
-    border: 1px solid CanvasText;
+    border: var(--stroke-w) solid CanvasText;
   }
 
   .tag-badge--more {
@@ -315,7 +315,7 @@
   /* An outline adds a non-colour cue to the active filter. */
   .tag-badge--toggle[aria-pressed="true"] {
     border-color: Highlight;
-    outline: 1px solid Highlight;
+    outline: var(--stroke-w) solid Highlight;
     outline-offset: 1px;
   }
 

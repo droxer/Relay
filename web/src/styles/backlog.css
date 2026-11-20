@@ -229,7 +229,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  border: 1px dashed var(--ink-4);
+  border: var(--stroke-w) dashed var(--ink-4);
   border-radius: inherit;
 }
 
@@ -435,7 +435,7 @@
 .backlog-task[data-priority="high"] { border-color: var(--line-strong); }
 
 @media (forced-colors: active) {
-  .backlog-card-eyebrow .priority-badge[data-priority="high"] { box-shadow: none; border: 1px solid CanvasText; background: Highlight; color: HighlightText; }
+  .backlog-card-eyebrow .priority-badge[data-priority="high"] { box-shadow: none; border: var(--stroke-w) solid CanvasText; background: Highlight; color: HighlightText; }
   .backlog-card-eyebrow .priority-badge[data-priority="high"] .priority-bars > i { background: HighlightText; }
 }
 

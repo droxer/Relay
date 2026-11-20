@@ -559,7 +559,7 @@ button.project-member-row:hover .project-member-row-open {
   width: var(--dot-sm);
   height: var(--dot-sm);
   border-radius: var(--r-full);
-  box-shadow: inset 0 0 0 1px var(--tone);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--tone);
 }
 
 .project-dashboard-attention-title {
