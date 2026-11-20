@@ -2393,6 +2393,7 @@
     "empty_filtered_title": "沒有匹配的技能",
     "empty_filtered_body": "請嘗試其他搜尋詞。",
     "library_label": "技能庫",
+    "group_uploads": "上傳的技能",
     "granted_count": "已授予 {{count}} 個",
     "member_count": "{{count}} 名成員",
     "current_revision": "當前版本",

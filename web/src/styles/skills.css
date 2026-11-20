@@ -35,19 +35,66 @@
   background: var(--surface-list);
 }
 
-/* Same inset as .conversation-list, .agents-roster-groups + .agents-roster-list
-   and .teams-list: --sp-3 top and sides over a --sp-7 bottom run-off. This sat
-   at --sp-2 on top, so the library was the one rail whose first row rode 4px
-   higher under its header than the three beside it. */
-.skills-roster-list {
+/* Banded by folder on the agent roster's recipe (.agents-roster-groups in
+   agents.css): the scroller owns the --sp-7 run-off, each band a sticky quiet
+   label over its own compact list. */
+.skills-roster-groups {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding: var(--sp-2) 0 var(--sp-7);
+}
+
+.skills-roster-group + .skills-roster-group {
+  margin-top: var(--sp-4);
+}
+
+/* A folder path can run long (skills/engineering/review); the name truncates
+   so the count never leaves the line, and the repository — shown only when
+   two repositories share a folder name — truncates first. */
+.skills-roster-group-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-list);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  color: var(--ink-3);
+}
+
+.skills-roster-group-name,
+.skills-roster-group-repo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skills-roster-group-name {
+  flex: 0 1 auto;
+}
+
+.skills-roster-group-repo {
+  flex: 0 100 auto;
+  color: var(--ink-4);
+}
+
+.skills-roster-group-count {
+  flex: none;
+  color: var(--ink-4);
+}
+
+.skills-roster-list {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
   margin: 0;
-  padding: var(--sp-3) var(--sp-3) var(--sp-7);
+  padding: var(--sp-1) var(--sp-3) 0;
   list-style: none;
 }
 
@@ -518,7 +565,7 @@
   }
 
   /* Stacked, both panes size to content and the page owns the scroll. */
-  .skills-roster-list,
+  .skills-roster-groups,
   .skill-detail {
     overflow: visible;
   }
