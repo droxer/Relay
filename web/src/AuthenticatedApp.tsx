@@ -54,6 +54,7 @@ import { useUserProvisioning } from "./hooks/useUserProvisioning";
 import { useLocalNodeAdoption } from "./hooks/useLocalNodeAdoption";
 import { useUserAgents } from "./hooks/useUserAgents";
 import { useTeams } from "./hooks/useTeams";
+import { useRosterAvailabilityRefresh } from "./hooks/useRosterAvailabilityRefresh";
 import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { computerId as stableComputerId, computerName } from "./lib/createAgent";
@@ -167,6 +168,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     !openingRoute || ["home", "main", "projects", "backlog", "routine", "computers"].includes(openingRoute.route),
     workspaceVisible,
     !openingRoute || (openingRoute.route === "main" && !openingRoute.sessionId));
+  useRosterAvailabilityRefresh(nodes, nodesReady);
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel()
       && workspaceVisible,

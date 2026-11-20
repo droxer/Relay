@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   isSettledTaskStatus,
+  nodeAvailabilitySignature,
   RELAY_POLL_INTERVALS_MS,
   sessionsPollIntervalMs,
   taskRecordPollIntervalMs,
@@ -17,15 +18,15 @@ import {
 describe("relay polling budget", () => {
   it("keeps freshness-critical reads fast without hot-polling stable resources", () => {
     assert.equal(RELAY_POLL_INTERVALS_MS.sessions, 5_000);
-    assert.equal(RELAY_POLL_INTERVALS_MS.nodes, 10_000);
+    assert.equal(RELAY_POLL_INTERVALS_MS.nodes, 15_000);
     assert.equal(RELAY_POLL_INTERVALS_MS.tasks, 10_000);
     assert.equal(RELAY_POLL_INTERVALS_MS.sandboxes, 30_000);
   });
 
-  it("gives projects and rosters their own slower cadence", () => {
-    assert.ok(RELAY_POLL_INTERVALS_MS.projects >= 30_000);
-    assert.ok(RELAY_POLL_INTERVALS_MS.agents >= 30_000);
-    assert.ok(RELAY_POLL_INTERVALS_MS.teams >= 30_000);
+  it("polls projects and rosters only as a backstop to invalidation", () => {
+    assert.ok(RELAY_POLL_INTERVALS_MS.projects >= 300_000);
+    assert.ok(RELAY_POLL_INTERVALS_MS.agents >= 300_000);
+    assert.ok(RELAY_POLL_INTERVALS_MS.teams >= 300_000);
   });
 
   it("backs the sessions poll off only while the SSE tail is connected", () => {
@@ -77,5 +78,24 @@ describe("session stream status", () => {
     setSessionStreamConnected(true);
     assert.equal(calls, 2);
     setSessionStreamConnected(false);
+  });
+});
+
+describe("nodeAvailabilitySignature", () => {
+  const node = { id: "n1", status: "ready", online: true, dispatchable: true, agents: { claude: "ready", codex: "failed" } };
+
+  it("ignores order and fields that do not decide availability", () => {
+    const other = { id: "n2", status: "ready", online: false, agents: {} };
+    const reordered = { ...node, agents: { codex: "failed", claude: "ready" }, lastSeenAgeMs: 4_000, queuedCommandCount: 2 };
+    assert.equal(nodeAvailabilitySignature([node, other]), nodeAvailabilitySignature([other, reordered]));
+  });
+
+  it("changes when liveness, dispatchability, or a runtime's readiness changes", () => {
+    const base = nodeAvailabilitySignature([node]);
+    assert.notEqual(nodeAvailabilitySignature([{ ...node, online: false }]), base);
+    assert.notEqual(nodeAvailabilitySignature([{ ...node, dispatchable: false }]), base);
+    assert.notEqual(nodeAvailabilitySignature([{ ...node, agents: { ...node.agents, codex: "ready" } }]), base);
+    assert.notEqual(nodeAvailabilitySignature([{ ...node, status: "stopped" }]), base);
+    assert.notEqual(nodeAvailabilitySignature([]), base);
   });
 });

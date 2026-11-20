@@ -4,22 +4,24 @@ import type { TaskStatus } from "relay-core";
    of them run in a hidden tab (refetchIntervalInBackground stays false). */
 export const RELAY_POLL_INTERVALS_MS = {
   sandboxes: 30_000,
-  /** Computers change through registration and liveness, which the web
-      reads as `online` with a 30 s timeout; nothing on screen needs them
-      faster than this. */
-  nodes: 10_000,
+  /** Computers change through registration and liveness, which the backend
+      derives with a 60 s timeout; nothing on screen needs them faster than
+      this. */
+  nodes: 15_000,
   sessions: 5_000,
   /** The open thread's SSE tail pushes its events, so the list only has to
       catch the other threads' status changes. */
   sessionsWhileStreaming: 15_000,
   /** Task status moves on a round's closeout, not at stream rate. */
   tasks: 10_000,
-  /** Projects change through the owner's own edits (which write the cache)
-      far more than in the background. */
-  projects: 30_000,
-  /** Agents and teams only drift through node-reported availability. */
-  agents: 30_000,
-  teams: 30_000,
+  /** Projects change through the owner's own edits, which invalidate the
+      cache; the poll is only a backstop for someone else's edit. */
+  projects: 300_000,
+  /** Agents and teams change through roster mutations (which invalidate) and
+      node-reported availability, which `useRosterAvailabilityRefresh` follows
+      from the nodes poll. The poll is only a backstop. */
+  agents: 300_000,
+  teams: 300_000,
   /** The notification inbox. The bell is a summary, not a live feed, and a
       run's own surfaces already show it finishing in real time. */
   notifications: 30_000,
@@ -30,7 +32,33 @@ export const RELAY_POLL_INTERVALS_MS = {
 } as const;
 
 /** How long a mounted roster read is reused before a new mount refetches it. */
-export const ROSTER_STALE_TIME_MS = RELAY_POLL_INTERVALS_MS.agents;
+export const ROSTER_STALE_TIME_MS = 30_000;
+
+/**
+ * What about the computers decides whether an agent is available: each
+ * computer's liveness and its runtimes' readiness. The roster is refetched
+ * only when this changes, so a steady nodes poll costs the roster nothing.
+ */
+export function nodeAvailabilitySignature(nodes: readonly NodeAvailabilityInput[]): string {
+  return nodes
+    .map((node) => {
+      const runtimes = Object.entries(node.agents ?? {})
+        .map(([agent, status]) => `${agent}=${status}`)
+        .sort()
+        .join(",");
+      return `${node.id}:${node.status}:${node.online ? 1 : 0}${node.dispatchable === false ? 0 : 1}:${runtimes}`;
+    })
+    .sort()
+    .join("|");
+}
+
+export interface NodeAvailabilityInput {
+  id: string;
+  status?: string;
+  online: boolean;
+  dispatchable?: boolean;
+  agents?: Partial<Record<string, string>>;
+}
 
 export function sessionsPollIntervalMs(streamConnected: boolean): number {
   return streamConnected ? RELAY_POLL_INTERVALS_MS.sessionsWhileStreaming : RELAY_POLL_INTERVALS_MS.sessions;

@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getProjectManager } from "../api-client/project-manager";
+import { PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "../hooks/useRelayData";
 import { ManagerProposalCard } from "./ManagerProposalCard";
 
 /** How often a live run's staged proposals are checked for. */
@@ -24,7 +25,12 @@ export function ProjectManagerProposals({projectId,threadId,readOnly,running}: {
     wasRunning.current=running;
   },[running,refetch]);
   const refresh=()=>{void Promise.all([
-    client.invalidateQueries({queryKey:["project-manager",projectId]}),client.invalidateQueries({queryKey:["relay"]}),
+    client.invalidateQueries({queryKey:["project-manager",projectId]}),
+    // Applying a proposal changes the project and creates tasks; computers
+    // and sandboxes are untouched, so they are not refetched.
+    client.invalidateQueries({queryKey:PROJECTS_QUERY_KEY,exact:true}),
+    client.invalidateQueries({queryKey:TASKS_QUERY_KEY,exact:true}),
+    client.invalidateQueries({queryKey:SESSIONS_QUERY_KEY,exact:true}),
     client.invalidateQueries({queryKey:["task-record"]}),
   ]);};
   return <>{(query.data?.proposals??[]).filter(proposal=>proposal.threadId===threadId).map(proposal=><ManagerProposalCard
