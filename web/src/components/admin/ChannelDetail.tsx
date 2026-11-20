@@ -1,17 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   addChatAllowedConversation,
   addChatIdentityLink,
   deleteChatAllowedConversation,
   deleteChatIdentityLink,
+  listControlPanelAgents,
   rotateTelegramWebhookSecret,
   updateChatIntegration,
 } from "../../api";
-import type { ChatIntegration, UserAgent, DaemonNodeMonitorRecord } from "../../types";
-import { agentsOnNodes } from "../../lib/adminHelpers";
+import type { ChatIntegration } from "../../types";
+import { ADMIN_AGENTS_KEY, agentsOnNodes } from "../../lib/adminHelpers";
+import { CONTROL_PANEL_NODES_KEY, CONTROL_PANEL_POLL_MS, fetchControlPanelNodes } from "../../lib/controlPanelQueries";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -45,8 +48,6 @@ import { useKeyChange } from "../../hooks/useKeyChange";
  */
 interface ChannelDetailProps {
   selected: ChatIntegration | undefined;
-  agents: UserAgent[] | undefined;
-  nodes: DaemonNodeMonitorRecord[] | undefined;
   busy: boolean;
   mutate: (label: string, action: () => Promise<{ integration: ChatIntegration }>) => Promise<unknown>;
   /** Health check and activation, both view-level provisioning calls. */
@@ -67,8 +68,6 @@ interface ChannelDetailProps {
 
 export function ChannelDetail({
   selected,
-  agents: agentRecords,
-  nodes,
   busy,
   mutate,
   provision,
@@ -80,6 +79,7 @@ export function ChannelDetail({
   const { t } = useTranslation();
   const [editPublicBaseUrl, setEditPublicBaseUrl] = useState("");
   const [editCredentials, setEditCredentials] = useState<Record<string, string>>({});
+  const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [identityForm, setIdentityForm] = useState({
     externalUserId: "",
     userId: "",
@@ -107,15 +107,29 @@ export function ChannelDetail({
     ));
   }, { from: null });
 
+  const userId = identityForm.userId.trim();
+  const pickerVisible = Boolean(selected) && agentPickerOpen;
+  const { data: agentRoster } = useQuery({
+    queryKey: ADMIN_AGENTS_KEY,
+    queryFn: ({ signal }) => listControlPanelAgents(undefined, signal),
+    enabled: pickerVisible,
+  });
+  const { data: nodes } = useQuery({
+    queryKey: CONTROL_PANEL_NODES_KEY,
+    queryFn: ({ signal }) => fetchControlPanelNodes(signal),
+    enabled: pickerVisible && Boolean(userId),
+    staleTime: CONTROL_PANEL_POLL_MS,
+  });
+  const agentRecords = agentRoster?.agents;
   const identityAgentOptions = useMemo(() => {
     const agents = (agentRecords ?? []).filter((agent) => !agent.deletedAt);
-    const userId = identityForm.userId.trim();
+    // Without a User filter, every live Agent is a candidate.
     if (!userId) return agents;
     const nodeIds = (nodes ?? [])
       .filter((node) => node.userId === userId)
       .map((node) => node.id);
     return agentsOnNodes(nodeIds, agents);
-  }, [agentRecords, nodes, identityForm.userId]);
+  }, [agentRecords, nodes, userId]);
 
   // A channel identity routes to one agent, so this picker offers a single
   // roster and the shared picker draws no tab strip for it. If a channel ever
@@ -379,7 +393,10 @@ export function ChannelDetail({
               onValueChange={(value) =>
                 setIdentityForm((prev) => ({ ...prev, defaultAgentId: value ?? "" }))
               }
-              onOpenChange={(open) => { if (open) roster.resetTab(); }}
+              onOpenChange={(open) => {
+                setAgentPickerOpen(open);
+                if (open) roster.resetTab();
+              }}
             >
               <SelectTrigger
                 className="w-full"

@@ -37,9 +37,11 @@ def get_session_or_404(store: SessionStore, session_id: str) -> dict[str, Any]:
         raise HTTPException(404, "Session not found.") from None
 
 
-def get_task_or_404(store: TaskStore, task_id: str) -> dict[str, Any]:
+def get_task_or_404(
+    store: TaskStore, task_id: str, *, record_view: bool = False,
+) -> dict[str, Any]:
     try:
-        task = store.get_task(task_id)
+        task = store.get_task_record(task_id) if record_view else store.get_task(task_id)
         if not task.get("id"):
             raise HTTPException(404, "Task not found.")
         return task
@@ -196,9 +198,9 @@ def get_session_header_for_actor(
 
 
 def get_task_for_actor(
-    store: TaskStore, task_id: str, actor: Actor
+    store: TaskStore, task_id: str, actor: Actor, *, record_view: bool = False,
 ) -> dict[str, Any]:
-    task = get_task_or_404(store, task_id)
+    task = get_task_or_404(store, task_id, record_view=record_view)
     if task.get("deletedAt"):
         raise HTTPException(404, "Task not found.")
     if not actor_can_access_record(actor, task):

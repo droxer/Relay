@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, UTC
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, insert, or_, select, update
 
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..resource_lock import resource_transaction
@@ -196,10 +196,22 @@ class DatabaseManagedNodeStore:
                 True,
             )
 
-    def list_nodes(self, *, include_deleted: bool = False) -> list[dict[str, Any]]:
-        nodes = self._records("nodes")
+    def list_nodes(
+        self, *, include_deleted: bool = False, user_id: str | None = None,
+        include_ids: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        statement = select(self.records.c.snapshot).where(self.records.c.kind == "nodes")
+        if user_id is not None:
+            owned = self.records.c.snapshot["userId"].as_string() == user_id
+            statement = statement.where(or_(owned, self.records.c.id.in_(include_ids)) if include_ids else owned)
+        elif include_ids is not None:
+            if not include_ids:
+                return []
+            statement = statement.where(self.records.c.id.in_(include_ids))
         if not include_deleted:
-            nodes = [node for node in nodes if node.get("desiredState") != "deleted"]
+            statement = statement.where(self.records.c.snapshot["desiredState"].as_string().is_distinct_from("deleted"))
+        with store_transaction(self.engine) as conn:
+            nodes = list(conn.scalars(statement))
         return sorted(nodes, key=lambda item: (item.get("createdAt") or "", item["id"]))
 
     def get_node(self, node_id: str) -> dict[str, Any] | None:

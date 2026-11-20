@@ -471,9 +471,16 @@ class NodeRows(DaemonStoreState):
             agents = self._node_agents_by_node(conn, [str(row["id"])])
         return apply_node_agents(row_to_node(row), agents.get(str(row["id"]), []))
 
-    def list_nodes(self) -> list[dict[str, Any]]:
+    def list_nodes(
+        self, *, user_id: str | None = None, ui_token_hash: str | None = None,
+    ) -> list[dict[str, Any]]:
+        statement = select(self.nodes)
+        if user_id is not None:
+            statement = statement.where(self.nodes.c.user_id == user_id)
+        if ui_token_hash is not None:
+            statement = statement.where(self.nodes.c.ui_token_hash == ui_token_hash)
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(select(self.nodes)).mappings().all()
+            rows = conn.execute(statement).mappings().all()
             agents = self._node_agents_by_node(conn, [str(row["id"]) for row in rows])
         return [
             apply_node_agents(row_to_node(row), agents.get(str(row["id"]), []))

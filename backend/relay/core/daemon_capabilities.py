@@ -12,6 +12,7 @@ A current daemon advertises every capability in
 ``DAEMON_NODE_CAPABILITIES``, so a registered computer missing any of them is
 running an older client. A capability a daemon advertises only in some modes
 must never join that set, or every such computer would read as outdated.
+``DAEMON_RECOGNIZED_CAPABILITIES`` also accepts optimizations with a legacy fallback.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ DAEMON_CAPABILITY_RUNTIME_REFRESH = "runtime-refresh"
 DAEMON_CAPABILITY_PROJECT_WORKSPACE_DELETE = "project-workspace-delete"
 DAEMON_CAPABILITY_GENERATED_FILES = "generated-files"
 DAEMON_CAPABILITY_WORKSPACE_READ_SHARED = "workspace-read-shared"
+DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS = "workspace-list-thread-records"
 DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS = "structured-agent-events"
 DAEMON_CAPABILITY_THREAD_WORKSPACES = "thread-workspaces"
 DAEMON_CAPABILITY_PROJECT_WORKSPACES = "project-workspaces"
@@ -109,6 +111,9 @@ DAEMON_NODE_CAPABILITIES = frozenset(
         DAEMON_CAPABILITY_RELAY_THREAD_RECORDS,
     }
 )
+
+# The backend can still serve the combined listing through ordinary commands.
+DAEMON_RECOGNIZED_CAPABILITIES = DAEMON_NODE_CAPABILITIES | {DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS}
 
 
 def has_capability(node: Mapping[str, Any] | None, capability: str) -> bool:

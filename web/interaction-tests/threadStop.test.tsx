@@ -54,12 +54,14 @@ it("clears a pending stop when dispatch fails", async () => {
   expect(cancel).not.toHaveBeenCalled();
 });
 
-it("cancels an already running thread immediately", async () => {
+it("cancels an already running thread with the fallback Computer credential", async () => {
   const { deps, cancel, session } = setup(true);
   deps.activeSession = { ...session, status: "running" };
+  deps.fallbackNode = { id: "node-1" };
+  deps.tokens = { "node-1": "computer-token" };
   const { result } = renderHook(() => useThreadDispatch(deps));
   await act(async () => { await result.current.cancelActiveRun(); });
-  expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+  expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, token: "computer-token" }));
 });
 
 it("does not apply a stop in another thread to the pending send", async () => {

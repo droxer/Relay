@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { RecordHistory } from "../src/components/task-record/RecordHistory";
 
@@ -69,4 +69,25 @@ it("says a status move the way the thread does, with who made it and why", async
   expect(items[2]!.textContent).not.toContain("thread.lifecycle.by_");
   // A move wears the task's status glyph; bookkeeping lines only a dot.
   expect(items[1]!.querySelector(".task-status-icon")?.getAttribute("data-status")).toBe("waiting_for_human");
+});
+
+it("loads older Activity on demand and uses the earlier status to label a resumed run", async () => {
+  listTaskEvents.mockResolvedValueOnce({
+    events: [
+      { id: "z1", taskId: "task_1", type: "task.status", timestamp: "2026-06-03T09:00:00.000Z", status: "running" },
+      { id: "a2", taskId: "task_1", type: "task.status", timestamp: "2026-06-03T09:00:00.000Z", status: "review" },
+    ],
+    previousStatus: "waiting_for_human", nextBefore: 12,
+  } as never).mockResolvedValueOnce({
+    events: [{ id: "old", taskId: "task_1", type: "task.created", timestamp: "2026-06-02T09:00:00.000Z" }],
+    previousStatus: "backlog", nextBefore: null,
+  } as never);
+  renderHistory();
+  await screen.findByText("thread.lifecycle.resumed");
+  expect(screen.getAllByRole("listitem").map((row) => row.getAttribute("data-status"))).toEqual(["review", "running"]);
+  fireEvent.click(screen.getByRole("button", { name: "list.pagination_next" }));
+  await screen.findByText("backlog.history.created");
+  expect(listTaskEvents).toHaveBeenLastCalledWith("task_1", { activity: true, before: 12 }, expect.any(AbortSignal));
+  fireEvent.click(screen.getByRole("button", { name: "list.pagination_previous" }));
+  await screen.findByText("thread.lifecycle.resumed");
 });

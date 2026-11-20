@@ -101,6 +101,8 @@ For a list-latency change, inspect all of the following before editing:
 The browser task board opts into `GET /tasks?view=summary`; the unqualified
 public `GET /tasks` contract still returns complete task records. Treat the
 projection as an explicit transport optimization, not a replacement contract.
+Open Task records request the snapshot projection and reuse the list revision
+to refresh when present. The Activity history has its own reader.
 
 ### Session stream
 
@@ -143,8 +145,32 @@ response shapes merely because the consumer is a different page.
 Collection queries use freshness windows matched to their poll budgets and
 retain thread paging cursors with the cached rows. On unrelated pages, session
 and computer reads back off to 60 seconds; returning reconciles stale caches
-without forcing fresh ones to reload. `AuthenticatedApp` owns the Agent and
-Team roster polling timers, while page observers reuse those queries. Empty,
+without forcing fresh ones to reload. The shell gets the Home badge and Thread
+activity from the Thread collection and enables the full Task summary query
+for Task and Automation lists and an open Thread's Task history. Home reads
+a compact Task projection and Project totals in one query. The Project
+Dashboard has a separate Project-scoped query and ETag. The Project
+directory, Workspace, Members, and Settings use the Thread projection.
+Project file browsers share cached
+listings and previews and offer manual retry on a 503. A Task's
+Workflow timeline batches linked Threads' Workflow projections on entry and
+refreshes only individual live or invalidated Threads. The Admin
+Dashboard fetches an Agent count cached by the backend. Waitlist bands share
+one paged query, and Channels fetches its routing roster when the Agent
+picker opens. Agent and Team Activities use a compact workspace projection and
+allow the browser to revalidate it by ETag. They poll every 15 seconds when
+idle and every 3 seconds for active runs and running or queued Tasks.
+The notification bell polls only the unread count while closed. The inbox
+shares its count with the bell cache, and desktop notifications keep polling
+the inbox even with the panel closed.
+Personal Computer inventory scopes runtime, run, queue and managed metadata
+reads to the caller's Computers. The admin fleet view still covers the fleet.
+Task Activity polls its newest page while live and caches older pages until
+invalidated.
+`AuthenticatedApp` owns the Agent and Team roster polling timers,
+while page observers reuse those queries. The Agent roster also carries
+default-agent offers, so the shell shares one request and refreshes it after
+an offer is answered. Empty,
 settled message queues poll every 30 seconds. Empty queues during a run poll
 every five seconds, and pending messages poll every second. Queue writes use the
 acknowledged response to update the cache. Manual refresh refetches active readers only,

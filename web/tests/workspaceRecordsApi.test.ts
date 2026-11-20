@@ -24,6 +24,20 @@ for (const list of [
   (path: string) => listProjectWorkspaceFiles({ projectId: "p", path }),
   (path: string) => listTaskWorkspaceFiles({ taskId: "t", path }),
 ]) {
+  test("Activity uses one listing when the backend can merge the compatible roots", async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (input) => {
+      const url = new URL(String(input), "http://relay.test");
+      calls.push(url.searchParams.get("view") ?? "ordinary");
+      return Response.json({ path: ".relay/threads", exists: true, threadRecordsMerged: true, entries: [
+        { name: "old", path: "threads/old", kind: "directory", updatedAt: "2026-10-01T00:00:00Z" },
+      ] });
+    }) as typeof fetch;
+    const result = await list(".relay/threads");
+    assert.deepEqual(calls, ["activity"]);
+    assert.equal(result.entries[0]?.path, "threads/old");
+  });
+
   test("Activity includes historical threads alongside migrated threads", async () => {
     serve({
       ".relay/threads": ["current", "all"],

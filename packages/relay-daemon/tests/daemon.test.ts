@@ -50,7 +50,7 @@ import { requestUpdatePause } from "../src/update-pause.js";
 import { requestUpdateStartup } from "../src/update-startup.js";
 import { acquireBoxliteHomeLock } from "../src/box.js";
 import { agentWorkspaceSubpath } from "../src/agent-workspace.js";
-import { listWorkspace, readWorkspaceFile, WorkspaceReadError } from "../src/workspace-read.js";
+import { listWorkspace, readWorkspaceFile, workspaceCommandEvent, WorkspaceReadError } from "../src/workspace-read.js";
 import { isMainModule } from "../src/cli.js";
 import { consumeRoundResult, readRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
 import { WorkspaceRunGate } from "../src/workspace-run-gate.js";
@@ -4467,6 +4467,32 @@ test("listWorkspace lists files relative to the provided root and sorts director
   }
 });
 
+test("one Activity listing preserves real paths and prefers the newest records", () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-activity-"));
+  try {
+    for (const path of [".relay/threads/both", ".threads/both", "threads/legacy", "threads/both"]) {
+      mkdirSync(join(root, path), { recursive: true });
+    }
+    writeFileSync(join(root, ".relay/threads/both/HANDOFF.md"), "current");
+    writeFileSync(join(root, ".threads/both/HANDOFF.md"), "older");
+    writeFileSync(join(root, "threads/both/HANDOFF.json"), "{}");
+    const command = { id: "read-activity", type: "workspace.list", path: ".relay/threads", threadRecordsMaxBytes: 4096 } as const;
+    const listing = workspaceCommandEvent(root, command);
+    assert.equal(listing.type, "workspace.listing");
+    assert.equal(listing.threadRecordsMerged, true);
+    assert.deepEqual(listing.entries.map(entry => entry.path), [".relay/threads/both", "threads/legacy"]);
+    const nested = workspaceCommandEvent(root, { ...command, path: ".relay/threads/both" });
+    assert.equal(nested.type, "workspace.listing");
+    assert.deepEqual(nested.entries.map(entry => entry.path), ["threads/both/HANDOFF.json", ".relay/threads/both/HANDOFF.md"]);
+    const direct = workspaceCommandEvent(root, { ...command, threadRecordsMaxBytes: undefined });
+    const constrained = workspaceCommandEvent(root, { ...command, threadRecordsMaxBytes: Buffer.byteLength(JSON.stringify(direct)) });
+    assert.deepEqual(constrained, direct);
+    assert.equal(workspaceCommandEvent(root, { ...command, path: ".relay/threads/../.." }).type, "workspace.error");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("readWorkspaceFile rejects escapes and caps text while identifying binary data", () => {
   const root = mkdtempSync(join(tmpdir(), "relay-ws-"));
   const outsideRoot = mkdtempSync(join(tmpdir(), "relay-ws-out-"));
@@ -4557,6 +4583,7 @@ test("relay daemon serves project workspace commands", async () => {
   const projectRoot = join(root, workspaceSubpath);
   mkdirSync(projectRoot, { recursive: true });
   writeFileSync(join(projectRoot, "report.md"), "hello");
+  mkdirSync(join(projectRoot, "threads/previous"), { recursive: true });
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
   let registration: DaemonNodeRegistration | undefined;
@@ -4572,6 +4599,7 @@ test("relay daemon serves project workspace commands", async () => {
       if (path.endsWith("/commands")) {
         if (!served) { served = true; return jsonResponse({ commands: [
           { id: "cmd_ls", type: "workspace.list", sessionId: projectId, workspaceLayout: "project", workspaceSubpath, path: "" },
+          { id: "cmd_activity", type: "workspace.list", sessionId: projectId, workspaceLayout: "project", workspaceSubpath, path: ".relay/threads", threadRecordsMaxBytes: 4096 },
           { id: "cmd_read", type: "workspace.read", sessionId: projectId, workspaceLayout: "project", workspaceSubpath, path: "report.md" },
           { id: "cmd_bad", type: "workspace.read", sessionId: projectId, workspaceLayout: "project", workspaceSubpath, path: "../escape" },
         ] }); }
@@ -4579,7 +4607,7 @@ test("relay daemon serves project workspace commands", async () => {
       }
       if (path.endsWith("/events")) {
         events.push(await jsonBody<DaemonNodeEvent>(init));
-        if (events.length === 3) stop.abort();
+        if (events.length === 4) stop.abort();
         return jsonResponse({ ok: true }, 202);
       }
       throw new Error(`Unexpected URL ${url}`);
@@ -4588,9 +4616,15 @@ test("relay daemon serves project workspace commands", async () => {
   rmSync(root, { recursive: true, force: true });
 
   assert.equal(registration?.capabilities?.includes("workspace-read-shared"), true);
-  const listing = events.find((event) => event.type === "workspace.listing");
+  assert.equal(registration?.capabilities?.includes("workspace-list-thread-records"), true);
+  const listing = events.find((event) => event.type === "workspace.listing" && event.commandId === "cmd_ls");
   assert.ok(listing && listing.type === "workspace.listing");
-  assert.deepEqual(listing.entries.map((entry) => entry.name), ["report.md"]);
+  assert.deepEqual(listing.entries.map((entry) => entry.name), ["threads", "report.md"]);
+  const activity = events.find(event => event.type === "workspace.listing" && event.commandId === "cmd_activity");
+  assert.ok(activity && activity.type === "workspace.listing");
+  assert.equal(activity.threadRecordsMerged, true);
+  assert.equal(activity.exists, true);
+  assert.deepEqual(activity.entries.map(entry => entry.path), ["threads/previous"]);
   const file = events.find((event) => event.type === "workspace.file");
   assert.ok(file && file.type === "workspace.file");
   assert.equal(Buffer.from(file.contentBase64 ?? "", "base64").toString(), "hello");

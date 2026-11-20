@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from ...computer.access import actor_may_manage_computer
 from ...computer.names import (
     present_computer,
+    present_computer_inventory,
     rename_computer_for_actor,
 )
 from ...computer.node_agents import (
@@ -15,7 +16,6 @@ from ...computer.node_agents import (
 )
 from ...core.daemon_capabilities import DAEMON_CAPABILITY_RUNTIME_REFRESH, has_capability
 from ...core.ids import new_database_id
-from ...core.managed_node_policy import managed_node_placeholder
 from ...daemon_registry.records import public_sandbox_record
 from ..actors import (
     actor_can_access_sandbox,
@@ -32,32 +32,6 @@ router = APIRouter()
 
 @router.get("/daemon-nodes")
 def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    deleted_managed_node_ids = {
-        node["id"]
-        for node in ctx.managed_node_store.list_nodes(include_deleted=True)
-        if node.get("desiredState") == "deleted"
-    }
-
-    def visible_computers(
-        nodes: list[dict[str, Any]], managed_nodes: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        observed = [
-            node
-            for node in nodes
-            if node.get("managedNodeId") not in deleted_managed_node_ids
-            and not node.get("retiredAt")
-        ]
-        observed_managed_ids = {
-            node["managedNodeId"] for node in observed if node.get("managedNodeId")
-        }
-        pending = [
-            managed_node_placeholder(node)
-            for node in managed_nodes
-            if node["id"] not in observed_managed_ids
-        ]
-        presented = [present_computer(ctx, node) for node in observed]
-        return [*presented, *pending]
-
     actor = request_actor_or_none(request, ctx.auth_store)
     token = bearer_token(request)
     if token and actor is None:
@@ -66,24 +40,10 @@ def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             managed_ids = {
                 node["managedNodeId"] for node in nodes if node.get("managedNodeId")
             }
-            managed_nodes = [
-                node
-                for node in ctx.managed_node_store.list_nodes()
-                if node["id"] in managed_ids
-            ]
-            return {"nodes": visible_computers(nodes, managed_nodes)}
+            return {"nodes": present_computer_inventory(ctx, nodes, managed_ids=managed_ids)}
     if actor:
-        nodes = [
-            node
-            for node in ctx.registry.monitor_nodes()
-            if node.get("userId") == actor["userId"]
-        ]
-        managed_nodes = [
-            node
-            for node in ctx.managed_node_store.list_nodes()
-            if node.get("userId") == actor["userId"]
-        ]
-        return {"nodes": visible_computers(nodes, managed_nodes)}
+        nodes = ctx.registry.monitor_nodes_for_user(actor["userId"])
+        return {"nodes": present_computer_inventory(ctx, nodes, owner_user_id=actor["userId"])}
     raise HTTPException(401, "Authentication required.")
 
 

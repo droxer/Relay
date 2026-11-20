@@ -3,6 +3,7 @@ from __future__ import annotations
 import unicodedata
 from typing import Any, Protocol
 
+from ..core.managed_node_policy import managed_node_placeholder
 from ..persistence.protocols import ManagedNodeStore
 from ..security.actor import Actor
 from .access import actor_may_manage_computer
@@ -47,13 +48,58 @@ def computer_display_name(ctx: ComputerContext, node: dict[str, Any]) -> str:
         if node.get("managedNodeId")
         else None
     )
-    return (
-        (managed_node or {}).get("displayName") or node.get("displayName") or node["id"]
-    )
+    return _display_name(node, managed_node)
+
+
+def _display_name(node: dict[str, Any], managed_node: dict[str, Any] | None) -> str:
+    return (managed_node or {}).get("displayName") or node.get("displayName") or node["id"]
 
 
 def present_computer(ctx: ComputerContext, node: dict[str, Any]) -> dict[str, Any]:
     return {**node, "displayName": computer_display_name(ctx, node)}
+
+
+def present_computer_inventory(
+    ctx: ComputerContext,
+    nodes: list[dict[str, Any]],
+    *,
+    owner_user_id: str | None = None,
+    managed_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Use one managed-node read for names, tombstones, and pending Computers."""
+    if owner_user_id is not None or managed_ids is not None:
+        # Keep names and tombstones for visible runtimes even if the desired
+        # state changed owner before the runtime's record caught up.
+        observed_ids = {node["managedNodeId"] for node in nodes if node.get("managedNodeId")}
+        records = ctx.managed_node_store.list_nodes(
+            include_deleted=True, user_id=owner_user_id, include_ids=observed_ids | (managed_ids or set()),
+        )
+    else:
+        records = ctx.managed_node_store.list_nodes(include_deleted=True)
+    managed_nodes = {node["id"]: node for node in records}
+    observed = []
+    observed_managed_ids = set()
+    for node in nodes:
+        if node.get("retiredAt"):
+            continue
+        managed_id = node.get("managedNodeId")
+        managed = managed_nodes.get(managed_id) if managed_id else None
+        if managed and managed.get("desiredState") == "deleted":
+            continue
+        observed.append({**node, "displayName": _display_name(node, managed)})
+        if managed_id:
+            observed_managed_ids.add(managed_id)
+    return [
+        *observed,
+        *(
+            managed_node_placeholder(node)
+            for node_id, node in managed_nodes.items()
+            if node.get("desiredState") != "deleted"
+            and node_id not in observed_managed_ids
+            and (owner_user_id is None or node.get("userId") == owner_user_id)
+            and (managed_ids is None or node_id in managed_ids)
+        ),
+    ]
 
 
 def rename_computer_for_actor(

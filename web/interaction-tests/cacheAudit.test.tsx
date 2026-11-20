@@ -6,8 +6,10 @@ import { useRelayData } from "../src/hooks/useRelayData";
 import { useTaskThreadLifecycle } from "../src/hooks/useTaskThreadLifecycle";
 import { useUserAgents } from "../src/hooks/useUserAgents";
 import { useTeams } from "../src/hooks/useTeams";
+import { useDefaultAgentOffers } from "../src/hooks/useDefaultAgentOffers";
+import { useWorkflowName } from "../src/hooks/useProjectWorkflows";
 import { useThreadQueue } from "../src/hooks/useThreadQueue";
-import { listSessionSummaries, listTasks, listTaskEvents } from "../src/api";
+import { getWorkflow, listDefaultAgentOffers, listSessionSummaries, listTasks, listTaskEvents, listUserAgents, listWorkflows } from "../src/api";
 import { apiJson } from "../src/api-client/client";
 import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
 import type { RelayTaskListItem } from "../src/types";
@@ -19,8 +21,11 @@ vi.mock("../src/api", () => ({
   listTasks: vi.fn(async () => ({ tasks: [] })),
   listProjects: vi.fn(async () => ({ projects: [] })),
   listUserAgents: vi.fn(async () => ({ agents: [] })),
+  listDefaultAgentOffers: vi.fn(async () => ({ offers: [] })),
   listTeams: vi.fn(async () => ({ teams: [] })),
   listTaskEvents: vi.fn(async () => ({ events: [] })),
+  listWorkflows: vi.fn(),
+  getWorkflow: vi.fn(),
 }));
 vi.mock("../src/api-client/client", () => ({ apiJson: vi.fn(async () => ({ messages: [], paused: false })) }));
 vi.mock("../src/api-client/sessions", () => ({ cancelRun: vi.fn() }));
@@ -30,6 +35,20 @@ function setup() {
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   return { client, wrapper };
 }
+
+it("reuses a fresh Workflow catalog row and falls back to one detail read after invalidation", async () => {
+  const { client, wrapper } = setup();
+  client.setQueryData(["workflows", "project"], { workflows: [{ id: "workflow", name: "Cached workflow" }] });
+  vi.mocked(getWorkflow).mockResolvedValue({ workflow: { id: "workflow", name: "Renamed workflow" } } as Awaited<ReturnType<typeof getWorkflow>>);
+  const view = renderHook(() => useWorkflowName("workflow", "project"), { wrapper });
+  await waitFor(() => expect(view.result.current.data).toBe("Cached workflow"));
+  expect(getWorkflow).not.toHaveBeenCalled();
+  await act(() => client.invalidateQueries({ queryKey: ["workflows"] }));
+  await waitFor(() => expect(view.result.current.data).toBe("Renamed workflow"));
+  expect(getWorkflow).toHaveBeenCalledExactlyOnceWith("workflow", expect.any(AbortSignal));
+  expect(listWorkflows).not.toHaveBeenCalled();
+  view.unmount(); client.clear();
+});
 
 it("reuses fresh collection data and paging cursors across remounts", async () => {
   const { client, wrapper } = setup();
@@ -112,6 +131,27 @@ it("gives shared roster queries one polling owner", async () => {
     expect(observers.filter(observer => observer.options.refetchInterval !== false)).toHaveLength(1);
   }
   page.unmount(); owner.unmount(); client.clear();
+});
+
+it("does not poll a second endpoint when the Agent roster includes default offers", async () => {
+  const offer = { computerId: "computer", computerName: "Development", executorKinds: ["codex"] as const };
+  vi.mocked(listUserAgents).mockResolvedValueOnce({
+    agents: [],
+    defaultAgentOffers: [{ ...offer, executorKinds: [...offer.executorKinds] }],
+  });
+  const { client, wrapper } = setup();
+  const view = renderHook(() => {
+    const roster = useUserAgents("owner", true);
+    const { offers } = useDefaultAgentOffers("owner", roster.defaultAgentOffers);
+    return offers;
+  }, { wrapper });
+  try {
+    await waitFor(() => expect(view.result.current).toEqual([offer]));
+    expect(listDefaultAgentOffers).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    client.clear();
+  }
 });
 
 

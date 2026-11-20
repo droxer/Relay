@@ -7,7 +7,7 @@ import { UnplacedComputerWork } from "./UnplacedComputerWork";
 import { ComputerWorkspaceNav } from "./ComputerWorkspaceNav";
 
 import { RelayEmptyState } from "./RelayEmptyState";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, UserAgent } from "../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, TasksResponse, UserAgent } from "../types";
 import type { HomeItem } from "../lib/homeQueue";
 import type { HomeSetupProgress } from "../lib/onboarding";
 import type { Language, Theme } from "../lib/appStorage";
@@ -77,6 +77,7 @@ interface WorkRoutePageProps {
   unplacedTasks?: RelayTaskSummary[];
   sessions: RelaySession[];
   homeItems: HomeItem[];
+  homeTaskProjects?: TasksResponse["homeProjects"];
   homeStatus: ProjectCollectionStatus;
   /** Setup the person has not finished, or null once it is done or hidden. */
   homeSetupProgress: HomeSetupProgress | null;
@@ -152,6 +153,7 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       userId={props.selectedUser}
       setUser={props.setUser}
       items={props.homeItems}
+      taskProjects={props.homeTaskProjects}
       dataStatus={props.homeStatus}
       setupProgress={props.homeSetupProgress}
       onOpenOnboarding={props.onOpenOnboarding}

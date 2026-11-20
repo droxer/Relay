@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 from loguru import logger
@@ -22,6 +23,7 @@ from ...core.daemon_capabilities import (
 )
 from ..credentials import (
     daemon_node_token_matches,
+    hash_daemon_node_token,
     sandbox_ui_token_matches,
 )
 from ..scheduling import (
@@ -115,13 +117,22 @@ class NodeLivenessMixin(RegistryState):
         # node up to act on it must see it as gone.
         return self._live_node(sandbox_id)
 
-    def list_ready(self) -> list[dict[str, Any]]:
-        self._refresh_persisted_liveness()
-        if not self.sandboxes:
+    def list_ready(
+        self, *, user_id: str | None = None, ui_token: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if user_id is not None:
+            nodes = list(self._persisted_node_observations(self.daemon_store.list_nodes(user_id=user_id)))
+        elif ui_token is not None:
+            nodes = list(self._persisted_node_observations(self._nodes_for_ui_token(ui_token)))
+        else:
+            self._refresh_persisted_liveness()
+            nodes = list(self.sandboxes.values())
+        if not nodes:
             return []
-        active_runs_by_node = self._active_runs_by_node()
+        scope = {node["id"] for node in nodes} if user_id is not None or ui_token is not None else None
+        active_runs_by_node = self._active_runs_by_node(node_ids=scope)
         return sorted(
-            self.sandboxes.values(),
+            nodes,
             key=lambda sandbox: self._selection_key(
                 sandbox, active_runs_by_node.get(sandbox["id"], [])
             ),
@@ -148,19 +159,39 @@ class NodeLivenessMixin(RegistryState):
         logger.debug("Daemon node status updated", sandbox_id=sandbox_id, status=status)
 
     def monitor_nodes(self) -> list[dict[str, Any]]:
-
         self._refresh_persisted_liveness()
-        active_runs_by_node = self._active_runs_by_node()
-        queued_counts = self.daemon_store.queued_command_counts()
+        return self._monitor_node_records(tuple(self.sandboxes.values()))
+
+    def monitor_nodes_for_user(self, user_id: str) -> list[dict[str, Any]]:
+        records = self.daemon_store.list_nodes(user_id=user_id)
+        return self._monitor_persisted_scope(records)
+
+    def _monitor_persisted_scope(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return self._monitor_node_records(self._persisted_node_observations(records), scoped=True)
+
+    def _persisted_node_observations(self, records: list[dict[str, Any]]) -> Iterable[dict[str, Any]]:
+        # Ownership and token membership are read from storage on every scoped
+        # read. Keep local heartbeat precision without touching the fleet cache.
+        return (merge_node_observation(self.sandboxes.get(record["id"]), record) for record in records)
+
+    def _monitor_node_records(self, records: Iterable[dict[str, Any]], *, scoped: bool = False) -> list[dict[str, Any]]:
+        visible = [record for record in records if record.get("status") != DAEMON_NODE_DELETED_STATUS]
+        if scoped:
+            node_ids = {record["id"] for record in visible}
+            if not node_ids:
+                return []
+            active_runs_by_node = self._active_runs_by_node(node_ids=node_ids)
+            queued_counts = self.daemon_store.queued_command_counts(node_ids=node_ids)
+        else:
+            active_runs_by_node = self._active_runs_by_node()
+            queued_counts = self.daemon_store.queued_command_counts()
         nodes = []
         for sandbox in sorted(
-            self.sandboxes.values(),
+            visible,
             key=lambda item: self._selection_key(
                 item, active_runs_by_node.get(item["id"], [])
             ),
         ):
-            if sandbox.get("status") == DAEMON_NODE_DELETED_STATUS:
-                continue
             liveness = self._liveness(sandbox)
             nodes.append(
                 {
@@ -189,16 +220,15 @@ class NodeLivenessMixin(RegistryState):
         return nodes
 
     def monitor_nodes_for_token(self, token: str | None) -> list[dict[str, Any]] | None:
-        if not token:
-            return None
-        allowed = {
-            sandbox["id"]
-            for sandbox in self.sandboxes.values()
-            if sandbox_ui_token_matches(sandbox, token)
-        }
-        if not allowed:
-            return None
-        return [node for node in self.monitor_nodes() if node["id"] in allowed]
+        allowed = self._nodes_for_ui_token(token)
+        return self._monitor_persisted_scope(allowed) if allowed else None
+
+    def _nodes_for_ui_token(self, token: str | None) -> list[dict[str, Any]]:
+        token_hash = hash_daemon_node_token(token)
+        if not token_hash:
+            return []
+        return [record for record in self.daemon_store.list_nodes(ui_token_hash=token_hash)
+                   if sandbox_ui_token_matches(record, token)]
 
     def control_panel_nodes(self) -> list[dict[str, Any]]:
         nodes = self.monitor_nodes()
@@ -257,9 +287,10 @@ class NodeLivenessMixin(RegistryState):
             ),
         )
 
-    def _active_runs_by_node(self) -> dict[str, list[dict[str, Any]]]:
+    def _active_runs_by_node(self, *, node_ids: set[str] | None = None) -> dict[str, list[dict[str, Any]]]:
         active_runs_by_node: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for run in self.daemon_store.list_active_runs():
+        runs = self.daemon_store.list_active_runs() if node_ids is None else self.daemon_store.list_active_runs(node_ids=node_ids)
+        for run in runs:
             active_runs_by_node[run["nodeId"]].append(run)
         return active_runs_by_node
 

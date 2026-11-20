@@ -20,7 +20,7 @@ describe("relay polling budget", () => {
     assert.equal(RELAY_POLL_INTERVALS_MS.sessions, 5_000);
     assert.equal(RELAY_POLL_INTERVALS_MS.nodes, 15_000);
     assert.equal(RELAY_POLL_INTERVALS_MS.tasks, 10_000);
-    assert.equal(RELAY_POLL_INTERVALS_MS.sandboxes, 30_000);
+    assert.equal(RELAY_POLL_INTERVALS_MS.dashboardMetrics, 30_000);
   });
 
   it("polls projects and rosters only as a backstop to invalidation", () => {
@@ -35,15 +35,15 @@ describe("relay polling budget", () => {
     assert.ok(sessionsPollIntervalMs(true) > sessionsPollIntervalMs(false));
   });
 
-  it("stops polling a task record once it settles", () => {
+  it("lets the Task list own polling while it carries the open record", () => {
     assert.equal(isSettledTaskStatus("done"), true);
     assert.equal(isSettledTaskStatus("blocked"), true);
     assert.equal(isSettledTaskStatus(undefined), false);
     for (const status of ["backlog", "assigned", "running", "waiting_for_human", "review"] as const) {
-      assert.equal(taskRecordPollIntervalMs(status), RELAY_POLL_INTERVALS_MS.tasks, status);
+      assert.equal(taskRecordPollIntervalMs(status, true), false, status);
     }
-    assert.equal(taskRecordPollIntervalMs("done"), false);
-    assert.equal(taskRecordPollIntervalMs(undefined), RELAY_POLL_INTERVALS_MS.tasks);
+    assert.equal(taskRecordPollIntervalMs("done", true), false);
+    assert.equal(taskRecordPollIntervalMs(undefined, false), RELAY_POLL_INTERVALS_MS.tasks);
   });
 
   it("keeps a slow poll on a settled record the polled list does not carry", () => {

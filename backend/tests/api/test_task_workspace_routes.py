@@ -313,6 +313,48 @@ def test_project_task_browses_the_recorded_project_workspace(
     assert captured["workspaceSubpath"] == "projects/prj_launch"
 
 
+@pytest.mark.parametrize("supports_merge, does_merge", [(False, False), (True, False), (True, True)])
+def test_activity_listing_merges_compatibility_roots(client, backlog_task, monkeypatch, supports_merge, does_merge):
+    app = client.app
+    capabilities = ["project-workspaces", "workspace-read-shared"]
+    if supports_merge:
+        capabilities.append("workspace-list-thread-records")
+    node = _register_node(app, "node_alice_activity", "activity-computer", capabilities)
+    assert ("workspace-list-thread-records" in node["capabilities"]) is supports_merge
+    controller = SessionController(
+        app.state.session_store, task_store=app.state.task_store, task_id=backlog_task["id"],
+        workspace_path=node["workspacePath"], owner_user_id=ALICE,
+        project_id="prj_launch", workspace_layout="project", workspace_subpath="projects/prj_launch",
+        daemon_node_id=node["id"],
+    )
+    controller.create_session(backlog_task["title"], ["human", "codex"])
+
+    commands = []
+
+    def entry(path: str) -> dict:
+        return {"name": path.split("/")[-1], "path": path, "kind": "directory"}
+
+    async def dispatch(_ctx: Any, _node: dict, command: dict) -> dict:
+        commands.append(command)
+        path = command["path"]
+        entries = [entry(f"{path}/both")] if path != "threads" else [entry("threads/older"), entry("threads/both")]
+        merged = {"threadRecordsMerged": True} if command.get("threadRecordsMaxBytes") and does_merge else {}
+        return {
+            "type": "workspace.listing", "path": path, "exists": True,
+            "entries": [*entries, entry("threads/older")] if merged else entries, **merged,
+        }
+
+    monkeypatch.setattr("relay.api.tasks.workspace_files.dispatch_workspace_command", dispatch)
+    response = client.get(f"/api/v1/tasks/{backlog_task['id']}/workspace/files", params={
+        "path": ".relay/threads", "view": "activity",
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["threadRecordsMerged"] is True
+    assert [row["path"] for row in response.json()["entries"]] == [".relay/threads/both", "threads/older"]
+    assert [command["path"] for command in commands] == ([".relay/threads"] if does_merge else [".relay/threads", ".threads", "threads"])
+    assert commands[0].get("threadRecordsMaxBytes") == (app.state.settings.max_json_body_bytes if supports_merge else None)
+
+
 def test_task_workspace_rejects_a_daemon_that_lost_task_workspace_support(
     client, backlog_task
 ):

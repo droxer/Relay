@@ -13,6 +13,7 @@ import {
   WorkspacePathBreadcrumb,
 } from "../workspace/WorkspaceFileList";
 import { PROJECT_WORKSPACE_FILE_ROOTS } from "../../lib/workspaceFileTabs";
+import { retryProjectWorkspaceRead } from "../../lib/workspaceHome";
 import {
   WorkspaceFilePreview,
   useWorkspaceFileView,
@@ -85,12 +86,14 @@ export function ThreadSpaceFiles({
 
   const fileQuery = useQuery({
     queryKey: ["workspace-files", `project:${projectId}`, path, 0],
+    retry: retryProjectWorkspaceRead,
     queryFn: ({ signal }): Promise<ProjectWorkspaceFilesResponse> =>
       listProjectWorkspaceFiles({ projectId, path }, signal),
   });
   const contentQuery = useQuery({
     queryKey: ["workspace-file", `project:${projectId}`, selectedPath, 0],
     enabled: Boolean(selectedPath),
+    retry: retryProjectWorkspaceRead,
     queryFn: ({ signal }): Promise<ProjectWorkspaceFileResponse> =>
       readProjectWorkspaceFile({ projectId, path: selectedPath }, signal),
   });

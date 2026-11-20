@@ -30,7 +30,7 @@ export function setup(existing = false) {
     composerLogicalAgents: [{ id: "agent-1", executorKind: "codex", availability: "ready", enabled: true }],
     threadMentionCandidates: [{ id: "agent-1", name: "Codex", eligible: true }],
     composerTeams: [],
-    selectedUser: "alice", selectedSandbox: undefined, selectedThreadNodeId: "node-1",
+    selectedUser: "alice", fallbackNode: undefined, selectedThreadNodeId: "node-1",
     selectedToken: undefined, tokens: {},
     composerRef: { current: { getText: () => "do work", clear: vi.fn(), setText: vi.fn() } },
     transcript: { pinToBottom: vi.fn() },

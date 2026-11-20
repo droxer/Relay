@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
+from relay.core.daemon_capabilities import DAEMON_NODE_CAPABILITIES, DAEMON_RECOGNIZED_CAPABILITIES, missing_capabilities
 
 REPO = Path(__file__).parents[3]
 PROTOCOL = (REPO / "packages/relay-core/src/daemon-node-protocol.ts").read_text()
@@ -43,11 +43,15 @@ def _advertised_capabilities() -> set[str]:
 
 
 def test_the_backend_knows_exactly_the_protocol_capabilities() -> None:
-    assert set(DAEMON_NODE_CAPABILITIES) == _protocol_capabilities()
+    assert set(DAEMON_RECOGNIZED_CAPABILITIES) == _protocol_capabilities()
 
 
 def test_a_current_daemon_advertises_every_known_capability() -> None:
-    assert _advertised_capabilities() == set(DAEMON_NODE_CAPABILITIES)
+    assert _advertised_capabilities() == set(DAEMON_RECOGNIZED_CAPABILITIES)
+
+
+def test_a_computer_can_keep_the_compatibility_listing_without_an_update() -> None:
+    assert missing_capabilities({"lastSeenAt": "earlier", "capabilities": list(DAEMON_NODE_CAPABILITIES)}) == []
 
 
 def test_a_current_daemon_advertises_durable_output_acknowledgement() -> None:

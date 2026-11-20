@@ -69,6 +69,30 @@ def test_a_connected_computer_offers_its_ready_runtimes(alice) -> None:
     assert client.get("/api/v1/agents").json()["agents"] == []
 
 
+def test_agent_roster_can_include_offers_without_repeating_inventory_reads(alice, monkeypatch) -> None:
+    client, _ = alice
+    offers = client.get(OFFERS).json()["offers"]
+    registry = client.app.state.registry
+    store = client.app.state.agent_store
+    calls = []
+    monitor, list_agents = registry.monitor_nodes, store.list_agents
+
+    def read_inventory():
+        calls.append("inventory")
+        return monitor()
+
+    def read_agents(**options):
+        calls.append("agents")
+        return list_agents(**options)
+
+    monkeypatch.setattr(registry, "monitor_nodes", read_inventory)
+    monkeypatch.setattr(store, "list_agents", read_agents)
+    path = "/api/v1/agents?include=default-offers"
+    assert client.get(path).json() == {"agents": [], "defaultAgentOffers": offers}
+    assert calls == ["agents", "inventory"]
+    assert TestClient(client.app).get(path).status_code == 401
+
+
 def test_accept_mixed_answer_creates_only_unanswered_runtimes(alice) -> None:
     client, computer = alice
     assert (
@@ -80,6 +104,9 @@ def test_accept_mixed_answer_creates_only_unanswered_runtimes(alice) -> None:
     assert response.status_code == 201
     assert [agent["executorKind"] for agent in response.json()["agents"]] == ["codex"]
     assert client.get(OFFERS).json()["offers"] == []
+    combined = client.get("/api/v1/agents?include=default-offers").json()
+    assert combined["defaultAgentOffers"] == []
+    assert [agent["executorKind"] for agent in combined["agents"]] == ["codex"]
 
 
 def test_concurrent_accepts_create_one_default(alice) -> None:

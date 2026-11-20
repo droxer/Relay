@@ -103,6 +103,57 @@ async function serve(page: Page, theme: Theme, onboarding: Record<string, string
 
 const queue = (page: Page) => page.getByRole("region", { name: "Up next" });
 
+test("uses a compact Home Task list and full Project counts", async ({ page }) => {
+  await serve(page, "light");
+  const scopes: (string | null)[] = [];
+  await page.route(/\/api\/v1\/tasks\?/, async route => {
+    const scope = new URL(route.request().url()).searchParams.get("scope");
+    scopes.push(scope);
+    if (scope !== "home") return route.fallback();
+    await route.fulfill({ json: {
+      tasks: tasks.filter(task => ["t-due", "t-retry"].includes(task.id)),
+      homeProjects: { "p-billing": { total: 20, progress: { done: 15, review: 1, running: 0, blocked: 0 }, updatedAt: ago(1) } },
+    } });
+  });
+  await page.goto("/home");
+  const billing = page.getByRole("region", { name: "Projects" }).getByRole("link", { name: /Billing v2.*75%/ });
+  await expect(billing).toContainText("20 tasks");
+  await expect(page.getByRole("region", { name: "Upcoming" })).toContainText("Review the release checklist");
+  expect(scopes).toEqual(["home"]);
+});
+
+test("loads notification details once when the bell opens", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await serve(page, "light");
+  const views: string[] = [];
+  await page.route(/\/api\/v1\/notifications\?/, async (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const view = params.get("view") ?? "inbox";
+    views.push(view);
+    const count = { unreadCount: 1 };
+    await route.fulfill({ json: view === "count" ? count : {
+      ...count,
+      notifications: [{
+        id: "notice", kind: "task_completed", data: { taskId: "t-done", title: "Accessibility pass on checkout", status: "done" },
+        createdAt: ago(10), readAt: null,
+      }],
+    } });
+  });
+
+  await page.goto("/home");
+  const bell = page.locator(".sidenav-panel [data-nav='notifications']");
+  await expect(bell).toContainText("1");
+  expect(views).toEqual(["count"]);
+  await bell.click();
+  await expect(page.locator(".notif-panel")).toContainText("Accessibility pass on checkout");
+  expect(views).toEqual(["count", "inbox"]);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".notif-panel")).toBeHidden();
+  await bell.click();
+  await expect(page.locator(".notif-panel")).toContainText("Accessibility pass on checkout");
+  expect(views).toEqual(["count", "inbox"]);
+});
+
 for (const theme of ["dark", "light"] as const) {
   test(`a signed-in visitor lands on Home and sees what needs them first (${theme})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 });

@@ -48,6 +48,7 @@ export function useLanePagination(
 ): {
   lanePages: LanePages;
   setLanePage: (lane: string, page: number) => void;
+  resetLanePages: () => void;
 } {
   const parse = useCallback(
     (value: string | null) => parseLanePages(value, laneOrder),
@@ -71,7 +72,8 @@ export function useLanePagination(
     });
   }, [setLanePages]);
 
-  return { lanePages, setLanePage };
+  const resetLanePages = useCallback(() => setLanePages(EMPTY_LANE_PAGES), [setLanePages]);
+  return { lanePages, setLanePage, resetLanePages };
 }
 
 /* Module-level so the fallback is referentially stable — `useUrlSearchState`

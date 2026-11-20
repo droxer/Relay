@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-type TaskQuery = "task-record" | "task-events" | "task-runs" | "task-artifacts";
+type TaskQuery = "task-record" | "task-events" | "task-activity" | "task-runs" | "task-artifacts";
 
 // Keep revision signals with the account's cache lifetime, rather than the
 // mounted panel. Only small revision strings are retained, never responses.

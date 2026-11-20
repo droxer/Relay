@@ -1,13 +1,13 @@
 import userEvent from "@testing-library/user-event";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import { DashboardView } from "../src/components/admin/dashboard/DashboardView";
 import { getDashboardSessions, getDashboardTokens } from "../src/api";
 import type { NodeMetrics } from "../src/hooks/useNodeMetrics";
 
 vi.mock("../src/api", () => ({
-  listControlPanelAgents: vi.fn(async () => ({ agents: [] })),
+  getDashboardAgents: vi.fn(async () => ({ count: 0 })),
   getDashboardSessions: vi.fn(async () => ({ total: 0, last24h: 0, last7d: 0, statusCounts: {}, dailyCounts: [], topUsers: [] })),
   getDashboardTokens: vi.fn(async () => ({ available: false, daily: [] })),
 }));
@@ -16,9 +16,10 @@ function show() {
   vi.mocked(getDashboardSessions).mockClear();
   vi.mocked(getDashboardTokens).mockClear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}>
+  const view = render(<QueryClientProvider client={client}>
     <DashboardView nodes={[]} users={[]} metrics={{ total: 0, queued: 0 } as NodeMetrics} onManageNodes={() => {}} />
   </QueryClientProvider>);
+  return { client, view };
 }
 
 async function selectRange(value: string) {
@@ -26,6 +27,25 @@ async function selectRange(value: string) {
   await user.click(screen.getByRole("combobox", { name: "admin.v2.dash_range" }));
   await user.click(await screen.findByRole("option", { name: `admin.v2.dash_range_${value}` }));
 }
+
+it("reads each historical aggregate once per server cache window", async () => {
+  vi.useFakeTimers();
+  focusManager.setFocused(true);
+  const { client, view } = show();
+  try {
+    await act(() => vi.advanceTimersByTimeAsync(29_999));
+    expect(getDashboardSessions).toHaveBeenCalledTimes(1);
+    expect(getDashboardTokens).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(30_001));
+    expect(getDashboardSessions).toHaveBeenCalledTimes(3);
+    expect(getDashboardTokens).toHaveBeenCalledTimes(3);
+  } finally {
+    view.unmount();
+    client.clear();
+    focusManager.setFocused(undefined);
+    vi.useRealTimers();
+  }
+});
 
 it("defaults to seven days and changes both historical queries together", async () => {
   show();

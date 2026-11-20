@@ -27,6 +27,10 @@ export function listControlPanelUsers(signal?: AbortSignal): Promise<ControlPane
   return apiJson<ControlPanelUsersResponse>("/admin/users", { signal });
 }
 
+export function getDashboardAgents(signal?: AbortSignal): Promise<{ count: number }> {
+  return apiJson("/admin/dashboard/agents", { signal });
+}
+
 export function createControlPanelUser(
   input: CreateControlPanelUserInput,
 ): Promise<CreateControlPanelUserResponse> {

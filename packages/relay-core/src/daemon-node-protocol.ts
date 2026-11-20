@@ -79,7 +79,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "durable-output-ack" | "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope";
+export type DaemonNodeCapability = "durable-output-ack" | "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "workspace-list-thread-records" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope";
 /** Waits for backend output receipts with a 60s default drain budget and durable replay. */
 export const DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK: DaemonNodeCapability = "durable-output-ack";
 export const DAEMON_CAPABILITY_DURABLE_REPORTS: DaemonNodeCapability = "durable-reports";
@@ -97,6 +97,8 @@ export const DAEMON_CAPABILITY_HANDOFF_VALIDATION: DaemonNodeCapability = "hando
 export const DAEMON_CAPABILITY_GENERATED_FILES: DaemonNodeCapability = "generated-files";
 /** The daemon can serve live file listings and reads from the workspace root it exposes. */
 export const DAEMON_CAPABILITY_WORKSPACE_READ_SHARED: DaemonNodeCapability = "workspace-read-shared";
+/** One workspace.list covers the current and both historical thread record directories. */
+export const DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS: DaemonNodeCapability = "workspace-list-thread-records";
 /** The daemon emits normalized nested-agent lifecycle events in addition to raw output. */
 export const DAEMON_CAPABILITY_STRUCTURED_AGENT_EVENTS: DaemonNodeCapability = "structured-agent-events";
 /** The daemon executes each thread below its configured node workspace root. */
@@ -448,6 +450,8 @@ export interface DaemonWorkspaceListCommand {
   workspaceLayout?: DaemonWorkspaceLayout;
   workspaceSubpath?: string;
   path: string;
+  /** Combine the canonical Activity path with its historical roots if the result fits this event budget. */
+  threadRecordsMaxBytes?: number;
 }
 
 export interface DaemonWorkspaceReadCommand {
@@ -701,6 +705,7 @@ export type DaemonNodeEvent =
       path: string;
       exists: boolean;
       entries: DaemonWorkspaceEntry[];
+      threadRecordsMerged?: true;
     }
   | {
       type: "workspace.file";

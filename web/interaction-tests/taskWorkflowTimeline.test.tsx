@@ -1,24 +1,31 @@
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import type { WorkflowRun } from "relay-core";
 import { TaskWorkflowTimeline } from "../src/components/task-record/TaskWorkflowTimeline";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
-import { decideWorkflow, getSession, RelayApiError } from "../src/api";
+import { decideWorkflow, getTaskWorkflowHistory, getThreadWorkflow, RelayApiError } from "../src/api";
 
 vi.mock("../src/api", async importOriginal => ({
   ...await importOriginal<typeof import("../src/api")>(),
-  getSession: vi.fn(),
+  getThreadWorkflow: vi.fn(),
+  getTaskWorkflowHistory: vi.fn(),
   decideWorkflow: vi.fn(),
 }));
 
 function show(ids: string[], currentUserId = "owner", onOpenThread = vi.fn()) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <DialogProvider>
-      <TaskWorkflowTimeline currentUserId={currentUserId} sessionIds={ids} agentName={id => id} onOpenThread={onOpenThread} />
+      <TaskWorkflowTimeline taskId="task" currentUserId={currentUserId} sessionIds={ids} agentName={id => id} onOpenThread={onOpenThread} />
     </DialogProvider>
   </QueryClientProvider>);
 }
+
+beforeEach(() => {
+  vi.mocked(getThreadWorkflow).mockReset();
+  vi.mocked(getTaskWorkflowHistory).mockReset();
+  vi.mocked(decideWorkflow).mockReset();
+});
 
 function session(id: string, status: "completed" | "ready" | "cancelled", startedAt: string) {
   return {
@@ -27,7 +34,7 @@ function session(id: string, status: "completed" | "ready" | "cancelled", starte
       workflowRunId: id, teamSnapshot: { name: `Frozen ${id}` },
       startedAt, status, currentIndex: 0, gateDecisions: [], assignments: [],
     }],
-  } as Awaited<ReturnType<typeof getSession>>;
+  } as Awaited<ReturnType<typeof getThreadWorkflow>>;
 }
 
 it("puts the open run before newer finished runs and keeps history folded by run", async () => {
@@ -37,11 +44,13 @@ it("puts the open run before newer finished runs and keeps history folded by run
     session("ordinary", "completed", "2026-11-18T04:00:00Z"),
     session("older", "cancelled", "2026-11-18T02:00:00Z"),
   ];
-  vi.mocked(getSession).mockImplementation(async id => records.find(record => record.id === id)!);
+  vi.mocked(getTaskWorkflowHistory).mockResolvedValue({ threads: records });
   const onOpenThread = vi.fn();
   show(records.map(record => record.id), "owner", onOpenThread);
   await screen.findByRole("heading", { name: "workflow.current_run" });
   const cards = screen.getAllByRole("article");
+  expect(getTaskWorkflowHistory).toHaveBeenCalledOnce();
+  expect(getThreadWorkflow).not.toHaveBeenCalled();
   expect(cards.map(card => card.querySelector("strong")?.textContent)).toEqual(["Frozen active", "Frozen recent", "Frozen older"]);
   expect(cards.every(card => !card.querySelector("details")?.open)).toBe(true);
   const threadLink = within(cards[0]).getByRole("link", { name: "backlog.open_thread" });
@@ -77,7 +86,8 @@ it.each([
 ] as const)("lets the owner $kind from Activities and refreshes the gate", async ({ kind, next, label }) => {
   const waiting = approvalSession();
   const refreshed = approvalSession(next, 5);
-  vi.mocked(getSession).mockResolvedValueOnce(waiting).mockResolvedValue(refreshed);
+  vi.mocked(getTaskWorkflowHistory).mockResolvedValue({ threads: [waiting] });
+  vi.mocked(getThreadWorkflow).mockResolvedValue(refreshed);
   vi.mocked(decideWorkflow).mockResolvedValueOnce(refreshed);
   show([waiting.id]);
 
@@ -93,7 +103,8 @@ it.each([
 
 it("refreshes a stale approval gate after a competing decision", async () => {
   const waiting = approvalSession();
-  vi.mocked(getSession).mockResolvedValueOnce(waiting).mockResolvedValue(approvalSession("ready", 5));
+  vi.mocked(getTaskWorkflowHistory).mockResolvedValue({ threads: [waiting] });
+  vi.mocked(getThreadWorkflow).mockResolvedValue(approvalSession("ready", 5));
   vi.mocked(decideWorkflow).mockRejectedValueOnce(new RelayApiError("Stale workflow revision", 409));
   show([waiting.id]);
 
@@ -104,7 +115,7 @@ it("refreshes a stale approval gate after a competing decision", async () => {
 
 it("shows the gate status without decisions to a viewer who does not own the Thread", async () => {
   const waiting = approvalSession();
-  vi.mocked(getSession).mockResolvedValue(waiting);
+  vi.mocked(getTaskWorkflowHistory).mockResolvedValue({ threads: [waiting] });
   show([waiting.id], "viewer");
 
   expect(await screen.findByText("workflow.status_awaiting_approval")).toBeTruthy();
@@ -116,16 +127,25 @@ it("selects the latest run by start time when all runs are finished", async () =
     session("latest", "cancelled", "2026-11-18T02:00:00Z"),
     session("earliest", "completed", "2026-11-18T01:00:00Z"),
   ];
-  vi.mocked(getSession).mockImplementation(async id => records.find(record => record.id === id)!);
+  vi.mocked(getTaskWorkflowHistory).mockResolvedValue({ threads: records });
   show(records.map(record => record.id));
   await screen.findByRole("heading", { name: "workflow.latest_run" });
   expect(within(screen.getAllByRole("article")[0]).getByText("Frozen latest")).toBeTruthy();
 });
 
 it("makes a failed timeline read visible and retryable", async () => {
-  vi.mocked(getSession).mockRejectedValueOnce(new Error("Offline")).mockResolvedValue({ workflowRuns: [] } as any);
+  vi.mocked(getTaskWorkflowHistory).mockRejectedValueOnce(new Error("Offline"))
+    .mockResolvedValue({ threads: [session("retry", "completed", "2026-11-18T03:00:00Z")] });
   show(["retry"]);
   expect(await screen.findByRole("alert")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "workspace.retry" }));
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+});
+
+it("uses individual reads when the backend predates batch history", async () => {
+  vi.mocked(getTaskWorkflowHistory).mockRejectedValue(new RelayApiError("Not found", 404));
+  vi.mocked(getThreadWorkflow).mockResolvedValue(session("latest", "completed", "2026-11-18T03:00:00Z"));
+  show(["latest"]);
+  await screen.findByRole("heading", { name: "workflow.latest_run" });
+  expect(getThreadWorkflow).toHaveBeenCalledOnce();
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { WaitlistInviteResult } from "../../../types";
 import { SearchInput } from "@/components/ui/search-input";
@@ -9,7 +9,6 @@ import { Alert } from "@/components/ui/alert";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { ListGroup } from "../../ListGroup";
 import { AdminInbox, ICON, ICON_STROKE_LARGE } from "../../icons";
-import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { useLanePagination } from "../../../hooks/usePagination";
 import { LANE_PAGE_SIZE } from "../../../lib/pagination";
 import { serverPage, WAITLIST_STATUS_ORDER, WAITLIST_STATUS_TONE } from "../../../lib/waitlist";
@@ -40,19 +39,19 @@ interface WaitlistViewProps {
 export function WaitlistView({ waitlistOpen, invites, onInvited, onDismissInvites }: WaitlistViewProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const settledQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
-  const { lanePages, setLanePage } = useLanePagination(WAITLIST_STATUS_ORDER, "waitlistLanes");
+  const [settledQuery, setSettledQuery] = useState("");
+  const { lanePages, setLanePage, resetLanePages } = useLanePagination(WAITLIST_STATUS_ORDER, "waitlistLanes");
+  useEffect(() => {
+    const next = query.trim();
+    if (next === settledQuery) return;
+    const timer = setTimeout(() => {
+      setSettledQuery(next);
+      resetLanePages();
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query, settledQuery, resetLanePages]);
   const queue = useWaitlistQueue(settledQuery, lanePages);
-  const failed = queue.bands.find((band) => band.error)?.error ?? null;
-
-  // A narrower search can leave a band with fewer pages than the one open, so
-  // a new search starts every band from its first page.
-  function handleSearch(next: string) {
-    setQuery(next);
-    for (const status of WAITLIST_STATUS_ORDER) {
-      if ((lanePages[status] ?? 1) > 1) setLanePage(status, 1);
-    }
-  }
+  const failed = queue.error;
 
   return (
     <div className="adm-view">
@@ -63,7 +62,7 @@ export function WaitlistView({ waitlistOpen, invites, onInvited, onDismissInvite
           label={t("admin.waitlist.search_placeholder")}
           name="admin-waitlist-search"
           value={query}
-          onChange={(event) => handleSearch(event.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
           placeholder={t("admin.waitlist.search_placeholder")}
         />
       </div>

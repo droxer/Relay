@@ -72,7 +72,11 @@ export function TaskRecordView({
   // routine or task itself.
   const recordId = runId ?? taskId;
   const placeholder = useMemo(() => tasks.find((task) => task.id === recordId), [tasks, recordId]);
-  const { task, isPending, notFound, error } = useTaskRecord(recordId, placeholder);
+  // Other Tasks can update this record's dependency view without moving its revision.
+  const dependentIds = useMemo(() => tasks
+    .filter((task) => !task.deletedAt && task.prerequisiteTaskIds?.includes(recordId))
+    .map((task) => task.id).sort(), [tasks, recordId]);
+  const { task, isPending, notFound, error } = useTaskRecord(recordId, placeholder, dependentIds);
   const parent = useMemo(
     () => (runId ? tasks.find((candidate) => candidate.id === taskId) : undefined),
     [runId, taskId, tasks],

@@ -24,6 +24,7 @@ function controller(overrides: Partial<NotificationsController> = {}): Notificat
     isPending: false,
     isError: false,
     isFetching: false,
+    observeInbox: vi.fn(() => vi.fn()),
     retry: vi.fn(),
     markAllRead: vi.fn(),
     clearAll: vi.fn(),

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getTask, RelayApiError } from "../api";
 import { useTaskQueryRevision } from "./useTaskQueryRevision";
 import { taskRecordPollIntervalMs } from "../lib/relayPolling";
-import type { RelayTask, RelayTaskListItem } from "../types";
+import type { RelayTaskListItem } from "../types";
 
 export const TASK_RECORD_QUERY_KEY = "task-record";
 
@@ -18,16 +18,14 @@ export const TASK_RECORD_QUERY_KEY = "task-record";
  * state built on them is dead. `placeholderData` paints immediately and
  * leaves those flags honest.
  *
- * The record polls only until it settles (done or blocked). After that the
- * list row — itself polled, and written by every task mutation — is the
- * change signal: when its status or updatedAt moves, the record refetches,
- * so a retry, a reopen, or another person's edit still reaches the surface.
- * A record with no list row (opened by deep link past the list's page) keeps
- * a slow poll instead, since nothing else would tell it to refetch.
+ * When the list already polls this Task, its revision is the change signal
+ * for the record. A record outside the list owns its polling, with a slower
+ * cadence once it settles.
  */
 export function useTaskRecord(
   taskId: string | null,
   placeholder?: RelayTaskListItem,
+  dependentIds?: readonly string[],
 ): {
   task: RelayTaskListItem | undefined;
   isPending: boolean;
@@ -36,17 +34,22 @@ export function useTaskRecord(
 } {
   const query = useQuery({
     queryKey: [TASK_RECORD_QUERY_KEY, taskId],
-    queryFn: ({ signal }) => getTask(taskId as string, signal),
+    queryFn: ({ signal }) => getTask(taskId as string, signal, "record"),
     enabled: Boolean(taskId),
-    placeholderData: placeholder as RelayTask | undefined,
+    placeholderData: placeholder,
     refetchInterval: (current) => taskRecordPollIntervalMs(current.state.data?.status, placeholder !== undefined),
   });
 
-  const listStamp = placeholder ? `${placeholder.status}|${placeholder.updatedAt}` : undefined;
+  const eventCount = placeholder && "eventCount" in placeholder && typeof placeholder.eventCount === "number"
+    ? placeholder.eventCount
+    : undefined;
+  const listStamp = placeholder
+    ? JSON.stringify([placeholder.status, placeholder.updatedAt, eventCount, placeholder.waitingOn ?? [], dependentIds ?? []])
+    : undefined;
   useTaskQueryRevision(TASK_RECORD_QUERY_KEY, taskId, listStamp, query.isFetching);
 
   return {
-    task: query.data as RelayTaskListItem | undefined,
+    task: query.data,
     get isPending() { return query.isPending; },
     // A record that 404s is a deleted or mistyped id — the surface says so
     // rather than spinning forever.

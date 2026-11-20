@@ -56,7 +56,8 @@ export function useThreadNavigation({
 
   function openThread(sessionId: string, replace = false, parentTaskId?: string) {
     const session = myThreads.find((candidate) => candidate.id === sessionId);
-    const ownerTaskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id;
+    const ownerTaskId = tasks.find((task) => task.linkedSessionIds.includes(sessionId))?.id
+      ?? session?.taskActivity?.origin?.taskId;
     const taskId = parentTaskId ?? (route === "main" ? null : ownerTaskId ?? (route === "backlog" ? recordTaskId : null));
     // useThreadComposerSelection owns restoration and the thread's default.
     // Reopening the active thread must not reset its automatic agent pick.

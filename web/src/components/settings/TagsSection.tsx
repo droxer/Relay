@@ -49,7 +49,7 @@ export function TagsSection() {
       await client.cancelQueries({ queryKey: TAG_CATALOG_KEY });
       client.setQueryData(TAG_CATALOG_KEY, { tags: result.tags, total: result.tags.length });
       close(); setNotice(t("tags.manager.applied"));
-      await Promise.all([["relay", "tasks"], ["tasks"], ["task-record"], ["task-events"]].map(queryKey => client.invalidateQueries({ queryKey })));
+      await Promise.all([["relay", "tasks"], ["tasks"], ["task-record"], ["task-events"], ["task-activity"]].map(queryKey => client.invalidateQueries({ queryKey })));
       if (!returnFocus.current?.isConnected) searchRef.current?.focus();
     }, onError: (reason) => { setPreview(null); fail(reason); } });
   const busy = create.isPending || inspect.isPending || apply.isPending;

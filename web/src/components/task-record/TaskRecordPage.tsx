@@ -28,7 +28,7 @@ import { canManageAutomation, type RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
 import { RecordPrerequisites } from "./RecordPrerequisites";
 import { useUserAgents } from "../../hooks/useUserAgents";
-import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
+import { useWorkflowName } from "../../hooks/useProjectWorkflows";
 import { useTeams } from "../../hooks/useTeams";
 import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
 import type { HistoryNameResolver } from "./taskHistoryLabel";
@@ -133,7 +133,7 @@ export function TaskRecordPage({
   /* The band names the assignee and the timeline names assignment targets;
      both resolve through the same directories the boards use. */
   const { teams } = useTeams(currentUser.userId);
-  const workflowQuery = useProjectWorkflows(task?.projectId, Boolean(task?.assignedWorkflowId));
+  const workflowName = useWorkflowName(tab === "definition" ? task.assignedWorkflowId : undefined, task.projectId);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const historyNames = useMemo<HistoryNameResolver>(() => ({
     teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
@@ -270,13 +270,13 @@ export function TaskRecordPage({
             {/* Why a run is stuck, and what to do about it, before the trace
                 of how it got there. */}
             {task.status !== "review" && task.attention?.code !== "workflow_blocked" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}
-            <TaskWorkflowTimeline currentUserId={currentUser.userId} sessionIds={task.linkedSessionIds ?? []} agentName={id => historyNames.agentName?.(id) ?? id} onOpenThread={onOpenThread} />
+            <TaskWorkflowTimeline taskId={task.id} currentUserId={currentUser.userId} sessionIds={task.linkedSessionIds ?? []} agentName={id => historyNames.agentName?.(id) ?? id} onOpenThread={onOpenThread} />
             <RecordResultLine taskId={task.id} revision={revision} hideReason={Boolean(taskRecoveryReason(task))} onOpenThread={onOpenThread} />
             <RecordHistory taskId={task.id} revision={revision} live={task.status === "running"} names={historyNames} currentUserId={currentUser.userId} onOpenThread={onOpenThread} />
           </TabsContent>
         )}
         <TabsContent value="definition">
-          <TaskRecordDefinition workflowLabel={workflowQuery.data?.workflows?.find(item => item.id === task.assignedWorkflowId)?.name} task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
+          <TaskRecordDefinition workflowLabel={workflowName.data ?? undefined} task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
           {onOpenTask ? (
             <RecordPrerequisites task={task} tasks={tasks} readOnly={readOnly} onOpenTask={onOpenTask} />
           ) : null}

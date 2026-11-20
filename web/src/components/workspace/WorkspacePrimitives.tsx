@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { agentLabel } from "../../lib/plan";
 import { compactDate, compactDueDate, taskAssigneeName } from "../../lib/workspaceFormat";
-import type { WorkspaceBriefResponse, WorkspaceBriefSession, WorkspaceBriefTask } from "../../types";
+import type { WorkspaceActivityResponse, WorkspaceBriefSession, WorkspaceBriefTask } from "../../types";
 import { PriorityBadge } from "../PriorityBadge";
 import { TaskStatusIcon } from "../TaskStatusIcon";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
@@ -143,7 +143,7 @@ function ActivityRow({ title, meta, onClick }: { title: string; meta: string; on
   );
 }
 
-function sessionTitle(session: WorkspaceBriefSession): string {
+function sessionTitle(session: Pick<WorkspaceBriefSession, "title" | "taskGoal" | "id">): string {
   return session.title?.trim() || session.taskGoal?.trim() || session.id;
 }
 
@@ -216,7 +216,7 @@ export function WorkspaceActivities({
   emptyPulse = false,
   agents,
 }: {
-  brief?: WorkspaceBriefResponse;
+  brief?: WorkspaceActivityResponse;
   onOpenThread: (sessionId: string) => void;
   emptyMark?: ReactNode;
   emptyPulse?: boolean;

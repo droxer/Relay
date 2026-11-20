@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.daemon_registry.credentials import hash_daemon_node_token
+from relay.daemon_registry.registry import DaemonNodeRegistry
 from relay.persistence.agent.placements import DatabaseAgentPlacementStore
 from relay.agents.routing import placement_node
 from relay.computer.node_agents import sync_node_agents
@@ -84,6 +86,68 @@ def _create_account(client: TestClient, username: str, *, user_id: str) -> None:
         },
     )
     assert response.status_code == 201
+
+
+def test_personal_computer_inventory_reads_only_visible_runtime_rows(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        for name in ("alice", "bob"):
+            _create_account(client, name, user_id=name)
+        runtime_store = app.state.daemon_store
+        remote = DaemonNodeRegistry(app.state.session_store, runtime_store)
+        visible = {}
+        for name, owner in (("alice", ALICE), ("bob", BOB)):
+            node = remote.register({
+                "sandboxId": f"sbx_{name}", "userId": owner, "token": f"node_{name}",
+                "status": "ready", "protocolVersion": 1, "workspacePath": f"/workspace/{name}",
+            }, f"ui_{name}")
+            visible[name] = node["id"]
+        assert not app.state.registry.sandboxes
+
+        scopes: dict[str, list[dict]] = {}
+        for method in ("list_nodes", "list_active_runs", "queued_command_counts"):
+            def observe(*args, name=method, original=getattr(runtime_store, method), **kwargs):
+                scopes.setdefault(name, []).append(kwargs)
+                return original(*args, **kwargs)
+            monkeypatch.setattr(runtime_store, method, observe)
+
+        _login(client, "alice", "userpass")
+        response = client.get("/api/v1/daemon-nodes", headers={"Authorization": "Bearer ui_bob"})
+        assert response.status_code == 200, response.text
+        assert [row["id"] for row in response.json()["nodes"]] == [visible["alice"]]
+        assert scopes == {
+            "list_nodes": [{"user_id": ALICE}],
+            "list_active_runs": [{"node_ids": {visible["alice"]}}],
+            "queued_command_counts": [{"node_ids": {visible["alice"]}}],
+        }
+        scopes.clear()
+        legacy = _legacy_ui_client(client)
+        token_view = legacy.get("/api/v1/daemon-nodes", headers={"Authorization": "Bearer ui_bob"})
+        assert token_view.status_code == 200, token_view.text
+        assert [row["id"] for row in token_view.json()["nodes"]] == [visible["bob"]]
+        assert scopes["list_active_runs"] == scopes["queued_command_counts"] == [{"node_ids": {visible["bob"]}}]
+        assert legacy.get("/api/v1/daemon-nodes", headers={"Authorization": "Bearer node_bob"}).status_code == 401
+
+        scopes.clear()
+        response = client.get("/api/v1/sandboxes", headers={"Authorization": "Bearer ui_bob"})
+        assert response.status_code == 200, response.text
+        assert [row["id"] for row in response.json()["sandboxes"]] == [visible["alice"]]
+        assert scopes == {
+            "list_nodes": [{"user_id": ALICE}],
+            "list_active_runs": [{"node_ids": {visible["alice"]}}],
+        }
+        scopes.clear()
+        response = legacy.get("/api/v1/sandboxes", headers={"Authorization": "Bearer ui_bob"})
+        assert response.status_code == 200, response.text
+        assert [row["id"] for row in response.json()["sandboxes"]] == [visible["bob"]]
+        assert scopes == {
+            "list_nodes": [{"ui_token_hash": hash_daemon_node_token("ui_bob")}],
+            "list_active_runs": [{"node_ids": {visible["bob"]}}],
+        }
+        assert legacy.get("/api/v1/sandboxes", headers={"Authorization": "Bearer node_bob"}).status_code == 401
 
 
 def test_daemon_run_events_leave_the_async_event_loop(monkeypatch) -> None:
@@ -159,7 +223,8 @@ def test_daemon_output_batch_preserves_order(monkeypatch) -> None:
         ]
 
 
-def test_workspace_event_is_authorized_and_persists_response(monkeypatch, database_io_off_event_loop) -> None:
+@pytest.mark.parametrize("merged", [False, True])
+def test_workspace_event_is_authorized_and_persists_response(monkeypatch, database_io_off_event_loop, merged) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -179,16 +244,18 @@ def test_workspace_event_is_authorized_and_persists_response(monkeypatch, databa
             "type": "workspace.listing",
             "commandId": "00000000-0000-4000-8000-000000000080",
             "agentId": "agent_1",
-            "path": "",
+            "path": ".relay/threads" if merged else "",
             "exists": True,
             "entries": [],
+            **({"threadRecordsMerged": True} if merged else {}),
         }
         app.state.daemon_store.enqueue_command(
             "sbx_workspace",
             {
                 "id": event["commandId"],
                 "type": "workspace.list",
-                "path": "",
+                "path": event["path"],
+                **({"threadRecordsMaxBytes": 4096} if merged else {}),
             },
         )
         app.state.daemon_store.take_queued_commands("sbx_workspace")
@@ -345,17 +412,33 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
         managed = client.get(f"/api/v1/admin/managed-nodes/{managed_node['id']}")
         assert managed.status_code == 200
         assert managed.json()["node"]["phase"] == "ready"
-        control_panel_node = client.get("/api/v1/admin/daemon-nodes").json()["nodes"][0]
-        assert control_panel_node["managedNodeId"] == managed_node["id"]
-        assert control_panel_node["displayName"] == managed_node["displayName"]
-        assert "nodeToken" not in control_panel_node
-
         alice_client = TestClient(app)
         _login(alice_client, "alice", "userpass")
-        assert [
-            node["id"]
-            for node in alice_client.get("/api/v1/daemon-nodes").json()["nodes"]
-        ] == [runtime["sandboxId"]]
+        store = app.state.managed_node_store
+        list_nodes = store.list_nodes
+
+        def reject_individual_read(_node_id):
+            raise AssertionError("inventory reads managed records in one batch")
+
+        with monkeypatch.context() as capture:
+            list_reads = []
+
+            def count_lists(**options):
+                list_reads.append(options)
+                return list_nodes(**options)
+
+            capture.setattr(store, "get_node", reject_individual_read)
+            capture.setattr(store, "list_nodes", count_lists)
+            [control_panel_node] = client.get("/api/v1/admin/daemon-nodes").json()["nodes"]
+            [owned_node] = alice_client.get("/api/v1/daemon-nodes").json()["nodes"]
+            assert list_reads == [
+                {"include_deleted": True},
+                {"include_deleted": True, "user_id": ALICE, "include_ids": {managed_node["id"]}},
+            ]
+        assert control_panel_node["managedNodeId"] == managed_node["id"]
+        assert owned_node["id"] == runtime["sandboxId"]
+        assert owned_node["displayName"] == control_panel_node["displayName"] == managed_node["displayName"]
+        assert "nodeToken" not in control_panel_node
 
         deleted = client.delete(f"/api/v1/admin/managed-nodes/{managed_node['id']}")
         assert deleted.status_code == 202

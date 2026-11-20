@@ -16,7 +16,7 @@ from ...core.models import (
 )
 from ...core.daemon_records import EXECUTION_INTERRUPTED_STATE_KEY, NODE_POLL_DRAINED_AT
 from ...core.daemon_capabilities import (
-    DAEMON_NODE_CAPABILITIES,
+    DAEMON_RECOGNIZED_CAPABILITIES,
 )
 from ..credentials import (
     daemon_node_token_matches,
@@ -58,7 +58,7 @@ def registered_capabilities(payload: dict[str, Any]) -> list[str]:
         {
             value
             for value in (payload.get("capabilities") or [])
-            if isinstance(value, str) and value in DAEMON_NODE_CAPABILITIES
+            if isinstance(value, str) and value in DAEMON_RECOGNIZED_CAPABILITIES
         }
     )
 

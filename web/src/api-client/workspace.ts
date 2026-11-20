@@ -4,6 +4,7 @@ import type {
   ProjectWorkspaceFilesResponse,
   TaskWorkspaceFileResponse,
   TaskWorkspaceFilesResponse,
+  WorkspaceActivityResponse,
   WorkspaceBriefResponse,
   WorkspaceFileEntry,
 } from "../types.ts";
@@ -23,17 +24,25 @@ export function listArtifacts(
   return apiJson<ArtifactsResponse>(`/artifacts${query ? `?${query}` : ""}`, { signal });
 }
 
-export function getWorkspaceBrief(
-  input: { userId?: string; agentId?: string; teamId?: string; projectId?: string } = {},
-  signal?: AbortSignal,
-): Promise<WorkspaceBriefResponse> {
+type WorkspaceScope = { userId?: string; agentId?: string; teamId?: string; projectId?: string };
+
+function workspaceBriefPath(input: WorkspaceScope, view?: "activity"): string {
   const params = new URLSearchParams();
   if (input.userId) params.set("userId", input.userId);
   if (input.agentId) params.set("agentId", input.agentId);
   if (input.teamId) params.set("teamId", input.teamId);
   if (input.projectId) params.set("projectId", input.projectId);
+  if (view) params.set("view", view);
   const query = params.toString();
-  return apiJson<WorkspaceBriefResponse>(`/workspace/brief${query ? `?${query}` : ""}`, { signal });
+  return `/workspace/brief${query ? `?${query}` : ""}`;
+}
+
+export function getWorkspaceBrief(input: WorkspaceScope = {}, signal?: AbortSignal): Promise<WorkspaceBriefResponse> {
+  return apiJson(workspaceBriefPath(input), { signal });
+}
+
+export function getWorkspaceActivity(input: WorkspaceScope, signal?: AbortSignal): Promise<WorkspaceActivityResponse> {
+  return apiJson(workspaceBriefPath(input, "activity"), { signal });
 }
 
 
@@ -69,27 +78,34 @@ export function listTaskWorkspaceFiles(
 async function listWorkspaceFiles<T extends { path: string; exists: boolean; entries: WorkspaceFileEntry[] }>(
   endpoint: string, path = "", signal?: AbortSignal,
 ): Promise<T> {
-  const list = (folder: string): Promise<T> => {
-    const query = new URLSearchParams(folder ? { path: folder } : {}).toString();
-    return apiJson<T>(`${endpoint}${query ? `?${query}` : ""}`, { signal });
+  const list = (folder: string, view?: "activity") => {
+    const params = new URLSearchParams(folder ? { path: folder } : {});
+    if (view) params.set("view", view);
+    const query = params.toString();
+    return apiJson<T & { threadRecordsMerged?: true }>(`${endpoint}${query ? `?${query}` : ""}`, { signal });
   };
   if (path !== THREAD_RECORDS_ROOT && !path.startsWith(`${THREAD_RECORDS_ROOT}/`)) return list(path);
+  const current = await list(path, "activity");
+  if (current.threadRecordsMerged) return { ...current, entries: [...current.entries].sort(compareActivityEntries) };
+
+  // Older backends answer only for the requested path.
   const rest = path.slice(THREAD_RECORDS_ROOT.length);
-  // Oldest first, so newer records win a name both hold.
-  const [current, ...older] = await Promise.all(
-    [path, ...OLDER_THREAD_RECORDS_ROOTS.map(root => `${root}${rest}`)].map(list),
-  );
+  const older = await Promise.all(OLDER_THREAD_RECORDS_ROOTS.map(root => list(`${root}${rest}`)));
   const entries = new Map<string, WorkspaceFileEntry>();
-  for (const listing of [...older].reverse().concat(current)) {
+  for (const listing of [...older.reverse(), current]) {
     for (const entry of listing.entries) entries.set(entry.name, entry);
   }
   return {
     ...current,
     exists: [current, ...older].some(listing => listing.exists),
-    entries: [...entries.values()].sort((left, right) => left.kind === right.kind
-      ? left.name.toLowerCase().localeCompare(right.name.toLowerCase())
-      : left.kind === "directory" ? -1 : 1),
+    entries: [...entries.values()].sort(compareActivityEntries),
   };
+}
+
+function compareActivityEntries(left: WorkspaceFileEntry, right: WorkspaceFileEntry): number {
+  return left.kind === right.kind
+    ? left.name.toLowerCase().localeCompare(right.name.toLowerCase())
+    : left.kind === "directory" ? -1 : 1;
 }
 
 export function readTaskWorkspaceFile(

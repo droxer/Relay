@@ -9,7 +9,7 @@ import type { ThreadPermissionMode } from "relay-core";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { WorkRoutePage, showsWorkRoutePage, skipLinkTarget } from "./components/WorkRoutePage";
 import { useRelayData } from "./hooks/useRelayData";
-import { useLocationPathname } from "./hooks/useLocationPathname";
+import { useLocationPathname, useProjectDashboardTaskScope, useTaskCollectionVisible } from "./hooks/useLocationPathname";
 import { useRelayMutations } from "./hooks/useRelayMutations";
 import { useMutationError } from "./hooks/useMutationError";
 import { useAppRouter } from "./hooks/useAppRouter";
@@ -133,7 +133,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const [threadKindFilter, setThreadKindFilter] = useState<ThreadKindFilter>(THREAD_KIND_FILTER_ALL);
   const mounted = useClientMounted();
   const panels = usePanelLayout(mounted);
-  const { agents: logicalAgents, isSuccess: agentsReady } = useUserAgents(user.userId, true);
+  const { agents: logicalAgents, isSuccess: agentsReady, defaultAgentOffers } = useUserAgents(user.userId, true);
   const { teams, isSuccess: teamsReady } = useTeams(user.userId, true);
   const composerRef = useRef<ComposerHandle>(null);
   const messageOperationIdsRef = useRef(new Map<string, string>());
@@ -142,11 +142,12 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const selectedUserToken = tokens[selectedUser];
   const pathname = useLocationPathname();
   const openingRoute = pathname ? parseAppPath(pathname) : null;
+  const taskListVisible = useTaskCollectionVisible();
+  const taskProjectId = useProjectDashboardTaskScope();
   const workspaceVisible = !openingRoute
     || ["home", "main", "projects", "computers"].includes(openingRoute.route)
     || Boolean(openingRoute.sessionId);
   const {
-    sandboxes,
     nodes,
     nodesReady,
     sessions,
@@ -157,6 +158,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     loadMoreSessions,
     tasks,
     homeTaskNeedsYou,
+    homeTaskProjects,
     projects,
     projectsStatus,
     homeStatus,
@@ -164,11 +166,12 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     projectsError,
     isRefreshing,
     refresh,
-    setSandboxes,
   } = useRelayData(selectedUserToken, true,
-    !openingRoute || ["home", "main", "projects", "backlog", "routine", "computers"].includes(openingRoute.route),
+    taskListVisible,
     workspaceVisible,
-    !openingRoute || (openingRoute.route === "main" && !openingRoute.sessionId));
+    !taskListVisible,
+    taskProjectId,
+    openingRoute?.route === "home");
   useRosterAvailabilityRefresh(nodes, nodesReady);
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel()
@@ -179,7 +182,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     () => mergeThreadRuntimeNodes(nodes, localNodes),
     [localNodes, nodes],
   );
-  const selectedSandbox = useMemo(() => sandboxes.find((s) => s.userId === selectedUser), [sandboxes, selectedUser]);
   // The logged-in user's threads are the
   // sessions they own. The backend already owner-scopes /api/v1/threads, so this is
   // just the non-archived sessions sorted most-recent first.
@@ -443,7 +445,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const threadDetail = useSessionDetail(requestedSessionId, transcriptVisible, user.id);
   useSessionEvents(activeSession?.id, transcriptVisible && threadDetail.ready && shouldTailSessionEvents(activeSession?.status));
 
-  const selectedToken = selectedSandbox ? (tokens[selectedSandbox.id] ?? tokens[selectedUser]) : tokens[selectedUser];
+  const fallbackNode = nodes.find(node => node.userId === selectedUser && tokens[node.id]);
+  const selectedToken = fallbackNode ? tokens[fallbackNode.id] : selectedUserToken;
   const {
     activeRunOwner,
     activeRun,
@@ -502,7 +505,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
 
   const { adoptLocalDaemonNodes } = useUserProvisioning({
     nodes,
-    setSandboxes,
     refreshLocalDaemonNodes,
     refreshWithToken,
   });
@@ -600,7 +602,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     effectiveSelectableLogicalAgents,
     composerLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedUser, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
+    selectedUser, fallbackNode, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -759,6 +761,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             unplacedTasks={unplacedTasks}
             sessions={sessions}
             homeItems={homeItems}
+            homeTaskProjects={homeTaskProjects}
             homeStatus={homeStatus}
             homeSetupProgress={homeSetupProgress}
             onOpenOnboarding={openOnboarding}
@@ -903,7 +906,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       </ScreenErrorBoundary>
       {/* A connecting computer asks, once, whether to create a default agent
           per ready runtime it brought. */}
-      {user.userId ? <DefaultAgentsPrompt userId={user.userId} /> : null}
+      {user.userId ? <DefaultAgentsPrompt userId={user.userId} rosterOffers={defaultAgentOffers} /> : null}
     </AppShell>
     </ListRailWidthContext.Provider>
   );

@@ -33,9 +33,13 @@ def _caller(request: Request, ctx: AppContextDep) -> str:
 
 @router.get("/notifications")
 def list_notifications(
-    request: Request, ctx: AppContextDep, limit: int = Query(50, ge=1, le=MAX_LIST_LIMIT),
+    request: Request, ctx: AppContextDep, limit: int = Query(50, ge=1, le=MAX_LIST_LIMIT), view: str = "",
 ) -> dict[str, Any]:
-    return _store(request).list_for_user(_caller(request, ctx), limit=limit)
+    user_id = _caller(request, ctx)
+    store = _store(request)
+    if view == "count":
+        return _unread_count(store, user_id)
+    return store.list_for_user(user_id, limit=limit)
 
 
 def _target_ids(body: dict[str, Any]) -> list[str] | None:
@@ -51,7 +55,7 @@ def _target_ids(body: dict[str, Any]) -> list[str] | None:
 
 
 def _unread_count(store: DatabaseNotificationStore, user_id: str) -> dict[str, Any]:
-    return {"unreadCount": store.list_for_user(user_id, limit=1)["unreadCount"]}
+    return {"unreadCount": store.count_unread(user_id)}
 
 
 @router.post("/notifications/read")

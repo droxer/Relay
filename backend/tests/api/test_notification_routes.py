@@ -60,6 +60,29 @@ def test_a_finished_task_reaches_its_owners_inbox_only(admin: TestClient, ada: T
     assert admin.get(f"{API}/notifications").json() == {"notifications": [], "unreadCount": 0}
 
 
+def test_count_projection_skips_inbox_rows_and_respects_preferences(
+    admin: TestClient, ada: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _finish_task(ada, ADA)
+    _finish_task(ada, ADA)
+    first, second = (item["id"] for item in ada.get(f"{API}/notifications").json()["notifications"])
+
+    def unexpected_list(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("Count-only operations must not read the inbox rows")
+
+    monkeypatch.setattr(ada.app.state.context.notification_store, "list_for_user", unexpected_list)
+    endpoint = f"{API}/notifications?view=count&limit=1"
+    assert ada.get(endpoint).json() == {"unreadCount": 2}
+    assert admin.get(endpoint).json() == {"unreadCount": 0}
+    assert TestClient(admin.app).get(endpoint).status_code == 401
+    assert ada.post(f"{API}/notifications/read", json={"ids": [first]}).json() == {"unreadCount": 1}
+    assert ada.put(f"{API}/notifications/preferences", json={"mutedKinds": ["task_completed"]}).status_code == 200
+    assert ada.get(endpoint).json() == {"unreadCount": 0}
+    assert ada.put(f"{API}/notifications/preferences", json={"mutedKinds": []}).status_code == 200
+    assert ada.post(f"{API}/notifications/clear", json={"ids": [second]}).json() == {"unreadCount": 0}
+    assert ada.get(endpoint).json() == {"unreadCount": 0}
+
+
 def test_marking_read_by_id_and_all(admin: TestClient, ada: TestClient) -> None:
     _finish_task(ada, ADA)
     _finish_task(ada, ADA)

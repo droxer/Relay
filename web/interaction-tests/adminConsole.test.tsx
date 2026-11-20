@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
@@ -7,23 +7,42 @@ import { DialogProvider } from "../src/components/ui/DialogProvider";
 import type { AdminView } from "../src/components/admin/AdminViewToggle";
 import type { CurrentUser } from "../src/types";
 
-vi.mock("../src/hooks/useAdminNodes", () => {
-  const result = { nodes: [], users: [], pollError: null, mergeNodes: vi.fn(), refetch: vi.fn() };
-  return { useAdminNodes: () => result };
-});
+import { configurePersonalQueryCache } from "../src/lib/personalQueryCache";
 
 function show(section: AdminView = "users", waitlist = true) {
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+  const requests = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({
     settings: { maxLocalComputersPerUser: 3 }, capabilities: { userEdits: true, waitlist },
-    nodes: [], entries: [], total: 0, counts: { waiting: 0, invited: 0, joined: 0, declined: 0 },
-  }))));
+    nodes: [], users: [], entries: [], total: 0, counts: { waiting: 0, invited: 0, joined: 0, declined: 0 },
+    bands: Object.fromEntries(["waiting", "invited", "joined", "declined"].map(status => [status, { entries: [], total: 0 }])),
+  })));
+  vi.stubGlobal("fetch", requests);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  configurePersonalQueryCache(client);
   function Harness() {
     const [view, setView] = useState(section);
     return <AdminPage currentUser={{ role: "admin" } as CurrentUser} section={view} onSelectSection={setView} />;
   }
-  return render(<QueryClientProvider client={client}><DialogProvider><Harness /></DialogProvider></QueryClientProvider>);
+  render(<QueryClientProvider client={client}><DialogProvider><Harness /></DialogProvider></QueryClientProvider>);
+  return { client, paths: () => requests.mock.calls.map(([input]) => new URL(String(input), "http://localhost").pathname) };
 }
+
+it("requests only settings on Organization and loads the roster when Users opens", async () => {
+  const { client, paths } = show("organization");
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  expect(paths()).toEqual(["/api/v1/admin/settings"]);
+
+  fireEvent.click(screen.getByRole("link", { name: "admin.v2.nav_users" }));
+  await waitFor(() => expect(paths()).toContain("/api/v1/admin/users"));
+  expect(paths()).toContain("/api/v1/admin/daemon-nodes");
+  expect(paths().filter(path => path === "/api/v1/admin/settings")).toHaveLength(1);
+});
+
+it("opens Waitlist without fetching the Computer inventory", async () => {
+  const { client, paths } = show("waitlist");
+  await screen.findByRole("searchbox", { name: "admin.waitlist.search_placeholder" });
+  await waitFor(() => expect(client.isFetching()).toBe(0));
+  expect(paths()).not.toContain("/api/v1/admin/daemon-nodes");
+});
 
 it("offers invitations instead of manual creation in the empty user roster", async () => {
   show();

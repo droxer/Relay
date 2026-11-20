@@ -36,7 +36,7 @@ setTaskPrerequisites,
 import type { AgentRunInput, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
-import { NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
+import { HOME_TASKS_QUERY_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { TEAMS_QUERY_KEY } from "./useTeams";
@@ -61,7 +61,11 @@ export function useRelayMutations() {
   const { reportMutationError } = useMutationError();
 
   const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
-  const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
+  const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
+  const invalidateTaskProjections = (task: RelayTask) => {
+    void queryClient.invalidateQueries({ queryKey: HOME_TASKS_QUERY_KEY, exact: true });
+    if (task.projectId) void queryClient.invalidateQueries({ queryKey: [...TASKS_QUERY_KEY, task.projectId], exact: true });
+  };
   const invalidateThreadTasks = (sessionId: string) => {
     const tasks = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY) ?? [];
     const linkedIds = new Set(tasks.filter(task => task.linkedSessionIds?.includes(sessionId)).map(task => task.id));
@@ -248,6 +252,7 @@ export function useRelayMutations() {
       // response removes the new record until another refresh.
       await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
       cacheTask(task);
+      invalidateTaskProjections(task);
     },
     onError: onRelayError("Failed to create task", "errors.save_task"),
   });
@@ -365,7 +370,10 @@ export function useRelayMutations() {
 
   const assignTaskMutation = useMutation({
     mutationFn: ({ taskId, agentId }: { taskId: string; agentId: string }) => assignTask(taskId, agentId),
-    onSuccess: cacheTask,
+    onSuccess: (task) => {
+      cacheTask(task);
+      invalidateTaskProjections(task);
+    },
     onError: onRelayError("Failed to assign task", "errors.task_action"),
   });
 
@@ -379,6 +387,7 @@ export function useRelayMutations() {
     }) => startTask(taskId, input),
     onSuccess: (result) => {
       cacheTask(result.task);
+      invalidateTaskProjections(result.task);
       if (result.session) cacheSession(result.session);
       void invalidateNodes();
       announce({

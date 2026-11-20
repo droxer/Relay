@@ -1,9 +1,9 @@
 import type { DashboardRange } from "../lib/dashboardRange";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardSessions, type DashboardSessionsResponse } from "../api";
+import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 
 const KEY = ["admin", "dashboard", "sessions"] as const;
-const POLL_INTERVAL_MS = 10_000;
 
 const EMPTY: DashboardSessionsResponse = {
   total: 0,
@@ -24,7 +24,8 @@ export function useDashboardSessions(enabled: boolean, range?: DashboardRange): 
     queryKey: [...KEY, range ?? null],
     queryFn: ({ signal }) => getDashboardSessions(signal, range),
     enabled,
-    refetchInterval: POLL_INTERVAL_MS,
+    staleTime: RELAY_POLL_INTERVALS_MS.dashboardMetrics,
+    refetchInterval: RELAY_POLL_INTERVALS_MS.dashboardMetrics,
   });
   return {
     data: query.data ?? EMPTY,

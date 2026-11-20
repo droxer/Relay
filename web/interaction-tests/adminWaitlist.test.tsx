@@ -39,6 +39,13 @@ const QUEUE: Record<WaitlistStatus, WaitlistEntry[]> = {
   declined: [],
 };
 
+function queueResponse(queue: typeof QUEUE) {
+  const bands = Object.fromEntries(Object.entries(queue).map(([status, entries]) =>
+    [status, { entries, total: entries.length }],
+  ));
+  return new Response(JSON.stringify({ bands }));
+}
+
 function stubFetch() {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -52,9 +59,7 @@ function stubFetch() {
       };
       return new Response(JSON.stringify(result));
     }
-    const status = url.searchParams.get("status") as WaitlistStatus;
-    const counts = { waiting: 2, invited: 1, joined: 0, declined: 0 };
-    return new Response(JSON.stringify({ entries: QUEUE[status], total: QUEUE[status].length, counts }));
+    return queueResponse(QUEUE);
   }));
   return calls;
 }
@@ -62,7 +67,7 @@ function stubFetch() {
 /** The page's part: it holds the minted links so they survive a re-render. */
 function Harness() {
   const [invites, setInvites] = useState<WaitlistInviteResult[] | null>(null);
-  return <WaitlistView invites={invites} onInvited={setInvites} onDismissInvites={() => setInvites(null)} />;
+  return <WaitlistView waitlistOpen invites={invites} onInvited={setInvites} onDismissInvites={() => setInvites(null)} />;
 }
 
 it("groups the queue by status and hides empty bands", async () => {
@@ -76,8 +81,31 @@ it("groups the queue by status and hides empty bands", async () => {
   expect(within(invited).getByText("admin.waitlist.delivery_bounced")).toBeTruthy();
   expect(screen.queryByRole("region", { name: "admin.waitlist.status_joined" })).toBeNull();
   expect(screen.queryByRole("region", { name: "admin.waitlist.status_declined" })).toBeNull();
-  const statuses = calls.map((call) => new URL(call.url).searchParams.get("status"));
-  expect(statuses).toEqual(expect.arrayContaining(["waiting", "invited", "joined", "declined"]));
+  expect(calls.map((call) => new URL(call.url).pathname)).toEqual(["/api/v1/admin/waitlist/queue"]);
+});
+
+it("resets pagination with the debounced search in the same request", async () => {
+  const previous = window.location.href;
+  window.history.replaceState(null, "", "/admin/waitlist?waitlistLanes=waiting%3A2");
+  const calls = stubFetch();
+  vi.useFakeTimers();
+  try {
+    render(<Harness />, { wrapper });
+    await act(() => vi.advanceTimersByTimeAsync(10));
+    expect(new URL(calls[0].url).searchParams.has("waiting")).toBe(true);
+    const search = screen.getByRole("searchbox", { name: "admin.waitlist.search_placeholder" });
+    fireEvent.change(search, { target: { value: "a" } });
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(calls).toHaveLength(1);
+    fireEvent.change(search, { target: { value: "ada" } });
+    await act(() => vi.advanceTimersByTimeAsync(250));
+    expect(calls).toHaveLength(2);
+    const searchParams = new URL(calls[1].url).searchParams;
+    expect(searchParams.get("q")).toBe("ada");
+    expect(searchParams.has("waiting")).toBe(false);
+  } finally {
+    window.history.replaceState(null, "", previous);
+  }
 });
 
 it("reveals a minted invite link once, until it is dismissed", async () => {
@@ -133,17 +161,16 @@ it("shows a link-only invite with no delivery status", () => {
 it("refreshes background delivery failures without leaving stale queued results in the reveal", async () => {
   let delivered = false;
   const issued = entry("pending", "invited", { lastDeliveryStatus: "queued" });
-  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-    const url = new URL(String(input), "http://relay.test");
-    const status = url.searchParams.get("status");
-    const entries = status === "invited" ? [{ ...issued,
+  const fetchQueue = vi.fn(async () => {
+    const entries: WaitlistEntry[] = [{ ...issued,
       lastDeliveryStatus: delivered ? "failed" : "queued",
       lastDeliveryError: delivered ? "Delivery timed out" : null,
-    }] : [];
-    return new Response(JSON.stringify({ entries, total: entries.length, counts: {} }));
-  }));
+    }];
+    return queueResponse({ waiting: [], invited: entries, joined: [], declined: [] });
+  });
+  vi.stubGlobal("fetch", fetchQueue);
   vi.useFakeTimers();
-  render(<WaitlistView invites={[{
+  render(<WaitlistView waitlistOpen invites={[{
     entry: issued, inviteUrl: "https://relay.test/join#token=pending", delivery: { status: "queued", error: null },
   }]} onInvited={vi.fn()} onDismissInvites={vi.fn()} />, { wrapper });
   await act(() => vi.advanceTimersByTimeAsync(10));
@@ -156,6 +183,7 @@ it("refreshes background delivery failures without leaving stale queued results 
     vi.useRealTimers();
   }
   expect(await within(invited).findByText("admin.waitlist.delivery_failed")).toBeTruthy();
+  expect(fetchQueue).toHaveBeenCalledTimes(2);
   const reveal = screen.getByRole("region", { name: "admin.waitlist.reveal_title" });
   expect(within(reveal).queryByText("admin.waitlist.delivery_queued")).toBeNull();
   expect(within(reveal).getByText("https://relay.test/join#token=pending")).toBeTruthy();

@@ -47,7 +47,7 @@ export function canCancelThreadRun(input: {
 
 export function threadCancelNodeId(input: {
   node: Pick<DaemonNodeMonitorRecord, "id"> | undefined;
-  sandbox: { id: string } | undefined;
+  fallbackNode: { id: string } | undefined;
 }): string | undefined {
-  return input.node?.id ?? input.sandbox?.id;
+  return input.node?.id ?? input.fallbackNode?.id;
 }

@@ -47,22 +47,14 @@ def require_sandbox_access(
 @router.get("/sandboxes")
 def sandboxes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor_or_none(request, ctx.auth_store)
+    if actor is not None:
+        visible = ctx.registry.list_ready(user_id=actor["userId"])
+        return {"sandboxes": [public_computer_record(ctx, sandbox) for sandbox in visible]}
     token = bearer_token(request)
-    if token and actor is None:
-        allowed = [
-            public_computer_record(ctx, sandbox)
-            for sandbox in ctx.backend.list()
-            if sandbox_ui_token_matches(sandbox, token)
-        ]
-        if allowed:
-            return {"sandboxes": allowed}
-    if actor:
-        allowed = [
-            public_computer_record(ctx, sandbox)
-            for sandbox in ctx.backend.list()
-            if sandbox.get("userId") == actor["userId"]
-        ]
-        return {"sandboxes": allowed}
+    if token:
+        visible = ctx.registry.list_ready(ui_token=token)
+        if visible:
+            return {"sandboxes": [public_computer_record(ctx, sandbox) for sandbox in visible]}
     raise HTTPException(401, "Authentication required.")
 
 

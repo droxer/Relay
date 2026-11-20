@@ -29,8 +29,11 @@ import { ICON } from "../icons";
  * the rest; Skip declines them all. Closing the dialog answers nothing, so it
  * asks again next time the app loads.
  */
-export function DefaultAgentsPrompt({ userId }: { userId: string }) {
-  const { offers, answer, isAnswering } = useDefaultAgentOffers(userId);
+export function DefaultAgentsPrompt({ userId, rosterOffers }: {
+  userId: string;
+  rosterOffers: DefaultAgentOffer[] | null | undefined;
+}) {
+  const { offers, answer, isAnswering } = useDefaultAgentOffers(userId, rosterOffers);
   const [setAside, setSetAside] = useState<ReadonlySet<string>>(() => new Set());
   const offer = nextDefaultAgentOffer(offers, setAside);
   const putAside = (computerId: string) => setSetAside((current) => new Set([...current, computerId]));

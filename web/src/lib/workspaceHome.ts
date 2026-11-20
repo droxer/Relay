@@ -20,3 +20,8 @@ export function isWorkspaceRetryableError(error: unknown): boolean {
     && "status" in error
     && (error as Error & { status: unknown }).status === 503;
 }
+
+/** A 503 already has a manual retry and may have waited for the Computer. */
+export function retryProjectWorkspaceRead(failureCount: number, error: unknown): boolean {
+  return failureCount < 1 && !isWorkspaceRetryableError(error);
+}

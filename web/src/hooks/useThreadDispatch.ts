@@ -59,7 +59,7 @@ export interface ThreadDispatchDeps {
 
   /* --- where it runs ---------------------------------------------------- */
   selectedUser: string;
-  selectedSandbox: Parameters<typeof threadCancelNodeId>[0]["sandbox"];
+  fallbackNode: Parameters<typeof threadCancelNodeId>[0]["fallbackNode"];
   selectedThreadNodeId: ThreadTargets["selectedThreadNodeId"];
   selectedToken: string | undefined;
   tokens: Record<string, string | undefined>;
@@ -96,7 +96,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     effectiveSelectableLogicalAgents,
     composerLogicalAgents = effectiveSelectableLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedUser, selectedSandbox, selectedThreadNodeId, selectedToken, tokens,
+    selectedUser, fallbackNode, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -324,7 +324,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     const onThread = !selected.composingNew && (selected.selectedSessionId ?? selected.activeSessionId) === sessionId;
     const cancelNodeId = threadCancelNodeId({
       node: activeRunOwner?.node ?? activeRuntimeNode ?? undefined,
-      sandbox: selectedSandbox,
+      fallbackNode,
     });
     try {
       const session = await cancelRunMutation.mutateAsync({

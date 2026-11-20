@@ -131,11 +131,19 @@ class DatabaseNotificationStore:
                 .order_by(notifications.c.created_at.desc(), notifications.c.id.desc())
                 .limit(limit)
             ).mappings().all()
-            unread = conn.execute(
-                select(func.count()).select_from(notifications)
-                .where(visible, notifications.c.read_at.is_(None))
-            ).scalar_one()
-        return {"notifications": [_public(row) for row in rows], "unreadCount": int(unread)}
+            unread = self._count_unread(conn, visible)
+        return {"notifications": [_public(row) for row in rows], "unreadCount": unread}
+
+    def count_unread(self, user_id: str) -> int:
+        with store_transaction(self.engine) as conn:
+            return self._count_unread(conn, self._visible(user_id, self._muted_kinds(conn, user_id)))
+
+    @staticmethod
+    def _count_unread(conn: Any, visible: Any) -> int:
+        return int(conn.execute(
+            select(func.count()).select_from(notifications)
+            .where(visible, notifications.c.read_at.is_(None))
+        ).scalar_one())
 
     def mark_read(self, user_id: str, ids: list[str] | None) -> None:
         """Mark the given notices read, or every unread one when ``ids`` is None."""

@@ -53,7 +53,7 @@ describe("Agent team management", () => {
     assert.match(projectWorkspaceFilesSource, /listProjectWorkspaceFiles|readProjectWorkspaceFile/);
     assert.doesNotMatch(projectWorkspaceFilesSource, /listAgentWorkspaceFiles|readAgentWorkspaceFile|threadId|WorkspaceFileScope/);
     assert.doesNotMatch(teamWorkspaceSource, /getTeamArtifacts|TeamArtifacts/);
-    assert.match(teamWorkspaceSource, /getWorkspaceBrief\(\{ teamId: team\.id \}/);
+    assert.match(teamWorkspaceSource, /useWorkspaceActivity\(\{ teamId: team\.id \}, pageTab === "activities"\)/);
     assert.doesNotMatch(agentDetailSource, /nav\.refresh|NavRefresh/);
     assert.doesNotMatch(teamWorkspaceSource, /nav\.refresh|NavRefresh/);
     // The shared list-header create affordance, in its primary tier — the

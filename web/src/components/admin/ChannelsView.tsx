@@ -18,9 +18,7 @@ import {
   checkChatIntegration,
   createChatIntegration,
   listChatIntegrations,
-  listControlPanelAgents,
 } from "../../api";
-import { CONTROL_PANEL_NODES_KEY, fetchControlPanelNodes } from "../../lib/controlPanelQueries";
 import { backendPublicOrigin } from "../../lib/apiOrigin";
 import { useUrlSearchState } from "../../hooks/useUrlSearchState";
 import type { ChatIntegration } from "../../types";
@@ -91,19 +89,6 @@ export function ChannelsView({
     queryKey: CHAT_INTEGRATIONS_KEY,
     queryFn: async ({ signal }) => (await listChatIntegrations(signal)).integrations,
   });
-  const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: ({ signal }) => listControlPanelAgents(undefined, signal),
-  });
-  const nodesQuery = useQuery({
-    queryKey: CONTROL_PANEL_NODES_KEY,
-    queryFn: ({ signal }) => fetchControlPanelNodes(signal),
-  });
-
-  // Agents aren't owned by users — the default agent for a chat identity is
-  // resolved through the selected user's computers (their nodes), matching
-  // the Users view. With no user typed, any agent is a candidate.
-
   const integrations = (query.data ?? []).filter((integration) => integration.provider === "telegram");
   const selected = useMemo(
     () => integrations.find((integration) => integration.id === selectedId) ?? integrations[0] ?? null,
@@ -400,8 +385,6 @@ export function ChannelsView({
 
         <ChannelDetail
           selected={selected}
-          agents={agentsQuery.data?.agents}
-          nodes={nodesQuery.data}
           busy={busy !== null}
           mutate={mutate}
           provision={provision}

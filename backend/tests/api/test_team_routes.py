@@ -663,6 +663,13 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
         assert individual_task["id"] not in {item["id"] for item in payload["tasks"]}
         assert payload["metrics"]["artifactCount"] == 1
         assert client.get(f"/api/v1/teams/{team['id']}/artifacts").status_code == 404
+        activity = client.get(f"/api/v1/workspace/brief?view=activity&teamId={team['id']}")
+        assert activity.status_code == 200
+        compact = activity.json()
+        assert set(compact) == {"activeRuns", "sessions", "tasks"}
+        assert [item["id"] for item in compact["sessions"]] == [session["id"]]
+        assert [item["runId"] for item in compact["activeRuns"]] == ["run_team"]
+        assert compact["tasks"] == payload["tasks"]
 
 
 def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(
