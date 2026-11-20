@@ -658,3 +658,64 @@
   letter-spacing: var(--type-body-track);
   text-align: center;
 }
+
+/* A publish or GitHub import is one request that can run for minutes and
+   reports nothing until it answers, so its bar is indeterminate: a segment
+   sweeping a track, on the workspace loading bar's recipe. Chrome feedback,
+   not agent work — grey ink, never --live. */
+.skill-import-progress {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.skill-import-progress-bar {
+  height: 4px;
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: var(--line-2);
+}
+
+.skill-import-progress-bar::after {
+  content: "";
+  display: block;
+  width: 30%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink-3);
+  animation: skill-import-sweep 1.6s var(--ease) infinite;
+}
+
+@keyframes skill-import-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(340%); }
+}
+
+.skill-import-progress-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  font: var(--type-body-sm);
+  color: var(--ink-3);
+}
+
+.skill-import-progress-meta p {
+  margin: 0;
+  min-width: 0;
+}
+
+.skill-import-progress-clock {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The global reduced-motion reset only shortens the sweep, which would park
+   the segment off the track's end and leave it reading empty. Hold a still,
+   dimmed fill instead so the bar still says "working". */
+@media (prefers-reduced-motion: reduce) {
+  .skill-import-progress-bar::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}

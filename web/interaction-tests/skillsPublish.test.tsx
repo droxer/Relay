@@ -169,3 +169,30 @@ it("shows all-rejected batch results without selecting a missing publication", a
   expect(screen.getByRole("status").textContent).toBe("skills.imported_count");
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+it("shows import progress while a GitHub import runs and clears it when done", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    let finish!: (value: unknown) => void;
+    importSkill.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
+    await user.click(createButton());
+    await user.click(screen.getByRole("button", { name: "GitHub" }));
+    await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/example/skills");
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Publish" }));
+    expect(screen.getByRole("progressbar")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("skills.progress.started.github");
+    // A long import tells the person it is still going rather than stuck.
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    expect(screen.getByRole("status").textContent).toBe("skills.progress.slow");
+    await act(async () => { vi.advanceTimersByTime(45_000); });
+    expect(screen.getByRole("status").textContent).toBe("skills.progress.long");
+    await act(async () => finish({ skills: [{ id: "review", displayName: "Code review" }], failed: [] }));
+    expect(await screen.findByText("Code review")).toBeTruthy();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});

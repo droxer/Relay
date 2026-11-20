@@ -2385,6 +2385,17 @@
     "publish_subtitle": "将技能包发布到技能库，然后分享给智能体。",
     "publish": "发布",
     "publishing": "正在发布…",
+    "progress": {
+      "label": "导入进度",
+      "started": {
+        "github": "正在拉取仓库并读取其中的技能…",
+        "upload": "正在上传技能包…",
+        "reimport": "正在从 GitHub 拉取最新版本…"
+      },
+      "slow": "仍在处理中。较大的仓库或技能包可能需要几分钟。",
+      "long": "仍在处理中。请保持此页面打开，直到完成。",
+      "elapsed": "已用时 {{time}}"
+    },
     "loading": "正在加载技能…",
     "loading_detail": "正在加载技能…",
     "try_again": "重试",

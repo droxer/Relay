@@ -2440,6 +2440,17 @@
     "publish_subtitle": "Publish a bundle to the library, then share it with agents.",
     "publish": "Publish",
     "publishing": "Publishing…",
+    "progress": {
+      "label": "Import progress",
+      "started": {
+        "github": "Fetching the repository and reading its skills…",
+        "upload": "Uploading the bundle…",
+        "reimport": "Fetching the latest version from GitHub…"
+      },
+      "slow": "Still working. Large repositories and bundles can take a few minutes.",
+      "long": "Still working. Keep this page open until it finishes.",
+      "elapsed": "{{time}} elapsed"
+    },
     "loading": "Loading skills…",
     "loading_detail": "Loading skill…",
     "try_again": "Try again",
