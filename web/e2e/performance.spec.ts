@@ -314,6 +314,43 @@ test("a cold conversation opens on its latest window and requests older messages
   expect(historyReads).toBe(2);
 });
 
+test("a conversation skips file-only history pages until its first messages are visible", async ({ page }) => {
+  const original = session("file-only-history", 0, 1);
+  const fileEvents = Array.from({ length: 3 }, (_, index) => {
+    const id = `file-${index}`;
+    return {
+      id, type: "artifact.created", sessionId: original.id, timestamp: hoursAgo(1),
+      artifact: { id, kind: "workspace_file", title: id, path: `/w/${id}`, createdAt: hoursAgo(1),
+        agentRunId: `${original.id}-run-0` },
+    };
+  });
+  const events = [...original.events, ...fileEvents];
+  const thread = { ...original, events, eventCount: events.length, artifacts: fileEvents.map(event => event.artifact) };
+  const historyReads: number[] = [];
+  await page.route("**/api/**", async route => {
+    const url = new URL(route.request().url());
+    let body: unknown = { sessions: [thread], agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
+    if (url.pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    else if (url.pathname.endsWith(`/threads/${thread.id}`)) {
+      expect(url.searchParams.get("view")).toBe("transcript");
+      const before = url.searchParams.get("before");
+      if (before) {
+        const eventCount = Number(before);
+        historyReads.push(eventCount);
+        const eventStart = eventCount === 5 ? 3 : 0;
+        body = { eventStart, eventCount, events: events.slice(eventStart, eventCount) };
+      } else {
+        body = { ...thread, eventStart: 5, eventOffset: 5, eventsRevision: "c".repeat(64), events: events.slice(5) };
+      }
+    }
+    await route.fulfill({ json: body });
+  });
+  await page.goto(`/threads/${thread.id}`);
+  await expect(page.locator(".transcript .agent-code")).toContainText("turn0");
+  await expect(page.getByRole("button", { name: "Load earlier messages" })).toHaveCount(0);
+  expect(historyReads).toEqual([5, 3]);
+});
+
 test("scrolling toward older messages fetches one history page without moving the reading position", async ({ page }) => {
   const original = session("scroll-history", 0, 15);
   const review = { id: "review", kind: "review", title: "Generated review", path: "/w/review.md", createdAt: hoursAgo(1) };
