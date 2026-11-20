@@ -340,7 +340,7 @@ html:lang(zh-TW) .md-body blockquote {
      frame has to be legible enough to read as a boundary rather than as the
      table simply stopping mid-word. 1px, not the 0.5px hairline, for the
      same reason. */
-  border: 1px solid var(--line-1);
+  border: var(--stroke-w) solid var(--line-1);
   border-radius: var(--r-2);
 
   /* Scroll affordance. Four background layers: two opaque covers pinned to the

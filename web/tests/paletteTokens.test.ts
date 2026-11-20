@@ -819,3 +819,39 @@ describe("status marks", () => {
     assert.match(home, /\[data-stage="done"\]\s*\{\s*--home-stage:\s*var\(--ok-mark\)/);
   });
 });
+
+describe("signature and tint hygiene", () => {
+  const SOLID_PLANES = ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--surface-band"];
+
+  it("keeps the signature ring clear of every solid plane in both registers", () => {
+    /* --signature (the mark's --brand-lead) is the focus ring and every
+       selection marker. roles.css claims it clears 4.3:1 on every plane;
+       WCAG 1.4.11 needs 3:1. Hold the documented figure, so a retuned mark
+       cannot quietly take the ring below it. */
+    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
+      const signature = tokenIn(register, "--brand-lead");
+      for (const plane of SOLID_PLANES) {
+        const ratio = contrast(signature, tokenIn(register, plane));
+        assert.ok(ratio >= 4.3, `${label} --signature on ${plane} is ${ratio.toFixed(2)}:1`);
+      }
+    }
+  });
+
+  it("never dims text by mixing its ink toward transparent", () => {
+    /* The same rule as opacity: an alpha-mixed ink reaches past the ramp's AA
+       floor. A quieter text is an --ink-* tier. */
+    const offenders = surfaceSheetNames().flatMap((name) =>
+      [...stripStyleComments(readStyle(name)).matchAll(/(?<![\w-])color:\s*color-mix\([^;]*transparent\)[^;]*;/g)]
+        .map((m) => `${name}: ${m[0]}`)
+    );
+    assert.deepEqual(offenders, [], `step the ink instead:\n  ${offenders.join("\n  ")}`);
+  });
+
+  it("fills status washes through --tone-tint rather than re-mixing 8%", () => {
+    const offenders = surfaceSheetNames().flatMap((name) =>
+      [...stripStyleComments(readStyle(name)).matchAll(/color-mix\(in srgb, var\(--(?:err|ok|warn|info|live)\) 8%, transparent\)/g)]
+        .map((m) => `${name}: ${m[0]}`)
+    );
+    assert.deepEqual(offenders, [], `set --tone and use var(--tone-tint):\n  ${offenders.join("\n  ")}`);
+  });
+});

@@ -5,7 +5,7 @@
    fields and bare rail searches share the same treatment. */
 [data-slot="search"],
 [data-slot="search"] input {
-  --focus-outline: 1px solid var(--link);
+  --focus-outline: var(--stroke-w) solid var(--link);
   --focus-offset: 0px;
 }
 
@@ -276,7 +276,7 @@
    shape (same as fleet presence + node status dots) instead of a fill. */
 .user-avatar.tone-bad::after {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--tone);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--tone);
 }
 
 /* Running state — concentric pulse ring around the pip. */

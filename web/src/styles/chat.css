@@ -393,12 +393,13 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .team-handoff-node {
-    animation: agent-rail-pulse var(--t-pulse) var(--ease) infinite;
+    --pulse-color: var(--live);
+    animation: pulse-ring var(--t-pulse) var(--ease) infinite;
   }
 
   .team-handoff-dots > i {
     --blink-from: 0.25;
-    animation: blink var(--t-pulse) var(--ease) infinite;
+    animation: blink var(--t-pulse) var(--ease-breathe) infinite;
   }
 
   .team-handoff-dots > i:nth-child(2) { animation-delay: calc(var(--t-pulse) / 6); }
@@ -480,7 +481,7 @@
    carries the alarm, not a solid --err fill. */
 .rail-node-system.tone-bad {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--tone);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--tone);
 }
 
 /* A continuation from the same agent drops its whole header row — mark, name,
@@ -534,17 +535,9 @@
 @media (prefers-reduced-motion: no-preference) {
   .msg-agent.streaming .rail-node-agent {
     border-color: var(--live);
-    animation: agent-rail-pulse var(--t-pulse) var(--ease) infinite;
+    --pulse-color: var(--live);
+    animation: pulse-ring var(--t-pulse) var(--ease) infinite;
   }
-}
-
-/* Local by necessity, not by preference: this ring is spaced off the canvas
-   by a second shadow, which the shared single-shadow pulse-ring cannot carry.
-   The 6px spread and 40% tint match pulse-ring so it reads at the same
-   strength. */
-@keyframes agent-rail-pulse {
-  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 40%, transparent); }
-  100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--live) 0%, transparent); }
 }
 
 /* The user turn: a content-hugging bubble on the right, its time resolving

@@ -517,7 +517,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-2);
-  border-bottom: 1px dashed var(--line-1);
+  border-bottom: var(--stroke-w) dashed var(--line-1);
   --rise-from: var(--rise-sm);
 
   animation: rise var(--t-slow) var(--ease) backwards;
@@ -531,14 +531,15 @@
 
 /* The `state` Badge variant already draws a --tone-line hairline on the chip
    geometry; this is a ghost in an empty-state illustration, so it overrides the
-   line to DASHED and softens the ink. Everything else — inline-flex, the
+   line to DASHED and steps the ink down to --ink-4 (never alpha: that
+   would dim text past the ramp's AA floor). Everything else — inline-flex, the
    --sp-2 inline pad, --r-2, nowrap — came from restating the badge by hand. */
 .artifacts-empty-tag {
   --tone: var(--info);
   border-style: dashed;
-  border-width: 1px;
+  border-width: var(--stroke-w);
   padding-block: var(--sp-hairline);
-  color: color-mix(in srgb, var(--info) 80%, transparent);
+  color: var(--ink-4);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -576,7 +577,7 @@
   border-radius: var(--r-full);
   background: var(--ok);
   --blink-from: 0.45;
-  animation: blink var(--t-pulse-calm) var(--ease) infinite;
+  animation: blink var(--t-pulse-calm) var(--ease-breathe) infinite;
 }
 
 .workspace-loading {

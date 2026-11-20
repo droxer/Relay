@@ -47,7 +47,7 @@
 .agent-state[data-availability="offline"]::after,
 .agent-state.tone-bad::after {
   background: var(--agent-pip-surface, var(--surface-0));
-  box-shadow: inset 0 0 0 1px var(--tone);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--tone);
 }
 
 /* A quiet, readable connection badge shared by agent and thread lists.
@@ -172,12 +172,12 @@
    told by the ring. Same ring shape the node status dots and StatusPill use. */
 .state-mark[data-shape="ring"] {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--mark-accent);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--mark-accent);
 }
 
 .state-mark[data-shape="dashed"] {
   background: transparent;
-  border: 1px dashed var(--mark-accent);
+  border: var(--stroke-w) dashed var(--mark-accent);
   box-shadow: none;
 }
 

@@ -169,7 +169,7 @@
   height: var(--sp-2);
   border-radius: var(--r-full);
   background: var(--ink-4);
-  animation: blink var(--t-pulse-calm) var(--ease) infinite;
+  animation: blink var(--t-pulse-calm) var(--ease-breathe) infinite;
 }
 
 .onboarding-footer {

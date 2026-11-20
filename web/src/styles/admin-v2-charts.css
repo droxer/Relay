@@ -95,7 +95,7 @@
 }
 
 .adm-chart-hit span[data-active] {
-  background: color-mix(in srgb, var(--ink-1) 5%, transparent);
+  background: var(--row-hover);
 }
 
 .adm-chart-tip {

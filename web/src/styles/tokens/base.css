@@ -448,9 +448,7 @@ tr[data-selected="true"],
 
    Do NOT hand-roll a second ring keyframe to vary the tint percentage — that
    is what produced four different "live" ring strengths (40/45/55%) across
-   four files. The single exception is a ring that must layer a second shadow
-   underneath it (chat.css `agent-rail-pulse` spaces its ring off the canvas),
-   which a one-shadow keyframe cannot express. */
+   four files. Point --pulse-color at the tone instead. */
 @keyframes pulse-ring {
   0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pulse-color, var(--info)) 40%, transparent); }
   100% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--pulse-color, var(--info)) 0%, transparent); }
@@ -471,7 +469,7 @@ tr[data-selected="true"],
    scale(1.6)`): under reduced motion a11y.css cuts the animation to one
    instant iteration with no fill, so the ring rests there — "working" is
    still told by shape, not by colour alone. Larger live objects (the
-   transcript rail node) keep pulse-ring / agent-rail-pulse; this is for dots. */
+   transcript rail node) keep pulse-ring; this is for dots. */
 @keyframes live-ring {
   0%   { opacity: 0.7; transform: scale(1); }
   100% { opacity: 0;   transform: scale(2.2); }
