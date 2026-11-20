@@ -97,7 +97,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .thread-panel-resize {
+  .thread-panel-resize,
+  .list-rail-resize {
     display: none;
   }
 

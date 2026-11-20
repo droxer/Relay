@@ -501,6 +501,11 @@
 }
 
 @media (max-width: 820px) {
+  /* Stacked: the library has no side edge to drag. */
+  .skills-page .list-rail-resize {
+    display: none;
+  }
+
   .skills-page {
     grid-template-columns: 1fr;
     overflow-y: auto;

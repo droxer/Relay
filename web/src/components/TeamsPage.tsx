@@ -23,6 +23,7 @@ import { TeamWorkspacePage } from "./TeamWorkspacePage";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { ListSkeleton } from "./ListSkeleton";
+import { ListRailResizeHandle } from "@/components/ListRailResize";
 
 export function TeamsPage({
   currentUser,
@@ -202,6 +203,7 @@ export function TeamsPage({
             </ul>
           )}
         </div>
+        <ListRailResizeHandle />
       </div>
 
       <div className="teams-detail">
