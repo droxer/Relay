@@ -17,6 +17,7 @@
 /* ---- roster (left rail) --------------------------------------------- */
 
 .agents-roster {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;

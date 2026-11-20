@@ -46,6 +46,17 @@ export async function listSessionSummaries(
 /** One thread's last server-validated snapshot, owned by its Account's QueryClient. */
 export type SessionSnapshotCache = { snapshot?: RelaySession; etag?: string; eventsRevision?: string };
 
+export type ThreadWorkflow = Pick<RelaySession, "id" | "status" | "workflowRuns" | "activeWorkflowRunId">
+  & { ownerUserId?: string | null };
+
+export function getThreadWorkflow(sessionId: string, signal?: AbortSignal): Promise<ThreadWorkflow> {
+  return apiJson(`/threads/${encodeURIComponent(sessionId)}?view=workflow`, { signal });
+}
+
+export function getTaskWorkflowHistory(taskId: string, signal?: AbortSignal): Promise<{ threads: ThreadWorkflow[] }> {
+  return apiJson(`/tasks/${encodeURIComponent(taskId)}/workflow-history`, { signal });
+}
+
 export async function getSession(sessionId: string, signal?: AbortSignal, cache?: SessionSnapshotCache): Promise<RelaySession> {
   const path = `/threads/${encodeURIComponent(sessionId)}`;
   if (!cache) return apiJson(path, { signal, guard: sessionGuard });

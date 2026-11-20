@@ -15,6 +15,7 @@ from sqlalchemy import (
     literal_column,
     or_,
     select,
+    text,
 )
 from .output_compaction import compact_completed_run_output
 from ..db_time import format_db_time
@@ -103,6 +104,28 @@ class SessionReadRows(SessionStoreState):
         if version is None:
             raise KeyError(session_id)
         return int(version)
+
+    def list_session_workflows(self, session_ids: list[str], owner_user_id: str) -> list[dict[str, Any]]:
+        ids = []
+        for session_id in session_ids:
+            try:
+                ids.append(_canonical_database_session_id(session_id))
+            except KeyError:
+                continue
+        if not ids:
+            return []
+        sessions = self.sessions
+        statement = select(
+            sessions.c.id, sessions.c.owner_user_id.label("ownerUserId"), sessions.c.status,
+            sessions.c.snapshot["workflowRuns"].label("workflowRuns"),
+            sessions.c.snapshot["activeWorkflowRunId"].as_string().label("activeWorkflowRunId"),
+        ).where(sessions.c.owner_user_id == owner_user_id)
+        results: dict[str, dict[str, Any]] = {}
+        with store_transaction(self.engine) as conn:
+            for start in range(0, len(ids), 500):
+                for row in conn.execute(statement.where(sessions.c.id.in_(ids[start:start + 500]))).mappings():
+                    results[row["id"]] = {**row, "workflowRuns": row["workflowRuns"] or []}
+        return [results[session_id] for session_id in dict.fromkeys(ids) if session_id in results]
 
     def list_sessions(
         self, *, owner_user_id: str | None = None, include_archived: bool = True
@@ -284,6 +307,37 @@ class SessionReadRows(SessionStoreState):
             {**(row["snapshot"] or {}), "eventCount": int(row["version"] or 0)}
             for row in rows
         ]
+
+    def list_workspace_threads(
+        self, *, owner_user_id: str, project_id: str | None = None,
+        team_id: str | None = None, agent_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Rows for Activities, including Threads an Agent joined after creation."""
+        sessions = self.sessions
+        snapshot = sessions.c.snapshot
+        pg = self.engine.dialect.name == "postgresql"
+        runs = "sessions.snapshot->'agentRuns'" if pg else "json_extract(sessions.snapshot, '$.agentRuns')"
+        array_length = "jsonb_array_length" if pg else "json_array_length"
+        fields = ("title", "taskGoal", "status", "updatedAt")
+        statement = (
+            select(sessions.c.id, *(snapshot[field].as_string().label(field) for field in fields),
+                   literal_column(f"COALESCE({array_length}({runs}), 0)").label("runCount"))
+            .where(sessions.c.owner_user_id == owner_user_id)
+            .order_by(sessions.c.updated_at.desc(), sessions.c.id.desc())
+        )
+        if project_id is not None:
+            statement = statement.where(sessions.c.project_id == project_id)
+        if team_id is not None:
+            statement = statement.where(snapshot["teamId"].as_string() == team_id)
+        if agent_id is not None:
+            elements = "jsonb_array_elements" if pg else "json_each"
+            field = _artifact_field_sql(pg, "logicalAgentId")
+            ran = text(
+                f"EXISTS (SELECT 1 FROM {elements}({runs}) a WHERE {field} = :activity_agent_id)"
+            ).bindparams(activity_agent_id=agent_id)
+            statement = statement.where(or_(snapshot["ownerAgentId"].as_string() == agent_id, ran))
+        with store_transaction(self.engine) as conn:
+            return [dict(row) for row in conn.execute(statement).mappings()]
 
     def list_open_sessions_idle_since(self, cutoff: datetime) -> list[dict[str, Any]]:
         """Open (``running``) threads untouched since ``cutoff``, as snapshots.

@@ -207,7 +207,17 @@ def get_session(
     session_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any] | Response:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    transcript = request.query_params.get("view") == "transcript"
+    view = request.query_params.get("view")
+    if view == "workflow":
+        session = get_session_header_for_actor(ctx.session_store, session_id, actor)
+        return {
+            "id": session["id"],
+            "ownerUserId": session.get("ownerUserId"),
+            "status": session["status"],
+            "workflowRuns": session.get("workflowRuns", []),
+            "activeWorkflowRunId": session.get("activeWorkflowRunId"),
+        }
+    transcript = view == "transcript"
     if transcript:
         session = get_session_header_for_actor(ctx.session_store, session_id, actor)
         before = request.query_params.get("before")

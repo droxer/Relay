@@ -144,7 +144,10 @@ def _workspace_listing(value: dict[str, Any]) -> EventFields:
     entries = value.get("entries")
     if not isinstance(value.get("exists"), bool) or not isinstance(entries, list):
         raise ValueError("invalid daemon workspace.listing event.")
-    return {"exists": value["exists"], "entries": entries}
+    return {
+        "exists": value["exists"], "entries": entries,
+        **({"threadRecordsMerged": True} if value.get("threadRecordsMerged") is True else {}),
+    }
 
 
 def _workspace_file(value: dict[str, Any]) -> EventFields:

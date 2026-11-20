@@ -1,7 +1,7 @@
 import { shouldReloadOnNavigation } from "./buildFreshness.ts";
 import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
-import { DEFAULT_PROJECT_PAGE_TAB, PROJECT_PAGE_TAB_ALIASES, PROJECT_PAGE_TABS } from "./projectPage.ts";
+import { DEFAULT_PROJECT_PAGE_TAB, parseProjectPageTab, PROJECT_PAGE_TAB_ALIASES, PROJECT_PAGE_TABS } from "./projectPage.ts";
 import { readConnectionResult } from "../domain-types/connections.ts";
 import {
   DEFAULT_ADMIN_SECTION,
@@ -86,6 +86,20 @@ export type AppLocationState = {
   publicPage?: PublicPage;
   notFound?: boolean;
 };
+
+/** Full Task rows drive Home, work boards, and the open Thread's Task history. */
+export function needsTaskCollection(location: AppLocationState, search?: URLSearchParams): boolean {
+  if (location.notFound || location.login || location.publicPage) return false;
+  if (location.route === "projects") {
+    if (location.sessionId) return true;
+    if (!location.projectId || location.composingNew) return false;
+    if (search?.get("task")) return true;
+    const tab = parseProjectPageTab(search?.get("tab") ?? null);
+    return tab === "dashboard" || tab === "tasks" || tab === "automations";
+  }
+  return ["home", "backlog", "routine"].includes(location.route)
+    || (location.route === "main" && Boolean(location.sessionId));
+}
 
 /** Signed-out destinations beside `/login`. A signed-in visitor has no use
     for any of them, so App sends them home. */

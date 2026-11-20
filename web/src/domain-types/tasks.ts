@@ -36,6 +36,8 @@ export interface TaskFilesResponse {
 
 export interface TaskEventsResponse {
   events: RelayTaskEvent[];
+  nextBefore?: number | null;
+  previousStatus?: TaskStatus;
 }
 
 /**
@@ -81,6 +83,13 @@ export interface TasksResponse {
   flowPolicy?: { wipLimit: number; scope: "user" };
   flowUsage?: { userId: string; occupied: number };
   tasks: RelayTaskSummary[];
+  homeProjects?: Record<string, HomeProjectTaskSummary>;
+}
+
+export interface HomeProjectTaskSummary {
+  total: number;
+  progress: Record<"done" | "review" | "running" | "blocked", number>;
+  updatedAt: string;
 }
 
 /** Task starts may pin a logical agent by id and let the server resolve its executor. */

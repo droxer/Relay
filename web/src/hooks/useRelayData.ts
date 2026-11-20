@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { Dispatch, SetStateAction } from "react";
-import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { listDaemonNodes, listProjects, listSandboxes, listSessionSummaries, listTasks } from "../api";
-import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SandboxRecord, SessionSummary } from "../types";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useQueries, useQueryClient, type Query, type UseQueryResult } from "@tanstack/react-query";
+import { listDaemonNodes, listProjects, listSessionSummaries, listTasks } from "../api";
+import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SessionSummary, TasksResponse } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
 import { appendOlderSessionPage, mergeSessionHeadPage, THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
@@ -14,7 +13,6 @@ import type { SessionHeadCache } from "../api-client/sessions";
 
 export const RELAY_QUERY_KEY = ["relay"] as const;
 const RELAY_KEY = RELAY_QUERY_KEY;
-const SANDBOXES_KEY = ["relay", "sandboxes"] as const;
 export const NODES_QUERY_KEY = ["relay", "daemon-nodes"] as const;
 const NODES_KEY = NODES_QUERY_KEY;
 const SESSIONS_KEY = ["relay", "sessions"] as const;
@@ -32,8 +30,8 @@ const TASKS_KEY = ["relay", "tasks"] as const;
 export const PROJECTS_QUERY_KEY = ["relay", "projects"] as const;
 const PROJECTS_KEY = PROJECTS_QUERY_KEY;
 export const TASKS_QUERY_KEY = TASKS_KEY;
+export const HOME_TASKS_QUERY_KEY = [...TASKS_KEY, "home"] as const;
 type RelayDataResult = {
-  sandboxes: SandboxRecord[];
   nodes: DaemonNodeMonitorRecord[];
   nodesReady: boolean;
   sessions: RelaySession[];
@@ -50,6 +48,7 @@ type RelayDataResult = {
   loadMoreSessions: () => Promise<void>;
   tasks: RelayTaskSummary[];
   homeTaskNeedsYou?: number;
+  homeTaskProjects?: TasksResponse["homeProjects"];
   projects: ProjectRecord[];
   homeStatus: ProjectCollectionStatus;
   projectsStatus: ProjectCollectionStatus;
@@ -57,20 +56,19 @@ type RelayDataResult = {
   projectsError: string;
   isRefreshing: boolean;
   refresh: (signal?: AbortSignal, tokenOverride?: string) => Promise<void>;
-  setSandboxes: Dispatch<SetStateAction<SandboxRecord[]>>;
   upsertNode: (node: DaemonNodeMonitorRecord) => void;
 };
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "sandboxes" | "nodes" | "nodesReady" | "sessions" | "sessionsLoading" | "tasks" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
+  "nodes" | "nodesReady" | "sessions" | "sessionsLoading" | "tasks" | "homeTaskProjects" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
 >;
 
-/* The only fields the app reads off the five polls, folded into one value.
+/* The only fields the app reads off the collection polls, folded into one value.
 
    Without `combine`, useQueries hands back the raw result array and notifies on
    every change to any tracked field of any query — and reading fetchStatus for
-   the projects status tracks it on all five observers. So each poll's fetch
+   the projects status tracks it on all observers. So each poll's fetch
    start and its fetch end each re-rendered the whole App, ~18 commits per 10s
    on data that had not changed, and every thread row re-rendered with it.
    React Query deep-compares a combined value against the last one
@@ -78,14 +76,15 @@ type RelayCollections = Pick<
    no render. Module scope keeps the function's identity stable, which is what
    lets the observer reuse the last result instead of recombining. */
 function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayCollections {
-  const [sandboxesQuery, nodesQuery, sessionsQuery, tasksQuery, projectsQuery] = results;
+  const [nodesQuery, sessionsQuery, tasksQuery, projectsQuery] = results;
+  const taskData = tasksQuery.data as RelayTaskSummary[] | TasksResponse | undefined;
   return {
-    sandboxes: (sandboxesQuery.data as SandboxRecord[] | undefined) ?? [],
     nodesReady: nodesQuery.isSuccess,
     nodes: (nodesQuery.data as DaemonNodeMonitorRecord[] | undefined) ?? [],
     sessions: (sessionsQuery.data as RelaySession[] | undefined) ?? [],
     sessionsLoading: sessionsQuery.isLoading,
-    tasks: (tasksQuery.data as RelayTaskSummary[] | undefined) ?? [],
+    tasks: (Array.isArray(taskData) ? taskData : taskData?.tasks) ?? [],
+    homeTaskProjects: Array.isArray(taskData) ? undefined : taskData?.homeProjects,
     projects: (projectsQuery.data as ProjectRecord[] | undefined) ?? [],
     homeStatus: [nodesQuery, sessionsQuery, tasksQuery, projectsQuery].some(q => q.isError)
       ? "error" : [nodesQuery, sessionsQuery, tasksQuery, projectsQuery].some(q => !q.isSuccess) ? "loading" : "ready",
@@ -101,8 +100,8 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
 
 // Server state for the control-plane console, owned by TanStack Query.
 // Visible nodes and task state poll every 10s; sessions back off
-// while the open thread's SSE tail is connected; projects and stable sandbox
-// inventory reconcile less often. No poll runs in a hidden tab. Dedup and retry/backoff come
+// while the open thread's SSE tail is connected; projects reconcile less often.
+// No poll runs in a hidden tab. Dedup and retry/backoff come
 // from the cache instead of hand-rolled timers. The hook keeps its previous
 // external shape so callers (App.tsx) are unchanged.
 export function useRelayData(
@@ -110,10 +109,14 @@ export function useRelayData(
   enabled: boolean,
   taskListVisible = true,
   workspaceVisible = true,
-  threadListOnly = false,
+  projectedTasksOnly = false,
+  taskProjectId?: string,
+  homeTaskView = false,
 ): RelayDataResult {
   const queryClient = useQueryClient();
-  const taskListCache = useRef<TaskListCache>({});
+  const tasksKey = useMemo(() => homeTaskView ? HOME_TASKS_QUERY_KEY : taskProjectId ? [...TASKS_KEY, taskProjectId] : TASKS_KEY, [homeTaskView, taskProjectId]);
+  // Keep each validator with its owning query, including across route switches.
+  const taskListCaches = useRef(new WeakMap<Query, TaskListCache>());
   const sessionHeadCache = useRef<SessionHeadCache>({});
   // Background reconciliation must stay visually silent. Only a user/app
   // initiated refresh drives page-level refresh chrome.
@@ -141,26 +144,17 @@ export function useRelayData(
     () => queryClient.getQueryData<SessionPages>(SESSION_PAGES_KEY)?.homeTaskNeedsYou,
   );
   // A missing field in a successful response identifies a pre-projection
-  // backend. Until the first response arrives the directory needs no Task GET.
-  const fetchFullTasks = !threadListOnly || homeTaskNeedsYou === null;
+  // backend. Surfaces with no Task table use the activity included in the
+  // existing Thread reconciliation for the shell's counts and statuses.
+  const fetchFullTasks = !projectedTasksOnly || homeTaskNeedsYou === null;
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const [moreSessionsFailed, setMoreSessionsFailed] = useState(false);
   const loadingMoreRef = useRef(false);
   const nextSessionCursor = olderCursor === undefined ? headCursor : olderCursor;
 
-  const { sandboxes, nodes, nodesReady, sessions, sessionsLoading, tasks, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
+  const { nodes, nodesReady, sessions, sessionsLoading, tasks, homeTaskProjects, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
     combine: combineRelayCollections,
     queries: [
-      {
-        queryKey: SANDBOXES_KEY,
-        staleTime: RELAY_POLL_INTERVALS_MS.sandboxes,
-        enabled,
-        refetchInterval: RELAY_POLL_INTERVALS_MS.sandboxes,
-        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<SandboxRecord[]> => {
-          const tk = fetchToken();
-          return tk ? ((await listSandboxes(tk, signal)).sandboxes ?? []) : [];
-        },
-      },
       {
         queryKey: NODES_KEY,
         staleTime: RELAY_POLL_INTERVALS_MS.nodes,
@@ -204,15 +198,19 @@ export function useRelayData(
         },
       },
       {
-        queryKey: TASKS_KEY,
+        queryKey: tasksKey,
         staleTime: RELAY_POLL_INTERVALS_MS.tasks,
         enabled: enabled && fetchFullTasks,
         refetchInterval: taskListVisible ? RELAY_POLL_INTERVALS_MS.tasks : 60_000,
-        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[]> => {
-          const result = await listTasks(signal, taskListCache.current);
+        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[] | TasksResponse> => {
+          const query = queryClient.getQueryCache().find({ queryKey: tasksKey, exact: true });
+          const cached = query && taskListCaches.current.get(query);
+          const cache = cached ?? { projectId: taskProjectId, home: homeTaskView };
+          if (query && !cached) taskListCaches.current.set(query, cache);
+          const result = await listTasks(signal, cache);
           if (result.flowPolicy) queryClient.setQueryData(["task-flow-policy"], result.flowPolicy);
           if (result.flowUsage) queryClient.setQueryData(["task-flow-usage"], result.flowUsage);
-          return result.tasks ?? [];
+          return homeTaskView ? result : result.tasks ?? [];
         },
       },
       {
@@ -231,9 +229,9 @@ export function useRelayData(
     const wasVisible = previouslyVisible.current;
     previouslyVisible.current = taskListVisible;
     if (enabled && taskListVisible && !wasVisible) {
-      void queryClient.refetchQueries({ queryKey: TASKS_KEY, exact: true, stale: true }, { cancelRefetch: false });
+      void queryClient.refetchQueries({ queryKey: tasksKey, exact: true, stale: true }, { cancelRefetch: false });
     }
-  }, [enabled, taskListVisible, queryClient]);
+  }, [enabled, taskListVisible, queryClient, tasksKey]);
 
   const previouslyWorkspaceVisible = useRef(workspaceVisible);
   useEffect(() => {
@@ -261,7 +259,7 @@ export function useRelayData(
   // refetches because this only runs while the queries are disabled.
   useEffect(() => {
     if (!enabled) {
-      taskListCache.current = {};
+      taskListCaches.current = new WeakMap();
       sessionHeadCache.current = {};
       void queryClient.resetQueries({ queryKey: RELAY_KEY });
     }
@@ -301,9 +299,7 @@ export function useRelayData(
     const previous = previousTokenRef.current;
     previousTokenRef.current = token;
     if (enabled && previous !== token) {
-      for (const queryKey of [SANDBOXES_KEY, NODES_KEY]) {
-        void queryClient.refetchQueries({ queryKey, exact: true, type: "active" });
-      }
+      void queryClient.refetchQueries({ queryKey: NODES_KEY, exact: true, type: "active" });
     }
   }, [token, enabled, queryClient]);
 
@@ -325,20 +321,6 @@ export function useRelayData(
     [enabled, queryClient],
   );
 
-  // Optimistic sandbox updates write straight into the cache so callers keep
-  // their familiar setState-style API.
-  const setSandboxes = useCallback<Dispatch<SetStateAction<SandboxRecord[]>>>(
-    (update) => {
-      queryClient.setQueryData<SandboxRecord[]>(SANDBOXES_KEY, (current) => {
-        const base = current ?? [];
-        return typeof update === "function"
-          ? (update as (prev: SandboxRecord[]) => SandboxRecord[])(base)
-          : update;
-      });
-    },
-    [queryClient],
-  );
-
   const upsertNode = useCallback(
     (node: DaemonNodeMonitorRecord) => {
       queryClient.setQueryData<DaemonNodeMonitorRecord[]>(NODES_KEY, (current) => {
@@ -352,7 +334,6 @@ export function useRelayData(
   );
 
   return {
-    sandboxes,
     nodes,
     nodesReady,
     sessions,
@@ -362,7 +343,8 @@ export function useRelayData(
     moreSessionsFailed,
     loadMoreSessions,
     tasks,
-    homeTaskNeedsYou: threadListOnly ? homeTaskNeedsYou ?? undefined : undefined,
+    homeTaskNeedsYou: projectedTasksOnly || taskProjectId ? homeTaskNeedsYou ?? undefined : undefined,
+    homeTaskProjects,
     projects,
     projectsStatus,
     tasksStatus,
@@ -370,7 +352,6 @@ export function useRelayData(
     homeStatus,
     isRefreshing: manualRefreshPending,
     refresh,
-    setSandboxes,
     upsertNode,
   };
 }

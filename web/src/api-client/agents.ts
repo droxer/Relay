@@ -6,6 +6,7 @@ import type {
   AgentTeamsResponse,
   CreateAgentInput,
   CreateAgentResponse,
+  DefaultAgentOffer,
   RelaySession,
   TeamMutationInput,
   TeamWorkflow,
@@ -15,8 +16,8 @@ import type {
 } from "../types.ts";
 import { apiJson } from "./client.ts";
 
-export function listUserAgents(signal?: AbortSignal): Promise<UserAgentsResponse> {
-  return apiJson<UserAgentsResponse>("/agents", { signal });
+export function listUserAgents(signal?: AbortSignal, includeDefaultOffers = false): Promise<UserAgentsResponse> {
+  return apiJson<UserAgentsResponse>(includeDefaultOffers ? "/agents?include=default-offers" : "/agents", { signal });
 }
 
 export function createAgent(body: CreateAgentInput): Promise<CreateAgentResponse> {
@@ -175,11 +176,7 @@ export function deleteAgentPlacement(placementId: string): Promise<{ placement: 
 
 /** A connected computer's ready runtimes that have never had an agent there
     and whose default agent the person has not declined. */
-export interface DefaultAgentOffer {
-  computerId: string;
-  computerName: string;
-  executorKinds: AgentName[];
-}
+export type { DefaultAgentOffer } from "../domain-types/agents.ts";
 
 export interface DefaultAgentAnswer {
   computerId: string;

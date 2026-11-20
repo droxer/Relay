@@ -251,6 +251,14 @@ class WaitlistService:
             "counts": self.store.counts(),
         }
 
+    def list_queue(self, *, query: str | None, limit: int, offsets: dict[str, int]) -> dict[str, Any]:
+        return {
+            "bands": {
+                status: {"entries": [self.public_entry(entry) for entry in entries], "total": total}
+                for status, (entries, total) in self.store.list_queue(query=query, limit=limit, offsets=offsets).items()
+            },
+        }
+
     def invite(self, entry_id: str, *, invited_by: str | None, origin: InviteOrigin) -> dict[str, Any]:
         """Invite one entry and email it now, so the admin sees the outcome."""
         pending = self._issue_invite(entry_id, invited_by=invited_by, origin=origin)

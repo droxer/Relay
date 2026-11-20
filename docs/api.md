@@ -134,7 +134,25 @@ The existing thread event stream carries the manifest and attributed runs.
 list views may request `GET /api/v1/tasks?view=summary`, which omits `events`
 and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`
 instead. An optional `limit` is clamped to 1–500; omitting it does not silently
-truncate either projection.
+truncate either projection. The summary view accepts `projectId` to select
+only the caller's Tasks in that Project before applying the limit. The Project
+Dashboard uses this scope and still receives the owner's overall flow usage.
+The Home page uses `scope=home` with `view=summary`. It receives fields for
+the action queue, upcoming and ready work, prerequisites, and the five most
+recently finished Tasks. `homeProjects` carries Project totals, progress and
+latest Task updates across the entire account collection.
+
+The browser opens Tasks and Automations with `GET /api/v1/tasks/{id}?view=record`,
+which includes current state, prerequisites, and history counts. It reads the
+Task snapshot when current and replays history when recovering a legacy
+snapshot. Task Activity reads `/tasks/{id}/events?view=activity` in pages of
+25 events by default, starting with the most recent page. Events within a page
+are ordered oldest first. It passes `nextBefore` as `before` to read an older
+page. `previousStatus` preserves the meaning of the oldest status change in
+each page. The default `/events` response still provides the full replay log.
+`GET /tasks/{id}/workflow-history` returns `{threads}` with Workflow projections
+for all of the Task's linked Threads owned by the caller. Task Activity uses
+that response to open the timeline and keeps polling per active Thread.
 
 Personal task lists are scoped to the signed-in user for every role, including
 administrators. Tasks and automations appear only for their owner. Both projections apply this scope
@@ -376,6 +394,12 @@ or the window moved. An `If-None-Match` matching the whole snapshot returns
 `304` after access is checked. Transcript responses use `no-store` and the
 browser retains validators in its per-Account query cache.
 
+`GET /api/v1/threads/{id}?view=workflow` returns the Thread's `id`,
+`ownerUserId`, `status`, `workflowRuns`, and `activeWorkflowRunId` for
+the Task Activities timeline. It uses the same ownership check as Thread
+detail and reads the materialized Workflow state without loading the
+transcript.
+
 Thread message dispatch can return HTTP 409 with a structured `detail.code`.
 `thread_run_active` means the thread already has an execution reservation.
 `node_not_accepting_commands` means the Computer is online and its last command
@@ -423,6 +447,10 @@ but not token sums; these are retained ledger runs, not live executions.
 Totals include retained usage after thread deletion. The backend groups
 the ledger in storage and caches each reporting window briefly. See
 [dashboard reporting storage and timezone behavior](guides/backend-operations.md#grouped-dashboard-token-metrics).
+
+`GET /api/v1/admin/dashboard/agents` returns `{count}` for the current
+fleet across Accounts. The count includes disabled Agents and excludes deleted
+ones. The backend caches the aggregate for up to 30 seconds.
 
 Chat activation, health checks, and webhook-secret rotation are exclusive per
 integration across PostgreSQL backend replicas. A conflicting operation, or a
@@ -717,6 +745,11 @@ that project's recent Threads, active tasks, active runs, artifacts, and bound
 Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
 exclusive.
 
+The Agent and Team Activities tabs use `GET /api/v1/workspace/brief?view=activity`
+with the same scope selectors. It returns the visible Thread rows, active runs,
+and up to ten active Tasks. An unchanged projection returns `304` after the
+normal access check when the request carries its ETag.
+
 Projects and Tasks are separate browser destinations. `/projects` opens the
 project directory; `/projects/{id}` opens Dashboard, and `?tab=tasks` opens the
 project's Tasks tab with its board/list views. `?tab=automations` lists the
@@ -867,6 +900,11 @@ GET    /api/v1/agents/default-offers          -> {"offers": [{computerId, comput
 POST   /api/v1/agents/default-offers/accept   -> 201 {"agents": [...]}
 POST   /api/v1/agents/default-offers/decline  -> {"ok": true}
 ```
+
+The signed-in browser uses `GET /api/v1/agents?include=default-offers` to
+receive `defaultAgentOffers` alongside `agents`, using the same Computer
+inventory and Agent records for both. The standalone offer read also remains
+available.
 
 Admin logical-agent and placement management:
 
@@ -1083,6 +1121,14 @@ GET /api/v1/tasks/{id}/artifacts?versions=all
 
 Task workspace reads use the recorded `workspaceBinding` and current daemon for
 its stable Computer. Listings include `workspaceLayout` and `sharedWithProject`.
+For Project and Task workspace listings under `.relay/threads`, `view=activity`
+combines the requested path with the same path under `.threads` and `threads`.
+The response includes `threadRecordsMerged: true` and preserves each entry's
+real path. Current entries take precedence on duplicate names. Daemons with
+`workspace-list-thread-records` can do this in one command. The backend
+merges separate replies for older Daemons or when a merged reply exceeds
+the configured event body limit.
+
 The status route returns `{ "waiting": false }`, or `{ "waiting": true }` with
 an optional authorized `blockingSessionId` and `blockingTitle`. It never requests
 a filesystem scan. All routes use the existing task access policy.
@@ -1612,6 +1658,7 @@ Rules and rationale: `docs/guides/accounts.md`.
 | `POST /waitlist/invites/lookup` | none | Body `{token}`. `{invite: {email, name, suggestedHandle, expiresAt}}`; every dead token is one `404` |
 | `POST /waitlist/invites/accept` | none | Body `{token, handle, password}`. Creates the account, sets the session cookie, returns `{user}`. `400` weak password or bad handle, `409` handle taken or `"An account with this email already exists."` (the invited address is now used by another Account), `404` dead invite; a refused accept leaves the invite live |
 | `GET /admin/waitlist?status=&q=&limit=&offset=` | admin | `{entries, total, counts}`, oldest first |
+| `GET /admin/waitlist/queue?q=&limit=&waiting=&invited=&joined=&declined=` | admin | `{bands: {waiting, invited, joined, declined}}`. Each band has `{entries, total}` after applying the search, oldest first. The four optional status parameters are zero-based offsets. `limit` is the page size per band (1–200) |
 | `POST /admin/waitlist/{id}/invite` | admin | Rotates the token and returns its link. `{entry, inviteUrl, delivery: null \| {status, error}}`; `inviteUrl` is the only time the token appears |
 | `POST /admin/waitlist/invitations` | admin | Body `{email, name?, locale?}` (`en`/`zh-CN`/`zh-TW`). Invites an address directly, reusing its entry if it asked (source `admin-invite` otherwise) and ignoring the queue cap; emailed now only when invite email is enabled. `{entry, inviteUrl, delivery}`. `400` malformed, `409` a live account already uses the email, or the entry joined and its account still exists (a deleted user's entry is reopened and re-invited) |
 | `POST /admin/waitlist/invite-batch` | admin | Body `{count}` (1–50, oldest waiting first) or `{ids}`. `{invites: [...]}` with `delivery: null` by default. When email is enabled, emailable invites have `delivery.status: "queued"`; the emails go out after the response, so the links survive a slow mail service. A queued email whose entry was re-invited, declined, accepted, or erased meanwhile is not sent |
@@ -1663,6 +1710,13 @@ password policy, and rejects an unchanged password. Success returns
 other login sessions while keeping the calling session. Attempts are rate
 limited. Both endpoints require a session cookie; invalid values return 400.
 The browser exposes both forms at `/settings/account`.
+
+### Notification inbox
+
+`GET /api/v1/notifications?view=count` returns `{unreadCount}` for the
+signed-in Account. It counts unread, uncleared notices outside the Account's
+muted kinds. With the inbox closed, the web client polls that count and loads
+the notice list on opening. Desktop notifications keep the list poll active.
 
 ### Personal tag catalog
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -26,6 +27,7 @@ from ..computers.workspace_transport import (
     raise_workspace_error,
     workspace_binding_command,
     workspace_binding_target,
+    workspace_listing_event,
     workspace_path,
 )
 from ..deps import AppContext, AppContextDep
@@ -234,19 +236,21 @@ async def task_workspace_files(
     task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
     path = workspace_path(request.query_params.get("path"))
     node, workspace_layout, workspace_subpath = await run_in_threadpool(_task_workspace_target, ctx, task, actor)
-    event = await dispatch_workspace_command(
-        ctx,
-        node,
-        _task_workspace_command(
+    event = await workspace_listing_event(
+        path,
+        view=request.query_params.get("view"),
+        node=node,
+        max_event_bytes=ctx.settings.max_json_body_bytes,
+        command_for=lambda folder: _task_workspace_command(
             task,
             command_id=new_database_id(),
             command_type="workspace.list",
-            path=path,
+            path=folder,
             workspace_layout=workspace_layout,
             workspace_subpath=workspace_subpath,
         ),
+        dispatch=partial(dispatch_workspace_command, ctx, node),
     )
-    raise_workspace_error(event)
     return live_workspace_listing(
         event,
         path=path,

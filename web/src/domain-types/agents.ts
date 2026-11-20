@@ -113,6 +113,13 @@ export interface CreateAgentResponse {
 
 export interface UserAgentsResponse {
   agents: UserAgent[];
+  defaultAgentOffers?: DefaultAgentOffer[];
+}
+
+export interface DefaultAgentOffer {
+  computerId: string;
+  computerName: string;
+  executorKinds: AgentName[];
 }
 
 export interface TeamMemberSummary {

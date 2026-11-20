@@ -13,9 +13,9 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
 
 from ...core.deploy_config import trusted_web_origin
 from ...persistence.account.waitlist import WAITLIST_STATUSES, WaitlistConflictError
@@ -40,6 +40,7 @@ router = APIRouter()
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200
+QueueOffset = Annotated[int, Query(ge=0, le=2**31 - 1)]
 _INVITE_NOT_LIVE = "This invite link is no longer valid."
 _HANDLE_UNSAFE = re.compile(r"[^a-z0-9._-]+")
 
@@ -213,6 +214,25 @@ def list_waitlist(
         raise HTTPException(400, f"limit must be 1-{MAX_PAGE_SIZE} and offset non-negative.")
     query = (q or "").strip() or None
     return _service(request).list(status=status, query=query, limit=limit, offset=offset)
+
+
+@router.get("/admin/waitlist/queue")
+def list_waitlist_queue(
+    request: Request,
+    ctx: AppContextDep,
+    q: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+    waiting: QueueOffset = 0,
+    invited: QueueOffset = 0,
+    joined: QueueOffset = 0,
+    declined: QueueOffset = 0,
+) -> dict[str, Any]:
+    require_admin_session(request, ctx.auth_store)
+    return _service(request).list_queue(
+        query=(q or "").strip() or None,
+        limit=limit,
+        offsets={"waiting": waiting, "invited": invited, "joined": joined, "declined": declined},
+    )
 
 
 @router.post("/admin/waitlist/invite-batch")

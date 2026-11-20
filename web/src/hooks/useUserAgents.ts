@@ -1,29 +1,36 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { RELAY_POLL_INTERVALS_MS, ROSTER_STALE_TIME_MS } from "../lib/relayPolling";
 import { listUserAgents } from "../api";
 import { dedupeAgentsById } from "../lib/userAgents";
-import type { UserAgent } from "../types";
+import type { DefaultAgentOffer, UserAgent } from "../types";
 
 export const USER_AGENTS_QUERY_KEY = "user-agents";
 
+export function userAgentRosterOptions(userId?: string) {
+  return queryOptions({
+    queryKey: [USER_AGENTS_QUERY_KEY, userId],
+    queryFn: ({ signal }) => listUserAgents(signal, true),
+    staleTime: ROSTER_STALE_TIME_MS,
+  });
+}
+
 export function useUserAgents(userId?: string, poll = false): {
   agents: UserAgent[];
+  defaultAgentOffers: DefaultAgentOffer[] | null | undefined;
   isFetching: boolean;
   isSuccess: boolean;
   error: string | null;
   refetch: () => Promise<unknown>;
 } {
   const query = useQuery({
-    queryKey: [USER_AGENTS_QUERY_KEY, userId],
-    queryFn: ({ signal }) => listUserAgents(signal),
+    ...userAgentRosterOptions(userId),
     enabled: Boolean(userId),
     // Every roster mutation invalidates this key, so the poll only has to
     // catch node-reported availability drift; the stale window lets the many
     // pages that mount this hook share one read instead of refetching.
-    staleTime: ROSTER_STALE_TIME_MS,
     // AuthenticatedApp owns the timer; page observers reuse the same cache.
     refetchInterval: poll ? RELAY_POLL_INTERVALS_MS.agents : false,
   });
@@ -34,6 +41,10 @@ export function useUserAgents(userId?: string, poll = false): {
   // each poll's start and end. Only a caller that reads it now pays.
   return {
     agents,
+    get defaultAgentOffers() {
+      if (!query.data && !query.isError) return undefined;
+      return query.data?.defaultAgentOffers ?? null;
+    },
     get isSuccess() { return query.isSuccess; },
     get isFetching() { return query.isFetching; },
     get error() { return query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null; },

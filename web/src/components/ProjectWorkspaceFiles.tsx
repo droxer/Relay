@@ -9,7 +9,7 @@ import type {
   ProjectWorkspaceFileResponse,
   ProjectWorkspaceFilesResponse,
 } from "../types";
-import { workspaceHomeStatus } from "../lib/workspaceHome";
+import { retryProjectWorkspaceRead, workspaceHomeStatus } from "../lib/workspaceHome";
 import {
   PROJECT_WORKSPACE_FILE_ROOTS,
   parseWorkspaceBrowsePath,
@@ -58,12 +58,14 @@ function WorkspaceFileBrowser({
   const selectedPath = selectedKey.startsWith("file:") ? selectedKey.slice(5) : "";
   const fileQuery = useQuery({
     queryKey: ["workspace-files", `project:${projectId}`, filePath, refreshVersion],
+    retry: retryProjectWorkspaceRead,
     queryFn: ({ signal }): Promise<ProjectWorkspaceFilesResponse> =>
       listProjectWorkspaceFiles({ projectId, path: filePath }, signal),
   });
   const contentQuery = useQuery({
     queryKey: ["workspace-file", `project:${projectId}`, selectedPath, refreshVersion],
     enabled: Boolean(selectedPath),
+    retry: retryProjectWorkspaceRead,
     queryFn: ({ signal }): Promise<ProjectWorkspaceFileResponse> =>
       readProjectWorkspaceFile({ projectId, path: selectedPath }, signal),
   });

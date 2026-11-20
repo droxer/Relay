@@ -4,10 +4,12 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { RelaySession, SessionSummariesResponse } from "../src/types";
 import { applySessionEvent } from "../src/lib/sessionEvents";
+import { useProjectDashboardTaskScope, useTaskCollectionVisible } from "../src/hooks/useLocationPathname";
 import { useRelayData } from "../src/hooks/useRelayData";
 import { listDaemonNodes, listSandboxes, listSessionSummaries, listTasks } from "../src/api";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
+import * as routes from "../src/lib/appRoute";
 
 vi.mock("../src/api", () => ({
   listSandboxes: vi.fn(),
@@ -32,38 +34,33 @@ afterEach(() => { setSessionStreamConnected(false); });
 it("keeps a refresh's token override while an overlapping plain refresh settles", async () => {
   const tokens: string[] = [];
   let failNextMinted = true;
-  let releasePlainNodes: (() => void) | undefined;
-  let hangNextNodes = false;
-  vi.mocked(listSandboxes).mockImplementation(async (token?: string) => {
+  let releasePlainSessions: (() => void) | undefined;
+  vi.mocked(listDaemonNodes).mockImplementation(async (token?: string) => {
     tokens.push(token ?? "");
     if (token === "minted" && failNextMinted) {
       failNextMinted = false;
       throw new Error("transient");
     }
-    return { sandboxes: [] };
-  });
-  vi.mocked(listDaemonNodes).mockImplementation(() => {
-    if (!hangNextNodes) return Promise.resolve({ nodes: [] });
-    hangNextNodes = false;
-    return new Promise((resolve) => { releasePlainNodes = () => resolve({ nodes: [] }); });
+    return { nodes: [] };
   });
   const { client, view } = setup();
   await waitFor(() => expect(tokens).toEqual(["user-token"]));
   await waitFor(() => expect(client.isFetching()).toBe(0));
 
-  // A plain refresh whose sandboxes fetch lands while its nodes fetch hangs.
-  hangNextNodes = true;
+  // A plain refresh whose nodes fetch lands while the Thread list hangs.
+  vi.mocked(listSessionSummaries).mockImplementationOnce(() => new Promise((resolve) => {
+    releasePlainSessions = () => resolve({ sessions: [] });
+  }));
   let plain!: Promise<void>;
   act(() => { plain = view.result.current.refresh(); });
   await waitFor(() => expect(tokens).toEqual(["user-token", "user-token"]));
-  await waitFor(() => expect(client.isFetching({ queryKey: ["relay", "sandboxes"] })).toBe(0));
+  await waitFor(() => expect(client.isFetching({ queryKey: ["relay", "daemon-nodes"] })).toBe(0));
 
-  // The override refresh refetches sandboxes under the minted token (the first
-  // attempt fails and retries) and takes over the hanging nodes fetch, so the
-  // plain refresh settles while the override's sandboxes retry is pending.
+  // The override refresh retries the nodes request under the minted token
+  // while the plain refresh settles.
   let minted!: Promise<void>;
   act(() => { minted = view.result.current.refresh(undefined, "minted"); });
-  releasePlainNodes?.();
+  releasePlainSessions?.();
   await act(async () => { await Promise.all([plain, minted]); });
 
   expect(tokens.slice(2)).toEqual(["minted", "minted"]);
@@ -88,6 +85,7 @@ it("backs the sessions poll off while the session stream is connected", async ()
 
 it("does not refetch the cookie-scoped thread list when the sandbox token changes", async () => {
   vi.mocked(listDaemonNodes).mockResolvedValue({ nodes: [] });
+  vi.mocked(listSandboxes).mockClear();
   vi.mocked(listSandboxes).mockResolvedValue({ sandboxes: [] });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
@@ -98,6 +96,7 @@ it("does not refetch the cookie-scoped thread list when the sandbox token change
   await waitFor(() => expect(listDaemonNodes).toHaveBeenLastCalledWith("replaced", expect.any(AbortSignal)));
   await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(listSessionSummaries).toHaveBeenCalledTimes(before);
+  expect(listSandboxes).not.toHaveBeenCalled();
   view.unmount(); client.clear();
 });
 
@@ -109,6 +108,84 @@ it("loads tasks on the thread directory when the server lacks activity summaries
   expect(view.result.current.homeTaskNeedsYou).toBeUndefined();
   view.unmount();
   client.clear();
+});
+
+it("reads Task summaries only on surfaces that display or route Task records", async () => {
+  vi.mocked(listSessionSummaries).mockResolvedValue({ sessions: [], homeTaskNeedsYou: 3 });
+  vi.mocked(listTasks).mockClear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const previousUrl = window.location.href;
+  const navigate = (path: string) => act(() => {
+    window.history.replaceState(null, "", path);
+    window.dispatchEvent(new Event(routes.APP_NAVIGATION_EVENT));
+  });
+  navigate("/projects/id?tab=workspace");
+  const view = renderHook(() => {
+    const needsTasks = useTaskCollectionVisible();
+    return useRelayData(undefined, true, needsTasks, false, !needsTasks);
+  }, { wrapper });
+  try {
+    await waitFor(() => expect(view.result.current.homeTaskNeedsYou).toBe(3));
+    for (const path of ["/threads", "/threads/new", "/admin", "/channels", "/skills", "/agents", "/teams", "/computers", "/projects", "/projects/id?tab=members", "/projects/id?tab=workflows", "/projects/id?tab=settings", "/projects/id?tab=workspace"]) {
+      const url = new URL(path, "http://relay.test");
+      expect(routes.needsTaskCollection(routes.parseAppPath(url.pathname), url.searchParams), path).toBe(false);
+    }
+    for (const path of ["/home", "/threads/id", "/tasks", "/automations", "/computers/id/tasks", "/projects/id", "/projects/id?tab=tasks", "/projects/id?tab=automations", "/projects/id?task=id", "/projects/id/threads/id"]) {
+      const url = new URL(path, "http://relay.test");
+      expect(routes.needsTaskCollection(routes.parseAppPath(url.pathname), url.searchParams), path).toBe(true);
+    }
+    expect(listTasks).not.toHaveBeenCalled();
+    navigate("/projects/id?tab=tasks");
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(1));
+    navigate("/projects/id?tab=settings");
+    navigate("/tasks");
+    await act(async () => {});
+    expect(listTasks).toHaveBeenCalledTimes(1);
+  } finally {
+    view.unmount();
+    window.history.replaceState(null, "", previousUrl);
+    client.clear();
+    vi.mocked(listSessionSummaries).mockResolvedValue({ sessions: [] });
+  }
+});
+
+it("does not use Project Dashboard rows or their validator for the account Task board", async () => {
+  vi.mocked(listTasks).mockClear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const original = window.location.href;
+  const go = (path: string) => act(() => {
+    window.history.replaceState(null, "", path);
+    window.dispatchEvent(new Event(routes.APP_NAVIGATION_EVENT));
+  });
+  go("/projects/project-a");
+  const view = renderHook(() => {
+    const scope = useProjectDashboardTaskScope();
+    const visible = useTaskCollectionVisible();
+    return useRelayData(undefined, true, visible, true, !visible, scope);
+  }, { wrapper });
+  try {
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(listTasks).mock.calls[0][1]).toMatchObject({ projectId: "project-a" });
+    go("/projects/project-b?tab=dashboard");
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(listTasks).mock.calls[1][1]).toMatchObject({ projectId: "project-b" });
+    go("/tasks");
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(3));
+    const calls = vi.mocked(listTasks).mock.calls;
+    expect(calls[2][1]?.projectId).toBeUndefined();
+    expect(new Set(calls.map(call => call[1])).size).toBe(3);
+    calls[0][1]!.etag = '"project-a-validator"';
+    await act(() => client.invalidateQueries({ queryKey: ["relay", "tasks", "project-a"], refetchType: "none" }));
+    go("/projects/project-a");
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(4));
+    expect(vi.mocked(listTasks).mock.calls[3][1]?.etag).toBe('"project-a-validator"');
+  } finally {
+    view.unmount();
+    window.history.replaceState(null, "", original);
+    client.clear();
+  }
 });
 
 it("slows task reconciliation off task surfaces and refreshes when they become visible", async () => {

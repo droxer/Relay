@@ -7,10 +7,10 @@ import { useRelayMutations } from "../src/hooks/useRelayMutations";
 import { RecordRuns } from "../src/components/task-record/RecordRuns";
 import { RecordArtifacts } from "../src/components/task-record/RecordArtifacts";
 import { highlightLiveToHtml, highlightToHtml } from "../src/lib/syntax";
-import { updateTask, listTaskRuns, listTaskArtifacts } from "../src/api";
+import { deleteSession, renameSession, updateTask, listTaskRuns, listTaskArtifacts } from "../src/api";
 import type { RelayTask } from "../src/types";
 
-vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), updateTask: vi.fn(), listTaskRuns: vi.fn(), listTaskArtifacts: vi.fn() }));
+vi.mock("../src/api", async (original) => ({ ...await original<typeof import("../src/api")>(), deleteSession: vi.fn(), renameSession: vi.fn(), updateTask: vi.fn(), listTaskRuns: vi.fn(), listTaskArtifacts: vi.fn() }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ announce: vi.fn() }) }));
 vi.mock("../src/components/task-record/RecordWorkspace", () => ({ RecordWorkspace: () => null }));
 vi.mock("../src/components/task-record/RecordArtifactPreview", () => ({ RecordArtifactPreview: () => null }));
@@ -20,6 +20,21 @@ function setup() {
   return { client, wrapper };
 }
 const task = (id: string) => ({ id, priority: "normal", status: "backlog", updatedAt: "2026-11-10", eventCount: 0, events: [], activity: [] });
+it("invalidates cached Agent and Team Activities after a Thread rename or delete", async () => {
+  const { client, wrapper } = setup();
+  const keys = [["workspace-activity", { agentId: "agent" }], ["workspace-activity", { teamId: "team" }]];
+  const seed = () => keys.forEach(key => client.setQueryData(key, { sessions: [], tasks: [], activeRuns: [] }));
+  seed();
+  vi.mocked(renameSession).mockResolvedValue({ id: "thread", title: "Renamed", events: [] } as Awaited<ReturnType<typeof renameSession>>);
+  vi.mocked(deleteSession).mockResolvedValue(undefined);
+  const view = renderHook(() => useRelayMutations(), { wrapper });
+  await act(() => view.result.current.renameSessionMutation.mutateAsync({ sessionId: "thread", title: "Renamed" }));
+  for (const key of keys) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+  seed();
+  await act(() => view.result.current.deleteSessionMutation.mutateAsync({ sessionId: "thread" }));
+  for (const key of keys) expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+  view.unmount(); client.clear();
+});
 it.each(["a", "b"])("keeps a newer successful edit on task %s when an earlier edit fails", async (secondId) => {
   const { client, wrapper } = setup();
   client.setQueryData(["relay", "tasks"], [task("a"), task("b")]);

@@ -1,11 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getWorkspaceBrief } from "../api";
 import type { UserAgent } from "../types";
 import { agentLabel } from "../lib/plan";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
+import { useWorkspaceActivity } from "../hooks/useWorkspaceActivity";
 import { AgentMark } from "./AgentMark";
 import { AgentPlacementBadge } from "./AgentPlacementBadge";
 import { AgentProfilePanel } from "./AgentProfilePanel";
@@ -30,7 +29,6 @@ import { ICON } from "./icons";
 export type AgentDetailTab = "profile" | "skills" | "activities";
 
 const DETAIL_TABS: readonly AgentDetailTab[] = ["profile", "skills", "activities"];
-const ACTIVITY_POLL_MS = 3000;
 
 interface AgentDetailPageProps {
   agent: UserAgent;
@@ -57,12 +55,7 @@ export function AgentDetailPage({
     (value) => value === "profile" ? null : value,
     "push",
   );
-  const activityQuery = useQuery({
-    queryKey: ["agent-activity-brief", agent.id],
-    refetchInterval: pageTab === "activities" ? ACTIVITY_POLL_MS : false,
-    queryFn: ({ signal }) => getWorkspaceBrief({ agentId: agent.id }, signal),
-    enabled: pageTab === "activities",
-  });
+  const activityQuery = useWorkspaceActivity({ agentId: agent.id }, pageTab === "activities");
   const brief = activityQuery.data;
   const activitiesLoading = pageTab === "activities" && activityQuery.isLoading && !brief;
   const activitiesError = pageTab === "activities" && !brief && activityQuery.error
@@ -146,7 +139,7 @@ export function AgentDetailPage({
           <TabsList className="workspace-page-tabs" stripKey={pageTab} aria-label={t("agents_page.detail_sections")}>
             {DETAIL_TABS.map((tab) => {
               const count = tab === "activities"
-                ? brief ? brief.metrics.sessionCount || undefined : undefined
+                ? brief?.sessions.length || undefined
                 : tab === "skills" ? skillCount || undefined : undefined;
               return (
                 <TabsTrigger

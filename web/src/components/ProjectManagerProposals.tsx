@@ -2,7 +2,10 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getProjectManager } from "../api-client/project-manager";
-import { PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "../hooks/useRelayData";
+import type { AppliedManagerProposal } from "../domain-types/project-manager";
+import type { RelayTaskListItem } from "../types";
+import { HOME_TASKS_QUERY_KEY, TASKS_QUERY_KEY } from "../hooks/useRelayData";
+import { TASK_RECORD_QUERY_KEY } from "../hooks/useTaskRecord";
 import { ManagerProposalCard } from "./ManagerProposalCard";
 
 /** How often a live run's staged proposals are checked for. */
@@ -24,15 +27,20 @@ export function ProjectManagerProposals({projectId,threadId,readOnly,running}: {
     if (wasRunning.current && !running) void refetch();
     wasRunning.current=running;
   },[running,refetch]);
-  const refresh=()=>{void Promise.all([
-    client.invalidateQueries({queryKey:["project-manager",projectId]}),
-    // Applying a proposal changes the project and creates tasks; computers
-    // and sandboxes are untouched, so they are not refetched.
-    client.invalidateQueries({queryKey:PROJECTS_QUERY_KEY,exact:true}),
-    client.invalidateQueries({queryKey:TASKS_QUERY_KEY,exact:true}),
-    client.invalidateQueries({queryKey:SESSIONS_QUERY_KEY,exact:true}),
-    client.invalidateQueries({queryKey:["task-record"]}),
-  ]);};
+  const refresh = (applied?: AppliedManagerProposal) => {
+    void client.invalidateQueries({ queryKey: ["project-manager", projectId], exact: true });
+    if (!applied) return;
+    const changed = new Set(applied.tasks.map(task => task.id));
+    for (const queryKey of [TASKS_QUERY_KEY, HOME_TASKS_QUERY_KEY, [...TASKS_QUERY_KEY, projectId]]) {
+      void client.invalidateQueries({ queryKey, exact: true });
+    }
+    // A prerequisite change can also affect another Task's derived dependents.
+    void client.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY], predicate: ({ queryKey, state }) =>
+      changed.has(String(queryKey[1])) || (state.data as RelayTaskListItem | undefined)?.projectId === projectId });
+    if (applied.proposal?.operations.some(operation => "tags" in operation.fields)) {
+      void client.invalidateQueries({ queryKey: ["account", "tags"] });
+    }
+  };
   return <>{(query.data?.proposals??[]).filter(proposal=>proposal.threadId===threadId).map(proposal=><ManagerProposalCard
     key={`${proposal.id}:${proposal.revision}`} projectId={projectId} proposal={proposal} disabled={readOnly}
     agents={query.data?.manager?.candidates} teams={query.data?.teams} onChanged={refresh}

@@ -4,6 +4,9 @@ import { apiJson } from "./client.ts";
 export function listWorkflows(projectId?: string, signal?: AbortSignal): Promise<{ workflows: Workflow[] }> {
   return apiJson(`/workflows${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""}`, { signal });
 }
+export function getWorkflow(workflowId: string, signal?: AbortSignal): Promise<{ workflow: Workflow }> {
+  return apiJson(`/workflows/${encodeURIComponent(workflowId)}`, { signal });
+}
 export function saveWorkflow(input: WorkflowMutationInput, workflowId?: string): Promise<{ workflow: Workflow }> {
   return apiJson(workflowId ? `/workflows/${encodeURIComponent(workflowId)}` : "/workflows", {
     method: workflowId ? "PATCH" : "POST", body: input,

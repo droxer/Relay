@@ -28,24 +28,33 @@ from .names import computer_display_name
 DEFAULT_AGENT_ROLE = "implementer"
 
 
-def default_agent_offers(ctx: Any, user_id: str, declined: set[tuple[str, str]]) -> list[dict[str, Any]]:
+def default_agent_offers(
+    ctx: Any,
+    user_id: str,
+    declined: set[tuple[str, str]],
+    *,
+    fleet: Iterable[dict[str, Any]] | None = None,
+    history: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """The runtimes on this user's connected Computers still awaiting an answer.
 
     One entry per Computer with a live node, in the order the registry ranks
     them: ``{computerId, computerName, executorKinds}``.
     """
-    history = ctx.agent_store.list_agents(supervisor_user_id=user_id, include_deleted=True)
     computers: dict[str, list[dict[str, Any]]] = {}
-    for node in ctx.registry.monitor_nodes():
+    for node in ctx.registry.monitor_nodes() if fleet is None else fleet:
         if node.get("userId") != user_id or node.get("retiredAt"):
             continue
         key = computer_id(node)
         if not is_provisional_computer_id(key):
             computers.setdefault(key, []).append(node)
+    online = [(key, nodes) for key, nodes in computers.items() if any(is_live_node(node) for node in nodes)]
+    if not online:
+        return []
+    if history is None:
+        history = ctx.agent_store.list_agents(supervisor_user_id=user_id, include_deleted=True)
     offers = []
-    for key, nodes in computers.items():
-        if not any(is_live_node(node) for node in nodes):
-            continue
+    for key, nodes in online:
         kinds = _unanswered_runtimes(key, nodes, history, declined)
         if kinds:
             offers.append(

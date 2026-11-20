@@ -35,6 +35,12 @@ export function listNotifications(signal?: AbortSignal, limit = 50): Promise<Not
   return apiJson<NotificationsResponse>(`/notifications?limit=${limit}`, { signal });
 }
 
+export async function getUnreadNotificationCount(signal?: AbortSignal): Promise<Pick<NotificationsResponse, "unreadCount">> {
+  // A backend that predates the count view still supplies the total with a one-row listing.
+  const { unreadCount } = await apiJson<Pick<NotificationsResponse, "unreadCount">>("/notifications?view=count&limit=1", { signal });
+  return { unreadCount };
+}
+
 /** Mark the named notices read, or every notice with `"all"`. Ids that are
     not the caller's are ignored by the server. */
 export function markNotificationsRead(target: readonly string[] | "all"): Promise<{ unreadCount: number }> {

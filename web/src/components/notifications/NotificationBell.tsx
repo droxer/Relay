@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type HTMLAttributes, type MouseEvent } from "react";
+import { useEffect, useId, useState, type HTMLAttributes, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ActionRemove, ICON, NavNotifications } from "../icons";
 import { StateMark } from "../StateMark";
@@ -57,7 +57,10 @@ export function NotificationBell({
   // while the person reads it.
   const [now, setNow] = useState(0);
   const headingId = useId();
-  const { unreadCount } = controller;
+  const { observeInbox, unreadCount } = controller;
+  useEffect(() => {
+    if (open) return observeInbox();
+  }, [observeInbox, open]);
   const badge = countBadgeText(unreadCount);
   const label = unreadCount > 0
     ? t("notifications.bell_unread", { count: unreadCount })

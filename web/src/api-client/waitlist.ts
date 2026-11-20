@@ -58,6 +58,20 @@ export function listWaitlist(query: WaitlistListQuery, signal?: AbortSignal): Pr
   return apiJson<WaitlistListResponse>(`/admin/waitlist?${params.toString()}`, { signal });
 }
 
+export function listWaitlistQueue(
+  query: string,
+  limit: number,
+  offsets: Record<WaitlistStatus, number>,
+  signal?: AbortSignal,
+): Promise<{ bands: Record<WaitlistStatus, Pick<WaitlistListResponse, "entries" | "total">> }> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (query) params.set("q", query);
+  for (const [status, offset] of Object.entries(offsets)) {
+    if (offset > 0) params.set(status, String(offset));
+  }
+  return apiJson(`/admin/waitlist/queue?${params}`, { signal });
+}
+
 /** Invite, re-invite, or resend — each rotates the token. */
 export function inviteWaitlistEntry(id: string): Promise<WaitlistInviteResult> {
   return apiJson<WaitlistInviteResult>(`/admin/waitlist/${encodeURIComponent(id)}/invite`, { method: "POST" });

@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 
 from ...core.computer_identity import computer_id as resolve_computer_id
 from ...core.workspace_artifacts import (
@@ -16,6 +17,7 @@ from ...core.workspace_artifacts import (
 )
 from ...security.actor import Actor
 from ..actors import request_actor, request_actor_or_sandbox
+from ..conditional_get import CACHE_CONTROL, etag_matches, weak_etag
 from ..deps import AppContext, AppContextDep
 from .activity import thread_list_activity
 from .projections import (
@@ -123,10 +125,19 @@ def list_artifacts(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 
-@router.get("/workspace/brief")
-def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+@router.get("/workspace/brief", response_model=dict[str, Any])
+def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any] | Response:
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
     agent, team, project, user_id = _workspace_scope(ctx, actor, request)
+    if request.query_params.get("view") == "activity":
+        payload = _workspace_activity(ctx, user_id, agent, team, project)
+        response = JSONResponse(payload)
+        etag = weak_etag(bytes(response.body))
+        headers = {"ETag": etag.decode("ascii"), "Cache-Control": CACHE_CONTROL.decode("ascii")}
+        if etag_matches(request.headers.get("if-none-match", "").encode("latin-1"), etag):
+            return Response(status_code=304, headers=headers)
+        response.headers.update(headers)
+        return response
     sessions = [
         session
         for session in ctx.session_store.list_session_snapshots(
@@ -163,6 +174,31 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         **({"projectId": project["id"]} if project else {}),
         **_workspace_brief_lists(nodes, active_runs, sessions, tasks),
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _workspace_activity(
+    ctx: AppContext, user_id: str,
+    agent: dict[str, Any] | None, team: dict[str, Any] | None, project: dict[str, Any] | None,
+) -> dict[str, Any]:
+    agent_id = agent["id"] if agent else None
+    team_id = team["id"] if team else None
+    project_id = project["id"] if project else None
+    sessions = ctx.session_store.list_workspace_threads(
+        owner_user_id=user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+    )
+    runs = ctx.registry.daemon_store.list_workspace_active_runs(
+        user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+        computer_id=project.get("computerId") if project else None,
+    )
+    tasks = ctx.task_store.list_task_summaries(
+        user_id=user_id, limit=10, project_id=project_id,
+        assigned_agent_id=agent_id, assigned_team_id=team_id, statuses=ACTIVE_TASK_STATUSES,
+    )
+    return {
+        "sessions": sessions,
+        "activeRuns": runs,
+        "tasks": [task_brief_item(task) for task in tasks],
     }
 
 

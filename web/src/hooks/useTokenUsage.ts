@@ -1,11 +1,11 @@
 import type { DashboardRange } from "../lib/dashboardRange";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardTokens, type TokenUsageSnapshot } from "../api";
+import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 
 export type { TokenUsageSnapshot };
 
 const KEY = ["admin", "dashboard", "tokens"] as const;
-const POLL_INTERVAL_MS = 10_000;
 
 const EMPTY_SNAPSHOT: TokenUsageSnapshot = {
   available: false,
@@ -27,7 +27,8 @@ export function useTokenUsage(range?: DashboardRange): TokenUsageState {
   const query = useQuery<TokenUsageSnapshot>({
     queryKey: [...KEY, range ?? null],
     queryFn: ({ signal }) => getDashboardTokens(signal, undefined, range),
-    refetchInterval: POLL_INTERVAL_MS,
+    staleTime: RELAY_POLL_INTERVALS_MS.dashboardMetrics,
+    refetchInterval: RELAY_POLL_INTERVALS_MS.dashboardMetrics,
   });
   return {
     ...(query.data ?? EMPTY_SNAPSHOT),

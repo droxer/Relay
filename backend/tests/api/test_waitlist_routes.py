@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from relay.app import create_app
 from relay.notifications.mailer import DeliveryResult, EmailMessage
 
@@ -59,6 +60,39 @@ def _invite(client: TestClient, email: str = "ada@example.com") -> str:
     response = client.post(f"{API}/admin/waitlist/{entry['id']}/invite")
     assert response.status_code == 200, response.text
     return response.json()["inviteUrl"].split("#token=", 1)[1]
+
+
+def test_queue_batches_filtered_status_pages(client: TestClient) -> None:
+    path = f"{API}/admin/waitlist/queue"
+    assert client.get(path).status_code == 401
+    for address in ("ada@example.com", "ben@example.com", "cy@example.com", "other@outside.test"):
+        _join(client, address)
+    _bootstrap_admin(client)
+    _invite(client, "cy@example.com")
+
+    engine = client.app.state.waitlist.store.engine
+    statements = []
+
+    def executed(_conn, _cursor, statement, _params, _context, _many):
+        if "FROM waitlist_entries" in statement:
+            statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", executed)
+    try:
+        response = client.get(path, params={"q": "EXAMPLE.COM", "limit": 1, "waiting": 1})
+    finally:
+        event.remove(engine, "before_cursor_execute", executed)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    bands = response.json()["bands"]
+    assert len(statements) == 3  # One grouped count, then only the two non-empty pages.
+    for status, offset in (("waiting", 1), ("invited", 0), ("joined", 0), ("declined", 0)):
+        old = client.get(f"{API}/admin/waitlist", params={
+            "status": status, "q": "EXAMPLE.COM", "limit": 1, "offset": offset,
+        }).json()
+        assert bands[status] == {"entries": old["entries"], "total": old["total"]}
+    assert [entry["email"] for entry in bands["waiting"]["entries"]] == ["ben@example.com"]
+    assert client.get(path, params={"waiting": -1}).status_code == 422
 
 
 def test_only_the_public_join_is_gated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

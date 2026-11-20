@@ -12,6 +12,34 @@ const entries = ["docs", "src", "README.md", "quarterly-planning-notes-with-a-lo
 }));
 const readme = `# Relay product development\n\nA long paragraph that should wrap nicely on a phone screen and not overflow the pane at all, even with long words like supercalifragilisticexpialidocious.\n\n| Column | Another column | Third |\n| --- | --- | --- |\n| a | b | c |\n\n\`\`\`ts\nexport const SOMETHING_VERY_LONG_IDENTIFIER = computeTheThing(withArguments, andMoreArguments, andEvenMore);\n\`\`\`\n`;
 
+test("Activity loads one listing and previews a handoff from a historical directory", async ({ page }) => {
+  const requests: [string | null, string | null][] = [];
+  const historicalFile = "threads/mixed/HANDOFF.md";
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    let body: unknown = { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [project] };
+    if (url.pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    if (url.pathname.endsWith("/workspace/files")) {
+      const path = url.searchParams.get("path");
+      const view = url.searchParams.get("view");
+      requests.push([path, view]);
+      body = { projectId: project.id, source: "live", nodeId: "node-1", path, exists: true, threadRecordsMerged: true,
+        entries: [{ name: "HANDOFF.md", path: historicalFile, kind: "file", bytes: 21, updatedAt: stamp }], generatedAt: stamp };
+    }
+    if (url.pathname.endsWith("/workspace/file")) {
+      expect(url.searchParams.get("path")).toBe(historicalFile);
+      body = { projectId: project.id, source: "live", nodeId: "node-1", path: historicalFile, exists: true,
+        content: "Historical handoff", isBinary: false, bytes: 21, generatedAt: stamp };
+    }
+    await route.fulfill({ json: body });
+  });
+
+  await page.goto("/projects/proj-1?tab=workspace&path=.relay%2Fthreads%2Fmixed");
+  await page.getByRole("button", { name: /HANDOFF\.md/ }).click();
+  await expect(page.locator(".workspace-pane-preview")).toContainText("Historical handoff");
+  expect(requests).toEqual([[".relay/threads/mixed", "activity"]]);
+});
+
 for (const [label, width, height, touch] of [["small", 320, 640, true], ["phone", 390, 844, true], ["landscape", 844, 390, true], ["tablet", 820, 1180, true], ["compact", 1024, 768, false], ["laptop", 1280, 800, false], ["desktop", 1440, 900, false], ["wide", 2560, 1440, false]] as const) {
   test(`project file preview fits ${label}`, async ({ browser }, info) => {
     const context = await browser.newContext({ viewport: { width, height }, hasTouch: touch, isMobile: touch });

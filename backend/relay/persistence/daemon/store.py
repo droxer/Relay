@@ -15,6 +15,7 @@ from .rows import terminal_time_expression
 from .nodes import NodeRows
 from .observations import NodeObservationRows
 from .commands import CommandQueueRows
+from .run_reads import DaemonRunReads
 from .run_requests import RunRequestRows
 from .workspace_responses import WorkspaceResponseRows
 from .maintenance import DaemonRecordMaintenance
@@ -31,6 +32,7 @@ class DatabaseDaemonStore(
     NodeRows,
     NodeObservationRows,
     CommandQueueRows,
+    DaemonRunReads,
     RunRequestRows,
     WorkspaceResponseRows,
     DaemonRecordMaintenance,

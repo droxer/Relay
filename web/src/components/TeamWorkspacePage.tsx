@@ -3,16 +3,17 @@
 import type { TeamMemberConfig } from "../types";
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { timestampTitle } from "../lib/workspaceFormat";
-import { deleteTeamProfileImage, getWorkspaceBrief, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
+import { deleteTeamProfileImage, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useComputerOptions } from "../hooks/useComputerOptions";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
+import { useWorkspaceActivity } from "../hooks/useWorkspaceActivity";
 import { teamAvailability } from "../lib/taskAssignment";
 import { teamContractChanged, teamMutationInput } from "../lib/teamForm";
 import type { AgentTeam } from "../types";
@@ -48,7 +49,6 @@ import { defaultWorkflowId, predefinedStyle } from "../lib/workflowSelection";
 type TeamPageTab = "profile" | "activities";
 
 const TEAM_PAGE_TABS: readonly TeamPageTab[] = ["profile", "activities"];
-const TEAM_BRIEF_POLL_MS = 3000;
 
 function parseTeamTab(value: string | null): TeamPageTab {
   return TEAM_PAGE_TABS.includes(value as TeamPageTab) ? value as TeamPageTab : "profile";
@@ -449,12 +449,8 @@ export function TeamWorkspacePage({
 }) {
   const { t, i18n } = useTranslation();
   const [pageTab, setPageTab] = useUrlSearchState("tab", "profile" as TeamPageTab, parseTeamTab, (value) => value === "profile" ? null : value, "push");
-  const briefQuery = useQuery({
-    queryKey: ["team-workspace-brief", team.id],
-    queryFn: ({ signal }) => getWorkspaceBrief({ teamId: team.id }, signal),
-    enabled: pageTab !== "profile",
-    refetchInterval: pageTab === "activities" ? TEAM_BRIEF_POLL_MS : false,
-  });
+  const briefQuery = useWorkspaceActivity({ teamId: team.id }, pageTab === "activities");
+  const threadCount = briefQuery.data?.sessions.length ?? 0;
   const { computer, computerLabel } = useTeamComputer(team, userId);
   /* The record's properties, one list for both tabs: in the identity rail on
      Profile, in the record's right column on Activity. Availability leads —
@@ -531,7 +527,7 @@ export function TeamWorkspacePage({
                 className={`workspace-page-tab${pageTab === tab ? " is-active" : ""}`}
               >
                 {tab === "profile" ? t("workspace.tab_profile") : t("workspace.tab_activities")}
-                {tab === "activities" && briefQuery.data?.metrics.sessionCount ? <span className="workspace-page-tab-count tnum">{briefQuery.data.metrics.sessionCount}</span> : null}
+                {tab === "activities" && threadCount > 0 ? <span className="workspace-page-tab-count tnum">{threadCount}</span> : null}
               </TabsTrigger>
             ))}
           </TabsList>

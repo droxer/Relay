@@ -5,6 +5,7 @@ import type {
   GitHubIssueQuery,
   GitHubIssuesResponse,
   RelayTask,
+  RelayTaskListItem,
   RoutineSchedule,
   StartTaskResponse,
   TaskArtifactsResponse,
@@ -22,10 +23,13 @@ import { relayApiEndpoint } from "../lib/apiOrigin.ts";
 import { taskGuard, tasksGuard, taskReviewGuard } from "./responseShape.ts";
 
 /** Owned by the personal-space hook, never shared across Accounts. */
-export type TaskListCache = { etag?: string; data?: TasksResponse };
+export type TaskListCache = { projectId?: string; home?: boolean; etag?: string; data?: TasksResponse };
 
 export async function listTasks(signal?: AbortSignal, cache?: TaskListCache): Promise<TasksResponse> {
-  const path = "/tasks?view=summary";
+  const params = new URLSearchParams({ view: "summary" });
+  if (cache?.projectId) params.set("projectId", cache.projectId);
+  if (cache?.home) params.set("scope", "home");
+  const path = `/tasks?${params}`;
   if (!cache) return apiJson<TasksResponse>(path, { signal, guard: tasksGuard });
   const response = await fetchWithSession(relayApiEndpoint(path), {
     signal,
@@ -64,8 +68,11 @@ export function importGitHubIssues(input: GitHubImportInput): Promise<GitHubImpo
 /** One task or routine, by id. The list poll carries most records already,
  *  but a deep link to a record arrives before the list resolves — and an
  *  occurrence may sit outside whatever the list is showing. */
-export function getTask(taskId: string, signal?: AbortSignal): Promise<RelayTask> {
-  return apiJson<RelayTask>(`/tasks/${encodeURIComponent(taskId)}`, { signal, guard: taskGuard });
+export function getTask(taskId: string, signal: AbortSignal | undefined, view: "record"): Promise<RelayTaskListItem>;
+export function getTask(taskId: string, signal?: AbortSignal): Promise<RelayTask>;
+export function getTask(taskId: string, signal?: AbortSignal, view?: "record"): Promise<RelayTaskListItem> {
+  const path = `/tasks/${encodeURIComponent(taskId)}`;
+  return apiJson(view ? `${path}?view=${view}` : path, { signal, guard: taskGuard });
 }
 
 export function getTaskReview(taskId: string, signal?: AbortSignal): Promise<TaskReview> {
@@ -143,11 +150,15 @@ export function listTaskFiles(
  */
 export function listTaskEvents(
   taskId: string,
-  options: { includeOccurrences?: boolean } = {},
+  options: { includeOccurrences?: boolean; activity?: boolean; before?: number } = {},
   signal?: AbortSignal,
 ): Promise<TaskEventsResponse> {
-  const query = options.includeOccurrences ? "?include=occurrences" : "";
-  return apiJson<TaskEventsResponse>(`/tasks/${encodeURIComponent(taskId)}/events${query}`, { signal });
+  const params = new URLSearchParams();
+  if (options.includeOccurrences) params.set("include", "occurrences");
+  if (options.activity) params.set("view", "activity");
+  if (options.before !== undefined) params.set("before", String(options.before));
+  const query = params.toString();
+  return apiJson<TaskEventsResponse>(`/tasks/${encodeURIComponent(taskId)}/events${query ? `?${query}` : ""}`, { signal });
 }
 
 /**

@@ -2,14 +2,14 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { applyManagerProposal, dismissManagerProposal } from "../api-client/project-manager";
-import type { ManagerFields, ManagerProposal } from "../domain-types/project-manager";
+import type { AppliedManagerProposal, ManagerFields, ManagerProposal } from "../domain-types/project-manager";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { navigateToAppPath } from "../lib/appRoute";
 
 export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, agents = [], teams = [] }: {
-  projectId: string; proposal: ManagerProposal; disabled: boolean; onChanged: () => void;
+  projectId: string; proposal: ManagerProposal; disabled: boolean; onChanged: (applied?: AppliedManagerProposal) => void;
   agents?: Array<{id: string; displayName: string}>; teams?: Array<{id: string; displayName: string}>;
 }) {
   const { t } = useTranslation();
@@ -32,9 +32,9 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
     if (application.current?.fingerprint !== fingerprint) application.current = { fingerprint, key: crypto.randomUUID() };
     setBusy(true); setError("");
     try {
-      await applyManagerProposal(projectId, proposal.id, { operationIds: selected, fields,
+      const applied = await applyManagerProposal(projectId, proposal.id, { operationIds: selected, fields,
         expectedRevision: proposal.revision, idempotencyKey: application.current!.key });
-      onChanged();
+      onChanged(applied);
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }

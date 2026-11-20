@@ -31,7 +31,9 @@ from ...computer.names import computer_display_name
 from ...projects.catalog import agent_has_active_project
 from ...teams.membership import remove_agent_from_teams
 from ..deps import AppContextDep
-from ..actors import request_actor
+from ...computer.default_agents import default_agent_offers
+from ...security.onboarding import declined_default_agents
+from ..actors import chat_service_user_header, request_actor
 from ..bodies import JsonBodyDep, json_body, string_field
 from ...skills.bundle import resolve_bundle
 from ...skills.assignments import effective_assignments
@@ -52,10 +54,10 @@ AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy", "de
 @router.get("/agents")
 def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
+    include_offers = request.query_params.get("include") == "default-offers" and not chat_service_user_header(request)
+    records = ctx.agent_store.list_agents(supervisor_user_id=actor["userId"], include_deleted=include_offers)
     agents = [
-        agent
-        for agent in ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
-        if agent.get("enabled", True)
+        agent for agent in records if agent.get("enabled", True) and not agent.get("deletedAt")
     ]
     nodes = _node_map(ctx)
     fleet = list(nodes.values())
@@ -66,7 +68,11 @@ def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         "agents": [
             {**view, "bindingStatus": binding_status(agent, fleet)}
             for agent, view in zip(agents, _agent_views(ctx, agents, nodes=nodes), strict=True)
-        ]
+        ],
+        **({"defaultAgentOffers": default_agent_offers(
+            ctx, actor["userId"], declined_default_agents(actor.get("account", {}).get("onboarding")),
+            fleet=fleet, history=records,
+        )} if include_offers else {}),
     }
 
 

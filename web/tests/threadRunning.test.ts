@@ -92,17 +92,17 @@ describe("threadRunning", () => {
     }), true);
   });
 
-  it("targets the visible daemon node before the sandbox snapshot when cancelling", () => {
+  it("targets the active daemon node before the fallback when cancelling", () => {
     assert.equal(threadCancelNodeId({
       node,
-      sandbox: { id: "sbx_stale_snapshot" },
+      fallbackNode: { id: "sbx_stale_snapshot" },
     }), "sbx_alice");
   });
 
-  it("falls back to the sandbox snapshot when no visible daemon node exists", () => {
+  it("uses the fallback when the active daemon node is unknown", () => {
     assert.equal(threadCancelNodeId({
       node: undefined,
-      sandbox: { id: "sbx_alice" },
+      fallbackNode: { id: "sbx_alice" },
     }), "sbx_alice");
   });
 });

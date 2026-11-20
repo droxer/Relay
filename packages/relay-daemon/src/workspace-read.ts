@@ -8,6 +8,7 @@ import type {
   DaemonWorkspaceListCommand,
   DaemonWorkspaceReadCommand,
 } from "relay-core";
+import { THREAD_RECORDS_DIR, THREAD_RECORDS_DIRS } from "./thread-workspace.js";
 
 const DEFAULT_READ_LIMIT_BYTES = 256 * 1024;
 
@@ -90,6 +91,12 @@ function relativeHomePath(home: string, target: string): string {
   return target === home ? "" : target.slice(home.length + 1).split(sep).join("/");
 }
 
+function compareEntries(left: DaemonWorkspaceEntry, right: DaemonWorkspaceEntry): number {
+  return left.kind === right.kind
+    ? left.name.toLowerCase().localeCompare(right.name.toLowerCase())
+    : left.kind === "directory" ? -1 : 1;
+}
+
 export function listWorkspace(
   workspaceRoot: string,
   relativePath: string,
@@ -119,10 +126,26 @@ export function listWorkspace(
       updatedAt: new Date(info.mtimeMs).toISOString(),
     });
   }
-  entries.sort((left, right) => left.kind === right.kind
-    ? left.name.toLowerCase().localeCompare(right.name.toLowerCase())
-    : left.kind === "directory" ? -1 : 1);
+  entries.sort(compareEntries);
   return { path, exists: true, entries };
+}
+
+function listThreadRecords(workspaceRoot: string, path: string, current: ReturnType<typeof listWorkspace>): ReturnType<typeof listWorkspace> {
+  if ((path !== THREAD_RECORDS_DIR && !path.startsWith(`${THREAD_RECORDS_DIR}/`))
+    || path.split(/[\\/]/).includes("..")) {
+    throw new WorkspaceReadError("invalid-path", "Activity listings require a path within the thread records directory.");
+  }
+  const relative = path.slice(THREAD_RECORDS_DIR.length);
+  const listings = [...THREAD_RECORDS_DIRS.slice(1).reverse().map(root => listWorkspace(workspaceRoot, `${root}${relative}`)), current];
+  const entries = new Map<string, DaemonWorkspaceEntry>();
+  for (const listing of listings) {
+    for (const entry of listing.entries) entries.set(entry.name, entry);
+  }
+  return {
+    path: current.path,
+    exists: listings.some(listing => listing.exists),
+    entries: [...entries.values()].sort(compareEntries),
+  };
 }
 
 export function readWorkspaceFile(
@@ -177,14 +200,17 @@ export function workspaceCommandEvent(
   try {
     if (command.type === "workspace.list") {
       const listing = listWorkspace(workspaceRoot, command.path);
-      return {
-        type: "workspace.listing",
+      const event = {
+        type: "workspace.listing" as const,
         commandId: command.id,
         ...(command.leaseId ? { leaseId: command.leaseId } : {}),
-        path: listing.path,
-        exists: listing.exists,
-        entries: listing.entries,
+        ...listing,
       };
+      if (command.threadRecordsMaxBytes === undefined) return event;
+      const merged = {
+        ...event, ...listThreadRecords(workspaceRoot, command.path, listing), threadRecordsMerged: true as const,
+      };
+      return Buffer.byteLength(JSON.stringify(merged)) <= command.threadRecordsMaxBytes ? merged : event;
     }
     const file = readWorkspaceFile(workspaceRoot, command.path, undefined);
     return {

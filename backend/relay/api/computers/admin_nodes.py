@@ -6,14 +6,13 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from ...computer.access import PERSONAL_COMPUTER_READ_ONLY, admin_may_manage_computer
 from ...computer.limits import assert_local_computer_allowed, local_computer_enrollment_scope
-from ...computer.names import normalize_computer_display_name, present_computer
+from ...computer.names import normalize_computer_display_name, present_computer, present_computer_inventory
 from ...computer.node_agents import (
     assert_node_agent_runs_drained,
     remove_node_agents,
     sync_node_agents,
 )
 from ...core.legacy_names import with_legacy_user_id
-from ...core.managed_node_policy import managed_node_placeholder
 from ...daemon_registry.records import public_sandbox_record
 from ...security.request_auth import require_admin_session
 from ...security.user_handles import user_record
@@ -175,27 +174,8 @@ def delete_control_panel_daemon_node(
 @router.get("/admin/daemon-nodes")
 def control_panel_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
-    observed = []
-    for node in ctx.registry.control_panel_nodes():
-        if node.get("retiredAt"):
-            continue
-        managed_node = (
-            ctx.managed_node_store.get_node(node["managedNodeId"])
-            if node.get("managedNodeId")
-            else None
-        )
-        if managed_node and managed_node.get("desiredState") == "deleted":
-            continue
-        observed.append(with_node_display_name(ctx, node))
-    observed_managed_ids = {
-        node["managedNodeId"] for node in observed if node.get("managedNodeId")
-    }
-    pending = [
-        managed_node_placeholder(node)
-        for node in ctx.managed_node_store.list_nodes()
-        if node["id"] not in observed_managed_ids
-    ]
-    return {"nodes": [with_legacy_user_id(node) for node in [*observed, *pending]]}
+    inventory = present_computer_inventory(ctx, ctx.registry.control_panel_nodes())
+    return {"nodes": [with_legacy_user_id(node) for node in inventory]}
 
 
 @router.post("/admin/daemon-nodes", status_code=201)

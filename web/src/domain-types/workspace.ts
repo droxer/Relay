@@ -78,6 +78,12 @@ export interface WorkspaceBriefResponse {
   generatedAt: string;
 }
 
+export interface WorkspaceActivityResponse {
+  sessions: Pick<WorkspaceBriefSession, "id" | "title" | "taskGoal" | "status" | "runCount" | "updatedAt">[];
+  activeRuns: Pick<DaemonNodeMonitorRecord["activeRuns"][number], "runId" | "sessionId" | "taskGoal" | "agent" | "startedAt">[];
+  tasks: WorkspaceBriefTask[];
+}
+
 export type WorkspaceFileKind = "directory" | "file";
 
 export interface WorkspaceFileEntry {

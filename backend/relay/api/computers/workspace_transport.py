@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from collections.abc import Awaitable, Callable
 from datetime import datetime, UTC
 from typing import Any
 
@@ -13,8 +14,10 @@ from starlette.concurrency import run_in_threadpool
 from ...core.computer_identity import computer_id
 from ...realtime.event_notifier import workspace_response_key
 from ...core.workspace_capabilities import required_workspace_capabilities
+from ...core.workspace_layout import THREAD_RECORDS_DIR, THREAD_RECORDS_DIRS
 from ..deps import AppContext
 from ...core.daemon_capabilities import (
+    DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS,
     DAEMON_CAPABILITY_WORKSPACE_READ_SHARED,
     has_capability,
 )
@@ -165,6 +168,48 @@ def raise_workspace_error(event: dict[str, Any]) -> None:
     raise HTTPException(status, message)
 
 
+async def workspace_listing_event(
+    path: str, *, view: str | None, node: dict[str, Any], max_event_bytes: int,
+    command_for: Callable[[str], dict[str, Any]],
+    dispatch: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    async def read(folder: str, *, merge: bool = False) -> dict[str, Any]:
+        command = command_for(folder)
+        if merge:
+            command["threadRecordsMaxBytes"] = max_event_bytes
+        event = await dispatch(command)
+        raise_workspace_error(event)
+        return event
+
+    if view != "activity" or (path != THREAD_RECORDS_DIR and not path.startswith(f"{THREAD_RECORDS_DIR}/")):
+        return await read(path)
+    if ".." in path.replace("\\", "/").split("/"):
+        raise HTTPException(400, "Workspace path must not traverse upward.")
+
+    relative = path[len(THREAD_RECORDS_DIR):]
+    legacy_paths = [f"{root}{relative}" for root in THREAD_RECORDS_DIRS[1:]]
+    if has_capability(node, DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS):
+        current = await read(path, merge=True)
+        if current.get("threadRecordsMerged") is True:
+            return current
+        # A large listing falls back to separate replies, as does a daemon downgraded during the read.
+        older = await asyncio.gather(*(read(folder) for folder in legacy_paths))
+    else:
+        current, *older = await asyncio.gather(*(read(folder) for folder in [path, *legacy_paths]))
+
+    entries = {
+        entry["name"]: entry
+        for listing in [*reversed(older), current]
+        for entry in listing.get("entries", [])
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+    }
+    return {
+        **current, "threadRecordsMerged": True,
+        "exists": any(listing.get("exists") for listing in [current, *older]),
+        "entries": sorted(entries.values(), key=lambda entry: (entry.get("kind") != "directory", entry["name"].lower())),
+    }
+
+
 def live_workspace_listing(
     event: dict[str, Any], *, path: str, metadata: dict[str, Any]
 ) -> dict[str, Any]:
@@ -174,6 +219,7 @@ def live_workspace_listing(
         "path": event.get("path", path),
         "exists": bool(event.get("exists")),
         "entries": event.get("entries") or [],
+        **({"threadRecordsMerged": True} if event.get("threadRecordsMerged") is True else {}),
         "generatedAt": workspace_timestamp(),
     }
 

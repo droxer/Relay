@@ -143,24 +143,27 @@ export function taskHistoryEntries(
   events: RelayTaskEvent[],
   ownerTaskId: string,
   limit = TASK_HISTORY_LIMIT,
+  previousStatus?: TaskStatus,
 ): TaskHistoryEntry[] {
   const entries: TaskHistoryEntry[] = [];
   for (const event of events) {
     const entry = entryFor(event, ownerTaskId);
     if (entry) entries.push(entry);
   }
-  return withPreviousStatus(entries)
-    .sort((left, right) => right.timestamp.localeCompare(left.timestamp) || right.id.localeCompare(left.id))
-    .slice(0, limit);
+  // Activity pages already arrive in timestamp and sequence order. Preserve
+  // that order when status moves share the same timestamp.
+  if (previousStatus === undefined) {
+    entries.sort((left, right) => left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id));
+  }
+  return withPreviousStatus(entries, ownerTaskId, previousStatus).reverse().slice(0, limit);
 }
 
 /** Stamps each status move with the status it left, walking every task's
     moves oldest first — before the cap, so the oldest shown move still knows
     where it came from. A routine's occurrences each keep their own track. */
-function withPreviousStatus(entries: readonly TaskHistoryEntry[]): TaskHistoryEntry[] {
-  const current = new Map<string, TaskStatus>();
-  const ordered = [...entries].sort((left, right) => left.timestamp.localeCompare(right.timestamp) || left.id.localeCompare(right.id));
-  return ordered.map((entry) => {
+function withPreviousStatus(entries: readonly TaskHistoryEntry[], ownerTaskId: string, previousStatus?: TaskStatus): TaskHistoryEntry[] {
+  const current = new Map<string, TaskStatus>(previousStatus ? [[ownerTaskId, previousStatus]] : []);
+  return entries.map((entry) => {
     if (entry.kind !== "status" || !entry.status) return entry;
     const from = current.get(entry.taskId) ?? "backlog";
     current.set(entry.taskId, entry.status);

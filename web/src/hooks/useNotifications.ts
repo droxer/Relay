@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
   clearNotifications,
   getNotificationPreferences,
+  getUnreadNotificationCount,
   listNotifications,
   markNotificationsRead,
   updateNotificationPreferences,
@@ -105,6 +106,8 @@ export type NotificationsController = {
   readonly isPending: boolean;
   readonly isError: boolean;
   readonly isFetching: boolean;
+  /** Keep the detail query active for an open panel and release it on close. */
+  observeInbox: () => () => void;
   retry: () => void;
   markAllRead: () => void;
   /** Empty the inbox. */
@@ -156,11 +159,36 @@ export function useNotifications({ enabled, onOpen }: {
   const { user } = useAuthSession();
   const accountId = user?.id;
   const queryKey = useMemo(() => [...NOTIFICATIONS_QUERY_KEY, accountId], [accountId]);
+  const countKey = [...queryKey, "count"] as const;
+  const [openPanels, setOpenPanels] = useState(0);
+  const observeInbox = useCallback(() => {
+    setOpenPanels(count => count + 1);
+    return () => setOpenPanels(count => count - 1);
+  }, []);
+  const readDetails = desktopEnabled || openPanels > 0;
+  const watching = enabled && Boolean(accountId);
+
+  const count = useQuery({
+    queryKey: countKey,
+    enabled: watching && !readDetails,
+    queryFn: ({ signal }) => getUnreadNotificationCount(signal),
+    refetchInterval: RELAY_POLL_INTERVALS_MS.notifications,
+    refetchOnWindowFocus: true,
+  });
 
   const query = useQuery({
     queryKey,
-    enabled: enabled && Boolean(accountId),
-    queryFn: ({ signal }) => listNotifications(signal),
+    enabled: watching && readDetails,
+    queryFn: async ({ signal }) => {
+      await queryClient.cancelQueries({ queryKey: countKey, exact: true });
+      const countVersion = queryClient.getQueryState(countKey)?.dataUpdateCount;
+      const response = await listNotifications(signal);
+      // A badge poll can start again if the panel closes mid-fetch. Keep any newer count it read.
+      if (!signal.aborted && queryClient.getQueryState(countKey)?.dataUpdateCount === countVersion) {
+        queryClient.setQueryData(countKey, { unreadCount: response.unreadCount });
+      }
+      return response;
+    },
     refetchInterval: RELAY_POLL_INTERVALS_MS.notifications,
     // A hidden tab is exactly when a desktop notice is worth showing, so the
     // poll keeps running there — but only for a person who asked for them.
@@ -169,7 +197,7 @@ export function useNotifications({ enabled, onOpen }: {
   });
 
   const notices = useMemo(() => notificationViews(query.data?.notifications), [query.data]);
-  const unreadCount = query.data?.unreadCount ?? 0;
+  const unreadCount = count.data?.unreadCount ?? query.data?.unreadCount ?? 0;
 
   const changeKey = ["notification-change", accountId];
   const reconcileChanges = () => {
@@ -177,24 +205,34 @@ export function useNotifications({ enabled, onOpen }: {
       void queryClient.invalidateQueries({ queryKey });
     }
   };
+  async function updateInbox(ids: readonly string[] | "all", update: (current: NotificationsResponse) => NotificationsResponse) {
+    await queryClient.cancelQueries({ queryKey });
+    const previous = queryClient.getQueryData<NotificationsResponse>(queryKey);
+    const optimistic = previous && queryClient.setQueryData<NotificationsResponse>(queryKey, update(previous));
+    const previousCount = queryClient.getQueryData<Pick<NotificationsResponse, "unreadCount">>(countKey);
+    const optimisticCount = previous && optimistic && queryClient.setQueryData(countKey, {
+      unreadCount: ids === "all" ? 0 : Math.max(0, (previousCount?.unreadCount ?? previous.unreadCount)
+        - (previous.unreadCount - optimistic.unreadCount)),
+    });
+    return { previous, optimistic, queryKey, previousCount, optimisticCount, countKey };
+  }
+  function restoreInbox(context: Awaited<ReturnType<typeof updateInbox>> | undefined) {
+    if (context?.previous) {
+      queryClient.setQueryData<NotificationsResponse>(context.queryKey, current =>
+        current === context.optimistic ? context.previous : current);
+    }
+    if (context?.previousCount) {
+      queryClient.setQueryData<Pick<NotificationsResponse, "unreadCount">>(context.countKey, current =>
+        current === context.optimisticCount ? context.previousCount : current);
+    }
+  }
   const markRead = useMutation({
     mutationKey: changeKey,
     onSettled: reconcileChanges,
     mutationFn: (ids: readonly string[] | "all") => markNotificationsRead(ids),
-    onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<NotificationsResponse>(queryKey);
-      if (previous) {
-        const target = ids === "all" ? "all" : new Set(ids);
-        queryClient.setQueryData(queryKey, withRead(previous, target, new Date().toISOString()));
-      }
-      return { previous, queryKey, optimistic: queryClient.getQueryData<NotificationsResponse>(queryKey) };
-    },
+    onMutate: (ids) => updateInbox(ids, previous => withRead(previous, ids === "all" ? "all" : new Set(ids), new Date().toISOString())),
     onError: (error, _ids, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData<NotificationsResponse>(context.queryKey, current =>
-          current === context.optimistic ? context.previous : current);
-      }
+      restoreInbox(context);
       reportMutationError("Failed to mark notifications read", error, t("notifications.mark_failed"));
     },
   });
@@ -204,19 +242,9 @@ export function useNotifications({ enabled, onOpen }: {
     mutationKey: changeKey,
     onSettled: reconcileChanges,
     mutationFn: (ids: readonly string[] | "all") => clearNotifications(ids),
-    onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<NotificationsResponse>(queryKey);
-      if (previous) {
-        queryClient.setQueryData(queryKey, withoutCleared(previous, ids === "all" ? "all" : new Set(ids)));
-      }
-      return { previous, queryKey, optimistic: queryClient.getQueryData<NotificationsResponse>(queryKey) };
-    },
+    onMutate: (ids) => updateInbox(ids, previous => withoutCleared(previous, ids === "all" ? "all" : new Set(ids))),
     onError: (error, _ids, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData<NotificationsResponse>(context.queryKey, current =>
-          current === context.optimistic ? context.previous : current);
-      }
+      restoreInbox(context);
       reportMutationError("Failed to clear notifications", error, t("notifications.clear_failed"));
     },
   });
@@ -258,6 +286,7 @@ export function useNotifications({ enabled, onOpen }: {
     get isPending() { return query.isPending; },
     get isError() { return query.isError; },
     get isFetching() { return query.isFetching; },
+    observeInbox,
     retry: () => { void query.refetch(); },
     markAllRead,
     clearAll,

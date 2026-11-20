@@ -20,6 +20,14 @@ router = APIRouter()
 DASHBOARD_CACHE = DashboardCache()
 
 
+@router.get("/admin/dashboard/agents")
+def dashboard_agents(request: Request, ctx: AppContextDep) -> dict[str, int]:
+    require_admin_session(request, ctx.auth_store)
+    return DASHBOARD_CACHE.get_or_build(
+        ctx.agent_store, ("agents",), lambda: {"count": ctx.agent_store.count_live_agents()},
+    )
+
+
 @router.get("/admin/dashboard/sessions")
 def dashboard_sessions(
     request: Request, ctx: AppContextDep, start: date | None = None,

@@ -1,5 +1,5 @@
-import { keepPreviousData, useQueries } from "@tanstack/react-query";
-import { listWaitlist } from "../../../api";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { listWaitlistQueue } from "../../../api";
 import type { WaitlistEntry, WaitlistStatus } from "../../../types";
 import { ADMIN_ROSTER_POLL_MS, CONTROL_PANEL_POLL_MS } from "../../../lib/controlPanelQueries";
 import { LANE_PAGE_SIZE } from "../../../lib/pagination";
@@ -18,57 +18,40 @@ export function waitlistPollIntervalMs(entries: readonly WaitlistEntry[] | undef
     : ADMIN_ROSTER_POLL_MS;
 }
 
-export interface WaitlistBand {
+interface WaitlistBand {
   status: WaitlistStatus;
   entries: WaitlistEntry[];
   /** The band's whole size under the current search, not the page on screen. */
   total: number;
   page: number;
-  loaded: boolean;
-  error: Error | null;
 }
 
-export interface WaitlistQueue {
+interface WaitlistQueue {
   bands: WaitlistBand[];
   /** Every band has answered at least once. */
   loaded: boolean;
   /** No band has a row under the current search. */
   empty: boolean;
+  error: Error | null;
 }
 
-/**
- * One server-paged read per status band. The queue can outgrow a single
- * fetch, so each band asks for its own page (oldest first) instead of the
- * list arriving whole and being grouped here. `combine` folds the four
- * results into one stable value, so a poll that changes nothing re-renders
- * nothing.
- */
+/** Read one bounded page per status through a single account-scoped query. */
 export function useWaitlistQueue(query: string, lanePages: Record<string, number>): WaitlistQueue {
-  return useQueries({
-    queries: WAITLIST_STATUS_ORDER.map((status) => {
-      const page = lanePages[status] ?? 1;
-      return {
-        queryKey: [...WAITLIST_QUERY_KEY, status, query, page],
-        queryFn: ({ signal }: { signal: AbortSignal }) => listWaitlist(
-          { status, q: query, limit: LANE_PAGE_SIZE, offset: pageOffset(page, LANE_PAGE_SIZE) },
-          signal,
-        ),
-        placeholderData: keepPreviousData,
-        refetchInterval: (query: { state: { data?: { entries?: WaitlistEntry[] } } }) =>
-          waitlistPollIntervalMs(query.state.data?.entries),
-      };
-    }),
-    combine: (results) => {
-      const bands = results.map((result, index): WaitlistBand => ({
-        status: WAITLIST_STATUS_ORDER[index],
-        entries: result.data?.entries ?? [],
-        total: result.data?.total ?? 0,
-        page: lanePages[WAITLIST_STATUS_ORDER[index]] ?? 1,
-        loaded: result.data !== undefined,
-        error: result.error,
-      }));
-      const loaded = bands.every((band) => band.loaded || band.error);
-      return { bands, loaded, empty: loaded && bands.every((band) => band.total === 0) };
-    },
+  const offsets = Object.fromEntries(WAITLIST_STATUS_ORDER.map((status) =>
+    [status, pageOffset(lanePages[status] ?? 1, LANE_PAGE_SIZE)],
+  )) as Record<WaitlistStatus, number>;
+  const result = useQuery({
+    queryKey: [...WAITLIST_QUERY_KEY, query, offsets],
+    queryFn: ({ signal }) => listWaitlistQueue(query, LANE_PAGE_SIZE, offsets, signal),
+    placeholderData: keepPreviousData,
+    refetchInterval: ({ state }) => waitlistPollIntervalMs(state.data?.bands.invited.entries),
   });
+  const bands = WAITLIST_STATUS_ORDER.map((status): WaitlistBand => ({
+    status,
+    entries: result.data?.bands[status].entries ?? [],
+    total: result.data?.bands[status].total ?? 0,
+    page: lanePages[status] ?? 1,
+  }));
+  const loaded = result.data !== undefined || result.isError;
+  return { bands, loaded, empty: loaded && bands.every((band) => band.total === 0), error: result.error };
 }

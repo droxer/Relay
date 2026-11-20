@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import { AgentDelegationSettings } from "../src/components/AgentDelegationSettings";
 import { DirectDelegationCard } from "../src/components/DirectDelegationCard";
+import { USER_AGENTS_QUERY_KEY } from "../src/hooks/useUserAgents";
 import type { UserAgent } from "../src/types";
 
 const agents = vi.hoisted(() => ({ list: vi.fn() }));
@@ -29,6 +30,15 @@ it("offers owned agents on the same Computer and preserves successive saves", as
   expect(screen.queryByRole("checkbox", {name: "A"})).toBeNull();
   expect(screen.queryByRole("checkbox", {name: "OTHER"})).toBeNull();
   expect(screen.queryByRole("checkbox", {name: "FOREIGN"})).toBeNull();
+});
+
+it("reuses the fresh Agent roster already loaded by the shell", async () => {
+  const client = new QueryClient();
+  client.setQueryData([USER_AGENTS_QUERY_KEY, "alice"], { agents: [agent("b")] });
+  agents.list.mockClear();
+  render(<QueryClientProvider client={client}><AgentDelegationSettings agent={agent("a")} editable onChange={vi.fn()} /></QueryClientProvider>);
+  expect(await screen.findByRole("checkbox", { name: "B" })).toBeTruthy();
+  expect(agents.list).not.toHaveBeenCalled();
 });
 
 it("shows save failures and leaves the previous permission intact", async () => {

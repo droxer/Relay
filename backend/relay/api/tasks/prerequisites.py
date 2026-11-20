@@ -72,12 +72,13 @@ def with_dependency_summaries(
 
     A dependency does not grant detail access. The allowlist below deliberately
     excludes descriptions, evidence, history and runtime/workspace details.
-    Fetch compact snapshots in batches, never reconstruct event histories.
+    Reuse tasks already in the response and read missing prerequisites in batches.
     """
     ids = list(dict.fromkeys(key for task in tasks for key in task.get("waitingOn") or []))
-    summaries: dict[str, dict[str, Any]] = {}
-    for offset in range(0, len(ids), 500):
-        for task in ctx.task_store.list_task_summaries(task_ids=ids[offset:offset + 500]):
+    summaries = {task["id"]: task for task in tasks if task.get("status") != "done"}
+    missing = [key for key in ids if key not in summaries]
+    for offset in range(0, len(missing), 500):
+        for task in ctx.task_store.list_task_summaries(task_ids=missing[offset:offset + 500]):
             summaries[task["id"]] = task
     projects: dict[str, bool] = {}
     result: list[dict[str, Any]] = []

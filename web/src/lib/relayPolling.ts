@@ -3,7 +3,8 @@ import type { TaskStatus } from "relay-core";
 /* Poll budgets. Every interval here is a React Query refetchInterval, so none
    of them run in a hidden tab (refetchIntervalInBackground stays false). */
 export const RELAY_POLL_INTERVALS_MS = {
-  sandboxes: 30_000,
+  /** These server-side dashboard aggregates are cached for 30 seconds. */
+  dashboardMetrics: 30_000,
   /** Computers change through registration and liveness, which the backend
       derives with a 60 s timeout; nothing on screen needs them faster than
       this. */
@@ -73,13 +74,12 @@ export function isSettledTaskStatus(status: TaskStatus | undefined): boolean {
 }
 
 /**
- * A task record polls until it settles; after that the polled list row is its
- * change signal. A record the list does not carry (a deep link past the list's
- * page) has no such signal, so it keeps a slow poll instead of stopping.
+ * The polled list row is the change signal for an open Task record. Records
+ * outside the list own their polling, slowing down once they settle.
  */
-export function taskRecordPollIntervalMs(status: TaskStatus | undefined, hasListRow = true): number | false {
-  if (!isSettledTaskStatus(status)) return RELAY_POLL_INTERVALS_MS.tasks;
-  return hasListRow ? false : RELAY_POLL_INTERVALS_MS.settledTaskRecord;
+export function taskRecordPollIntervalMs(status: TaskStatus | undefined, hasListRow: boolean): number | false {
+  if (hasListRow) return false;
+  return isSettledTaskStatus(status) ? RELAY_POLL_INTERVALS_MS.settledTaskRecord : RELAY_POLL_INTERVALS_MS.tasks;
 }
 
 /**

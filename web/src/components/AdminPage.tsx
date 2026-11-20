@@ -114,16 +114,18 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
   const [authError, setAuthError] = useState<string | null>(null);
 
   const view = section;
+  const usersSection = view === "users" || view === "waitlist";
   const setView = onSelectSection;
   const [layout, setLayout] = useState<AdminLayout>("card");
   /* A phone has no width for the table: it always gets the cards, and the
      card/list switch is hidden there (admin-v2-users.css). */
   const phone = useMediaQuery(PHONE_QUERY);
   const shownLayout: AdminLayout = phone ? "card" : layout;
-  const { nodes, users, pollError, mergeNodes, refetch, inventoryLoading, inventoryError } = useAdminNodes(
-    Boolean(admin),
-    view === "dashboard" || layout === "list",
-  );
+  const { nodes, users, pollError, mergeNodes, refetch, inventoryLoading, inventoryError } = useAdminNodes({
+    nodesEnabled: Boolean(admin) && (view === "dashboard" || view === "users" || view === "computers"),
+    usersEnabled: Boolean(admin) && view !== "organization",
+    live: view === "dashboard" || (view !== "waitlist" && layout === "list"),
+  });
   const managedNodesQuery = useQuery({
     queryKey: ["admin", "managed-nodes"],
     queryFn: ({ signal }) => listManagedNodes(signal),
@@ -136,7 +138,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
   const orgSettingsQuery = useQuery({
     queryKey: ["admin", "settings"],
     queryFn: ({ signal }) => getOrgSettings(signal),
-    enabled: Boolean(admin),
+    enabled: Boolean(admin) && usersSection,
   });
   const defaultMaxLocalComputers = orgSettingsQuery.data?.settings.maxLocalComputersPerUser;
   // Absent while the query is in flight; only a definite false hides the
@@ -392,7 +394,6 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
       ? String(managedNodesQuery.error)
       : null;
   const headerError = authError ?? pollError ?? managedNodesError;
-  const usersSection = view === "users" || view === "waitlist";
   const viewTitle = t(`admin.v2.title_${usersSection ? "users" : view}`);
   const hasHeaderActions = Boolean(headerError) || usersSection;
   const headerCount = usersSection

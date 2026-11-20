@@ -24,7 +24,7 @@ import { taskRef } from "../../lib/taskRef";
 import { formatThreadStamp } from "../../lib/threadStamp";
 import { greetingName, greetingPeriod } from "../../lib/welcomeRecap";
 import type { AgentName } from "relay-core";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem, TasksResponse } from "../../types";
 import { HomeQueue } from "./HomeQueue";
 import { FinishedPanel, HomeLink, ProjectsPanel, RunningPanel } from "./HomePanels";
 import { HomeSetupFocus, HomeSetupPanel } from "./HomeSetupPanel";
@@ -45,6 +45,7 @@ export interface HomePageProps {
   onRefresh: () => Promise<void>;
   onOpenRoutineRecord: (id: string, runId?: string) => void;
   tasks: readonly RelayTaskListItem[];
+  taskProjects?: TasksResponse["homeProjects"];
   sessions: readonly RelaySession[];
   projects: readonly ProjectRecord[];
   nodes: readonly DaemonNodeMonitorRecord[];
@@ -62,7 +63,7 @@ const MINUTE_MS = 60_000;
 /** Home: what needs the signed-in person, ranked, beside where their work
  *  stands. The queue is computed once by the app shell (it also feeds the
  *  rail's badge) and arrives here as `items`. */
-export function HomePage({ user, userId, setUser, items, tasks, sessions, projects, nodes, onOpenThread, onOpenTaskRecord, dataStatus, setupProgress, onOpenOnboarding, onRefresh, onOpenRoutineRecord }: HomePageProps) {
+export function HomePage({ user, userId, setUser, items, tasks, taskProjects, sessions, projects, nodes, onOpenThread, onOpenTaskRecord, dataStatus, setupProgress, onOpenOnboarding, onRefresh, onOpenRoutineRecord }: HomePageProps) {
   const { t, i18n } = useTranslation();
   const now = useMinuteClock();
   const actions = useHomeActions(setUser);
@@ -90,7 +91,7 @@ export function HomePage({ user, userId, setUser, items, tasks, sessions, projec
   const agentNames = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.displayName])), [agents]);
   const projectNames = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
   const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
-  const projectRows = useMemo(() => homeProjects(projects, tasks, items), [items, projects, tasks]);
+  const projectRows = useMemo(() => homeProjects(projects, tasks, items, undefined, taskProjects), [items, projects, tasks, taskProjects]);
   const running = useMemo(() => runningNow(sessions, nodes, userId), [nodes, sessions, userId]);
   const setup = useMemo(() => homeSetup(nodes, agents, userId), [agents, nodes, userId]);
   const finished = useMemo(() => recentlyFinished(tasks, userId), [tasks, userId]);

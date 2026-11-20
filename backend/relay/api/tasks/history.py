@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from loguru import logger
 
 from ...core.workspace_artifacts import (
@@ -14,6 +14,7 @@ from ...core.workspace_artifacts import (
 from ...security.actor import Actor
 from ..actors import (
     get_task_for_actor,
+    get_task_header_for_actor,
     request_actor,
 )
 from ..deps import AppContextDep
@@ -57,6 +58,9 @@ def task_events(
     request: Request,
     ctx: AppContextDep,
     include: str | None = None,
+    view: str | None = None,
+    before: int | None = Query(default=None, ge=0, le=2**63 - 1),
+    limit: int = Query(default=25, ge=1, le=100),
 ) -> dict[str, Any]:
     """The task's event log — the run history behind its current state.
 
@@ -68,6 +72,12 @@ def task_events(
     receive another task's events.
     """
     actor = request_actor(request, ctx.auth_store)
+    if view == "activity" and include != "occurrences":
+        task = get_task_header_for_actor(ctx.task_store, task_id, actor)
+        try:
+            return ctx.task_store.task_activity_page(task["id"], limit=limit, before=before)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     events = list(task["events"])
     if include == "occurrences":

@@ -23,6 +23,7 @@ from ..engine import store_transaction
 from ..sql import names_no_uuid_row
 from ..tables.projects import projects
 from .rows import (
+    compact_task_snapshot,
     compact_task_summary,
 )
 from .state import TaskStoreState
@@ -34,6 +35,36 @@ def _live_owned_tasks(table: Any, user_id: str) -> tuple[Any, ...]:
         table.c.deleted_at.is_(None),
         or_(table.c.project_id.is_(None), select(projects.c.id).where(projects.c.id == table.c.project_id).exists()),
     )
+
+
+_ACTIVITY_EVENT_TYPES = (
+    "task.created", "task.assigned", "task.unassigned", "task.project_set", "task.status",
+    "task.session_linked", "task.session_unlinked", "task.occurrence_created", "task.dispatch_outcome", "task.activity",
+)
+
+
+def _snapshot_activity_page(
+    history: list[dict[str, Any]], *, limit: int, before: int | None,
+) -> dict[str, Any]:
+    activity = sorted(
+        ((sequence, event) for sequence, event in enumerate(history) if event.get("type") in _ACTIVITY_EVENT_TYPES),
+        key=lambda item: (item[1].get("timestamp") or "", item[0]),
+    )
+    end = len(activity)
+    if before is not None:
+        anchor = next((index for index, (sequence, _) in enumerate(activity) if sequence == before), None)
+        if anchor is None:
+            raise ValueError("Invalid Task Activity cursor.")
+        end = anchor
+    start = max(0, end - limit)
+    previous = next((
+        event.get("status") for _, event in reversed(activity[:start]) if event.get("type") == "task.status"
+    ), None)
+    return {
+        "events": [event for _, event in activity[start:end]],
+        "nextBefore": activity[start][0] if start else None,
+        "previousStatus": previous or "backlog",
+    }
 
 
 class TaskReadRows(TaskStoreState):
@@ -73,12 +104,70 @@ class TaskReadRows(TaskStoreState):
             return int(conn.scalar(wip_count_query(scope)) or 0)
 
     def get_task(self, task_id: str) -> dict[str, Any]:
+        return self._read_task(task_id, include_history=True)
+
+    def get_task_record(self, task_id: str) -> dict[str, Any]:
+        return self._read_task(task_id, include_history=False)
+
+    def get_task_header(self, task_id: str) -> dict[str, Any]:
+        """Read the Task identity and access fields without loading any events."""
+        if names_no_uuid_row(self.engine, task_id):
+            raise KeyError(task_id)
+        tasks = self.tasks
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(select(
+                tasks.c.id, tasks.c.owner_user_id.label("ownerUserId"), tasks.c.deleted_at.label("deletedAt"),
+            ).where(tasks.c.id == task_id)).mappings().first()
+        if row is None:
+            raise KeyError(task_id)
+        return dict(row)
+
+    def task_activity_page(self, task_id: str, *, limit: int, before: int | None) -> dict[str, Any]:
+        events = self.events
+        owned = events.c.task_id == task_id
+        position = tuple_(events.c.timestamp, events.c.sequence)
+        newest = (events.c.timestamp.desc(), events.c.sequence.desc())
+        page = select(events.c.payload, events.c.sequence, events.c.timestamp).where(
+            owned, events.c.type.in_(_ACTIVITY_EVENT_TYPES),
+        ).order_by(*newest).limit(limit + 1)
+        with store_transaction(self.engine) as conn:
+            if before is not None:
+                anchor = conn.execute(select(events.c.timestamp, events.c.sequence).where(
+                    owned, events.c.sequence == before,
+                )).first()
+                if anchor is None:
+                    return self._legacy_task_activity(conn, task_id, limit=limit, before=before)
+                page = page.where(position < tuple_(anchor.timestamp, anchor.sequence))
+            rows = conn.execute(page).mappings().all()
+            window = rows[:limit]
+            if not window:
+                if before is None:
+                    return self._legacy_task_activity(conn, task_id, limit=limit, before=None)
+                return {"events": [], "nextBefore": None, "previousStatus": "backlog"}
+            oldest = window[-1]
+            previous = conn.scalar(select(events.c.payload["status"].as_string()).where(
+                owned, events.c.type == "task.status", position < tuple_(oldest["timestamp"], oldest["sequence"]),
+            ).order_by(*newest).limit(1))
+        return {
+            "events": [row["payload"] for row in reversed(window)],
+            "nextBefore": oldest["sequence"] if len(rows) > limit else None,
+            "previousStatus": previous or "backlog",
+        }
+
+    def _legacy_task_activity(self, conn: Any, task_id: str, *, limit: int, before: int | None) -> dict[str, Any]:
+        # Treat the snapshot as the log only when no durable event rows exist.
+        events = self.events
+        has_events = conn.scalar(select(select(events.c.sequence).where(events.c.task_id == task_id).exists()))
+        history = [] if has_events else conn.scalar(select(self.tasks.c.snapshot["events"]).where(self.tasks.c.id == task_id))
+        return _snapshot_activity_page(history or [], limit=limit, before=before)
+
+    def _read_task(self, task_id: str, *, include_history: bool) -> dict[str, Any]:
         if names_no_uuid_row(self.engine, task_id):
             raise KeyError(task_id)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
-                    select(self.tasks.c.id, self.tasks.c.snapshot).where(
+                    select(self.tasks.c.id, self.tasks.c.snapshot, self.tasks.c.version).where(
                         self.tasks.c.id == task_id
                     )
                 )
@@ -87,10 +176,15 @@ class TaskReadRows(TaskStoreState):
             )
             if not row:
                 raise KeyError(task_id)
+            snapshot = row["snapshot"] or {}
+            version = int(row["version"] or 0)
+            if not include_history and snapshot.get("eventCount") == version:
+                return compact_task_snapshot(snapshot, event_count=version)
             events = self._events_for_task(conn, row["id"])
             if not events:
-                events = list((row["snapshot"] or {}).get("events", []))
-            return materialize_task_events(events) if events else row["snapshot"]
+                events = list(snapshot.get("events", []))
+            record = materialize_task_events(events) if events else snapshot
+            return record if include_history else compact_task_snapshot(record, event_count=version)
 
     def list_tasks(
         self, *, user_id: str | None = None, limit: int | None = None
@@ -192,9 +286,58 @@ class TaskReadRows(TaskStoreState):
         with store_transaction(self.engine) as conn:
             return int(conn.scalar(statement) or 0)
 
+    def home_tasks(self, user_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Candidates for the Home panels plus each Project's full rollup."""
+        tasks = self.tasks
+        scope = _live_owned_tasks(tasks, user_id)
+        personal = func.coalesce(tasks.c.assignee_user_id, tasks.c.owner_user_id) == user_id
+        project_counts = select(
+            tasks.c.project_id, tasks.c.status, tasks.c.is_routine,
+            func.count().label("total"), func.max(tasks.c.snapshot["updatedAt"].as_string()).label("updated_at"),
+        ).where(*scope, tasks.c.project_id.is_not(None)).group_by(
+            tasks.c.project_id, tasks.c.status, tasks.c.is_routine,
+        ).order_by(tasks.c.project_id, tasks.c.status, tasks.c.is_routine)
+
+        read = select(tasks.c.snapshot).where(*scope, personal)
+        recent = (tasks.c.updated_at.desc(), tasks.c.id.desc())
+        upcoming = or_(tasks.c.due_date.is_not(None), tasks.c.snapshot["scheduledFor"].as_string().is_not(None))
+        open_issues = or_(
+            upcoming,
+            tasks.c.snapshot["prerequisiteTaskIds"].as_string().is_not(None),
+            tasks.c.status.in_(("assigned", "queued", "waiting_for_human", "review", "blocked")),
+            and_(tasks.c.status == "backlog", or_(tasks.c.assigned_agent_id.is_not(None), tasks.c.assigned_team_id.is_not(None))),
+            and_(tasks.c.project_id.is_(None), tasks.c.snapshot["computerId"].as_string().is_(None),
+                 tasks.c.snapshot["sourceRoutineId"].as_string().is_(None), tasks.c.status != "cancelled"),
+        )
+        candidates = read.where(tasks.c.status != "done", or_(
+            and_(tasks.c.is_routine.is_(False), open_issues),
+            and_(tasks.c.is_routine.is_(True), tasks.c.routine_state == "active",
+                 tasks.c.routine_next_run_at.is_not(None)),
+        )).order_by(*recent)
+        finished = read.where(tasks.c.status == "done", tasks.c.is_routine.is_(False)).order_by(
+            func.coalesce(tasks.c.snapshot["finishedAt"].as_string(), tasks.c.snapshot["updatedAt"].as_string()).desc(),
+            *recent,
+        ).limit(5)
+
+        summaries: dict[str, Any] = {}
+        with store_transaction(self.engine) as conn:
+            rows = [*conn.scalars(candidates), *conn.scalars(finished)]
+            for row in conn.execute(project_counts).mappings():
+                summary = summaries.setdefault(row["project_id"], {
+                    "total": 0, "progress": dict.fromkeys(("done", "review", "running", "blocked"), 0), "updatedAt": "",
+                })
+                summary["updatedAt"] = max(summary["updatedAt"], row["updated_at"] or "")
+                if not row["is_routine"]:
+                    summary["total"] += row["total"]
+                    if row["status"] in summary["progress"]:
+                        summary["progress"][row["status"]] = row["total"]
+        return rows, summaries
+
     def list_task_summaries(
         self, *, user_id: str | None = None, limit: int | None = None,
-        task_ids: list[str] | None = None
+        task_ids: list[str] | None = None, project_id: str | None = None,
+        assigned_agent_id: str | None = None, assigned_team_id: str | None = None,
+        statuses: frozenset[str] | None = None,
     ) -> list[dict[str, Any]]:
         statement = (
             select(
@@ -215,6 +358,16 @@ class TaskReadRows(TaskStoreState):
             statement = statement.where(self.tasks.c.owner_user_id == user_id)
         if task_ids is not None:
             statement = statement.where(self.tasks.c.id.in_(task_ids))
+        if project_id is not None:
+            if names_no_uuid_row(self.engine, project_id):
+                return []
+            statement = statement.where(self.tasks.c.project_id == project_id)
+        if assigned_agent_id is not None:
+            statement = statement.where(self.tasks.c.assigned_agent_id == assigned_agent_id)
+        if assigned_team_id is not None:
+            statement = statement.where(self.tasks.c.assigned_team_id == assigned_team_id)
+        if statuses is not None:
+            statement = statement.where(self.tasks.c.status.in_(statuses))
         if limit is not None:
             statement = statement.limit(max(1, limit))
         with store_transaction(self.engine) as conn:

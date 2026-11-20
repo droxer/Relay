@@ -36,16 +36,19 @@ function combineAdminNodes([nodesQuery, usersQuery]: AdminNodeResults) {
     inventoryLoading: nodesQuery.data === undefined && !nodesQuery.error,
     inventoryError: nodesQuery.error ? String(nodesQuery.error) : null,
     users: usersQuery.data ?? NO_USERS,
-    pollError: nodesQuery.error ?? usersQuery.error,
+    nodesError: nodesQuery.error,
+    usersError: usersQuery.error,
     dataUpdatedAt: Math.max(nodesQuery.dataUpdatedAt, usersQuery.dataUpdatedAt),
   };
 }
 
-// Admin page node snapshot (daemon nodes + users). Node polling shares
-// CONTROL_PANEL_NODES_KEY with useLocalDaemonNodes so localhost chat + admin
-// reuse cached /api/v1/admin/daemon-nodes data; App disables its local reader here. When `live` is false the
-// data is fetched once and not refreshed, which keeps the admin card view stable.
-export function useAdminNodes(enabled: boolean, live: boolean = true): {
+// Admin pages select what to read. The Computer inventory also shares its
+// cache with the local workspace and Channels readers.
+export function useAdminNodes({ nodesEnabled, usersEnabled, live }: {
+  nodesEnabled: boolean;
+  usersEnabled: boolean;
+  live: boolean;
+}): {
   nodes: ControlPanelDaemonNodeRecord[];
   users: UserRecord[];
   inventoryLoading: boolean;
@@ -57,13 +60,13 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
 } {
   const queryClient = useQueryClient();
 
-  const { nodes, users, pollError, dataUpdatedAt, inventoryLoading, inventoryError } = useQueries({
+  const { nodes, users, nodesError, usersError, dataUpdatedAt, inventoryLoading, inventoryError } = useQueries({
     queries: [
       {
         queryKey: CONTROL_PANEL_NODES_KEY,
         staleTime: CONTROL_PANEL_POLL_MS,
         queryFn: ({ signal }: { signal: AbortSignal }) => fetchControlPanelNodes(signal),
-        enabled,
+        enabled: nodesEnabled,
         refetchInterval: live ? CONTROL_PANEL_POLL_MS : false,
       },
       {
@@ -71,7 +74,7 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
         staleTime: ADMIN_ROSTER_POLL_MS,
         queryFn: async ({ signal }: { signal: AbortSignal }) =>
           (await listControlPanelUsers(signal)).users ?? [],
-        enabled,
+        enabled: usersEnabled,
         refetchInterval: live ? ADMIN_ROSTER_POLL_MS : false,
       },
     ],
@@ -91,13 +94,11 @@ export function useAdminNodes(enabled: boolean, live: boolean = true): {
   );
 
   const refetch = useCallback(
-    () => Promise.all([
-      queryClient.refetchQueries({ queryKey: CONTROL_PANEL_NODES_KEY }),
-      queryClient.refetchQueries({ queryKey: ADMIN_USERS_KEY }),
-    ]),
+    () => queryClient.refetchQueries({ queryKey: CONTROL_PANEL_NODES_KEY, exact: true }, { cancelRefetch: false }),
     [queryClient],
   );
 
+  const pollError = (nodesEnabled ? nodesError : null) ?? (usersEnabled ? usersError : null);
   return {
     inventoryLoading,
     inventoryError,

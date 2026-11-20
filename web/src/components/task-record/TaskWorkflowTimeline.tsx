@@ -1,10 +1,9 @@
 "use client";
 
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { WorkflowRun } from "relay-core";
-import type { RelaySession } from "../../types";
-import { getSession } from "../../api";
+import { getTaskWorkflowHistory, getThreadWorkflow, RelayApiError, type ThreadWorkflow } from "../../api";
 import { pathForAppState } from "../../lib/appRoute";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { taskWorkflowSessionQueryKey } from "../../lib/workflowRuns";
@@ -19,19 +18,48 @@ function isOpenRun(run: WorkflowRun): boolean {
 
 /** Each execution owns its frozen ledger. Reading every linked Thread also
  *  preserves earlier failed/cancelled runs after a Task starts again. */
-export function TaskWorkflowTimeline({ currentUserId, sessionIds, agentName, onOpenThread }: {
+export function TaskWorkflowTimeline({ taskId, currentUserId, sessionIds, agentName, onOpenThread }: {
+  taskId: string;
   currentUserId: string | undefined;
   sessionIds: readonly string[];
   agentName: (agentId: string) => string;
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t } = useTranslation();
+  const client = useQueryClient();
   const ids = [...new Set(sessionIds)];
-  const queries = useQueries({ queries: ids.map(sessionId => ({
-    queryKey: taskWorkflowSessionQueryKey(sessionId),
-    queryFn: ({ signal }: { signal: AbortSignal }) => getSession(sessionId, signal),
+  const historyQuery = useQuery({
+    queryKey: ["task-workflow-history", taskId, ids],
+    enabled: ids.length > 0,
     staleTime: RELAY_POLL_INTERVALS_MS.sessions,
-    refetchInterval: (query: { state: { data?: RelaySession } }) => {
+    queryFn: async ({ signal }) => {
+      const revisions = new Map(ids.map(id => [id, client.getQueryState(taskWorkflowSessionQueryKey(id))?.dataUpdateCount]));
+      try {
+        const { threads } = await getTaskWorkflowHistory(taskId, signal);
+        if (!signal.aborted) {
+          for (const thread of threads) {
+            const key = taskWorkflowSessionQueryKey(thread.id);
+            const before = client.getQueryState(key);
+            // A gate decision or a live Thread poll may have started while history was loading.
+            if (revisions.has(thread.id) && before?.dataUpdateCount === revisions.get(thread.id)
+              && !before?.isInvalidated && before?.fetchStatus !== "fetching") client.setQueryData(key, thread);
+          }
+        }
+        return threads.map(thread => thread.id);
+      } catch (error) {
+        if (error instanceof RelayApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
+  });
+  const present = new Set(historyQuery.data ?? []);
+  const readable = historyQuery.data === null ? ids : ids.filter(id => present.has(id));
+  const queries = useQueries({ queries: readable.map(sessionId => ({
+    queryKey: taskWorkflowSessionQueryKey(sessionId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => getThreadWorkflow(sessionId, signal),
+    staleTime: RELAY_POLL_INTERVALS_MS.sessions,
+    refetchOnMount: (query: { state: { isInvalidated: boolean } }) => historyQuery.data === null || query.state.isInvalidated,
+    refetchInterval: (query: { state: { data?: ThreadWorkflow } }) => {
       const session = query.state.data;
       const settled = session && ["completed", "cancelled", "failed"].includes(session.status);
       return settled && !session.workflowRuns?.some(isOpenRun) ? false : RELAY_POLL_INTERVALS_MS.sessions;
@@ -40,7 +68,7 @@ export function TaskWorkflowTimeline({ currentUserId, sessionIds, agentName, onO
   // The Thread links are appended in execution order. Preserve that order as
   // a fallback for old records with a missing or identical start time.
   const runs = queries.flatMap((query, index) => (query.data?.workflowRuns ?? []).map(run => ({
-    run, sessionId: ids[index],
+    run, sessionId: readable[index],
     canDecide: !query.isError && !!currentUserId && query.data?.ownerUserId === currentUserId
       && query.data.activeWorkflowRunId === run.workflowRunId,
   }))).reverse().sort((a, b) => (Date.parse(b.run.startedAt) || 0) - (Date.parse(a.run.startedAt) || 0));
@@ -66,8 +94,11 @@ export function TaskWorkflowTimeline({ currentUserId, sessionIds, agentName, onO
         ) : null}
       </section>
     ) : null}
+    {historyQuery.isError || (historyQuery.data && readable.length !== ids.length) ? (
+      <RecordFailure message={t("workflow.timeline_load_failed")} onRetry={() => { void historyQuery.refetch(); }} />
+    ) : null}
     {queries.map((query, index) => query.isError ? (
-      <RecordFailure key={ids[index]} message={t("workflow.timeline_load_failed")} onRetry={() => { void query.refetch(); }} />
+      <RecordFailure key={readable[index]} message={t("workflow.timeline_load_failed")} onRetry={() => { void query.refetch(); }} />
     ) : null)}
   </>;
 }

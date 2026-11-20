@@ -9,10 +9,11 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import insert, select, update
 from relay.api.tasks import payloads as task_payloads
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.persistence.daemon.rows import run_to_row
 
 from automation_helpers import WEEKLY_TRIGGERS, fire_now
 from issue_projects import PROJECT_CAPABILITY, project_for_team
@@ -607,34 +608,17 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
                 "taskGoal": "Work alone",
             }
         )
-        monkeypatch.setattr(
-            app.state.registry,
-            "monitor_nodes",
-            lambda: [
-                {
-                    "id": "node_alice",
-                    "userId": ALICE,
-                    "activeRuns": [
-                        {
-                            "runId": "run_team",
-                            "sessionId": session["id"],
-                            "logicalAgentId": lead["id"],
-                            "taskGoal": "Ship together",
-                            "agent": "codex",
-                            "startedAt": "2026-07-23T00:00:00Z",
-                        },
-                        {
-                            "runId": "run_individual",
-                            "sessionId": unrelated_session["id"],
-                            "logicalAgentId": lead["id"],
-                            "taskGoal": "Work alone",
-                            "agent": "codex",
-                            "startedAt": "2026-07-23T00:00:01Z",
-                        },
-                    ],
-                }
-            ],
-        )
+        node = app.state.registry.register({
+            "sandboxId": "node_alice", "userId": ALICE, "workspacePath": "/workspace/alice",
+            "token": "node_token", "protocolVersion": 1, "status": "ready",
+        })
+        store = app.state.daemon_store
+        with store.engine.begin() as conn:
+            conn.execute(insert(store.runs), [run_to_row({
+                "runId": run_id, "nodeId": node["id"], "sessionId": thread["id"],
+                "logicalAgentId": lead["id"], "taskGoal": thread["taskGoal"], "agent": "codex",
+                "status": "running", "startedAt": "2026-07-23T00:00:00Z",
+            }) for run_id, thread in (("run_team", session), ("run_individual", unrelated_session))])
         app.state.session_store.create_artifact(
             session["id"],
             {
@@ -663,6 +647,13 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
         assert individual_task["id"] not in {item["id"] for item in payload["tasks"]}
         assert payload["metrics"]["artifactCount"] == 1
         assert client.get(f"/api/v1/teams/{team['id']}/artifacts").status_code == 404
+        activity = client.get(f"/api/v1/workspace/brief?view=activity&teamId={team['id']}")
+        assert activity.status_code == 200
+        compact = activity.json()
+        assert set(compact) == {"activeRuns", "sessions", "tasks"}
+        assert [item["id"] for item in compact["sessions"]] == [session["id"]]
+        assert [item["runId"] for item in compact["activeRuns"]] == ["run_team"]
+        assert compact["tasks"] == payload["tasks"]
 
 
 def test_team_rejects_cross_supervisor_members_and_assignment_conflicts(

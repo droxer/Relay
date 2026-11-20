@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 from ...projects.manager import initial_manager_id, manager_role_patch, ManagerError
 
@@ -37,6 +38,7 @@ from ..computers.workspace_transport import (
     live_workspace_file,
     live_workspace_listing,
     raise_workspace_error,
+    workspace_listing_event,
     workspace_path,
 )
 
@@ -184,17 +186,19 @@ async def project_workspace_files(
     project = _readable_project(ctx, request, project_id)
     path = workspace_path(request.query_params.get("path"))
     node = _project_workspace_node(ctx, project)
-    event = await dispatch_workspace_command(
-        ctx,
-        node,
-        _project_workspace_command(
+    event = await workspace_listing_event(
+        path,
+        view=request.query_params.get("view"),
+        node=node,
+        max_event_bytes=ctx.settings.max_json_body_bytes,
+        command_for=lambda folder: _project_workspace_command(
             project,
             command_id=new_database_id(),
             command_type="workspace.list",
-            path=path,
+            path=folder,
         ),
+        dispatch=partial(dispatch_workspace_command, ctx, node),
     )
-    raise_workspace_error(event)
     return live_workspace_listing(
         event,
         path=path,

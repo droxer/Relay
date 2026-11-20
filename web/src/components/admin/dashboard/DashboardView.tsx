@@ -4,7 +4,7 @@ import { useState } from "react";
 import { DashboardRangePicker } from "./DashboardRangePicker";
 import { dashboardPresetRange, type DashboardRangeSelection, type DashboardDateRange } from "../../../lib/dashboardRange";
 import { useQuery } from "@tanstack/react-query";
-import { listControlPanelAgents } from "../../../api";
+import { getDashboardAgents } from "../../../api";
 import { ADMIN_ROSTER_POLL_MS } from "../../../lib/controlPanelQueries";
 import { useTranslation } from "react-i18next";
 import { useDashboardSessions } from "../../../hooks/useDashboardSessions";
@@ -41,10 +41,11 @@ export function DashboardView({
   const sessionsQuery = useDashboardSessions(true, range);
   const tokens = useTokenUsage(range);
   const agentsQuery = useQuery({
-    queryKey: ["admin", "agents"],
-    queryFn: ({ signal }) => listControlPanelAgents(undefined, signal),
+    queryKey: ["admin", "dashboard", "agents"],
+    queryFn: ({ signal }) => getDashboardAgents(signal),
+    staleTime: ADMIN_ROSTER_POLL_MS,
     refetchInterval: ADMIN_ROSTER_POLL_MS,
-    select: (data) => data.agents.filter((agent) => !agent.deletedAt).length,
+    select: (data) => data.count,
   });
 
   const sessionsReady = !sessionsQuery.isLoading && !sessionsQuery.error;

@@ -19,18 +19,37 @@ function setup(initial: unknown) {
   return { client, view };
 }
 
-it("polls a live record and stops once it settles", async () => {
+it("polls a record outside the list, then backs off once it settles", async () => {
   vi.mocked(getTask).mockReset().mockResolvedValue(task("running"));
-  const { client, view } = setup(task("running"));
+  const { client, view } = setup(undefined);
   await act(async () => {});
   expect(getTask).toHaveBeenCalledTimes(1);
+  expect(getTask).toHaveBeenLastCalledWith("t1", expect.any(AbortSignal), "record");
   await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.tasks));
   expect(getTask).toHaveBeenCalledTimes(2);
 
   vi.mocked(getTask).mockResolvedValue(task("done"));
   await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.tasks));
   expect(getTask).toHaveBeenCalledTimes(3);
-  await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.settledTaskRecord));
+  await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.settledTaskRecord - 1));
+  expect(getTask).toHaveBeenCalledTimes(3);
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  expect(getTask).toHaveBeenCalledTimes(4);
+  view.unmount(); client.clear(); vi.useRealTimers();
+});
+
+it("uses the list's event count as the change signal for a live Task record", async () => {
+  vi.mocked(getTask).mockReset().mockResolvedValue(task("running"));
+  const first = { ...task("running") as object, eventCount: 3 };
+  const { client, view } = setup(first);
+  await act(async () => {});
+  await act(() => vi.advanceTimersByTimeAsync(RELAY_POLL_INTERVALS_MS.tasks * 3));
+  expect(getTask).toHaveBeenCalledTimes(1);
+  view.rerender({ row: { ...first, eventCount: 4 } });
+  await act(async () => {});
+  expect(getTask).toHaveBeenCalledTimes(2);
+  view.rerender({ row: { ...first, eventCount: 4, waitingOn: ["another-task"] } });
+  await act(async () => {});
   expect(getTask).toHaveBeenCalledTimes(3);
   view.unmount(); client.clear(); vi.useRealTimers();
 });

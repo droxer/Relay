@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ArrowUpRight } from "lucide-react";
@@ -7,6 +8,7 @@ import { useTaskQueryRevision } from "../../hooks/useTaskQueryRevision";
 import { listTaskEvents } from "../../api";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
+import { Button } from "@/components/ui/button";
 import { pathForAppState } from "../../lib/appRoute";
 import { historyDays, taskHistoryEntries, threadLinkEntryIds, type TaskHistoryEntry } from "../../lib/taskHistory";
 import { TaskStatusIcon } from "../TaskStatusIcon";
@@ -18,7 +20,6 @@ import {
   historyEntryLabel,
   type HistoryNameResolver,
 } from "./taskHistoryLabel";
-import type { RelayTaskEvent } from "../../types";
 
 /**
  * Run history for one plain task.
@@ -57,20 +58,24 @@ export function RecordHistory({
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
+  const [paging, setPaging] = useState<{ taskId: string; cursors: number[] }>({ taskId, cursors: [] });
+  const cursors = paging.taskId === taskId ? paging.cursors : [];
+  const before = cursors.at(-1);
 
   /* Cached, and polled while the task is actually running. The timeline used
      to load once per mount and then sit frozen — on the surface whose job is
      watching a task, with a run ledger polling beside it on the routine's. */
   const eventsQuery = useQuery({
-    queryKey: ["task-events", taskId],
-    queryFn: ({ signal }) => listTaskEvents(taskId, {}, signal),
+    queryKey: before === undefined ? ["task-activity", taskId] : ["task-activity", taskId, before],
+    queryFn: ({ signal }) => listTaskEvents(taskId, { activity: true, ...(before === undefined ? {} : { before }) }, signal),
     // See RecordRuns: a tab switch must not refire this on every keystroke.
-    staleTime: RELAY_POLL_INTERVALS_MS.tasks,
-    refetchInterval: live ? RELAY_POLL_INTERVALS_MS.tasks : false,
+    staleTime: before === undefined ? RELAY_POLL_INTERVALS_MS.tasks : Infinity,
+    refetchInterval: live && before === undefined ? RELAY_POLL_INTERVALS_MS.tasks : false,
   });
-  useTaskQueryRevision("task-events", taskId, revision, eventsQuery.isFetching);
-  const events: RelayTaskEvent[] | undefined = eventsQuery.data?.events;
-  const entries = events ? taskHistoryEntries(events, taskId) : [];
+  useTaskQueryRevision("task-activity", before === undefined ? taskId : null, revision, eventsQuery.isFetching);
+  const page = eventsQuery.data;
+  const entries = page ? taskHistoryEntries(page.events, taskId, page.previousStatus ? Infinity : undefined, page.previousStatus) : [];
+  const older = page?.nextBefore;
   const threadLinkIds = threadLinkEntryIds(entries);
 
   return (
@@ -83,7 +88,7 @@ export function RecordHistory({
       </h3>
       {eventsQuery.isError ? (
         <RecordFailure message={t("backlog.history_error")} onRetry={() => void eventsQuery.refetch()} />
-      ) : !events ? (
+      ) : !page ? (
         <p className="record-panel-note" role="status" aria-live="polite">{t("backlog.history_loading")}</p>
       ) : entries.length === 0 ? (
         <p className="record-panel-note">{t(live ? "backlog.history_empty_live" : "backlog.history_empty")}</p>
@@ -113,6 +118,18 @@ export function RecordHistory({
           })}
         </div>
       )}
+      {before !== undefined || older != null ? (
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={before === undefined}
+            onClick={() => setPaging({ taskId, cursors: cursors.slice(0, -1) })}>
+            {t("list.pagination_previous")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={older == null}
+            onClick={() => { if (older != null) setPaging({ taskId, cursors: [...cursors, older] }); }}>
+            {t("list.pagination_next")}
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }

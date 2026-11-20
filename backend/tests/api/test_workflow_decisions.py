@@ -53,6 +53,56 @@ def endpoint(sid):
     return f"/api/v1/threads/{sid}/workflow-decisions"
 
 
+def test_workflow_view_skips_transcript_and_checks_thread_access(monkeypatch):
+    with waiting_gate(monkeypatch) as (app, client, _, _, sid, _):
+        path = f"/api/v1/threads/{sid}"
+        full = client.get(path).json()
+        projection = {key: full[key] for key in ("id", "ownerUserId", "status", "workflowRuns", "activeWorkflowRunId")}
+
+        compact = client.get(f"{path}?view=workflow")
+        assert compact.status_code == 200
+        assert compact.json() == projection
+        assert compact.headers["cache-control"] == "no-store"
+        assert len(compact.content) < len(client.get(path).content)
+
+        def unexpected_full_read(_session_id):
+            raise AssertionError("the workflow view must not hydrate a transcript")
+
+        monkeypatch.setattr(app.state.session_store, "get_session", unexpected_full_read)
+        assert client.get(f"{path}?view=workflow").json() == projection
+        stranger = TestClient(app)
+        assert stranger.get(f"{path}?view=workflow").status_code == 401
+        app.state.auth_store.create_account("other", "kestrel-vault-8820", role="admin", email="other@example.com")
+        assert stranger.post("/api/v1/auth/login", json={"username": "other", "password": "kestrel-vault-8820"}).status_code == 200
+        assert stranger.get(f"{path}?view=workflow").status_code == 403
+
+
+def test_task_workflow_history_batches_linked_threads_with_independent_access(monkeypatch):
+    with waiting_gate(monkeypatch) as (app, client, _, _, session_id, _):
+        path = f"/api/v1/threads/{session_id}?view=workflow"
+        owned = client.get(path).json()
+        sessions = app.state.session_store
+        other = sessions.create_session({"taskGoal": "Unrelated", "ownerUserId": _admin_id(app), "workspacePath": "/workspace"})
+        foreign = sessions.create_session({"taskGoal": "Private", "ownerUserId": str(uuid4()), "workspacePath": "/workspace"})
+        tasks = app.state.task_store
+        task = tasks.create_task({"title": "Batch history", "ownerUserId": owned["ownerUserId"]})
+        for linked in (session_id, foreign["id"]):
+            tasks.link_session(task["id"], linked)
+
+        route = f"/api/v1/tasks/{task['id']}/workflow-history"
+        assert TestClient(app).get(route).status_code == 401
+
+        def unexpected_thread_read(*_args, **_kwargs):
+            pytest.fail("Workflow history must use the batched projection")
+
+        monkeypatch.setattr(sessions, "get_session", unexpected_thread_read)
+        monkeypatch.setattr(sessions, "get_session_header", unexpected_thread_read)
+        response = client.get(route, params={"threadId": other["id"]})
+        assert response.status_code == 200, response.text
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json() == {"threads": [owned]}
+
+
 @pytest.mark.parametrize("kind, status", [("approve", "ready"), ("reject", "blocked")])
 def test_owner_records_bound_gate_once(monkeypatch, kind, status):
     with waiting_gate(monkeypatch) as (app, client, here, _, sid, body):

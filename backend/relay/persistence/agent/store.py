@@ -5,6 +5,7 @@ from threading import RLock
 from typing import Any
 
 from sqlalchemy import (
+    func,
     insert,
     select,
     update,
@@ -133,6 +134,12 @@ class DatabaseAgentStore:
                     if not agent.get("deletedAt"):
                         found[agent["id"]] = agent
         return [found[key] for key in ids if key in found]
+
+    def count_live_agents(self) -> int:
+        with store_transaction(self.engine) as conn:
+            return int(conn.scalar(
+                select(func.count()).select_from(self.agents).where(self.agents.c.deleted_at.is_(None))
+            ) or 0)
 
     def list_agents(
         self,

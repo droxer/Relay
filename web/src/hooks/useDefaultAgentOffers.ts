@@ -13,15 +13,15 @@ type Answer = { offer: DefaultAgentOffer; selected: ReadonlySet<AgentName> };
 
 /**
  * The default agents connected computers offer, and the one answer a person
- * gives each: create the checked runtimes' agents and decline the rest. Polls
- * at the computers' own cadence, since an offer appears when one connects.
+ * gives each. The Agent roster reconciles the offers along with availability.
+ * Backends that omit the projection use the standalone read.
  */
-export function useDefaultAgentOffers(userId?: string) {
+export function useDefaultAgentOffers(userId: string, rosterOffers: DefaultAgentOffer[] | null | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: [DEFAULT_AGENT_OFFERS_QUERY_KEY, userId],
     queryFn: ({ signal }) => listDefaultAgentOffers(signal),
-    enabled: Boolean(userId),
+    enabled: Boolean(userId) && rosterOffers === null,
     refetchInterval: RELAY_POLL_INTERVALS_MS.nodes,
   });
   const answer = useMutation({
@@ -43,7 +43,7 @@ export function useDefaultAgentOffers(userId?: string) {
     },
   });
   return {
-    offers: query.data?.offers ?? [],
+    offers: rosterOffers ?? query.data?.offers ?? [],
     answer: answer.mutateAsync,
     get isAnswering() { return answer.isPending; },
   };

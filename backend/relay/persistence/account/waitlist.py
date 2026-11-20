@@ -21,6 +21,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.sql.elements import ColumnElement
 
 from ...core.ids import new_database_id
 from ..resource_lock import resource_transaction
@@ -141,15 +142,7 @@ class DatabaseWaitlistStore:
         conditions = []
         if status:
             conditions.append(self.entries.c.status == status)
-        if query:
-            pattern = f"%{_escape_like(query.lower())}%"
-            conditions.append(
-                or_(
-                    self.entries.c.email.like(pattern, escape="\\"),
-                    func.lower(self.entries.c.name).like(pattern, escape="\\"),
-                    func.lower(self.entries.c.company).like(pattern, escape="\\"),
-                )
-            )
+        conditions.extend(self._search_conditions(query))
         with store_transaction(self.engine) as conn:
             total = conn.scalar(select(func.count()).select_from(self.entries).where(*conditions))
             rows = conn.execute(
@@ -160,6 +153,36 @@ class DatabaseWaitlistStore:
                 .offset(offset)
             ).mappings().all()
         return [_row_to_entry(row) for row in rows], int(total or 0)
+
+    def list_queue(
+        self, *, query: str | None, limit: int, offsets: dict[str, int],
+    ) -> dict[str, tuple[builtins.list[dict[str, Any]], int]]:
+        conditions = self._search_conditions(query)
+        entries = self.entries
+        with store_transaction(self.engine) as conn:
+            totals = dict(conn.execute(
+                select(entries.c.status, func.count()).where(*conditions).group_by(entries.c.status)
+            ).tuples().all())
+            bands = {}
+            for status, offset in offsets.items():
+                total = totals.get(status, 0)
+                rows = conn.execute(
+                    select(entries).where(entries.c.status == status, *conditions)
+                    .order_by(entries.c.created_at, entries.c.id)
+                    .limit(limit).offset(offset)
+                ).mappings().all() if offset < total else []
+                bands[status] = ([_row_to_entry(row) for row in rows], total)
+        return bands
+
+    def _search_conditions(self, query: str | None) -> builtins.list[ColumnElement[bool]]:
+        if not query:
+            return []
+        pattern = f"%{_escape_like(query.lower())}%"
+        return [or_(
+            self.entries.c.email.like(pattern, escape="\\"),
+            func.lower(self.entries.c.name).like(pattern, escape="\\"),
+            func.lower(self.entries.c.company).like(pattern, escape="\\"),
+        )]
 
     def oldest_waiting_ids(self, limit: int) -> builtins.list[str]:
         with store_transaction(self.engine) as conn:

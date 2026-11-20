@@ -124,13 +124,6 @@
   background: var(--line-strong);
 }
 
-/* The splitter sits absolute over the roster's edge. */
-.agents-roster,
-.teams-roster,
-.skills-list {
-  position: relative;
-}
-
 .mobile-topbar {
   display: none;
 }

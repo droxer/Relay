@@ -1,18 +1,19 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useNotifications, useNotificationPreferences } from "../src/hooks/useNotifications";
-import { markNotificationsRead, clearNotifications, listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
+import { markNotificationsRead, clearNotifications, getUnreadNotificationCount, listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
 import { configurePersonalQueryCache } from "../src/lib/personalQueryCache";
 import { NotificationsSection } from "../src/components/settings/NotificationsSection";
+import { writeDesktopNotifications } from "../src/lib/appStorage";
 
 const auth = vi.hoisted(() => ({ user: { id: "account-a" } as { id: string } | null }));
 vi.mock("../src/hooks/useAuthSession", () => ({ useAuthSession: () => auth }));
 vi.mock("../src/hooks/useMutationError", () => ({ useMutationError: () => ({ reportMutationError: vi.fn() }) }));
 vi.mock("../src/api", () => ({
   NOTIFICATION_KINDS: ["task_completed", "computer_status", "client_outdated"],
-  listNotifications: vi.fn(), getNotificationPreferences: vi.fn(),
+  listNotifications: vi.fn(), getUnreadNotificationCount: vi.fn(), getNotificationPreferences: vi.fn(),
   markNotificationsRead: vi.fn(), clearNotifications: vi.fn(), updateNotificationPreferences: vi.fn(),
 }));
 
@@ -22,8 +23,17 @@ function setup() {
   return { client, wrapper };
 }
 
+function useOpenInbox() {
+  const inbox = useNotifications({ enabled: true, onOpen: vi.fn() });
+  const { observeInbox } = inbox;
+  useEffect(observeInbox, [observeInbox]);
+  return inbox;
+}
+
 beforeEach(() => {
   auth.user = { id: "account-a" };
+  writeDesktopNotifications(false);
+  vi.mocked(getUnreadNotificationCount).mockReset().mockResolvedValue({ unreadCount: 1 });
   vi.mocked(listNotifications).mockReset().mockResolvedValue({ notifications: [{
     id: "private-notice", kind: "task_completed", data: { taskId: "private-task", title: "Private task", status: "done" },
     createdAt: "2026-10-16T09:00:00Z", readAt: null,
@@ -32,9 +42,43 @@ beforeEach(() => {
   vi.mocked(updateNotificationPreferences).mockReset();
 });
 
+it("polls only the count until opening the inbox and uses its latest count after closing", async () => {
+  const { client, wrapper } = setup();
+  configurePersonalQueryCache(client);
+  vi.mocked(getUnreadNotificationCount).mockResolvedValue({ unreadCount: 3 });
+  const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
+  await waitFor(() => expect(view.result.current.unreadCount).toBe(3));
+  expect(listNotifications).not.toHaveBeenCalled();
+  let close!: () => void;
+  act(() => { close = view.result.current.observeInbox(); });
+  await waitFor(() => expect(view.result.current.notices).toHaveLength(1));
+  expect(view.result.current.unreadCount).toBe(1);
+  act(close);
+  expect(view.result.current.unreadCount).toBe(1);
+  expect(getUnreadNotificationCount).toHaveBeenCalledOnce();
+  expect(listNotifications).toHaveBeenCalledOnce();
+  view.unmount(); client.clear();
+});
+
+it("keeps fetching detail for desktop notifications while the panel is closed", async () => {
+  writeDesktopNotifications(true);
+  const { client, wrapper } = setup();
+  const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
+  try {
+    await waitFor(() => expect(view.result.current.notices).toHaveLength(1));
+    const details = client.getQueryCache().find({ queryKey: ["relay", "notifications", "account-a"], exact: true });
+    expect(details?.observers[0]?.options.refetchIntervalInBackground).toBe(true);
+    expect(getUnreadNotificationCount).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    client.clear();
+    writeDesktopNotifications(false);
+  }
+});
+
 it("never shows another account's cached inbox or preferences while the new fetch fails", async () => {
   const { client, wrapper } = setup();
-  const hook = () => ({ inbox: useNotifications({ enabled: true, onOpen: vi.fn() }), prefs: useNotificationPreferences() });
+  const hook = () => ({ inbox: useOpenInbox(), prefs: useNotificationPreferences() });
   const first = renderHook(hook, { wrapper });
   await waitFor(() => expect(first.result.current.inbox.notices).toHaveLength(1));
   await waitFor(() => expect(first.result.current.prefs.preferences?.mutedKinds).toEqual(["task_completed"]));
@@ -55,7 +99,7 @@ it("removes a dismissed notice at once and restores it when the clear fails", as
   const { client, wrapper } = setup();
   let fail!: (error: Error) => void;
   vi.mocked(clearNotifications).mockReset().mockImplementation(() => new Promise((_resolve, reject) => { fail = reject; }));
-  const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
+  const view = renderHook(useOpenInbox, { wrapper });
   await waitFor(() => expect(view.result.current.notices).toHaveLength(1));
   act(() => view.result.current.dismiss(view.result.current.notices[0]));
   await waitFor(() => expect(view.result.current.notices).toEqual([]));
@@ -70,7 +114,7 @@ it("removes a dismissed notice at once and restores it when the clear fails", as
 it("clears the whole inbox", async () => {
   const { client, wrapper } = setup();
   vi.mocked(clearNotifications).mockReset().mockResolvedValue({ unreadCount: 0 });
-  const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
+  const view = renderHook(useOpenInbox, { wrapper });
   await waitFor(() => expect(view.result.current.notices).toHaveLength(1));
   vi.mocked(listNotifications).mockResolvedValue({ notifications: [], unreadCount: 0 });
   act(() => view.result.current.clearAll());
@@ -187,7 +231,7 @@ it("does not let delayed read receipts restore an obsolete unread count", async 
   vi.mocked(listNotifications).mockResolvedValue({notifications,unreadCount:2} as never);
   let first!: (value:{unreadCount:number})=>void;
   vi.mocked(markNotificationsRead).mockReset().mockImplementationOnce(()=>new Promise(resolve=>{first=resolve;})).mockResolvedValueOnce({unreadCount:0});
-  const view=renderHook(()=>useNotifications({enabled:true,onOpen:vi.fn()}),{wrapper});
+  const view=renderHook(useOpenInbox,{wrapper});
   await waitFor(()=>expect(view.result.current.notices).toHaveLength(2));
   act(()=>view.result.current.open(view.result.current.notices[0]));
   await waitFor(()=>expect(markNotificationsRead).toHaveBeenCalledTimes(1));
@@ -207,7 +251,7 @@ it("reuses a fresh inbox and preferences when Settings is reopened", async () =>
   vi.useFakeTimers();
   const { client, wrapper } = setup();
   configurePersonalQueryCache(client);
-  const hook = () => ({ inbox: useNotifications({ enabled: true, onOpen: vi.fn() }), prefs: useNotificationPreferences() });
+  const hook = () => ({ inbox: useOpenInbox(), prefs: useNotificationPreferences() });
   const first = renderHook(hook, { wrapper });
   await act(async () => {});
   first.unmount();

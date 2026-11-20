@@ -5,6 +5,7 @@ import {beforeEach,expect,it,vi} from 'vitest';
 import {ProjectManagerLine} from '../src/components/ProjectManagerLine';
 import {ProjectDashboard} from '../src/components/ProjectDashboard';
 import {ManagerProposalCard} from '../src/components/ManagerProposalCard';
+import {ProjectManagerProposals} from '../src/components/ProjectManagerProposals';
 import {useProjectLeadDiscussion} from '../src/hooks/useProjectLeadDiscussion';
 import {threadDraftKey} from '../src/hooks/useComposer';
 import {SESSIONS_QUERY_KEY} from '../src/hooks/useRelayData';
@@ -83,6 +84,30 @@ it('offers no discussion with a disabled lead',()=>{
 const owner={id:'u',userId:'u',username:'owner',role:'user'} as any;
 const hookWrapper=(client:QueryClient)=>({children}:{children:React.ReactNode})=>
  <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+
+it.each(["apply", "dismiss"] as const)("limits cache invalidation after a proposal %s", async action => {
+ const client = new QueryClient();
+ const keys = {
+  tasks: ["relay", "tasks"], projectTasks: ["relay", "tasks", "p"], otherProject: ["relay", "tasks", "other"],
+  home: ["relay", "tasks", "home"], nodes: ["relay", "daemon-nodes"],
+  notifications: ["relay", "notifications", "u"], changed: ["task-record", "task"], other: ["task-record", "other"],
+ };
+ for (const key of Object.values(keys)) client.setQueryData(key, {projectId: key === keys.changed ? "p" : "other"});
+ api.get.mockResolvedValue({proposals: [proposal]});
+ api.apply.mockResolvedValue({tasks: [{id: "task"}]});
+ api.dismiss.mockResolvedValue({});
+ const view = render(<ProjectManagerProposals projectId="p" threadId="thread" readOnly={false} running={false} />,
+  {wrapper: hookWrapper(client)});
+ try {
+  fireEvent.click(await screen.findByRole("button", {name: `project_manager.${action}`}));
+  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  const invalidated = Object.entries(keys).filter(([, key]) => client.getQueryState(key)?.isInvalidated).map(([name]) => name);
+  expect(invalidated).toEqual(action === "apply" ? ["tasks", "projectTasks", "home", "changed"] : []);
+ } finally {
+  view.unmount();
+  client.clear();
+ }
+});
 
 it('opens each discussion independently and saves the topic draft on its own Thread',async()=>{
  sessionStorage.clear();

@@ -32,7 +32,7 @@ function makeRun(id: string, status: WorkflowRun["status"], startedAt: string): 
   };
 }
 
-async function fixture(page: Page, language: string) {
+async function fixture(page: Page, language: string, assignedWorkflowId?: string) {
   const runs = [
     makeRun("First release", "cancelled", "2026-11-18T01:00:00Z"),
     makeRun("Earlier release", "completed", "2026-11-18T02:00:00Z"),
@@ -48,7 +48,7 @@ async function fixture(page: Page, language: string) {
   }));
   const task = {
     id: "ship", title: "Ship the release", description: "", status: "waiting_for_human", priority: "normal",
-    projectId: "release", ownerUserId: "alice", isRoutine: false,
+    projectId: "release", ownerUserId: "alice", isRoutine: false, assignedWorkflowId,
     linkedSessionIds: sessions.map(session => session.id), activity: [], events: [], createdAt: stamp, updatedAt: stamp,
     attention: { code: "workflow_blocked" as string | undefined },
   };
@@ -63,6 +63,10 @@ async function fixture(page: Page, language: string) {
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "Alice", role: "user", theme: "light", language } };
     if (path.endsWith("/projects/release")) body = { project };
     if (path.endsWith("/tasks/ship")) body = task;
+    if (path.endsWith("/tasks/ship/workflow-history")) body = { threads: sessions };
+    if (assignedWorkflowId && path.endsWith(`/workflows/${assignedWorkflowId}`)) {
+      body = { workflow: { id: assignedWorkflowId, name: "Release workflow definition" } };
+    }
     if (path.endsWith("/threads/release-2/workflow-decisions")) {
       const active = sessions[2];
       active.workflowRuns = [{ ...active.workflowRuns[0], status: "ready", revision: 19 }];
@@ -77,13 +81,36 @@ async function fixture(page: Page, language: string) {
   });
 }
 
+test("reads a Task's Workflow by ID only on the Definition tab", async ({ page }) => {
+  const workflowReads: string[] = [];
+  page.on("request", request => {
+    const { pathname } = new URL(request.url());
+    if (pathname === "/api/v1/workflows" || pathname.startsWith("/api/v1/workflows/")) workflowReads.push(pathname);
+  });
+  await fixture(page, "en", "release-plan");
+  await page.goto("/projects/release?task=ship&recordTab=activity");
+  await expect(page.getByRole("heading", { name: "Current run" })).toBeVisible();
+  expect(workflowReads).toEqual([]);
+  await page.getByRole("tab", { name: "Definition" }).click();
+  await expect(page.getByText("Release workflow definition", { exact: true })).toBeVisible();
+  expect(workflowReads).toEqual(["/api/v1/workflows/release-plan"]);
+});
+
 test("approves a waiting Workflow Run in Task Activities", async ({ page }) => {
+  const initialReads: string[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname.endsWith("/workflow-history") || url.searchParams.get("view") === "workflow") {
+      initialReads.push(url.pathname);
+    }
+  });
   await fixture(page, "en");
   await page.goto("/projects/release?task=ship&recordTab=activity");
 
   const run = page.locator(".record-workflow-run").first();
   const summary = run.locator(".workflow-run-summary");
   await expect(summary.getByText("Waiting for approval", { exact: true })).toBeVisible();
+  expect(initialReads).toEqual(["/api/v1/tasks/ship/workflow-history"]);
   await expect(run.getByRole("button", { name: /^Reject\b/ })).toBeVisible();
   const decision = page.waitForRequest(request => request.url().endsWith("/threads/release-2/workflow-decisions"));
   await run.getByRole("button", { name: /^Approve\b/ }).click();

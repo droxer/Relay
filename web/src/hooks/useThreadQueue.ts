@@ -130,7 +130,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     if (await change(running ? "steer" : "promote", id)) {
       void client.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
       void client.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
-      void client.invalidateQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
+      void client.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
     }
   }, [change, running, client]);
   return { messages: state.messages, enqueue, steer, edit, remove,

@@ -3,7 +3,7 @@
  * projects at a glance, what is running now, and what finished lately. Every
  * reading is derived from data the app already loads.
  */
-import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem } from "../types.js";
+import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem, TasksResponse } from "../types.js";
 import type { HomeItem } from "./homeQueue.ts";
 import { openPermissionRequests } from "./permissionRequests.ts";
 
@@ -44,25 +44,32 @@ export function homeProjects(
   tasks: readonly RelayTaskListItem[],
   queue: readonly HomeItem[],
   limit = HOME_PROJECT_LIMIT,
+  summaries?: TasksResponse["homeProjects"],
 ): HomeProjectRow[] {
   const rows = projects
     .filter((project) => !project.archivedAt)
     .map((project): HomeProjectRow => {
-      const issues = tasks.filter((task) => isIssue(task) && task.projectId === project.id);
+      // Older backends send the complete summary list instead of rollups.
+      const issues = summaries ? [] : tasks.filter((task) => isIssue(task) && task.projectId === project.id);
+      const summary = summaries?.[project.id];
       const items = queue.filter((item) => item.projectId === project.id);
-      const progress = Object.fromEntries(
+      const progress = summary?.progress ?? Object.fromEntries(
         PROJECT_PROGRESS.map((status) => [status, issues.filter((task) => task.status === status).length]),
       ) as ProjectProgress;
       return {
         project,
-        total: issues.length,
+        total: summary?.total ?? issues.length,
         progress,
         waitingOnYou: items.filter((item) => item.tier === "paused" || item.tier === "needs_you").length,
         next: items[0] ?? null,
       };
     });
   const rank = (row: HomeProjectRow) => (row.next ? queue.indexOf(row.next) : Number.POSITIVE_INFINITY);
-  const touched = (row: HomeProjectRow) => latest(row.project.updatedAt, tasks, row.project.id);
+  const touched = (row: HomeProjectRow) => {
+    if (!summaries) return latest(row.project.updatedAt, tasks, row.project.id);
+    const updatedAt = summaries[row.project.id]?.updatedAt ?? "";
+    return updatedAt > row.project.updatedAt ? updatedAt : row.project.updatedAt;
+  };
   return rows
     .sort((left, right) => rank(left) - rank(right) || touched(right).localeCompare(touched(left)))
     .slice(0, limit);

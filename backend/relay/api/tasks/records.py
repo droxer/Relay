@@ -59,6 +59,16 @@ router = APIRouter()
 # Explicit limits remain bounded; an omitted limit preserves the complete list.
 TASK_LIST_MAX_LIMIT = 500
 
+# Home uses the same links, waits and assignment as the full Task list but
+# does not render descriptions, schedules, artifact metadata or histories.
+HOME_TASK_FIELDS = frozenset({
+    "id", "number", "title", "priority", "status", "isRoutine", "ownerUserId", "assigneeUserId",
+    "projectId", "computerId", "sourceRoutineId", "linkedSessionIds", "createdAt", "updatedAt",
+    "startedAt", "finishedAt", "dueDate", "scheduledFor", "routineState", "routineNextRunAt",
+    "assignedAgentId", "assignedTeamId", "assignedWorkflowId", "workspaceBinding", "workspaceWaiting", "dispatchClaim",
+    "dispatchOutcome", "prerequisiteTaskIds", "waitingOn", "waitingOnSummaries", "blockerReason", "awaiting",
+})
+
 
 def task_list_limit(raw_limit: str | None) -> int | None:
     if raw_limit is None:
@@ -73,12 +83,22 @@ def task_list_limit(raw_limit: str | None) -> int | None:
 @router.get("/tasks")
 def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    summary_view = request.query_params.get("view") == "summary"
+    view = request.query_params.get("view")
+    if view == "summary" and request.query_params.get("scope") == "home":
+        rows, projects = ctx.task_store.home_tasks(actor["userId"])
+        tasks = with_dependency_summaries(ctx, actor, with_waiting_on(ctx, [public_task(task) for task in rows]))
+        return {
+            "tasks": [{"description": "", **{name: value for name, value in task.items() if name in HOME_TASK_FIELDS}}
+                      for task in tasks],
+            "homeProjects": projects,
+        }
+    summary_view = view == "summary"
     limit = task_list_limit(request.query_params.get("limit"))
     if summary_view and hasattr(ctx.task_store, "list_task_summaries"):
         tasks = ctx.task_store.list_task_summaries(
             user_id=actor["userId"],
             limit=limit,
+            project_id=request.query_params.get("projectId") or None,
         )
     else:
         tasks = ctx.task_store.list_tasks(
@@ -129,9 +149,10 @@ def create_task(
 @router.get("/tasks/{task_id}")
 def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    return task_with_prerequisite_view(
-        ctx, public_task(get_task_for_actor(ctx.task_store, task_id, actor))
+    task = get_task_for_actor(
+        ctx.task_store, task_id, actor, record_view=request.query_params.get("view") == "record",
     )
+    return task_with_prerequisite_view(ctx, public_task(task))
 
 
 @router.patch("/tasks/{task_id}", openapi_extra=openapi_body(TaskPatchBody))
@@ -178,6 +199,13 @@ def review_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str,
     actor = request_actor(request, ctx.auth_store)
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     return task_review(ctx, task)
+
+
+@router.get("/tasks/{task_id}/workflow-history")
+def task_workflow_history(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
+    return {"threads": ctx.session_store.list_session_workflows(task.get("linkedSessionIds") or [], actor["userId"])}
 
 
 @router.delete("/tasks/{task_id}")

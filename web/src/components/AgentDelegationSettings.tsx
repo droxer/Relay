@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { listControlPanelAgents, listUserAgents } from "../api";
+import { listControlPanelAgents } from "../api";
+import { userAgentRosterOptions } from "../hooks/useUserAgents";
 import type { UserAgent } from "../types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert } from "@/components/ui/alert";
@@ -22,11 +23,14 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
   useEffect(() => {
     if (!pending.current) setSelected(agent.delegationAgentIds ?? null);
   }, [agent.delegationAgentIds]);
+  const ownerId = agent.supervisorUserId;
+  const visible = editable || selected === null || selected.length > 0;
   const roster = useQuery({
-    queryKey: ["delegation-agents", admin ? "admin" : "own", agent.supervisorUserId],
-    queryFn: ({ signal }) => admin
-      ? listControlPanelAgents(agent.supervisorUserId, signal) : listUserAgents(signal),
-    enabled: Boolean(agent.supervisorUserId),
+    ...(admin ? {
+      queryKey: ["delegation-agents", "admin", ownerId],
+      queryFn: ({ signal }: { signal: AbortSignal }) => listControlPanelAgents(ownerId, signal),
+    } : userAgentRosterOptions(ownerId)),
+    enabled: Boolean(ownerId) && visible,
     staleTime: 30_000,
   });
   const candidates = (roster.data?.agents ?? []).filter((other) => other.id !== agent.id && other.enabled
@@ -50,7 +54,7 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
       setSaving(false);
     }
   }
-  if (!editable && !allEligible && !custom.length) return null;
+  if (!visible) return null;
   return (
     <fieldset className="agent-delegation-settings" disabled={saving || !editable} aria-busy={saving}>
       <legend>{t("delegation.can_delegate_to")}</legend>

@@ -86,7 +86,7 @@ class TaskRoutineRows(TaskStoreState):
                 routine_id, occurrence["id"], run_date, trigger_kind
             )
             task_pk = row["id"]
-            sequence = int(row["version"] or 0)
+            sequence = int(routine["eventCount"])
             for offset, event in enumerate(routine_events):
                 conn.execute(
                     insert(self.events).values(

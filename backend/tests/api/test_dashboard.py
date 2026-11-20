@@ -69,6 +69,41 @@ def test_database_dashboard_avoids_full_session_and_token_history_reads(
         assert client.get("/api/v1/admin/dashboard/tokens").status_code == 200
 
 
+def test_dashboard_agent_count_reuses_a_scalar_read(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap(client)
+    owner = client.get("/api/v1/auth/me").json()["user"]["userId"]
+    store = app.state.agent_store
+    for name in ("Writer", "Disabled", "Retired"):
+        agent = store.create_agent(owner, {
+            "displayName": name, "executorKind": "codex", "defaultRole": "implementer",
+            "enabled": name != "Disabled",
+        })
+    store.delete_agent(agent["id"])
+
+    statements = []
+
+    def executed(_conn, _cursor, statement, _params, _context, _many):
+        if "FROM agents" in statement:
+            statements.append(statement)
+
+    event.listen(store.engine, "before_cursor_execute", executed)
+    try:
+        path = "/api/v1/admin/dashboard/agents"
+        for _ in range(2):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert response.json() == {"count": 2}
+        assert len(statements) == 1
+        assert "count(" in statements[0].lower()
+        assert "snapshot" not in statements[0]
+        assert TestClient(app).get(path).status_code == 401
+    finally:
+        event.remove(store.engine, "before_cursor_execute", executed)
+
+
 def test_control_plane_metrics_reports_notification_health(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
