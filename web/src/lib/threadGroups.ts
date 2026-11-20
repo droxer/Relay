@@ -48,7 +48,7 @@ export function groupThreads(
       queued.push(item);
     } else if (phase && phase !== "terminal") {
       running.push(item);
-    } else if (threadAwaitsHuman(item.session, waits)) {
+    } else if (threadAwaitsHuman(item.session, waits, item.taskAwaitsHuman)) {
       needsYou.push(item);
     } else if (!item.session.execution && (item.session.status === "running" || item.runningAgent)) {
       running.push(item);

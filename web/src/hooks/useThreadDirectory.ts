@@ -63,6 +63,7 @@ interface ThreadDirectoryInput {
   threadKindFilter?: ThreadKindFilter;
   /** Tasks whose linked sessions mark a thread as backlog- or routine-driven. */
   tasks: Parameters<typeof threadOriginIndex>[0];
+  preferTaskActivity?: boolean;
   visibleNodes: readonly DirectoryNode[];
   runtimeNodes: Parameters<typeof threadNodeOffline>[2];
   logicalAgents: readonly DirectoryAgent[];
@@ -78,6 +79,7 @@ export function useThreadDirectory({
   threadProjectFilter = THREAD_PROJECT_FILTER_ALL,
   threadKindFilter = THREAD_KIND_FILTER_ALL,
   tasks,
+  preferTaskActivity = false,
   visibleNodes,
   runtimeNodes,
   logicalAgents,
@@ -91,6 +93,7 @@ export function useThreadDirectory({
     logicalAgents,
     runtimeNodes,
     origins,
+    preferTaskActivity,
     runningBy: new Map(
       visibleNodes.flatMap((node) => node.activeRuns.map((run) => [run.sessionId, run] as const)),
     ),
@@ -104,7 +107,7 @@ export function useThreadDirectory({
     // Reading the cache in render is safe: a session object is immutable, so
     // the same key always maps to the same answer.
     items: new WeakMap<ThreadItem["session"], ThreadItem>(),
-  }), [visibleNodes, logicalAgents, runtimeNodes, origins, projects]);
+  }), [visibleNodes, logicalAgents, runtimeNodes, origins, projects, preferTaskActivity]);
 
   // Items are rebuilt whenever any input moves — a node or task poll — but a
   // row is memoized on its item, so each unchanged item keeps its previous
@@ -114,12 +117,14 @@ export function useThreadDirectory({
     if (cached) return cached;
     const activeRun = world.runningBy.get(session.id);
     const running = Boolean(activeRun) || session.status === "running";
+    const taskActivity = world.preferTaskActivity ? session.taskActivity : undefined;
     const item: ThreadItem = {
       session,
       runningAgent: activeRun?.agent,
       runningAgentName: running ? runningAgentName(session, activeRun, world.agentNames) : undefined,
       nodeOffline: threadNodeOffline(session, world.logicalAgents, world.runtimeNodes),
-      origin: world.origins.get(session.id),
+      origin: taskActivity ? taskActivity.origin ?? undefined : world.origins.get(session.id),
+      taskAwaitsHuman: taskActivity?.awaitsHuman,
       projectName: session.projectId ? world.projectNames.get(session.projectId) ?? session.projectId : undefined,
       // Resolved against the logical agent list, not stored on the session:
       // a renamed or re-imaged agent must not need a session rewrite for the

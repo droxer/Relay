@@ -1,4 +1,4 @@
-import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary, TaskStatus } from "../types.js";
+import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary, ThreadOrigin } from "../types.js";
 import type { ThreadGroups } from "./threadGroups.js";
 import { taskRef } from "./taskRef.ts";
 
@@ -16,6 +16,7 @@ export type ThreadItem = {
   nodeOffline?: boolean;
   /** The backlog task or routine that started this thread; absent for a chat. */
   origin?: ThreadOrigin;
+  taskAwaitsHuman?: boolean;
   /** Display name for the owning project; falls back to its ID while loading. */
   projectName?: string;
   /** The room's agents, in join order. The row draws their faces; runtime
@@ -28,18 +29,6 @@ export type ThreadParticipant = {
   id: string;
   displayName: string;
   profileImageUrl?: string | null;
-};
-
-/** The task or routine that owns a conversation, alongside its project badge. */
-export type ThreadOrigin = {
-  kind: "backlog" | "routine";
-  taskId: string;
-  /** The task's number as people read it (`#12`, `AUTO-3`); its id until numbered. */
-  ref: string;
-  /** Current lifecycle of the linked task or automation occurrence. */
-  status?: TaskStatus;
-  /** The backlog task's title, or the parent routine's for an occurrence. */
-  title: string;
 };
 
 type OriginTask = Pick<
@@ -258,7 +247,7 @@ export function threadRowMeta(
    every poll. Both helpers below exist to keep the rail's cost proportional to
    what is on screen and what actually changed. */
 
-function sameOrigin(a: ThreadOrigin | undefined, b: ThreadOrigin | undefined): boolean {
+export function sameOrigin(a: ThreadOrigin | null | undefined, b: ThreadOrigin | null | undefined): boolean {
   if (a === b) return true;
   return Boolean(a && b && a.kind === b.kind && a.taskId === b.taskId && a.ref === b.ref && a.title === b.title && a.status === b.status);
 }
@@ -282,6 +271,7 @@ export function reuseThreadItems(previous: readonly ThreadItem[], next: ThreadIt
       && prior.runningAgentName === item.runningAgentName
       && prior.nodeOffline === item.nodeOffline
       && sameOrigin(prior.origin, item.origin)
+      && prior.taskAwaitsHuman === item.taskAwaitsHuman
       && prior.projectName === item.projectName
       && sameParticipants(prior.participants, item.participants);
     const result = keep ? prior : item;

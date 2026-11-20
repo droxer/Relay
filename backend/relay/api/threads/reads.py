@@ -15,8 +15,9 @@ from ...core.workspace_artifacts import (
     workspace_artifacts,
 )
 from ...security.actor import Actor
-from ..actors import request_actor_or_sandbox
+from ..actors import request_actor, request_actor_or_sandbox
 from ..deps import AppContext, AppContextDep
+from .activity import thread_list_activity
 from .projections import (
     agent_for_workspace,
     agent_supervisor_user_id,
@@ -56,8 +57,12 @@ def decode_summary_cursor(cursor: str) -> tuple[datetime, str]:
 
 @router.get("/threads")
 def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    if request.query_params.get("view") == "summary":
+    summary_view = request.query_params.get("view") == "summary"
+    include_activity = summary_view and request.query_params.get("include") == "activity"
+    # Task projections use the same credentials as GET /tasks.
+    actor = (request_actor(request, ctx.auth_store) if include_activity
+             else request_actor_or_sandbox(request, ctx.auth_store, ctx.registry))
+    if summary_view:
         try:
             requested_limit = int(request.query_params.get("limit") or "100")
         except ValueError as error:
@@ -70,9 +75,12 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         )
         sessions = ensure_sessions_managed_affinity(ctx, summaries)
         sessions = ctx.execution_lifecycle.annotate(sessions)
+        rows = [session_brief_item(session) for session in sessions]
+        activity = thread_list_activity(ctx, actor, rows, include_home_count=not cursor) if include_activity else {}
         return {
-            "sessions": [session_brief_item(session) for session in sessions],
+            "sessions": rows,
             "nextCursor": encode_summary_cursor(next_position) if next_position else None,
+            **activity,
         }
     visible = ctx.session_store.list_sessions(owner_user_id=actor["userId"])
     sessions = ensure_sessions_managed_affinity(ctx, visible)

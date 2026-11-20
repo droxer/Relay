@@ -20,7 +20,7 @@ const NODES_KEY = NODES_QUERY_KEY;
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 export const SESSIONS_QUERY_KEY = SESSIONS_KEY;
 const SESSION_PAGES_KEY = ["relay", "session-pages"] as const;
-type SessionPages = { headCursor: string | null; olderCursor?: string | null };
+type SessionPages = { headCursor: string | null; olderCursor?: string | null; homeTaskNeedsYou?: number | null };
 // A poll hands its page to structuralSharing, where the merge reads the
 // cache at the moment of commit. Other writes already supply merged rows.
 const sessionHeadPages = new WeakMap<RelaySession[], {
@@ -49,6 +49,7 @@ type RelayDataResult = {
   /** Load the next older page of the thread list. */
   loadMoreSessions: () => Promise<void>;
   tasks: RelayTaskSummary[];
+  homeTaskNeedsYou?: number;
   projects: ProjectRecord[];
   homeStatus: ProjectCollectionStatus;
   projectsStatus: ProjectCollectionStatus;
@@ -109,6 +110,7 @@ export function useRelayData(
   enabled: boolean,
   taskListVisible = true,
   workspaceVisible = true,
+  threadListOnly = false,
 ): RelayDataResult {
   const queryClient = useQueryClient();
   const taskListCache = useRef<TaskListCache>({});
@@ -135,6 +137,12 @@ export function useRelayData(
   // reshuffles the first page never invalidates them.
   const [headCursor, setHeadCursor] = useState<string | null>(() => queryClient.getQueryData<SessionPages>(SESSION_PAGES_KEY)?.headCursor ?? null);
   const [olderCursor, setOlderCursor] = useState<string | null | undefined>(() => queryClient.getQueryData<SessionPages>(SESSION_PAGES_KEY)?.olderCursor);
+  const [homeTaskNeedsYou, setHomeTaskNeedsYou] = useState<number | null | undefined>(
+    () => queryClient.getQueryData<SessionPages>(SESSION_PAGES_KEY)?.homeTaskNeedsYou,
+  );
+  // A missing field in a successful response identifies a pre-projection
+  // backend. Until the first response arrives the directory needs no Task GET.
+  const fetchFullTasks = !threadListOnly || homeTaskNeedsYou === null;
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const [moreSessionsFailed, setMoreSessionsFailed] = useState(false);
   const loadingMoreRef = useRef(false);
@@ -184,7 +192,8 @@ export function useRelayData(
         // stay in the cache below it (mergeSessionHeadPage).
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelaySession[]> => {
           const atRequestStart = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY) ?? [];
-          const page = await listSessionSummaries(signal, { limit: THREAD_PAGE_SIZE }, sessionHeadCache.current);
+          const page = await listSessionSummaries(signal, { limit: THREAD_PAGE_SIZE, includeActivity: true }, sessionHeadCache.current);
+          setHomeTaskNeedsYou(typeof page.homeTaskNeedsYou === "number" ? page.homeTaskNeedsYou : null);
           const next = typeof page.nextCursor === "string" ? page.nextCursor : null;
           setHeadCursor(next);
           // The first page is the whole list: nothing older is left to load.
@@ -197,7 +206,7 @@ export function useRelayData(
       {
         queryKey: TASKS_KEY,
         staleTime: RELAY_POLL_INTERVALS_MS.tasks,
-        enabled,
+        enabled: enabled && fetchFullTasks,
         refetchInterval: taskListVisible ? RELAY_POLL_INTERVALS_MS.tasks : 60_000,
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[]> => {
           const result = await listTasks(signal, taskListCache.current);
@@ -239,8 +248,8 @@ export function useRelayData(
 
   // Cursors describe the cached rows, so keep their lifetime with those rows.
   useEffect(() => {
-    if (enabled) queryClient.setQueryData<SessionPages>(SESSION_PAGES_KEY, { headCursor, olderCursor });
-  }, [enabled, headCursor, olderCursor, queryClient]);
+    if (enabled) queryClient.setQueryData<SessionPages>(SESSION_PAGES_KEY, { headCursor, olderCursor, homeTaskNeedsYou });
+  }, [enabled, headCursor, olderCursor, homeTaskNeedsYou, queryClient]);
 
   // When disabled (e.g. logged out) drop cached rows so the UI clears at once.
   // resetQueries, NOT setQueryData: seeding [] counts as data written after
@@ -262,6 +271,7 @@ export function useRelayData(
     if (isEnabled) return;
     setHeadCursor(null);
     setOlderCursor(undefined);
+    setHomeTaskNeedsYou(undefined);
     setMoreSessionsFailed(false);
   });
 
@@ -271,7 +281,7 @@ export function useRelayData(
     loadingMoreRef.current = true;
     setLoadingMoreSessions(true);
     try {
-      const page = await listSessionSummaries(undefined, { limit: THREAD_PAGE_SIZE, cursor: nextSessionCursor });
+      const page = await listSessionSummaries(undefined, { limit: THREAD_PAGE_SIZE, cursor: nextSessionCursor, includeActivity: true });
       queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, (current) =>
         current ? appendOlderSessionPage(current, page.sessions ?? []) : current);
       setOlderCursor(typeof page.nextCursor === "string" ? page.nextCursor : null);
@@ -352,6 +362,7 @@ export function useRelayData(
     moreSessionsFailed,
     loadMoreSessions,
     tasks,
+    homeTaskNeedsYou: threadListOnly ? homeTaskNeedsYou ?? undefined : undefined,
     projects,
     projectsStatus,
     tasksStatus,

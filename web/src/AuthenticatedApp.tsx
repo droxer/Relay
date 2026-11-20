@@ -154,6 +154,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     moreSessionsFailed,
     loadMoreSessions,
     tasks,
+    homeTaskNeedsYou,
     projects,
     projectsStatus,
     homeStatus,
@@ -164,7 +165,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     setSandboxes,
   } = useRelayData(selectedUserToken, true,
     !openingRoute || ["home", "main", "projects", "backlog", "routine", "computers"].includes(openingRoute.route),
-    workspaceVisible);
+    workspaceVisible,
+    !openingRoute || (openingRoute.route === "main" && !openingRoute.sessionId));
   const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel()
       && workspaceVisible,
@@ -186,16 +188,16 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // Home's queue, computed once: Home renders it and the rail badges it.
   const homeItems = useMemo(
     () => homeQueue({
-      tasks,
+      tasks: homeTaskNeedsYou === undefined ? tasks : [],
       sessions,
       nodes: runtimeNodes,
       userId: selectedUser,
       today: homeToday,
       snoozes: user.homeSnoozes,
     }),
-    [homeToday, runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
+    [homeToday, homeTaskNeedsYou, runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
   );
-  const homeNeedsYou = homeNeedsYouCount(homeItems);
+  const homeNeedsYou = homeNeedsYouCount(homeItems) + (homeTaskNeedsYou ?? 0);
   const onboarding = useOnboarding({
     user,
     setUser,
@@ -481,6 +483,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     threadProjectFilter,
     threadKindFilter,
     tasks,
+    preferTaskActivity: homeTaskNeedsYou !== undefined,
     visibleNodes,
     runtimeNodes,
     logicalAgents,

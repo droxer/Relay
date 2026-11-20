@@ -198,6 +198,14 @@ keyset on the thread's last update, so a thread that moves to the top between
 two page loads is neither repeated nor skipped. The web rail loads 20 at a
 time.
 
+The signed-in web directory requests `?view=summary&include=activity`. Each
+row in the requested page then carries `taskActivity` with an `origin`
+(`kind`, `taskId`, `ref`, `title`, `status`, or `null` for a chat) and an
+`awaitsHuman` flag for settled work. The first page also carries
+`homeTaskNeedsYou`, a count of Tasks in review or waiting for the viewer,
+excluding snoozed Tasks. Only Task data visible through `GET /api/v1/tasks`
+is included. Older pages load with the directory's cursor.
+
 `PATCH /api/v1/auth/preferences` takes any of `theme`, `language`,
 `onboarding`, and `homeSnoozes`, and answers `{user}`. `homeSnoozes` is
 `{"snooze": [{"key", "stamp"}], "unsnooze": ["key"]}`: Home hides an item
