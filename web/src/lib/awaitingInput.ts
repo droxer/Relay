@@ -90,6 +90,7 @@ export function awaitingInput(
 export function threadAwaitsHuman(
   session: RelaySession | undefined,
   tasks: ThreadWaitSource,
+  taskAwaitsHuman?: boolean,
 ): boolean {
   if (!session) return false;
   // A runtime permission prompt can pause an active run. Older work outcomes
@@ -99,7 +100,7 @@ export function threadAwaitsHuman(
   if (session.execution?.blockingReason === "workflow_blocked"
     || session.execution?.blockingReason === "workflow_waiting_for_human") return true;
   if (session.status === "waiting_for_human") return true;
-  return session.status === "completed" && threadWait(session, tasks) !== null;
+  return session.status === "completed" && (taskAwaitsHuman ?? (threadWait(session, tasks) !== null));
 }
 
 type ThreadWait =

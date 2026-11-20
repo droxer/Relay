@@ -30,6 +30,7 @@ import type {
   TaskStatus,
   TokenUsage,
 } from "relay-core";
+import type { ThreadTaskActivity } from "./sessions.ts";
 
 export type {
   CollaborationStyle,
@@ -64,6 +65,7 @@ export type {
 };
 
 export type RelaySession = CoreSession & {
+  taskActivity?: ThreadTaskActivity;
   /** Number of earlier transcript events available to load. */
   eventStart?: number;
   /** Revision of the most recent HTTP transcript window. */

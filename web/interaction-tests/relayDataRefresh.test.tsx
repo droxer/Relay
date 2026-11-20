@@ -17,12 +17,12 @@ vi.mock("../src/api", () => ({
   listProjects: vi.fn(async () => ({ projects: [] })),
 }));
 
-function setup() {
+function setup(threadListOnly = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: 1, retryDelay: 0 } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  const view = renderHook(() => useRelayData("user-token", true), { wrapper });
+  const view = renderHook(() => useRelayData("user-token", true, true, true, threadListOnly), { wrapper });
   return { client, view };
 }
 
@@ -99,6 +99,16 @@ it("does not refetch the cookie-scoped thread list when the sandbox token change
   await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(listSessionSummaries).toHaveBeenCalledTimes(before);
   view.unmount(); client.clear();
+});
+
+it("loads tasks on the thread directory when the server lacks activity summaries", async () => {
+  vi.mocked(listSandboxes).mockResolvedValue({ sandboxes: [] });
+  vi.mocked(listTasks).mockClear();
+  const { client, view } = setup(true);
+  await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(1));
+  expect(view.result.current.homeTaskNeedsYou).toBeUndefined();
+  view.unmount();
+  client.clear();
 });
 
 it("slows task reconciliation off task surfaces and refreshes when they become visible", async () => {

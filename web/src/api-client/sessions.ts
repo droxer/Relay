@@ -17,12 +17,13 @@ export type SessionHeadCache = { etag?: string; page?: SessionSummariesResponse 
 
 export async function listSessionSummaries(
   signal?: AbortSignal,
-  page?: { limit: number; cursor?: string },
+  page?: { limit: number; cursor?: string; includeActivity?: boolean },
   headCache?: SessionHeadCache,
 ): Promise<SessionSummariesResponse> {
   const params = new URLSearchParams({ view: "summary" });
   if (page) params.set("limit", String(page.limit));
   if (page?.cursor) params.set("cursor", page.cursor);
+  if (page?.includeActivity) params.set("include", "activity");
   const path = `/threads?${params}`;
   if (!headCache) return apiJson(path, { signal, guard: sessionSummariesGuard });
   const cached = headCache.page;

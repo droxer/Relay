@@ -1,6 +1,21 @@
-import type { AgentName, AgentRole, CollaborationStyle, RelaySession } from "relay-core";
+import type { AgentName, AgentRole, CollaborationStyle, RelaySession, TaskStatus } from "relay-core";
+
+export type ThreadOrigin = {
+  kind: "backlog" | "routine";
+  taskId: string;
+  ref: string;
+  title: string;
+  status?: TaskStatus;
+};
+
+export type ThreadTaskActivity = {
+  origin: ThreadOrigin | null;
+  /** Whether a settled Thread is still waiting for the reader. */
+  awaitsHuman: boolean;
+};
 
 export interface SessionSummary {
+  taskActivity?: ThreadTaskActivity;
   workOutcome?: RelaySession["workOutcome"] | null;
   execution?: RelaySession["execution"];
   deletionRequestedAt?: string;
@@ -37,6 +52,8 @@ export interface SessionSummariesResponse {
   /** Where the next, older page starts; `null` (or absent, from an older
    *  backend) on the last page. Opaque: pass it back as `cursor`. */
   nextCursor?: string | null;
+  /** The Task contribution to the Home badge, returned with the head page. */
+  homeTaskNeedsYou?: number;
 }
 
 export interface AgentRunInput {

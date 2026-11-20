@@ -10,10 +10,12 @@ from collections import defaultdict
 from typing import Any
 from sqlalchemy import (
     Text,
+    and_,
     cast,
     func,
     or_,
     select,
+    tuple_,
 )
 from .flow import wip_count_query, user_wip_limit
 from .reducer import materialize_task_events
@@ -24,6 +26,14 @@ from .rows import (
     compact_task_summary,
 )
 from .state import TaskStoreState
+
+
+def _live_owned_tasks(table: Any, user_id: str) -> tuple[Any, ...]:
+    return (
+        table.c.owner_user_id == user_id,
+        table.c.deleted_at.is_(None),
+        or_(table.c.project_id.is_(None), select(projects.c.id).where(projects.c.id == table.c.project_id).exists()),
+    )
 
 
 class TaskReadRows(TaskStoreState):
@@ -139,6 +149,48 @@ class TaskReadRows(TaskStoreState):
                 for row in rows
                 if not row["snapshot"].get("deletedAt")
             ]
+
+    def thread_list_task_links(
+        self, session_ids: list[str], user_id: str,
+    ) -> tuple[list[dict[str, Any]], set[str]]:
+        if not session_ids:
+            return [], set()
+        tasks, links = self.tasks, self.task_sessions
+        parent = tasks.alias("parent_routine")
+        waiting_session = tasks.c.snapshot["waitingSessionId"].as_string()
+        source_routine = tasks.c.snapshot["sourceRoutineId"].as_string()
+        filters = _live_owned_tasks(tasks, user_id)
+        linked = (
+            select(links.c.session_id.label("sessionId"), tasks.c.id, tasks.c.number,
+                   tasks.c.title, tasks.c.status, tasks.c.is_routine.label("isRoutine"),
+                   source_routine.label("sourceRoutineId"), parent.c.title.label("sourceTitle"),
+                   waiting_session.label("waitingSessionId"))
+            .select_from(links.join(tasks, links.c.task_id == tasks.c.id))
+            .outerjoin(parent, and_(cast(parent.c.id, Text) == source_routine, *_live_owned_tasks(parent, user_id)))
+            .where(links.c.session_id.in_(session_ids), *filters)
+            .order_by(tasks.c.updated_at.desc(), tasks.c.id.desc())
+        )
+        named_waits = select(waiting_session).where(
+            *filters, tasks.c.is_routine.is_(False), tasks.c.status == "waiting_for_human",
+            waiting_session.in_(session_ids),
+        )
+        with store_transaction(self.engine) as conn:
+            results = [dict(row) for row in conn.execute(linked).mappings()]
+            waiting = {str(session_id) for session_id in conn.scalars(named_waits)}
+        return results, waiting
+
+    def count_home_tasks_needing_attention(self, user_id: str, snoozed: dict[str, str]) -> int:
+        tasks = self.tasks
+        statement = select(func.count()).select_from(tasks).where(
+            *_live_owned_tasks(tasks, user_id),
+            func.coalesce(tasks.c.assignee_user_id, tasks.c.owner_user_id) == user_id,
+            tasks.c.is_routine.is_(False), tasks.c.status.in_(("review", "waiting_for_human")),
+        )
+        if snoozed:
+            stamp = func.coalesce(tasks.c.snapshot["updatedAt"].as_string(), "")
+            statement = statement.where(tuple_(cast(tasks.c.id, Text), stamp).not_in(list(snoozed.items())))
+        with store_transaction(self.engine) as conn:
+            return int(conn.scalar(statement) or 0)
 
     def list_task_summaries(
         self, *, user_id: str | None = None, limit: int | None = None,

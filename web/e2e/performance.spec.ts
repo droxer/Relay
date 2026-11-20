@@ -193,6 +193,11 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
   await page.addInitScript(installCommitCounter);
   await mockApi(page);
   let revalidations = 0;
+  let taskListReads = 0;
+  await page.route("**/api/v1/tasks?*", async route => {
+    taskListReads++;
+    await route.fulfill({ json: { tasks: [] } });
+  });
   const etag = 'W/"thread-list"';
   await page.route("**/api/v1/threads?*", async (route) => {
     if (route.request().headers()["if-none-match"] === etag) {
@@ -200,12 +205,22 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
       await route.fulfill({ status: 304, headers: { ETag: etag } });
       return;
     }
-    await route.fulfill({ json: { sessions: THREADS }, headers: { ETag: etag } });
+    await route.fulfill({ json: {
+      sessions: THREADS.map((session, index) => ({
+        ...session, taskActivity: {
+          origin: index === 0 ? { kind: "backlog", taskId: "linked-task", ref: "#41", title: "Linked issue", status: "waiting_for_human" } : null,
+          awaitsHuman: index === 0,
+        },
+      })),
+      homeTaskNeedsYou: 2,
+    }, headers: { ETag: etag } });
   });
   await page.goto(`${workPath}/threads`);
   await expect(page.locator(".conversation-name").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Home, 2 items need attention" })).toBeVisible();
+  await expect(page.getByText("#41", { exact: true })).toBeVisible();
   // Let first-load commits settle, then watch 10s of identical polls: two
-  // sessions polls (5s) plus a nodes and a tasks poll (10s) — see
+  // sessions polls (5s) plus a nodes poll (10s) — see
   // RELAY_POLL_INTERVALS_MS. The sessions query shares unchanged records
   // across polls (shareSessions), so even the first refetch moves no row.
   await page.waitForTimeout(4_000);
@@ -214,8 +229,15 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
   const { commits, rowRenders } = await page.evaluate(() => (window as unknown as { __commits: { commits: number; rowRenders: number } }).__commits);
   expect({ commits, rowRenders }, "thread rows re-rendered on unchanged data").toMatchObject({ rowRenders: 0 });
   expect(revalidations).toBeGreaterThan(0);
+  expect(taskListReads).toBe(0);
   // Before: ~18 app-wide commits in 10s, one per fetch start and end.
   expect(commits, "app-wide commits while idle").toBeLessThanOrEqual(2);
+  await page.locator(".thread-kind-filter").getByRole("button", { name: "Tasks" }).click();
+  await expect(page.locator(".conversation-name")).toHaveCount(1);
+  await expect(page.getByText("#41", { exact: true })).toBeVisible();
+  expect(taskListReads).toBe(0);
+  await page.getByRole("link", { name: "Home, 2 items need attention" }).click();
+  await expect.poll(() => taskListReads).toBe(1);
 });
 
 test("the thread rail mounts a bounded window and grows as it scrolls", async ({ page }) => {

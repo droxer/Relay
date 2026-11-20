@@ -3,6 +3,7 @@ import { mergeTokenUsage } from "./tokenUsage.ts";
 import { withPermissionRequested, withPermissionResolved, withPermissionsExpired } from "./permissionRequests.ts";
 import { applyWorkflowEvent, cancelOpenWorkflowRuns, isWorkflowEvent, workflowSnapshotDue } from "./workflowRuns.ts";
 import { observedSessionEventCount, summaryEventCountOf } from "./sessionPollMerge.ts";
+import { sameOrigin } from "./threads.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
@@ -314,6 +315,8 @@ function sameSessionShape(a: RelaySession, b: RelaySession): boolean {
     && a.events.length === b.events.length
     && a.eventStart === b.eventStart
     && a.transcriptRevision === b.transcriptRevision
+    && a.taskActivity?.awaitsHuman === b.taskActivity?.awaitsHuman
+    && sameOrigin(a.taskActivity?.origin, b.taskActivity?.origin)
     && a.status === b.status
     && a.phase === b.phase
     && a.title === b.title

@@ -153,6 +153,7 @@ export function mergeSessionSnapshotIntoSessions(
   if (missing.length > 0 && summaryEventCountOf(existing) === observedSessionEventCount(merged)) {
     merged = { ...merged, execution: existing.execution };
   }
+  if (!merged.taskActivity && existing.taskActivity) merged = { ...merged, taskActivity: existing.taskActivity };
   if (merged === existing) return current;
   const next = [...current];
   next[index] = prefix.length > 0
