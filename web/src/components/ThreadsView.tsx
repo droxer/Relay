@@ -341,11 +341,13 @@ export function ThreadsView({
   });
   const taskStatusActions = useTaskStatusActions(lifecycle.task?.id);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
-  const olderTranscript = useOlderTranscript(transcriptVisible ? activeSessionId : undefined);
-  const hasEarlierMessages = (activeSession?.eventStart ?? 0) > 0;
+  const { load: loadEarlier, pending: earlierPending, failed: earlierFailed } =
+    useOlderTranscript(transcriptVisible ? activeSessionId : undefined);
+  const eventStart = activeSession?.eventStart ?? 0;
+  const hasEarlierMessages = eventStart > 0;
   const { start: transcriptStart, sentinelRef, pinOldest } = useTranscriptWindow(
-    activeSessionId, displayMessages.length, activeSession?.eventStart,
-    transcriptVisible && hasEarlierMessages && !olderTranscript.failed ? olderTranscript.load : undefined,
+    activeSessionId, displayMessages.length, eventStart,
+    transcriptVisible && hasEarlierMessages && !earlierFailed ? loadEarlier : undefined,
   );
   // A thread is about to render markdown: start the pipeline download now so
   // the first turn rarely shows its plain-text fallback. A brand-new empty
@@ -384,6 +386,13 @@ export function ThreadsView({
     hasPendingMessage: Boolean(pendingUserMessage),
     hasOnboardingPanel: Boolean(onboardingPanel),
   });
+  const needsFirstMessages = transcriptVisible && !transcriptPending && !threadLoadError
+    && displayMessages.length === 0 && !earlierPending && !earlierFailed;
+  useEffect(() => {
+    // A page of file or status events can leave the transcript with no turns
+    // and no room to scroll. Keep paging until there is something to read.
+    if (needsFirstMessages && eventStart > 0) void loadEarlier(pinOldest);
+  }, [needsFirstMessages, eventStart, loadEarlier, pinOldest]);
   // A thread parked on its human: the composer carries the question, and
   // sending the reply is what resumes the work.
   const waiting = useMemo(() => (running ? null : awaitingInput(activeSession, tasks)), [activeSession, running, tasks]);
@@ -666,11 +675,11 @@ export function ThreadsView({
               <>
                 {transcriptStart === 0 && hasEarlierMessages ? (
                   <div className="transcript-history">
-                    <Button type="button" variant="outline" size="sm" loading={olderTranscript.pending}
-                      onClick={() => void olderTranscript.load(pinOldest)}>
+                    <Button type="button" variant="outline" size="sm" loading={earlierPending}
+                      onClick={() => void loadEarlier(pinOldest)}>
                       {t("thread.load_earlier_messages")}
                     </Button>
-                    {olderTranscript.failed ? <div role="alert">{t("thread.earlier_messages_failed")}</div> : null}
+                    {earlierFailed ? <div role="alert">{t("thread.earlier_messages_failed")}</div> : null}
                   </div>
                 ) : null}
                 {transcriptStart > 0 || hasEarlierMessages ? (
