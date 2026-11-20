@@ -1,7 +1,7 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import type { ControlPanelDaemonNodeRecord } from "../../types";
+import type { UserRosterComputer } from "../../types";
 import { isNodeOnline, nodeOwnershipProfile, visualStatus } from "../../lib/adminHelpers";
 import { NodePresence } from "./NodePresence";
 import { computerName } from "../../lib/computerNodes";
@@ -28,7 +28,7 @@ export function UserComputers({
   nodes,
   t,
 }: {
-  nodes: ControlPanelDaemonNodeRecord[];
+  nodes: UserRosterComputer[];
   t: TFunction;
 }) {
   if (nodes.length === 0) {

@@ -3,11 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkflows } from "../src/components/workflow/ProjectWorkflows";
 import { WorkflowEditor } from "../src/components/workflow/WorkflowEditor";
-import { listWorkflows, saveWorkflow, startProjectWorkflow } from "../src/api";
+import { listWorkflowPreviews, saveWorkflow, startProjectWorkflow } from "../src/api";
 import type { AgentTeam, ProjectRecord, UserAgent, Workflow } from "../src/types";
 
-vi.mock("../src/api", () => ({ listWorkflows: vi.fn(), saveWorkflow: vi.fn(async () => ({})), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(async () => ({ id: "run" })) }));
-vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", useTeams: () => ({ teams: [], isSuccess: true }) }));
+vi.mock("../src/api", () => ({ listWorkflowPreviews: vi.fn(), saveWorkflow: vi.fn(async () => ({})), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(async () => ({ id: "run" })) }));
+vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", TEAM_RECORD_QUERY_KEY: "team-record", useTeams: () => ({ teams: [], isSuccess: true }) }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: async () => true, announce: vi.fn() }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
@@ -16,7 +16,7 @@ const agents = [{ id: "a", displayName: "Ada", enabled: true, executorKind: "cod
 const workflow = { id: "w", ownerUserId: "owner", projectId: "p", name: "Release", enabled: true,
   workflowSteps: [{ id: "build", name: "Build", agentId: "a", instructions: "Build it", acceptanceCriteria: ["Tests pass"], requiresApproval: false }] } as Workflow;
 function mount(element: React.ReactNode) { render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{element}</QueryClientProvider>); }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(listWorkflows).mockResolvedValue({ workflows: [workflow] }); });
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(listWorkflowPreviews).mockResolvedValue({ workflows: [workflow] }); });
 
 it("creates a Project definition with no Teams or Team fields", async () => {
   const close = vi.fn();
@@ -43,7 +43,7 @@ it("starts a Project Workflow independently when there are no Teams", async () =
 });
 
 it("offers Project workflow creation even with an empty Team directory", async () => {
-  vi.mocked(listWorkflows).mockResolvedValue({ workflows: [] });
+  vi.mocked(listWorkflowPreviews).mockResolvedValue({ workflows: [] });
   mount(<ProjectWorkflows project={project} agents={agents} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
   expect(await screen.findByText("workflow.project_empty_title")).toBeTruthy();
   expect((screen.getByRole("button", { name: "workflow.create" }) as HTMLButtonElement).disabled).toBe(false);

@@ -5,23 +5,23 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import { TaskDrawer } from "../src/components/task-board/TaskDrawer";
 import { emptyBacklogForm, emptyRoutineForm, type TaskBoardFormState } from "../src/lib/taskBoardForm";
-import type { CurrentUser, ProjectRecord, UserAgent, Workflow } from "../src/types";
+import type { CurrentUser, ProjectRecord, ProjectWorkflowChoice, UserAgent } from "../src/types";
 
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => <div>{children}</div> }));
 vi.mock("../src/components/task-board/TaskTagsField", () => ({ TaskTagsField: () => null }));
 vi.mock("../src/components/connections/ConnectionGrantField", () => ({ ConnectionGrantField: () => null }));
 vi.mock("../src/hooks/useSessionCapabilities", () => ({ useSessionCapabilities: () => ({}) }));
-vi.mock("../src/api", () => ({ listWorkflows: vi.fn(async () => ({ workflows: [] })) }));
+vi.mock("../src/api", () => ({ listProjectWorkflowChoices: vi.fn(async () => ({ workflows: [] })) }));
 
 const currentUser = { userId: "owner", username: "owner" } as CurrentUser;
 const project = { id: "p", name: "Project P", enabled: true, ownerUserId: "owner", computerId: "c", members: [{ agentId: "a", enabled: true }] } as ProjectRecord;
 const agent = { id: "a", displayName: "Ada", executorKind: "codex", enabled: true, supervisorUserId: "owner", placements: [{ computerId: "c", desiredState: "active" }] } as UserAgent;
-const workflow = { id: "w", name: "Ship workflow", projectId: "p", enabled: true, workflowSteps: [{ agentId: "a" }] } as Workflow;
+const workflow: ProjectWorkflowChoice = { id: "w", name: "Ship workflow", projectId: "p", enabled: true, stepAgentIds: ["a"] };
 
 function mount(initial: TaskBoardFormState) {
   const submit = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  client.setQueryData(["workflows", "p"], { workflows: [workflow, { ...workflow, id: "foreign", projectId: "q", name: "Foreign workflow" }] });
+  client.setQueryData(["workflows", "choices", "p"], { workflows: [workflow, { ...workflow, id: "foreign", projectId: "q", name: "Foreign workflow" }] });
   function Editor() {
     const [form, setForm] = useState(initial);
     return <TaskDrawer open form={form} projects={[project]} logicalAgents={[agent]} teams={[]} saving={false}

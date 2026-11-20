@@ -42,7 +42,45 @@ it("assigns the first added agent as lead by default", async () => {
   fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "Build" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
-  expect(mutateAsync.mock.calls[0][0].input.leadAgentId, "null lead causes project_lead_not_member").toBe("a");
+  expect(mutateAsync.mock.calls[0][0].input).toEqual({
+    expectedVersion: 1, leadAgentId: "a",
+    memberChange: { op: "add", agentId: "a", fields: { role: "implementer", responsibilities: "Build", enabled: true } },
+  });
+});
+
+it("sends only the changed responsibility even with long instructions on the roster", async () => {
+  const member = { ...lead, instructions: "Keep this private to the member. ".repeat(100) };
+  editor([member, { ...other, instructions: "Keep their instructions too. ".repeat(100) }], member);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "Ship the release" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledExactlyOnceWith({
+    projectId: "p",
+    baseProject: expect.objectContaining({ version: 1 }),
+    input: { expectedVersion: 1, memberChange: { op: "update", agentId: "a", fields: { responsibilities: "Ship the release" } } },
+  }));
+});
+
+it("clears saved instructions with an explicit null", async () => {
+  const member = { ...lead, instructions: "Saved instructions" };
+  editor([member, other], member);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.instructions" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledExactlyOnceWith({
+    projectId: "p",
+    baseProject: expect.objectContaining({ version: 1 }),
+    input: { expectedVersion: 1, memberChange: { op: "update", agentId: "a", fields: { instructions: null } } },
+  }));
+});
+
+it("falls back once when an older server rejects the member change field", async () => {
+  mutateAsync.mockRejectedValueOnce(new RelayApiError("project_patch_unsupported", 400, "project_patch_unsupported"));
+  const { onClose } = editor([lead, other]);
+  fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "Ship the release" } });
+  fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  expect(mutateAsync).toHaveBeenCalledTimes(2);
+  expect(mutateAsync.mock.calls[1][0].input.members).toEqual([{ ...lead, responsibilities: "Ship the release" }, other]);
+  expect(getProject).not.toHaveBeenCalled();
 });
 
 it.each(["project.member_make_lead", "project.member_enabled"])("validates %s before submitting a roster without an enabled lead", async (name) => {
@@ -71,7 +109,11 @@ it("blocks removing the only enabled lead while disabled members remain", async 
 it("allows removing the final member and clearing the lead", async () => {
   editor();
   fireEvent.click(screen.getByRole("button", { name: "project.member_remove" }));
-  await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ projectId: "p", input: { expectedVersion: 1, leadAgentId: null, members: [] } }));
+  await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({
+    projectId: "p",
+    baseProject: expect.objectContaining({ version: 1 }),
+    input: { expectedVersion: 1, leadAgentId: null, memberChange: { op: "remove", agentId: "a" } },
+  }));
 });
 
 it("keeps the existing lead when adding another member", async () => {
@@ -80,7 +122,7 @@ it("keeps the existing lead when adding another member", async () => {
   fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "Build" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
-  expect(mutateAsync.mock.calls[0][0].input.leadAgentId).toBe("b");
+  expect(mutateAsync.mock.calls[0][0].input.leadAgentId).toBeUndefined();
 });
 
 it("allows assigning another enabled member as lead", async () => {
@@ -97,8 +139,7 @@ it("hands over Project Lead management without changing execution roles", async 
   fireEvent.click(screen.getByRole("checkbox", { name: "project.member_make_lead" }));
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
-  expect(mutateAsync.mock.calls[0][0].input.members).toEqual([lead, other]);
-  expect(mutateAsync.mock.calls[0][0].input.leadAgentId).toBe("b");
+  expect(mutateAsync.mock.calls[0][0].input).toEqual({ expectedVersion: 1, leadAgentId: "b" });
 });
 
 it("recovers a stale save while retaining other members and unedited fields", async () => {
@@ -111,7 +152,11 @@ it("recovers a stale save while retaining other members and unedited fields", as
   await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
   const patch = mutateAsync.mock.calls[1][0].input;
   expect(patch.expectedVersion).toBe(2);
-  expect(patch.members).toEqual([{ ...lead, responsibilities: "My draft", instructions: "Concurrent instructions" }, other]);
+  expect(mutateAsync.mock.calls[1][0].baseProject).toMatchObject({
+    version: 2, members: [{ ...lead, instructions: "Concurrent instructions" }, other],
+  });
+  expect(patch.memberChange).toEqual({ op: "update", agentId: "a", fields: { responsibilities: "My draft" } });
+  expect(patch.members).toBeUndefined();
   expect(confirm).toHaveBeenCalled();
 });
 
@@ -149,5 +194,7 @@ it("rebases removal without dropping a concurrently added member", async () => {
   editor([lead, other], other);
   fireEvent.click(screen.getByRole("button", { name: "project.member_remove" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
-  expect(mutateAsync.mock.calls[1][0].input.members.map((m: any) => m.agentId)).toEqual(["a", "c"]);
+  expect(mutateAsync.mock.calls[1][0].input).toEqual({
+    expectedVersion: 2, memberChange: { op: "remove", agentId: "b" },
+  });
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQueries, useQueryClient, type Query, type UseQueryResult } from "@tanstack/react-query";
-import { listDaemonNodes, listProjects, listSessionSummaries, listTasks } from "../api";
-import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SessionSummary, TasksResponse } from "../types";
+import { listDaemonNodes, listSessionSummaries, listTasks } from "../api";
+import type { DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskSummary, SessionSummary, TasksResponse } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
 import { appendOlderSessionPage, mergeSessionHeadPage, THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
@@ -10,6 +10,7 @@ import { isSessionStreamConnected, subscribeSessionStream } from "../lib/session
 import { useKeyChange } from "./useKeyChange";
 import type { TaskListCache } from "../api-client/tasks";
 import type { SessionHeadCache } from "../api-client/sessions";
+import { projectDirectoryOptions, PROJECTS_QUERY_KEY } from "./projectQueries";
 
 export const RELAY_QUERY_KEY = ["relay"] as const;
 const RELAY_KEY = RELAY_QUERY_KEY;
@@ -27,10 +28,13 @@ const sessionHeadPages = new WeakMap<RelaySession[], {
   atRequestStart: RelaySession[];
 }>();
 const TASKS_KEY = ["relay", "tasks"] as const;
-export const PROJECTS_QUERY_KEY = ["relay", "projects"] as const;
-const PROJECTS_KEY = PROJECTS_QUERY_KEY;
+export { PROJECTS_QUERY_KEY };
 export const TASKS_QUERY_KEY = TASKS_KEY;
 export const HOME_TASKS_QUERY_KEY = [...TASKS_KEY, "home"] as const;
+export const ISSUES_PAGE_KEY = [...TASKS_KEY, "issue-page"] as const;
+export const AUTOMATIONS_PAGE_KEY = [...TASKS_KEY, "automation-page"] as const;
+export const THREAD_TASKS_QUERY_KEY = [...TASKS_KEY, "thread"] as const;
+export const COMPUTER_TASKS_QUERY_KEY = [...TASKS_KEY, "computer"] as const;
 type RelayDataResult = {
   nodes: DaemonNodeMonitorRecord[];
   nodesReady: boolean;
@@ -49,19 +53,22 @@ type RelayDataResult = {
   tasks: RelayTaskSummary[];
   homeTaskNeedsYou?: number;
   homeTaskProjects?: TasksResponse["homeProjects"];
-  projects: ProjectRecord[];
+  homeUntriaged?: TasksResponse["homeUntriaged"];
+  threadTaskContext?: TasksResponse["threadTaskContext"];
+  projectDashboard?: TasksResponse["projectDashboard"];
+  projects: ProjectListItem[];
   homeStatus: ProjectCollectionStatus;
   projectsStatus: ProjectCollectionStatus;
   tasksStatus: ProjectCollectionStatus;
   projectsError: string;
   isRefreshing: boolean;
-  refresh: (signal?: AbortSignal, tokenOverride?: string) => Promise<void>;
+  refresh: () => Promise<void>;
   upsertNode: (node: DaemonNodeMonitorRecord) => void;
 };
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "nodes" | "nodesReady" | "sessions" | "sessionsLoading" | "tasks" | "homeTaskProjects" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
+  "nodes" | "nodesReady" | "sessions" | "sessionsLoading" | "tasks" | "homeTaskProjects" | "homeUntriaged" | "threadTaskContext" | "projectDashboard" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
 >;
 
 /* The only fields the app reads off the collection polls, folded into one value.
@@ -85,7 +92,10 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
     sessionsLoading: sessionsQuery.isLoading,
     tasks: (Array.isArray(taskData) ? taskData : taskData?.tasks) ?? [],
     homeTaskProjects: Array.isArray(taskData) ? undefined : taskData?.homeProjects,
-    projects: (projectsQuery.data as ProjectRecord[] | undefined) ?? [],
+    homeUntriaged: Array.isArray(taskData) ? undefined : taskData?.homeUntriaged,
+    threadTaskContext: Array.isArray(taskData) ? undefined : taskData?.threadTaskContext,
+    projectDashboard: Array.isArray(taskData) ? undefined : taskData?.projectDashboard,
+    projects: (projectsQuery.data as ProjectListItem[] | undefined) ?? [],
     homeStatus: [nodesQuery, sessionsQuery, tasksQuery, projectsQuery].some(q => q.isError)
       ? "error" : [nodesQuery, sessionsQuery, tasksQuery, projectsQuery].some(q => !q.isSuccess) ? "loading" : "ready",
     projectsStatus: queryCollectionStatus(projectsQuery),
@@ -111,10 +121,20 @@ export function useRelayData(
   workspaceVisible = true,
   projectedTasksOnly = false,
   taskProjectId?: string,
-  homeTaskView = false,
+  taskScope?: TaskListCache["scope"],
+  { pageOwned = false, threadId: taskThreadId, computerId: taskComputerId, projectDirectory = true }: {
+    pageOwned?: boolean; threadId?: string; computerId?: string;
+    projectDirectory?: boolean;
+  } = {},
 ): RelayDataResult {
   const queryClient = useQueryClient();
-  const tasksKey = useMemo(() => homeTaskView ? HOME_TASKS_QUERY_KEY : taskProjectId ? [...TASKS_KEY, taskProjectId] : TASKS_KEY, [homeTaskView, taskProjectId]);
+  const homeTaskView = taskScope === "home";
+  const tasksKey = useMemo(() => {
+    if (taskThreadId) return [...THREAD_TASKS_QUERY_KEY, taskThreadId];
+    const prefix = taskComputerId ? [...COMPUTER_TASKS_QUERY_KEY, taskComputerId]
+      : taskProjectId ? [...TASKS_KEY, taskProjectId] : TASKS_KEY;
+    return taskScope ? [...prefix, taskScope] : prefix;
+  }, [taskProjectId, taskScope, taskThreadId, taskComputerId]);
   // Keep each validator with its owning query, including across route switches.
   const taskListCaches = useRef(new WeakMap<Query, TaskListCache>());
   const sessionHeadCache = useRef<SessionHeadCache>({});
@@ -122,17 +142,11 @@ export function useRelayData(
   // initiated refresh drives page-level refresh chrome.
   const [manualRefreshPending, setManualRefreshPending] = useState(false);
 
-  // One-shot override applied by refresh(_, tokenOverride) during sandbox
-  // provisioning, before the freshly minted token has propagated into state.
-  // Each refresh call owns its override by identity: overlapping refreshes
-  // must not clear another call's override while its fetches (or retries)
-  // are still in flight.
-  const overrideRef = useRef<{ token: string } | undefined>(undefined);
   const manualRefreshesRef = useRef(0);
-  const fetchToken = () => overrideRef.current?.token ?? token;
   // Re-renders only when the stream connects or drops, which re-arms the
   // sessions interval at once instead of after the next poll.
   const streamConnected = useSyncExternalStore(subscribeSessionStream, isSessionStreamConnected, () => false);
+  const computersHaveRuns = () => queryClient.getQueryData<DaemonNodeMonitorRecord[]>(NODES_KEY)?.some(node => node.activeRuns?.length) ?? false;
 
   // Thread list paging. The head cursor is where the polled first page ends;
   // the older cursor is where the last older page ended — undefined until one
@@ -146,13 +160,14 @@ export function useRelayData(
   // A missing field in a successful response identifies a pre-projection
   // backend. Surfaces with no Task table use the activity included in the
   // existing Thread reconciliation for the shell's counts and statuses.
-  const fetchFullTasks = !projectedTasksOnly || homeTaskNeedsYou === null;
+  const fetchFullTasks = !pageOwned && (!projectedTasksOnly || homeTaskNeedsYou === null);
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const [moreSessionsFailed, setMoreSessionsFailed] = useState(false);
   const loadingMoreRef = useRef(false);
   const nextSessionCursor = olderCursor === undefined ? headCursor : olderCursor;
 
-  const { nodes, nodesReady, sessions, sessionsLoading, tasks, homeTaskProjects, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
+  const { nodes, nodesReady, sessions, sessionsLoading, tasks, homeTaskProjects, homeUntriaged, threadTaskContext,
+    projectDashboard, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
     combine: combineRelayCollections,
     queries: [
       {
@@ -165,13 +180,20 @@ export function useRelayData(
         // without a sandbox token left every tokenless client blind to live
         // runs: no working badge, and a cancel button with no node to talk to.
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<DaemonNodeMonitorRecord[]> =>
-          (await listDaemonNodes(fetchToken(), signal)).nodes ?? [],
+          (await listDaemonNodes(token, signal)).nodes ?? [],
       },
       {
         queryKey: SESSIONS_KEY,
         staleTime: RELAY_POLL_INTERVALS_MS.sessions,
         enabled,
-        refetchInterval: workspaceVisible ? sessionsPollIntervalMs(streamConnected) : 60_000,
+        refetchInterval: () => {
+          if (!workspaceVisible) return 60_000;
+          const rows = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY);
+          const active = rows?.some(session => session.execution
+            ? !["terminal", "recovery_required"].includes(session.execution.phase)
+            : session.status === "running");
+          return sessionsPollIntervalMs(streamConnected, Boolean(active) || computersHaveRuns());
+        },
         // Keep an unchanged session's identity across polls without walking
         // its events, so an identical poll re-renders no row.
         structuralSharing: (previous: unknown, next: unknown) => {
@@ -201,25 +223,31 @@ export function useRelayData(
         queryKey: tasksKey,
         staleTime: RELAY_POLL_INTERVALS_MS.tasks,
         enabled: enabled && fetchFullTasks,
-        refetchInterval: taskListVisible ? RELAY_POLL_INTERVALS_MS.tasks : 60_000,
+        refetchInterval: () => {
+          if (!taskListVisible) return 60_000;
+          const data = queryClient.getQueryData<RelayTaskSummary[] | TasksResponse>(tasksKey);
+          const rows = Array.isArray(data) ? data : data?.tasks;
+          const active = !Array.isArray(data) && data?.projectDashboard?.hasQueuedOrRunning
+            || rows?.some(task => ["assigned", "queued", "running"].includes(task.status));
+          return active || computersHaveRuns() ? RELAY_POLL_INTERVALS_MS.tasks : RELAY_POLL_INTERVALS_MS.idleCollections;
+        },
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[] | TasksResponse> => {
           const query = queryClient.getQueryCache().find({ queryKey: tasksKey, exact: true });
           const cached = query && taskListCaches.current.get(query);
-          const cache = cached ?? { projectId: taskProjectId, home: homeTaskView };
+          const cache = cached ?? (taskThreadId ? { threadId: taskThreadId }
+            : taskComputerId ? { computerId: taskComputerId, scope: taskScope }
+            : { projectId: taskProjectId, scope: taskScope });
           if (query && !cached) taskListCaches.current.set(query, cache);
           const result = await listTasks(signal, cache);
           if (result.flowPolicy) queryClient.setQueryData(["task-flow-policy"], result.flowPolicy);
           if (result.flowUsage) queryClient.setQueryData(["task-flow-usage"], result.flowUsage);
-          return homeTaskView ? result : result.tasks ?? [];
+          return homeTaskView || taskThreadId || result.projectDashboard ? result : result.tasks ?? [];
         },
       },
       {
-        queryKey: PROJECTS_KEY,
-        staleTime: RELAY_POLL_INTERVALS_MS.projects,
-        enabled,
+        ...projectDirectoryOptions(),
+        enabled: enabled && projectDirectory,
         refetchInterval: RELAY_POLL_INTERVALS_MS.projects,
-        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<ProjectRecord[]> =>
-          (await listProjects(signal)).projects ?? [],
       },
     ],
   });
@@ -304,16 +332,13 @@ export function useRelayData(
   }, [token, enabled, queryClient]);
 
   const refresh = useCallback(
-    async (_signal?: AbortSignal, tokenOverride?: string) => {
+    async () => {
       if (!enabled) return;
-      const override = tokenOverride ? { token: tokenOverride } : undefined;
-      if (override) overrideRef.current = override;
       manualRefreshesRef.current += 1;
       setManualRefreshPending(true);
       try {
         await queryClient.refetchQueries({ queryKey: RELAY_KEY, type: "active" });
       } finally {
-        if (override && overrideRef.current === override) overrideRef.current = undefined;
         manualRefreshesRef.current -= 1;
         if (manualRefreshesRef.current === 0) setManualRefreshPending(false);
       }
@@ -343,8 +368,12 @@ export function useRelayData(
     moreSessionsFailed,
     loadMoreSessions,
     tasks,
-    homeTaskNeedsYou: projectedTasksOnly || taskProjectId ? homeTaskNeedsYou ?? undefined : undefined,
+    homeTaskNeedsYou: projectedTasksOnly || taskProjectId || taskThreadId || taskComputerId || taskScope === "automations"
+      ? homeTaskNeedsYou ?? undefined : undefined,
     homeTaskProjects,
+    homeUntriaged,
+    threadTaskContext,
+    projectDashboard,
     projects,
     projectsStatus,
     tasksStatus,

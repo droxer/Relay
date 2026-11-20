@@ -44,6 +44,38 @@ def test_a_changed_list_answers_200_with_a_new_etag(monkeypatch, tmp_path):
     assert [task["title"] for task in after.json()["tasks"]] == ["Write the brief"]
 
 
+def test_web_computer_inventory_revalidates_while_only_age_changes(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    owner = client.get("/api/v1/auth/me").json()["user"]["userId"]
+    registration = client.post("/api/v1/daemon-node-registrations", json={
+        "sandboxId": "etag-node", "userId": owner, "token": "etag-node-token",
+        "workspacePath": "/etag-workspace", "protocolVersion": 1, "status": "ready",
+    })
+    assert registration.status_code == 200, registration.text
+
+    registry = client.app.state.registry
+    liveness = registry._liveness
+    monkeypatch.setattr(registry, "_liveness", lambda node: {**liveness(node), "lastSeenAgeMs": 1})
+    legacy = client.get("/api/v1/daemon-nodes")
+    assert legacy.json()["nodes"][0]["lastSeenAgeMs"] == 1
+    projected = client.get("/api/v1/daemon-nodes?view=web")
+    [node] = projected.json()["nodes"]
+    assert node["lastSeenAt"]
+    assert "lastSeenAgeMs" not in node
+    assert "lastPollAgeMs" not in node
+
+    monkeypatch.setattr(registry, "_liveness", lambda node: {**liveness(node), "lastSeenAgeMs": 2})
+    headers = {"If-None-Match": projected.headers["etag"]}
+    assert client.get("/api/v1/daemon-nodes?view=web", headers=headers).status_code == 304
+
+    monkeypatch.setattr(registry, "_liveness", lambda node: {
+        **liveness(node), "lastSeenAgeMs": 60001, "online": False, "stale": True,
+    })
+    changed = client.get("/api/v1/daemon-nodes?view=web", headers=headers)
+    assert changed.status_code == 200
+    assert changed.json()["nodes"][0]["online"] is False
+
+
 def test_thread_detail_revalidates_without_storing_transcripts_in_http_cache(monkeypatch, tmp_path):
     client = _client(monkeypatch, tmp_path)
     thread = client.post("/api/v1/threads", json={"taskGoal": "Write the brief"}).json()
@@ -109,6 +141,9 @@ def test_cold_transcript_load_reads_a_bounded_tail_and_pages_back(monkeypatch, t
     thread_id = client.post("/api/v1/threads", json={"taskGoal": "Long running thread"}).json()["id"]
     store = client.app.state.session_store
     expected = [event["id"] for event in store.get_session(thread_id)["events"]]
+    start = relay_event("agent.started", thread_id, {"runId": "agent", "agent": "codex", "brief": "Dispatch-only instructions"})
+    store.append_event(thread_id, start, hydrate_events=False)
+    expected.append(start["id"])
     for index in range(24):
         event = relay_event("agent.output", thread_id, {
             "runId": "agent", "agent": "codex", "stream": "stdout",
@@ -122,10 +157,14 @@ def test_cold_transcript_load_reads_a_bounded_tail_and_pages_back(monkeypatch, t
 
     monkeypatch.setattr(store, "get_session", reject_full_read)
     path = f"/api/v1/threads/{thread_id}?view=transcript"
-    tail = client.get(path)
+    legacy = client.get(path)
+    tail = client.get(f"{path}&window=compact")
     assert tail.status_code == 200
-    assert len(tail.content) < 400_000
+    assert len(tail.content) < 150_000
+    assert len(tail.content) < len(legacy.content) // 2
     page = tail.json()
+    assert legacy.json()["agentRuns"][0]["brief"] == "Dispatch-only instructions"
+    assert "brief" not in page["agentRuns"][0]
     assert 0 < page["eventStart"] < page["eventCount"]
     assert page["eventCount"] == len(expected)
     event_ids = [event["id"] for event in page["events"]]

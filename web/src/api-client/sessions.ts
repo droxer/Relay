@@ -62,7 +62,7 @@ export async function getSession(sessionId: string, signal?: AbortSignal, cache?
   if (!cache) return apiJson(path, { signal, guard: sessionGuard });
 
   const previous = cache.snapshot?.id === sessionId ? cache.snapshot : undefined;
-  const endpoint = `${path}?view=transcript`;
+  const endpoint = `${path}?view=transcript&window=compact`;
   const response = await fetchWithSession(relayApiEndpoint(endpoint), {
     signal,
     credentials: "include",

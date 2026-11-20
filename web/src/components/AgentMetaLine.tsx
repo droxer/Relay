@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { activePlacements, describeAgentPlacements } from "../lib/agentPlacements";
 import { agentLabel } from "../lib/plan";
-import type { AgentName, AgentPlacement } from "../types";
+import type { AgentName, AgentPlacementRoute } from "../types";
 
 /**
  * The one line that annotates an agent, in plain words: which runtime it is,
@@ -36,7 +36,7 @@ export function AgentMetaLine({
   model,
 }: {
   executorKind: AgentName;
-  placements: readonly AgentPlacement[];
+  placements: readonly AgentPlacementRoute[];
   /** The agent's pinned model id; "" is the runtime default. Omit on
       surfaces that do not carry the agent's model policy. */
   model?: string;

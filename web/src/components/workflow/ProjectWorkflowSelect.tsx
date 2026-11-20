@@ -1,12 +1,12 @@
 "use client";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import type { Workflow } from "../../types";
+import type { ProjectWorkflowChoice } from "../../types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Button } from "../ui/button";
 
 export function ProjectWorkflowSelect({ workflows, value, onChange, disabled, loading, failed, issue, onRetry }: {
-  workflows: Workflow[]; value: string; onChange: (id: string) => void; disabled?: boolean;
+  workflows: ProjectWorkflowChoice[]; value: string; onChange: (id: string) => void; disabled?: boolean;
   loading?: boolean; failed?: boolean; issue?: boolean; onRetry: () => void;
 }) {
   const { t } = useTranslation();

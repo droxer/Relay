@@ -23,7 +23,7 @@ import type { AgentPlacement, ControlPanelDaemonNodeRecord, UserAgent } from "..
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Button } from "@/components/ui/button";
 import { ADMIN_AGENTS_KEY } from "../lib/adminHelpers";
-import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
+import { USER_AGENT_RECORD_QUERY_KEY, USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
 import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { formatRelativeTime } from "./admin/helpers";
 import { IdentityMark } from "./IdentityMark";
@@ -123,16 +123,22 @@ export function AgentProfilePanel({
      node-reported fields (availability, models, skills, binding status) on
      read, which the PATCH responses do not all carry. Teams embed each
      member's name, avatar, and availability, so they refresh too. */
-  function invalidateAgentLists() {
+  function invalidateAgentLists(refreshTeams = true) {
     void queryClient.invalidateQueries({ queryKey: ADMIN_AGENTS_KEY, exact: true });
-    // ["user-agents", userId]: the prefix is the one list, whoever's it is.
+    // Roster rows and any cached searches reflect identity changes.
     void queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] });
-    void queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
+    if (refreshTeams) void queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
   }
 
   function applyAgentUpdate(updated: UserAgent) {
     queryClient.setQueryData(["admin", "agent", updated.id], { agent: updated });
-    invalidateAgentLists();
+    if (!canManage) {
+      const queryKey = [USER_AGENT_RECORD_QUERY_KEY, updated.id];
+      void queryClient.cancelQueries({ queryKey, exact: true });
+      queryClient.setQueryData(queryKey, { agent: updated });
+    }
+    invalidateAgentLists(updated.displayName !== agent.displayName || updated.profileImageUrl !== agent.profileImageUrl
+      || updated.enabled !== agent.enabled || updated.defaultRole !== agent.defaultRole || updated.availability !== agent.availability);
     onAgentUpdated?.(updated);
   }
 

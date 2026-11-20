@@ -18,6 +18,8 @@ export interface ProjectMember {
   projectManager?: boolean;
 }
 
+export type ProjectMemberSummary = Omit<ProjectMember, "responsibilities" | "instructions">;
+
 export type ProjectSetupState = "drafting" | "proposed" | "failed" | "applied" | "dismissed";
 
 /** Why a proposed member cannot be applied as is (projects/setup.py). */
@@ -132,6 +134,8 @@ export interface ProjectRecord {
   setup?: ProjectSetup;
   /** Context lines project runs proposed, waiting for the owner to adopt or dismiss. */
   contextSuggestions?: ProjectContextSuggestion[];
+  /** Present on directory rows whose context is available from the detail endpoint. */
+  contextSummary?: { suggestionCount: number };
   computerId: string;
   workspaceLayout: "project";
   workspaceSubpath: string;
@@ -146,8 +150,29 @@ export interface ProjectRecord {
   archivedAt?: string;
 }
 
+export type ProjectSetupSummary = Pick<ProjectSetup, "state" | "mode" | "threadId"> & { hasProposal: boolean };
+
+export interface ProjectDirectoryEntry extends Pick<ProjectRecord,
+  "id" | "ownerUserId" | "name" | "computerId" | "workspaceLayout" | "workspaceSubpath"
+  | "leadAgentId" | "managerAgentId" | "managerThreadId" | "enabled" | "version"
+  | "createdAt" | "updatedAt" | "archivedAt" | "contextSummary"
+> {
+  view: "directory";
+  members: ProjectMemberSummary[];
+  setupSummary?: ProjectSetupSummary;
+}
+
+/** Older servers may still return the complete Project in the directory. */
+export type ProjectListItem = ProjectDirectoryEntry | ProjectRecord;
+
+export interface ProjectIndexRow extends Pick<ProjectRecord, "id" | "name" | "enabled" | "archivedAt" | "version"> {
+  memberCount: number;
+}
+
+export type ProjectRailItem = ProjectIndexRow | ProjectListItem;
+
 export interface ProjectsResponse {
-  projects: ProjectRecord[];
+  projects: ProjectListItem[];
 }
 
 export interface CreateProjectInput {
@@ -179,9 +204,18 @@ export interface UpdateProjectInput {
   context?: string;
   leadAgentId?: string | null;
   members?: CreateProjectInput["members"];
+  /** One roster edit against expectedVersion. */
+  memberChange?: ProjectMemberChange;
   enabled?: boolean;
   /** Closes the project's drafted setup in the same revision. */
   setupResolution?: "applied" | "dismissed";
   /** Suggestions this save adopted or dismissed; both leave the pending list. */
   resolveContextSuggestions?: string[];
 }
+
+type ProjectMemberFields = Pick<ProjectMember, "role" | "responsibilities" | "enabled"> & { instructions?: string | null };
+
+export type ProjectMemberChange =
+  | { op: "add"; agentId: string; fields: ProjectMemberFields }
+  | { op: "update"; agentId: string; fields: Partial<ProjectMemberFields> }
+  | { op: "remove"; agentId: string };

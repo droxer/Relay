@@ -16,7 +16,7 @@ vi.mock("../src/hooks/useTokenUsage", () => ({
 function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}>
-    <DashboardView nodes={[]} users={[]} metrics={{ total: 0, queued: 0 } as NodeMetrics} onManageNodes={() => {}} />
+    <DashboardView nodes={[]} metrics={{ total: 0, queued: 0 } as NodeMetrics} onManageNodes={() => {}} />
   </QueryClientProvider>);
 }
 

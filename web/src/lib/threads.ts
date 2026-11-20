@@ -1,4 +1,4 @@
-import type { AgentName, ProjectRecord, RelaySession, RelayTaskSummary, ThreadOrigin } from "../types.js";
+import type { AgentName, ProjectRailItem, RelaySession, RelayTaskSummary, ThreadOrigin } from "../types.js";
 import type { ThreadGroups } from "./threadGroups.js";
 import { taskRef } from "./taskRef.ts";
 
@@ -62,7 +62,7 @@ export function threadOriginIndex(tasks: readonly OriginTask[]): Map<string, Thr
 }
 
 type ProjectThreadBucket = {
-  project: ProjectRecord;
+  project: ProjectRailItem;
   threads: ThreadItem[];
 };
 
@@ -76,7 +76,7 @@ export function threadDirectoryMode(route: string, sessionId: string | null | un
 /** The global list includes every thread; Projects scopes its own directory. */
 export function threadsForDirectory(
   threads: readonly ThreadItem[],
-  projects: readonly ProjectRecord[],
+  projects: readonly Pick<ProjectRailItem, "id">[],
   mode: ThreadDirectoryMode,
 ): ThreadItem[] {
   const projectIds = new Set(projects.map((project) => project.id));
@@ -89,7 +89,7 @@ export function threadsForDirectory(
 /** Builds the sidebar's Project -> thread hierarchy without hiding empty projects. */
 export function projectThreadBuckets(
   threads: readonly ThreadItem[],
-  projects: readonly ProjectRecord[],
+  projects: readonly ProjectRailItem[],
 ): { projects: ProjectThreadBucket[]; unclassified: ThreadItem[] } {
   const orderedProjects = projects
     .slice()

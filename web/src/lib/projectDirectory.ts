@@ -8,14 +8,35 @@
  * testing away from the DOM.
  */
 
-import type { ProjectRecord } from "../types.js";
+import type { ProjectDirectoryEntry, ProjectIndexRow, ProjectListItem, ProjectRailItem, ProjectRecord } from "../types.js";
 import type { ProjectCollectionStatus } from "./projectPage.js";
 
 /** Apply a project mutation result before its background collection refetch. */
-export function mergeProjectIntoProjects(
-  projects: ProjectRecord[],
-  project: ProjectRecord,
-): ProjectRecord[] {
+export function isProjectDirectoryEntry(project: ProjectListItem): project is ProjectDirectoryEntry {
+  return "view" in project && project.view === "directory";
+}
+
+export function projectDirectoryEntry(project: ProjectRecord): ProjectDirectoryEntry {
+  const { members, setup, contextSuggestions, contextSummary, context, contextRevision, description, goal, workspaceHostPath, ...entry } = project;
+  const suggestionCount = contextSuggestions?.length ?? contextSummary?.suggestionCount ?? 0;
+  return {
+    ...entry,
+    view: "directory",
+    members: members.map(({ responsibilities, instructions, ...member }) => member),
+    ...(suggestionCount > 0 ? { contextSummary: { suggestionCount } } : {}),
+    ...(setup ? { setupSummary: {
+      state: setup.state, mode: setup.mode, threadId: setup.threadId, hasProposal: Boolean(setup.proposal),
+    } } : {}),
+  };
+}
+
+export function projectIndexRow(project: ProjectRailItem): ProjectIndexRow {
+  if ("memberCount" in project) return project;
+  const { id, name, enabled, archivedAt, version, members } = project;
+  return { id, name, enabled, archivedAt, version, memberCount: members.length };
+}
+
+export function mergeProjectIntoProjects<T extends Pick<ProjectRailItem, "id" | "name">>(projects: T[], project: T): T[] {
   return [...projects.filter((entry) => entry.id !== project.id), project].sort(
     (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
   );
@@ -32,13 +53,13 @@ type ProjectFolderTone = "attn" | "run";
 
 /** Active projects open, archived ones stay shut — until the user says
  *  otherwise, and then their choice outranks both defaults. */
-export function isProjectExpanded(project: ProjectRecord, expansion: ProjectExpansion): boolean {
+export function isProjectExpanded(project: ProjectListItem, expansion: ProjectExpansion): boolean {
   return expansion[project.id] ?? !project.archivedAt;
 }
 
 export function toggleProjectExpansion(
   expansion: ProjectExpansion,
-  project: ProjectRecord,
+  project: ProjectListItem,
 ): ProjectExpansion {
   return { ...expansion, [project.id]: !isProjectExpanded(project, expansion) };
 }

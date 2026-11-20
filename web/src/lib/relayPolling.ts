@@ -13,6 +13,7 @@ export const RELAY_POLL_INTERVALS_MS = {
   /** The open thread's SSE tail pushes its events, so the list only has to
       catch the other threads' status changes. */
   sessionsWhileStreaming: 15_000,
+  idleCollections: 30_000,
   /** Task status moves on a round's closeout, not at stream rate. */
   tasks: 10_000,
   /** Projects change through the owner's own edits, which invalidate the
@@ -61,7 +62,8 @@ export interface NodeAvailabilityInput {
   agents?: Partial<Record<string, string>>;
 }
 
-export function sessionsPollIntervalMs(streamConnected: boolean): number {
+export function sessionsPollIntervalMs(streamConnected: boolean, hasActiveWork: boolean): number {
+  if (!hasActiveWork) return RELAY_POLL_INTERVALS_MS.idleCollections;
   return streamConnected ? RELAY_POLL_INTERVALS_MS.sessionsWhileStreaming : RELAY_POLL_INTERVALS_MS.sessions;
 }
 

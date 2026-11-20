@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useEffectEvent, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DashboardView } from "./admin/dashboard/DashboardView";
 import { useNodeMetrics } from "../hooks/useNodeMetrics";
 import { useTranslation } from "react-i18next";
@@ -42,10 +42,11 @@ import { InviteNextButton } from "./admin/waitlist/InviteNextButton";
 import { InviteByEmailDrawer } from "./admin/waitlist/InviteByEmailDrawer";
 import type { AdminLayout } from "./admin/AdminLayoutToggle";
 import { useAdminNodes } from "../hooks/useAdminNodes";
+import { useAdminUsers } from "../hooks/useAdminUsers";
 import { NODES_QUERY_KEY } from "../hooks/useRelayData";
 import { withoutDeletedComputer } from "../lib/daemonNodes";
 import { useRelayStore } from "../lib/store";
-import { CONTROL_PANEL_POLL_MS } from "../lib/controlPanelQueries";
+import { ADMIN_ROSTER_POLL_MS, ADMIN_USERS_KEY, CONTROL_PANEL_NODES_KEY } from "../lib/controlPanelQueries";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import {
   persistStoredNodeTokenMap,
@@ -57,6 +58,8 @@ import { omit } from "../lib/omit";
 import { useKeyChange } from "../hooks/useKeyChange";
 
 type AuthScreen = "login" | "bootstrap";
+const NO_USERS: UserRecord[] = [];
+const NO_NODES: ControlPanelDaemonNodeRecord[] = [];
 
 type AdminPageProps = {
   currentUser?: CurrentUser | null;
@@ -121,18 +124,35 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
      card/list switch is hidden there (admin-v2-users.css). */
   const phone = useMediaQuery(PHONE_QUERY);
   const shownLayout: AdminLayout = phone ? "card" : layout;
-  const { nodes, users, pollError, mergeNodes, refetch, inventoryLoading, inventoryError } = useAdminNodes({
-    nodesEnabled: Boolean(admin) && (view === "dashboard" || view === "users" || view === "computers"),
-    usersEnabled: Boolean(admin) && view !== "organization",
+  const directory = useAdminUsers({ enabled: Boolean(admin) && view === "users", live: view === "users" && shownLayout === "list" });
+  const users = directory.response?.users ?? NO_USERS;
+  const pagedRoster = directory.response?.page !== undefined;
+  const { nodes, mergeNodes, refetch, inventoryLoading, inventoryError } = useAdminNodes({
+    enabled: Boolean(admin) && (view === "dashboard" || view === "computers"
+      || (view === "users" && directory.response !== undefined && !pagedRoster)),
     live: view === "dashboard" || (view !== "waitlist" && layout === "list"),
   });
-  const managedNodesQuery = useQuery({
+  const pollError = inventoryError ?? (view === "users" && directory.error ? directory.error.message : null);
+  const managedNodesQuery = useInfiniteQuery({
     queryKey: ["admin", "managed-nodes"],
-    queryFn: ({ signal }) => listManagedNodes(signal),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ signal, pageParam }) => listManagedNodes(signal, pageParam),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: Boolean(admin) && view === "computers",
-    refetchInterval: CONTROL_PANEL_POLL_MS,
+    staleTime: ADMIN_ROSTER_POLL_MS,
+    // Older pages are historical. Keep a slow head poll while only it is loaded.
+    refetchInterval: ({ state }) => (state.data?.pages.length ?? 0) < 2 ? ADMIN_ROSTER_POLL_MS : false,
+    refetchOnMount: ({ state }) => (state.data?.pages.length ?? 0) < 2,
   });
-  const managedNodes = managedNodesQuery.data?.nodes ?? [];
+  const managedNodes = useMemo(() => managedNodesQuery.data?.pages.flatMap(page => page.nodes) ?? [], [managedNodesQuery.data]);
+  const computerOwners = useMemo(() => {
+    const owners = new Map<string, UserRecord>();
+    for (const node of [...managedNodes, ...nodes]) {
+      if (node.ownerLabel) owners.set(node.ownerLabel.id, node.ownerLabel);
+    }
+    for (const user of users) owners.set(user.id, user);
+    return [...owners.values()];
+  }, [users, nodes, managedNodes]);
   // The org default is what a user without an override follows, so the
   // user forms show it as their placeholder.
   const orgSettingsQuery = useQuery({
@@ -153,7 +173,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
       the one place they can still be read; dismissing or leaving drops them. */
   const [waitlistInvites, setWaitlistInvites] = useState<WaitlistInviteResult[] | null>(null);
   const setAdminView = useRelayStore((state) => state.setAdminView);
-  const [editUserId, setEditUserId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<UserRecord | null>(null);
   const [credentialsNodeId, setCredentialsNodeId] = useState<string | null>(null);
   const [manageExecutorsNodeId, setManageExecutorsNodeId] = useState<string | null>(null);
   const [storedTokens, setStoredTokens] = useState<StoredNodeTokenMap>(() => readStoredNodeTokens());
@@ -227,10 +247,10 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
   }
 
   function handleNodeUpdated(updated: ControlPanelDaemonNodeRecord) {
-    mergeNodes((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((current) => (current.id === updated.id ? updated : current)),
-    }));
+    mergeNodes((prev) => prev.map((current) => (current.id !== updated.id ? current : {
+        ...updated,
+        ownerLabel: updated.ownerLabel ?? (updated.userId === current.userId ? current.ownerLabel : undefined),
+    })));
   }
 
   async function handleRenameNode(node: ControlPanelDaemonNodeRecord) {
@@ -276,10 +296,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
   async function handleUnassignNode(node: ControlPanelDaemonNodeRecord) {
     try {
       const result = await unassignControlPanelDaemonNode(node.id);
-      mergeNodes((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((current) => (current.id === result.node.id ? result.node : current)),
-      }));
+      mergeNodes((prev) => prev.map((current) => (current.id === result.node.id ? result.node : current)));
     } catch (error) {
       reportMutationError("Failed to unassign node", error, t("errors.admin_unassign_node"));
       throw error;
@@ -301,14 +318,11 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
       } else {
         await deleteControlPanelDaemonNode(node.id);
       }
-      mergeNodes((prev) => ({
-        ...prev,
-        nodes: prev.nodes.filter((current) => (
+      mergeNodes((prev) => prev.filter((current) => (
           node.managedNodeId
             ? current.managedNodeId !== node.managedNodeId && current.id !== node.id
             : current.id !== node.id
-        )),
-      }));
+      )));
       await queryClient.cancelQueries({ queryKey: NODES_QUERY_KEY, exact: true });
       queryClient.setQueryData<DaemonNodeMonitorRecord[]>(NODES_QUERY_KEY, (current) =>
         withoutDeletedComputer(current ?? [], node));
@@ -344,24 +358,20 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
     try {
       const result = await deleteControlPanelUser(user.id);
       const unassignedSet = new Set(result.unassignedNodes);
-      mergeNodes((prev) => ({
-        users: prev.users.filter((current) => current.id !== user.id),
-        nodes: prev.nodes.map((current) =>
-          unassignedSet.has(current.id) ? omit(current, "userId") : current,
-        ),
-      }));
+      mergeNodes((prev) => prev.map((current) =>
+        unassignedSet.has(current.id) ? omit(current, "userId", "ownerLabel") : current,
+      ));
+      await queryClient.invalidateQueries({ queryKey: ADMIN_USERS_KEY });
     } catch (error) {
       reportMutationError("Failed to delete user", error, t("errors.admin_delete_user"));
       throw error;
     }
   }
 
-  function handleEditUserSuccess(user: UserRecord) {
-    mergeNodes((prev) => ({
-      ...prev,
-      users: prev.users.map((item) => (item.id === user.id ? user : item)),
-    }));
-    setEditUserId(null);
+  function handleEditUserSuccess() {
+    setEditingUser(null);
+    void queryClient.invalidateQueries({ queryKey: ADMIN_USERS_KEY });
+    void queryClient.invalidateQueries({ queryKey: CONTROL_PANEL_NODES_KEY, refetchType: "none" });
   }
 
   if (!authChecked) {
@@ -397,7 +407,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
   const viewTitle = t(`admin.v2.title_${usersSection ? "users" : view}`);
   const hasHeaderActions = Boolean(headerError) || usersSection;
   const headerCount = usersSection
-    ? t("admin.user_count", { count: users.length })
+    ? directory.loading ? undefined : t("admin.user_count", { count: directory.response?.userCount ?? users.length })
     : view === "computers"
       // The owner's page counts "4 computers · 3 online"; the fleet reads the
       // same way.
@@ -490,18 +500,19 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
             <div key={view} className="adm-view-stage">
               {view === "dashboard" ? (
                 <DashboardView
-                  nodes={nodes} users={users} metrics={metrics}
+                  nodes={nodes} metrics={metrics}
                   inventoryLoading={inventoryLoading} inventoryError={inventoryError}
                   onManageNodes={() => setView("computers")}
                 />
               ) : view === "users" ? (
                 <UsersView
+                  directory={directory}
                   users={users}
-                  nodes={nodes}
+                  nodes={pagedRoster ? directory.response?.nodes ?? NO_NODES : nodes}
                   layout={shownLayout}
                   onLayoutChange={setLayout}
                   onDeleteUser={handleDeleteUser}
-                  onEditUser={canEditUsers ? (user) => setEditUserId(user.id) : undefined}
+                  onEditUser={canEditUsers ? setEditingUser : undefined}
                   highlightedUserId={null}
                 />
               ) : view === "organization" ? (
@@ -517,7 +528,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
                 <>
                   <NodesView
                     nodes={nodes}
-                    users={users}
+                    users={computerOwners}
                     layout={shownLayout}
                     onLayoutChange={setLayout}
                     onRevealCredentials={handleRevealCredentials}
@@ -528,7 +539,11 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
                   />
                   <ManagedNodeHistory
                     nodes={managedNodes}
-                    users={users}
+                    users={computerOwners}
+                    loadingMore={managedNodesQuery.isFetchingNextPage}
+                    onLoadMore={managedNodesQuery.hasNextPage
+                      ? () => { void managedNodesQuery.fetchNextPage(); }
+                      : undefined}
                     onRecover={handleRecoverManagedNode}
                     onDeletePermanently={handlePermanentlyDeleteManagedNode}
                   />
@@ -549,9 +564,9 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
         }}
       />
       <EditUserDrawer
-        open={editUserId !== null}
-        onClose={() => setEditUserId(null)}
-        user={users.find((user) => user.id === editUserId) ?? null}
+        open={editingUser !== null}
+        onClose={() => setEditingUser(null)}
+        user={editingUser}
         defaultMaxLocalComputers={defaultMaxLocalComputers}
         onSuccess={handleEditUserSuccess}
       />
@@ -560,7 +575,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
         onClose={() => setCredentialsNodeId(null)}
         node={credentialsNode}
         storedToken={credentialsNodeId ? storedTokens[credentialsNodeId] : undefined}
-        userHandle={handleForUserId(users, credentialsNode?.userId)}
+        userHandle={handleForUserId(computerOwners, credentialsNode?.userId)}
         onUnassign={handleUnassignNode}
         onDelete={handleDeleteNode}
       />
@@ -568,7 +583,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
         open={manageExecutorsNodeId !== null}
         onClose={() => setManageExecutorsNodeId(null)}
         node={manageExecutorsNode}
-        userHandle={handleForUserId(users, manageExecutorsNode?.userId)}
+        userHandle={handleForUserId(computerOwners, manageExecutorsNode?.userId)}
         onUpdated={handleNodeUpdated}
         onSave={updateControlPanelDaemonNodeDisabledAgents}
       />

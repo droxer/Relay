@@ -1,4 +1,4 @@
-import { apiJson } from "./client.ts";
+import { apiJson, privateConditionalJson, type PrivateResponseCache } from "./client.ts";
 
 /** The kinds this build knows how to render. A server may send others; the
     inbox reads them through `notificationView`, which skips what it cannot
@@ -24,6 +24,8 @@ export interface NotificationsResponse {
   unreadCount: number;
 }
 
+export type NotificationInboxCache = PrivateResponseCache<NotificationsResponse>;
+
 export interface NotificationPreferences {
   mutedKinds: string[];
   /** Every kind the server can send, muted or not. */
@@ -31,8 +33,10 @@ export interface NotificationPreferences {
 }
 
 /** Newest first; muted kinds are already left out by the server. */
-export function listNotifications(signal?: AbortSignal, limit = 50): Promise<NotificationsResponse> {
-  return apiJson<NotificationsResponse>(`/notifications?limit=${limit}`, { signal });
+export function listNotifications(
+  signal?: AbortSignal, limit = 50, inboxCache?: NotificationInboxCache,
+): Promise<NotificationsResponse> {
+  return privateConditionalJson(`/notifications?limit=${limit}`, signal, inboxCache);
 }
 
 export async function getUnreadNotificationCount(signal?: AbortSignal): Promise<Pick<NotificationsResponse, "unreadCount">> {

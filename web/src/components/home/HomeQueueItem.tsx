@@ -167,7 +167,7 @@ function itemTitle(item: HomeItem, t: T): string {
     case "offline":
       return computerName(item.node);
     case "untriaged":
-      return t("home.untriaged_title", { count: item.tasks.length });
+      return t("home.untriaged_title", { count: item.count });
     default:
       return item.task.title;
   }

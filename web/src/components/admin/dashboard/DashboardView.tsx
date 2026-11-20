@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useDashboardSessions } from "../../../hooks/useDashboardSessions";
 import { useTokenUsage } from "../../../hooks/useTokenUsage";
 import type { NodeMetrics } from "../../../hooks/useNodeMetrics";
-import type { ControlPanelDaemonNodeRecord, UserRecord } from "../../../types";
+import type { ControlPanelDaemonNodeRecord } from "../../../types";
 import { RuntimeUsage, RuntimeInventory } from "./RuntimeStats";
 import { ActivityChart } from "./ActivityChart";
 import { NodeStatusCard } from "./NodeStatusCard";
@@ -24,7 +24,6 @@ import { displayTone, fleetSummary } from "../../../lib/fleetSlots";
 
 interface DashboardViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
-  users: UserRecord[];
   metrics: NodeMetrics;
   onManageNodes: () => void;
   inventoryLoading?: boolean;
@@ -32,7 +31,7 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({
-  nodes, users, metrics, onManageNodes, inventoryLoading, inventoryError,
+  nodes, metrics, onManageNodes, inventoryLoading, inventoryError,
 }: DashboardViewProps) {
   const { t, i18n } = useTranslation();
   const [preset, setPreset] = useState<DashboardRangeSelection>("7d");
@@ -50,7 +49,7 @@ export function DashboardView({
 
   const sessionsReady = !sessionsQuery.isLoading && !sessionsQuery.error;
   const sessions = sessionsQuery.data;
-  const nodesReady = nodes.length > 0 || users.length > 0;
+  const nodesReady = nodes.length > 0 || (inventoryLoading === false && !inventoryError);
 
   const dash = "—";
   const showTokens = tokens.available || tokens.isError || tokens.isLoading || (tokens.daily?.length ?? 0) > 0;
@@ -159,7 +158,6 @@ export function DashboardView({
         ) : null}
         <TopUsers
           className={`adm-dash-panel${showTokens ? "" : " adm-dash-panel--wide"}`}
-          users={users}
           ranked={sessions.topUsers}
           error={sessionsQuery.error}
         />

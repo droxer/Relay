@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { TeamMemberPicker, addTeamMember, removeTeamMember, type TeamMembership } from "../src/components/TeamMemberPicker";
 import { TeamMemberCard } from "../src/components/TeamMemberCard";
-import { teamMutationInput } from "../src/lib/teamForm";
-import type { UserAgent, RelaySession, TeamMemberConfig } from "../src/types";
+import type { UserAgent, RelaySession, TeamMemberConfigPatch } from "../src/types";
 
 const agent = (id: string, displayName: string, executorKind: UserAgent["executorKind"] = "codex") => ({
   id, displayName, executorKind, enabled: true, availability: "ready", placements: [], deletedAt: null,
@@ -50,7 +49,7 @@ it("makes the first added member the lead", () => {
 });
 
 it("makes on-request participation optional in the saved payload", async () => {
-  const saved: TeamMemberConfig[] = [];
+  const saved: TeamMemberConfigPatch[] = [];
   render(
     <TeamMemberCard
       member={{ id: "builder", displayName: "Builder", executorKind: "codex" }}
@@ -70,15 +69,10 @@ it("makes on-request participation optional in the saved payload", async () => {
   expect(screen.getByRole("checkbox", { name: "team_work.required" })
     .hasAttribute("data-disabled")).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "team_work.save_member" }));
-  await screen.findByText("Own the reset API");
-  const payload = teamMutationInput({
-    name: "Team", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], enabled: true,
-    memberConfigs: { builder: saved[0] }, acceptanceCriteria: ["No reusable reset token", ""],
+  await waitFor(() => {
+    expect(saved).toEqual([{ responsibility: "Own the reset API", participation: "on_request", required: false }]);
+    expect(screen.queryByLabelText("team_work.responsibility")).toBeNull();
   });
-  // A member with no team role of its own and no agent role saves as an
-  // implementer: every save records the role the member plays.
-  expect(payload.memberConfigs?.builder).toEqual({ role: "implementer", responsibility: "Own the reset API", participation: "on_request", required: false });
-  expect(payload.acceptanceCriteria).toEqual(["No reusable reset token"]);
 });
 
 // The setup's Button mock drops `tooltip` (the real one turns it into the
@@ -86,16 +80,13 @@ it("makes on-request participation optional in the saved payload", async () => {
 const pencil = () => document.querySelector<HTMLButtonElement>(".team-work-member-edit")!;
 
 it("reads as a summary and edits one member in place", async () => {
-  const saved: TeamMemberConfig[] = [];
-  render(
-    <TeamMemberCard
-      member={{ id: "qa", displayName: "Checker", executorKind: "codex", defaultRole: "reviewer", availability: "ready" }}
-      config={{ responsibility: "Review the diff", expectedOutputs: ["Findings list"] }}
-      lead={false}
-      canEdit
-      onSave={async (next) => { saved.push(next); return true; }}
-    />,
+  const saved: TeamMemberConfigPatch[] = [];
+  const card = (expectedOutputs: string[]) => (
+    <TeamMemberCard member={{ id: "qa", displayName: "Checker", executorKind: "codex", defaultRole: "reviewer", availability: "ready" }}
+      config={{ responsibility: "Review the diff", expectedOutputs }} lead={false} canEdit
+      onSave={async (fields) => { saved.push(fields); return true; }} />
   );
+  const view = render(card(["Findings list"]));
   // Read mode: the summary, no form controls.
   expect(screen.getByText("Review the diff")).toBeTruthy();
   expect(screen.getByText("Findings list")).toBeTruthy();
@@ -107,11 +98,11 @@ it("reads as a summary and edits one member in place", async () => {
   // The role select opens on the agent's own role; there is no inherit choice.
   expect(screen.getByRole("combobox", { name: "team_work.role" }).textContent).toContain("team_work.role_reviewer");
   fireEvent.change(screen.getByLabelText("team_work.responsibility"), { target: { value: "Review auth changes" } });
+  view.rerender(card(["Concurrent outputs"]));
   fireEvent.click(screen.getByRole("button", { name: "team_work.save_member" }));
-  await screen.findByText("Review auth changes");
-  // The team role starts from the agent's own role and is saved with the card.
-  expect(saved).toEqual([{ role: "reviewer", responsibility: "Review auth changes", expectedOutputs: ["Findings list"] }]);
-  expect(screen.queryByLabelText("team_work.responsibility")).toBeNull();
+  await waitFor(() => expect(screen.queryByLabelText("team_work.responsibility")).toBeNull());
+  expect(saved).toEqual([{ responsibility: "Review auth changes" }]);
+  expect(screen.getByText("Concurrent outputs")).toBeTruthy();
 });
 
 it("discards the draft on cancel and stays open when the save fails", async () => {

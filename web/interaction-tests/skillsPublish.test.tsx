@@ -10,7 +10,11 @@ vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => (
 
 const { createSkill, importSkill } = vi.hoisted(() => ({ createSkill: vi.fn(async (input: any) => ({ id: "new-skill", ...input })), importSkill: vi.fn() }));
 vi.mock("../src/api", () => ({ createSkill, importSkill, deleteSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn() }));
-vi.mock("../src/hooks/useSkills", () => ({ SKILLS_QUERY_KEY: "skills", useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }), useSkill: () => ({ data: null, isLoading: false, error: null }) }));
+vi.mock("../src/hooks/useSkills", async (load) => ({
+  ...await load<typeof import("../src/hooks/useSkills")>(),
+  useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }),
+  useSkill: () => ({ data: null, isLoading: false, error: null }),
+}));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 

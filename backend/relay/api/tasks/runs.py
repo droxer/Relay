@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
@@ -206,6 +206,7 @@ def task_runs(
     request: Request,
     ctx: AppContextDep,
     limit: int = RUN_LEDGER_LIMIT,
+    before: str | None = Query(default=None, max_length=256),
 ) -> dict[str, Any]:
     """The task's run ledger — one row per run, newest first.
 
@@ -220,13 +221,24 @@ def task_runs(
     if limit < 1:
         raise HTTPException(400, "limit must be at least 1.")
     actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(ctx.task_store, task_id, actor)
-    occurrences = occurrence_tasks(ctx, task, actor)
-    runs = [run_row(ctx, occurrence) for occurrence in occurrences] if occurrences else (
-        [] if task.get("isRoutine") else [run_row(ctx, task)]
+    task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
+    position = None
+    if before is not None:
+        parts = before.split("|")
+        if len(parts) != 3 or not parts[2]:
+            raise HTTPException(400, "Invalid run ledger cursor.")
+        position = parts[0], parts[1], parts[2]
+    if not task.get("isRoutine"):
+        runs = [] if position is not None else [run_row(ctx, get_task_for_actor(ctx.task_store, task_id, actor))]
+        return {"taskId": task_id, "runs": runs, "nextCursor": None}
+    page_size = min(limit, RUN_LEDGER_MAX_LIMIT)
+    positions = ctx.task_store.occurrence_positions(
+        task.get("occurrenceIds") or [], actor["userId"], limit=page_size + 1, before=position,
     )
-    runs.sort(
-        key=lambda run: (run.get("scheduledFor") or "", run.get("createdAt") or ""),
-        reverse=True,
-    )
-    return {"taskId": task_id, "runs": runs[: min(limit, RUN_LEDGER_MAX_LIMIT)]}
+    page = positions[:page_size]
+    runs = occurrence_tasks(ctx, task, actor, occurrence_ids=[key for _, _, key in page])
+    return {
+        "taskId": task_id,
+        "runs": [run_row(ctx, occurrence) for occurrence in runs],
+        "nextCursor": "|".join(page[-1]) if len(positions) > page_size else None,
+    }

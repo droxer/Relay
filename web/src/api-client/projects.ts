@@ -1,5 +1,8 @@
 import type {
   CreateProjectInput,
+  ProjectMember,
+  ProjectListItem,
+  ProjectRailItem,
   ProjectRecord,
   ApplySetupTasksInput,
   ProjectSetupResponse,
@@ -8,14 +11,26 @@ import type {
   StartProjectSetupInput,
   UpdateProjectInput,
 } from "../types.ts";
-import { apiJson } from "./client.ts";
+import { apiJson, privateConditionalJson, type PrivateResponseCache } from "./client.ts";
 
-export function listProjects(signal?: AbortSignal): Promise<ProjectsResponse> {
-  return apiJson<ProjectsResponse>("/projects", { signal });
+export function listProjects(signal?: AbortSignal, cache?: PrivateResponseCache<ProjectsResponse>): Promise<ProjectsResponse> {
+  return privateConditionalJson("/projects?view=directory", signal, cache);
 }
 
-export function getProject(projectId: string): Promise<{ project: ProjectRecord }> {
-  return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}`);
+export function listProjectIndex(
+  signal?: AbortSignal, cache?: PrivateResponseCache<{ projects: ProjectRailItem[] }>,
+): Promise<{ projects: ProjectRailItem[] }> {
+  return privateConditionalJson("/projects?view=index", signal, cache);
+}
+
+export function getProjectDirectoryEntry(
+  projectId: string, signal?: AbortSignal, cache?: PrivateResponseCache<{ project: ProjectListItem }>,
+): Promise<{ project: ProjectListItem }> {
+  return privateConditionalJson(`/projects/${encodeURIComponent(projectId)}?view=directory`, signal, cache);
+}
+
+export function getProject(projectId: string, signal?: AbortSignal, cache?: PrivateResponseCache<{ project: ProjectRecord }>): Promise<{ project: ProjectRecord }> {
+  return privateConditionalJson(`/projects/${encodeURIComponent(projectId)}`, signal, cache);
 }
 
 export function createProject(input: CreateProjectInput): Promise<{ project: ProjectRecord }> {
@@ -35,11 +50,54 @@ export function checkProjectWorkspace(
   });
 }
 
-export function updateProject(projectId: string, input: UpdateProjectInput): Promise<{ project: ProjectRecord }> {
-  return apiJson<{ project: ProjectRecord }>(`/projects/${encodeURIComponent(projectId)}`, {
+type ProjectMemberUpdate = Pick<ProjectRecord, "id" | "version" | "leadAgentId" | "managerAgentId" | "updatedAt"> & {
+  baseVersion: number;
+  memberChanges: (
+    | { op: "remove"; agentId: string }
+    | { op: "add"; agentId: string; fields: Omit<ProjectMember, "agentId"> }
+    | { op: "update"; agentId: string; fields: Partial<Omit<ProjectMember, "agentId" | "instructions" | "projectManager">> & {
+      instructions?: string | null; projectManager?: boolean | null;
+    } }
+  )[];
+};
+
+function applyProjectMemberUpdate(base: ProjectRecord, update: ProjectMemberUpdate): ProjectRecord | undefined {
+  const { baseVersion, memberChanges, ...saved } = update;
+  if (saved.id !== base.id || baseVersion !== base.version || saved.version !== baseVersion + 1) return undefined;
+  const members = new Map(base.members.map(member => [member.agentId, member]));
+  for (const change of memberChanges) {
+    if (change.op === "remove") {
+      if (!members.delete(change.agentId)) return undefined;
+    } else if (change.op === "add") {
+      if (members.has(change.agentId)) return undefined;
+      members.set(change.agentId, { agentId: change.agentId, ...change.fields });
+    } else {
+      const previous = members.get(change.agentId);
+      if (!previous) return undefined;
+      const { instructions, projectManager, ...fields } = change.fields;
+      const member = { ...previous, ...fields };
+      if (instructions === null) delete member.instructions;
+      else if (instructions !== undefined) member.instructions = instructions;
+      if (projectManager === null) delete member.projectManager;
+      else if (projectManager !== undefined) member.projectManager = projectManager;
+      members.set(change.agentId, member);
+    }
+  }
+  return { ...base, ...saved, members: [...members.values()] };
+}
+
+export async function updateProject(projectId: string, input: UpdateProjectInput, baseProject?: ProjectRecord): Promise<{ project: ProjectRecord }> {
+  const base = baseProject?.id === projectId && baseProject.version === input.expectedVersion ? baseProject : undefined;
+  const query = base ? "?view=member-update" : "";
+  const result = await apiJson<{ project: ProjectRecord } | { projectMemberUpdate: ProjectMemberUpdate }>(`/projects/${encodeURIComponent(projectId)}${query}`, {
     method: "PATCH",
     body: input,
   });
+  if ("project" in result) return result;
+  const project = base && applyProjectMemberUpdate(base, result.projectMemberUpdate);
+  // The PATCH has committed. If this snapshot cannot apply the update, read
+  // the current Project instead of retrying the write.
+  return project ? { project } : getProject(projectId);
 }
 
 export function getProjectSetup(projectId: string, signal?: AbortSignal): Promise<ProjectSetupResponse> {

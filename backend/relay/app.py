@@ -26,6 +26,7 @@ from .api.admin import dashboard as admin_dashboard_routes, settings as admin_se
 from .api.agents import (
     agents as agent_routes,
     default_agents as default_agent_routes,
+    roster as agent_roster_routes,
     skills as skill_routes,
     teams as team_routes,
 )
@@ -407,6 +408,7 @@ API_ROUTERS = (
     auth_routes.router,
     device_authorization_routes.router,
     default_agent_routes.router,
+    agent_roster_routes.router,
     agent_routes.router,
     team_routes.router,
     project_routes.router,

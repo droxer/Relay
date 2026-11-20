@@ -5,10 +5,63 @@ from copy import deepcopy
 from typing import Any
 
 from .ids import new_database_id, now_iso
-from .team_workflows import workflow_fields
+from .team_workflows import STEP_FIELDS, workflow_fields
 from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style
 
 FIELDS = frozenset({'name', 'projectId', 'ownerTeamId', 'workflowSteps', 'enabled'})
+
+STEP_PATCH_FIELDS = STEP_FIELDS - {'id'}
+OPTIONAL_STEP_FIELDS = frozenset({'kind', 'expectedOutputs'})
+
+
+def apply_workflow_step_changes(steps: list[dict[str, Any]], changes: Any) -> list[dict[str, Any]]:
+    if not isinstance(changes, dict) or not changes or changes.keys() - {'byId', 'order'}:
+        raise ValueError('workflow_step_changes_invalid')
+    originals = {step['id']: step for step in steps}
+    by_id = changes.get('byId', {})
+    order = changes.get('order', list(originals))
+    if (not isinstance(by_id, dict) or not isinstance(order, list) or not 1 <= len(order) <= 64
+            or not all(isinstance(step_id, str) for step_id in order)
+            or len(set(order)) != len(order) or by_id.keys() - set(order)):
+        raise ValueError('workflow_step_changes_invalid')
+    result = []
+    for step_id in order:
+        fields = by_id.get(step_id, {})
+        if (not isinstance(fields, dict) or fields.keys() - STEP_PATCH_FIELDS
+                or any(value is None and key not in OPTIONAL_STEP_FIELDS for key, value in fields.items())):
+            raise ValueError('workflow_step_changes_invalid')
+        merged = {**originals.get(step_id, {}), **fields, 'id': step_id}
+        result.append({key: value for key, value in merged.items() if value is not None})
+    return result
+
+
+def workflow_step_changes(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> dict[str, Any]:
+    originals = {step['id']: step for step in before}
+    by_id = {}
+    for step in after:
+        original = originals.get(step['id'], {})
+        fields = {key: step.get(key) for key in STEP_PATCH_FIELDS if original.get(key) != step.get(key)}
+        if fields:
+            by_id[step['id']] = fields
+    order = [step['id'] for step in after]
+    return {**({'byId': by_id} if by_id else {}), **({'order': order} if order != list(originals) else {})}
+
+
+def workflow_step_agent_ids(workflow: dict[str, Any]) -> list[str]:
+    return list(dict.fromkeys(step['agentId'] for step in workflow['workflowSteps']))
+
+
+def workflow_preview(workflow: dict[str, Any]) -> dict[str, Any]:
+    """The step flow and ownership needed to display or start a Workflow."""
+    return {
+        **{key: workflow[key] for key in (
+            'id', 'name', 'projectId', 'ownerTeamId', 'teamId', 'enabled', 'createdAt', 'updatedAt', 'version',
+        ) if key in workflow},
+        'workflowSteps': [
+            {key: step[key] for key in ('id', 'name', 'agentId', 'requiresApproval') if key in step}
+            for step in workflow['workflowSteps']
+        ],
+    }
 
 
 def team_workflows(team: dict[str, Any]) -> list[dict[str, Any]]:
@@ -53,7 +106,7 @@ def workflow_execution_snapshot(team: dict[str, Any], workflow_id: str) -> dict[
     if not workflow.get('enabled', True):
         raise ValueError('workflow_disabled')
     # A run needs only its participants, not unused specialists in the Team.
-    members = list(dict.fromkeys(step['agentId'] for step in workflow['workflowSteps']))
+    members = workflow_step_agent_ids(workflow)
     if not set(members) <= set(team.get('memberAgentIds', [])):
         raise ValueError('team_workflow_assignee_not_member')
     return {
@@ -119,7 +172,7 @@ def project_workflow_definition(owner: str, payload: dict[str, Any], *, current:
 def project_workflow_snapshot(definition: dict[str, Any], project: dict[str, Any], team: dict[str, Any] | None = None) -> dict[str, Any]:
     if not definition.get('enabled', True) or definition.get('deletedAt'):
         raise ValueError('workflow_disabled')
-    members = list(dict.fromkeys(step['agentId'] for step in definition['workflowSteps']))
+    members = workflow_step_agent_ids(definition)
     if team and (not team.get('enabled', True) or team.get('deletedAt') or not set(members) <= set(team.get('memberAgentIds', []))):
         raise ValueError('workflow_team_unavailable')
     return {**deepcopy(definition), 'workflowId': definition['id'], 'workflowKind': 'steps',

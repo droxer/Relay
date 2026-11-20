@@ -2,11 +2,12 @@ import { createContext, useContext } from "react";
 import { fireEvent, render as testingRender, screen, within } from "@testing-library/react";
 import { cloneElement, createElement, type ReactElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ProjectRecord, Workflow } from "../src/types";
+import type { ProjectRecord, ProjectWorkflowChoice } from "../src/types";
 
 function render(element: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(["workflows", "project-1"], { workflows: [{ id: "w", projectId: "project-1", name: "Ship workflow", enabled: true, workflowSteps: [] } as unknown as Workflow] });
+  const workflow: ProjectWorkflowChoice = { id: "w", projectId: "project-1", name: "Ship workflow", enabled: true, stepAgentIds: [] };
+  client.setQueryData(["workflows", "choices", "project-1"], { workflows: [workflow] });
   return testingRender(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
 }
 import { expect, it, vi } from "vitest";

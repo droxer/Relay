@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import type { UserAgent } from "../../types";
+import type { WorkflowAgent } from "./WorkflowEditor";
 import type { WorkflowFieldError, WorkflowStepDraft, WorkflowStepField } from "../../lib/workflowTeamDraft";
 import { WORKFLOW_LIMITS } from "../../lib/workflowTeamDraft";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ type Props = {
   step: WorkflowStepDraft;
   index: number;
   count: number;
-  agents: UserAgent[];
+  agents: readonly WorkflowAgent[];
   errors?: Partial<Record<WorkflowStepField, WorkflowFieldError>>;
   disabled?: boolean;
   onChange: (patch: Partial<WorkflowStepDraft>) => void;

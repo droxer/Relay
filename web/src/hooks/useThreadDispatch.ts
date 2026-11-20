@@ -1,6 +1,6 @@
 import { type MutableRefObject } from "react";
 import type { TFunction } from "i18next";
-import type { AgentName, AgentTeam, UserAgent, ProjectRecord, RelaySession } from "../types";
+import type { AgentName, AgentTeam, UserAgent, ProjectListItem, RelaySession } from "../types";
 import type { AppRoute } from "../lib/viewTypes";
 import type { ComposerHandle } from "../components/composer/Composer";
 import type { useRelayMutations } from "./useRelayMutations";
@@ -43,7 +43,7 @@ type ThreadTargets = ReturnType<typeof useThreadTargets>;
 export interface ThreadDispatchDeps {
   /* --- the thread being acted on --------------------------------------- */
   activeSession: RelaySession | undefined;
-  activeProject: ProjectRecord | null;
+  activeProject: ProjectListItem | null;
   activeRun: Parameters<typeof canCancelThreadRun>[0]["activeRun"];
   activeRunOwner: { node?: Parameters<typeof threadCancelNodeId>[0]["node"] } | null | undefined;
   activeRuntimeNode: Parameters<typeof threadCancelNodeId>[0]["node"] | null;

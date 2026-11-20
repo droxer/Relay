@@ -218,10 +218,11 @@ def get_session(
             "activeWorkflowRunId": session.get("activeWorkflowRunId"),
         }
     transcript = view == "transcript"
+    compact = request.query_params.get("window") == "compact"
     if transcript:
         session = get_session_header_for_actor(ctx.session_store, session_id, actor)
         before = request.query_params.get("before")
-        page = read_transcript_page(ctx.session_store, session, before)
+        page = read_transcript_page(ctx.session_store, session, before, compact=compact)
         if before is not None:
             return page
         session = {**session, **page}
@@ -239,7 +240,7 @@ def get_session(
         ),
     }
     if transcript:
-        return transcript_response(request, snapshot)
+        return transcript_response(request, snapshot, compact=compact)
     return snapshot
 
 

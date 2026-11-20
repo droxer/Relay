@@ -94,6 +94,25 @@ def test_marking_read_by_id_and_all(admin: TestClient, ada: TestClient) -> None:
     assert ada.post(f"{API}/notifications/read", json={"all": True}).json() == {"unreadCount": 0}
 
 
+def test_inbox_revalidates_without_sending_unchanged_details(admin: TestClient, ada: TestClient) -> None:
+    _finish_task(ada, ADA)
+    path = f"{API}/notifications?limit=50"
+    first = ada.get(path)
+    validator = {"If-None-Match": first.headers.get("etag", "")}
+    unchanged = ada.get(path, headers=validator)
+    assert unchanged.status_code == 304
+    assert unchanged.content == b""
+    assert first.headers["cache-control"] == "no-store"
+    assert admin.get(path, headers=validator).json()["notifications"] == []
+    assert TestClient(admin.app).get(path, headers=validator).status_code == 401
+
+    first_id = first.json()["notifications"][0]["id"]
+    assert ada.post(f"{API}/notifications/read", json={"ids": [first_id]}).status_code == 200
+    changed = ada.get(path, headers=validator)
+    assert changed.status_code == 200
+    assert changed.json()["unreadCount"] == 0
+
+
 @pytest.mark.parametrize("body", [{}, {"ids": "x"}, {"ids": [1]}, {"ids": [""]}, {"ids": ["x"] * 101}])
 def test_mark_read_rejects_malformed_bodies(ada: TestClient, body: dict) -> None:
     assert ada.post(f"{API}/notifications/read", json=body).status_code == 400

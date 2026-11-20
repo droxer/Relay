@@ -140,7 +140,31 @@ Dashboard uses this scope and still receives the owner's overall flow usage.
 The Home page uses `scope=home` with `view=summary`. It receives fields for
 the action queue, upcoming and ready work, prerequisites, and the five most
 recently finished Tasks. `homeProjects` carries Project totals, progress and
-latest Task updates across the entire account collection.
+latest Task updates across the entire account collection. `homeUntriaged`
+carries the intake count and its earliest and latest creation timestamps.
+The Issues list uses `scope=issues` to exclude Automation definitions.
+`view=summary&scope=issues&layout=list` applies Issues filters and ordering
+before returning 50 rows, the clamped `page` and matching total, queue counts,
+tag choices, and totals for the visible groups. `layout=board` returns up to
+10 rows per lane and each lane's position and total. Pass `page` for the
+table or `lanes=backlog:2,running:3` for the board. `today` is the browser's
+local calendar date for due-date filters. The row projection omits descriptions
+and history. A record reads its full description separately, and its Definition
+can read the Project's prerequisite references via
+`GET /tasks?view=prerequisite-choices&projectId=<id>`.
+`scope=board` also excludes generated runs. `scope=automations` reads
+Automation definitions and their active occurrences.
+`computerId` filters these summary lists to standalone work on the named
+Computer. A recorded workspace binding takes precedence. Unbound legacy work
+remains available for the browser to place or resolve from its Threads.
+`scope=project-dashboard&projectId=<id>&today=<YYYY-MM-DD>` returns Project
+issue totals, the overall user's flow usage, and up to five issues to
+review. The dashboard uses `attentionTotal` to count the remaining issues.
+`GET /tasks?view=summary&threadId=<id>` reads one Thread's originating Task,
+work waiting for a reply, active round's Task, and any Tasks that match its
+saved suggestions in the same Project or intake. It includes source
+Automation names and a versioned `threadTaskContext` so the web can reconcile
+changes to suggestions or round scope as they stream in.
 
 The browser opens Tasks and Automations with `GET /api/v1/tasks/{id}?view=record`,
 which includes current state, prerequisites, and history counts. It reads the
@@ -150,6 +174,11 @@ snapshot. Task Activity reads `/tasks/{id}/events?view=activity` in pages of
 are ordered oldest first. It passes `nextBefore` as `before` to read an older
 page. `previousStatus` preserves the meaning of the oldest status change in
 each page. The default `/events` response still provides the full replay log.
+The Thread status timeline uses `/tasks/{id}/events?view=lifecycle` to read
+status changes, execution claims, and Thread links in event order.
+`GET /tasks/{id}/runs` returns scheduled runs newest first with
+`nextCursor`. Pass it as `before` to load an older page. The Runs tab polls
+the first page and fetches older pages on demand.
 `GET /tasks/{id}/workflow-history` returns `{threads}` with Workflow projections
 for all of the Task's linked Threads owned by the caller. Task Activity uses
 that response to open the timeline and keeps polling per active Thread.
@@ -381,12 +410,13 @@ DELETE /api/v1/admin/managed-nodes/{id}/record
 Full `GET /api/v1/threads` responses remain complete for the authenticated owner.
 
 The browser hydrates individual threads with
-`GET /api/v1/threads/{id}?view=transcript`. It receives the thread fields and
-a recent event window starting at the zero-based `eventStart`. At most 160
-events are read, with a 384 KiB event budget that always admits the newest
-event. `eventCount` is the exclusive end sequence. To read earlier events,
-send `before=<eventStart>` to get the preceding window without the thread
-fields. A subsequent snapshot request can send
+`GET /api/v1/threads/{id}?view=transcript&window=compact`. It receives the
+thread fields and a recent event window starting at the zero-based `eventStart`.
+At most 160 events are read. The compact window budgets 128 KiB for events and
+omits execution briefs from the snapshot. The default window and history pages
+budget 384 KiB for events. Every window admits its newest event, even if that
+event exceeds the budget. `eventCount` is the exclusive end sequence. Send
+`before=<eventStart>` to get the preceding window. A subsequent snapshot request can send
 `X-Relay-Thread-Events: <start>:<count>:<eventsRevision>` to reuse the matching
 prefix of a window. `eventOffset` identifies the first event returned. The
 server sends a new window starting at `eventStart` if older events changed
@@ -451,6 +481,14 @@ the ledger in storage and caches each reporting window briefly. See
 `GET /api/v1/admin/dashboard/agents` returns `{count}` for the current
 fleet across Accounts. The count includes disabled Agents and excludes deleted
 ones. The backend caches the aggregate for up to 30 seconds.
+`GET /api/v1/admin/dashboard/sessions` includes the display name and handle
+of each ranked User whose Account is still in the directory.
+`GET /api/v1/admin/daemon-nodes?view=web` includes the owner label for
+each Computer whose User is still in the directory. It supports in-memory
+revalidation using `If-None-Match` and stays `no-store`. The browser reads
+deleted managed Computers through `GET /api/v1/admin/managed-nodes?view=history`,
+which filters for completed deletion and returns 20 records by default with
+an optional `nextCursor`.
 
 Chat activation, health checks, and webhook-secret rotation are exclusive per
 integration across PostgreSQL backend replicas. A conflicting operation, or a
@@ -629,7 +667,14 @@ an attempt. Daemons acknowledge requested execution with the lease-bound
 ## Projects
 
 `GET /api/v1/projects` returns the current user's active and archived
-projects so historical project threads keep their original grouping. Creating a
+projects so historical project threads keep their original grouping.
+`?view=index` supplies the Projects rail with IDs, names, status, versions,
+and member counts. The selected Project can load its roster and setup
+indicators through `GET /api/v1/projects/{id}?view=directory`.
+The full detail route supplies context, pending suggestions, and member contracts.
+The Dashboard reads a Project Lead's identity and availability through
+`GET /api/v1/agents/{id}?view=badge`.
+Creating a
 project binds an immutable stable Computer identity and creates one shared
 workspace subpath for every task conversation in that project:
 
@@ -1017,6 +1062,10 @@ and quarantined counts, acknowledged positions, affected run IDs, incident
 identity/causes, and whether durable receipts were negotiated. They contain
 neither credentials nor raw output. The `computer_transport` notification
 updates one incident brief through recovery without resetting read/clear state.
+`GET /api/v1/daemon-nodes?view=web` includes a compact `transport` reading
+for signed-in owners whose Computer has reported diagnostics. The browser view
+carries observation timestamps and liveness flags, so idle age counters do
+not invalidate its ETag.
 
 Managed-node retry creates an attempt with `replaceActive: true`; draining
 patches `desiredState` to `stopped`. `tasks/claim-next` is retired and has no v1
@@ -1042,7 +1091,8 @@ The retired `org` visibility is migrated to `public` by `20261112_0124`;
 | :- | :- |
 | `GET /skills` | `{skills}` with the caller's granted-agent counts |
 | `POST /skills` | Metadata plus `files: [{path, contentBase64}]`; returns the created skill |
-| `GET /skills/{id}` | Skill, revision history, current file manifest, caller-owned granted agent IDs |
+| `GET /skills/{id}` | Skill, revision history, current file manifest, caller-owned granted agent IDs. Optional `revision_limit` (1–50) bounds the revisions and returns `nextRevisionBefore`. |
+| `GET /skills/{id}/revisions?before={revision}&limit=10` | Older revisions below the exclusive revision number, with `nextRevisionBefore` or `null` |
 | `PATCH /skills/{id}` | `displayName`, `description`, or `visibility` |
 | `DELETE /skills/{id}` | Soft deletion; returns 204 |
 | `POST /skills/{id}/revisions` | `files` and optional `note`; creates an immutable revision |
@@ -1613,6 +1663,16 @@ in place of the Project directory. Existing nested Task conversation links
 resolve to the conversation's Project or Computer workspace and share the same
 conversation and access to its owning Task.
 
+## Administrator user roster
+
+`GET /api/v1/admin/users?view=web` returns 25 users at a time, the Computer
+labels and presence for those rows, the requested page clamped to the filtered
+total, and account-wide counts for the status filters. Pass `page`, `filter`,
+`sort` and `q` to change the window. Search matches the user's name, email,
+department, id, and assigned Computer names or ids across the entire roster.
+The response carries an ETag and is held in the admin's in-memory query cache.
+`GET /api/v1/admin/users` without the view retains the complete roster.
+
 ## Sign-in and account email
 
 Every new Account carries a sign-in email: bootstrap, admin creation
@@ -1716,7 +1776,9 @@ The browser exposes both forms at `/settings/account`.
 `GET /api/v1/notifications?view=count` returns `{unreadCount}` for the
 signed-in Account. It counts unread, uncleared notices outside the Account's
 muted kinds. With the inbox closed, the web client polls that count and loads
-the notice list on opening. Desktop notifications keep the list poll active.
+the notice list on opening. Desktop notifications keep the list poll active
+when enabled and granted by the browser. The list stays `no-store` and
+supports `If-None-Match` for revalidation with an in-memory copy.
 
 ### Personal tag catalog
 
@@ -2231,8 +2293,20 @@ accepts `requestId`, `taskGoal`, and optional eligible `teamId`. Team-owned
 definitions additionally require their owning Team and an execution `projectId`.
 A new run freezes `workflowSnapshot`, retaining `teamSnapshot` as a wire alias.
 
+The Team profile reads `GET /api/v1/teams/{teamId}?view=preview` for Workflow
+previews and its members' Agent placements. The Team roster keeps the smaller
+member summaries.
+The roster editor reads `GET /api/v1/teams/{teamId}/member-choices` for Agent
+choices on the Team's Computer and current members who may have moved. Both
+responses carry the placement fields needed for Computer labels and routing.
+
 Team assignment uses `PUT/DELETE /api/v1/teams/{teamId}/workflows/{id}/link`.
-Unassignment preserves the definition. Project-scoped Team defaults use
+Unassignment preserves the definition.
+The owner can read `GET /api/v1/teams/{teamId}/workflow-choices` for enabled
+Project Workflows whose steps fit the Team roster and whose Projects are active
+on the Team's Computer. It returns Workflow IDs, names, and Project IDs, along
+with IDs and names of Projects used by the choices or linked Workflows.
+Already linked eligible Workflows remain in the projection. Project-scoped Team defaults use
 `PUT/DELETE /api/v1/teams/{teamId}/workflow-defaults/{projectId}` (PUT body:
 `{workflowId}`). They materialize in `projectWorkflowDefaults`.
 

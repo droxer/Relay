@@ -10,7 +10,7 @@ import { AgentModelField } from "./AgentModelField";
 import { useComputerOptions } from "../../hooks/useComputerOptions";
 import { ComputerOptionsFeedback } from "../computer/ComputerOptionsFeedback";
 import { ComputerSelect } from "../ComputerSelect";
-import { USER_AGENTS_QUERY_KEY } from "../../hooks/useUserAgents";
+import { USER_AGENT_RECORD_QUERY_KEY, USER_AGENTS_QUERY_KEY } from "../../hooks/useUserAgents";
 import { agentLabel } from "../../lib/plan";
 import { AGENT_NAMES } from "../../types";
 import type { AgentName, AgentRole, UserAgent } from "../../types";
@@ -178,6 +178,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
         displayName: displayName.trim() || undefined,
         profileImageUrl,
       });
+      queryClient.setQueryData([USER_AGENT_RECORD_QUERY_KEY, result.agent.id], result);
       await queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] });
       onCreated(result.agent);
       onClose();

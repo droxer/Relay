@@ -1,8 +1,11 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useUserAgents } from "../hooks/useUserAgents";
+import { USER_AGENTS_QUERY_KEY, useUserAgents, userAgentRecordOptions } from "../hooks/useUserAgents";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { searchOwnAgents } from "../api-client/agents";
 import { SearchInput } from "@/components/ui/search-input";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { agentMatchesQuery } from "../lib/agentSearch";
@@ -25,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { CreateAgentDialog } from "./agents/CreateAgentDialog";
 import { ListSkeleton } from "./ListSkeleton";
 import { ListRailResizeHandle } from "@/components/ListRailResize";
+import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 
 interface AgentsPageProps {
   currentUser: CurrentUser;
@@ -129,16 +133,48 @@ function AgentsPageView({
   onOpenThread,
 }: AgentsPageProps) {
   const { t } = useTranslation();
-  const { agents, isFetching, error, refetch } = useUserAgents(currentUser.userId);
+  const { agents, summarized, searchesInstructions, isFetching, error, refetch } = useUserAgents(currentUser.userId);
   const [query, setQuery] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value || null);
+  const trimmedQuery = query.trim();
+  const settledQuery = useDebouncedValue(trimmedQuery, 250);
+  const waitForSearch = settledQuery !== trimmedQuery;
   const activeAgents = useMemo(
     () => agents.filter((agent) => !agent.deletedAt),
     [agents],
   );
+  const blurbs = useMemo(() => Object.fromEntries([...new Set(activeAgents.map(agent => agent.executorKind))]
+    .map(kind => [kind, t(`agent.${kind}.blurb`)])), [activeAgents, t]);
+  const searchEnabled = summarized && searchesInstructions && Boolean(trimmedQuery && activeAgents.length);
+  const matchQuery = useQuery({
+    queryKey: [USER_AGENTS_QUERY_KEY, currentUser.userId, "matches", settledQuery, blurbs],
+    queryFn: ({ signal }) => searchOwnAgents(settledQuery, blurbs, signal),
+    enabled: searchEnabled && !waitForSearch,
+    staleTime: 30_000,
+  });
+  const matches = searchEnabled && !waitForSearch ? matchQuery.data?.agentIds : undefined;
+  const recordId = detailAgent?.id;
+  const detailQuery = useQuery({
+    ...userAgentRecordOptions(recordId),
+    enabled: summarized && Boolean(recordId),
+    refetchInterval: RELAY_POLL_INTERVALS_MS.agents,
+  });
+  const record = detailQuery.data?.agent;
+  const refetchRecord = detailQuery.refetch;
+  const summaryVersion = detailAgent?.version;
+  const recordVersion = record?.version;
+  useEffect(() => {
+    if (summarized && recordId && summaryVersion !== undefined && recordVersion !== undefined && recordVersion < summaryVersion) {
+      void refetchRecord({ cancelRefetch: false });
+    }
+  }, [summarized, recordId, summaryVersion, recordVersion, refetchRecord]);
+  const profile = summarized ? (record && detailAgent && record.version === detailAgent.version ? {
+    ...record, availability: detailAgent.availability, bindingStatus: detailAgent.bindingStatus, placements: detailAgent.placements,
+  } : record) : detailAgent;
 
   const visibleAgents = useMemo(() => {
+    const matchingIds = matches ? new Set(matches) : null;
     return activeAgents
-      .filter((agent) => agentMatchesQuery(agent, t(`agent.${agent.executorKind}.blurb`), query))
+      .filter((agent) => matchingIds ? matchingIds.has(agent.id) : agentMatchesQuery(agent, blurbs[agent.executorKind], query))
       .sort((left, right) => {
         const rank = (agent: UserAgent) => {
           if (agent.availability === "ready") return 0;
@@ -150,11 +186,14 @@ function AgentsPageView({
         if (rankDelta !== 0) return rankDelta;
         return left.displayName.localeCompare(right.displayName, undefined, { sensitivity: "base" });
       });
-  }, [activeAgents, query, t]);
+  }, [activeAgents, blurbs, matches, query]);
 
   const agentGroups = useMemo(() => groupAgentsByComputer(visibleAgents), [visibleAgents]);
 
-  const loading = isFetching && agents.length === 0;
+  const loading = (isFetching && agents.length === 0)
+    || (searchEnabled && (waitForSearch || matchQuery.isPending) && visibleAgents.length === 0);
+  const searchError = searchEnabled && !waitForSearch && matchQuery.isError ? matchQuery.error.message : null;
+  const listError = (agents.length === 0 && error) || searchError;
   const [createOpen, setCreateOpen] = useState(false);
 
   // All route changes share the editor's navigation guard, including the
@@ -213,11 +252,11 @@ function AgentsPageView({
 
         {loading ? (
           <ListSkeleton label={t("admin.loading")} />
-        ) : error && agents.length === 0 ? (
+        ) : listError ? (
           <RelayEmptyState feature="agents"
             title={t("workspace.load_failed")}
-            body={error}
-            actions={<Button type="button" variant="outline" onClick={() => void refetch()}>{t("workspace.retry")}</Button>}
+            body={listError}
+            actions={<Button type="button" variant="outline" onClick={() => void (searchError ? matchQuery.refetch() : refetch())}>{t("workspace.retry")}</Button>}
           />
         ) : visibleAgents.length === 0 ? (
           <RelayEmptyState feature="agents"
@@ -281,12 +320,12 @@ function AgentsPageView({
                 </Button>
               )}
             />
-            <AgentDetailPage
-              key={detailAgent.id}
-              agent={detailAgent}
-              onOpenThread={onOpenThread}
-              canEditMeta
-            />
+            {profile ? (
+              <AgentDetailPage key={detailAgent.id} agent={profile} onOpenThread={onOpenThread} canEditMeta />
+            ) : detailQuery.isError ? (
+              <RelayEmptyState feature="agents" title={t("workspace.load_failed")} body={detailQuery.error.message}
+                actions={<Button type="button" variant="outline" onClick={() => void refetchRecord()}>{t("workspace.retry")}</Button>} />
+            ) : <ListSkeleton label={t("admin.loading")} />}
           </>
         ) : (
           <RelayEmptyState feature="agents"

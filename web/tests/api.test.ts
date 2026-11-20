@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
+import type { AgentTeam, ProjectRecord, Workflow } from "../src/types.ts";
 
 import {
   apiJson,
@@ -12,9 +13,11 @@ import {
   cancelRun,
   deleteTask,
   getWorkspaceBrief,
+  getTeamMemberChoices,
   listProjectWorkspaceFiles,
   listArtifacts,
   listUserAgents,
+  listTeams,
   listSessionSummaries,
   listTaskArtifacts,
   listTaskFiles,
@@ -31,7 +34,9 @@ import {
   updateComputerDisplayName,
   updateOwnUserAgent,
   updateProject,
+  updateTeamMemberConfig,
   updateUserPreferences,
+  updateWorkflowDraft,
 } from "../src/api.js";
 
 const originalFetch = globalThis.fetch;
@@ -39,6 +44,53 @@ const originalFetch = globalThis.fetch;
 describe("apiJson", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  it("expands a compact Team roster once, preserving member order and workflow defaults", async () => {
+    const lead = { id: "lead", displayName: "Lead" };
+    const reviewer = { id: "reviewer", displayName: "Reviewer" };
+    const preset = { id: "preset:build_review", name: "Build and review", kind: "predefined", enabled: true };
+    const custom = { id: "release", name: "Release", kind: "steps", enabled: true, version: 4, stepAgentIds: [reviewer.id] };
+    const row = { id: "team", version: 2, memberAgentIds: [reviewer.id, lead.id, "removed"],
+      leadAgentId: lead.id, defaultWorkflowId: custom.id, workflowOptions: [custom] };
+    let calls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, options?: RequestInit) => {
+      assert.equal(String(input), "/api/v1/teams?view=summary&format=compact");
+      calls++;
+      if (calls === 2) {
+        assert.equal(new Headers(options?.headers).get("if-none-match"), 'W/"roster"');
+        return new Response(null, { status: 304 });
+      }
+      return Response.json({
+        view: "summary", teams: [row, { ...row, id: "other", leadAgentId: "removed" }],
+        memberDirectory: [lead, reviewer], predefinedWorkflows: [preset],
+      }, { headers: { etag: 'W/"roster"' } });
+    }) as typeof fetch;
+
+    const options = { view: "summary" as const, cache: {} };
+    const roster = await listTeams(undefined, options);
+    assert.deepEqual(roster.teams[0], { ...row, members: [reviewer, lead], lead, workflowOptions: [preset, custom] });
+    assert.equal(roster.teams[0].members[0], roster.teams[1].members[0]);
+    assert.equal(roster.teams[1].lead, null);
+    assert.equal(await listTeams(undefined, options), roster);
+    assert.equal(calls, 2);
+  });
+
+  it("filters Agent choices locally when an older server lacks the Team endpoint", async () => {
+    const team = { id: "team", computerId: "here", memberAgentIds: ["member"] } as AgentTeam;
+    const here = { id: "available", computerId: "here", placements: [] };
+    const member = { id: "member", computerId: "there", placements: [] };
+    const other = { id: "other", computerId: "there", placements: [] };
+    const reads: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const path = String(input);
+      reads.push(path);
+      if (path.endsWith("/member-choices")) return Response.json({ detail: "Not found." }, { status: 404 });
+      return Response.json({ agents: [here, member, other] });
+    }) as typeof fetch;
+
+    assert.deepEqual(await getTeamMemberChoices(team), { computerId: "here", agents: [here, member] });
+    assert.deepEqual(reads, ["/api/v1/teams/team/member-choices", "/api/v1/agents?view=summary"]);
   });
 
   it("renames a computer through the owner-facing daemon-node resource", async () => {
@@ -614,6 +666,70 @@ describe("project mutations", () => {
     }]);
   });
 
+  it("applies a compact member update to its original revision without another read", async () => {
+    const kept = { agentId: "reviewer", role: "reviewer" as const, responsibilities: "Review", enabled: true };
+    const base = {
+      id: "project/1", version: 3, leadAgentId: "agent-1", managerAgentId: "agent-1",
+      members: [{
+        agentId: "agent-1", role: "implementer", responsibilities: "Build", instructions: "Long instructions",
+        enabled: true, projectManager: true,
+      }, kept],
+    } as ProjectRecord;
+    const input = {
+      expectedVersion: 3, leadAgentId: "agent-2", memberChange: { op: "add" as const, agentId: "agent-2",
+        fields: { role: "planner" as const, responsibilities: "Plan", enabled: true } },
+    };
+    const calls: Array<{ url: string; method?: string; body: unknown }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), method: init?.method, body: JSON.parse(String(init?.body ?? "{}")) });
+      return Response.json({ projectMemberUpdate: {
+        id: "project/1", baseVersion: 3, version: 4, leadAgentId: "agent-2", managerAgentId: "agent-2", updatedAt: "2026-11-20T00:00:00Z",
+        memberChanges: [
+          { op: "update", agentId: "agent-1", fields: { projectManager: null } },
+          { op: "add", agentId: "agent-2", fields: { ...input.memberChange.fields, projectManager: true } },
+        ],
+      } });
+    }) as typeof fetch;
+    try {
+      const { project } = await updateProject(base.id, input, base);
+      assert.equal(project.version, 4);
+      assert.equal(project.leadAgentId, "agent-2");
+      assert.deepEqual(project.members, [
+        { agentId: "agent-1", role: "implementer", responsibilities: "Build", instructions: "Long instructions", enabled: true },
+        kept,
+        { agentId: "agent-2", ...input.memberChange.fields, projectManager: true },
+      ]);
+      assert.equal(project.members[1], kept);
+      assert.equal(base.members[0].projectManager, true);
+      assert.deepEqual(calls, [{ url: "/api/v1/projects/project%2F1?view=member-update", method: "PATCH", body: input }]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("reads the saved Project if the response belongs to a different base revision", async () => {
+    const base = { id: "project/1", version: 3, members: [] } as unknown as ProjectRecord;
+    const saved = { ...base, version: 5 };
+    const calls: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method} ${url}`);
+      return Response.json(init?.method === "PATCH" ? { projectMemberUpdate: {
+        id: base.id, baseVersion: 4, version: 5, memberChanges: [],
+      } } : { project: saved });
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(await updateProject(base.id, { expectedVersion: 3, leadAgentId: null }, base), { project: saved });
+      assert.deepEqual(calls, [
+        "PATCH /api/v1/projects/project%2F1?view=member-update",
+        "GET /api/v1/projects/project%2F1",
+      ]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it("archives the exact project version", async () => {
     const calls: Array<{ url: string; method: string }> = [];
     const original = globalThis.fetch;
@@ -678,6 +794,97 @@ describe("project mutations", () => {
       url: "/api/v1/projects/project%2F1?expectedVersion=4",
       method: "DELETE",
     }]);
+  });
+});
+
+describe("team member edits", () => {
+  const team = {
+    id: "team/one", version: 4, updatedAt: "before",
+    memberConfigs: { lead: { role: "planner" }, "builder/one": { role: "implementer", expectedOutputs: ["Keep build notes"] } },
+  } as unknown as AgentTeam;
+
+  it("applies only the saved fields for a matching Team revision", async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method} ${url}`);
+      assert.deepEqual(JSON.parse(String(init?.body)), { responsibility: "Build" });
+      return Response.json({ teamMemberUpdate: {
+        teamId: team.id, agentId: "builder/one", baseVersion: 4, version: 5, updatedAt: "after",
+        fields: { responsibility: "Build" },
+      } });
+    }) as typeof fetch;
+    try {
+      const result = await updateTeamMemberConfig(team, "builder/one", { responsibility: "Build" });
+      assert.equal(result.baseVersion, 4);
+      assert.deepEqual(result.team.memberConfigs?.["builder/one"], { role: "implementer", expectedOutputs: ["Keep build notes"], responsibility: "Build" });
+      assert.equal(result.team.memberConfigs?.lead, team.memberConfigs?.lead);
+      assert.deepEqual(calls, ["PATCH /api/v1/teams/team%2Fone/members/builder%2Fone"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("reads the changed Team once when another writer advanced its revision", async () => {
+    const calls: string[] = [];
+    const latest = { ...team, version: 6 };
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method} ${url}`);
+      return Response.json(init?.method === "PATCH" ? { teamMemberUpdate: {
+        teamId: team.id, agentId: "builder/one", baseVersion: 5, version: 6, fields: { responsibility: "Build" },
+      } } : { team: latest });
+    }) as typeof fetch;
+    try {
+      assert.deepEqual(await updateTeamMemberConfig(team, "builder/one", { responsibility: "Build" }), { team: latest });
+      assert.deepEqual(calls, [
+        "PATCH /api/v1/teams/team%2Fone/members/builder%2Fone",
+        "GET /api/v1/teams/team%2Fone?view=preview",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe("workflow edits", () => {
+  const first = { id: "first", name: "Plan", agentId: "lead", instructions: "Draft the plan", acceptanceCriteria: ["Verified"], requiresApproval: true };
+  const second = { ...first, id: "second", name: "Build" };
+  const third = { ...second, id: "third", name: "Review" };
+  const workflow: Workflow = {
+    id: "workflow/one", projectId: "project", version: 8, name: "Release", enabled: true,
+    createdAt: "before", updatedAt: "before", workflowSteps: [first, second],
+  };
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("reconstructs a reordered workflow from only the saved step fields", async () => {
+    const calls: string[] = [];
+    const { id, ...newStep } = third;
+    const changes = { workflowStepChanges: { order: [id, first.id], byId: { [id]: newStep, first: { name: "Plan release" } } } };
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method} ${url}`);
+      assert.deepEqual(JSON.parse(String(init?.body)), { ...changes, expectedVersion: 8 });
+      return Response.json({ workflowUpdate: {
+        id: workflow.id, name: workflow.name, updatedAt: "after", baseVersion: 8, version: 9, ...changes,
+      } });
+    }) as typeof fetch;
+    const saved = (await updateWorkflowDraft(workflow, changes)).workflow;
+    assert.deepEqual(saved, { ...workflow, version: 9, updatedAt: "after", workflowSteps: [third, { ...first, name: "Plan release" }] });
+    assert.deepEqual(calls, ["PATCH /api/v1/workflows/workflow%2Fone?view=update"]);
+  });
+
+  it("reads the exact workflow once if the response cannot be applied to the draft revision", async () => {
+    const calls: string[] = [];
+    const latest = { ...workflow, version: 10 };
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method} ${url}`);
+      return Response.json(init?.method === "PATCH" ? { workflowUpdate: {
+        id: workflow.id, name: "Updated", baseVersion: 9, version: 10, workflowStepChanges: {},
+      } } : { workflow: latest });
+    }) as typeof fetch;
+    assert.deepEqual(await updateWorkflowDraft(workflow, { name: "Updated" }), { workflow: latest });
+    assert.deepEqual(calls, ["PATCH /api/v1/workflows/workflow%2Fone?view=update", "GET /api/v1/workflows/workflow%2Fone"]);
   });
 });
 

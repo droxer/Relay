@@ -1,7 +1,9 @@
 import { listControlPanelDaemonNodes } from "../api";
-import type { ControlPanelDaemonNodeRecord } from "../types";
+import type { QueryClient, QueryFunctionContext } from "@tanstack/react-query";
+import type { PrivateResponseCache } from "../api-client/client";
+import type { ControlPanelDaemonNodeRecord, ControlPanelDaemonNodesResponse } from "../types";
 
-/** Shared TanStack Query key so admin Nodes and thread local-node adoption dedupe polls. */
+/** Shared TanStack Query key for fleet health and the local thread runtime picker. */
 export const CONTROL_PANEL_NODES_KEY = ["relay", "control-panel-nodes"] as const;
 /** The admin user roster query. */
 export const ADMIN_USERS_KEY = ["admin", "users"] as const;
@@ -12,6 +14,13 @@ export const CONTROL_PANEL_POLL_MS = 10_000;
     which write or invalidate their caches, so the poll only catches other admins. */
 export const ADMIN_ROSTER_POLL_MS = 30_000;
 
-export async function fetchControlPanelNodes(signal?: AbortSignal): Promise<ControlPanelDaemonNodeRecord[]> {
-  return (await listControlPanelDaemonNodes(signal)).nodes ?? [];
+const fleetCaches = new WeakMap<QueryClient, PrivateResponseCache<ControlPanelDaemonNodesResponse>>();
+
+export async function fetchControlPanelNodes({ client, signal }: QueryFunctionContext): Promise<ControlPanelDaemonNodeRecord[]> {
+  let responseCache = fleetCaches.get(client);
+  if (!responseCache) {
+    responseCache = {};
+    fleetCaches.set(client, responseCache);
+  }
+  return (await listControlPanelDaemonNodes(signal, responseCache)).nodes ?? [];
 }

@@ -125,7 +125,7 @@ it("resolves the thread's task and its moves here", async () => {
     { id: "e2", type: "task.status", taskId: "tsk_1", timestamp: "2026-10-18T10:00:01.000Z", status: "running" },
     { id: "e3", type: "task.status", taskId: "tsk_1", timestamp: "2026-10-18T10:05:00.000Z", status: "review" },
   ];
-  vi.spyOn(api, "listTaskEvents").mockResolvedValue({ events } as Awaited<ReturnType<typeof api.listTaskEvents>>);
+  const listEvents = vi.spyOn(api, "listTaskEvents").mockResolvedValue({ events });
   const task = { id: "tsk_1", number: 12, title: "Ship", status: "review", isRoutine: false, linkedSessionIds: ["ses_1"] } as unknown as RelayTaskListItem;
   const onOpenTaskRecord = vi.fn();
 
@@ -137,6 +137,7 @@ it("resolves the thread's task and its moves here", async () => {
   }), { wrapper });
 
   await waitFor(() => expect(result.current.markers).toHaveLength(3));
+  expect(listEvents).toHaveBeenCalledWith("tsk_1", { view: "lifecycle" }, expect.any(AbortSignal));
   expect(result.current.task?.ref).toBe("#12");
   expect(result.current.task?.status).toBe("review");
   // Its newest thread is the one its moves are made from.

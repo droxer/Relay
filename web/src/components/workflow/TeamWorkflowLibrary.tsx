@@ -1,45 +1,53 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { linkTeamWorkflow, listProjects, setTeamProjectWorkflow, updateTeam } from "../../api";
-import { PROJECTS_QUERY_KEY } from "../../hooks/useRelayData";
-import { TEAMS_QUERY_KEY } from "../../hooks/useTeams";
-import { useProjectWorkflows, useInvalidateWorkflows } from "../../hooks/useProjectWorkflows";
-import { defaultWorkflowId, PREDEFINED_WORKFLOWS } from "../../lib/workflowSelection";
-import type { AgentTeam, ProjectRecord, UserAgent } from "../../types";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { linkTeamWorkflow, setTeamDefaultWorkflow, setTeamProjectWorkflow, type TeamWorkflowWriteResponse } from "../../api";
+import { syncTeamWorkflowUpdate, useTeamWorkflowChoices } from "../../hooks/useProjectWorkflows";
+import { teamRecordKey, TEAMS_QUERY_KEY } from "../../hooks/useTeams";
+import { defaultWorkflowId, PREDEFINED_WORKFLOWS, teamWorkflowPreviews } from "../../lib/workflowSelection";
+import type { AgentTeam } from "../../types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
-import { WorkflowEditor } from "./WorkflowEditor";
-import type { Workflow } from "../../types";
+import { WorkflowEditorForPreview, type WorkflowAgent } from "./WorkflowEditor";
+import type { WorkflowPreview } from "../../types";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
 import { ICON, NavProjects } from "../icons";
 
 /** Teams reference Project processes; definitions survive unassignment. */
-export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam; agents: UserAgent[]; userId?: string }) {
+export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam; agents: readonly WorkflowAgent[]; userId?: string }) {
   const { t } = useTranslation();
   const client = useQueryClient();
-  const invalidate = useInvalidateWorkflows();
-  const [editing, setEditing] = useState<{ workflow: Workflow | null } | null>(null);
+  const [editing, setEditing] = useState<{ workflow: WorkflowPreview | null } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const projectsQuery = useQuery({ queryKey: PROJECTS_QUERY_KEY,
-    queryFn: async ({ signal }): Promise<ProjectRecord[]> => (await listProjects(signal)).projects ?? [], staleTime: 60_000 });
-  const catalog = useProjectWorkflows(undefined, Boolean(userId));
-  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
   const canManage = Boolean(userId) && userId === team.ownerUserId;
-  const custom = team.workflows ?? [];
-  const available = (catalog.data?.workflows ?? []).filter(workflow => workflow.enabled
-    && !custom.some(item => item.id === workflow.id)
-    && !workflow.ownerTeamId && projects.some(project => project.id === workflow.projectId && project.enabled && !project.archivedAt && project.computerId === team.computerId)
-    && workflow.workflowSteps.every(step => team.memberAgentIds.includes(step.agentId)));
+  const catalog = useTeamWorkflowChoices(team, canManage);
+  const projectNames = new Map(catalog.data?.projects.map(project => [project.id, project.name]));
+  const loading = canManage && catalog.isPending;
+  const loadFailed = canManage && catalog.isError;
+  const custom = teamWorkflowPreviews(team);
+  const available = (catalog.data?.workflows ?? []).filter(workflow => !custom.some(item => item.id === workflow.id));
   const change = useMutation({
-    mutationFn: async (action: () => Promise<unknown>) => action(),
-    onSuccess: invalidate,
+    mutationFn: (action: () => Promise<TeamWorkflowWriteResponse>) => action(),
+    onSuccess: async (result) => {
+      if (result && "teamWorkflowUpdate" in result) {
+        await syncTeamWorkflowUpdate(client, userId, team.id, result.teamWorkflowUpdate);
+        return;
+      }
+      const key = teamRecordKey(userId, team.id);
+      if (result?.team?.workflowPreviews) {
+        await client.cancelQueries({ queryKey: key, exact: true });
+        client.setQueryData(key, result);
+      } else {
+        await client.invalidateQueries({ queryKey: key });
+      }
+      await client.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY, userId] });
+    },
     onError: error => setFailure(error instanceof Error ? error.message : String(error)),
   });
-  function apply(action: () => Promise<unknown>) {
+  function apply(action: () => Promise<TeamWorkflowWriteResponse>) {
     setFailure(null);
     change.mutate(action);
   }
@@ -53,15 +61,15 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
       {canManage ? <div className="workflow-library-actions">
         <Select value="" disabled={change.isPending || !available.length} onValueChange={id => { if (id) apply(() => linkTeamWorkflow(team.id, id)); }}>
           <SelectTrigger size="sm" className="w-auto" aria-label={t("workflow.assign_workflow")}><SelectValue>{t("workflow.assign_workflow")}</SelectValue></SelectTrigger>
-          <SelectContent>{available.map(workflow => <SelectItem key={workflow.id} value={workflow.id}>{workflow.name} · {projects.find(project => project.id === workflow.projectId)?.name}</SelectItem>)}</SelectContent>
+          <SelectContent>{available.map(workflow => <SelectItem key={workflow.id} value={workflow.id}>{workflow.name} · {projectNames.get(workflow.projectId)}</SelectItem>)}</SelectContent>
         </Select>
         <Button type="button" variant="outline" size="sm" onClick={() => setEditing({ workflow: null })}>{t("workflow.create")}</Button>
       </div> : null}
     </div>
     <p className="workflow-editor-note">{t("workflow.team_reference_hint")}</p>
     {failure ? <p role="alert" className="text-destructive">{failure}</p> : null}
-    {projectsQuery.isPending || catalog.isPending ? <p aria-busy="true">{t("workflow.loading")}</p> : null}
-    {projectsQuery.isError || catalog.isError ? <div role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="outline" size="dense" onClick={() => { void projectsQuery.refetch(); void catalog.refetch(); }}>{t("workspace.retry")}</Button></div> : null}
+    {loading ? <p aria-busy="true">{t("workflow.loading")}</p> : null}
+    {loadFailed ? <div role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="outline" size="dense" onClick={() => void catalog.refetch()}>{t("workspace.retry")}</Button></div> : null}
     <ul className="workflow-team-list">
       {/* The glyph marks a predefined row and the step flow a custom one, so
           neither needs a kind chip; only the default is called out. */}
@@ -69,10 +77,10 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
         <span className="workflow-library-main"><span className="workflow-team-row-name"><PredefinedWorkflowIcon style={style} /><span className="workflow-library-name">{t(`collab_style.${style}`)}</span>
           {defaultWorkflowId(team) === `preset:${style}` ? badge(t("workflow.default_badge")) : null}</span><span className="workflow-library-meta">{t(`collab_style.${style}_hint`)}</span></span>
         {canManage && defaultWorkflowId(team) !== `preset:${style}` ? <div className="workflow-team-actions"><Button type="button" variant="ghost" size="dense" disabled={change.isPending}
-          onClick={() => apply(async () => { await updateTeam(team.id, { defaultWorkflowId: `preset:${style}` }); await client.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] }); })}>{t("workflow.set_default")}</Button></div> : null}
+          onClick={() => apply(() => setTeamDefaultWorkflow(team.id, `preset:${style}`))}>{t("workflow.set_default")}</Button></div> : null}
       </li>)}
       {custom.map(workflow => {
-        const project = projects.find(item => item.id === workflow.projectId);
+        const projectName = workflow.projectId ? projectNames.get(workflow.projectId) : undefined;
         const isDefault = team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id || team.defaultWorkflowId === workflow.id;
         const projectUrl = `/projects/${encodeURIComponent(workflow.projectId ?? "")}?tab=members`;
         const projectOwned = !workflow.ownerTeamId && Boolean(workflow.projectId);
@@ -83,12 +91,12 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
               <span className="workflow-library-meta">{t("workflow.step_count", { count: workflow.workflowSteps.length })}{!projectOwned ? ` · ${team.name}` : null}</span>
               {projectOwned ? <span className="workflow-project-origin">
                 <NavProjects size={ICON.sm} aria-hidden="true" />
-                <span>{t("workflow.project_origin")} <a className="record-inline-action" href={projectUrl} title={t("workflow.open_project")}>{project?.name ?? t("workflow.project_unavailable")}</a></span>
+                <span>{t("workflow.project_origin")} <a className="record-inline-action" href={projectUrl} title={t("workflow.open_project")}>{projectName ?? t("workflow.project_unavailable")}</a></span>
               </span> : null}
             </div>
             {canManage ? <div className="workflow-team-actions">
               <Button type="button" variant="ghost" size="dense" disabled={change.isPending || !workflow.enabled}
-                onClick={() => apply(() => workflow.ownerTeamId ? updateTeam(team.id, { defaultWorkflowId: isDefault ? "preset:build_review" : workflow.id }) : setTeamProjectWorkflow(team.id, workflow.projectId!, isDefault ? null : workflow.id))}>{t(workflow.ownerTeamId ? (isDefault ? "workflow.clear_default" : "workflow.set_default") : (isDefault ? "workflow.clear_project_default" : "workflow.set_project_default"))}</Button>
+                onClick={() => apply(() => workflow.ownerTeamId ? setTeamDefaultWorkflow(team.id, isDefault ? "preset:build_review" : workflow.id) : setTeamProjectWorkflow(team.id, workflow.projectId!, isDefault ? null : workflow.id))}>{t(workflow.ownerTeamId ? (isDefault ? "workflow.clear_default" : "workflow.set_default") : (isDefault ? "workflow.clear_project_default" : "workflow.set_project_default"))}</Button>
               {!workflow.ownerTeamId ? <Button type="button" variant="ghost" size="dense" disabled={change.isPending || isDefault} onClick={() => apply(() => linkTeamWorkflow(team.id, workflow.id, false))}>{t("workflow.unassign")}</Button> : <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>}
             </div> : null}
           </div>
@@ -96,7 +104,7 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
         </li>;
       })}
     </ul>
-    <WorkflowEditor open={editing !== null} workflow={editing?.workflow ?? null} team={team} teams={[team]} agents={agents} onClose={() => setEditing(null)} />
-    {canManage && !available.length && !catalog.isPending && !catalog.isError ? <p className="workflow-editor-note">{t("workflow.assign_hint")} <a className="record-inline-action" href="/projects">{t("workflow.open_projects")}</a></p> : null}
+    <WorkflowEditorForPreview open={editing !== null} workflow={editing?.workflow ?? null} team={team} teams={[team]} agents={agents} onClose={() => setEditing(null)} />
+    {canManage && !available.length && !loading && !loadFailed ? <p className="workflow-editor-note">{t("workflow.assign_hint")} <a className="record-inline-action" href="/projects">{t("workflow.open_projects")}</a></p> : null}
   </section>;
 }

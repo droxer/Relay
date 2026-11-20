@@ -67,7 +67,7 @@ export function RecordHistory({
      watching a task, with a run ledger polling beside it on the routine's. */
   const eventsQuery = useQuery({
     queryKey: before === undefined ? ["task-activity", taskId] : ["task-activity", taskId, before],
-    queryFn: ({ signal }) => listTaskEvents(taskId, { activity: true, ...(before === undefined ? {} : { before }) }, signal),
+    queryFn: ({ signal }) => listTaskEvents(taskId, { view: "activity", before }, signal),
     // See RecordRuns: a tab switch must not refire this on every keystroke.
     staleTime: before === undefined ? RELAY_POLL_INTERVALS_MS.tasks : Infinity,
     refetchInterval: live && before === undefined ? RELAY_POLL_INTERVALS_MS.tasks : false,

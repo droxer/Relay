@@ -3,17 +3,18 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentTeam } from "../../types";
-import { defaultWorkflowId, predefinedStyle, workflowOptions, workflowSelectionIssue, workflowParticipantsAllowed } from "../../lib/workflowSelection";
+import { defaultWorkflowId, predefinedStyle, teamWorkflowName, workflowOptions, workflowSelectionIssue, workflowParticipantsAllowed } from "../../lib/workflowSelection";
 import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 /** A Workflow's display name: a predefined one's localized name, else the
  *  Team's custom definition, else "unavailable" for one no longer offered. */
-export function useWorkflowName(team?: Pick<AgentTeam, "workflows">): (workflowId: string) => string {
+export function useWorkflowName(team?: Pick<AgentTeam, "workflows" | "workflowOptions">): (workflowId: string) => string {
   const { t } = useTranslation();
   return (workflowId) => {
     const style = predefinedStyle(workflowId);
-    return style ? t(`collab_style.${style}`) : team?.workflows?.find(item => item.id === workflowId)?.name ?? t("workflow.unavailable");
+    if (style) return t(`collab_style.${style}`);
+    return teamWorkflowName(team, workflowId) ?? t("workflow.unavailable");
   };
 }
 

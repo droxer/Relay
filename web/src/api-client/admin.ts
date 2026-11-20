@@ -17,14 +17,19 @@ import type {
   UpdateControlPanelUserInput,
   UserRecord,
 } from "../types.ts";
-import { apiJson } from "./client.ts";
+import { apiJson, privateConditionalJson, type PrivateResponseCache } from "./client.ts";
 
-export function listControlPanelDaemonNodes(signal?: AbortSignal): Promise<ControlPanelDaemonNodesResponse> {
-  return apiJson<ControlPanelDaemonNodesResponse>("/admin/daemon-nodes", { signal });
+export function listControlPanelDaemonNodes(
+  signal?: AbortSignal, responseCache?: PrivateResponseCache<ControlPanelDaemonNodesResponse>,
+): Promise<ControlPanelDaemonNodesResponse> {
+  return privateConditionalJson("/admin/daemon-nodes?view=web", signal, responseCache);
 }
 
-export function listControlPanelUsers(signal?: AbortSignal): Promise<ControlPanelUsersResponse> {
-  return apiJson<ControlPanelUsersResponse>("/admin/users", { signal });
+export function listControlPanelUsers(
+  signal?: AbortSignal, params?: string, responseCache?: PrivateResponseCache<ControlPanelUsersResponse>,
+): Promise<ControlPanelUsersResponse> {
+  const path = params === undefined ? "/admin/users" : `/admin/users?view=web&${params}`;
+  return privateConditionalJson(path, signal, responseCache);
 }
 
 export function getDashboardAgents(signal?: AbortSignal): Promise<{ count: number }> {
@@ -164,8 +169,10 @@ export function deleteManagedNode(nodeId: string): Promise<CreateManagedNodeResp
   });
 }
 
-export function listManagedNodes(signal?: AbortSignal): Promise<ManagedNodesResponse> {
-  return apiJson<ManagedNodesResponse>("/admin/managed-nodes", { signal });
+export function listManagedNodes(signal?: AbortSignal, cursor?: string): Promise<ManagedNodesResponse> {
+  const search = new URLSearchParams({ view: "history" });
+  if (cursor) search.set("cursor", cursor);
+  return apiJson<ManagedNodesResponse>(`/admin/managed-nodes?${search}`, { signal });
 }
 
 export function recoverManagedNode(nodeId: string): Promise<{ node: ManagedNodeRecord }> {
@@ -220,7 +227,7 @@ export interface DashboardSessionsResponse {
   last7d: number;
   statusCounts: Record<string, number>;
   dailyCounts: Array<{ date: string; count: number; completed: number; failed: number }>;
-  topUsers: Array<{ userId: string; sessionCount: number }>;
+  topUsers: Array<{ userId: string; sessionCount: number; displayName?: string; handle?: string }>;
 }
 
 export interface TokenCounts {

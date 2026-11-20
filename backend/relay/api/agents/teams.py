@@ -1,25 +1,33 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from ...persistence.team.store import TeamValidationError, validate_team_payload
 from ...security.request_auth import require_admin_session, require_user_session
 from ...core.team_workflows import is_workflow_team
-from ...core.workflows import team_workflows, workflow_catalog, workflow_execution_snapshot
-from ...core.workflow_selection import default_workflow_id, predefined_style
+from ...core.workflows import (
+    team_workflows, workflow_catalog, workflow_execution_snapshot, workflow_preview, workflow_step_agent_ids,
+)
+from ...core.workflow_selection import PREDEFINED_WORKFLOWS, default_workflow_id, predefined_style
 from ...teams.workflow import validate_workflow_write
 from ...teams.computer import resolve_team_computer
 from ...teams.membership import with_member_roles
-from .agents import _agent_views, _user_exists
+from .agents import _agent_views, _node_map, _user_exists
 from ..deps import AppContextDep
 from ..actors import request_actor, chat_service_user_header
 from ..bodies import JsonBodyDep, string_field
+from ..conditional_get import private_conditional_json
 
 router = APIRouter()
 
 ROSTER_FIELDS = frozenset({"leadAgentId", "memberAgentIds", "computerId"})
+SUMMARY_FIELDS = (
+    "id", "ownerUserId", "name", "profileImageUrl", "leadAgentId", "memberAgentIds",
+    "computerId", "enabled", "createdAt", "updatedAt", "version", "projectId",
+    "collaborationStyle", "humanApproval", "projectWorkflowDefaults",
+)
 
 
 def _workflow_owner(
@@ -143,16 +151,76 @@ def _member_views(
     for team in teams:
         for agent_id in team.get("memberAgentIds", []):
             member_ids.setdefault(agent_id, None)
+    if not member_ids:
+        return {}
     agents = ctx.agent_store.get_agents_by_ids(list(member_ids))
     return {
         view["id"]: view
-        for view in _agent_views(ctx, agents)
+        for view in _agent_views(ctx, agents, summary=True)
     }
 
 
-def _team_views(ctx: AppContextDep, teams: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _team_views(
+    ctx: AppContextDep, teams: list[dict[str, Any]], *, summary: bool = False,
+) -> list[dict[str, Any]]:
     views = _member_views(ctx, teams)
-    return [_team_view(ctx, team, member_views=views) for team in teams]
+    return [_team_view(ctx, team, member_views=views, view="summary" if summary else "full") for team in teams]
+
+
+def _workflow_options_summary(team: dict[str, Any], *, include_presets: bool = True) -> list[dict[str, Any]]:
+    definitions = team.get("workflows")
+    if definitions is None:
+        definitions = [team] if "workflowSteps" in team else []
+    custom = [
+        {
+            **{key: definition[key] for key in ("id", "name", "projectId", "enabled", "updatedAt", "version") if key in definition},
+            "kind": "steps",
+            "stepCount": len(definition["workflowSteps"]),
+            "stepAgentIds": workflow_step_agent_ids(definition),
+        } for definition in definitions
+    ]
+    return [*PREDEFINED_WORKFLOWS, *custom] if include_presets else custom
+
+
+def _member_summary(agent: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": agent["id"],
+        "displayName": agent["displayName"],
+        "profileImageUrl": agent.get("profileImageUrl"),
+        "executorKind": agent["executorKind"],
+        "defaultRole": agent.get("defaultRole"),
+        "enabled": agent.get("enabled", True),
+        "availability": agent.get("availability", "offline"),
+    }
+
+
+def _preview_member(agent: dict[str, Any], owner: str) -> dict[str, Any]:
+    member = _member_summary(agent)
+    visible = member["enabled"] and agent.get("supervisorUserId") == owner
+    return {
+        **member,
+        "placements": [
+            {key: placement[key] for key in (
+                "id", "daemonNodeId", "runtimeNodeId", "computerId", "nodeDisplayName", "desiredState", "priority",
+            ) if key in placement}
+            for placement in agent["placements"]
+            if placement.get("supervisorUserId") == owner and placement.get("desiredState") != "removed"
+        ] if visible else [],
+        **({"computerId": agent["computerId"]} if visible and agent.get("computerId") else {}),
+    }
+
+
+def _team_summary(team: dict[str, Any], *, include_presets: bool = True) -> dict[str, Any]:
+    return {
+        **{key: team[key] for key in SUMMARY_FIELDS if key in team},
+        "defaultWorkflowId": default_workflow_id(team),
+        **({"workflowStepCount": len(team["workflowSteps"])} if "workflowSteps" in team else {}),
+        "memberConfigs": {
+            agent_id: {key: config[key] for key in ("role", "participation") if key in config}
+            for agent_id, config in (team.get("memberConfigs") or {}).items()
+        },
+        "workflowOptions": _workflow_options_summary(team, include_presets=include_presets),
+    }
 
 
 def _team_view(
@@ -160,36 +228,86 @@ def _team_view(
     team: dict[str, Any],
     *,
     member_views: dict[str, dict[str, Any]] | None = None,
+    view: Literal["full", "summary", "record", "preview"] = "full",
 ) -> dict[str, Any]:
     views = _member_views(ctx, [team]) if member_views is None else member_views
-    members = []
-    for agent_id in team.get("memberAgentIds", []):
-        view = views.get(agent_id)
-        if view is None:
-            continue
-        members.append(
-            {
-                "id": view["id"],
-                "displayName": view["displayName"],
-                "profileImageUrl": view.get("profileImageUrl"),
-                "executorKind": view["executorKind"],
-                "defaultRole": view.get("defaultRole"),
-                "enabled": view.get("enabled", True),
-                "availability": view.get("availability", "offline"),
-            }
-        )
+    members = [_member_summary(views[agent_id]) for agent_id in team.get("memberAgentIds", []) if agent_id in views]
     lead = next(
         (member for member in members if member["id"] == team.get("leadAgentId")),
         None,
     )
-    return {**team, "workflows": team_workflows(team), "workflowOptions": workflow_catalog(team),
-            "defaultWorkflowId": default_workflow_id(team), "members": members, "lead": lead}
+    if view == "summary":
+        return {**_team_summary(team), "members": members, "lead": lead}
+    roster = {"defaultWorkflowId": default_workflow_id(team), "members": members, "lead": lead}
+    legacy_count = {"workflowStepCount": len(team["workflowSteps"])} if "workflowSteps" in team else {}
+    if view == "preview":
+        definitions = team["workflows"] if "workflows" in team else team_workflows(team)
+        return {
+            **{key: value for key, value in team.items() if key not in {"workflows", "workflowSteps"}},
+            **roster,
+            "members": [_preview_member(views[member["id"]], team["ownerUserId"]) for member in members],
+            **legacy_count,
+            "workflowPreviews": [workflow_preview(definition) for definition in definitions],
+            "workflowOptions": _workflow_options_summary(team),
+        }
+    return {
+        **team, **roster,
+        "workflows": team_workflows(team),
+        **({"workflowOptions": workflow_catalog(team)} if view == "full"
+           else {"workflowOptions": _workflow_options_summary(team)}),
+    }
 
 
 @router.get("/teams")
 def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    return {"teams": _team_views(ctx, ctx.team_store.list_teams(actor["userId"]))}
+    summary = request.query_params.get("view") == "summary"
+    teams = ctx.team_store.list_teams(actor["userId"])
+    if summary and request.query_params.get("format") == "compact":
+        members = _member_views(ctx, teams)
+        return {
+            "view": "summary",
+            "teams": [_team_summary(team, include_presets=False) for team in teams],
+            "memberDirectory": [_member_summary(members[agent_id]) for agent_id in sorted(members)],
+            "predefinedWorkflows": PREDEFINED_WORKFLOWS,
+        }
+    return {"teams": _team_views(ctx, teams, summary=summary), **({"view": "summary"} if summary else {})}
+
+
+@router.get("/teams/{team_id}")
+def get_team(team_id: str, request: Request, ctx: AppContextDep) -> Response:
+    actor = request_actor(request, ctx.auth_store)
+    team = _owned_team(ctx, team_id, actor["userId"])
+    view: Literal["preview", "record"] = "preview" if request.query_params.get("view") == "preview" else "record"
+    return private_conditional_json(request, {"team": _team_view(ctx, team, view=view)})
+
+
+def _active_computers(agent: dict[str, Any]) -> list[str]:
+    placed = dict.fromkeys(
+        item["computerId"] for item in agent["placements"]
+        if item.get("computerId") and item["desiredState"] == "active"
+    )
+    return list(placed) or ([agent["computerId"]] if agent.get("computerId") else [])
+
+
+@router.get("/teams/{team_id}/member-choices")
+def list_team_member_choices(team_id: str, request: Request, ctx: AppContextDep) -> Response:
+    owner = require_user_session(request, ctx.auth_store)["userId"]
+    team = _owned_team(ctx, team_id, owner)
+    member_ids = set(team.get("memberAgentIds", []))
+    records = [agent for agent in ctx.agent_store.list_agent_summaries(owner) if agent.get("enabled", True)]
+    views = _agent_views(ctx, records, nodes=_node_map(ctx, owner=owner), owner=owner, summary=True) if records else []
+    computers = {agent["id"]: _active_computers(agent) for agent in views}
+    target = team.get("computerId")
+    if not target and member_ids:
+        shared = set.intersection(*(set(computers.get(member_id, ())) for member_id in member_ids))
+        lead_computers = computers.get(team.get("leadAgentId"), [])
+        target = min(shared, default=next(iter(lead_computers), ""))
+    choices = [
+        _preview_member(agent, owner) for agent in views
+        if agent["id"] in member_ids or target in computers[agent["id"]]
+    ]
+    return private_conditional_json(request, {"computerId": target or "", "agents": choices})
 
 
 @router.post("/teams", status_code=201)
@@ -231,7 +349,47 @@ def update_team(
         )
     except ValueError as error:
         raise _team_error(error) from error
-    return {"team": _team_view(ctx, team)}
+    if body.keys() == {"defaultWorkflowId"} and request.query_params.get("format") == "delta":
+        return _team_workflow_default_update(team)
+    view: Literal["preview", "full"] = "preview" if request.query_params.get("view") == "preview" else "full"
+    return {"team": _team_view(ctx, team, view=view)}
+
+
+def _team_workflow_default_update(team: dict[str, Any], *, project_id: str | None = None) -> dict[str, Any]:
+    version = team["version"]
+    update = {
+        "teamId": team["id"], "baseVersion": version - 1, "version": version,
+        "updatedAt": team["updatedAt"], "defaultWorkflowId": default_workflow_id(team),
+        "legacyWorkflow": is_workflow_team(team),
+    }
+    if project_id is not None:
+        update["projectDefault"] = {
+            "projectId": project_id, "workflowId": team["projectWorkflowDefaults"].get(project_id),
+        }
+    return {"teamWorkflowUpdate": update}
+
+
+@router.patch("/teams/{team_id}/members/{agent_id}")
+def update_team_member(
+    team_id: str, agent_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    current = _owned_team(ctx, team_id, actor["userId"])
+    _workflow_owner(request, ctx, current["ownerUserId"], {}, current)
+    try:
+        agent = ctx.agent_store.get_agent(agent_id)
+        if not agent or agent.get("deletedAt"):
+            raise TeamValidationError("team_member_not_found")
+        if agent.get("supervisorUserId") != actor["userId"]:
+            raise TeamValidationError("team_member_wrong_supervisor")
+        update = ctx.team_store.update_member_config(
+            team_id, agent_id, _request_body, default_role=agent.get("defaultRole") or "implementer",
+        )
+    except KeyError as error:
+        raise HTTPException(404, "Team not found.") from error
+    except ValueError as error:
+        raise _team_error(error) from error
+    return {"teamMemberUpdate": update}
 
 
 @router.delete("/teams/{team_id}", status_code=200)

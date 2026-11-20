@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark" = "light", projectCount = 1, legacy = false, projectSubset = false, withCustom = false, withTeam = true) {
+async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark" = "light", projectCount = 1, legacy = false, projectSubset = false, withCustom = false, withTeam = true, summarized = false) {
   const stamp = "2026-09-25T00:00:00Z";
   const computerId = "device:alice:host";
   const agents = ["lead", "qa"].map((id) => ({
@@ -12,7 +12,8 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
   }));
   let team: Record<string, unknown> = { id: "delivery", name: "Delivery", ownerUserId: "alice", leadAgentId: "lead", computerId,
     memberAgentIds: ["lead", "qa"], members: agents, lead: agents[0], enabled: true,
-    collaborationStyle: "build_review", memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
+    collaborationStyle: "build_review", memberConfigs: {}, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp,
+    ...(summarized ? { version: 1 } : {}) };
   let task = { id: "task", title: "Ship the fix", description: "Fix and review", status: "backlog", priority: "normal",
     acceptancePolicy: "human", assignedTeamId: withTeam ? team.id : undefined, projectId: "project", ownerUserId: "alice",
     isRoutine: false, linkedSessionIds: [], activity: [], events: [], createdAt: stamp, updatedAt: stamp };
@@ -47,24 +48,64 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
   const workflowWrites: Record<string, unknown>[] = [];
   const sends: Record<string, unknown>[] = [];
   const patches: Record<string, unknown>[] = [];
+  const preview = (workflow: Record<string, any>) => ({
+    ...workflow, workflowSteps: workflow.workflowSteps.map(({ id, name, agentId, requiresApproval }: Record<string, any>) => ({ id, name, agentId, requiresApproval })),
+  });
   await page.route("**/api/**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
+    const { pathname: path, searchParams } = new URL(route.request().url());
     const method = route.request().method();
     const teamView = { ...team, workflows: workflows.filter(workflow => linked.has(workflow.id)).map(workflow => ({ ...workflow, teamId: team.id })) };
     let body: unknown = { sessions: [session], agents, teams: withTeam ? [teamView] : [], tasks: [task], nodes: [node], projects, sandboxes: [], skills: [] };
+    if (summarized && path.endsWith("/teams") && method === "GET") {
+      body = { view: "summary", teams: [{ ...team, workflows: undefined, workflowOptions: workflows.filter(workflow => linked.has(workflow.id)).map(workflow => ({
+        id: workflow.id, name: workflow.name, projectId: workflow.projectId, kind: "steps", enabled: true,
+        stepAgentIds: ["lead"], stepCount: 1,
+      })) }] };
+    }
+    if (path.endsWith("/teams/delivery") && method === "GET") {
+      body = { team: summarized && searchParams.get("view") === "preview"
+        ? { ...teamView, workflows: undefined, workflowPreviews: teamView.workflows.map(preview) }
+        : teamView };
+    }
+    if (path.endsWith("/teams/delivery/workflow-choices")) {
+      body = {
+        workflows: workflows.filter(workflow => workflow.enabled && workflow.projectId && !workflow.ownerTeamId)
+          .map(({ id, name, projectId }) => ({ id, name, projectId })),
+        projects: projects.map(({ id, name }) => ({ id, name })),
+      };
+    }
+    if (path.endsWith("/teams/delivery/member-choices")) body = { computerId, agents };
     if (path.endsWith("/workflows")) {
       if (method === "POST") {
         const input = route.request().postDataJSON(); workflowWrites.push(input);
         const workflow = { ...input, ownerUserId: "alice", id: "wf_ship", createdAt: stamp, updatedAt: stamp };
         workflows.push(workflow); if (input.ownerTeamId) linked.add(workflow.id); body = { workflow };
-      } else body = { workflows: workflows.filter(workflow => !new URL(route.request().url()).searchParams.get("projectId") || workflow.projectId === new URL(route.request().url()).searchParams.get("projectId")) };
+      } else {
+        const scope = searchParams.get("projectId");
+        const records = workflows.filter(workflow => !scope || workflow.projectId === scope);
+        body = summarized && searchParams.get("view") === "preview"
+          ? { view: "preview", workflows: records.map(preview) }
+          : { workflows: records };
+      }
     }
+    if (path.endsWith("/workflows/wf_release") && method === "GET") body = { workflow: workflows.find(workflow => workflow.id === "wf_release") };
     const link = path.match(/\/teams\/delivery\/workflows\/([^/]+)\/link$/);
     if (link) { if (method === "PUT") linked.add(link[1]); else linked.delete(link[1]); body = { team: teamView }; }
     if (path.match(/\/workflows\/[^/]+\/runs$/)) { sends.push(route.request().postDataJSON()); body = { ...session, projectId: "project" }; }
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme, language: "en" } };
     if (path.endsWith("/teams/delivery") && method === "PATCH") {
-      const patch = route.request().postDataJSON(); patches.push(patch); team = { ...team, ...patch }; body = { team };
+      const patch = route.request().postDataJSON();
+      patches.push(patch);
+      const baseVersion = team.version;
+      if (typeof baseVersion === "number" && searchParams.get("format") === "delta" && typeof patch.defaultWorkflowId === "string") {
+        const version = baseVersion + 1;
+        team = { ...team, ...patch, version };
+        body = { teamWorkflowUpdate: { teamId: team.id, baseVersion, version, updatedAt: stamp,
+          defaultWorkflowId: patch.defaultWorkflowId, legacyWorkflow: false } };
+      } else {
+        team = { ...team, ...patch };
+        body = { team };
+      }
     }
     if (path.endsWith("/tasks/task")) {
       if (method === "PATCH") { const patch = route.request().postDataJSON(); patches.push(patch); task = { ...task, ...patch, updatedAt: new Date(Date.parse(stamp) + patches.length * 1000).toISOString() }; }
@@ -91,6 +132,87 @@ async function fixture(page: Page, failFirstSend = false, theme: "light" | "dark
 }
 
 const option = (page: Page, name: string) => page.getByRole("option", { name: new RegExp(`^${name}`) });
+
+for (const olderBackend of [false, true]) {
+  test(`Team Workflow assignment loads eligible choices (${olderBackend ? "older backend" : "scoped read"})`, async ({ page }) => {
+    await fixture(page, false, "light", 1, false, false, true, true, true);
+    const path = "/api/v1/teams/delivery/workflow-choices";
+    if (olderBackend) {
+      await page.route(`**${path}`, route => route.fulfill({ status: 404, json: { detail: "Not found." } }));
+    }
+    const reads: string[] = [];
+    page.on("request", request => {
+      const url = new URL(request.url());
+      if (request.method() === "GET" && [path, "/api/v1/projects", "/api/v1/workflows"].includes(url.pathname)) {
+        reads.push(url.pathname + url.search);
+      }
+    });
+    await page.goto("/teams/delivery");
+    await page.getByRole("combobox", { name: "Assign workflow" }).click();
+    await expect(option(page, "Release · API")).toBeVisible();
+    expect(reads).toEqual(olderBackend ? [path, "/api/v1/projects?view=directory", "/api/v1/workflows?view=choices"] : [path]);
+  });
+}
+
+test("changing a Team default does not refetch the roster or Team record", async ({ page }) => {
+  await fixture(page, false, "light", 1, false, false, false, true, true);
+  const reads: string[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && /^\/api\/v1\/teams(?:\/delivery)?$/.test(url.pathname)) reads.push(url.pathname);
+  });
+  await page.goto("/teams/delivery");
+  const pipeline = page.locator('.workflow-team-row[data-kind="predefined"]').filter({ hasText: "Pipeline" });
+  await pipeline.getByRole("button", { name: "Set as default" }).click();
+  await expect(pipeline.getByText("Default", { exact: true })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(reads).toEqual(["/api/v1/teams", "/api/v1/teams/delivery"]);
+});
+
+test("a shared Team summary fetches the selected Team with Workflow previews", async ({ page }) => {
+  await fixture(page, false, "light", 1, false, true, false, true, true);
+  const reads: string[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && /^\/api\/v1\/teams(?:\/delivery)?$/.test(url.pathname)) {
+      reads.push(url.pathname + url.search);
+    }
+  });
+  await page.goto("/teams");
+  const row = page.getByRole("button", { name: /Delivery.*Builder.*Reviewer/ });
+  await expect(row).toBeVisible();
+  expect(reads).toEqual(["/api/v1/teams?view=summary&format=compact"]);
+  await row.click();
+  const library = page.getByRole("region", { name: /^Workflows/ });
+  await expect(library.getByRole("list", { name: "Steps of Project delivery" })).toContainText("Build");
+  expect(reads).toEqual(["/api/v1/teams?view=summary&format=compact", "/api/v1/teams/delivery?view=preview"]);
+});
+
+test("Project Workflows load previews until editing requests one definition", async ({ page }) => {
+  await fixture(page, false, "light", 1, false, false, true, false, true);
+  const reads: string[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname.startsWith("/api/v1/workflows")) reads.push(url.pathname + url.search);
+  });
+  await page.goto("/projects/project?tab=members");
+  const region = page.getByRole("region", { name: /^Workflows/ });
+  await expect(region.getByRole("list", { name: "Steps of Release" })).toContainText("Build");
+  const preview = "/api/v1/workflows?view=preview&projectId=project";
+  expect(reads).toEqual([preview]);
+  await region.getByRole("button", { name: "Start run", exact: true }).click();
+  const starter = page.getByRole("dialog", { name: "Start workflow" });
+  await expect(starter).toBeVisible();
+  expect(reads).toEqual([preview]);
+  await starter.getByRole("button", { name: "Cancel", exact: true }).click();
+  for (let opening = 0; opening < 2; opening++) {
+    await region.getByRole("button", { name: "Edit", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit workflow" });
+    await expect(editor.getByRole("textbox", { name: "Instructions", exact: true })).toHaveValue("Build it");
+    expect(reads).toEqual([preview, "/api/v1/workflows/wf_release"]);
+    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  }
+});
 
 for (const mobile of [false, true]) {
   test(`team default workflow saves with its role preview (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
@@ -296,6 +418,11 @@ for (const mobile of [false, true]) {
 
 test("a Project Task selects an independent workflow with no Teams", async ({ page }) => {
   const { patches } = await fixture(page, false, "light", 1, false, false, true, false);
+  const workflowReads: string[] = [];
+  page.on("request", request => {
+    const { pathname, search } = new URL(request.url());
+    if (request.method() === "GET" && pathname.startsWith("/api/v1/workflows")) workflowReads.push(pathname + search);
+  });
   await page.goto("/projects/project?task=task&recordTab=definition");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
@@ -306,6 +433,7 @@ test("a Project Task selects an independent workflow with no Teams", async ({ pa
   expect(patches.at(-1)?.assignedTeamId).toBeNull();
   await expect(page.getByRole("button", { name: "Save task", exact: true })).toHaveCount(0);
   await expect(page.locator(".record-definition").getByText("Release", { exact: true })).toBeVisible();
+  expect(workflowReads).toEqual(["/api/v1/workflows?view=choices&projectId=project"]);
 });
 
 

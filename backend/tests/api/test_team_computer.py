@@ -219,3 +219,29 @@ def test_saving_a_legacy_split_team_with_its_unchanged_roster_still_works(monkey
         )
 
         assert response.status_code == 200, response.text
+
+
+def test_team_member_choices_limit_computer_and_keep_current_members(monkeypatch) -> None:
+    with _world(monkeypatch) as (app, client, here, there):
+        lead = _agent(app, here, "Lead")
+        available = _agent(app, here, "Available")
+        member = _agent(app, there, "Current member")
+        _agent(app, there, "Unrelated")
+        _sync(app, here, there)
+        # Both old split Teams and a member moved since assignment need a way
+        # to remove the off-Computer member.
+        team = app.state.team_store.create_team(
+            _admin_id(app),
+            {"name": "Legacy", "leadAgentId": lead["id"], "memberAgentIds": [lead["id"], member["id"]]},
+        )
+        path = f"/api/v1/teams/{team['id']}/member-choices"
+        response = client.get(path)
+        assert response.status_code == 200, response.text
+        assert response.json()["computerId"] == computer_id(here)
+        choices = response.json()["agents"]
+        assert [agent["id"] for agent in choices] == [available["id"], member["id"], lead["id"]]
+        for agent in choices:
+            assert "instructions" not in agent and "modelPolicy" not in agent
+        headers = {"If-None-Match": response.headers["etag"]}
+        assert client.get(path, headers=headers).status_code == 304
+        assert TestClient(app).get(path, headers=headers).status_code == 401

@@ -7,16 +7,20 @@ A mixin of ``DatabaseTaskStore``; it shares the store's engine and tables
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date
 from typing import Any
 from sqlalchemy import (
     Text,
     and_,
+    case,
     cast,
+    false,
     func,
     or_,
     select,
     tuple_,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from .flow import wip_count_query, user_wip_limit
 from .reducer import materialize_task_events
 from ..engine import store_transaction
@@ -41,6 +45,7 @@ _ACTIVITY_EVENT_TYPES = (
     "task.created", "task.assigned", "task.unassigned", "task.project_set", "task.status",
     "task.session_linked", "task.session_unlinked", "task.occurrence_created", "task.dispatch_outcome", "task.activity",
 )
+_LIFECYCLE_EVENT_TYPES = ("task.status", "task.execution.claimed", "task.session_linked")
 
 
 def _snapshot_activity_page(
@@ -117,10 +122,22 @@ class TaskReadRows(TaskStoreState):
         with store_transaction(self.engine) as conn:
             row = conn.execute(select(
                 tasks.c.id, tasks.c.owner_user_id.label("ownerUserId"), tasks.c.deleted_at.label("deletedAt"),
+                tasks.c.project_id.label("projectId"), tasks.c.is_routine.label("isRoutine"),
             ).where(tasks.c.id == task_id)).mappings().first()
         if row is None:
             raise KeyError(task_id)
         return dict(row)
+
+    def task_lifecycle_events(self, task_id: str) -> list[dict[str, Any]]:
+        events = self.events
+        with store_transaction(self.engine) as conn:
+            selected = list(conn.scalars(select(events.c.payload).where(
+                events.c.task_id == task_id, events.c.type.in_(_LIFECYCLE_EVENT_TYPES),
+            ).order_by(events.c.sequence)))
+            if selected:
+                return selected
+            history = self._snapshot_task_events(conn, task_id)
+        return [event for event in history if event.get("type") in _LIFECYCLE_EVENT_TYPES]
 
     def task_activity_page(self, task_id: str, *, limit: int, before: int | None) -> dict[str, Any]:
         events = self.events
@@ -155,11 +172,15 @@ class TaskReadRows(TaskStoreState):
         }
 
     def _legacy_task_activity(self, conn: Any, task_id: str, *, limit: int, before: int | None) -> dict[str, Any]:
+        return _snapshot_activity_page(self._snapshot_task_events(conn, task_id), limit=limit, before=before)
+
+    def _snapshot_task_events(self, conn: Any, task_id: str) -> list[dict[str, Any]]:
         # Treat the snapshot as the log only when no durable event rows exist.
         events = self.events
         has_events = conn.scalar(select(select(events.c.sequence).where(events.c.task_id == task_id).exists()))
-        history = [] if has_events else conn.scalar(select(self.tasks.c.snapshot["events"]).where(self.tasks.c.id == task_id))
-        return _snapshot_activity_page(history or [], limit=limit, before=before)
+        if has_events:
+            return []
+        return conn.scalar(select(self.tasks.c.snapshot["events"]).where(self.tasks.c.id == task_id)) or []
 
     def _read_task(self, task_id: str, *, include_history: bool) -> dict[str, Any]:
         if names_no_uuid_row(self.engine, task_id):
@@ -244,6 +265,89 @@ class TaskReadRows(TaskStoreState):
                 if not row["snapshot"].get("deletedAt")
             ]
 
+    def thread_tasks(
+        self, user_id: str, thread_id: str, *, active_task_id: str | None,
+        project_id: str | None, next_steps: list[str],
+    ) -> list[dict[str, Any]]:
+        """The origin, waiting work, active round, and already adopted suggestions."""
+        tasks = self.tasks
+        owned = _live_owned_tasks(tasks, user_id)
+        newest = (tasks.c.updated_at.desc(), tasks.c.id.desc())
+        recent = select(tasks.c.id).where(*owned).order_by(*newest).limit(1)
+        links = self.task_sessions
+        origin = recent.join(links, links.c.task_id == tasks.c.id).where(links.c.session_id == thread_id)
+        linked_ids = tasks.c.snapshot["linkedSessionIds"]
+        if self.engine.dialect.name == "postgresql":
+            legacy_link = linked_ids.op("@>")(cast([thread_id], JSONB))
+        else:
+            items = func.json_each(linked_ids).table_valued("value")
+            legacy_link = select(items.c.value).where(items.c.value == thread_id).exists()
+        legacy_origin = recent.where(legacy_link)
+        named_wait = recent.where(
+            tasks.c.is_routine.is_(False), tasks.c.status == "waiting_for_human",
+            tasks.c.snapshot["waitingSessionId"].as_string() == thread_id,
+        )
+        selected = [
+            tasks.c.id == func.coalesce(origin.scalar_subquery(), legacy_origin.scalar_subquery()),
+            tasks.c.id == named_wait.scalar_subquery(),
+        ]
+        if active_task_id and not names_no_uuid_row(self.engine, active_task_id):
+            selected.append(tasks.c.id == active_task_id)
+        if project_id is None or not names_no_uuid_row(self.engine, project_id):
+            for title in next_steps:
+                choice = recent.where(
+                    tasks.c.is_routine.is_(False), tasks.c.project_id == project_id, tasks.c.title == title,
+                )
+                selected.append(tasks.c.id == choice.scalar_subquery())
+
+        with store_transaction(self.engine) as conn:
+            rows = list(conn.execute(select(tasks.c.snapshot, tasks.c.version).where(
+                *owned, or_(*selected),
+            ).order_by(*newest)).mappings())
+            parents = {
+                key for row in rows if (key := row["snapshot"].get("sourceRoutineId"))
+                and not names_no_uuid_row(self.engine, key)
+            } - {row["snapshot"]["id"] for row in rows}
+            if parents:
+                rows.extend(conn.execute(select(tasks.c.snapshot, tasks.c.version).where(
+                    *owned, tasks.c.is_routine.is_(True), tasks.c.id.in_(sorted(parents)),
+                ).order_by(*newest)).mappings())
+        return [
+            compact_task_summary(
+                row["snapshot"], event_count=int(row["version"] or 0),
+                activity_count=int(row["snapshot"].get("activityCount") or 0),
+            ) for row in rows
+        ]
+
+    def occurrence_positions(
+        self, occurrence_ids: list[str], user_id: str, *,
+        limit: int, before: tuple[str, str, str] | None = None,
+    ) -> list[tuple[str, str, str]]:
+        """Read only the run positions needed for the requested ledger page."""
+        ids = [key for key in dict.fromkeys(occurrence_ids) if not names_no_uuid_row(self.engine, key)]
+        if not ids:
+            return []
+        tasks = self.tasks
+        snapshot = tasks.c.snapshot
+        scheduled = func.coalesce(
+            func.nullif(snapshot["scheduledFor"].as_string(), ""), snapshot["dueDate"].as_string(), "",
+        )
+        created = func.coalesce(snapshot["createdAt"].as_string(), "")
+        record_id = cast(tasks.c.id, Text)
+        statement = select(scheduled, created, record_id).where(
+            tasks.c.deleted_at.is_(None), tasks.c.owner_user_id == user_id,
+        )
+        if before is not None:
+            statement = statement.where(tuple_(scheduled, created, record_id) < before)
+        statement = statement.order_by(scheduled.desc(), created.desc(), record_id.desc()).limit(limit)
+        rows: list[tuple[str, str, str]] = []
+        with store_transaction(self.engine) as conn:
+            for start in range(0, len(ids), 500):
+                rows.extend((when, started, key) for when, started, key in conn.execute(
+                    statement.where(tasks.c.id.in_(ids[start:start + 500])),
+                ))
+        return sorted(rows, reverse=True)[:limit]
+
     def thread_list_task_links(
         self, session_ids: list[str], user_id: str,
     ) -> tuple[list[dict[str, Any]], set[str]]:
@@ -286,7 +390,7 @@ class TaskReadRows(TaskStoreState):
         with store_transaction(self.engine) as conn:
             return int(conn.scalar(statement) or 0)
 
-    def home_tasks(self, user_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    def home_tasks(self, user_id: str) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any] | None]:
         """Candidates for the Home panels plus each Project's full rollup."""
         tasks = self.tasks
         scope = _live_owned_tasks(tasks, user_id)
@@ -299,6 +403,16 @@ class TaskReadRows(TaskStoreState):
         ).order_by(tasks.c.project_id, tasks.c.status, tasks.c.is_routine)
 
         read = select(tasks.c.snapshot).where(*scope, personal)
+        created = tasks.c.snapshot["createdAt"].as_string()
+        intake = select(
+            func.count().label("count"), func.min(created).label("first"), func.max(created).label("last"),
+        ).select_from(tasks).where(
+            *scope, personal, tasks.c.is_routine.is_(False),
+            tasks.c.status.not_in(("done", "cancelled")),
+            tasks.c.project_id.is_(None),
+            func.coalesce(tasks.c.snapshot["computerId"].as_string(), "") == "",
+            func.coalesce(tasks.c.snapshot["sourceRoutineId"].as_string(), "") == "",
+        )
         recent = (tasks.c.updated_at.desc(), tasks.c.id.desc())
         upcoming = or_(tasks.c.due_date.is_not(None), tasks.c.snapshot["scheduledFor"].as_string().is_not(None))
         open_issues = or_(
@@ -306,8 +420,6 @@ class TaskReadRows(TaskStoreState):
             tasks.c.snapshot["prerequisiteTaskIds"].as_string().is_not(None),
             tasks.c.status.in_(("assigned", "queued", "waiting_for_human", "review", "blocked")),
             and_(tasks.c.status == "backlog", or_(tasks.c.assigned_agent_id.is_not(None), tasks.c.assigned_team_id.is_not(None))),
-            and_(tasks.c.project_id.is_(None), tasks.c.snapshot["computerId"].as_string().is_(None),
-                 tasks.c.snapshot["sourceRoutineId"].as_string().is_(None), tasks.c.status != "cancelled"),
         )
         candidates = read.where(tasks.c.status != "done", or_(
             and_(tasks.c.is_routine.is_(False), open_issues),
@@ -322,6 +434,7 @@ class TaskReadRows(TaskStoreState):
         summaries: dict[str, Any] = {}
         with store_transaction(self.engine) as conn:
             rows = [*conn.scalars(candidates), *conn.scalars(finished)]
+            untriaged = conn.execute(intake).mappings().one()
             for row in conn.execute(project_counts).mappings():
                 summary = summaries.setdefault(row["project_id"], {
                     "total": 0, "progress": dict.fromkeys(("done", "review", "running", "blocked"), 0), "updatedAt": "",
@@ -331,13 +444,65 @@ class TaskReadRows(TaskStoreState):
                     summary["total"] += row["total"]
                     if row["status"] in summary["progress"]:
                         summary["progress"][row["status"]] = row["total"]
-        return rows, summaries
+        return rows, summaries, ({
+            "count": untriaged["count"],
+            "firstCreatedAt": untriaged["first"],
+            "lastCreatedAt": untriaged["last"],
+        } if untriaged["count"] else None)
+
+    def project_dashboard(self, user_id: str, project_id: str, today: date) -> dict[str, Any]:
+        tasks = self.tasks
+        snapshot = tasks.c.snapshot
+        scope = [
+            *_live_owned_tasks(tasks, user_id), tasks.c.is_routine.is_(False),
+            func.coalesce(snapshot["sourceRoutineId"].as_string(), "") == "",
+            false() if names_no_uuid_row(self.engine, project_id) else tasks.c.project_id == project_id,
+        ]
+        opened = tasks.c.status.not_in(("done", "cancelled"))
+        blocked = tasks.c.status == "blocked"
+        overdue = and_(opened, tasks.c.due_date < today)
+        active = and_(opened, or_(
+            func.coalesce(snapshot["startedAt"].as_string(), "") != "",
+            tasks.c.status.in_(("running", "review", "waiting_for_human")),
+        ))
+        done = func.coalesce(snapshot["workflowStage"].as_string(), tasks.c.status) == "done"
+        attention = or_(blocked, overdue)
+        stats = select(
+            func.count().label("total"),
+            func.count().filter(active).label("active"),
+            func.count().filter(blocked).label("blocked"),
+            func.count().filter(overdue).label("overdue"),
+            func.count().filter(done).label("done"),
+            func.count().filter(attention).label("attention"),
+            func.count().filter(tasks.c.status.in_(("assigned", "queued", "running"))).label("live"),
+        ).select_from(tasks).where(*scope)
+        read = select(tasks.c.id, tasks.c.number, tasks.c.title, tasks.c.status, tasks.c.due_date).where(
+            *scope, attention,
+        ).order_by(
+            case((blocked, 0), else_=1),
+            case((~blocked, tasks.c.due_date)),
+            tasks.c.updated_at.desc(), tasks.c.id.desc(),
+        ).limit(5)
+        with store_transaction(self.engine) as conn:
+            counts = conn.execute(stats).mappings().one()
+            rows = conn.execute(read).mappings().all() if counts["attention"] else []
+        return {
+            "metrics": {key: counts[key] for key in ("total", "active", "blocked", "overdue", "done")},
+            "attentionTotal": counts["attention"],
+            "hasQueuedOrRunning": counts["live"] > 0,
+            "attention": [
+                {"task": {"id": row["id"], "number": row["number"], "title": row["title"], "dueDate": row["due_date"], "isRoutine": False},
+                 "reason": "blocked" if row["status"] == "blocked" else "overdue",
+                 "overdue": bool(row["due_date"] and row["due_date"] < today)}
+                for row in rows
+            ],
+        }
 
     def list_task_summaries(
         self, *, user_id: str | None = None, limit: int | None = None,
         task_ids: list[str] | None = None, project_id: str | None = None,
         assigned_agent_id: str | None = None, assigned_team_id: str | None = None,
-        statuses: frozenset[str] | None = None,
+        statuses: frozenset[str] | None = None, scope: str | None = None, computer_id: str | None = None,
     ) -> list[dict[str, Any]]:
         statement = (
             select(
@@ -362,12 +527,33 @@ class TaskReadRows(TaskStoreState):
             if names_no_uuid_row(self.engine, project_id):
                 return []
             statement = statement.where(self.tasks.c.project_id == project_id)
+        if computer_id is not None:
+            snapshot = self.tasks.c.snapshot
+            # The workspace binding wins when it exists. Unbound legacy Tasks
+            # are still candidates for the browser's recorded Thread fallback.
+            bound = func.coalesce(
+                func.nullif(snapshot["workspaceBinding"]["computerId"].as_string(), ""),
+                func.nullif(snapshot["computerId"].as_string(), ""),
+            )
+            statement = statement.where(self.tasks.c.project_id.is_(None), or_(bound == computer_id, bound.is_(None)))
         if assigned_agent_id is not None:
             statement = statement.where(self.tasks.c.assigned_agent_id == assigned_agent_id)
         if assigned_team_id is not None:
             statement = statement.where(self.tasks.c.assigned_team_id == assigned_team_id)
         if statuses is not None:
             statement = statement.where(self.tasks.c.status.in_(statuses))
+        if scope == "automations":
+            statement = statement.where(or_(
+                self.tasks.c.is_routine.is_(True),
+                and_(
+                    self.tasks.c.status.in_(("assigned", "queued", "running", "waiting_for_human", "review")),
+                    func.coalesce(self.tasks.c.snapshot["sourceRoutineId"].as_string(), "") != "",
+                ),
+            ))
+        elif scope in ("board", "issues"):
+            statement = statement.where(self.tasks.c.is_routine.is_(False))
+            if scope == "board":
+                statement = statement.where(func.coalesce(self.tasks.c.snapshot["sourceRoutineId"].as_string(), "") == "")
         if limit is not None:
             statement = statement.limit(max(1, limit))
         with store_transaction(self.engine) as conn:

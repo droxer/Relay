@@ -7,7 +7,6 @@ import {
   mergeVisibleDaemonNodes,
   mergeThreadRuntimeNodes,
   withoutDeletedComputer,
-  shouldClaimLocalDaemonNode,
 } from "../src/lib/daemonNodes.js";
 import {
   buildDaemonStartCommand,
@@ -120,29 +119,6 @@ describe("Relay web thread status", () => {
     assert.equal("nodeToken" in visibleNode, false);
   });
 
-  it("claims an online local node when the saved token only exposes stale nodes", () => {
-    const staleAuthenticatedNode = daemonNode({
-      id: "sbx_alice_old",
-      userId: "alice",
-      online: false,
-      stale: true,
-    });
-    const liveControlPanelNode = controlPanelNode({
-      id: "sbx_alice_live",
-      userId: "alice",
-      online: true,
-      stale: false,
-    });
-
-    assert.equal(shouldClaimLocalDaemonNode(liveControlPanelNode, [staleAuthenticatedNode]), true);
-    assert.equal(shouldClaimLocalDaemonNode(liveControlPanelNode, [daemonNode({
-      id: "sbx_alice_live",
-      userId: "alice",
-      online: true,
-      stale: false,
-    })]), false);
-  });
-
   it("keeps unassigned control-panel nodes out of the chat roster", () => {
     const assignedNode = controlPanelNode({
       id: "sbx_alice",
@@ -159,7 +135,6 @@ describe("Relay web thread status", () => {
     const visibleNodes = mergeVisibleDaemonNodes([], [assignedNode, unassignedNode]);
 
     assert.deepEqual(visibleNodes.map((node) => node.id), ["sbx_alice"]);
-    assert.equal(shouldClaimLocalDaemonNode(unassignedNode, []), false);
   });
 
   it("keeps distinct computers for one user in the thread runtime picker", () => {
@@ -387,7 +362,7 @@ describe("Relay web thread status", () => {
     }) as typeof fetch;
     try {
       const result = await listManagedNodes();
-      assert.equal(requestPath, "/api/v1/admin/managed-nodes");
+      assert.equal(requestPath, "/api/v1/admin/managed-nodes?view=history");
       assert.deepEqual(result.nodes, []);
     } finally {
       globalThis.fetch = originalFetch;

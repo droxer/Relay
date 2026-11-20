@@ -465,6 +465,47 @@ def test_managed_node_provisioning_replays_the_same_runtime_after_lost_response(
         assert alice_client.get("/api/v1/daemon-nodes").json()["nodes"] == []
 
 
+def test_user_daemon_inventory_includes_only_its_compact_connection_reading(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(tmp_path)
+    admin = TestClient(app)
+    _bootstrap_admin(admin)
+    _create_account(admin, "alice", user_id="alice")
+    _create_account(admin, "bob", user_id="bob")
+    for user, owner in (("alice", ALICE), ("bob", BOB)):
+        registration = admin.post("/api/v1/daemon-node-registrations", json={
+            "sandboxId": user,
+            "userId": owner,
+            "token": f"node_{user}",
+            "workspacePath": f"/workspace/{user}",
+            "workspaceId": f"mch_{user}",
+            "protocolVersion": 1,
+            "capabilities": ["durable-reports"],
+            "status": "ready",
+        })
+        assert registration.status_code == 200, registration.text
+        node = app.state.registry.get(user)
+        assert node is not None
+        app.state.context.daemon_store.save_transport_status(computer_id(node), {
+            "state": "retrying",
+            "causes": ["storage"],
+            "recovered": False,
+            "pending": 4,
+            "quarantined": 2,
+            "positions": [{"commandId": "private-command", "sequence": 1}],
+        })
+
+    alice = TestClient(app)
+    _login(alice, "alice", "userpass")
+    [node] = alice.get("/api/v1/daemon-nodes?view=web").json()["nodes"]
+    assert node["id"] == "alice"
+    assert node["transport"] == {
+        "state": "retrying", "causes": ["storage"], "recovered": False, "pending": 4, "quarantined": 2,
+    }
+    assert alice.get("/api/v1/daemon-nodes/bob/transport").status_code == 403
+    assert alice.get("/api/v1/daemon-nodes/alice/transport").json()["positions"]
+
+
 def test_user_daemon_list_replaces_retired_managed_runtime_with_one_placeholder(
     monkeypatch,
 ) -> None:
@@ -611,6 +652,43 @@ def test_admin_can_recover_deleted_managed_node(monkeypatch) -> None:
 
         missing = client.post("/api/v1/admin/managed-nodes/nodes_missing/recover")
         assert missing.status_code == 404
+
+
+def test_admin_computer_views_return_owner_labels_and_page_terminal_history(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    _bootstrap_admin(client)
+    _create_account(client, "alice", user_id="alice")
+    store = app.state.managed_node_store
+    live = store.create_node({"userId": ALICE})
+    deleting = store.create_node({"userId": ALICE, "desiredState": "stopped"})
+    store.update_node(deleting["id"], {"desiredState": "deleted"})
+    retired = []
+    for _ in range(3):
+        node = store.create_node({"userId": ALICE, "desiredState": "stopped"})
+        store.update_node(node["id"], {"desiredState": "deleted"})
+        retired.append(store.update_node(node["id"], {"phase": "deleted"}))
+    retired.sort(key=lambda node: (node["updatedAt"], node["id"]), reverse=True)
+
+    owner = {"id": ALICE, "displayName": "alice", "handle": "alice"}
+    web_path = "/api/v1/admin/daemon-nodes?view=web"
+    read = client.get(web_path)
+    inventory = read.json()["nodes"]
+    assert next(node for node in inventory if node["id"] == live["id"])["ownerLabel"] == owner
+    headers = {"If-None-Match": read.headers.get("etag", "")}
+    assert read.headers["cache-control"] == "no-store"
+    assert client.get(web_path, headers=headers).status_code == 304
+    assert TestClient(app).get(web_path, headers=headers).status_code == 401
+    path = "/api/v1/admin/managed-nodes"
+    first = client.get(path, params={"view": "history", "limit": 2}).json()
+    assert [node["id"] for node in first["nodes"]] == [node["id"] for node in retired[:2]]
+    assert all(node["ownerLabel"] == owner for node in first["nodes"])
+    second = client.get(path, params={"view": "history", "limit": 2, "cursor": first["nextCursor"]}).json()
+    assert [node["id"] for node in second["nodes"]] == [retired[2]["id"]]
+    assert second["nextCursor"] is None
+    assert len(client.get(path).json()["nodes"]) == 5
+    assert client.get(path, params={"view": "history", "cursor": "invalid"}).status_code == 422
 
 
 def test_recovered_managed_node_reattaches_the_original_agent(monkeypatch) -> None:

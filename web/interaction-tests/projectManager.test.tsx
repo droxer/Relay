@@ -89,6 +89,13 @@ it.each(["apply", "dismiss"] as const)("limits cache invalidation after a propos
  const client = new QueryClient();
  const keys = {
   tasks: ["relay", "tasks"], projectTasks: ["relay", "tasks", "p"], otherProject: ["relay", "tasks", "other"],
+  dashboard: ["relay", "tasks", "p", "project-dashboard"],
+  issues: ["relay", "tasks", "issue-page", "scope=issues&layout=list"],
+  board: ["relay", "tasks", "issue-page", "scope=board&layout=board&projectId=p"],
+  otherBoard: ["relay", "tasks", "issue-page", "scope=board&layout=board&projectId=other"],
+  computer: ["relay", "tasks", "issue-page", "scope=board&layout=list&computerId=device"],
+  automations: ["relay", "tasks", "automation-page", "projectId=p", 1],
+  thread: ["relay", "tasks", "thread", "thread"], otherThread: ["relay", "tasks", "thread", "other"],
   home: ["relay", "tasks", "home"], nodes: ["relay", "daemon-nodes"],
   notifications: ["relay", "notifications", "u"], changed: ["task-record", "task"], other: ["task-record", "other"],
  };
@@ -102,7 +109,7 @@ it.each(["apply", "dismiss"] as const)("limits cache invalidation after a propos
   fireEvent.click(await screen.findByRole("button", {name: `project_manager.${action}`}));
   await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
   const invalidated = Object.entries(keys).filter(([, key]) => client.getQueryState(key)?.isInvalidated).map(([name]) => name);
-  expect(invalidated).toEqual(action === "apply" ? ["tasks", "projectTasks", "home", "changed"] : []);
+  expect(invalidated).toEqual(action === "apply" ? ["tasks", "projectTasks", "dashboard", "issues", "board", "thread", "home", "changed"] : []);
  } finally {
   view.unmount();
   client.clear();

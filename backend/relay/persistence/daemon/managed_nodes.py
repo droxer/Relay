@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, UTC
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, or_, select, update
+from sqlalchemy import delete, func, insert, or_, select, update
 
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..resource_lock import resource_transaction
@@ -213,6 +213,23 @@ class DatabaseManagedNodeStore:
         with store_transaction(self.engine) as conn:
             nodes = list(conn.scalars(statement))
         return sorted(nodes, key=lambda item: (item.get("createdAt") or "", item["id"]))
+
+    def list_deleted_nodes(
+        self, *, limit: int, before: tuple[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
+        snapshot = self.records.c.snapshot
+        record_id = self.records.c.id
+        updated_at = func.coalesce(snapshot["updatedAt"].as_string(), snapshot["createdAt"].as_string())
+        statement = select(snapshot).where(
+            self.records.c.kind == "nodes",
+            snapshot["desiredState"].as_string() == "deleted",
+            snapshot["phase"].as_string() == "deleted",
+        )
+        if before is not None:
+            at, node_id = before
+            statement = statement.where(or_(updated_at < at, (updated_at == at) & (record_id < node_id)))
+        with store_transaction(self.engine) as conn:
+            return list(conn.scalars(statement.order_by(updated_at.desc(), record_id.desc()).limit(limit)))
 
     def get_node(self, node_id: str) -> dict[str, Any] | None:
         return self._read_record("nodes", node_id)

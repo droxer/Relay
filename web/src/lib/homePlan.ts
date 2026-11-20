@@ -1,5 +1,5 @@
 /** Home's recommendations use existing state; dates are local calendar days. */
-import type { ProjectRecord, RelayTaskListItem } from "../types.js";
+import type { ProjectListItem, RelayTaskListItem } from "../types.js";
 import type { HomeItem } from "./homeQueue.js";
 import { isoToday } from "./routine.ts";
 import { projectReadOnly } from "./projectPage.ts";
@@ -7,7 +7,7 @@ import { projectReadOnly } from "./projectPage.ts";
 const personal = (task: RelayTaskListItem, userId: string) => (task.assigneeUserId ?? task.ownerUserId) === userId;
 const live = (task: RelayTaskListItem) => !task.deletedAt && task.status !== "done";
 const priority = { high: 0, normal: 1, low: 2 };
-export function readyHomeTasks(tasks: readonly RelayTaskListItem[], projects: readonly ProjectRecord[], userId: string): RelayTaskListItem[] {
+export function readyHomeTasks(tasks: readonly RelayTaskListItem[], projects: readonly ProjectListItem[], userId: string): RelayTaskListItem[] {
   const writable = new Set(projects.filter(p => !projectReadOnly(p)).map(p => p.id));
   return tasks.filter(t => personal(t, userId) && live(t) && !t.isRoutine && !t.sourceRoutineId
     && (t.status === "backlog" || t.status === "assigned") && t.projectId && writable.has(t.projectId)

@@ -16,7 +16,7 @@ import { TaskRefLink } from "../task-board/TaskRefLink";
 import { TaskHoldupLine } from "../task-board/TaskHoldupLine";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "../task-board/InlineTaskFields";
 import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
-import type { ProjectRecord, RelayTaskListItem, TaskStatus } from "../../types";
+import type { ProjectListItem, RelayTaskListItem, TaskStatus } from "../../types";
 
 /** What a row needs beyond the task itself, resolved by the page per record. */
 export interface IssueRowContext {
@@ -24,7 +24,7 @@ export interface IssueRowContext {
   /** A closed project's issue shows its properties but offers no edits. */
   readOnly?: boolean;
   /** The issue's project — its computer decides who may take the issue. */
-  project?: ProjectRecord | null;
+  project?: ProjectListItem | null;
   ready: boolean;
   agentDisplayName?: string;
   agentImageUrl?: string | null;

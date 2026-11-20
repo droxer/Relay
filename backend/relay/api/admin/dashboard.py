@@ -36,10 +36,17 @@ def dashboard_sessions(
     require_admin_session(request, ctx.auth_store)
     zone = _dashboard_zone(tz)
     period = _dashboard_period(start, end, zone, all_time=all_time)
+
+    def build() -> dict[str, Any]:
+        metrics = ctx.session_store.dashboard_session_metrics(date_range=period, zone=zone, all_time=all_time)
+        ranked = metrics["topUsers"]
+        labels = ctx.auth_store.user_labels([row["userId"] for row in ranked])
+        return {**metrics, "topUsers": [{**row, **labels.get(row["userId"], {})} for row in ranked]}
+
     return DASHBOARD_CACHE.get_or_build(
         ctx.session_store,
         ("sessions", str(zone), period),
-        lambda: ctx.session_store.dashboard_session_metrics(date_range=period, zone=zone, all_time=all_time),
+        build,
     )
 
 

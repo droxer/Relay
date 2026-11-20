@@ -29,10 +29,10 @@ describe("relay polling budget", () => {
     assert.ok(RELAY_POLL_INTERVALS_MS.teams >= 300_000);
   });
 
-  it("backs the sessions poll off only while the SSE tail is connected", () => {
-    assert.equal(sessionsPollIntervalMs(false), RELAY_POLL_INTERVALS_MS.sessions);
-    assert.equal(sessionsPollIntervalMs(true), 15_000);
-    assert.ok(sessionsPollIntervalMs(true) > sessionsPollIntervalMs(false));
+  it("backs the sessions poll off while idle or while the SSE tail is connected", () => {
+    assert.equal(sessionsPollIntervalMs(false, true), RELAY_POLL_INTERVALS_MS.sessions);
+    assert.equal(sessionsPollIntervalMs(true, true), 15_000);
+    assert.equal(sessionsPollIntervalMs(false, false), 30_000);
   });
 
   it("lets the Task list own polling while it carries the open record", () => {

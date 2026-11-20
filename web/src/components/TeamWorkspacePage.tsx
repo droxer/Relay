@@ -1,22 +1,22 @@
 "use client";
 
-import type { TeamMemberConfig } from "../types";
+import type { TeamMemberConfig, TeamMemberConfigPatch } from "../types";
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { timestampTitle } from "../lib/workspaceFormat";
 import { deleteTeamProfileImage, selectTeamProfilePreset, updateTeamProfileImage } from "../api";
-import { useUserAgents } from "../hooks/useUserAgents";
+import { useTeamMemberChoices, useUserAgents } from "../hooks/useUserAgents";
 import { useComputerOptions } from "../hooks/useComputerOptions";
 import { useRelayMutations } from "../hooks/useRelayMutations";
-import { TEAMS_QUERY_KEY } from "../hooks/useTeams";
+import { teamRecordKey, TEAMS_QUERY_KEY } from "../hooks/useTeams";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { useWorkspaceActivity } from "../hooks/useWorkspaceActivity";
 import { teamAvailability } from "../lib/taskAssignment";
 import { teamContractChanged, teamMutationInput } from "../lib/teamForm";
-import type { AgentTeam } from "../types";
+import type { AgentTeam, AgentTeamsResponse } from "../types";
 import {
   ActionEdit,
   AdminDelete,
@@ -43,8 +43,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { TeamWorkflowPreview } from "./workflow/TeamWorkflowPreview";
 import { TeamWorkflowLibrary } from "./workflow/TeamWorkflowLibrary";
+import type { WorkflowAgent } from "./workflow/WorkflowEditor";
 import { isWorkflowTeam } from "../lib/workflowTeamDraft";
-import { defaultWorkflowId, predefinedStyle } from "../lib/workflowSelection";
+import { defaultWorkflowId, predefinedStyle, teamWorkflowPreviews } from "../lib/workflowSelection";
 
 type TeamPageTab = "profile" | "activities";
 
@@ -54,32 +55,20 @@ function parseTeamTab(value: string | null): TeamPageTab {
   return TEAM_PAGE_TABS.includes(value as TeamPageTab) ? value as TeamPageTab : "profile";
 }
 
-/** The computer a team lives on, resolved the way the roster editor does.
- *  Shared by the profile (which edits against it) and the page's facts. */
-function useTeamComputer(team: AgentTeam, userId?: string) {
-  const { agents: userAgents } = useUserAgents(userId);
-  const agents = useMemo(
-    () => userAgents.filter((agent) => !agent.deletedAt),
-    [userAgents],
-  );
-  const computerId = teamComputerId(team, agents);
-  const { options: computers } = useComputerOptions(team.ownerUserId, true);
-  const computer = computers.find((option) => option.computerId === computerId);
-  const computerLabel = computer?.label || agents
-    .flatMap((agent) => agent.placements)
-    .find((placement) => placement.computerId === computerId && placement.desiredState !== "removed")
-    ?.nodeDisplayName || computerId;
-  return { agents, computerId, computer, computerLabel };
-}
-
 function TeamProfile({
   team,
   userId,
+  computerId,
+  members,
+  workflowAgents,
   facts,
   onDeleted,
 }: {
   team: AgentTeam;
   userId?: string;
+  computerId: string;
+  members: AgentTeam["members"];
+  workflowAgents: readonly WorkflowAgent[];
   /** The record's properties, shown under the identity in the rail. */
   facts: readonly RecordFact[];
   onDeleted: () => void;
@@ -87,10 +76,12 @@ function TeamProfile({
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const queryClient = useQueryClient();
-  const { updateTeamMutation, deleteTeamMutation } = useRelayMutations();
-  const { agents, computerId } = useTeamComputer(team, userId);
+  const { updateTeamMutation, updateTeamMemberConfigMutation, deleteTeamMutation } = useRelayMutations();
   const workflow = isWorkflowTeam(team);
   const [editing, setEditing] = useState(false);
+  const roster = useTeamMemberChoices(team, editing && Boolean(userId));
+  const agents = useMemo(() => roster.data?.agents ?? [], [roster.data]);
+  const editingComputer = roster.data?.computerId ?? computerId;
   const [nameDraft, setNameDraft] = useState(team.name);
   const [memberIds, setMemberIds] = useState<string[]>(team.memberAgentIds);
   const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>(team.memberConfigs ?? {});
@@ -108,10 +99,10 @@ function TeamProfile({
   // placed there (plus current members, so a legacy split roster can be
   // trimmed rather than hidden).
   const computerAgents = useMemo(
-    () => agentsForTeamComputer(agents, computerId, memberIds),
-    [agents, computerId, memberIds],
+    () => agentsForTeamComputer(agents, editingComputer, memberIds),
+    [agents, editingComputer, memberIds],
   );
-  const busy = updateTeamMutation.isPending || deleteTeamMutation.isPending
+  const busy = updateTeamMutation.isPending || updateTeamMemberConfigMutation.isPending || deleteTeamMutation.isPending
     || imageSaving;
   const draftDirty = teamContractChanged(
     { memberConfigs, acceptanceCriteria },
@@ -127,10 +118,16 @@ function TeamProfile({
   );
 
   function applyTeamUpdate(updated: AgentTeam) {
-    queryClient.setQueriesData<{ teams: AgentTeam[] }>(
+    queryClient.setQueryData(teamRecordKey(userId, updated.id), { team: updated });
+    queryClient.setQueriesData<AgentTeamsResponse>(
       { queryKey: [TEAMS_QUERY_KEY] },
       (current) => current
-        ? { teams: current.teams.map((item) => item.id === updated.id ? updated : item) }
+        ? { ...current, teams: current.teams.map((item) => {
+          if (item.id !== updated.id) return item;
+          return current.view === "summary"
+            ? { ...item, profileImageUrl: updated.profileImageUrl, updatedAt: updated.updatedAt, version: updated.version }
+            : updated;
+        }) }
         : current,
     );
   }
@@ -205,7 +202,7 @@ function TeamProfile({
       membersRef.current?.focus();
       return;
     }
-    const offComputer = membersOffComputer(agents, computerId, memberIds);
+    const offComputer = membersOffComputer(agents, editingComputer, memberIds);
     const rosterChanged = memberIds.length !== team.memberAgentIds.length
       || memberIds.some((id) => !team.memberAgentIds.includes(id));
     if (rosterChanged && offComputer.length > 0) {
@@ -222,7 +219,7 @@ function TeamProfile({
           memberAgentIds: memberIds,
           // Pins a team saved before teams carried a computer, once its
           // whole roster is on one.
-          ...(offComputer.length === 0 && computerId ? { computerId } : {}),
+          ...(offComputer.length === 0 && editingComputer ? { computerId: editingComputer } : {}),
           memberConfigs, acceptanceCriteria,
           leadAgentId: leadId,
           defaultWorkflowId: workflowId,
@@ -237,21 +234,9 @@ function TeamProfile({
     }
   }
 
-  /** Inline save from one member card: only that member's contract changes;
-   *  membership, lead and criteria go back exactly as stored. */
-  async function saveMemberConfig(agentId: string, next: TeamMemberConfig): Promise<boolean> {
+  async function saveMemberConfig(agentId: string, fields: TeamMemberConfigPatch): Promise<boolean> {
     try {
-      await updateTeamMutation.mutateAsync({
-        teamId: team.id,
-        input: teamMutationInput({
-          name: team.name,
-          memberAgentIds: team.memberAgentIds,
-          leadAgentId: team.leadAgentId ?? "",
-          enabled: team.enabled,
-          memberConfigs: { ...(team.memberConfigs ?? {}), [agentId]: next },
-          acceptanceCriteria: team.acceptanceCriteria ?? [],
-        }),
-      });
+      await updateTeamMemberConfigMutation.mutateAsync({ team, agentId, fields });
       return true;
     } catch {
       // The shared mutation handler announces the error; the card stays open.
@@ -314,12 +299,17 @@ function TeamProfile({
                     disabled={busy}
                   />
                 </Field>
+                {!roster.isSuccess && roster.error ? <div role="alert">
+                  <p>{roster.error.message}</p>
+                  <Button type="button" variant="outline" size="dense" onClick={() => void roster.refetch()}>{t("workspace.retry")}</Button>
+                </div> : null}
+                {!roster.isSuccess && !roster.error ? <p aria-busy="true">{t("workspace.loading")}</p> : null}
                 <TeamMemberPicker
                   ref={membersRef}
                   agents={computerAgents}
                   value={{ memberIds, leadId }}
                   onChange={changeMembership}
-                  disabled={busy}
+                  disabled={busy || !roster.isSuccess}
                   legendHidden
                   emptyHint={t("teams.computer_no_agents")}
                   error={validationError === "members"
@@ -332,16 +322,14 @@ function TeamProfile({
                 </>
               ) : (
                 <div className="team-work-members team-profile-member-cards">
-                  {team.members.map((member) => (
+                  {members.map((member) => (
                     <TeamMemberCard
                       key={member.id}
-                      // TeamMemberSummary carries no placements; the roster's
-                      // full agent record knows the member's computers.
-                      member={{ ...member, placements: agents.find((agent) => agent.id === member.id)?.placements }}
+                      member={member}
                       config={team.memberConfigs?.[member.id] ?? {}}
                       lead={member.id === team.leadAgentId}
                       canEdit={!workflow && !busy && (cardEditingId === null || cardEditingId === member.id)}
-                      saving={updateTeamMutation.isPending && cardEditingId === member.id}
+                      saving={updateTeamMemberConfigMutation.isPending && cardEditingId === member.id}
                       onEditingChange={(open) => setCardEditingId(open ? member.id : null)}
                       onSave={(next) => saveMemberConfig(member.id, next)}
                     />
@@ -409,7 +397,7 @@ function TeamProfile({
                 nameOf={(id) => team.members.find((member) => member.id === id)?.displayName ?? t("project.member_unavailable")} />
             </section>}
           </form>
-          {!editing ? <TeamWorkflowLibrary team={team} agents={agents} userId={userId} /> : null}
+          {!editing ? <TeamWorkflowLibrary team={team} agents={workflowAgents} userId={userId} /> : null}
         </div>
 
         <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
@@ -451,7 +439,21 @@ export function TeamWorkspacePage({
   const [pageTab, setPageTab] = useUrlSearchState("tab", "profile" as TeamPageTab, parseTeamTab, (value) => value === "profile" ? null : value, "push");
   const briefQuery = useWorkspaceActivity({ teamId: team.id }, pageTab === "activities");
   const threadCount = briefQuery.data?.sessions.length ?? 0;
-  const { computer, computerLabel } = useTeamComputer(team, userId);
+  const legacyMemberRouting = team.members.some(member => member.placements === undefined);
+  const outsideWorkflowAgents = pageTab === "profile" && teamWorkflowPreviews(team).some(workflow =>
+    workflow.workflowSteps.some(step => !team.memberAgentIds.includes(step.agentId)));
+  const { agents } = useUserAgents(userId, false, legacyMemberRouting || outsideWorkflowAgents);
+  const members = team.members.map(member => {
+    if (member.placements !== undefined) return { ...member, placements: member.placements };
+    const agent = agents.find(item => item.id === member.id);
+    return { ...member, placements: agent?.placements ?? [], computerId: agent?.computerId ?? member.computerId };
+  });
+  const computerId = teamComputerId(team, members);
+  const { options: computers } = useComputerOptions(team.ownerUserId, true);
+  const computer = computers.find(option => option.computerId === computerId);
+  const computerLabel = computer?.label || members.flatMap(member => member.placements)
+    .find(placement => placement.computerId === computerId && placement.desiredState !== "removed")
+    ?.nodeDisplayName || computerId;
   /* The record's properties, one list for both tabs: in the identity rail on
      Profile, in the record's right column on Activity. Availability leads —
      it is the fact you came to check; the id is a reference coordinate and
@@ -539,7 +541,8 @@ export function TeamWorkspacePage({
       <RecordLayout facts={pageTab === "profile" ? [] : teamFacts} label={t("workspace.band_team_label")}>
       <div className="workspace-body">
         <TabsContent value="profile">
-          <TeamProfile team={team} userId={userId} facts={teamFacts} onDeleted={onDeleted} />
+          <TeamProfile team={team} userId={userId} computerId={computerId} members={members}
+            workflowAgents={outsideWorkflowAgents && agents.length ? agents : team.members} facts={teamFacts} onDeleted={onDeleted} />
         </TabsContent>
         <TabsContent value="activities">
           {briefQuery.isLoading && !briefQuery.data ? (

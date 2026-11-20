@@ -12,7 +12,7 @@ import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { isSubmitChord, submitShortcutLabel } from "../../lib/shortcuts";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ProjectWorkflowSelect } from "../workflow/ProjectWorkflowSelect";
-import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
+import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
 import { WorkflowSelect } from "../workflow/WorkflowSelect";
 import { workflowSelectionIssue } from "../../lib/workflowSelection";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentTeam, UserAgent, ProjectRecord, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
+import type { AgentTeam, UserAgent, ProjectListItem, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
 import { TASK_PRIORITIES } from "../../lib/backlog";
 import { NEW_TASK_STATUSES } from "../../lib/taskFlow";
 import { taskAssignmentOptions } from "../../lib/taskAssignment";
@@ -55,7 +55,7 @@ type TaskDrawerProps = {
   form: TaskBoardFormState;
   logicalAgents: UserAgent[];
   teams?: AgentTeam[];
-  projects?: ProjectRecord[];
+  projects?: ProjectListItem[];
   /** Every tag already in use on the page, offered while typing one. */
   tagSuggestions?: readonly string[];
   onCreateProject?: () => void;
@@ -148,7 +148,7 @@ function BacklogFields({ form, onChange, canRun }: {
  *  schedule controls, followed by its enabled switch. */
 function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
   form: RoutineTaskFormState; onChange: (next: TaskBoardFormState) => void;
-  logicalAgents: UserAgent[]; teams: AgentTeam[]; projects: ProjectRecord[];
+  logicalAgents: UserAgent[]; teams: AgentTeam[]; projects: ProjectListItem[];
 }) {
   const { t } = useTranslation();
   const enabledHintId = useId();
@@ -241,7 +241,7 @@ export function TaskDrawer({
   const assignmentSummaryId = `${fieldPrefix}-assignment-summary`;
   const busy = saving || deleting;
   const project = projects.find((item) => item.id === form.projectId);
-  const workflowQuery = useProjectWorkflows(project?.id, Boolean(project) && !form.assignedAgentId);
+  const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project) && !form.assignedAgentId);
   const availableProjects = projects.filter((item) => item.enabled && !item.archivedAt);
   const projectLabelId = useId();
   const projectTriggerRef = useRef<HTMLButtonElement>(null);
@@ -304,8 +304,8 @@ export function TaskDrawer({
     form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
   const independentWorkflow = workflowQuery.data?.workflows?.find(item => item.id === form.assignedWorkflowId);
   const workflowIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : Boolean(form.assignedWorkflowId
-    && (!project || !independentWorkflow?.enabled || independentWorkflow.projectId !== project?.id || Boolean(independentWorkflow.ownerTeamId) || workflowQuery.isError
-      || !independentWorkflow.workflowSteps.every(step => projectAgentIds?.includes(step.agentId))));
+    && (!project || !independentWorkflow?.enabled || independentWorkflow.projectId !== project?.id || workflowQuery.isError
+      || !independentWorkflow.stepAgentIds.every(id => projectAgentIds?.includes(id))));
 
 
   // A saved task can reference an agent/team that has since been deleted or is
@@ -471,7 +471,7 @@ export function TaskDrawer({
             value={form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null)}
             onChange={workflowId => onChange({ ...form, assignedWorkflowId: workflowId ?? "", collaborationStyle: null })} />
         </Field> : project && !form.assignedAgentId ? <Field label={t("workflow.select_workflow")} hint={t("workflow.optional_assignment_hint")} wrapper="div">
-          <ProjectWorkflowSelect workflows={(workflowQuery.data?.workflows ?? []).filter(item => item.projectId === project.id && !item.ownerTeamId && item.enabled && item.workflowSteps.every(step => projectAgentIds?.includes(step.agentId)))} value={form.assignedWorkflowId || ""}
+          <ProjectWorkflowSelect workflows={(workflowQuery.data?.workflows ?? []).filter(item => item.projectId === project.id && item.enabled && item.stepAgentIds.every(id => projectAgentIds?.includes(id)))} value={form.assignedWorkflowId || ""}
             onChange={id => updateBase({ assignedWorkflowId: id, assignedAgentId: "", assignedAgent: "", assignedTeamId: "", collaborationStyle: null })}
             disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
             issue={Boolean(workflowIssue)} onRetry={() => void workflowQuery.refetch()} />

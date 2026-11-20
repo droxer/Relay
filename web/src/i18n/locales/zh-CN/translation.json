@@ -1224,6 +1224,8 @@
     "place_work_here": "放到此计算机"
   },
   "routine": {
+    "loading": "正在加载自动化…",
+    "load_failed": "无法加载自动化。",
     "schedule": "触发器",
     "enabled_needs_target": "启用此自动化前，请选择项目、智能体或团队。",
     "project_hint": "可选。不选项目时，每次运行共用该自动化自己的工作区。",
@@ -1650,6 +1652,7 @@
       "history_description": "已删除的托管电脑会保留，用于审计和配置历史。",
       "history_deleted": "删除于 {{time}}",
       "history_count": "{{count}} 台已删除的电脑",
+      "history_load_more": "加载较早的电脑记录",
       "history_delete_action": "永久删除",
       "history_deleting": "正在删除…",
       "history_delete_confirm": "永久删除 {{name}}（{{id}}）？",
@@ -2412,6 +2415,8 @@
     "bundle": "技能包",
     "bytes_other": "{{value}} 字节",
     "revision_history": "版本记录",
+    "load_older_revisions": "加载较早的版本",
+    "revision_history_load_failed": "无法加载较早的版本。",
     "stable_revision": "稳定版",
     "promote_revision": "设为稳定版",
     "promote_revision_label": "将 v{{revision}} 设为稳定版",
@@ -2892,6 +2897,8 @@
     "operator_contains": "包含"
   },
   "issues": {
+    "loading": "正在加载任务…",
+    "load_failed": "无法加载任务。",
     "clear_assignment": "清除分配",
     "title": "任务",
     "sub_other": "{{count}} 个任务",
@@ -3936,6 +3943,7 @@
     "start": "开始运行",
     "loading": "正在加载工作流…",
     "load_failed": "无法加载工作流。",
+    "version_conflict": "编辑期间工作流已更新。当前草稿仍在，请重新打开工作流以加载最新版本。",
     "empty": "暂无工作流。可使用此项目电脑上的团队创建。",
     "empty_read_only": "暂无可用工作流。需要此项目电脑上的团队才能创建。",
     "steps_of": "{{name}} 的步骤",

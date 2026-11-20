@@ -1247,6 +1247,8 @@
     "place_work_here": "Place on this Computer"
   },
   "routine": {
+    "loading": "Loading automations…",
+    "load_failed": "Could not load automations.",
     "schedule": "Trigger",
     "enabled_needs_target": "Choose a project, agent, or team before enabling this automation.",
     "project_hint": "Optional. Without a project, every run shares the automation's own workspace.",
@@ -1685,6 +1687,7 @@
       "history_deleted": "Deleted {{time}}",
       "history_count_one": "{{count}} deleted computer",
       "history_count_other": "{{count}} deleted computers",
+      "history_load_more": "Load older computers",
       "history_delete_action": "Delete permanently",
       "history_deleting": "Deleting…",
       "history_delete_confirm": "Permanently delete {{name}} ({{id}})?",
@@ -2469,6 +2472,8 @@
     "bytes_one": "{{value}} byte",
     "bytes_other": "{{value}} bytes",
     "revision_history": "Revision history",
+    "load_older_revisions": "Load older revisions",
+    "revision_history_load_failed": "Could not load older revisions.",
     "stable_revision": "Stable",
     "promote_revision": "Use as stable",
     "promote_revision_label": "Use v{{revision}} as stable",
@@ -2955,6 +2960,8 @@
     "operator_contains": "contains"
   },
   "issues": {
+    "loading": "Loading tasks…",
+    "load_failed": "Could not load tasks.",
     "clear_assignment": "Clear assignment",
     "title": "Tasks",
     "sub_one": "{{count}} task",
@@ -4008,6 +4015,7 @@
     "start": "Start run",
     "loading": "Loading workflows…",
     "load_failed": "Workflows could not be loaded.",
+    "version_conflict": "This workflow changed while you were editing. Your draft is still here. Reopen the workflow to load the latest version.",
     "empty": "No workflows yet. Create one using a team on this Project’s Computer.",
     "empty_read_only": "No workflows available. A team on this Project’s Computer is needed to create one.",
     "steps_of": "Steps of {{name}}",

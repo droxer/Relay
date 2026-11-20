@@ -1,5 +1,54 @@
 import { test, expect } from "@playwright/test";
 
+test("reads only the owner's inventory without writing sandbox credentials on opening Computers", async ({ page }) => {
+  let adoptions = 0;
+  let adminReads = 0;
+  let ownerReads = 0;
+  let releaseInventory!: () => void;
+  const inventoryGate = new Promise<void>(resolve => { releaseInventory = resolve; });
+  const user = { id: "alice", userId: "alice", username: "alice", role: "admin", theme: "light", language: "en" };
+  const node = {
+    id: "already-owned", userId: "alice", displayName: "Already owned", online: true, stale: false,
+    status: "ready", activeRuns: [], agents: { codex: "ready" }, disabledAgents: [],
+    nodeLocation: "user-device", sandboxMode: "none",
+  };
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: [], homeTaskNeedsYou: 0, agents: [], teams: [], tasks: [], nodes: [], projects: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user };
+    else if (path.endsWith("/admin/daemon-nodes")) {
+      adminReads++;
+      body = { nodes: [
+        { ...node, nodeToken: "legacy-fixture-token" },
+        { ...node, id: "someone-else", userId: "other", nodeToken: "other-fixture-token" },
+      ] };
+    } else if (path.endsWith("/daemon-nodes")) {
+      ownerReads++;
+      await inventoryGate;
+      body = { nodes: [node] };
+    } else if (path.endsWith("/sandboxes") && route.request().method() === "POST") {
+      adoptions++;
+      body = node;
+    }
+    await route.fulfill({ json: body });
+  });
+  try {
+    const ownerInventory = page.waitForRequest(request => new URL(request.url()).pathname === "/api/v1/daemon-nodes");
+    await page.goto("/computers");
+    await ownerInventory;
+    // Hold the owner's list until the shell has mounted.
+    await expect(page.locator(".sidenav-nav")).toBeVisible();
+    expect(adoptions).toBe(0);
+    releaseInventory();
+    await expect(page.locator(".computer-card")).toHaveCount(1);
+    expect(adoptions).toBe(0);
+    expect(ownerReads).toBe(1);
+    expect(adminReads).toBe(0);
+  } finally {
+    releaseInventory();
+  }
+});
+
 test("computer approval preserves its URL and requires explicit consent", async ({ page }) => {
   let approvals = 0;
   const code = "abcdefghijklmnopqrstuvwxyz123456";
@@ -72,12 +121,12 @@ test("a computer that is not plainly online says why and what to do", async ({ p
     let body: unknown = { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "computer-user", username: "alice", role: "user", theme: "light", language: "en" } };
     if (path.endsWith("/daemon-nodes")) body = { nodes: [
-      node("healthy-node", "Healthy computer", {}),
+      node("healthy-node", "Healthy computer", { transport: transport["healthy-node"] }),
       node("offline-node", "Offline computer", { online: false, stale: true, dispatchable: false }),
       node("stopped-node", "Stopped computer", { online: false, stale: true, dispatchable: false, status: "stopped" }),
-      node("retrying-node", "Retrying computer", {}),
+      node("retrying-node", "Retrying computer", { transport: transport["retrying-node"] }),
       node("deaf-node", "Deaf computer", { dispatchable: false, capabilities: [] }),
-      node("quarantine-node", "Quarantine computer", {}),
+      node("quarantine-node", "Quarantine computer", { transport: transport["quarantine-node"] }),
     ] };
     const match = /\/daemon-nodes\/([^/]+)\/transport$/.exec(path);
     if (match) { asked.push(match[1]!); body = transport[match[1]!] ?? { state: "connecting", verified: false }; }
@@ -106,12 +155,12 @@ test("a computer that is not plainly online says why and what to do", async ({ p
   // Alive but not taking work: said from liveness alone, no snapshot needed.
   await expect(card("Deaf computer").locator(".adm-presence-pill")).toHaveText("Reconnecting");
   await expect(card("Deaf computer").locator(".computer-card-connection")).toContainText("not picking up new work yet");
-  expect(asked).not.toContain("deaf-node");
 
   const quarantine = card("Quarantine computer").locator(".computer-card-connection");
   await expect(quarantine).toContainText("Some reports were refused");
   await expect(quarantine.locator("code")).toHaveText("relay reports");
   await expect(card("Quarantine computer").locator(".adm-presence-pill")).toHaveText("Online");
+  expect(asked).toEqual([]);
 
   // The notice never widens its card.
   for (const notice of await page.locator(".computer-card-connection").all()) {

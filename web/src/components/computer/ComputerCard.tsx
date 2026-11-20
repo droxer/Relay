@@ -13,7 +13,6 @@ import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
 import { ClientOutdatedBadge } from "./ClientOutdatedBadge";
 import { ComputerConnectionNotice } from "./ComputerConnectionNotice";
-import { useComputerConnection } from "../../hooks/useComputerConnection";
 import { computerConnection, connectionNeedsNotice, type ComputerConnection } from "../../lib/computerConnection";
 import { HostOsBadge } from "./HostOsBadge";
 import { Button } from "@/components/ui/button";
@@ -314,5 +313,5 @@ function RuntimeRow({
  * card itself stays a pure rendering of what it is given.
  */
 export function LiveComputerCard(props: Omit<Parameters<typeof ComputerCard>[0], "connection">) {
-  return <ComputerCard {...props} connection={useComputerConnection(props.node)} />;
+  return <ComputerCard {...props} connection={computerConnection(props.node, props.node.transport)} />;
 }

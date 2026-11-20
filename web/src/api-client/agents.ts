@@ -1,23 +1,71 @@
 import type {
+  AgentBadge,
   AgentName,
   AgentPlacement,
   AgentRole,
+  AgentSetupResponse,
   AgentTeam,
   AgentTeamsResponse,
+  CompactTeamSummaryResponse,
   CreateAgentInput,
   CreateAgentResponse,
   DefaultAgentOffer,
   RelaySession,
   TeamMutationInput,
+  TeamRosterResponse,
+  TeamMemberConfigPatch,
+  TeamMemberChoicesResponse,
   TeamWorkflow,
   WorkflowMutationInput,
   UserAgent,
   UserAgentsResponse,
 } from "../types.ts";
-import { apiJson } from "./client.ts";
+import { apiJson, privateConditionalJson, RelayApiError, type PrivateResponseCache } from "./client.ts";
+import { applyTeamMemberConfigPatch } from "../lib/teamForm.ts";
+import { agentsForTeamComputer, teamComputerId } from "../lib/teamComputer.ts";
 
-export function listUserAgents(signal?: AbortSignal, includeDefaultOffers = false): Promise<UserAgentsResponse> {
-  return apiJson<UserAgentsResponse>(includeDefaultOffers ? "/agents?include=default-offers" : "/agents", { signal });
+export async function getTeamMemberChoices(
+  team: AgentTeam, signal?: AbortSignal, cache?: PrivateResponseCache<TeamMemberChoicesResponse>,
+): Promise<TeamMemberChoicesResponse> {
+  try {
+    return await privateConditionalJson(`/teams/${encodeURIComponent(team.id)}/member-choices`, signal, cache);
+  } catch (error) {
+    if (!(error instanceof RelayApiError && error.status === 404
+      && (error.code === "Not found." || error.code === "Not Found"))) throw error;
+  }
+  const { agents } = await listUserAgents(signal, false, { view: "summary" });
+  const computerId = teamComputerId(team, agents);
+  return { computerId, agents: agentsForTeamComputer(agents, computerId, team.memberAgentIds) };
+}
+
+export function listUserAgents(signal?: AbortSignal, includeDefaultOffers = false, options?: {
+  view: "summary"; cache?: PrivateResponseCache<UserAgentsResponse>;
+}): Promise<UserAgentsResponse> {
+  const params = new URLSearchParams();
+  if (includeDefaultOffers) params.set("include", "default-offers");
+  if (options) params.set("view", options.view);
+  const query = params.toString();
+  return privateConditionalJson(query ? `/agents?${query}` : "/agents", signal, options?.cache);
+}
+
+export function listAgentSetup(signal?: AbortSignal, cache?: PrivateResponseCache<AgentSetupResponse>): Promise<AgentSetupResponse> {
+  return privateConditionalJson("/agents?include=default-offers&view=setup", signal, cache);
+}
+
+export function getOwnAgent(agentId: string, signal?: AbortSignal, cache?: PrivateResponseCache<{ agent: UserAgent }>): Promise<{ agent: UserAgent }> {
+  return privateConditionalJson(`/agents/${encodeURIComponent(agentId)}`, signal, cache);
+}
+
+export function getOwnAgentBadge(
+  agentId: string, signal?: AbortSignal, cache?: PrivateResponseCache<{ agent: AgentBadge }>,
+): Promise<{ agent: AgentBadge }> {
+  return privateConditionalJson(`/agents/${encodeURIComponent(agentId)}?view=badge`, signal, cache);
+}
+
+export function searchOwnAgents(query: string, blurbs: Record<string, string>, signal?: AbortSignal): Promise<{ agentIds: string[] }> {
+  const params = new URLSearchParams({ view: "matches", q: query });
+  for (const [kind, blurb] of Object.entries(blurbs)) params.set(`blurb.${kind}`, blurb);
+  return apiJson(`/agents?${params}`, { signal });
 }
 
 export function createAgent(body: CreateAgentInput): Promise<CreateAgentResponse> {
@@ -29,8 +77,37 @@ export function listControlPanelAgents(userId?: string, signal?: AbortSignal): P
   return apiJson<UserAgentsResponse>(`/admin/agents${query}`, { signal });
 }
 
-export function listTeams(signal?: AbortSignal): Promise<AgentTeamsResponse> {
-  return apiJson<AgentTeamsResponse>("/teams", { signal });
+const expandedTeamRosters = new WeakMap<CompactTeamSummaryResponse, AgentTeamsResponse>();
+
+export async function listTeams(signal?: AbortSignal, options?: {
+  view: "summary"; cache?: PrivateResponseCache<TeamRosterResponse>;
+}): Promise<AgentTeamsResponse> {
+  const response = await privateConditionalJson<TeamRosterResponse>(
+    options ? `/teams?view=${options.view}&format=compact` : "/teams", signal, options?.cache,
+  );
+  if (!("memberDirectory" in response)) return response;
+  const cached = expandedTeamRosters.get(response);
+  if (cached) return cached;
+  const directory = new Map(response.memberDirectory.map(member => [member.id, member]));
+  const result: AgentTeamsResponse = {
+    view: response.view,
+    teams: response.teams.map(team => {
+      const members = team.memberAgentIds.flatMap(agentId => {
+        const member = directory.get(agentId);
+        return member ? [member] : [];
+      });
+      return {
+        ...team, members, lead: members.find(member => member.id === team.leadAgentId) ?? null,
+        workflowOptions: [...response.predefinedWorkflows, ...team.workflowOptions],
+      };
+    }),
+  };
+  expandedTeamRosters.set(response, result);
+  return result;
+}
+
+export function getOwnTeam(teamId: string, signal?: AbortSignal, cache?: PrivateResponseCache<{ team: AgentTeam }>): Promise<{ team: AgentTeam }> {
+  return privateConditionalJson(`/teams/${encodeURIComponent(teamId)}?view=preview`, signal, cache);
 }
 
 export function createTeam(input: TeamMutationInput): Promise<{ team: AgentTeam }> {
@@ -38,10 +115,49 @@ export function createTeam(input: TeamMutationInput): Promise<{ team: AgentTeam 
 }
 
 export function updateTeam(teamId: string, input: Partial<TeamMutationInput>): Promise<{ team: AgentTeam }> {
-  return apiJson<{ team: AgentTeam }>(`/teams/${encodeURIComponent(teamId)}`, {
+  return apiJson<{ team: AgentTeam }>(`/teams/${encodeURIComponent(teamId)}?view=preview`, {
     method: "PATCH",
     body: input,
   });
+}
+
+type TeamMemberUpdate = {
+  teamId: string; agentId: string; baseVersion: number; version: number;
+  updatedAt: string; fields: TeamMemberConfigPatch;
+};
+
+export async function updateTeamMemberConfig(team: AgentTeam, agentId: string, fields: TeamMemberConfigPatch): Promise<{ team: AgentTeam; baseVersion?: number }> {
+  let update: TeamMemberUpdate;
+  try {
+    ({ teamMemberUpdate: update } = await apiJson<{ teamMemberUpdate: TeamMemberUpdate }>(
+      `/teams/${encodeURIComponent(team.id)}/members/${encodeURIComponent(agentId)}`,
+      { method: "PATCH", body: fields },
+    ));
+  } catch (error) {
+    if (!(error instanceof RelayApiError) || !(
+      (error.status === 404 && error.code === "Not Found")
+      || (error.status === 405 && error.code === "Method Not Allowed")
+    )) throw error;
+    // Older backends can still write the complete member config map.
+    const memberConfigs = team.memberConfigs ?? {};
+    return updateTeam(team.id, { memberConfigs: {
+      ...memberConfigs, [agentId]: applyTeamMemberConfigPatch(memberConfigs[agentId] ?? {}, fields),
+    } });
+  }
+  if (update?.teamId !== team.id || update.agentId !== agentId
+    || update.baseVersion !== team.version || update.version !== update.baseVersion + 1) {
+    return getOwnTeam(team.id);
+  }
+  return {
+    baseVersion: update.baseVersion,
+    team: {
+      ...team, version: update.version, updatedAt: update.updatedAt,
+      memberConfigs: {
+        ...team.memberConfigs,
+        [agentId]: applyTeamMemberConfigPatch(team.memberConfigs?.[agentId] ?? {}, update.fields),
+      },
+    },
+  };
 }
 
 /** Start a Project workflow Team in a new Project Thread. Keep `requestId`

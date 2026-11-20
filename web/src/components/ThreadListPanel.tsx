@@ -15,7 +15,7 @@ import { buildThreadWaitIndex } from "../lib/awaitingInput";
 import { limitThreadGroups, railLimitFor, RAIL_PAGE_SIZE } from "../lib/threads";
 import { useStableCallback } from "@/hooks/useStableCallback";
 import { projectThreadBuckets } from "../lib/threads";
-import { projectDirectoryState } from "../lib/projectDirectory";
+import { projectDirectoryState, projectIndexRow } from "../lib/projectDirectory";
 import {
   clampThreadListWidth,
   maxThreadListWidth,
@@ -23,7 +23,7 @@ import {
   THREAD_LIST_WIDTH_MAX,
   THREAD_LIST_WIDTH_MIN,
 } from "../lib/threadList";
-import type { ProjectRecord, RelaySession, RelayTaskListItem } from "../types";
+import type { ProjectRailItem, RelaySession, RelayTaskListItem } from "../types";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
 import { useChatColumnResize } from "@/hooks/useChatColumnResize";
 import { chatColumnWidth, viewportWidth } from "@/lib/shellMetrics";
@@ -88,7 +88,7 @@ export function ThreadListPanel({
   /** Read with the threads to say which wait on a person — the same rule the
    *  thread's own prompt follows (`threadAwaitsHuman`). */
   tasks: readonly RelayTaskListItem[];
-  projects: ProjectRecord[];
+  projects: ProjectRailItem[];
   /** The projects query's state, the same one the detail pane resolves its
    *  loading / error / not-found panes from. The rail must not answer "no
    *  projects yet" for a fetch that has not finished or has failed. */
@@ -303,6 +303,7 @@ export function ThreadListPanel({
       >
         {directoryMode === "projects" && hierarchy ? hierarchy.projects.map(({ project }) => {
           const selection = selectedProjectId === project.id ? "selected" : null;
+          const memberLabel = t("project.member_count", { count: projectIndexRow(project).memberCount });
           return (
           <section key={project.id} className={`project-folder${selection ? ` ${selection}` : ""}${project.archivedAt ? " archived" : ""}`}>
             {/* The folder header is a rail row like any other — `.rail-row` +
@@ -318,15 +319,15 @@ export function ThreadListPanel({
                 type="button"
                 className="project-folder-select"
                 aria-current={selection === "selected" ? "page" : undefined}
-                tooltip={`${project.name} · ${t("project.member_count", { count: project.members.length })}`}
-                aria-label={`${project.name} · ${t("project.member_count", { count: project.members.length })}`}
+                tooltip={`${project.name} · ${memberLabel}`}
+                aria-label={`${project.name} · ${memberLabel}`}
                 onClick={() => onSelectProject(project.id)}
               >
                 <span className="project-folder-icon" aria-hidden="true"><ProjectMark size={ICON.md} /></span>
                 <span className="project-folder-name">{project.name}</span>
                 {/* Keep the roster count visible on touch and pointer layouts. */}
                 <span className="project-folder-meta" aria-hidden="true">
-                  {t("project.member_count", { count: project.members.length })}
+                  {memberLabel}
                 </span>
                 {/* State only when it adds something. Active is the resting
                     state of nearly every project, so printing it on every row

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from issue_projects import project_for_agents
 
 from relay.app import create_app
+from relay.api.agents import agents as agent_routes
 from relay.core.computer_identity import computer_id
 from store_fixtures import overwrite_snapshot
 from test_tasks import _login
@@ -211,6 +212,64 @@ def test_admin_manages_agents_and_user_lists_own_agents(
             ).status_code
             == 404
         )
+
+
+def test_own_agent_roster_projects_fields_and_reads_configuration_on_demand(client_with_node, monkeypatch) -> None:
+    client, node = client_with_node
+    assert client.get("/api/v1/agents?view=summary").json()["searchesInstructions"] is False
+    instructions = "Review task ownership before edits. " * 375 + "Inspect the quokka fixture."
+    created = client.post("/api/v1/agents", json={
+        "displayName": "Release reviewer", "computerId": node["computerId"], "executorKind": "claude",
+        "defaultRole": "reviewer", "instructions": instructions,
+    })
+    assert created.status_code == 201, created.text
+    agent = created.json()["agent"]
+    store = client.app.state.agent_store
+    path = f"/api/v1/agents/{agent['id']}"
+
+    def reject_detail_work(*_args, **_kwargs):
+        pytest.fail("The roster should not resolve detailed Agent configuration.")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(store, "list_agents", reject_detail_work)
+        patch.setattr(agent_routes, "_agent_skills", reject_detail_work)
+        patch.setattr(agent_routes, "_available_models", reject_detail_work)
+        summary = client.get("/api/v1/agents?view=summary&include=default-offers")
+        assert summary.status_code == 200, summary.text
+        data = summary.json()
+        assert data["view"] == "summary" and data["defaultAgentOffers"] == [] and data["searchesInstructions"] is True
+        [item] = data["agents"]
+        assert item["id"] == agent["id"] and item["defaultRole"] == "reviewer"
+        assert item["bindingStatus"] == "available"
+        assert [entry["id"] for entry in item["placements"]] == [entry["id"] for entry in agent["placements"]]
+        assert not (item.keys() & {"instructions", "availableModels", "skills", "delegationAgentIds"})
+        assert len(summary.content) < 3_000
+        badge_path = f"{path}?view=badge"
+        badge = client.get(badge_path)
+        assert badge.json() == {"agent": {
+            key: item[key] for key in ("id", "displayName", "profileImageUrl", "executorKind", "enabled", "availability")
+            if key in item
+        }}
+        headers = {"If-None-Match": badge.headers["etag"]}
+        assert client.get(badge_path, headers=headers).status_code == 304
+        assert TestClient(client.app).get(badge_path, headers=headers).status_code == 401
+        assert client.get("/api/v1/agents", params={"view": "matches", "q": "QUOKKA fixture"}).json() == {"agentIds": [agent["id"]]}
+        [placement] = item["placements"]
+        assert client.get("/api/v1/agents", params={"view": "matches", "q": placement["nodeDisplayName"]}).json() == {"agentIds": [agent["id"]]}
+        assert client.get("/api/v1/agents", params={"view": "matches", "q": "custom blurb", "blurb.claude": "custom blurb"}).json() == {"agentIds": [agent["id"]]}
+
+    record = client.get(path)
+    assert record.status_code == 200 and record.json()["agent"]["instructions"] == instructions
+    assert record.headers["Cache-Control"] == "no-store"
+    headers = {"If-None-Match": record.headers["ETag"]}
+    unchanged = client.get(path, headers=headers)
+    assert unchanged.status_code == 304 and unchanged.content == b""
+    assert client.patch(path, json={"instructions": "Check the fox fixture instead."}).status_code == 200
+    changed = client.get(path, headers=headers)
+    assert changed.status_code == 200 and changed.json()["agent"]["instructions"] == "Check the fox fixture instead."
+    assert client.get("/api/v1/agents", params={"view": "matches", "q": "quokka"}).json() == {"agentIds": []}
+    assert client.get("/api/v1/agents/not-an-agent-id").status_code == 404
+    assert TestClient(client.app).get(path).status_code == 401
 
 
 def test_user_agent_admin_routes_require_admin(monkeypatch) -> None:
@@ -2156,6 +2215,9 @@ def test_user_cannot_list_or_dispatch_another_users_agent(monkeypatch) -> None:
             == 200
         )
         assert client.get("/api/v1/agents").json()["agents"] == []
+        assert client.get("/api/v1/agents?view=summary").json()["agents"] == []
+        assert client.get("/api/v1/agents?view=matches&q=Builder").json() == {"agentIds": []}
+        assert client.get(f"/api/v1/agents/{agent['id']}").status_code == 404
 
         denied = client.post(
             "/api/v1/agent-runs",

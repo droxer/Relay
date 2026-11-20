@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
-import type { WorkflowStep } from "../../types";
+import type { WorkflowStepPreview } from "../../types";
 import { DisclosureChevron } from "../icons";
 
 /** A saved workflow's steps as one flow, in the same tiles a predefined
@@ -9,7 +9,7 @@ import { DisclosureChevron } from "../icons";
  *  when a person approves first. The Project tab, the Team library and the
  *  Team preview share it, so every saved process reads the same way. */
 export function WorkflowStepSummary({ steps, agentName, label }: {
-  steps: readonly WorkflowStep[];
+  steps: readonly WorkflowStepPreview[];
   agentName: (agentId: string) => string;
   label?: string;
 }) {

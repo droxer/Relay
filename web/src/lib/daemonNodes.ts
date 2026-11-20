@@ -91,15 +91,3 @@ export function withoutDeletedComputer(
     && (!deleted.managedNodeId || node.managedNodeId !== deleted.managedNodeId)
   ));
 }
-
-export function shouldClaimLocalDaemonNode(
-  controlPanelNode: ControlPanelDaemonNodeRecord,
-  authenticatedNodes: DaemonNodeMonitorRecord[],
-): boolean {
-  if (!controlPanelNode.userId || !controlPanelNode.nodeToken || !controlPanelNode.online || controlPanelNode.stale) return false;
-  return !authenticatedNodes.some((node) =>
-    (node.id === controlPanelNode.id || node.userId === controlPanelNode.userId) &&
-    node.online &&
-    !node.stale
-  );
-}

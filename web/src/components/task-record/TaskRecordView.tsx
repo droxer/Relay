@@ -8,7 +8,7 @@ import { Drawer } from "@/components/ui/Drawer";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
 import { useTaskRecord } from "../../hooks/useTaskRecord";
 import { pathForAppState } from "../../lib/appRoute";
-import { runningRoutineIds } from "../../lib/routine";
+import { runningRoutineIds, type RoutineListState } from "../../lib/routine";
 import { taskStartMutationInput } from "../../lib/taskBoardForm";
 import type { CurrentUser, RelayTaskListItem } from "../../types";
 import { TaskRecordPage, recordTitle } from "./TaskRecordPage";
@@ -33,6 +33,8 @@ export function TaskRecordView({
   runId,
   currentUser,
   tasks,
+  compactList = false,
+  automationStates,
   drawer,
   tabSearchKey,
   hrefForRecord,
@@ -48,6 +50,8 @@ export function TaskRecordView({
   /** The viewer — assignment and assignee names resolve through their directories. */
   currentUser: CurrentUser;
   tasks: RelayTaskListItem[];
+  compactList?: boolean;
+  automationStates?: Record<string, RoutineListState>;
   /** Present the record as a drawer over the board rather than as the page. */
   drawer?: {
     open: boolean;
@@ -76,13 +80,19 @@ export function TaskRecordView({
   const dependentIds = useMemo(() => tasks
     .filter((task) => !task.deletedAt && task.prerequisiteTaskIds?.includes(recordId))
     .map((task) => task.id).sort(), [tasks, recordId]);
-  const { task, isPending, notFound, error } = useTaskRecord(recordId, placeholder, dependentIds);
+  const { task, isPending, notFound, error } = useTaskRecord(recordId, placeholder, dependentIds, compactList);
   const parent = useMemo(
     () => (runId ? tasks.find((candidate) => candidate.id === taskId) : undefined),
     [runId, taskId, tasks],
   );
-  const running = useMemo(() => runningRoutineIds(tasks), [tasks]);
-  const parentRoutine = runId && parent ? { id: parent.id, title: parent.title } : undefined;
+  const running = useMemo(() => {
+    const ids = runningRoutineIds(tasks);
+    if (task && (automationStates?.[task.id] === "running"
+      || !automationStates?.[task.id] && task.hasRunningOccurrence)) ids.add(task.id);
+    return ids;
+  }, [tasks, task, automationStates]);
+  const parentRoutine = runId ? (task?.routineParent?.id === taskId ? task.routineParent
+    : parent ? { id: parent.id, title: parent.title } : undefined) : undefined;
 
   async function runRecord(): Promise<void> {
     if (busyAction || !task) return;
@@ -193,6 +203,7 @@ export function TaskRecordView({
         onDelete={() => { void deleteRecord(); }}
         onDone={() => { void markDone(); }}
         tasks={tasks}
+        loadPrerequisiteChoices={compactList}
         onOpenTask={(nextId) => onOpenRecord(nextId, null)}
       />
     );

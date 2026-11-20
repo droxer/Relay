@@ -4,6 +4,7 @@ import type {
   RelaySession,
   RelayTask,
   RelayTaskEvent,
+  RelayTaskListItem,
   RelayTaskSummary,
   RoutineOccurrenceTriggerKind,
   RoutineState,
@@ -72,6 +73,7 @@ export interface TaskRun {
 export interface TaskRunsResponse {
   taskId: string;
   runs: TaskRun[];
+  nextCursor?: string | null;
 }
 
 export interface TaskDeletionResponse {
@@ -84,6 +86,40 @@ export interface TasksResponse {
   flowUsage?: { userId: string; occupied: number };
   tasks: RelayTaskSummary[];
   homeProjects?: Record<string, HomeProjectTaskSummary>;
+  homeUntriaged?: HomeUntriagedSummary | null;
+  threadTaskContext?: ThreadTaskContext;
+  projectDashboard?: ProjectDashboardSummary;
+}
+
+export interface ProjectDashboardSummary {
+  metrics: Record<"total" | "active" | "blocked" | "overdue" | "done", number>;
+  attentionTotal: number;
+  hasQueuedOrRunning: boolean;
+  attention: {
+    task: Pick<RelayTaskListItem, "id" | "number" | "title" | "dueDate" | "isRoutine">;
+    reason: "blocked" | "overdue";
+    overdue: boolean;
+  }[];
+}
+
+export interface ThreadTaskContext {
+  threadId: string;
+  eventCount: number;
+  activeTaskId: string | null;
+  nextSteps: string[];
+}
+
+export const TASK_LIST_SCOPES = ["home", "issues", "board", "automations", "project-dashboard"] as const;
+export type TaskListScope = (typeof TASK_LIST_SCOPES)[number];
+
+export function isTaskListScope(value: unknown): value is TaskListScope {
+  return typeof value === "string" && (TASK_LIST_SCOPES as readonly string[]).includes(value);
+}
+
+export interface HomeUntriagedSummary {
+  count: number;
+  firstCreatedAt: string;
+  lastCreatedAt: string;
 }
 
 export interface HomeProjectTaskSummary {

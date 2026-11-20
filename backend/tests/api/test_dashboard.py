@@ -46,6 +46,8 @@ def test_dashboard_sessions_returns_shape(monkeypatch) -> None:
         assert len(body["dailyCounts"]) == 7
         assert all({"date", "count", "completed", "failed"} <= set(row) for row in body["dailyCounts"])
         assert isinstance(body["topUsers"], list)
+        assert body["topUsers"][0]["displayName"] == "admin"
+        assert body["topUsers"][0]["handle"] == "admin"
         assert isinstance(body["statusCounts"], dict)
 
 

@@ -1,4 +1,5 @@
 """Workflow aggregate independent of optional Team references."""
+from collections.abc import Collection
 from copy import deepcopy
 from typing import Any
 
@@ -23,43 +24,53 @@ class DatabaseWorkflowStore:
     def get_workflow(self, workflow_id: str, *, include_deleted: bool = False) -> dict[str, Any] | None:
         if names_no_uuid_row(self.engine, workflow_id):
             return None
-        statement = select(workflows.c.snapshot).where(workflows.c.id == workflow_id)
+        statement = select(workflows.c.snapshot, workflows.c.event_version).where(workflows.c.id == workflow_id)
         if not include_deleted:
             statement = statement.where(workflows.c.deleted_at.is_(None))
         with store_transaction(self.engine) as conn:
-            value = conn.execute(statement).scalar_one_or_none()
-        return deepcopy(value) if value else None
+            row = conn.execute(statement).one_or_none()
+        return {**deepcopy(row.snapshot), 'version': row.event_version} if row else None
 
     def list_workflows(self, owner: str | None = None, *, project_id: str | None = None,
-                       team_id: str | None = None) -> list[dict[str, Any]]:
-        statement = select(workflows.c.snapshot).where(workflows.c.deleted_at.is_(None))
+                       team_id: str | None = None, project_only: bool = False,
+                       project_ids: Collection[str] | None = None) -> list[dict[str, Any]]:
+        statement = select(workflows.c.snapshot, workflows.c.event_version).where(workflows.c.deleted_at.is_(None))
         if owner:
             statement = statement.where(workflows.c.owner_user_id == owner)
         if project_id:
             if names_no_uuid_row(self.engine, project_id):
                 return []
             statement = statement.where(workflows.c.project_id == project_id)
+        elif project_only:
+            statement = statement.where(workflows.c.project_id.is_not(None))
+        if project_ids is not None:
+            if not project_ids:
+                return []
+            statement = statement.where(workflows.c.project_id.in_(project_ids))
         if team_id:
             statement = statement.join(links, links.c.workflow_id == workflows.c.id).where(links.c.team_id == team_id)
         with store_transaction(self.engine) as conn:
-            values = conn.execute(statement).scalars().all()
-        return sorted((deepcopy(value) for value in values), key=lambda value: (value['name'].casefold(), value['id']))
+            rows = conn.execute(statement).all()
+        values = [{**deepcopy(row.snapshot), 'version': row.event_version} for row in rows]
+        return sorted(values, key=lambda value: (value['name'].casefold(), value['id']))
 
     def for_teams(self, team_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
         if not team_ids:
             return {}
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(select(links.c.team_id, workflows.c.snapshot).join(
+            rows = conn.execute(select(links.c.team_id, workflows.c.snapshot, workflows.c.event_version).join(
                 workflows, workflows.c.id == links.c.workflow_id,
             ).where(links.c.team_id.in_(team_ids), workflows.c.deleted_at.is_(None))).all()
         result: dict[str, list[dict[str, Any]]] = {}
-        for team_id, snapshot in rows:
-            result.setdefault(str(team_id), []).append({**deepcopy(snapshot), 'teamId': str(team_id)})
+        for team_id, snapshot, version in rows:
+            result.setdefault(str(team_id), []).append({**deepcopy(snapshot), 'teamId': str(team_id), 'version': version})
         for values in result.values():
             values.sort(key=lambda value: (value['name'].casefold(), value['id']))
         return result
 
-    def save_workflow(self, owner: str, payload: dict[str, Any], *, workflow_id: str | None = None) -> dict[str, Any]:
+    def save_workflow(
+        self, owner: str, payload: dict[str, Any], *, workflow_id: str | None = None, expected_version: int | None = None,
+    ) -> dict[str, Any]:
         project_id = payload.get('projectId')
         old = self.get_workflow(workflow_id) if workflow_id else None
         if workflow_id and not old:
@@ -71,6 +82,8 @@ class DatabaseWorkflowStore:
             current = self.get_workflow(workflow_id) if workflow_id else None
             if workflow_id and not current:
                 raise KeyError(workflow_id)
+            if expected_version is not None and (not current or current['version'] != expected_version):
+                raise ValueError('workflow_version_conflict')
             definition = project_workflow_definition(owner, payload, current=current)
             if not current or current['name'].casefold() != definition['name'].casefold():
                 if any(value['id'] != definition['id'] and value['name'].casefold() == definition['name'].casefold()
@@ -83,7 +96,7 @@ class DatabaseWorkflowStore:
                 with store_transaction(self.engine) as conn:
                     version = 0
                     if current:
-                        version = conn.execute(select(workflows.c.event_version).where(workflows.c.id == workflow_id)).scalar_one()
+                        version = current['version']
                         conn.execute(update(workflows).where(workflows.c.id == workflow_id).values(**self._row(definition, version + 1)))
                     else:
                         conn.execute(insert(workflows).values(**self._row(definition, 1)))
@@ -93,7 +106,7 @@ class DatabaseWorkflowStore:
                 if 'uq_workflows_live_project_name' in str(error) or 'workflows.project_id, workflows.name_key' in str(error):
                     raise ValueError('workflow_name_taken') from error
                 raise
-            return definition
+            return {**definition, 'version': version + 1}
 
     def delete_workflow(self, workflow_id: str) -> None:
         current = self.get_workflow(workflow_id)
@@ -103,7 +116,8 @@ class DatabaseWorkflowStore:
             self.assert_not_default(workflow_id)
             with store_transaction(self.engine) as conn:
                 version = conn.execute(select(workflows.c.event_version).where(workflows.c.id == workflow_id)).scalar_one()
-                definition = {**current, 'enabled': False, 'deletedAt': now_iso(), 'updatedAt': now_iso()}
+                definition = {key: value for key, value in current.items() if key != 'version'}
+                definition.update(enabled=False, deletedAt=now_iso(), updatedAt=now_iso())
                 conn.execute(update(workflows).where(workflows.c.id == workflow_id).values(**self._row(definition, version + 1)))
                 self._event(conn, definition, version, 'workflow.deleted')
 

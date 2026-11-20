@@ -151,6 +151,8 @@ export function AssignmentSelect({
   inline,
   hideTeams = false,
   workflows,
+  workflowMessage,
+  onOpenChange,
 }: {
   /** `agent:<id>`, `team:<id>`, or `NO_ASSIGNMENT`. */
   value: string;
@@ -165,7 +167,9 @@ export function AssignmentSelect({
   describedBy?: string;
   autoFocus?: boolean;
   hideTeams?: boolean;
-  workflows?: Workflow[];
+  workflows?: Pick<Workflow, "id" | "name">[];
+  workflowMessage?: string;
+  onOpenChange?: (open: boolean) => void;
   /** A list row's compact trigger: the row's own assignee chip, named by
    *  `label`, instead of the drawer's full-width field. */
   inline?: { label: string; content: ReactNode };
@@ -185,6 +189,7 @@ export function AssignmentSelect({
       value={value}
       onOpenChange={(open) => {
         if (open) roster.resetTab();
+        onOpenChange?.(open);
       }}
       onValueChange={(next) => {
         if (next == null) return;
@@ -243,7 +248,10 @@ export function AssignmentSelect({
               <RosterActionOption value={NAV_AGENTS} label={t("backlog.manage_agents")} icon={<NavAgents size={ICON.sm} />} />
             </>
           ) : roster.tab === "workflows" ? (
-            <>{workflows?.map(workflow => <SelectItem key={workflow.id} value={`workflow:${workflow.id}`}>{workflow.name}</SelectItem>)}</>
+            <>
+              {workflows?.map(workflow => <SelectItem key={workflow.id} value={`workflow:${workflow.id}`}>{workflow.name}</SelectItem>)}
+              {workflowMessage ? <RosterEmptyOption value="__workflow_status__" label={workflowMessage} disabled /> : null}
+            </>
           ) : (
             <>
               {teams.map((team) => (

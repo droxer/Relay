@@ -3,7 +3,7 @@
  * projects at a glance, what is running now, and what finished lately. Every
  * reading is derived from data the app already loads.
  */
-import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem, TasksResponse } from "../types.js";
+import type { DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskListItem, TasksResponse } from "../types.js";
 import type { HomeItem } from "./homeQueue.ts";
 import { openPermissionRequests } from "./permissionRequests.ts";
 
@@ -15,7 +15,7 @@ export const PROJECT_PROGRESS = ["done", "review", "running", "blocked"] as cons
 export type ProjectProgress = Record<(typeof PROJECT_PROGRESS)[number], number>;
 
 export interface HomeProjectRow {
-  project: ProjectRecord;
+  project: ProjectListItem;
   total: number;
   progress: ProjectProgress;
   waitingOnYou: number;
@@ -40,7 +40,7 @@ const finishedAt = (task: RelayTaskListItem) => task.finishedAt ?? task.updatedA
 /** Live projects, the ones with something for the person first (in queue
  *  order), then the most recently touched. */
 export function homeProjects(
-  projects: readonly ProjectRecord[],
+  projects: readonly ProjectListItem[],
   tasks: readonly RelayTaskListItem[],
   queue: readonly HomeItem[],
   limit = HOME_PROJECT_LIMIT,

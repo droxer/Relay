@@ -105,6 +105,9 @@ const queue = (page: Page) => page.getByRole("region", { name: "Up next" });
 
 test("uses a compact Home Task list and full Project counts", async ({ page }) => {
   await serve(page, "light");
+  await page.route(/\/api\/v1\/threads\?/, route => route.fulfill({ json: {
+    sessions: [pricing, webhook], homeTaskNeedsYou: 1,
+  } }));
   const scopes: (string | null)[] = [];
   await page.route(/\/api\/v1\/tasks\?/, async route => {
     const scope = new URL(route.request().url()).searchParams.get("scope");
@@ -113,12 +116,15 @@ test("uses a compact Home Task list and full Project counts", async ({ page }) =
     await route.fulfill({ json: {
       tasks: tasks.filter(task => ["t-due", "t-retry"].includes(task.id)),
       homeProjects: { "p-billing": { total: 20, progress: { done: 15, review: 1, running: 0, blocked: 0 }, updatedAt: ago(1) } },
+      homeUntriaged: { count: 96, firstCreatedAt: ago(8000), lastCreatedAt: ago(15) },
     } });
   });
   await page.goto("/home");
   const billing = page.getByRole("region", { name: "Projects" }).getByRole("link", { name: /Billing v2.*75%/ });
   await expect(billing).toContainText("20 tasks");
   await expect(page.getByRole("region", { name: "Upcoming" })).toContainText("Review the release checklist");
+  await expect(queue(page)).toContainText("96 tasks have no project");
+  await expect(queue(page)).toContainText("Add retry budget to webhook sender");
   expect(scopes).toEqual(["home"]);
 });
 

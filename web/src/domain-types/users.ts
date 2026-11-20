@@ -60,7 +60,15 @@ export interface UpdateControlPanelUserInput {
 
 export interface ControlPanelUsersResponse {
   users: UserRecord[];
+  nodes?: UserRosterComputer[];
+  page?: { page: number; total: number };
+  counts?: Record<"all" | "running" | "ready" | "idle" | "failed" | "unassigned", number>;
+  displayOrder?: string[];
+  userCount?: number;
 }
+
+export type UserRosterComputer = Pick<ControlPanelDaemonNodeRecord,
+  "id" | "displayName" | "userId" | "nodeLocation" | "status" | "online" | "stale" | "lastSeenAt">;
 
 export interface CreateControlPanelUserInput {
   userId: string;

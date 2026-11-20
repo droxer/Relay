@@ -4,7 +4,7 @@ import { useId, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { importGitHubIssues, previewGitHubIssues, RelayApiError } from "../../api";
-import type { GitHubIssuePreview, GitHubIssueState, GitHubIssuesResponse, ProjectRecord } from "../../types";
+import type { GitHubIssuePreview, GitHubIssueState, GitHubIssuesResponse, ProjectListItem } from "../../types";
 import { TASKS_QUERY_KEY } from "../../hooks/useRelayData";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
@@ -34,9 +34,9 @@ interface GitHubImportDrawerProps {
   open: boolean;
   onClose: () => void;
   /** The board's own project: the destination is fixed to it. */
-  lockedProject?: ProjectRecord | null;
+  lockedProject?: ProjectListItem | null;
   /** Otherwise, the projects a person may import into (none = intake). */
-  projects?: ProjectRecord[];
+  projects?: ProjectListItem[];
   /** The project picked when the drawer opens, e.g. the list's filter. */
   initialProjectId?: string;
   /** Opens an issue's existing task. */

@@ -113,11 +113,14 @@ export function routineFormFields(
  */
 export function routineMutationFields(
   form: Pick<RoutineTaskFormState, "routineTriggers" | "routineState">,
+  baseline?: Pick<RoutineTaskFormState, "routineTriggers" | "routineState"> | null,
 ): Pick<TaskMutationInput, "isRoutine" | "routineTriggers" | "routineState"> {
+  const triggers = form.routineTriggers.map(normalizeTriggerForSave);
+  const triggersChanged = !baseline || JSON.stringify(triggers) !== JSON.stringify(baseline.routineTriggers.map(normalizeTriggerForSave));
   return {
     isRoutine: true,
-    routineTriggers: form.routineTriggers.map(normalizeTriggerForSave),
-    ...(form.routineState === "paused_by_relay" ? {} : { routineState: form.routineState }),
+    ...(triggersChanged ? { routineTriggers: triggers } : {}),
+    ...(form.routineState !== "paused_by_relay" && form.routineState !== baseline?.routineState ? { routineState: form.routineState } : {}),
   };
 }
 

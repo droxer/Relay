@@ -8,12 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from ...notifications.rules import NOTIFICATION_KINDS
 from ...notifications.watcher import recipient_id
 from ...persistence.notification.store import MAX_LIST_LIMIT, DatabaseNotificationStore
 from ...security.request_auth import require_user_session
+from ..conditional_get import private_conditional_json
 from ..deps import AppContextDep, app_context
 from ..bodies import JsonBodyDep
 
@@ -31,15 +32,15 @@ def _caller(request: Request, ctx: AppContextDep) -> str:
     return recipient_id(require_user_session(request, ctx.auth_store))
 
 
-@router.get("/notifications")
+@router.get("/notifications", response_model=None)
 def list_notifications(
     request: Request, ctx: AppContextDep, limit: int = Query(50, ge=1, le=MAX_LIST_LIMIT), view: str = "",
-) -> dict[str, Any]:
+) -> dict[str, Any] | Response:
     user_id = _caller(request, ctx)
     store = _store(request)
     if view == "count":
         return _unread_count(store, user_id)
-    return store.list_for_user(user_id, limit=limit)
+    return private_conditional_json(request, store.list_for_user(user_id, limit=limit))
 
 
 def _target_ids(body: dict[str, Any]) -> list[str] | None:

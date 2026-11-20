@@ -13,22 +13,30 @@ import type {
   TaskEventsResponse,
   TaskFilesResponse,
   TaskMutationInput,
+  TaskListScope,
   TaskRunAssignment,
   TaskRunsResponse,
   TasksResponse,
   TaskReview,
 } from "../types.ts";
-import { apiJson, fetchWithSession, readApiResponse } from "./client.ts";
+import { apiJson, fetchWithSession, privateConditionalJson, readApiResponse, type PrivateResponseCache } from "./client.ts";
+import type { IssueQueue } from "../lib/issueQueues.ts";
+import type { TaskWorkflowStage } from "../lib/taskFlow.ts";
+import type { RoutineListState } from "../lib/routine.ts";
+import { isoToday } from "../lib/backlog.ts";
 import { relayApiEndpoint } from "../lib/apiOrigin.ts";
 import { taskGuard, tasksGuard, taskReviewGuard } from "./responseShape.ts";
 
 /** Owned by the personal-space hook, never shared across Accounts. */
-export type TaskListCache = { projectId?: string; home?: boolean; etag?: string; data?: TasksResponse };
+export type TaskListCache = { projectId?: string; scope?: TaskListScope; threadId?: string; computerId?: string; etag?: string; data?: TasksResponse };
 
 export async function listTasks(signal?: AbortSignal, cache?: TaskListCache): Promise<TasksResponse> {
   const params = new URLSearchParams({ view: "summary" });
   if (cache?.projectId) params.set("projectId", cache.projectId);
-  if (cache?.home) params.set("scope", "home");
+  if (cache?.scope) params.set("scope", cache.scope);
+  if (cache?.scope === "project-dashboard") params.set("today", isoToday());
+  if (cache?.threadId) params.set("threadId", cache.threadId);
+  if (cache?.computerId) params.set("computerId", cache.computerId);
   const path = `/tasks?${params}`;
   if (!cache) return apiJson<TasksResponse>(path, { signal, guard: tasksGuard });
   const response = await fetchWithSession(relayApiEndpoint(path), {
@@ -45,6 +53,50 @@ export async function listTasks(signal?: AbortSignal, cache?: TaskListCache): Pr
     cache.etag = response.headers.get("etag") ?? undefined;
   }
   return data;
+}
+
+export type IssuePagePosition = { page: number; total: number };
+export type UnplacedTaskPage = IssuePagePosition & { tasks: Pick<RelayTaskListItem, "id" | "title">[] };
+
+export interface IssuesResponse extends TasksResponse {
+  page?: IssuePagePosition;
+  lanes?: Record<TaskWorkflowStage, IssuePagePosition>;
+  /** The pre-queue count and the facets for the full matching collection. */
+  issueCount?: number;
+  counts?: Record<IssueQueue, number>;
+  tags?: string[];
+  groupTotals?: Record<string, number>;
+  sectionCounts?: Record<TaskWorkflowStage, number>;
+  unplaced?: UnplacedTaskPage;
+}
+
+export function listIssues(params: string, signal?: AbortSignal, cache?: PrivateResponseCache<IssuesResponse>): Promise<IssuesResponse> {
+  return privateConditionalJson(`/tasks?view=summary&${params}`, signal, cache);
+}
+
+export interface AutomationsResponse extends TasksResponse {
+  page?: IssuePagePosition;
+  automationCount?: number;
+  counts?: Record<RoutineListState, number>;
+  states?: Record<string, RoutineListState>;
+  tags?: string[];
+  hasLiveRuns?: boolean;
+  unplaced?: UnplacedTaskPage;
+}
+
+export function listAutomations(params: string, signal?: AbortSignal, cache?: PrivateResponseCache<AutomationsResponse>): Promise<AutomationsResponse> {
+  return privateConditionalJson(`/tasks?view=summary&scope=automations&layout=list&${params}`, signal, cache);
+}
+
+export type PrerequisiteChoice = Pick<RelayTaskListItem, "id" | "title" | "number">;
+
+export function listPrerequisiteChoices(projectId: string, taskId: string, query: string, page: number, signal?: AbortSignal): Promise<{
+  tasks: PrerequisiteChoice[]; page?: IssuePagePosition;
+}> {
+  const params = new URLSearchParams({ view: "prerequisite-choices", projectId, taskId });
+  if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
+  return apiJson(`/tasks?${params}`, { signal });
 }
 
 export function createTask(input: CreateTaskInput): Promise<RelayTask> {
@@ -68,11 +120,12 @@ export function importGitHubIssues(input: GitHubImportInput): Promise<GitHubImpo
 /** One task or routine, by id. The list poll carries most records already,
  *  but a deep link to a record arrives before the list resolves — and an
  *  occurrence may sit outside whatever the list is showing. */
-export function getTask(taskId: string, signal: AbortSignal | undefined, view: "record"): Promise<RelayTaskListItem>;
+export function getTask(taskId: string, signal: AbortSignal | undefined, view: "record", cache?: PrivateResponseCache<RelayTaskListItem>): Promise<RelayTaskListItem>;
 export function getTask(taskId: string, signal?: AbortSignal): Promise<RelayTask>;
-export function getTask(taskId: string, signal?: AbortSignal, view?: "record"): Promise<RelayTaskListItem> {
+export function getTask(taskId: string, signal?: AbortSignal, view?: "record", cache?: PrivateResponseCache<RelayTaskListItem>): Promise<RelayTaskListItem> {
   const path = `/tasks/${encodeURIComponent(taskId)}`;
-  return apiJson(view ? `${path}?view=${view}` : path, { signal, guard: taskGuard });
+  if (view === "record") return privateConditionalJson<RelayTaskListItem>(`${path}?view=record`, signal, cache, taskGuard);
+  return apiJson(path, { signal, guard: taskGuard });
 }
 
 export function getTaskReview(taskId: string, signal?: AbortSignal): Promise<TaskReview> {
@@ -150,12 +203,12 @@ export function listTaskFiles(
  */
 export function listTaskEvents(
   taskId: string,
-  options: { includeOccurrences?: boolean; activity?: boolean; before?: number } = {},
+  options: { includeOccurrences?: boolean; view?: "activity" | "lifecycle"; before?: number } = {},
   signal?: AbortSignal,
 ): Promise<TaskEventsResponse> {
   const params = new URLSearchParams();
   if (options.includeOccurrences) params.set("include", "occurrences");
-  if (options.activity) params.set("view", "activity");
+  if (options.view) params.set("view", options.view);
   if (options.before !== undefined) params.set("before", String(options.before));
   const query = params.toString();
   return apiJson<TaskEventsResponse>(`/tasks/${encodeURIComponent(taskId)}/events${query ? `?${query}` : ""}`, { signal });
@@ -169,11 +222,14 @@ export function listTaskEvents(
  */
 export function listTaskRuns(
   taskId: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; before?: string } = {},
   signal?: AbortSignal,
 ): Promise<TaskRunsResponse> {
-  const query = options.limit ? `?limit=${encodeURIComponent(String(options.limit))}` : "";
-  return apiJson<TaskRunsResponse>(`/tasks/${encodeURIComponent(taskId)}/runs${query}`, { signal });
+  const params = new URLSearchParams();
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.before) params.set("before", options.before);
+  const query = params.toString();
+  return apiJson<TaskRunsResponse>(`/tasks/${encodeURIComponent(taskId)}/runs${query ? `?${query}` : ""}`, { signal });
 }
 
 export type WebhookSecretStatus = { configured: boolean; path: string; header: string };

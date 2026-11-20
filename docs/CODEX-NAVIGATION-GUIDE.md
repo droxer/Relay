@@ -99,10 +99,10 @@ For a list-latency change, inspect all of the following before editing:
 - mutations that change a second aggregate, such as a session updating a task.
 
 The browser task board opts into `GET /tasks?view=summary`; the unqualified
-public `GET /tasks` contract still returns complete task records. Treat the
-projection as an explicit transport optimization, not a replacement contract.
-Open Task records request the snapshot projection and reuse the list revision
-to refresh when present. The Activity history has its own reader.
+public `GET /tasks` contract still returns complete task records. The global
+Issues page owns its paged query and carries the active filters, sort and
+positions. It gets full-collection counts with the visible rows. Open Task
+records request the snapshot projection, and Activity has its own reader.
 
 ### Session stream
 
@@ -119,7 +119,7 @@ reuses hydrated QueryClient entries and a bounded, account-scoped
 tab; stale details still reconcile through the existing fallback intervals.
 The initial snapshot precedes the SSE subscription, and detail hydration and
 SSE recovery share `lib/sessionSnapshotQuery.ts` for in-flight HTTP deduplication
-and event-prefix revalidation. The last HTTP snapshot is a bounded recent window
+and event-prefix revalidation. The browser requests a compact recent window
 held separately from the session advanced by SSE. Earlier windows load as the
 reader scrolls near the oldest visible messages or uses the load button. They
 prepend without replaying their events into current state. After a failure the
@@ -143,28 +143,37 @@ Computer selectors share `NODES_QUERY_KEY` with the shell, and Channels shares
 response shapes merely because the consumer is a different page.
 
 Collection queries use freshness windows matched to their poll budgets and
-retain thread paging cursors with the cached rows. On unrelated pages, session
-and computer reads back off to 60 seconds; returning reconciles stale caches
-without forcing fresh ones to reload. The shell gets the Home badge and Thread
-activity from the Thread collection and enables the full Task summary query
-for Task and Automation lists and an open Thread's Task history. Home reads
-a compact Task projection and Project totals in one query. The Project
-Dashboard has a separate Project-scoped query and ETag. The Project
-directory, Workspace, Members, and Settings use the Thread projection.
-Project file browsers share cached
-listings and previews and offer manual retry on a 503. A Task's
+retain thread paging cursors with the cached rows. Idle Thread and Task lists
+reconcile every 30 seconds. On unrelated pages, session and computer reads
+back off to 60 seconds. Returning reconciles stale caches without forcing fresh
+ones to reload. The shell gets the Home badge and Thread activity from the
+Thread collection. Task and Automation lists select a Task summary scope.
+An open Thread reads its own Task context and the linked Task's lifecycle
+events. Home reads a compact Task projection, intake counts, and Project
+totals in one query. The Project Dashboard gets counts and five attention
+rows. Project-scoped Task surfaces share a query and ETag per Project and scope.
+The Project directory, Workspace, Members, and Settings use the Thread
+projection. The global Project list defers context and context suggestions
+to the selected Project detail. Project file browsers share cached listings
+and previews and offer manual retry on a 503. A Task's
 Workflow timeline batches linked Threads' Workflow projections on entry and
 refreshes only individual live or invalidated Threads. The Admin
-Dashboard fetches an Agent count cached by the backend. Waitlist bands share
-one paged query, and Channels fetches its routing roster when the Agent
+Dashboard fetches a cached Agent count and gets ranked User names with
+session metrics. Users loads 25 records and the Computers for those rows
+in a single query. Waitlist bands share one paged query, and Channels
+fetches its routing roster when the Agent
 picker opens. Agent and Team Activities use a compact workspace projection and
 allow the browser to revalidate it by ETag. They poll every 15 seconds when
 idle and every 3 seconds for active runs and running or queued Tasks.
 The notification bell polls only the unread count while closed. The inbox
-shares its count with the bell cache, and desktop notifications keep polling
-the inbox even with the panel closed.
+shares its count with the bell cache. The inbox revalidates its in-memory
+copy, including with the panel closed when desktop notifications are allowed.
 Personal Computer inventory scopes runtime, run, queue and managed metadata
-reads to the caller's Computers. The admin fleet view still covers the fleet.
+reads to the caller's Computers and includes a compact connection reading.
+The signed-in browser discovers existing Computers through its session. The
+admin fleet view includes owner labels and revalidates in memory. Managed
+Computer history loads a recent page and fetches older records on request.
+Skill detail loads the latest ten revisions and fetches older ones on request.
 Task Activity polls its newest page while live and caches older pages until
 invalidated.
 `AuthenticatedApp` owns the Agent and Team roster polling timers,

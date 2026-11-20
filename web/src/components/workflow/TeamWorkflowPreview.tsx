@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import type { AgentTeam, CollaborationStyle } from "../../types";
 import { approvalSlotIndex, previewGaps, previewSlots, type SlotMember } from "../../lib/collaborationStyle";
-import { predefinedStyle } from "../../lib/workflowSelection";
+import { predefinedStyle, teamWorkflowPreviews } from "../../lib/workflowSelection";
 import { ActionRetry, DisclosureChevron } from "../icons";
 import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
@@ -24,7 +24,7 @@ export function TeamWorkflowPreview({ team, workflowId, members, leadId, approva
   const { t } = useTranslation();
   const workflowName = useWorkflowName(team);
   const style = predefinedStyle(workflowId);
-  const custom = style ? undefined : team.workflows?.find(item => item.id === workflowId);
+  const custom = style ? undefined : teamWorkflowPreviews(team).find(item => item.id === workflowId);
   return <div className="workflow-preview" data-kind={style ? "predefined" : "steps"} data-style={style}>
     <div className="workflow-preview-head">
       <span className="workflow-preview-name">

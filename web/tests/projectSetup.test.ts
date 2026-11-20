@@ -14,6 +14,7 @@ import {
   setupAwaitingApply,
 } from "../src/lib/projectSetup.ts";
 import type { ProjectRecord, ProjectSetupProposal } from "../src/types.ts";
+import { projectDirectoryEntry } from "../src/lib/projectDirectory.ts";
 
 const project = {
   id: "p",
@@ -147,6 +148,9 @@ describe("setupAwaitingApply", () => {
 
   it("points the setup thread at an unapplied proposal", () => {
     assert.equal(setupAwaitingApply(proposed, "t1"), proposed.setup);
+    const summary = projectDirectoryEntry(proposed);
+    assert.equal(setupAwaitingApply(summary, "t1"), summary.setupSummary);
+    assert.equal(setupAwaitingApply(summary, "t2"), null);
   });
 
   it("stays quiet in other threads and once the setup is resolved", () => {

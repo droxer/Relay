@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 def occurrence_tasks(
-    ctx: Any, task: dict[str, Any], actor: Actor
+    ctx: Any, task: dict[str, Any], actor: Actor, *, occurrence_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """The routine's promoted occurrences the actor may read.
 
@@ -36,7 +36,7 @@ def occurrence_tasks(
     if not task.get("isRoutine"):
         return []
     occurrences: list[dict[str, Any]] = []
-    for occurrence_id in task.get("occurrenceIds") or []:
+    for occurrence_id in occurrence_ids if occurrence_ids is not None else task.get("occurrenceIds") or []:
         try:
             occurrences.append(get_task_for_actor(ctx.task_store, occurrence_id, actor))
         except HTTPException:
@@ -72,6 +72,9 @@ def task_events(
     receive another task's events.
     """
     actor = request_actor(request, ctx.auth_store)
+    if view == "lifecycle" and include != "occurrences":
+        task = get_task_header_for_actor(ctx.task_store, task_id, actor)
+        return {"events": ctx.task_store.task_lifecycle_events(task["id"])}
     if view == "activity" and include != "occurrences":
         task = get_task_header_for_actor(ctx.task_store, task_id, actor)
         try:

@@ -1,8 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { needsTaskCollection, parseAppPath } from "../lib/appRoute";
-import { parseProjectPageTab } from "../lib/projectPage";
+import { needsTaskCollection, parseAppPath, taskListScope } from "../lib/appRoute";
 import { subscribeToLocation } from "./useLocationSearch";
 
 function snapshot(): string {
@@ -30,14 +29,34 @@ export function useTaskCollectionVisible(): boolean {
   return useSyncExternalStore(subscribeToLocation, taskCollectionSnapshot, () => false);
 }
 
-function dashboardProjectSnapshot(): string | undefined {
+function taskProjectSnapshot(): string | undefined {
   const location = parseAppPath(window.location.pathname);
-  if (location.route !== "projects" || location.sessionId || location.composingNew || !location.projectId) return;
-  const search = new URLSearchParams(window.location.search);
-  if (!search.get("task") && parseProjectPageTab(search.get("tab")) === "dashboard") return location.projectId;
+  if (location.route === "projects" && needsTaskCollection(location, new URLSearchParams(window.location.search))) {
+    return location.projectId ?? undefined;
+  }
 }
 
-/** Scope only the Dashboard. Boards and record routing can read across Projects. */
-export function useProjectDashboardTaskScope(): string | undefined {
-  return useSyncExternalStore(subscribeToLocation, dashboardProjectSnapshot, () => undefined);
+export function useProjectTaskScope(): string | undefined {
+  return useSyncExternalStore(subscribeToLocation, taskProjectSnapshot, () => undefined);
+}
+
+function taskListScopeSnapshot() {
+  return taskListScope(parseAppPath(window.location.pathname), new URLSearchParams(window.location.search));
+}
+
+export function useTaskListScope() {
+  return useSyncExternalStore(subscribeToLocation, taskListScopeSnapshot, () => undefined);
+}
+
+function projectTaskRecordSnapshot(): string | null {
+  const location = parseAppPath(window.location.pathname);
+  if (location.projectId && !location.sessionId) {
+    const search = new URLSearchParams(window.location.search);
+    return search.get("task") ?? search.get("run") ?? search.get("automation");
+  }
+  return null;
+}
+
+export function useProjectTaskRecordId(): string | null {
+  return useSyncExternalStore(subscribeToLocation, projectTaskRecordSnapshot, () => null);
 }

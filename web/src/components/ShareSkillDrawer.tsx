@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { assignSkill, revokeSkillAssignment } from "../api";
 import type { AgentTeam, UserAgent, SkillDetail } from "../types";
-import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
+import { USER_AGENT_RECORD_QUERY_KEY } from "../hooks/useUserAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { labelForExecutor } from "../lib/agentDisplayNames";
 import { Button } from "@/components/ui/button";
@@ -42,12 +42,18 @@ export function ShareSkillDrawer({
   skill,
   agents,
   teams,
+  targetsLoading,
+  targetsLoadFailed,
+  onRetryTargets,
   userId,
   onClose,
 }: {
   skill: SkillDetail;
   agents: UserAgent[];
   teams: AgentTeam[];
+  targetsLoading?: boolean;
+  targetsLoadFailed?: boolean;
+  onRetryTargets?: () => void;
   userId?: string;
   onClose: () => void;
 }) {
@@ -87,7 +93,7 @@ export function ShareSkillDrawer({
   async function refresh() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] }),
-      queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] }),
+      queryClient.invalidateQueries({ queryKey: [USER_AGENT_RECORD_QUERY_KEY] }),
     ]);
   }
   async function submit() {
@@ -185,12 +191,17 @@ export function ShareSkillDrawer({
                 />
               ))}
             </div>
-          ) : (
+          ) : !targetsLoading && !targetsLoadFailed ? (
             <p className="skill-muted">
               {t("skills.all_agents_granted")}
             </p>
-          )}
+          ) : null}
         </section>
+        {targetsLoading ? <p className="skill-muted" role="status" aria-busy="true">{t("admin.loading")}</p> : null}
+        {targetsLoadFailed ? <div role="alert">
+          <p>{t("workspace.load_failed")}</p>
+          <Button type="button" variant="outline" size="sm" onClick={onRetryTargets}>{t("workspace.retry")}</Button>
+        </div> : null}
         {assignments.length ? (
           <section>
             <h3>{t("skills.granted")}</h3>

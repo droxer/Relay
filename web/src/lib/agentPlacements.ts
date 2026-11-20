@@ -1,4 +1,4 @@
-import type { AgentPlacement } from "../types.js";
+import type { AgentPlacement, AgentPlacementRoute } from "../types.js";
 
 export type PlacementOwnership = "managed" | "local" | "pending";
 export type PlacementSandbox = "boxlite" | "host" | "pending";
@@ -15,7 +15,7 @@ type PlacementStatusTone = "good" | "info" | "warn" | "bad" | "neutral";
  * raw — so a removed computer stayed visible in a team long after it had gone
  * from the roster.
  */
-export function activePlacements(placements: readonly AgentPlacement[]): AgentPlacement[] {
+export function activePlacements<T extends Pick<AgentPlacement, "desiredState">>(placements: readonly T[]): T[] {
   return placements.filter((placement) => placement.desiredState !== "removed");
 }
 
@@ -27,8 +27,8 @@ export function placementStatusTone(status: AgentPlacement["status"]): Placement
   return "neutral";
 }
 
-export interface AgentPlacementDescription {
-  placement: AgentPlacement;
+export interface AgentPlacementDescription<T extends AgentPlacementRoute = AgentPlacement> {
+  placement: T;
   nodeName: string;
   ownership: PlacementOwnership;
   sandbox: PlacementSandbox;
@@ -43,7 +43,7 @@ interface PlacementBadgeLabels {
   status: string;
 }
 
-export function placementRuntimeNodeId(placement: AgentPlacement): string {
+export function placementRuntimeNodeId(placement: Pick<AgentPlacement, "runtimeNodeId" | "daemonNodeId">): string {
   return placement.runtimeNodeId || placement.daemonNodeId;
 }
 
@@ -66,9 +66,9 @@ export function placementBadgeDetailLabels(
   ];
 }
 
-export function describeAgentPlacements(
-  placements: AgentPlacement[],
-): AgentPlacementDescription[] {
+export function describeAgentPlacements<T extends AgentPlacementRoute>(
+  placements: readonly T[],
+): AgentPlacementDescription<T>[] {
   let activeIndex = 0;
   // One Computer per row. daemonNodeId is only the runtime observed when the
   // placement was created and may be replaced without moving the Agent.

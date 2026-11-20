@@ -116,7 +116,7 @@ export function ChannelDetail({
   });
   const { data: nodes } = useQuery({
     queryKey: CONTROL_PANEL_NODES_KEY,
-    queryFn: ({ signal }) => fetchControlPanelNodes(signal),
+    queryFn: fetchControlPanelNodes,
     enabled: pickerVisible && Boolean(userId),
     staleTime: CONTROL_PANEL_POLL_MS,
   });

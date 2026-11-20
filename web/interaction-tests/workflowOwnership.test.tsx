@@ -8,12 +8,12 @@ import { TeamWorkflowLibrary } from "../src/components/workflow/TeamWorkflowLibr
 import { ProjectWorkflows } from "../src/components/workflow/ProjectWorkflows";
 import { taskAssignmentOptions } from "../src/lib/taskAssignment";
 import { defaultWorkflowId, explicitTaskWorkflowId, workflowSelectionIssue } from "../src/lib/workflowSelection";
-import { listProjects, saveWorkflow, listWorkflows, linkTeamWorkflow, setTeamProjectWorkflow, deleteWorkflow } from "../src/api";
+import { getTeamWorkflowChoices, saveWorkflow, listWorkflowPreviews, listProjectWorkflowChoices, linkTeamWorkflow, setTeamProjectWorkflow, deleteWorkflow } from "../src/api";
 import type { AgentTeam, ProjectRecord, TeamWorkflow, UserAgent } from "../src/types";
 
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }));
-vi.mock("../src/api", () => ({ listProjects: vi.fn(), updateTeam: vi.fn(async () => ({})), saveWorkflow: vi.fn(), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(), listWorkflows: vi.fn(), linkTeamWorkflow: vi.fn(async () => ({})), setTeamProjectWorkflow: vi.fn(async () => ({})) }));
-vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", useTeams: () => ({ teams: [team], isSuccess: true }) }));
+vi.mock("../src/api", () => ({ getTeamWorkflowChoices: vi.fn(), updateTeam: vi.fn(async () => ({})), saveWorkflow: vi.fn(), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(), listWorkflowPreviews: vi.fn(), listProjectWorkflowChoices: vi.fn(), linkTeamWorkflow: vi.fn(async () => ({})), setTeamProjectWorkflow: vi.fn(async () => ({})) }));
+vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", TEAM_RECORD_QUERY_KEY: "team-record", teamRecordKey: (...parts: string[]) => ["team-record", ...parts], useTeams: () => ({ teams: [team], isSuccess: true }) }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm, announce: vi.fn() }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
@@ -38,7 +38,14 @@ function mount(children: ReactNode) {
   render(<QueryClientProvider client={client}>{children}</QueryClientProvider>);
   return client;
 }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(listProjects).mockResolvedValue({ projects: [project] } as never); vi.mocked(listWorkflows).mockResolvedValue({ workflows: [workflow] }); confirm.mockResolvedValue(true); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  const choice = { id: "w", name: "Ship", projectId: "p" };
+  vi.mocked(getTeamWorkflowChoices).mockResolvedValue({ projects: [{ id: project.id, name: project.name }], workflows: [choice] });
+  vi.mocked(listWorkflowPreviews).mockResolvedValue({ workflows: [workflow] });
+  vi.mocked(listProjectWorkflowChoices).mockResolvedValue({ workflows: [{ ...choice, enabled: true, stepAgentIds: ["a"] }] });
+  confirm.mockResolvedValue(true);
+});
 
 it("marks incompatible inherited defaults unavailable before Task save", () => {
   mount(<WorkflowSelect team={team} projectId="other" inherit value={null} onChange={vi.fn()} />);
@@ -59,13 +66,14 @@ it("changes only the Team default for this Project", async () => {
   await waitFor(() => expect(setTeamProjectWorkflow).toHaveBeenCalledWith("t", "p", "w"));
 });
 
-it("shows a retry instead of setup advice when Projects fail to load", async () => {
-  vi.mocked(listProjects).mockRejectedValue(new Error("offline"));
+it("shows a retry when Team Workflow choices fail to load", async () => {
+  vi.mocked(getTeamWorkflowChoices).mockRejectedValueOnce(new Error("offline"));
   mount(<TeamWorkflowLibrary team={team} agents={agents} userId="owner" />);
   expect(await screen.findByRole("alert")).toBeTruthy();
-  expect(screen.queryByText("workflow.create_needs_project")).toBeNull();
+  expect(screen.queryByText("workflow.assign_hint")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "workspace.retry" }));
-  await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(getTeamWorkflowChoices).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole("link", { name: "Website" })).toBeTruthy();
 });
 
 it("preserves step ownership and flags invalid assignees when Project changes", () => {

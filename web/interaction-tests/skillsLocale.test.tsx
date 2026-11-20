@@ -13,7 +13,11 @@ import { ShareSkillDrawer } from "../src/components/ShareSkillDrawer";
 import { projectMessages } from "../src/lib/projectMessages";
 
 vi.mock("react-i18next", async (load) => load());
-vi.mock("../src/hooks/useSkills", () => ({ SKILLS_QUERY_KEY: "skills", useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }), useSkill: () => ({ data: null, isLoading: false, error: null }) }));
+vi.mock("../src/hooks/useSkills", async (load) => ({
+  ...await load<typeof import("../src/hooks/useSkills")>(),
+  useSkills: () => ({ data: { skills: [] }, isLoading: false, error: null, refetch: vi.fn() }),
+  useSkill: () => ({ data: null, isLoading: false, error: null }),
+}));
 vi.mock("../src/hooks/useUserAgents", () => ({ USER_AGENTS_QUERY_KEY: "user-agents", useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/api", () => ({ createSkill: vi.fn(), deleteSkill: vi.fn(), importSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn(), assignSkill: vi.fn(), revokeSkillAssignment: vi.fn() }));

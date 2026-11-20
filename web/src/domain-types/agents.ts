@@ -27,6 +27,11 @@ export interface AgentPlacement {
   updatedAt: string;
 }
 
+/** The placement fields shared by Team member routing and computer labels. */
+export type AgentPlacementRoute = Pick<AgentPlacement,
+  "id" | "daemonNodeId" | "runtimeNodeId" | "computerId" | "nodeDisplayName"
+  | "desiredState" | "priority" | "nodeOwnership" | "nodeSandboxMode">;
+
 /** The roles an agent may hold, in the order a Pipeline round takes them —
     the order every role picker offers. Mirrors AGENT_ROLES in
     relay/core/models.py; the AgentRole type that relay-core already owns
@@ -94,6 +99,8 @@ export interface UserAgent {
   deletedAt?: string;
 }
 
+export type AgentBadge = Pick<UserAgent, "id" | "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">;
+
 /** Body for POST /agents — explicit agent creation (computer -> runtime -> role). */
 export interface CreateAgentInput {
   computerId: string;
@@ -114,7 +121,19 @@ export interface CreateAgentResponse {
 export interface UserAgentsResponse {
   agents: UserAgent[];
   defaultAgentOffers?: DefaultAgentOffer[];
+  view?: "summary";
+  searchesInstructions?: boolean;
 }
+
+export type OnboardingAgentCandidate = Pick<UserAgent, "id" | "executorKind" | "enabled" | "availability" | "deletedAt"> & {
+  placements: Pick<AgentPlacement, "daemonNodeId" | "runtimeNodeId" | "desiredState">[];
+};
+
+export type AgentSetupResponse = {
+  view: "setup";
+  onboardingAgents: OnboardingAgentCandidate[];
+  defaultAgentOffers?: DefaultAgentOffer[];
+} | UserAgentsResponse;
 
 export interface DefaultAgentOffer {
   computerId: string;
@@ -130,6 +149,15 @@ export interface TeamMemberSummary {
   executorKind: AgentName;
   enabled: boolean;
   availability: LogicalAgentAvailability;
+  /** The selected Team preview carries routing information for its members. */
+  placements?: AgentPlacementRoute[];
+  computerId?: string;
+}
+
+export type TeamMemberChoice = TeamMemberSummary & { placements: AgentPlacementRoute[] };
+export interface TeamMemberChoicesResponse {
+  computerId: string;
+  agents: TeamMemberChoice[];
 }
 
 export interface TeamMemberConfig {
@@ -140,20 +168,38 @@ export interface TeamMemberConfig {
   expectedOutputs?: string[];
 }
 
+export type TeamMemberConfigPatch = { [Key in keyof TeamMemberConfig]?: TeamMemberConfig[Key] | null };
+
 /** A step as the editor and the Team write API carry it
  *  (`backend/relay/core/team_workflows.py`). */
 export type WorkflowStep = WorkflowStepDefinition;
 
 export interface AgentTeam {
+  /** Revision of the Team record; optional on older servers. */
+  version?: number;
   defaultWorkflowId?: string;
   projectWorkflowDefaults?: Record<string, string>;
-  workflowOptions?: Array<{ id: string; kind: "predefined" | "steps"; name: string; projectId?: string; template?: CollaborationStyle; enabled: boolean }>;
+  workflowOptions?: Array<{
+    id: string;
+    kind: "predefined" | "steps";
+    name: string;
+    projectId?: string | null;
+    template?: CollaborationStyle;
+    enabled: boolean;
+    stepCount?: number;
+    stepAgentIds?: string[];
+    updatedAt?: string;
+    version?: number;
+  }>;
   workflows?: TeamWorkflow[];
+  workflowPreviews?: TeamWorkflowPreview[];
   /** Set only on a Project workflow Team; immutable once set. */
   projectId?: string;
   /** The ordered steps of a Project workflow Team. A Team with steps never
    *  carries a collaboration style or the legacy human approval. */
   workflowSteps?: WorkflowStep[];
+  /** Step count of a legacy Workflow Team in the roster summary. */
+  workflowStepCount?: number;
   collaborationStyle?: CollaborationStyle;
   /** The team's person approves the work before its round's final step
    *  (ADR-023). Absent means no. */
@@ -179,7 +225,19 @@ export interface AgentTeam {
 
 export interface AgentTeamsResponse {
   teams: AgentTeam[];
+  view?: "summary";
 }
+
+export interface CompactTeamSummaryResponse {
+  view: "summary";
+  teams: (Omit<AgentTeam, "members" | "lead" | "workflowOptions"> & {
+    workflowOptions: NonNullable<AgentTeam["workflowOptions"]>;
+  })[];
+  memberDirectory: TeamMemberSummary[];
+  predefinedWorkflows: NonNullable<AgentTeam["workflowOptions"]>;
+}
+
+export type TeamRosterResponse = AgentTeamsResponse | CompactTeamSummaryResponse;
 
 export interface TeamMutationInput {
   defaultWorkflowId?: string;
@@ -208,10 +266,28 @@ export interface Workflow {
   name: string;
   workflowSteps: WorkflowStep[];
   enabled: boolean;
+  /** Persisted revision, absent on older backends. */
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface TeamWorkflow extends Workflow { teamId: string }
 
+export type WorkflowStepPreview = Pick<WorkflowStep, "id" | "name" | "agentId" | "requiresApproval">;
+export type WorkflowPreview = Omit<Workflow, "workflowSteps" | "ownerUserId"> & { workflowSteps: WorkflowStepPreview[] };
+export type TeamWorkflowPreview = WorkflowPreview & { teamId: string };
+
+export type ProjectWorkflowChoice = Pick<Workflow, "id" | "name" | "enabled"> & {
+  projectId: string;
+  stepAgentIds: string[];
+};
+
 export type WorkflowMutationInput = Pick<Workflow, "name" | "projectId" | "workflowSteps" | "ownerTeamId"> & { enabled?: boolean };
+
+export type WorkflowStepFields = Partial<Omit<WorkflowStep, "id" | "kind" | "expectedOutputs">> & {
+  kind?: WorkflowStep["kind"] | null;
+  expectedOutputs?: string[] | null;
+};
+export type WorkflowStepChanges = { byId?: Record<string, WorkflowStepFields>; order?: string[] };
+export type WorkflowDraftUpdate = { name?: string; workflowStepChanges?: WorkflowStepChanges };

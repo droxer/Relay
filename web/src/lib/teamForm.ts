@@ -1,4 +1,28 @@
-import type { CollaborationStyle, TeamMutationInput, TeamMemberConfig } from "../types.js";
+import type { CollaborationStyle, TeamMutationInput, TeamMemberConfig, TeamMemberConfigPatch } from "../types.js";
+
+function normalizeMemberConfig(config: TeamMemberConfig): TeamMemberConfig {
+  return {
+    ...config,
+    ...(config.expectedOutputs
+      ? { expectedOutputs: config.expectedOutputs.map(value => value.trim()).filter(Boolean) }
+      : {}),
+  };
+}
+
+export function teamMemberConfigPatch(base: TeamMemberConfig, draft: TeamMemberConfig): TeamMemberConfigPatch {
+  const previous = normalizeMemberConfig(base);
+  const next = normalizeMemberConfig(draft);
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)] as (keyof TeamMemberConfig)[]);
+  return Object.fromEntries([...keys].flatMap(key => {
+    const before = key === "responsibility" ? previous[key]?.trim() : previous[key];
+    const after = key === "responsibility" ? next[key]?.trim() : next[key];
+    return JSON.stringify(before) === JSON.stringify(after) ? [] : [[key, after ?? null]];
+  }));
+}
+
+export function applyTeamMemberConfigPatch(base: TeamMemberConfig, patch: TeamMemberConfigPatch): TeamMemberConfig {
+  return Object.fromEntries(Object.entries({ ...base, ...patch }).filter(([, value]) => value !== null));
+}
 
 /** Drop members who are no longer on the team, and strip blank output lines. */
 function normalizeMemberConfigs(
@@ -8,12 +32,7 @@ function normalizeMemberConfigs(
   return Object.fromEntries(
     Object.entries(configs)
       .filter(([id]) => memberAgentIds.includes(id))
-      .map(([id, config]) => [id, {
-        ...config,
-        ...(config.expectedOutputs
-          ? { expectedOutputs: config.expectedOutputs.map((value) => value.trim()).filter(Boolean) }
-          : {}),
-      }]),
+      .map(([id, config]) => [id, normalizeMemberConfig(config)]),
   );
 }
 

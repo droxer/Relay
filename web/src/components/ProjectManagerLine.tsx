@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { navigateToAppPath } from "../lib/appRoute";
 import { PROJECT_LEAD_TOPICS, projectLeadTopicLabel, type ProjectLeadTopic } from "../lib/projectLeadTopics";
 import { projectMemberState } from "../lib/projectPage";
-import type { ProjectRecord, UserAgent } from "../types";
+import type { AgentBadge, ProjectListItem, UserAgent } from "../types";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { ChevronDownIcon, ICON, NavThreads } from "./icons";
 import { TonePill } from "./StatusPill";
@@ -24,8 +24,8 @@ import {
  *  the Agents tab stays the one place the role changes hands. Everything shown
  *  comes from the project and agents the page already has. */
 export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discussing = false }: {
-  project: ProjectRecord;
-  agents: UserAgent[];
+  project: ProjectListItem;
+  agents: readonly (AgentBadge & Pick<UserAgent, "deletedAt">)[];
   /** Opens where the role is assigned; absent when the viewer cannot edit. */
   onManage?: () => void;
   /** Opens the lead Thread, with a topic's question drafted when one is

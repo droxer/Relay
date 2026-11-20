@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from typing import Any
 
 from sqlalchemy import (
     delete,
+    func,
     insert,
+    or_,
     select,
     update,
 )
@@ -15,7 +17,7 @@ from ...core.ids import new_database_id, now_iso
 from ...projects.setup_result import generated_setup_name
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
-from ..sql import metadata as shared_metadata
+from ..sql import metadata as shared_metadata, names_no_uuid_row
 from ..tables import projects as projects_tables
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .manager import ManagerRows
@@ -75,6 +77,8 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         return project
 
     def get_project(self, project_id: str) -> dict[str, Any] | None:
+        if names_no_uuid_row(self.engine, project_id):
+            return None
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
@@ -106,6 +110,32 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
             (project_with_manager(dict(row["snapshot"])) for row in rows),
             key=lambda project: (project["name"].casefold(), project["id"]),
         )
+
+    def workflow_projects(
+        self, owner_user_id: str, computer_id: str | None, linked_ids: Collection[str],
+    ) -> list[tuple[str, str, bool]]:
+        columns = self.projects.c
+        eligible = (columns.computer_id == computer_id) & columns.enabled & columns.archived_at.is_(None)
+        valid_links = [project_id for project_id in linked_ids if not names_no_uuid_row(self.engine, project_id)]
+        statement = select(columns.id, columns.name, eligible).where(
+            columns.owner_user_id == owner_user_id, or_(eligible, columns.id.in_(valid_links)),
+        ).order_by(columns.name_key, columns.id)
+        with store_transaction(self.engine) as conn:
+            return [(str(project_id), name, available) for project_id, name, available in conn.execute(statement)]
+
+    def list_project_index(self, owner_user_id: str) -> list[dict[str, Any]]:
+        columns = self.projects.c
+        member_count = select(func.count()).where(self.members.c.project_id == columns.id).scalar_subquery()
+        statement = select(
+            columns.id, columns.name, columns.enabled, columns.event_version, columns.archived_at,
+            member_count.label("member_count"),
+        ).where(columns.owner_user_id == owner_user_id).order_by(columns.name_key, columns.id)
+        with store_transaction(self.engine) as conn:
+            return [{
+                "id": str(row.id), "name": row.name, "enabled": row.enabled,
+                "version": row.event_version, "memberCount": row.member_count,
+                **({"archivedAt": format_db_time(row.archived_at)} if row.archived_at else {}),
+            } for row in conn.execute(statement)]
 
     def list_linked_workspaces(self, computer_id: str) -> list[dict[str, str]]:
         """Every linked directory on one computer, archived projects included,

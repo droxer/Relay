@@ -11,7 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 
-from ...collaboration.contracts import member_configs, text_list
+from ...collaboration.contracts import apply_member_config_patch, member_configs, text_list
 from ...collaboration.styles import validate_collaboration_style
 from ...core.team_workflows import is_workflow_team, workflow_fields
 from ...core.ids import new_database_id, now_iso
@@ -20,7 +20,7 @@ from ..workflow.store import DatabaseWorkflowStore
 from ..resource_lock import resource_transaction
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
-from ..sql import metadata as shared_metadata
+from ..sql import metadata as shared_metadata, names_no_uuid_row
 from ..tables import teams as teams_tables
 from ...core.workflows import team_workflows, workflow_definition, validate_default_workflow
 from ...core.workflow_selection import workflow_id_for_style
@@ -108,21 +108,25 @@ class DatabaseTeamStore:
         return self.get_team(team["id"]) or team
 
     def get_team(self, team_id: str) -> dict[str, Any] | None:
+        if names_no_uuid_row(self.engine, team_id):
+            return None
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
                     select(
                         self.teams.c.snapshot,
                         self.teams.c.owner_user_id,
+                        self.teams.c.event_version,
                     ).where(self.teams.c.id == team_id)
                 )
                 .mappings()
                 .first()
             )
         return (
-            self._workflow_view(_normalized_team_snapshot(
-                row["snapshot"], row["owner_user_id"]
-            ))
+            self._workflow_view({
+                **_normalized_team_snapshot(row["snapshot"], row["owner_user_id"]),
+                "version": int(row["event_version"] or 0),
+            })
             if row
             else None
         )
@@ -136,6 +140,7 @@ class DatabaseTeamStore:
         statement = select(
             self.teams.c.snapshot,
             self.teams.c.owner_user_id,
+            self.teams.c.event_version,
         )
         if owner_user_id is not None:
             statement = statement.where(
@@ -147,9 +152,10 @@ class DatabaseTeamStore:
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         teams = [
-            _normalized_team_snapshot(
-                row["snapshot"], row["owner_user_id"]
-            )
+            {
+                **_normalized_team_snapshot(row["snapshot"], row["owner_user_id"]),
+                "version": int(row["event_version"] or 0),
+            }
             for row in rows
         ]
         definitions = self.workflow_store.for_teams([team["id"] for team in teams])
@@ -162,6 +168,32 @@ class DatabaseTeamStore:
                 team["id"],
             ),
         )
+
+    def update_member_config(
+        self, team_id: str, agent_id: str, fields: dict[str, Any], *, default_role: str | None,
+    ) -> dict[str, Any]:
+        applied: dict[str, Any] = {}
+
+        def update_snapshot(current: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+            nonlocal applied
+            if agent_id not in current["memberAgentIds"]:
+                raise TeamValidationError("team_member_not_found")
+            configs = current.get("memberConfigs") or {}
+            previous = configs.get(agent_id, {})
+            saved = apply_member_config_patch(agent_id, previous, fields, default_role)
+            applied = {
+                key: saved.get(key) for key in sorted(previous.keys() | saved.keys())
+                if previous.get(key) != saved.get(key)
+            }
+            patch = {"memberConfigs": {**configs, agent_id: saved}}
+            updated = {**current, **patch, "updatedAt": now_iso()}
+            return updated, {"patch": patch, "team": updated}
+
+        team = self._mutate(team_id, "team.updated", update_snapshot)
+        return {
+            "teamId": team_id, "agentId": agent_id, "baseVersion": team["version"] - 1,
+            "version": team["version"], "updatedAt": team["updatedAt"], "fields": applied,
+        }
 
     def update_team(self, team_id: str, patch: dict[str, Any]) -> dict[str, Any]:
         def update_snapshot(
@@ -386,11 +418,11 @@ class DatabaseTeamStore:
                     ))
                     if current.get("deletedAt"):
                         raise KeyError(team_id)
+                    sequence = int(row["event_version"] or 0)
                     mutation = mutate(current)
                     if mutation is None:
-                        return current
+                        return {**current, "version": sequence}
                     team, payload = mutation
-                    sequence = int(row["event_version"] or 0)
                     claimed = conn.execute(
                         update(self.teams)
                         .where(
@@ -413,7 +445,7 @@ class DatabaseTeamStore:
                             **_team_event_row(row["id"], sequence, event)
                         )
                     )
-                return team
+                return {**team, "version": sequence + 1}
             except _TeamWriteConflict:
                 if attempt == 2:
                     raise

@@ -1,15 +1,19 @@
 import type { ControlPanelDaemonNodeRecord, DaemonNodeMonitorRecord, SandboxRecord } from "relay-core";
+import type { ComputerTransportSnapshot } from "../lib/computerConnection.ts";
 
-/* The node records the web reads carry one field the shared protocol type
-   does not: whether the computer runs an older Relay client than the server
-   expects. The backend derives it per read; only the web renders it, so it
-   is declared here rather than in relay-core. Absent on an older backend. */
+/* The browser inventory adds derived fields to the daemon protocol record. */
 declare module "relay-core" {
   interface DaemonNodeMonitorRecord {
     clientOutdated?: boolean;
+    transport?: ComputerTransportSnapshot;
+  }
+  interface ControlPanelDaemonNodeRecord {
+    ownerLabel?: ComputerOwnerLabel;
   }
 }
 import type { UserRecord } from "./users.ts";
+
+type ComputerOwnerLabel = Pick<UserRecord, "id" | "displayName" | "handle">;
 
 export interface SandboxesResponse {
   sandboxes: SandboxRecord[];
@@ -111,6 +115,7 @@ export interface ManagedNodeRecord {
   id: string;
   displayName: string;
   userId?: string;
+  ownerLabel?: ComputerOwnerLabel;
   assignmentMode: "dedicated" | "pooled" | "shared";
   provider: string;
   profile: string;
@@ -138,4 +143,5 @@ export interface CreateManagedNodeResponse {
 
 export interface ManagedNodesResponse {
   nodes: ManagedNodeRecord[];
+  nextCursor?: string | null;
 }
