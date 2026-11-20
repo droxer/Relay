@@ -26,6 +26,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { SearchInput } from "@/components/ui/search-input";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { compactDate } from "../lib/workspaceFormat";
+import { groupSkillsByFolder } from "../lib/skillGroups";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { Drawer } from "@/components/ui/Drawer";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -277,15 +278,17 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const sourceLabelId = `${drawerId}-source`;
   const visibilityLabelId = `${drawerId}-visibility`;
   const editorVisibilityLabelId = `${drawerId}-editor-visibility`;
-  /* Matched against everything the row actually prints — the display name and
-     the slug beneath it — so a search never hides a row whose visible text
-     contains the term. */
+  /* Matched against everything the row and its band print — the display
+     name, the slug, and the folder path the band is named for — so a search
+     never hides a row whose visible text contains the term. */
   const needle = query.trim().toLowerCase();
   const visibleSkills = needle
     ? skills.filter((item) =>
-        `${item.displayName} ${item.slug} ${item.description}`.toLowerCase().includes(needle),
+        `${item.displayName} ${item.slug} ${item.description} ${item.sourceRef?.subpath ?? ""} ${item.namespace}`
+          .toLowerCase().includes(needle),
       )
     : skills;
+  const skillGroups = groupSkillsByFolder(visibleSkills);
 
   /* The landing frame is the roster frame every other rail route uses: a
      <PageHeader> over the list inside the rail, not a full-width banner above
@@ -376,29 +379,47 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
              rails — a selectable roster beside a detail pane — so it wears
              their row grammar: a .rail-row carrying the selection, the inset
              on the inner button (that button is the focus target), and one
-             meta line under the name. */
-          <ul className="skills-roster-list" data-density="compact">
-            {visibleSkills.map((item) => (
-              <li
-                key={item.id}
-                className="skills-roster-row rail-row"
-                data-selected={selectedId === item.id ? "true" : "false"}
-              >
-                <Button
-                  variant="ghost"
-                  type="button"
-                  className="skills-roster-row-select"
-                  aria-current={selectedId === item.id ? "page" : undefined}
-                  onClick={() => onSelectSkill(item.id)}
-                >
-                  <span className="skills-roster-row-name">{item.displayName}</span>
-                  <span className="skills-roster-row-meta">
-                    {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
-                  </span>
-                </Button>
-              </li>
-            ))}
-          </ul>
+             meta line under the name. Banded by the folder each bundle sits
+             in (lib/skillGroups), on the agent roster's band recipe: a
+             repository import keeps the shape its author gave it. */
+          <div className="skills-roster-groups">
+            {skillGroups.map((group) => {
+              const label = group.label ?? t("skills.group_uploads");
+              return (
+                <div key={group.key} className="skills-roster-group">
+                  <div className="skills-roster-group-label">
+                    <span className="skills-roster-group-name" translate={group.label ? "no" : undefined} title={label}>{label}</span>
+                    {group.repository ? (
+                      <span className="skills-roster-group-repo" translate="no">{group.repository}</span>
+                    ) : null}
+                    <span className="skills-roster-group-count tnum">{group.skills.length}</span>
+                  </div>
+                  <ul className="skills-roster-list" data-density="compact" aria-label={group.repository ? `${label} · ${group.repository}` : label}>
+                    {group.skills.map((item) => (
+                      <li
+                        key={item.id}
+                        className="skills-roster-row rail-row"
+                        data-selected={selectedId === item.id ? "true" : "false"}
+                      >
+                        <Button
+                          variant="ghost"
+                          type="button"
+                          className="skills-roster-row-select"
+                          aria-current={selectedId === item.id ? "page" : undefined}
+                          onClick={() => onSelectSkill(item.id)}
+                        >
+                          <span className="skills-roster-row-name">{item.displayName}</span>
+                          <span className="skills-roster-row-meta">
+                            {t(`skills.visibility.${item.visibility}`)} · {t("skills.granted_count", { count: item.grantedAgentCount ?? 0 })}
+                          </span>
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         )}
         <ListRailResizeHandle />
       </nav>

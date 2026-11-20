@@ -2448,6 +2448,7 @@
     "empty_filtered_title": "No skills match",
     "empty_filtered_body": "Try a different search.",
     "library_label": "Skills library",
+    "group_uploads": "Uploaded",
     "granted_count": "{{count}} granted",
     "member_count_one": "{{count}} member",
     "member_count_other": "{{count}} members",
