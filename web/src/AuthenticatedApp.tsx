@@ -819,7 +819,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             activeSession={activeSession}
             transcriptVisible={transcriptVisible}
             threadDetailsReady={threadDetail.ready}
-            threadLoadError={!activeSession ? threadDetail.error : null}
+            threadLoadError={threadDetail.error}
             onRetryThread={threadDetail.retry}
             pendingUserMessage={pendingUserMessage}
             displayMessages={displayMessages}

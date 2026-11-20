@@ -66,14 +66,18 @@ test("a mobile deep link keeps the composer docked while summary and detail arri
     await expect(composer).toBeVisible();
     const top = await composer.evaluate((element) => element.getBoundingClientRect().top);
     await expect(page.locator(".chat-panel--landing")).toHaveCount(0);
+    const loading = page.getByRole("log").getByRole("status").filter({ hasText: "Loading conversation…" });
+    await expect(loading).toBeVisible();
     releaseList();
     await expect(page.locator(".mobile-topbar")).toContainText(thread.title);
     // A summary has a goal but no turns. Painting it now would insert a
     // temporary opening message that the full transcript then displaces.
     await expect(page.locator(".transcript .msg")).toHaveCount(0);
+    await expect(loading).toBeVisible();
     expect(await composer.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(top, 0);
     releaseDetail();
     await expect(page.locator(".agent-code").last()).toContainText("turn2");
+    await expect(loading).toHaveCount(0);
     expect(await composer.evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(top, 0);
   } finally {
     releaseList();
@@ -541,4 +545,35 @@ test("a missing deep link shows a retry without another conversation or an enabl
   await error.getByRole("button", { name: "Retry" }).click();
   await expect(error).toHaveCount(0);
   await expect(page.locator(".agent-code").last()).toContainText("turn0");
+});
+
+test("a thread summary stays visible when the conversation fails and can be retried", async ({ page }) => {
+  let unavailable = true;
+  let attempts = 0;
+  const thread = session("thread-detail-retry", 0, 1);
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith(`/threads/${thread.id}`)) {
+      attempts++;
+      await route.fulfill(unavailable
+        ? { status: 503, json: { detail: "Conversation temporarily unavailable" } }
+        : { json: thread });
+      return;
+    }
+    const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
+      : { sessions: [thread], agents: [], teams: [], tasks: [], nodes: [computer], projects: [] };
+    await route.fulfill({ json: body });
+  });
+
+  await page.goto(`/threads/${thread.id}`);
+  await expect(page.getByRole("heading", { name: thread.title })).toBeVisible();
+  const log = page.getByRole("log");
+  const error = log.getByRole("alert");
+  await expect(error).toContainText("Conversation temporarily unavailable");
+  await expect(log.locator(".msg")).toHaveCount(0);
+  unavailable = false;
+  await error.getByRole("button", { name: "Retry" }).click();
+  await expect(log.locator(".agent-code").last()).toContainText("turn0");
+  await expect(error).toHaveCount(0);
+  expect(attempts).toBeGreaterThanOrEqual(2);
 });

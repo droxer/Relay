@@ -437,6 +437,7 @@
     "count_more": "{{count}}+ 個活動",
     "load_more": "載入更早的活動",
     "loading_more": "正在載入更早的活動…",
+    "transcript_loading": "正在載入會話…",
     "load_earlier_messages": "載入更早的訊息",
     "earlier_messages_failed": "無法載入更早的訊息，請重試。",
     "runtime_label": "電腦",
