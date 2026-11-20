@@ -2,6 +2,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getWorkflow, listWorkflows, RelayApiError } from "../api";
 import type { Workflow } from "../types";
+import { predefinedStyle } from "../lib/workflowSelection";
 import { TEAMS_QUERY_KEY } from "./useTeams";
 
 export const WORKFLOWS_QUERY_KEY = "workflows";
@@ -20,7 +21,7 @@ export function useWorkflowName(workflowId?: string | null, projectId?: string |
   const client = useQueryClient();
   return useQuery({
     queryKey: [WORKFLOWS_QUERY_KEY, "name", workflowId],
-    enabled: Boolean(workflowId),
+    enabled: Boolean(workflowId) && !predefinedStyle(workflowId),
     staleTime: WORKFLOW_STALE_MS,
     refetchInterval: WORKFLOW_REFRESH_MS,
     queryFn: async ({ signal }) => {

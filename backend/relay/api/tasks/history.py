@@ -14,6 +14,7 @@ from ...core.workspace_artifacts import (
 from ...security.actor import Actor
 from ..actors import (
     get_task_for_actor,
+    get_task_header_for_actor,
     request_actor,
 )
 from ..deps import AppContextDep
@@ -72,7 +73,7 @@ def task_events(
     """
     actor = request_actor(request, ctx.auth_store)
     if view == "activity" and include != "occurrences":
-        task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
+        task = get_task_header_for_actor(ctx.task_store, task_id, actor)
         try:
             return ctx.task_store.task_activity_page(task["id"], limit=limit, before=before)
         except ValueError as error:

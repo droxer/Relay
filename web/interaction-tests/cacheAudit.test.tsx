@@ -77,6 +77,23 @@ it("revalidates the assigned Workflow by ID while Definition stays open", async 
   }
 });
 
+it("keeps predefined Workflow labels local while Definition stays open", async () => {
+  vi.useFakeTimers();
+  focusManager.setFocused(true);
+  const { client, wrapper } = setup();
+  const view = renderHook(() => useWorkflowName("preset:pipeline"), { wrapper });
+  try {
+    await act(() => vi.advanceTimersByTimeAsync(60_001));
+    expect(getWorkflow).not.toHaveBeenCalled();
+    expect(listWorkflows).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    client.clear();
+    focusManager.setFocused(undefined);
+    vi.useRealTimers();
+  }
+});
+
 it("reuses fresh collection data and paging cursors across remounts", async () => {
   const { client, wrapper } = setup();
   const first = renderHook(() => useRelayData(undefined, true), { wrapper });

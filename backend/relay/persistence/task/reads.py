@@ -109,6 +109,19 @@ class TaskReadRows(TaskStoreState):
     def get_task_record(self, task_id: str) -> dict[str, Any]:
         return self._read_task(task_id, include_history=False)
 
+    def get_task_header(self, task_id: str) -> dict[str, Any]:
+        """Read the Task identity and access fields without loading any events."""
+        if names_no_uuid_row(self.engine, task_id):
+            raise KeyError(task_id)
+        tasks = self.tasks
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(select(
+                tasks.c.id, tasks.c.owner_user_id.label("ownerUserId"), tasks.c.deleted_at.label("deletedAt"),
+            ).where(tasks.c.id == task_id)).mappings().first()
+        if row is None:
+            raise KeyError(task_id)
+        return dict(row)
+
     def task_activity_page(self, task_id: str, *, limit: int, before: int | None) -> dict[str, Any]:
         events = self.events
         owned = events.c.task_id == task_id

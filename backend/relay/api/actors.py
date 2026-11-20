@@ -200,7 +200,18 @@ def get_session_header_for_actor(
 def get_task_for_actor(
     store: TaskStore, task_id: str, actor: Actor, *, record_view: bool = False,
 ) -> dict[str, Any]:
-    task = get_task_or_404(store, task_id, record_view=record_view)
+    return _require_task_access(get_task_or_404(store, task_id, record_view=record_view), actor)
+
+
+def get_task_header_for_actor(store: TaskStore, task_id: str, actor: Actor) -> dict[str, Any]:
+    try:
+        task = store.get_task_header(task_id)
+    except KeyError:
+        raise HTTPException(404, "Task not found.") from None
+    return _require_task_access(task, actor)
+
+
+def _require_task_access(task: dict[str, Any], actor: Actor) -> dict[str, Any]:
     if task.get("deletedAt"):
         raise HTTPException(404, "Task not found.")
     if not actor_can_access_record(actor, task):

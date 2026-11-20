@@ -214,9 +214,8 @@ class TaskWriteRows(TaskStoreState):
             if not row:
                 raise KeyError(task_id)
             task_pk = row["id"]
-            sequence = int(row["version"] or 0)
-            current = row["snapshot"] or {}
             current = self._current_snapshot(conn, row)
+            sequence = int(current["eventCount"])
             events = prepare_execution_events(current, events, execution_owner)
             if not events:
                 return current
@@ -301,11 +300,13 @@ class TaskWriteRows(TaskStoreState):
         task_pk = row["id"]
         sequence = int(row["version"] or 0)
         current = row["snapshot"] or {}
-        if current.get("eventCount") != sequence:
-            current = compact_task_snapshot(
-                materialize_task_events(self._events_for_task(conn, task_pk)),
-                event_count=sequence,
-            )
+        snapshot_events = current.get("events")
+        if snapshot_events or current.get("eventCount") != sequence:
+            history = self._events_for_task(conn, task_pk)
+            if not history and snapshot_events:
+                current = self._restore_task_event_rows(conn, task_pk, sequence, snapshot_events)
+            else:
+                current = compact_task_snapshot(materialize_task_events(history), event_count=sequence)
         # Execution ownership remains an authoritative event fact even if
         # an older writer omitted it from the snapshot.
         owner_event = conn.scalar(
@@ -325,6 +326,19 @@ class TaskWriteRows(TaskStoreState):
                 "revision": owner_event["revision"],
             }
         return current
+
+    def _restore_task_event_rows(
+        self, conn: Any, task_pk: str, version: int, history: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        # The Task write transaction also owns the repair. Keep cursor positions
+        # by assigning event rows in the original order, and keep the revision monotonic.
+        version = max(version, len(history))
+        snapshot = compact_task_snapshot(materialize_task_events(history), event_count=version)
+        conn.execute(insert(self.events), [
+            task_event_to_row(task_pk, sequence, event) for sequence, event in enumerate(history)
+        ])
+        conn.execute(update(self.tasks).where(self.tasks.c.id == task_pk).values(snapshot=snapshot, version=version))
+        return snapshot
 
     def _hydrate_task(self, task: dict[str, Any]) -> dict[str, Any]:
         with store_transaction(self.engine) as conn:

@@ -104,7 +104,7 @@ def test_activity_pages_preserve_status_context_and_skip_task_replay(project_con
     assert TestClient(app).get(route, params={"view": "activity"}).status_code == 401
 
 
-def test_snapshot_only_task_activity_honors_limit_and_cursor(project_context):
+def test_snapshot_only_task_activity_honors_limit_and_cursor(project_context, monkeypatch):
     app, client, project = project_context
     task_id = _task(client, project, "Snapshot-only Activity")["id"]
     store = app.state.task_store
@@ -115,6 +115,10 @@ def test_snapshot_only_task_activity_honors_limit_and_cursor(project_context):
         conn.execute(update(store.tasks).where(store.tasks.c.id == task_id).values(snapshot=snapshot))
         conn.execute(delete(store.events).where(store.events.c.task_id == task_id))
 
+    def reject_task_replay(*_args, **_kwargs):
+        pytest.fail("Activity should authorize from the Task header without replaying events")
+
+    monkeypatch.setattr(store, "get_task_record", reject_task_replay)
     route = f"/api/v1/tasks/{task_id}/events"
     first = client.get(route, params={"view": "activity", "limit": 2}).json()
     assert [event["status"] for event in first["events"]] == ["running", "review"]
@@ -125,6 +129,40 @@ def test_snapshot_only_task_activity_honors_limit_and_cursor(project_context):
     assert [event["type"] for event in last["events"]] == ["task.created"]
     assert last["nextBefore"] is None
     assert client.get(route).json()["events"] == snapshot["events"]
+    other = TestClient(app)
+    assert other.post("/api/v1/auth/login", json={
+        "username": "admin", "password": "kestrel-vault-7719",
+    }).status_code == 200
+    assert other.get(route, params={"view": "activity"}).status_code == 403
+
+
+@pytest.mark.parametrize("stored_version", [0, 9])
+def test_first_snapshot_only_task_write_preserves_history(project_context, stored_version):
+    app, client, project = project_context
+    task_id = _task(client, project, "Legacy Task")["id"]
+    store = app.state.task_store
+    for message in ("First", "Second", "Third"):
+        store.record_activity(task_id, message)
+    snapshot = store.get_task(task_id)
+    with store.engine.begin() as conn:
+        conn.execute(update(store.tasks).where(store.tasks.c.id == task_id).values(
+            snapshot=snapshot, version=stored_version,
+        ))
+        conn.execute(delete(store.events).where(store.events.c.task_id == task_id))
+
+    path = f"/api/v1/tasks/{task_id}"
+    options = {"view": "activity", "limit": 2}
+    first = client.get(f"{path}/events", params=options).json()
+    for title in ("Edited once", "Edited twice"):
+        edited = client.patch(path, json={"title": title})
+        assert edited.status_code == 200, edited.text
+        assert edited.json()["title"] == title
+    history = client.get(f"{path}/events").json()["events"]
+    assert history[:-2] == snapshot["events"]
+    assert [event["type"] for event in history[-2:]] == ["task.updated", "task.updated"]
+    older = client.get(f"{path}/events", params={**options, "before": first["nextBefore"]}).json()
+    assert older["events"] == snapshot["events"][:2]
+    assert older["nextBefore"] is None
 
 
 def test_set_read_and_clear_prerequisites(project_context):
