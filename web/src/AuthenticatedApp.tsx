@@ -41,6 +41,7 @@ import { useThreadComposerSelection } from "./hooks/useThreadComposerSelection";
 import { useThreadTargets } from "./hooks/useThreadTargets";
 import type { useUserPreferences } from "./hooks/useUserPreferences";
 import { usePanelLayout } from "./hooks/usePanelLayout";
+import { ListRailWidthContext } from "./components/ListRailResize";
 import { useThreadSpace } from "./hooks/useThreadSpace";
 import { useComposerRouting } from "./hooks/useComposerRouting";
 import { useThreadEditing } from "./hooks/useThreadEditing";
@@ -692,8 +693,14 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     () => (onboarding.progress.visible ? { done: onboarding.progress.completedCount, total: SETUP_STEPS.length } : null),
     [onboarding.progress.completedCount, onboarding.progress.visible],
   );
+  const listRail = useMemo(() => ({
+    width: panels.threadListWidth,
+    onResize: panels.resizeThreadList,
+    onResizeActive: panels.setThreadListResizing,
+  }), [panels.threadListWidth, panels.resizeThreadList, panels.setThreadListResizing]);
 
   return (
+    <ListRailWidthContext.Provider value={listRail}>
     <AppShell
       route={route}
       threadOpen={Boolean(routedSessionId) || composingNew}
@@ -898,5 +905,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
           per ready runtime it brought. */}
       {user.userId ? <DefaultAgentsPrompt userId={user.userId} /> : null}
     </AppShell>
+    </ListRailWidthContext.Provider>
   );
 }

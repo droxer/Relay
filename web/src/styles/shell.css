@@ -33,6 +33,14 @@
   --shell-rail-track: minmax(var(--thread-w-min), min(var(--thread-w), var(--thread-w-cap)));
   --shell-chat-track: minmax(var(--chat-w-min), 1fr);
   --shell-space-track: minmax(0px, 0px);
+  /* The agent, team, and skill rosters are the same list rail as the thread
+     rail (the rail row grammar below), so they take its width — floor, the
+     dragged and remembered --thread-w, and viewport cap — and the detail
+     pane's left edge never shifts moving between them. Declared here, on
+     the element AppShell writes --thread-w onto, for the same reason as the
+     tracks above: as a :root token it froze at the 360px default and every
+     roster ignored the stored width. */
+  --roster-track: minmax(var(--thread-w-min), min(var(--thread-w), var(--thread-w-cap)));
   grid-template-columns:
     var(--shell-nav-track) var(--shell-rail-track) var(--shell-chat-track) var(--shell-space-track);
   height: 100vh;
@@ -77,6 +85,50 @@
 .messenger-shell[data-space-resizing="true"],
 .messenger-shell[data-threadlist-resizing="true"] {
   transition: none;
+}
+
+/* The list rail's splitter — the thread rail's and the rosters' (agents,
+   teams, skills: ListRailResize.tsx), which drag one shared width. Laid over
+   the rail's right edge, as .sidenav-resize is (sidenav.css), rather than in
+   a column of its own: as a sibling track it ended the header
+   and filter hairlines 6px short of the border, a notch that read as a
+   second vertical line beside the rail. */
+.thread-panel-resize,
+.list-rail-resize {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--sp-1-5);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.thread-panel-resize::after,
+.list-rail-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: transparent;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.thread-panel-resize:hover::after,
+.thread-panel-resize:active::after,
+.list-rail-resize:hover::after,
+.list-rail-resize:active::after {
+  background: var(--line-strong);
+}
+
+/* The splitter sits absolute over the roster's edge. */
+.agents-roster,
+.teams-roster,
+.skills-list {
+  position: relative;
 }
 
 .mobile-topbar {

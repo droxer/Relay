@@ -24,6 +24,7 @@ import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
 import { CreateAgentDialog } from "./agents/CreateAgentDialog";
 import { ListSkeleton } from "./ListSkeleton";
+import { ListRailResizeHandle } from "@/components/ListRailResize";
 
 interface AgentsPageProps {
   currentUser: CurrentUser;
@@ -257,6 +258,7 @@ function AgentsPageView({
             })}
           </div>
         )}
+        <ListRailResizeHandle />
       </div>
 
       <div className="agents-detail">

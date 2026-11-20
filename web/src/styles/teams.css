@@ -383,6 +383,11 @@
 }
 
 @media (max-width: 1100px) {
+  /* Stacked: the roster has no side edge to drag. */
+  .teams-page .list-rail-resize {
+    display: none;
+  }
+
   .teams-page {
     display: flex;
     flex-direction: column;

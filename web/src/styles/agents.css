@@ -359,6 +359,11 @@
    surface scroll, matching the workspace pane's own breakpoint. */
 
 @media (max-width: 1100px) {
+  /* Stacked: the roster has no side edge to drag. */
+  .agents-page .list-rail-resize {
+    display: none;
+  }
+
   .agents-page {
     display: flex;
     flex-direction: column;

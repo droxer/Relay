@@ -745,6 +745,44 @@ test("dragging the thread rail moves the rail, and stops where CSS stops it", as
   await page.context().close();
 });
 
+/* The agent, team, and skill rosters are the same list rail as the thread
+   rail and share its one remembered width. Their track was a :root token,
+   which froze it at the 360px default — the same substitution trap as above —
+   so a stored width never reached them and they had no handle at all. */
+for (const [path, roster] of [["/agents", ".agents-roster"], ["/teams", ".teams-roster"], ["/skills", ".skills-list"]] as const) {
+  test(`the ${path.slice(1)} roster opens at the remembered list width`, async ({ browser }) => {
+    const page = await openPage(browser, path, false, { "relay-web.threadListWidth": "300" });
+    await expect(page.locator(roster).first()).toBeVisible();
+    expect(await renderedWidth(page, roster)).toBe(300);
+    await page.context().close();
+  });
+}
+
+test("dragging a roster remembers the width for every list rail", async ({ browser }) => {
+  const page = await openPage(browser, "/agents", false);
+  const handle = page.locator(".agents-roster .list-rail-resize");
+  await expect(handle).toBeVisible();
+  const before = await renderedWidth(page, ".agents-roster");
+  const box = (await handle.boundingBox())!;
+  const y = box.y + box.height / 2;
+  const startX = box.x + box.width / 2;
+  await page.mouse.move(startX, y);
+  await page.mouse.down();
+  for (let dx = -10; dx >= -60; dx -= 10) await page.mouse.move(startX + dx, y);
+  await page.mouse.up();
+
+  const after = await renderedWidth(page, ".agents-roster");
+  expect(after).toBeLessThan(before);
+  const stored = await page.evaluate(() => Number(localStorage.getItem("relay-web.threadListWidth")));
+  expect(stored).toBe(after);
+
+  // One width for every list rail: the thread rail comes back at it too.
+  await page.goto("/threads/review-thread");
+  await expect(page.locator(RAIL_WIDTHS.rail).first()).toBeVisible();
+  expect(await renderedWidth(page, RAIL_WIDTHS.rail)).toBe(after);
+  await page.context().close();
+});
+
 test("a task's file preview keeps its header actions inside it on a phone", async ({ browser }) => {
   /* The narrow-pane rules (artifact.css, the artifact-preview container query)
      once sat above the base header rule, so its fixed height and padding won

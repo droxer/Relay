@@ -33,6 +33,7 @@ import { useTranslation } from "react-i18next";
 import { useKeyChange } from "../hooks/useKeyChange";
 import { ListSkeleton } from "./ListSkeleton";
 import { DetailSkeleton } from "./DetailSkeleton";
+import { ListRailResizeHandle } from "@/components/ListRailResize";
 
 type CreateMode = "upload" | "github";
 const SOURCE_LABELS: Record<CreateMode, string> = {
@@ -399,6 +400,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
             ))}
           </ul>
         )}
+        <ListRailResizeHandle />
       </nav>
       <section className="skill-detail">
         {phone && selectedId ? (

@@ -23,36 +23,8 @@
   min-height: 0;
 }
 
-/* Laid over the panel's right edge, as .sidenav-resize is (sidenav.css),
-   rather than in a column of its own: as a sibling track it ended the header
-   and filter hairlines 6px short of the border, a notch that read as a
-   second vertical line beside the rail. */
-.thread-panel-resize {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: var(--sp-1-5);
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.thread-panel-resize::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: 2px;
-  background: transparent;
-  transition: background var(--t-fast) var(--ease);
-}
-
-.thread-panel-resize:hover::after,
-.thread-panel-resize:active::after {
-  background: var(--line-strong);
-}
+/* The splitter over the rail's right edge is shared with the rosters:
+   .thread-panel-resize / .list-rail-resize in shell.css. */
 
 /* The rail's header is the shared <PageHeader> (shell.css) and its filter
    band is .list-filter-bar (inputs.css); the header's create button is the
