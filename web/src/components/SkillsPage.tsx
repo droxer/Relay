@@ -28,6 +28,7 @@ import { RelayEmptyState } from "./RelayEmptyState";
 import { compactDate } from "../lib/workspaceFormat";
 import { groupSkillsByFolder } from "../lib/skillGroups";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
+import { SkillImportProgress } from "./SkillImportProgress";
 import { Drawer } from "@/components/ui/Drawer";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { useTranslation } from "react-i18next";
@@ -100,6 +101,10 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const [mode, setMode] = useState<CreateMode | null>(null);
   const [sharing, setSharing] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Publish has the drawer's own busy state; a re-import runs from the
+  // detail pane, so it needs its own flag to show progress there.
+  const [publishing, setPublishing] = useState(false);
+  const [reimporting, setReimporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [repositoryResult, setRepositoryResult] = useState<SkillRepositoryImportResult | null>(null);
   const uploadRequest = useRef({ draft: 0, revision: 0 });
@@ -169,6 +174,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   }
   async function publish() {
     setBusy(true);
+    setPublishing(true);
     setError(null);
     try {
       const shared = {
@@ -197,6 +203,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
       setError(errorText(err));
     } finally {
       setBusy(false);
+      setPublishing(false);
     }
   }
   // Save waits for something to save, like every other settings form here
@@ -614,11 +621,13 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                       disabled={busy}
                       onClick={async () => {
                         setBusy(true);
+                        setReimporting(true);
                         try {
                           await reimportSkill(skill.id);
                           await refresh();
                         } finally {
                           setBusy(false);
+                          setReimporting(false);
                         }
                       }}
                     >
@@ -640,6 +649,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                     {t("skills.save_details")}
                   </Button>
                 </footer>
+                {reimporting ? <SkillImportProgress kind="reimport" /> : null}
               </section>
             ) : null}
             </div>
@@ -809,6 +819,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                 ))}
               </div>
             </Field>
+            {publishing ? <SkillImportProgress kind={mode} /> : null}
             {error ? (
               <p role="alert" className="skill-error">
                 {error}

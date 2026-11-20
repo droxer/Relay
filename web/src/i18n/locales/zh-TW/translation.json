@@ -2385,6 +2385,17 @@
     "publish_subtitle": "將技能包釋出到技能庫，然後分享給智慧體。",
     "publish": "釋出",
     "publishing": "正在釋出…",
+    "progress": {
+      "label": "匯入進度",
+      "started": {
+        "github": "正在拉取儲存庫並讀取其中的技能…",
+        "upload": "正在上傳技能包…",
+        "reimport": "正在從 GitHub 拉取最新版本…"
+      },
+      "slow": "仍在處理中。較大的儲存庫或技能包可能需要幾分鐘。",
+      "long": "仍在處理中。請保持此頁面開啟，直到完成。",
+      "elapsed": "已用時 {{time}}"
+    },
     "loading": "正在載入技能…",
     "loading_detail": "正在載入技能…",
     "try_again": "重試",
