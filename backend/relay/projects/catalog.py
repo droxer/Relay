@@ -155,7 +155,7 @@ def update_project_payload(
     }
     if set(payload) - allowed:
         raise ProjectValidationError("project_patch_unsupported")
-    if ("memberChange" in payload or "leadAgentId" in payload) and expected_version != current["version"]:
+    if ("memberChange" in payload or "leadAgentId" in payload) and expected_version != current.get("version", expected_version):
         raise ProjectVersionConflict(current["id"])
     patch = {
         key: value
