@@ -3,8 +3,8 @@ import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getProjectManager } from "../api-client/project-manager";
 import type { AppliedManagerProposal } from "../domain-types/project-manager";
-import type { RelayTaskListItem } from "../types";
-import { HOME_TASKS_QUERY_KEY, TASKS_QUERY_KEY } from "../hooks/useRelayData";
+import type { RelaySession, RelayTaskListItem } from "../types";
+import { HOME_TASKS_QUERY_KEY, ISSUES_PAGE_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY, THREAD_TASKS_QUERY_KEY } from "../hooks/useRelayData";
 import { TASK_RECORD_QUERY_KEY } from "../hooks/useTaskRecord";
 import { ManagerProposalCard } from "./ManagerProposalCard";
 
@@ -31,9 +31,23 @@ export function ProjectManagerProposals({projectId,threadId,readOnly,running}: {
     void client.invalidateQueries({ queryKey: ["project-manager", projectId], exact: true });
     if (!applied) return;
     const changed = new Set(applied.tasks.map(task => task.id));
-    for (const queryKey of [TASKS_QUERY_KEY, HOME_TASKS_QUERY_KEY, [...TASKS_QUERY_KEY, projectId]]) {
-      void client.invalidateQueries({ queryKey, exact: true });
-    }
+    const projectThreads = new Set(client.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.filter(
+      session => session.projectId === projectId,
+    ).map(session => session.id));
+    projectThreads.add(threadId);
+    void client.invalidateQueries({
+      queryKey: TASKS_QUERY_KEY,
+      predicate: ({ queryKey }) => {
+        const [scope, filter] = queryKey.slice(TASKS_QUERY_KEY.length);
+        if (scope === undefined || scope === projectId || scope === HOME_TASKS_QUERY_KEY.at(-1) || scope === "issues") return true;
+        if (typeof filter !== "string") return false;
+        if (scope === THREAD_TASKS_QUERY_KEY.at(-1)) return projectThreads.has(filter);
+        if (scope !== ISSUES_PAGE_KEY.at(-1)) return false;
+        const params = new URLSearchParams(filter);
+        const project = params.get("projectId");
+        return project === projectId || (!project && params.get("scope") === "issues");
+      },
+    });
     // A prerequisite change can also affect another Task's derived dependents.
     void client.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY], predicate: ({ queryKey, state }) =>
       changed.has(String(queryKey[1])) || (state.data as RelayTaskListItem | undefined)?.projectId === projectId });

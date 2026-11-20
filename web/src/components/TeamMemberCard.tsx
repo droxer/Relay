@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AGENT_ROLE_OPTIONS } from "../types";
-import type { AgentName, AgentPlacement, LogicalAgentAvailability, TeamMemberConfig } from "../types";
+import type { AgentName, AgentPlacementRoute, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
+import { teamMemberConfigPatch } from "../lib/teamForm";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { LeadBadge } from "./LeadBadge";
@@ -24,7 +25,7 @@ type TeamCardMember = {
   enabled?: boolean;
   availability?: LogicalAgentAvailability;
   defaultRole?: string;
-  placements?: AgentPlacement[];
+  placements?: AgentPlacementRoute[];
 };
 
 /* A member's team role. Every save records one; a team saved before roles
@@ -206,21 +207,24 @@ export function TeamMemberCard({ member, config, lead, canEdit, saving, onEditin
   canEdit: boolean;
   saving?: boolean;
   onEditingChange?: (editing: boolean) => void;
-  onSave: (next: TeamMemberConfig) => Promise<boolean>;
+  onSave: (fields: TeamMemberConfigPatch) => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const idBase = useId();
   const [draft, setDraft] = useState<TeamMemberConfig | null>(null);
+  const base = useRef<TeamMemberConfig>({});
   const editing = draft !== null;
 
   function setEditing(next: TeamMemberConfig | null) {
+    if (next) base.current = next;
     setDraft(next);
     onEditingChange?.(next !== null);
   }
 
   async function save() {
-    if (!draft) return;
-    if (await onSave(draft)) setEditing(null);
+    if (!draft || saving) return;
+    const fields = teamMemberConfigPatch(base.current, draft);
+    if (!Object.keys(fields).length || await onSave(fields)) setEditing(null);
   }
 
   const editButton = editing ? null : (

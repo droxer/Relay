@@ -1,11 +1,11 @@
 import type { TFunction } from "i18next";
-import type { ControlPanelDaemonNodeRecord } from "../../types";
+import type { UserRosterComputer } from "../../types";
 import { formatRelativeTime, isNodeOnline } from "../../lib/adminHelpers";
 import { Badge, BadgeLabel } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface NodePresenceProps {
-  node: ControlPanelDaemonNodeRecord;
+  node: Pick<UserRosterComputer, "stale" | "online" | "lastSeenAt">;
   t: TFunction;
   className?: string;
   withLabel?: boolean;

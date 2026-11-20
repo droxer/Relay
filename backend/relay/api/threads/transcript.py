@@ -14,11 +14,12 @@ from ...persistence.protocols import SessionStore
 
 _WINDOW_LIMIT = 160
 _WINDOW_BYTES = 384 * 1024
+_COMPACT_WINDOW_BYTES = 128 * 1024
 _KNOWN_EVENTS = re.compile(r"([0-9]{1,10}):([0-9]{1,10}):([0-9a-f]{64})")
 
 
 def read_transcript_page(
-    store: SessionStore, header: dict[str, Any], before: str | None,
+    store: SessionStore, header: dict[str, Any], before: str | None, *, compact: bool = False,
 ) -> dict[str, Any]:
     end = int(header["eventCount"])
     if before is not None:
@@ -26,7 +27,8 @@ def read_transcript_page(
             raise HTTPException(400, "Invalid transcript page boundary.")
         end = int(before)
     start, events = store.read_transcript_page(
-        header["id"], before=end, limit=_WINDOW_LIMIT, max_bytes=_WINDOW_BYTES,
+        header["id"], before=end, limit=_WINDOW_LIMIT,
+        max_bytes=_COMPACT_WINDOW_BYTES if compact and before is None else _WINDOW_BYTES,
     )
     return {"eventStart": start, "eventCount": end, "events": events}
 
@@ -35,7 +37,7 @@ def _events_revision(events: list[dict[str, Any]]) -> str:
     return sha256(JSONResponse(events).body).hexdigest()
 
 
-def transcript_response(request: Request, session: dict[str, Any]) -> Response:
+def transcript_response(request: Request, session: dict[str, Any], *, compact: bool = False) -> Response:
     events = session["events"]
     start = session["eventStart"]
     revision = _events_revision(events)
@@ -43,6 +45,20 @@ def transcript_response(request: Request, session: dict[str, Any]) -> Response:
         **{key: value for key, value in session.items() if key != "events"},
         "eventsRevision": revision,
     }
+    if compact:
+        # Run briefs are execution inputs. The transcript renders the events
+        # and uses these run and assignment records for identity and status.
+        snapshot["agentRuns"] = [
+            {key: value for key, value in run.items() if key not in {"brief", "workspaceIdentity"}}
+            for run in session.get("agentRuns", [])
+        ]
+        snapshot["collaborationRounds"] = [
+            {**round_, "assignments": [
+                {key: value for key, value in assignment.items() if key != "brief"}
+                for assignment in round_.get("assignments", [])
+            ]}
+            for round_ in session.get("collaborationRounds", [])
+        ]
     etag = weak_etag(bytes(JSONResponse(snapshot).body))
     headers = {"ETag": etag.decode("ascii"), "Cache-Control": "no-store"}
     if etag_matches(request.headers.get("if-none-match", "").encode("latin-1"), etag):

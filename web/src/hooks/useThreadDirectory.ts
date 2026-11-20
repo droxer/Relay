@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { sessionComputer } from "../lib/workspaceScope";
-import type { ProjectRecord } from "../types";
+import type { ProjectRailItem } from "../types";
 import { matchesThreadQuery, reuseThreadItems, runningAgentName, threadOriginIndex, threadsForDirectory, type ThreadItem, type ThreadParticipant } from "../lib/threads";
 import { threadNodeOffline } from "../lib/threadRuntime";
 import {
@@ -22,10 +22,7 @@ import { applyThreadKindFilter, THREAD_KIND_FILTER_ALL, type ThreadKindFilter } 
  * `useMemo`s whose only relationship to the surrounding 1400 lines was that
  * they happened to be declared there.
  */
-/* Nodes and agents are typed structurally against what the derivation reads,
-   the same way lib/threadRuntime.ts types its own helpers. Projects are not:
-   threadsForDirectory groups on the full record, so a narrower shape here
-   would only be a second, weaker spelling of the same model. */
+/* The rail only reads project identity and display fields. */
 type DirectoryNode = {
   activeRuns: readonly { sessionId: string; agent: ThreadItem["runningAgent"]; logicalAgentId?: string }[];
 };
@@ -40,7 +37,7 @@ interface ThreadDirectory {
   /** …narrowed by the search query. */
   filteredThreads: ThreadItem[];
   /** Projects to list, on the projects route only. */
-  directoryProjects: ProjectRecord[];
+  directoryProjects: ProjectRailItem[];
   /** Threads to list, grouped for the active route. */
   directoryThreads: ThreadItem[];
   /** The projects the threads rail's quick filter offers. */
@@ -54,7 +51,7 @@ interface ThreadDirectoryInput {
   route: string;
   computerId?: string | null;
   myThreads: ThreadItem["session"][];
-  projects: readonly ProjectRecord[];
+  projects: readonly ProjectRailItem[];
   routedProjectId: string | null;
   threadQuery: string;
   /** The threads rail's project quick filter; every thread when omitted. */

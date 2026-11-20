@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
+from itertools import groupby
 from typing import Any
 
 from sqlalchemy import insert, select, update
@@ -77,15 +79,33 @@ class SkillEventRows(SkillStoreState):
         self._append_event(conn, skill_row["id"], sequence, event_type, payload)
 
     def _replay(self, conn: Any, skill_id: str) -> dict[str, Any]:
-        rows = (
-            conn.execute(
-                select(self.events_table.c.type, self.events_table.c.payload)
-                .where(self.events_table.c.skill_id == skill_id)
-                .order_by(self.events_table.c.sequence)
-            )
-            .mappings()
-            .all()
-        )
+        events = self.events_table
+        history = conn.execute(
+            self._replay_events().where(events.c.skill_id == skill_id).order_by(events.c.sequence)
+        ).mappings()
+        return self._reduce_skill(skill_id, history)
+
+    def _replay_events(self) -> Any:
+        events = self.events_table
+        return select(events.c.skill_id, events.c.type, events.c.payload).where(events.c.type.in_((
+            "skill.created", "skill.revision.added", "skill.revision.promoted", "skill.updated", "skill.deleted",
+        )))
+
+    def _replay_matching(self, conn: Any, predicate: Any) -> list[dict[str, Any]]:
+        events = self.events_table
+        rows = conn.execute(
+            self._replay_events()
+            .join(self.skills, self.skills.c.id == events.c.skill_id)
+            .where(predicate)
+            .order_by(events.c.skill_id, events.c.sequence)
+        ).mappings()
+        return [
+            self._reduce_skill(str(skill_id), history)
+            for skill_id, history in groupby(rows, key=lambda row: row["skill_id"])
+        ]
+
+    @staticmethod
+    def _reduce_skill(skill_id: str, rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         skill: dict[str, Any] | None = None
         for row in rows:
             payload = row["payload"]

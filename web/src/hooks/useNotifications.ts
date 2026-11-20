@@ -11,6 +11,7 @@ import {
   updateNotificationPreferences,
   type NotificationPreferences,
   type NotificationsResponse,
+  type NotificationInboxCache,
 } from "../api";
 import {
   DESKTOP_NOTIFICATIONS_CHANGE_EVENT,
@@ -58,6 +59,29 @@ export type DesktopPermission = NotificationPermission | "unsupported";
 export function desktopPermission(): DesktopPermission {
   if (typeof window === "undefined" || typeof window.Notification === "undefined") return "unsupported";
   return window.Notification.permission;
+}
+
+function subscribeDesktopPermission(onChange: () => void): () => void {
+  let status: PermissionStatus | undefined;
+  let subscribed = true;
+  window.addEventListener("focus", onChange);
+  document.addEventListener("visibilitychange", onChange);
+  window.addEventListener(DESKTOP_NOTIFICATIONS_CHANGE_EVENT, onChange);
+  void navigator.permissions?.query({ name: "notifications" }).then((result) => {
+    if (!subscribed) return;
+    status = result;
+    status.addEventListener("change", onChange);
+    onChange();
+  }).catch(() => {
+    // Permission queries are unavailable in some browsers.
+  });
+  return () => {
+    subscribed = false;
+    status?.removeEventListener("change", onChange);
+    window.removeEventListener("focus", onChange);
+    document.removeEventListener("visibilitychange", onChange);
+    window.removeEventListener(DESKTOP_NOTIFICATIONS_CHANGE_EVENT, onChange);
+  };
 }
 
 function showDesktopNotices(
@@ -156,16 +180,21 @@ export function useNotifications({ enabled, onOpen }: {
   const queryClient = useQueryClient();
   const { reportMutationError } = useMutationError();
   const [desktopEnabled] = useDesktopNotificationsSetting();
+  const permission = useSyncExternalStore(subscribeDesktopPermission, desktopPermission, () => "unsupported");
   const { user } = useAuthSession();
   const accountId = user?.id;
-  const queryKey = useMemo(() => [...NOTIFICATIONS_QUERY_KEY, accountId], [accountId]);
+  const { queryKey, inboxCache } = useMemo(() => {
+    const inboxCache: NotificationInboxCache = {};
+    return { queryKey: [...NOTIFICATIONS_QUERY_KEY, accountId], inboxCache };
+  }, [accountId]);
   const countKey = [...queryKey, "count"] as const;
   const [openPanels, setOpenPanels] = useState(0);
   const observeInbox = useCallback(() => {
     setOpenPanels(count => count + 1);
     return () => setOpenPanels(count => count - 1);
   }, []);
-  const readDetails = desktopEnabled || openPanels > 0;
+  const desktopActive = desktopEnabled && permission === "granted";
+  const readDetails = desktopActive || openPanels > 0;
   const watching = enabled && Boolean(accountId);
 
   const count = useQuery({
@@ -182,7 +211,7 @@ export function useNotifications({ enabled, onOpen }: {
     queryFn: async ({ signal }) => {
       await queryClient.cancelQueries({ queryKey: countKey, exact: true });
       const countVersion = queryClient.getQueryState(countKey)?.dataUpdateCount;
-      const response = await listNotifications(signal);
+      const response = await listNotifications(signal, 50, inboxCache);
       // A badge poll can start again if the panel closes mid-fetch. Keep any newer count it read.
       if (!signal.aborted && queryClient.getQueryState(countKey)?.dataUpdateCount === countVersion) {
         queryClient.setQueryData(countKey, { unreadCount: response.unreadCount });
@@ -192,7 +221,7 @@ export function useNotifications({ enabled, onOpen }: {
     refetchInterval: RELAY_POLL_INTERVALS_MS.notifications,
     // A hidden tab is exactly when a desktop notice is worth showing, so the
     // poll keeps running there — but only for a person who asked for them.
-    refetchIntervalInBackground: desktopEnabled,
+    refetchIntervalInBackground: desktopActive,
     refetchOnWindowFocus: true,
   });
 
@@ -272,13 +301,13 @@ export function useNotifications({ enabled, onOpen }: {
     seenRef.current = new Set(notices.map((notice) => notice.id));
     if (
       arrivals.length === 0
-      || !desktopEnabled
+      || !desktopActive
       || desktopPermission() !== "granted"
       || typeof document === "undefined"
       || !document.hidden
     ) return;
     showDesktopNotices(arrivals, t, (notice) => openRef.current(notice));
-  }, [desktopEnabled, notices, query.data, t]);
+  }, [desktopActive, notices, query.data, t]);
 
   return {
     notices,

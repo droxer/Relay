@@ -27,6 +27,29 @@ def test_membership_contract_survives_updates_and_removal(team_store) -> None:
     assert "builder" not in removed["memberConfigs"]
 
 
+def test_independent_member_fields_survive_concurrent_patches(team_store) -> None:
+    team = team_store.create_team("alice", {
+        "name": "Concurrent edits", "leadAgentId": "lead", "memberAgentIds": ["lead", "builder"],
+        "memberConfigs": {"builder": {"role": "implementer", "expectedOutputs": ["Build notes"]}},
+    })
+    start = Barrier(2)
+
+    def save(fields):
+        start.wait(timeout=5)
+        return team_store.update_member_config(team["id"], "builder", fields, default_role="implementer")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responsibility = executor.submit(save, {"responsibility": "Build the API"})
+        required = executor.submit(save, {"required": True})
+        updates = [responsibility.result(), required.result()]
+    assert sorted(update["baseVersion"] for update in updates) == [team["version"], team["version"] + 1]
+    after = team_store.get_team(team["id"])
+    assert after is not None and after["version"] == team["version"] + 2
+    assert after["memberConfigs"]["builder"] == {
+        "role": "implementer", "expectedOutputs": ["Build notes"], "responsibility": "Build the API", "required": True,
+    }
+
+
 @pytest.mark.parametrize("config", [
     {"stranger": {"role": "reviewer"}},
     {"lead": {"role": "root"}},

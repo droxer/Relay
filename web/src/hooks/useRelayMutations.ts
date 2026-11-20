@@ -32,21 +32,26 @@ setTaskPrerequisites,
   updateTask,
   updateProject,
   updateTeam,
+  updateTeamMemberConfig,
 } from "../api";
-import type { AgentRunInput, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
+import type { AgentRunInput, AgentTeam, AgentTeamsResponse, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectListItem, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMemberConfigPatch, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
+import { isTaskListScope } from "../domain-types/tasks";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
-import { HOME_TASKS_QUERY_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
+import { AUTOMATIONS_PAGE_KEY, COMPUTER_TASKS_QUERY_KEY, HOME_TASKS_QUERY_KEY, ISSUES_PAGE_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY, THREAD_TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { WORKSPACE_ACTIVITY_QUERY_KEY } from "./useWorkspaceActivity";
 import { useDialogs } from "../components/ui/DialogProvider";
-import { TEAMS_QUERY_KEY } from "./useTeams";
+import { teamRecordKey, TEAMS_QUERY_KEY } from "./useTeams";
+import { TEAM_WORKFLOW_CHOICES_KEY } from "./useProjectWorkflows";
 import { TASK_RECORD_QUERY_KEY } from "./useTaskRecord";
 import { mergeSessionSnapshotIntoSessions } from "../lib/sessionPollMerge";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
 import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
-import { mergeProjectIntoProjects } from "../lib/projectDirectory";
+import { mergeProjectIntoProjects, projectDirectoryEntry, projectIndexRow } from "../lib/projectDirectory";
+import { PROJECT_DIRECTORY_ENTRY_QUERY_KEY, PROJECT_INDEX_QUERY_KEY, PROJECT_RECORD_QUERY_KEY, projectRecordKey } from "./projectQueries";
+import type { ProjectIndexRow } from "../types";
 import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteErrorMessage } from "../lib/projectDeletion";
 import { threadLabel } from "../lib/threads";
 import { THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
@@ -64,13 +69,25 @@ export function useRelayMutations() {
   const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
   const invalidateWorkspaceActivity = () => queryClient.invalidateQueries({ queryKey: WORKSPACE_ACTIVITY_QUERY_KEY });
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
+  const invalidateIssues = () => queryClient.invalidateQueries({ queryKey: ISSUES_PAGE_KEY });
+  const taskLists = () => queryClient.getQueriesData<RelayTaskSummary[]>({ queryKey: TASKS_QUERY_KEY })
+    .filter((entry): entry is [typeof entry[0], RelayTaskSummary[]] => Array.isArray(entry[1]));
+  const filterTaskLists = (keep: (task: RelayTaskSummary) => boolean) => {
+    for (const [key] of taskLists()) {
+      queryClient.setQueryData<RelayTaskSummary[]>(key, current => current?.filter(keep));
+    }
+  };
   const invalidateTaskProjections = (task: RelayTask) => {
+    void invalidateIssues();
+    if (task.isRoutine || task.sourceRoutineId) void queryClient.invalidateQueries({ queryKey: AUTOMATIONS_PAGE_KEY });
+    void queryClient.invalidateQueries({ queryKey: THREAD_TASKS_QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: COMPUTER_TASKS_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: HOME_TASKS_QUERY_KEY, exact: true });
-    if (task.projectId) void queryClient.invalidateQueries({ queryKey: [...TASKS_QUERY_KEY, task.projectId], exact: true });
+    if (task.projectId) void queryClient.invalidateQueries({ queryKey: [...TASKS_QUERY_KEY, task.projectId] });
   };
   const invalidateThreadTasks = (sessionId: string) => {
-    const tasks = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY) ?? [];
-    const linkedIds = new Set(tasks.filter(task => task.linkedSessionIds?.includes(sessionId)).map(task => task.id));
+    const linkedIds = new Set(taskLists().flatMap(([, rows]) =>
+      rows.filter(task => task.linkedSessionIds?.includes(sessionId)).map(task => task.id)));
     // A deep-linked record can be cached before its list row is available.
     for (const [key, record] of queryClient.getQueriesData<RelayTask>({ queryKey: [TASK_RECORD_QUERY_KEY] })) {
       if (record?.linkedSessionIds?.includes(sessionId) || (typeof key[1] === "string" && linkedIds.has(key[1]))) {
@@ -80,7 +97,8 @@ export function useRelayMutations() {
     return invalidateTasks();
   };
   const invalidateNodes = () => queryClient.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
-  const invalidateProjects = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY, exact: true });
+  const invalidateProjects = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY });
+  const invalidateTeamWorkflowChoices = () => queryClient.invalidateQueries({ queryKey: TEAM_WORKFLOW_CHOICES_KEY });
   const invalidateTaskWorkflowSession = (sessionId: string) =>
     queryClient.invalidateQueries({ queryKey: taskWorkflowSessionQueryKey(sessionId), exact: true });
   // Prefix on purpose: the teams list is keyed ["teams", userId] and nothing
@@ -97,12 +115,33 @@ export function useRelayMutations() {
   };
   const cacheTask = (task: RelayTask) => {
     const summary = taskSummaryFromTask(task);
-    queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-      mergeTaskSummaryIntoTasks(current ?? [], summary));
+    for (const [key] of taskLists()) {
+      const first = key[TASKS_QUERY_KEY.length];
+      const computerId = first === COMPUTER_TASKS_QUERY_KEY.at(-1) ? key[COMPUTER_TASKS_QUERY_KEY.length] : undefined;
+      const projectId = computerId || isTaskListScope(first) ? undefined : first;
+      const scope = computerId ? key[COMPUTER_TASKS_QUERY_KEY.length + 1]
+        : projectId ? key[TASKS_QUERY_KEY.length + 1] : first;
+      const bound = task.workspaceBinding?.computerId || task.computerId;
+      const inWorkspace = computerId ? !task.projectId && (!bound || bound === computerId)
+        : !projectId || projectId === task.projectId;
+      const inScope = scope === "automations"
+        ? task.isRoutine || (task.sourceRoutineId && ["assigned", "queued", "running", "waiting_for_human", "review"].includes(task.status))
+        : scope === "board" ? !task.isRoutine && !task.sourceRoutineId : scope !== "issues" || !task.isRoutine;
+      queryClient.setQueryData<RelayTaskSummary[]>(key, current => current && (
+        inScope && inWorkspace
+          ? mergeTaskSummaryIntoTasks(current, summary)
+          : current.filter(row => row.id !== task.id)
+      ));
+    }
   };
   const cacheProject = (project: ProjectRecord) => {
-    queryClient.setQueryData<ProjectRecord[]>(PROJECTS_QUERY_KEY, (current) =>
-      mergeProjectIntoProjects(current ?? [], project));
+    queryClient.setQueryData(projectRecordKey(project.id, project.version), { project });
+    queryClient.setQueryData<ProjectListItem[]>(PROJECTS_QUERY_KEY, (current) =>
+      current?.some(row => row.id === project.id && row.version > project.version)
+        ? current : current && mergeProjectIntoProjects(current, projectDirectoryEntry(project)));
+    queryClient.setQueryData<ProjectIndexRow[]>(PROJECT_INDEX_QUERY_KEY, (current) =>
+      current?.some(row => row.id === project.id && row.version > project.version)
+        ? current : current && mergeProjectIntoProjects(current, projectIndexRow(project)));
   };
 
   const onRelayError = (context: string, messageKey: string) => (error: unknown) => {
@@ -256,9 +295,17 @@ export function useRelayMutations() {
       // A list poll started before creation can still carry the old rows.
       // Cancel it before publishing the new task or automation, otherwise its
       // response removes the new record until another refresh.
-      await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY, exact: true });
+      await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY });
       cacheTask(task);
-      invalidateTaskProjections(task);
+      void queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY, predicate: query =>
+        query.state.data === undefined
+        || query.queryKey[TASKS_QUERY_KEY.length] === HOME_TASKS_QUERY_KEY[TASKS_QUERY_KEY.length]
+        || query.queryKey[TASKS_QUERY_KEY.length] === ISSUES_PAGE_KEY[TASKS_QUERY_KEY.length]
+        || (task.isRoutine && query.queryKey[TASKS_QUERY_KEY.length] === AUTOMATIONS_PAGE_KEY[TASKS_QUERY_KEY.length])
+        || query.queryKey[TASKS_QUERY_KEY.length] === THREAD_TASKS_QUERY_KEY[TASKS_QUERY_KEY.length]
+        || query.queryKey.at(-1) === "project-dashboard"
+        || query.queryKey[TASKS_QUERY_KEY.length + 1] === "prerequisite-choices",
+      });
     },
     onError: onRelayError("Failed to create task", "errors.save_task"),
   });
@@ -275,43 +322,41 @@ export function useRelayMutations() {
       // an optimistic done would unmount the brief before a stale refusal.
       if (input.reviewRevision) {
         await queryClient.cancelQueries({ queryKey: [TASK_RECORD_QUERY_KEY, taskId] });
-        return { previous: undefined };
+        return;
       }
       const { status, priority, dueDate, assignedAgentId, assignedTeamId } = input;
       const assignmentChanged = assignedAgentId !== undefined || assignedTeamId !== undefined;
-      if (!status && !priority && dueDate === undefined && !assignmentChanged) return { previous: undefined };
+      if (!status && !priority && dueDate === undefined && !assignmentChanged) return;
       await queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY });
-      const previous = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY)?.find(task => task.id === taskId);
-      queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-        (current ?? []).map((task) => {
-          if (task.id !== taskId) return task;
-          return {
-            ...task,
-            ...(status ? { status, workflowStage: status === "blocked" || status === "waiting_for_human" ? task.workflowStage : status } : {}),
-            // A task moved off its wait no longer asks anything.
-            ...(status && status !== "waiting_for_human" ? { awaiting: null } : {}),
-            ...(priority ? { priority } : {}),
-            ...(dueDate !== undefined ? { dueDate: dueDate || undefined } : {}),
-            ...(assignmentChanged
-              ? {
-                  assignedAgentId: assignedAgentId || undefined,
-                  assignedTeamId: assignedTeamId || undefined,
-                  ...(assignedAgentId ? {} : { assignedAgent: undefined }),
-                }
-              : {}),
-          };
-        }),
-      );
-      const optimistic = queryClient.getQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY)?.find(task => task.id === taskId);
-      return { previous, optimistic };
+      return taskLists().flatMap(([key, rows]) => {
+        const previous = rows.find(task => task.id === taskId);
+        if (!previous) return [];
+        const next = {
+          ...previous,
+          ...(status ? { status, workflowStage: status === "blocked" || status === "waiting_for_human" ? previous.workflowStage : status } : {}),
+          // A task moved off its wait no longer asks anything.
+          ...(status && status !== "waiting_for_human" ? { awaiting: null } : {}),
+          ...(priority ? { priority } : {}),
+          ...(dueDate !== undefined ? { dueDate: dueDate || undefined } : {}),
+          ...(assignmentChanged
+            ? {
+                assignedAgentId: assignedAgentId || undefined,
+                assignedTeamId: assignedTeamId || undefined,
+                ...(assignedAgentId ? {} : { assignedAgent: undefined }),
+              }
+            : {}),
+        };
+        const optimistic = queryClient.setQueryData<RelayTaskSummary[]>(key, current =>
+          current?.map(row => row.id === taskId ? next : row))?.find(row => row.id === taskId);
+        return [{ key, previous, optimistic }];
+      });
     },
     onError: (error, { taskId }, context) => {
-      if (context?.previous) {
-        const previous = context.previous;
+      for (const { key, previous, optimistic } of context ?? []) {
         // Only undo this write while it still owns the row. Another edit or
         // server response supersedes it; reconciliation settles that race.
-        queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, current =>
-          current?.map(task => task.id === taskId && task === context.optimistic ? previous : task));
+        queryClient.setQueryData<RelayTaskSummary[]>(key, current =>
+          current?.map(task => task.id === taskId && task === optimistic ? previous : task));
       }
       const key = error instanceof RelayApiError ? taskFlowErrorKey(error.code) : undefined;
       onRelayError("Failed to update task", key ?? "errors.save_task")(error);
@@ -328,8 +373,7 @@ export function useRelayMutations() {
   const deleteTaskMutation = useMutation({
     mutationFn: ({ taskId }: { taskId: string }) => deleteTask(taskId),
     onSuccess: (_result, { taskId }) => {
-      queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-        (current ?? []).filter((task) => task.id !== taskId));
+      filterTaskLists(task => task.id !== taskId);
     },
     onSettled: () => {
       void invalidateTasks();
@@ -356,8 +400,7 @@ export function useRelayMutations() {
     onSuccess: ({ succeeded, failed }) => {
       if (succeeded.length > 0) {
         const removed = new Set(succeeded);
-        queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-          (current ?? []).filter((task) => !removed.has(task.id)));
+        filterTaskLists(task => !removed.has(task.id));
       }
       // One toast for the batch, not one per record: a selection of twenty
       // blocked tasks would otherwise bury the board in identical messages.
@@ -435,9 +478,17 @@ export function useRelayMutations() {
 
   const createProjectMutation = useMutation({
     mutationFn: (input: CreateProjectInput) => createProject(input),
-    onSuccess: ({ project }) => {
+    onSuccess: async ({ project }) => {
+      const keys = [PROJECTS_QUERY_KEY, PROJECT_INDEX_QUERY_KEY];
+      const cached = keys.filter(key => {
+        const state = queryClient.getQueryState(key);
+        return state?.data !== undefined && !state.isInvalidated;
+      });
+      await Promise.all(cached.map(queryKey => queryClient.cancelQueries({ queryKey, exact: true })));
       cacheProject(project);
-      void invalidateProjects();
+      for (const queryKey of keys) {
+        if (!cached.includes(queryKey)) void queryClient.invalidateQueries({ queryKey, exact: true });
+      }
     },
     onError: onRelayError("Failed to create project", "errors.save_project"),
   });
@@ -478,16 +529,26 @@ export function useRelayMutations() {
   });
 
   const updateProjectMutation = useMutation({
-    mutationFn: ({ projectId, input }: { projectId: string; input: UpdateProjectInput }) =>
-      updateProject(projectId, input),
-    onSuccess: ({ project }) => {
+    mutationFn: ({ projectId, input, baseProject }: { projectId: string; input: UpdateProjectInput; baseProject?: ProjectRecord }) =>
+      updateProject(projectId, input, baseProject),
+    onSuccess: async ({ project }, { input, baseProject }) => {
+      const change = input.memberChange;
+      const editsMemberText = change?.op === "update"
+        && input.leadAgentId === undefined
+        && Object.keys(change.fields).every(field => field === "responsibilities" || field === "instructions");
+      const directoryCached = Boolean(baseProject) && (
+        queryClient.getQueryData(PROJECTS_QUERY_KEY) !== undefined || queryClient.getQueryData(PROJECT_INDEX_QUERY_KEY) !== undefined);
+      if (directoryCached) await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
       cacheProject(project);
-      void invalidateProjects();
+      if (!directoryCached) void invalidateProjects();
+      if (input.name !== undefined || input.enabled !== undefined) void invalidateTeamWorkflowChoices();
+      if (!editsMemberText) void invalidateIssues();
     },
-    onError: (error) => {
+    onError: (error, { input }) => {
       // Project editors reconcile version conflicts and show a confirmation.
       // A generic failure toast here incorrectly blames the computer/roster.
-      if (error instanceof RelayApiError && error.code === "project_version_conflict") return;
+      if (error instanceof RelayApiError && (error.code === "project_version_conflict"
+        || (input.memberChange && error.status === 400 && error.code === "project_patch_unsupported"))) return;
       onRelayError("Failed to update project", "errors.save_project")(error);
     },
   });
@@ -498,6 +559,7 @@ export function useRelayMutations() {
     onSuccess: ({ project }) => {
       cacheProject(project);
       void invalidateProjects();
+      void invalidateTeamWorkflowChoices();
       void invalidateSessions();
       void invalidateTasks();
     },
@@ -510,6 +572,7 @@ export function useRelayMutations() {
     onSuccess: ({ project }) => {
       cacheProject(project);
       void invalidateProjects();
+      void invalidateTeamWorkflowChoices();
       void invalidateSessions();
       void invalidateTasks();
       announce({ message: t("project.unarchived"), tone: "success" });
@@ -539,13 +602,16 @@ export function useRelayMutations() {
         queryClient.cancelQueries({ queryKey: SESSIONS_QUERY_KEY }),
         queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY }),
       ]);
-      queryClient.setQueryData<ProjectRecord[]>(PROJECTS_QUERY_KEY, (current) =>
+      queryClient.setQueryData<ProjectListItem[]>(PROJECTS_QUERY_KEY, (current) =>
+        current?.filter((project) => project.id !== deletedProjectId));
+      queryClient.setQueryData<ProjectIndexRow[]>(PROJECT_INDEX_QUERY_KEY, (current) =>
         current?.filter((project) => project.id !== deletedProjectId));
       queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
         current?.filter((session) => session.projectId !== deletedProjectId));
-      queryClient.setQueryData<RelayTaskSummary[]>(TASKS_QUERY_KEY, (current) =>
-        current?.filter((task) => task.projectId !== deletedProjectId));
-      await Promise.all([invalidateProjects(), invalidateSessions(), invalidateTasks()]);
+      filterTaskLists(task => task.projectId !== deletedProjectId);
+      await Promise.all([invalidateProjects(), invalidateSessions(), invalidateTasks(), invalidateTeamWorkflowChoices()]);
+      queryClient.removeQueries({ queryKey: [...PROJECT_RECORD_QUERY_KEY, deletedProjectId] });
+      queryClient.removeQueries({ queryKey: [...PROJECT_DIRECTORY_ENTRY_QUERY_KEY, deletedProjectId] });
       queryClient.removeQueries({ queryKey: ["workspace-files", `project:${deletedProjectId}`] });
       queryClient.removeQueries({ queryKey: ["workspace-file", `project:${deletedProjectId}`] });
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] === "task-record"
@@ -584,11 +650,50 @@ export function useRelayMutations() {
   const updateTeamMutation = useMutation({
     mutationFn: ({ teamId, input }: { teamId: string; input: Partial<TeamMutationInput> }) =>
       updateTeam(teamId, input),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.team) queryClient.setQueryData(teamRecordKey(data.team.ownerUserId, data.team.id), data);
       void invalidateTeams();
       void invalidateTasks();
     },
     onError: onRelayError("Failed to update team", "errors.save_team"),
+  });
+
+  const updateTeamMemberConfigMutation = useMutation({
+    mutationFn: ({ team, agentId, fields }: { team: AgentTeam; agentId: string; fields: TeamMemberConfigPatch }) =>
+      updateTeamMemberConfig(team, agentId, fields),
+    onSuccess: async ({ team, baseVersion }, { agentId }) => {
+      const recordKey = teamRecordKey(team.ownerUserId, team.id);
+      const rosterKey = [TEAMS_QUERY_KEY, team.ownerUserId];
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: recordKey, exact: true }),
+        queryClient.cancelQueries({ queryKey: rosterKey, exact: true }),
+      ]);
+      queryClient.setQueryData<{ team: AgentTeam }>(recordKey, current =>
+        (current?.team.version ?? -1) > (team.version ?? -1) ? current : { team });
+      const roster = queryClient.getQueryData<AgentTeamsResponse>(rosterKey);
+      const previous = roster?.teams.find(row => row.id === team.id);
+      if (baseVersion === undefined || team.version === undefined || !roster || !previous || previous.version === undefined) {
+        void invalidateTeams();
+        return;
+      }
+      if (previous.version >= team.version) return;
+      if (previous.version !== baseVersion) {
+        void invalidateTeams();
+        return;
+      }
+      const { role, participation } = team.memberConfigs?.[agentId] ?? {};
+      const row = roster.view === "summary" ? {
+        ...previous, version: team.version, updatedAt: team.updatedAt,
+        memberConfigs: {
+          ...previous.memberConfigs,
+          [agentId]: { ...(role ? { role } : {}), ...(participation ? { participation } : {}) },
+        },
+      } : team;
+      queryClient.setQueryData<AgentTeamsResponse>(rosterKey, {
+        ...roster, teams: roster.teams.map(item => item.id === row.id ? row : item),
+      });
+    },
+    onError: onRelayError("Failed to update team member", "errors.save_team"),
   });
 
   const deleteTeamMutation = useMutation({
@@ -628,6 +733,7 @@ export function useRelayMutations() {
     unarchiveProjectMutation,
     deleteProjectMutation,
     updateTeamMutation,
+    updateTeamMemberConfigMutation,
     deleteTeamMutation,
   };
 }

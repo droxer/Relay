@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { AgentName, AgentTeam, ProjectRecord, RelaySession, UserAgent } from "../types";
+import type { AgentName, AgentTeam, ProjectListItem, RelaySession, UserAgent } from "../types";
 import { preferredRoutableAgent } from "../lib/agentDisplayNames";
 import { mentionCandidates } from "../lib/mentions";
 import { threadRoundTeam } from "../lib/messageRouting";
@@ -10,7 +10,7 @@ import { addressableThreadAgents, teamRosterForThread } from "../lib/threadRunti
 
 interface ComposerRoutingInput {
   activeSession: RelaySession | undefined;
-  activeProject: ProjectRecord | null;
+  activeProject: ProjectListItem | null;
   teams: AgentTeam[];
   logicalAgents: UserAgent[];
   /** Every agent on the thread's computer (useThreadTargets). */

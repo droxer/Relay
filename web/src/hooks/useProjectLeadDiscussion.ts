@@ -14,7 +14,7 @@ import { SESSIONS_QUERY_KEY } from "./useRelayData";
 export function useProjectLeadDiscussion({ projectId, currentUser, agents, onOpenThread }: {
   projectId: string;
   currentUser: CurrentUser;
-  agents: readonly UserAgent[];
+  agents: readonly Pick<UserAgent, "id" | "executorKind">[];
   onOpenThread: (sessionId: string) => void;
 }): { discuss: (topic?: ProjectLeadTopic) => void; pending: boolean } {
   const { t } = useTranslation();

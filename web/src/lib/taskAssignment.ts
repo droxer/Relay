@@ -1,4 +1,4 @@
-import type { AgentTeam, UserAgent, LogicalAgentAvailability, ProjectRecord, RelayTaskListItem, TaskMutationInput } from "../types.js";
+import type { AgentTeam, UserAgent, LogicalAgentAvailability, ProjectListItem, RelayTaskListItem, TaskMutationInput } from "../types.js";
 import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 import { isWorkflowTeam } from "./workflowTeamDraft.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
@@ -51,7 +51,7 @@ export function agentOnComputer(
  * `project_thread_assignments` in `backend/relay/projects/runtime.py`.
  */
 export function projectThreadRoster(
-  project: Pick<ProjectRecord, "computerId" | "leadAgentId" | "members">,
+  project: Pick<ProjectListItem, "computerId" | "leadAgentId" | "members">,
   agents: readonly ComputerPlaced[],
 ): { leadAgentId: string | null; memberAgentIds: string[] } {
   const listed = new Set(project.members.map((member) => member.agentId));
@@ -68,7 +68,7 @@ export function projectThreadRoster(
  * fallback in `project_thread_assignments`.
  */
 export function projectRoomAgentIds(
-  project: Pick<ProjectRecord, "members">,
+  project: Pick<ProjectListItem, "members">,
   session: { participantAgentIds?: readonly string[]; ownerAgentId?: string } | undefined,
 ): string[] {
   const crew = project.members.filter((member) => member.enabled).map((member) => member.agentId);
@@ -116,7 +116,7 @@ export function taskAssignmentOptions({
   teams,
   assigneeUserId,
 }: {
-  project?: Pick<ProjectRecord, "computerId" | "members"> & { id?: string } | null;
+  project?: Pick<ProjectListItem, "computerId" | "members"> & { id?: string } | null;
   computerId?: string;
   agents: readonly UserAgent[];
   teams: readonly AgentTeam[];

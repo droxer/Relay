@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 
 from ..engine import store_transaction
 from .rows import _revision_dict
@@ -21,16 +21,16 @@ class SkillReadRows(SkillStoreState):
 
     def list_skills(self, viewer_user_id: str) -> list[dict[str, Any]]:
         with store_transaction(self.engine) as conn:
-            ids = conn.scalars(
-                select(self.skills.c.id).where(
+            result = self._replay_matching(
+                conn,
+                and_(
                     self.skills.c.deleted_at.is_(None),
                     or_(
                         self.skills.c.visibility == "public",
                         self.skills.c.owner_user_id == viewer_user_id,
                     ),
-                )
-            ).all()
-            result = [self._replay(conn, skill_id) for skill_id in ids]
+                ),
+            )
         return sorted(
             result, key=lambda item: (item["displayName"].casefold(), item["id"])
         )
@@ -46,17 +46,20 @@ class SkillReadRows(SkillStoreState):
             )
         return _revision_dict(row) if row else None
 
-    def list_revisions(self, skill_id: str) -> list[dict[str, Any]]:
+    def list_revisions(
+        self, skill_id: str, *, before: int | None = None, limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        statement = (
+            select(self.revisions)
+            .where(self.revisions.c.skill_id == skill_id)
+            .order_by(self.revisions.c.revision.desc())
+        )
+        if before is not None:
+            statement = statement.where(self.revisions.c.revision < before)
+        if limit is not None:
+            statement = statement.limit(limit)
         with store_transaction(self.engine) as conn:
-            rows = (
-                conn.execute(
-                    select(self.revisions)
-                    .where(self.revisions.c.skill_id == skill_id)
-                    .order_by(self.revisions.c.revision.desc())
-                )
-                .mappings()
-                .all()
-            )
+            rows = conn.execute(statement).mappings().all()
         return [_revision_dict(row) for row in rows]
 
     def revision_files(self, revision_id: str) -> list[dict[str, Any]]:

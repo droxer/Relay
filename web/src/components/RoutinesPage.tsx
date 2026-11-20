@@ -2,23 +2,29 @@
 
 import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAutomationPage } from "../hooks/useAutomationPage";
+import { useClientMounted } from "../hooks/useClientMounted";
+import { useMutationError } from "../hooks/useMutationError";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
-import { computerWorkHref } from "../lib/workspaceScope";
+import { taskRecordQueryOptions } from "../hooks/useTaskRecord";
+import { computerWorkHref, taskComputer } from "../lib/workspaceScope";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { type ProjectRecord, type CurrentUser, type DaemonNodeMonitorRecord, type RelayTaskListItem } from "../types";
+import type { ProjectListItem, CurrentUser, DaemonNodeMonitorRecord, RelaySession, RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
 import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
 import { triggerError } from "../lib/automationTrigger";
 import { collectTags } from "../lib/taskTags";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
 import { applySort } from "../lib/listSort";
-import { paginate } from "../lib/pagination";
+import { DEFAULT_PAGE_SIZE, describePage, LANE_PAGE_SIZE, paginate } from "../lib/pagination";
 import { usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
+import { Button } from "@/components/ui/button";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { NEW_TASK_ACCEPTANCE_POLICY, emptyRoutineForm, routineFormFields, routineMutationFields, taskAssignmentMutationFields, taskBoardFormsEqual, taskAcceptancePolicy, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
@@ -50,19 +56,24 @@ import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { projectAutomationHref } from "../lib/projectAutomationRoute";
 import { taskRef } from "../lib/taskRef";
 import { TagFilterContext, useTagFilters } from "./tagFilter";
+import { UnplacedComputerWork } from "./UnplacedComputerWork";
+
+const NO_TASKS: RelayTaskListItem[] = [];
+const NO_SESSIONS: RelaySession[] = [];
 
 interface RoutinesPageProps {
   projectId?: string;
   computerId?: string;
   readOnly?: boolean;
-  projects?: ProjectRecord[];
+  projects?: ProjectListItem[];
   /** The routine whose record is open, from `/automations/<id>`. */
   recordTaskId?: string | null;
   /** The occurrence open as a run, from `/automations/<id>/runs/<runId>`. */
   recordRunId?: string | null;
   /** Opens a record; `null` returns to the board. */
   onOpenRecord: (routineId: string | null, runId?: string | null) => void;
-  tasks: RelayTaskListItem[];
+  tasks?: RelayTaskListItem[];
+  sessions?: RelaySession[];
   nodes: DaemonNodeMonitorRecord[];
   currentUser: CurrentUser;
   isRefreshing?: boolean;
@@ -70,15 +81,17 @@ interface RoutinesPageProps {
   onOpenThread: (sessionId: string) => void;
 }
 
-export function RoutinesPage({ projectId, computerId, readOnly = false, projects = [], recordTaskId, recordRunId, onOpenRecord, tasks: allTasks, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
+export function RoutinesPage({ projectId, computerId, readOnly = false, projects = [], recordTaskId, recordRunId, onOpenRecord, tasks: allTasks, sessions = NO_SESSIONS, nodes, currentUser, isRefreshing, onRefresh, onOpenThread }: RoutinesPageProps) {
   const hrefForRecord = useMemo(() => projectId
     ? (taskId: string, runId?: string | null) => projectAutomationHref(projectId, taskId, runId)
     : computerId ? (taskId: string, runId?: string | null) => computerWorkHref(computerId, "routine", taskId, runId) : undefined, [projectId, computerId]);
-  const tasks = useMemo(() => allTasks.filter((task) => !task.deletedAt && (!projectId || task.projectId === projectId)), [allTasks, projectId]);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const { teams } = useTeams(currentUser.userId);
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
+  const { reportMutationError } = useMutationError();
+  const queryClient = useQueryClient();
+  const mounted = useClientMounted();
   const {
     startTaskMutation,
     updateTaskMutation,
@@ -98,9 +111,9 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
   const [deletingSelection, setDeletingSelection] = useState(false);
   const startInFlight = useRef<string | null>(null);
+  const assignmentTarget = useRef<string | null>(null);
   const formDirty = Boolean(form && formBaseline && !taskBoardFormsEqual(form, formBaseline));
   const confirmDiscardChanges = useUnsavedChangesGuard(formDirty && !saving && !deleting);
-  const routineTasks = useMemo(() => tasks.filter((task) => task.isRoutine), [tasks]);
   /* An automation bound to a project names it under its title, as a backlog
      row does. An id the loaded projects do not know renders nothing rather
      than a raw id. */
@@ -108,10 +121,6 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
     const names = new Map(projects.map((project) => [project.id, project.name]));
     return (task: RelayTaskListItem) => (task.projectId ? names.get(task.projectId) : undefined);
   }, [projects]);
-  const tagOptions = useMemo(() => collectTags(routineTasks), [routineTasks]);
-  // Derived once for the whole board: `routineState` then costs a Set lookup
-  // per row instead of a full task scan.
-  const runningIds = useMemo(() => runningRoutineIds(tasks), [tasks]);
   /* Unsorted, `applySort` is the identity and `filterRoutineTasks`' own order
      (enabled first, then next run) stands — schedule health is the rail's
      dimension, not a column, so no comparator reads it. */
@@ -121,6 +130,35 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
   );
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
   const { page, setPage } = usePagination();
+  const [unplacedPage, setUnplacedPage] = useState(1);
+  const { result, waitingForSearch } = useAutomationPage({
+    projectId, computerId, filters, sort, page, unplacedPage, enabled: mounted && allTasks === undefined,
+    labels: {
+      missingAgent: t("backlog.assignment_unavailable_agent"), missingTeam: t("backlog.assignment_unavailable_team"),
+      workflow: t("workflow.assigned_workflow"), unassigned: t("backlog.unassigned"),
+    },
+  });
+  const response = allTasks === undefined && !waitingForSearch ? result.data : undefined;
+  const resultTags = response?.tags;
+  const resultPage = response?.page;
+  const remote = response?.page !== undefined;
+  const loading = allTasks === undefined && (waitingForSearch || result.isPending);
+  const loadFailed = allTasks === undefined && !waitingForSearch && result.isError;
+  const received = allTasks ?? response?.tasks ?? NO_TASKS;
+  const tasks = useMemo(() => remote ? received : received.filter(task => !task.deletedAt
+    && (!projectId || task.projectId === projectId)
+    && (!computerId || taskComputer(task, nodes, sessions) === computerId)), [received, remote, projectId, computerId, nodes, sessions]);
+  const routineTasks = useMemo(() => tasks.filter(task => task.isRoutine), [tasks]);
+  const routineCount = response?.automationCount ?? routineTasks.length;
+  const tagOptions = useMemo(() => resultTags ? collectTags([{ tags: resultTags }]) : collectTags(routineTasks),
+    [resultTags, routineTasks]);
+  const runningIds = useMemo(() => runningRoutineIds(tasks), [tasks]);
+  const unplaced = response?.unplaced ? describePage(response.unplaced.tasks, response.unplaced, LANE_PAGE_SIZE) : undefined;
+  const unplacedTasks = unplaced?.items ?? (computerId && !readOnly && !remote ? received.filter(task => {
+    if (!task.isRoutine || task.deletedAt || task.projectId || task.computerId || task.sourceRoutineId) return false;
+    const identity = taskComputer(task, nodes, sessions);
+    return !identity || identity === computerId;
+  }) : NO_TASKS);
   /* A tag on a row, tile, or the record filters this list by that tag
      (TagFilterContext): from the record it also closes the record. */
   const applyTagFilter = useCallback((tag: string) => {
@@ -130,16 +168,16 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
   const closeRecord = useCallback(() => onOpenRecord(null), [onOpenRecord]);
   const tagFilters = useTagFilters(filters.tag, applyTagFilter, closeRecord);
   const filteredTasks = useMemo(
-    () => applySort(filterRoutineTasks(tasks, filters), sortColumns, sort),
-    [filters, sort, sortColumns, tasks],
+    () => remote ? routineTasks : applySort(filterRoutineTasks(tasks, filters), sortColumns, sort),
+    [remote, routineTasks, filters, sort, sortColumns, tasks],
   );
   /* The rail's numbers answer "how many of what I am looking at are
      overdue", so they are counted against every filter EXCEPT the one the
      rail itself owns. Counting the already-narrowed list would put the whole
      board in the selected section and a 0 beside every other one. */
   const sectionCounts = useMemo(
-    () => routineStateCounts(filterRoutineTasks(tasks, { ...filters, state: "all" }), runningIds),
-    [filters, runningIds, tasks],
+    () => response?.counts ?? routineStateCounts(filterRoutineTasks(tasks, { ...filters, state: "all" }), runningIds),
+    [response?.counts, filters, runningIds, tasks],
   );
   const sectionTotal = useMemo(
     () => Object.values(sectionCounts).reduce((sum, count) => sum + count, 0),
@@ -148,7 +186,8 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
   /* One flat collection on one cursor. Schedule health used to band this
      list — and page each band off its own cursor — but the rail beside it
      names the section now, so a band would only repeat it. */
-  const pagedTasks = useMemo(() => paginate(filteredTasks, page), [filteredTasks, page]);
+  const pagedTasks = useMemo(() => resultPage ? describePage(filteredTasks, resultPage, DEFAULT_PAGE_SIZE)
+    : paginate(filteredTasks, page), [filteredTasks, page, resultPage]);
   // Selection follows what is on screen, so "select all" then Delete cannot
   // reach a routine on a page the reader never saw.
   const visibleIds = useMemo(
@@ -220,11 +259,11 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
         acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
         ...(form.permissionMode !== formBaseline?.permissionMode ? { permissionMode: form.permissionMode } : {}),
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
-        description: form.description,
+        ...(!form.id || form.description !== formBaseline?.description ? { description: form.description } : {}),
         ...(form.connectionGrants !== undefined ? { connectionGrants: form.connectionGrants } : {}),
         priority: form.priority,
         tags: form.tags,
-        ...routineMutationFields(form),
+        ...routineMutationFields(form, form.id ? formBaseline : undefined),
         ...taskAssignmentMutationFields(form),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
@@ -331,8 +370,19 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
 
   // Quick-assign entry from a card/row: same drawer, focus on the picker.
   function assignTask(task: RelayTaskListItem) {
-    setAssignmentFocus(true);
-    editTask(task);
+    assignmentTarget.current = task.id;
+    const openAssignment = (record: RelayTaskListItem) => {
+      if (assignmentTarget.current !== task.id) return;
+      setAssignmentFocus(true);
+      editTask(record);
+    };
+    if (!remote) {
+      openAssignment(task);
+      return;
+    }
+    void queryClient.fetchQuery(taskRecordQueryOptions(task.id)).then(openAssignment, (error) => {
+      reportMutationError("Failed to load Automation for assignment", error, t("routine.load_failed"));
+    });
   }
 
   function routineHandlers(task: RelayTaskListItem) {
@@ -354,6 +404,8 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
   return (
     <TagFilterContext value={tagFilters.list}>
       <section id="routine-panel" className={`routine-page ${projectId ? "routine-page--project" : "sec-shell"}`} aria-label={t("routine.title")} tabIndex={-1}>
+        {computerId && !readOnly ? <UnplacedComputerWork computerId={computerId} tasks={unplacedTasks}
+          page={unplaced} onPageChange={setUnplacedPage} /> : null}
         {/* Projects already supply navigation. Only the standalone board
             needs a rail; project lists expose state in their filter bar. */}
         {!projectId ? <div className="sec-rail">
@@ -361,7 +413,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
               kicker: the sidebar group already says where the reader is. */}
           <PageHeader
             title={t("routine.title")}
-            count={t("routine.sub", { count: routineTasks.length })}
+            count={loading ? undefined : t("routine.sub", { count: routineCount })}
             titleAs="h2"
             titleVariant="title"
             layout="stacked"
@@ -370,7 +422,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
             value={filters.state}
             counts={sectionCounts}
             total={sectionTotal}
-            onChange={(state) => setFilters({ ...filters, state })}
+            onChange={(state) => { setFilters({ ...filters, state }); setPage(1); }}
           />
         </div> : null}
 
@@ -380,7 +432,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
             titleAs="h2"
             titleVariant="title"
             topbarActions
-            count={projectId || sectionNarrowed ? t("routine.sub", { count: filteredTasks.length }) : undefined}
+            count={!loading && (projectId || sectionNarrowed) ? t("routine.sub", { count: pagedTasks.total }) : undefined}
             actions={
               <TaskBoardHeaderActions
                 refreshLabel={t("nav.refresh")}
@@ -397,7 +449,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
             includeState={Boolean(projectId)}
             agents={logicalAgents}
             tags={tagOptions}
-            onChange={setFilters}
+            onChange={(next) => { setFilters(next); setPage(1); }}
             sortMenu={
               <SortMenu
                 options={[
@@ -413,12 +465,18 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
             }
           />
 
-          {filteredTasks.length === 0 ? (
+          {loadFailed && !response ? (
+            <div className="task-project-notice" role="alert">
+              <span>{t("routine.load_failed")}</span>
+              <Button type="button" variant="ghost" onClick={() => void result.refetch()}>{t("project.retry")}</Button>
+            </div>
+          ) : loading ? <p className="record-empty" role="status">{t("routine.loading")}</p>
+          : filteredTasks.length === 0 ? (
             <BoardEmpty feature="routines"
-              title={routineTasks.length === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
-              body={routineTasks.length === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
-              createLabel={!readOnly && routineTasks.length === 0 ? t("routine.new") : undefined}
-              onCreate={!readOnly && routineTasks.length === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
+              title={routineCount === 0 ? t("routine.no_routines_title") : t("routine.no_match_title")}
+              body={routineCount === 0 ? t("routine.no_routines_body") : t("routine.no_match_body")}
+              createLabel={!readOnly && routineCount === 0 ? t("routine.new") : undefined}
+              onCreate={!readOnly && routineCount === 0 ? () => openRoutineForm(emptyRoutineForm(currentUser)) : undefined}
             />
           ) : (
             /* One table, one header, no bands: the rail beside this list has
@@ -441,7 +499,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
                   }
                   selection={visibleSelection}
                   onToggleSelect={(taskId) => { if (!readOnly) setSelection((current) => toggleSelected(current, taskId)); }}
-                  stateFor={(task) => routineState(task, runningIds)}
+                  stateFor={(task) => response?.states?.[task.id] ?? routineState(task, runningIds)}
                   assignmentFor={taskAssignmentDisplay}
                   handlersFor={routineHandlers}
                   projectNameFor={projectId ? undefined : projectNameFor}
@@ -501,6 +559,8 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
               currentUser={currentUser}
               runId={drawerRecord.runId}
               tasks={tasks}
+              compactList={allTasks === undefined}
+              automationStates={response?.states}
               drawer={{
                 open: Boolean(recordTaskId),
                 onClose: () => onOpenRecord(null),

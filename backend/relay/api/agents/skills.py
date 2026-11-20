@@ -7,7 +7,7 @@ import json
 import zipfile
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from ...skills.rules import (
@@ -139,16 +139,24 @@ async def create_skill(request: Request, ctx: AppContextDep) -> dict[str, Any]:
 
 
 @router.get("/skills/{skill_id}")
-def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def get_skill(
+    skill_id: str, request: Request, ctx: AppContextDep,
+    revision_limit: int | None = Query(None, ge=1, le=50),
+) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     skill = visible_skill(ctx, skill_id, actor["userId"])
+    revision_page = (
+        _revision_page(ctx, skill_id, revision_limit)
+        if revision_limit is not None
+        else {"revisions": ctx.skill_store.list_revisions(skill_id)}
+    )
     return {
         **skill,
         "grantedAgentIds": [
             agent["id"] for agent in ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
             if any(entry["skillId"] == skill_id for entry in skill_grants.read_grants(agent))
         ],
-        "revisions": ctx.skill_store.list_revisions(skill_id),
+        **revision_page,
         "assignments": [
             assignment
             for assignment in ctx.skill_store.list_assignments(skill_id=skill_id)
@@ -160,6 +168,26 @@ def get_skill(skill_id: str, request: Request, ctx: AppContextDep) -> dict[str, 
             for entry in ctx.skill_store.revision_files(skill["currentRevisionId"])
         ],
     }
+
+
+def _revision_page(
+    ctx: AppContextDep, skill_id: str, limit: int, *, before: int | None = None,
+) -> dict[str, Any]:
+    rows = ctx.skill_store.list_revisions(skill_id, before=before, limit=limit + 1)
+    return {
+        "revisions": rows[:limit],
+        "nextRevisionBefore": rows[limit - 1]["revision"] if len(rows) > limit else None,
+    }
+
+
+@router.get("/skills/{skill_id}/revisions")
+def get_skill_revisions(
+    skill_id: str, request: Request, ctx: AppContextDep,
+    before: int = Query(ge=1, le=2_147_483_647), limit: int = Query(10, ge=1, le=50),
+) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    visible_skill(ctx, skill_id, actor["userId"])
+    return _revision_page(ctx, skill_id, limit, before=before)
 
 
 async def import_files(ctx: AppContextDep, source: dict[str, Any], *, discover: bool = False) -> list[dict[str, Any]]:

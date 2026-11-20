@@ -7,6 +7,7 @@ from typing import Any
 from ..core.models import AGENT_ROLES
 
 ROLES = frozenset(AGENT_ROLES)
+MEMBER_CONFIG_FIELDS = frozenset({"role", "responsibility", "required", "participation", "expectedOutputs"})
 
 
 def text_list(value: Any, name: str, *, limit: int = 20) -> list[str]:
@@ -29,13 +30,7 @@ def member_configs(value: Any, members: list[str]) -> dict[str, dict[str, Any]]:
         raise ValueError("memberConfigs must name only current team members.")
     result = {}
     for agent_id, config in value.items():
-        if not isinstance(config, dict) or set(config) - {
-            "role",
-            "responsibility",
-            "required",
-            "participation",
-            "expectedOutputs",
-        }:
+        if not isinstance(config, dict) or set(config) - MEMBER_CONFIG_FIELDS:
             raise ValueError("Unsupported membership configuration.")
         if "role" in config and (
             not isinstance(config["role"], str) or config["role"] not in ROLES
@@ -70,3 +65,15 @@ def member_configs(value: Any, members: list[str]) -> dict[str, dict[str, Any]]:
             ),
         }
     return result
+
+
+def apply_member_config_patch(
+    agent_id: str, current: dict[str, Any], fields: dict[str, Any], default_role: str | None,
+) -> dict[str, Any]:
+    if not fields or fields.keys() - MEMBER_CONFIG_FIELDS:
+        raise ValueError("Unsupported membership configuration.")
+    merged = {**current, **fields}
+    updated = {key: value for key, value in merged.items() if value is not None}
+    if default_role:
+        updated.setdefault("role", default_role)
+    return member_configs({agent_id: updated}, [agent_id])[agent_id]

@@ -5,7 +5,7 @@ from typing import Any
 from ..core.computer_identity import computer_id
 from ..core.models import AGENT_ROLES
 from ..core.project_roles import upgrade_member
-from ..persistence.project.store import ProjectValidationError
+from ..persistence.project.store import ProjectValidationError, ProjectVersionConflict
 from ..agents.location import agent_placed_on_computer
 from .setup import ProjectSetupError, resolved_setup
 from ..core.daemon_capabilities import DAEMON_CAPABILITY_PROJECT_WORKSPACES, has_capability
@@ -17,6 +17,7 @@ PROJECT_INSTRUCTIONS_MAX_LENGTH = 8_000
 PROJECT_DESCRIPTION_MAX_LENGTH = 4_000
 PROJECT_GOAL_MAX_LENGTH = 280
 PROJECT_CONTEXT_MAX_LENGTH = 8_000
+EDITABLE_MEMBER_FIELDS = frozenset({"role", "responsibilities", "instructions", "enabled"})
 
 
 def create_project_payload(
@@ -146,6 +147,7 @@ def update_project_payload(
         "context",
         "leadAgentId",
         "members",
+        "memberChange",
         "enabled",
         "setupResolution",
         "resolveContextSuggestions",
@@ -153,11 +155,17 @@ def update_project_payload(
     }
     if set(payload) - allowed:
         raise ProjectValidationError("project_patch_unsupported")
+    if ("memberChange" in payload or "leadAgentId" in payload) and expected_version != current.get("version", expected_version):
+        raise ProjectVersionConflict(current["id"])
     patch = {
         key: value
         for key, value in payload.items()
-        if key not in ("expectedVersion", "setupResolution", "resolveContextSuggestions")
+        if key not in ("expectedVersion", "setupResolution", "resolveContextSuggestions", "memberChange")
     }
+    if "memberChange" in payload:
+        if "members" in payload:
+            raise ProjectValidationError("project_member_change_invalid")
+        patch["members"] = _apply_member_change(current["members"], payload["memberChange"])
     if "resolveContextSuggestions" in payload:
         # Adopting a suggestion is this PATCH carrying the edited context;
         # adopted and dismissed suggestions both leave the pending list.
@@ -214,6 +222,34 @@ def update_project_payload(
         # only supplies members. Keep the roster and lead as one valid update.
         patch["leadAgentId"] = lead_agent_id
     return patch, expected_version
+
+
+def _apply_member_change(members: list[dict[str, Any]], change: Any) -> list[dict[str, Any]]:
+    if not isinstance(change, dict):
+        raise ProjectValidationError("project_member_change_invalid")
+    operation = change.get("op")
+    agent_id = change.get("agentId")
+    if operation not in ("add", "update", "remove") or not isinstance(agent_id, str) or not agent_id:
+        raise ProjectValidationError("project_member_change_invalid")
+
+    index = next((index for index, member in enumerate(members) if member["agentId"] == agent_id), None)
+    if operation == "remove":
+        if set(change) != {"op", "agentId"}:
+            raise ProjectValidationError("project_member_change_invalid")
+        if index is None:
+            raise ProjectValidationError("project_member_not_found")
+        return [*members[:index], *members[index + 1:]]
+
+    fields = change.get("fields")
+    if set(change) != {"op", "agentId", "fields"} or not isinstance(fields, dict) or not fields or fields.keys() - EDITABLE_MEMBER_FIELDS:
+        raise ProjectValidationError("project_member_change_invalid")
+    if operation == "add":
+        if index is not None:
+            raise ProjectValidationError("project_members_duplicate")
+        return [*members, {"agentId": agent_id, **fields}]
+    if index is None:
+        raise ProjectValidationError("project_member_not_found")
+    return [*members[:index], {**members[index], **fields}, *members[index + 1:]]
 
 
 def validate_project_roster(
@@ -281,14 +317,7 @@ def validate_project_roster(
 def _normalize_member(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ProjectValidationError("project_member_invalid")
-    allowed = {
-        "agentId",
-        "role",
-        "responsibilities",
-        "instructions",
-        "enabled",
-        "projectManager",
-    }
+    allowed = EDITABLE_MEMBER_FIELDS | {"agentId", "projectManager"}
     if set(value) - allowed:
         raise ProjectValidationError("project_member_invalid")
     value = upgrade_member(value)

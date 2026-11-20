@@ -15,11 +15,9 @@ import {
   PROJECT_ATTENTION_LIMIT,
   projectAttentionIssues,
   projectIssueMetrics,
-  type ProjectAttentionIssue,
-  type ProjectIssueMetrics,
 } from "../lib/projectDashboard";
 import { taskRef } from "../lib/taskRef";
-import type { RelayTaskListItem } from "../types";
+import type { ProjectDashboardSummary, RelayTaskListItem } from "../types";
 import { KpiTile } from "./admin/dashboard/KpiTile";
 import { ICON, NavProjects } from "./icons";
 import { formatDueDate } from "./task-board/BacklogChrome";
@@ -36,6 +34,7 @@ interface ProjectDashboardProps {
    *  attention list on a wide pane, below it on a narrow one. */
   proposals?: ReactNode;
   tasks: RelayTaskListItem[];
+  summary?: ProjectDashboardSummary;
   onOpenRecord: (taskId: string) => void;
   onOpenBoard: () => void;
 }
@@ -45,10 +44,10 @@ interface ProjectDashboardProps {
  *  per-stage breakdown used to sit here too; for a project of a handful of
  *  issues they restated these four tiles, so the board's own columns carry
  *  the stages instead. */
-export function ProjectDashboard({ steward, review, proposals, tasks, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
+export function ProjectDashboard({ steward, review, proposals, tasks, summary, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
   const { t } = useTranslation();
-  const metrics = useMemo(() => projectIssueMetrics(tasks), [tasks]);
-  const attention = useMemo(() => projectAttentionIssues(tasks, undefined, Infinity), [tasks]);
+  const metrics = useMemo(() => summary?.metrics ?? projectIssueMetrics(tasks), [summary, tasks]);
+  const attention = useMemo(() => summary?.attention ?? projectAttentionIssues(tasks, undefined, Infinity), [summary, tasks]);
   /* Read from the cache only: whichever surface fetched the flow policy
      seeded it, and the dashboard does not poll for it on its own. */
   const { data: policy } = useQuery<{ wipLimit: number; scope: string }>({
@@ -85,7 +84,7 @@ export function ProjectDashboard({ steward, review, proposals, tasks, onOpenReco
       </Button>
     </div>
   ) : (
-    <AttentionCard issues={attention} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
+    <AttentionCard issues={attention} total={summary?.attentionTotal ?? attention.length} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
   );
 
   return (
@@ -104,7 +103,7 @@ export function ProjectDashboard({ steward, review, proposals, tasks, onOpenReco
 
 /** The four counts. Total carries the project's mix as a meter — done, in
  *  progress, blocked — so progress reads before any number does. */
-function ProgressRail({ metrics }: { metrics: ProjectIssueMetrics }) {
+function ProgressRail({ metrics }: { metrics: ProjectDashboardSummary["metrics"] }) {
   const { t } = useTranslation();
   const completedPercent = Math.round((metrics.done / metrics.total) * 100);
   const segments = [
@@ -150,16 +149,18 @@ function ProgressRail({ metrics }: { metrics: ProjectIssueMetrics }) {
 
 function AttentionCard({
   issues,
+  total,
   onOpenRecord,
   onOpenBoard,
 }: {
-  issues: ProjectAttentionIssue[];
+  issues: ProjectDashboardSummary["attention"];
+  total: number;
   onOpenRecord: (taskId: string) => void;
   onOpenBoard: () => void;
 }) {
   const { t } = useTranslation();
   const shown = issues.slice(0, PROJECT_ATTENTION_LIMIT);
-  const hidden = issues.length - shown.length;
+  const hidden = total - shown.length;
   return (
     <Card render={<section />} className="project-dashboard-card">
       <CardHeader>

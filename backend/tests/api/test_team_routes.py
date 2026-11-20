@@ -354,6 +354,54 @@ def test_team_member_role_starts_from_agent_role_and_is_the_teams(monkeypatch) -
         assert again["memberConfigs"][checker["id"]]["role"] == "reviewer"
 
 
+def test_team_member_contract_patch_preserves_other_writes(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap(client)
+        _user(client, "alice")
+        lead = _agent(client, "alice", "Lead", "codex", role="planner")["id"]
+        builder = _agent(client, "alice", "Builder", "claude")["id"]
+        outsider = _agent(client, "alice", "Outsider", "codex")["id"]
+        _login(client, "alice")
+        response = client.post("/api/v1/teams", json={
+            "name": "Contracts", "leadAgentId": lead, "memberAgentIds": [lead, builder],
+            "memberConfigs": {builder: {"required": True, "expectedOutputs": ["Keep this contract"]}},
+            "acceptanceCriteria": ["Keep the Team criteria"],
+        })
+        assert response.status_code == 201, response.text
+        team = response.json()["team"]
+        path = f"/api/v1/teams/{team['id']}"
+        lead_path, builder_path = f"{path}/members/{lead}", f"{path}/members/{builder}"
+        first = client.patch(lead_path, json={"responsibility": "  Own release quality  "})
+        assert first.status_code == 200, first.text
+        receipt = first.json()["teamMemberUpdate"]
+        assert receipt == {
+            "teamId": team["id"], "agentId": lead, "baseVersion": team["version"],
+            "version": team["version"] + 1, "updatedAt": receipt["updatedAt"],
+            "fields": {"responsibility": "Own release quality"},
+        }
+        second = client.patch(builder_path, json={"required": False, "participation": "on_request"})
+        assert second.status_code == 200, second.text
+        assert second.json()["teamMemberUpdate"]["baseVersion"] == receipt["version"]
+        assert second.json()["teamMemberUpdate"]["fields"] == {"required": False, "participation": "on_request"}
+        cleared = client.patch(builder_path, json={"expectedOutputs": None})
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["teamMemberUpdate"]["fields"] == {"expectedOutputs": None}
+        for invalid in ({"role": None, "memberAgentIds": [lead]}, {"required": True}, {}):
+            assert client.patch(builder_path, json=invalid).status_code == 400
+        assert client.patch(f"{path}/members/{outsider}", json={"required": True}).status_code == 400
+        saved = client.get(f"{path}?view=preview").json()["team"]
+        assert saved["version"] == cleared.json()["teamMemberUpdate"]["version"]
+        assert saved["memberConfigs"][lead] == {"role": "planner", "responsibility": "Own release quality"}
+        assert saved["memberConfigs"][builder] == {"role": "implementer", "required": False, "participation": "on_request"}
+        assert saved["acceptanceCriteria"] == team["acceptanceCriteria"]
+        summary, = client.get("/api/v1/teams?view=summary").json()["teams"]
+        assert summary["version"] == saved["version"]
+        assert client.post("/api/v1/auth/logout").status_code == 200
+        assert client.patch(builder_path, json={"required": True}).status_code == 401
+
+
 def test_admin_and_user_manage_teams(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

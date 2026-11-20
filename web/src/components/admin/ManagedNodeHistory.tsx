@@ -20,13 +20,17 @@ interface ManagedNodeHistoryProps {
   nodes: ManagedNodeRecord[];
   /** The roster, so a computer's user id can be shown as its @handle. */
   users: UserRecord[];
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   onRecover: (node: ManagedNodeRecord) => Promise<void>;
   onDeletePermanently: (node: ManagedNodeRecord) => Promise<void>;
 }
 
 type PendingAction = { id: string; kind: "recover" | "delete" } | null;
 
-export function ManagedNodeHistory({ nodes, users, onRecover, onDeletePermanently }: ManagedNodeHistoryProps) {
+export function ManagedNodeHistory({
+  nodes, users, loadingMore, onLoadMore, onRecover, onDeletePermanently,
+}: ManagedNodeHistoryProps) {
   const { t, i18n } = useTranslation();
   const { confirm } = useDialogs();
   const [pending, setPending] = useState<PendingAction>(null);
@@ -130,6 +134,11 @@ export function ManagedNodeHistory({ nodes, users, onRecover, onDeletePermanentl
           </li>
         ))}
       </ul>
+      {onLoadMore ? (
+        <Button type="button" variant="outline" size="sm" loading={loadingMore} onClick={onLoadMore}>
+          {t("admin.v2.history_load_more")}
+        </Button>
+      ) : null}
       {error ? <p className="adm-node-history-error" role="alert">{t("admin.v2.action_failed", { message: error })}</p> : null}
     </section>
   );

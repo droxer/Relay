@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useNotifications, useNotificationPreferences } from "../src/hooks/useNotifications";
 import { markNotificationsRead, clearNotifications, getUnreadNotificationCount, listNotifications, getNotificationPreferences, updateNotificationPreferences } from "../src/api";
 import { configurePersonalQueryCache } from "../src/lib/personalQueryCache";
@@ -42,6 +42,8 @@ beforeEach(() => {
   vi.mocked(updateNotificationPreferences).mockReset();
 });
 
+afterEach(() => vi.unstubAllGlobals());
+
 it("polls only the count until opening the inbox and uses its latest count after closing", async () => {
   const { client, wrapper } = setup();
   configurePersonalQueryCache(client);
@@ -61,6 +63,7 @@ it("polls only the count until opening the inbox and uses its latest count after
 });
 
 it("keeps fetching detail for desktop notifications while the panel is closed", async () => {
+  vi.stubGlobal("Notification", { permission: "granted" });
   writeDesktopNotifications(true);
   const { client, wrapper } = setup();
   const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
@@ -73,6 +76,32 @@ it("keeps fetching detail for desktop notifications while the panel is closed", 
     view.unmount();
     client.clear();
     writeDesktopNotifications(false);
+  }
+});
+
+it("only counts notices when desktop permission is denied, and follows permission changes", async () => {
+  const browserNotification = { permission: "denied" };
+  vi.stubGlobal("Notification", browserNotification);
+  writeDesktopNotifications(true);
+  const { client, wrapper } = setup();
+  const view = renderHook(() => useNotifications({ enabled: true, onOpen: vi.fn() }), { wrapper });
+  try {
+    await waitFor(() => expect(getUnreadNotificationCount).toHaveBeenCalledOnce());
+    expect(listNotifications).not.toHaveBeenCalled();
+    act(() => {
+      browserNotification.permission = "granted";
+      fireEvent.focus(window);
+    });
+    await waitFor(() => expect(listNotifications).toHaveBeenCalledOnce());
+    act(() => {
+      browserNotification.permission = "denied";
+      fireEvent.focus(window);
+    });
+    const details = client.getQueryCache().find({ queryKey: ["relay", "notifications", "account-a"], exact: true });
+    expect(details?.isActive()).toBe(false);
+  } finally {
+    view.unmount();
+    client.clear();
   }
 });
 

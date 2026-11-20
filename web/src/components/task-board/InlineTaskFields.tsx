@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
+import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
 import { useTranslation } from "react-i18next";
 import { enUS, zhCN, zhTW } from "react-day-picker/locale";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ import {
   taskAssignmentOptions,
   type TaskAssignmentChange,
 } from "../../lib/taskAssignment";
-import type { AgentTeam, UserAgent, ProjectRecord, RelayTaskListItem, TaskPriority, TaskStatus } from "../../types";
+import type { AgentTeam, UserAgent, ProjectListItem, RelayTaskListItem, TaskPriority, TaskStatus } from "../../types";
 
 /*
  * A row's properties, edited where they are read: the status mark, the
@@ -176,7 +176,7 @@ export function InlinePriority({
   );
 }
 
-type InlineAssigneeProps = Omit<Parameters<typeof InlineAssigneeOptions>[0], "workflowQuery">;
+type InlineAssigneeProps = Omit<Parameters<typeof InlineAssigneeOptions>[0], "workflowQuery" | "onAssignmentOpenChange">;
 
 export function InlineAssignee(props: InlineAssigneeProps) {
   return props.project && !props.readOnly && taskAssignmentEditable(props.task)
@@ -185,8 +185,9 @@ export function InlineAssignee(props: InlineAssigneeProps) {
 }
 
 function ProjectInlineAssignee(props: InlineAssigneeProps) {
-  const workflowQuery = useProjectWorkflows(props.project!.id);
-  return <InlineAssigneeOptions {...props} workflowQuery={workflowQuery} />;
+  const [open, setOpen] = useState(false);
+  const workflowQuery = useProjectWorkflowChoices(props.project!.id, open);
+  return <InlineAssigneeOptions {...props} workflowQuery={workflowQuery} onAssignmentOpenChange={setOpen} />;
 }
 
 function InlineAssigneeOptions({
@@ -198,13 +199,15 @@ function InlineAssigneeOptions({
   onChange,
   readOnly = false,
   workflowQuery,
+  onAssignmentOpenChange,
 }: {
-  workflowQuery?: ReturnType<typeof useProjectWorkflows>;
+  workflowQuery?: ReturnType<typeof useProjectWorkflowChoices>;
+  onAssignmentOpenChange?: (open: boolean) => void;
   task: RelayTaskListItem;
   agents: readonly UserAgent[];
   teams: readonly AgentTeam[];
   /** The task's Project — only enabled Project Agents may take the task. */
-  project?: ProjectRecord | null;
+  project?: ProjectListItem | null;
   /** The row's resolved assignee, as the static chip draws it. */
   display: { name?: string; imageUrl?: string | null; ready: boolean };
   onChange: (change: TaskAssignmentChange) => void;
@@ -212,7 +215,8 @@ function InlineAssigneeOptions({
 }) {
   const { t } = useTranslation();
   const projectAgents = new Set(project?.members.filter(member => member.enabled).map(member => member.agentId));
-  const workflows = workflowQuery?.data?.workflows?.filter(workflow => workflow.projectId === project?.id && !workflow.ownerTeamId && workflow.enabled && workflow.workflowSteps.every(step => projectAgents.has(step.agentId))) ?? [];
+  const workflows = workflowQuery?.data?.workflows.filter(workflow => workflow.projectId === project?.id && workflow.enabled
+    && workflow.stepAgentIds.every(id => projectAgents.has(id))) ?? [];
   const chip = (
     <TaskAssignee task={task} ready={display.ready} agentDisplayName={display.name} agentImageUrl={display.imageUrl} />
   );
@@ -238,7 +242,7 @@ function InlineAssigneeOptions({
   const selectedAgent = !selectedTeam && task.assignedAgentId
     ? options.agents.find((agent) => agent.id === task.assignedAgentId)
     : undefined;
-  const staleAssignment = Boolean((task.assignedTeamId && !options.teams.some(team => team.id === task.assignedTeamId)) || (task.assignedAgentId && !options.agents.some(agent => agent.id === task.assignedAgentId)) || (project && task.assignedWorkflowId && !workflowQuery?.isPending && !workflowQuery?.isError && !workflows.some(workflow => workflow.id === task.assignedWorkflowId)));
+  const staleAssignment = Boolean((task.assignedTeamId && !options.teams.some(team => team.id === task.assignedTeamId)) || (task.assignedAgentId && !options.agents.some(agent => agent.id === task.assignedAgentId)) || (project && task.assignedWorkflowId && workflowQuery?.isSuccess && !workflows.some(workflow => workflow.id === task.assignedWorkflowId)));
   const value = task.assignedTeamId
     ? `team:${task.assignedTeamId}`
     : task.assignedAgentId ? `agent:${task.assignedAgentId}`
@@ -251,6 +255,8 @@ function InlineAssigneeOptions({
       teams={options.teams}
       hideTeams={Boolean(project)}
       workflows={project ? workflows : undefined}
+      workflowMessage={workflowQuery?.isPending ? t("workflow.loading") : workflowQuery?.isError ? t("workflow.load_failed") : undefined}
+      onOpenChange={onAssignmentOpenChange}
       selectedAgent={selectedAgent}
       selectedTeam={selectedTeam}
       inline={{ label: staleAssignment ? t("backlog.assignment_reselect") : t("backlog.inline.assignee_label", { name: taskAssigneeLabel(task, display.name, t) }), content: staleAssignment ? <>{chip}<span className="assignee-reselect-mark" title={t("backlog.assignment_reselect")}><StatusWarn size={ICON.xs} aria-hidden="true" /></span></> : chip }}

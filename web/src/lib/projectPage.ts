@@ -1,7 +1,7 @@
 import type {
   UserAgent,
-  ProjectMember,
-  ProjectRecord,
+  ProjectMemberSummary,
+  ProjectListItem,
   RelayTaskListItem,
   WorkspaceBriefResponse,
 } from "../types.js";
@@ -57,14 +57,14 @@ export function parseProjectPageTab(value: string | null): ProjectPageTab {
     : DEFAULT_PROJECT_PAGE_TAB;
 }
 
-export function orderedProjectMembers(project: ProjectRecord): ProjectMember[] {
+export function orderedProjectMembers<T extends ProjectMemberSummary>(project: { members: T[]; leadAgentId: string | null }): T[] {
   return [
     ...project.members.filter((member) => member.agentId === project.leadAgentId),
     ...project.members.filter((member) => member.agentId !== project.leadAgentId),
   ];
 }
 
-export function projectMemberState(member: ProjectMember, agent?: UserAgent) {
+export function projectMemberState(member: ProjectMemberSummary, agent?: Pick<UserAgent, "enabled" | "availability" | "deletedAt">) {
   const available = Boolean(agent && !agent.deletedAt);
   return {
     available,
@@ -82,7 +82,7 @@ export function projectMemberState(member: ProjectMember, agent?: UserAgent) {
  * decide it inline, which left the rule enforced in one component and
  * bypassed by every other route to the same task.
  */
-export function projectReadOnly(project: ProjectRecord | null | undefined): boolean {
+export function projectReadOnly(project: Pick<ProjectListItem, "archivedAt" | "enabled"> | null | undefined): boolean {
   if (!project) return false;
   return Boolean(project.archivedAt) || !project.enabled;
 }
@@ -93,7 +93,7 @@ export function resolveProjectOverviewState({
   collectionStatus,
 }: {
   showProjectOverview: boolean;
-  project: ProjectRecord | null;
+  project: ProjectListItem | null;
   collectionStatus: ProjectCollectionStatus;
 }): ProjectOverviewState {
   if (!showProjectOverview) return "hidden";

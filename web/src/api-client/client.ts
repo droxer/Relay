@@ -89,6 +89,29 @@ export async function apiJson<T>(
   return readApiResponse(response, `${options.method ?? "GET"} ${path}`, options.guard);
 }
 
+export type PrivateResponseCache<T> = { etag?: string; data?: T };
+
+/** Revalidate an Account's in-memory copy without the browser's HTTP cache. */
+export async function privateConditionalJson<T>(
+  path: string, signal?: AbortSignal, responseCache?: PrivateResponseCache<T>, guard?: ResponseGuard<T>,
+): Promise<T> {
+  if (!responseCache) return apiJson(path, { signal, guard });
+  const cached = responseCache.data;
+  const response = await fetchWithSession(relayApiEndpoint(path), {
+    signal,
+    credentials: "include",
+    cache: "no-store",
+    headers: cached !== undefined && responseCache.etag ? { "If-None-Match": responseCache.etag } : {},
+  });
+  if (response.status === 304 && cached !== undefined) return cached;
+  const data = await readApiResponse<T>(response, `GET ${path}`, guard);
+  if (!signal?.aborted) {
+    responseCache.data = data;
+    responseCache.etag = response.headers.get("etag") ?? undefined;
+  }
+  return data;
+}
+
 /** Parses a Relay JSON response — or turns it into a `RelayApiError` — the way
     `apiJson` does, for a request that was started elsewhere (the bootstrap
     script's early `/auth/me` probe). `endpoint` names it in shape errors. */

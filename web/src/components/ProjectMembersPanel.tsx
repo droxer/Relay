@@ -4,7 +4,7 @@ import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { agentLabel } from "../lib/plan";
 import { MAX_PROJECT_MEMBERS, orderedProjectMembers, projectMemberState } from "../lib/projectPage";
-import type { UserAgent, ProjectMember, ProjectRecord } from "../types";
+import type { UserAgent, ProjectMember, ProjectListItem, ProjectMemberSummary } from "../types";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { ActionAdd, ICON, RowOpen } from "./icons";
 import { LeadBadge } from "./LeadBadge";
@@ -20,12 +20,14 @@ export function ProjectMembersPanel({
   agents,
   onAddMember,
   onEditMember,
+  detailStatus,
   children,
 }: {
-  project: ProjectRecord;
+  project: ProjectListItem;
   agents: UserAgent[];
   onAddMember?: () => void;
   onEditMember?: (member: ProjectMember) => void;
+  detailStatus?: ReactNode;
   /** Sections that follow the crew in the same gutter (the workflows). */
   children?: ReactNode;
 }) {
@@ -52,6 +54,7 @@ export function ProjectMembersPanel({
               </Button>
             ) : null}
           </div>
+          {detailStatus}
           <ProjectCrew
             project={project}
             members={members}
@@ -76,7 +79,7 @@ function ProjectMemberRow({
   lead,
   onEdit,
 }: {
-  member: ProjectMember;
+  member: ProjectMemberSummary;
   agent?: UserAgent;
   lead: boolean;
   onEdit?: () => void;
@@ -106,7 +109,7 @@ function ProjectMemberRow({
           {lead ? <LeadBadge /> : null}
         </span>
         <span className="project-member-row-meta">{meta}</span>
-        {member.responsibilities ? (
+        {"responsibilities" in member && typeof member.responsibilities === "string" && member.responsibilities ? (
           <span className="project-member-row-duty">{member.responsibilities}</span>
         ) : null}
       </span>
@@ -136,8 +139,8 @@ function ProjectCrew({
   onAddMember,
   onEditMember,
 }: {
-  project: ProjectRecord;
-  members: ProjectMember[];
+  project: ProjectListItem;
+  members: (ProjectMember | ProjectMemberSummary)[];
   agentsById: Map<string, UserAgent>;
   onAddMember?: () => void;
   onEditMember?: (member: ProjectMember) => void;
@@ -153,7 +156,7 @@ function ProjectCrew({
               member={member}
               agent={agentsById.get(member.agentId)}
               lead={member.agentId === project.leadAgentId}
-              onEdit={onEditMember ? () => onEditMember(member) : undefined}
+              onEdit={onEditMember && "responsibilities" in member ? () => onEditMember(member) : undefined}
             />
           ))}
         </ul>

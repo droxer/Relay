@@ -1,5 +1,4 @@
-import { useCallback } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { ControlPanelDaemonNodeRecord } from "../types";
 import {
   CONTROL_PANEL_NODES_KEY,
@@ -12,37 +11,16 @@ import {
 const EMPTY_LOCAL_NODES: ControlPanelDaemonNodeRecord[] = [];
 
 // Admin-only discovery of daemon nodes registered with a co-located control
-// panel. Shares CONTROL_PANEL_NODES_KEY with useAdminNodes so threads + admin do
-// reuse cached /api/v1/admin/daemon-nodes on localhost. App disables this
-// reader outside workspace views so Admin owns its own polling cadence.
-export function useLocalDaemonNodes(enabled: boolean): {
-  localNodes: ControlPanelDaemonNodeRecord[];
-  refreshLocalDaemonNodes: () => Promise<ControlPanelDaemonNodeRecord[]>;
-} {
-  const queryClient = useQueryClient();
-
+// panel. Shares CONTROL_PANEL_NODES_KEY with useAdminNodes so threads and the
+// Admin pages reuse the same inventory on localhost.
+export function useLocalDaemonNodes(enabled: boolean): ControlPanelDaemonNodeRecord[] {
   const query = useQuery({
     queryKey: CONTROL_PANEL_NODES_KEY,
-    queryFn: ({ signal }) => fetchControlPanelNodes(signal),
+    queryFn: fetchControlPanelNodes,
     enabled,
     staleTime: CONTROL_PANEL_POLL_MS,
     refetchInterval: CONTROL_PANEL_POLL_MS,
   });
 
-  const refreshLocalDaemonNodes = useCallback(
-    async () => {
-      try {
-        return (await queryClient.fetchQuery({
-          queryKey: CONTROL_PANEL_NODES_KEY,
-          queryFn: ({ signal }) => fetchControlPanelNodes(signal),
-          staleTime: 0,
-        })) ?? [];
-      } catch {
-        return [];
-      }
-    },
-    [queryClient],
-  );
-
-  return { localNodes: query.data ?? EMPTY_LOCAL_NODES, refreshLocalDaemonNodes };
+  return enabled ? query.data ?? EMPTY_LOCAL_NODES : EMPTY_LOCAL_NODES;
 }

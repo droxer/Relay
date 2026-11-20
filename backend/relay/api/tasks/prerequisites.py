@@ -7,6 +7,7 @@ read and never stored.
 
 from __future__ import annotations
 
+from itertools import batched
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -40,10 +41,21 @@ def with_waiting_on(ctx: AppContext, tasks: list[dict[str, Any]]) -> list[dict[s
     ]
 
 
-def task_with_prerequisite_view(ctx: AppContext, task: dict[str, Any]) -> dict[str, Any]:
+def task_with_prerequisite_view(
+    ctx: AppContext, task: dict[str, Any], *, include_summaries: bool = False,
+) -> dict[str, Any]:
     """One task's full view: ``waitingOn`` plus the tasks it ``unblocks``."""
     [viewed] = with_waiting_on(ctx, [task])
-    return {**viewed, "unblocks": ctx.task_store.task_dependents(task["id"])}
+    dependents = ctx.task_store.task_dependents(task["id"])
+    viewed["unblocks"] = dependents
+    if include_summaries and task.get("projectId") and task.get("ownerUserId") and not task.get("isRoutine"):
+        ids = dict.fromkeys([*(task.get("prerequisiteTaskIds") or []), *dependents])
+        viewed["prerequisiteSummaries"] = [
+            row for batch in batched(ids, 500) for row in ctx.task_store.prerequisite_choices(
+                task["ownerUserId"], task["projectId"], list(batch),
+            )
+        ]
+    return viewed
 
 
 @router.put("/tasks/{task_id}/prerequisites")

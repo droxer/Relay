@@ -1,13 +1,8 @@
 /**
  * One pagination vocabulary for every list and card surface.
  *
- * Client-side by design: these collections already arrive whole (the backlog,
- * routine, user, and node endpoints return the full set, and the filter,
- * search, and sort layers all run over that set locally). Paging on the server
- * would mean filtering a page instead of paging the filtered result, which
- * gets the semantics backwards — you would search one screenful. When a
- * collection outgrows a single fetch, the seam to change is the query, not
- * this module.
+ * Use `paginate` for local collections. A server collection filters before
+ * paging and passes its already sliced rows to `describePage`.
  *
  * Page numbers here are 1-based everywhere: in the URL, in this API, and on
  * screen. There is no 0-based half of the system to convert at.
@@ -46,14 +41,19 @@ export function paginate<T>(
   const pageCount = Math.max(1, Math.ceil(total / size));
   const page = Math.min(Math.max(1, Math.floor(requestedPage) || 1), pageCount);
   const start = (page - 1) * size;
-  const slice = items.slice(start, start + size);
+  return describePage(items.slice(start, start + size), { page, total }, size);
+}
+
+export function describePage<T>(items: T[], { page, total }: { page: number; total: number }, size: number): Page<T> {
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  const start = (page - 1) * size;
   return {
-    items: slice,
+    items,
     page,
     pageCount,
     total,
     from: total === 0 ? 0 : start + 1,
-    to: total === 0 ? 0 : start + slice.length,
+    to: total === 0 ? 0 : start + items.length,
     needed: pageCount > 1,
   };
 }

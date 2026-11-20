@@ -8,7 +8,7 @@ import type { UserAgent } from "../types";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { USER_AGENTS_QUERY_KEY } from "../hooks/useUserAgents";
+import { USER_AGENT_RECORD_QUERY_KEY } from "../hooks/useUserAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { SkillPreviewDrawer } from "./SkillPreviewDrawer";
 
@@ -45,7 +45,7 @@ export function AgentSkillsPanel({ agent, canEdit = false }: AgentSkillsPanelPro
       else await revokeSkill(skillId, agent.id);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [SKILLS_QUERY_KEY] }),
-        queryClient.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] }),
+        queryClient.invalidateQueries({ queryKey: [USER_AGENT_RECORD_QUERY_KEY, agent.id], exact: true }),
       ]);
     } catch (err) {
       const code = err && typeof err === "object" && "code" in err && typeof err.code === "string"

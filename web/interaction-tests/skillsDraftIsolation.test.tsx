@@ -45,8 +45,8 @@ vi.mock("../src/api", () => ({
   createSkill: vi.fn(), importSkill: vi.fn(), deleteSkill: vi.fn(),
   reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill,
 }));
-vi.mock("../src/hooks/useSkills", () => ({
-  SKILLS_QUERY_KEY: "skills",
+vi.mock("../src/hooks/useSkills", async (load) => ({
+  ...await load<typeof import("../src/hooks/useSkills")>(),
   useSkills: () => ({ data: { skills: [{ ...skill, grantedAgentCount: 0 }] }, isLoading: false, error: null, refetch: vi.fn() }),
   useSkill: () => ({ data: skill, isLoading: false, error: null }),
 }));

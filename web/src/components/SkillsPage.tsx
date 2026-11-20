@@ -11,7 +11,7 @@ import {
   updateSkill,
 } from "../api";
 import { RelayApiError } from "../api-client/client";
-import { useSkill, useSkills, SKILLS_QUERY_KEY } from "../hooks/useSkills";
+import { useOlderSkillRevisions, useSkill, useSkills, SKILLS_QUERY_KEY } from "../hooks/useSkills";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import type { CurrentUser, SkillFileInput, SkillRepositoryImportResult, SkillsResponse, SkillVisibility } from "../types";
@@ -88,8 +88,6 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const queryClient = useQueryClient();
   const drawerId = useId();
   const skillsQuery = useSkills();
-  const { agents } = useUserAgents(currentUser.userId);
-  const { teams } = useTeams(currentUser.userId);
   // Until the reader picks one, the list's first skill is the selection.
   /* A phone shows one pane at a time, as the agent and team rosters do: the
      library until a skill is picked, then that skill alone. Wider screens open
@@ -118,6 +116,12 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const [revisionFiles, setRevisionFiles] = useState<SkillFileInput[]>([]);
   const [revisionNote, setRevisionNote] = useState("");
   const skill = detailQuery.data;
+  const loadShareTargets = sharing && Boolean(skill);
+  const shareAgents = useUserAgents(currentUser.userId, false, loadShareTargets);
+  const shareTeams = useTeams(currentUser.userId, false, loadShareTargets);
+  const olderRevisions = useOlderSkillRevisions(selectedId, skill?.nextRevisionBefore);
+  const canLoadOlderRevisions = Boolean(skill?.nextRevisionBefore)
+    && (!olderRevisions.data || olderRevisions.hasNextPage);
   const errorText = (value: unknown) => {
     const code = value && typeof value === "object" && "code" in value && typeof value.code === "string"
       ? value.code
@@ -494,7 +498,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               <h3>{t("skills.revision_history")}</h3>
               {owned ? <p className="skill-muted">{t("skills.stable_delivery_note")}</p> : null}
               <ol className="skill-revisions">
-                {skill.revisions.map((revision) => (
+                {[...skill.revisions, ...(olderRevisions.data?.pages.flatMap(page => page.revisions) ?? [])].map((revision) => (
                   <li key={revision.id}>
                     <strong>v{revision.revision}</strong>
                     <span>{revision.note || t("skills.published_bundle")}</span>
@@ -521,6 +525,20 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                   </li>
                 ))}
               </ol>
+              {olderRevisions.isError ? (
+                <p className="skill-error" role="alert">{t("skills.revision_history_load_failed")}</p>
+              ) : null}
+              {canLoadOlderRevisions ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  loading={olderRevisions.isFetching}
+                  onClick={() => void olderRevisions.fetchNextPage({ cancelRefetch: false })}
+                >
+                  {t("skills.load_older_revisions")}
+                </Button>
+              ) : null}
             </section>
             {owned ? (
               <section className="skill-owner-tools">
@@ -847,8 +865,14 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
       {sharing && skill ? (
         <ShareSkillDrawer
           skill={skill}
-          agents={agents}
-          teams={teams}
+          agents={shareAgents.agents}
+          teams={shareTeams.teams}
+          targetsLoading={(shareAgents.isFetching && !shareAgents.isSuccess) || (shareTeams.isFetching && !shareTeams.isSuccess)}
+          targetsLoadFailed={Boolean(shareAgents.error || shareTeams.error)}
+          onRetryTargets={() => {
+            if (shareAgents.error) void shareAgents.refetch();
+            if (shareTeams.error) void shareTeams.refetch();
+          }}
           userId={currentUser.userId}
           onClose={() => setSharing(false)}
         />

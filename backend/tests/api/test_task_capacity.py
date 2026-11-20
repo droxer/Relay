@@ -36,6 +36,43 @@ def claim(store, task):
     )
 
 
+def test_admin_user_pages_include_only_their_computers_and_search_the_full_roster(client, monkeypatch):
+    ctx = client.app.state.context
+    for i in range(31):
+        ctx.auth_store.ensure_user(f"page-{i}", display_name=f"Team member {i:02}")
+    target = ctx.auth_store.ensure_user("target-user", display_name="ZZZ target")
+    target_id = target["id"]
+    monkeypatch.setattr(ctx.registry, "monitor_nodes", lambda: [
+        {"id": "remote-a", "displayName": "Build host Ä", "userId": target_id,
+         "status": "running", "stale": False, "online": True, "nodeLocation": "user-device",
+         "activeRuns": [{"taskTitle": "private transcript"}], "nodeToken": "not-in-the-roster"},
+        {"id": "remote-b", "displayName": "Second workstation", "userId": target_id,
+         "status": "ready", "stale": True, "online": False, "nodeLocation": "user-device"},
+    ])
+    path = "/api/v1/admin/users"
+    first = client.get(path, params={"view": "web", "sort": "user"})
+    assert first.status_code == 200
+    payload = first.json()
+    assert len(payload["users"]) == 25
+    assert payload["nodes"] == []
+    assert payload["userCount"] == 33
+    assert payload["page"] == {"page": 1, "total": 33}
+    assert payload["counts"] == {"all": 33, "running": 1, "ready": 0, "failed": 1, "idle": 0, "unassigned": 32}
+    assert client.get(path, params={"view": "web", "sort": "user"}, headers={
+        "If-None-Match": first.headers["etag"],
+    }).status_code == 304
+    last = client.get(path, params={"view": "web", "sort": "user", "page": 99}).json()
+    assert last["page"] == {"page": 2, "total": 33}
+    assert last["users"][-1]["id"] == target_id
+    scoped = client.get(path, params={"view": "web", "q": "BUILD HOST Ä", "filter": "failed"}).json()
+    assert scoped["page"] == {"page": 1, "total": 1}
+    assert [user["id"] for user in scoped["users"]] == [target_id]
+    assert [node["id"] for node in scoped["nodes"]] == ["remote-a", "remote-b"]
+    assert scoped["users"][0]["localComputerCount"] == 2
+    assert not {"nodeToken", "activeRuns"} & scoped["nodes"][0].keys()
+    assert len(client.get(path).json()["users"]) == 33
+
+
 def test_default_capacity_is_five_and_admin_can_change_it(client):
     user = create_user(client)
     assert user["effectiveMaxConcurrentTasks"] == 5

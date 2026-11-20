@@ -199,6 +199,12 @@ export interface RelayTask {
     message?: string;
   };
   workspaceBinding?: TaskWorkspaceBinding;
+  /** The latest recorded Thread can identify a legacy Task's Computer. */
+  linkedComputerId?: string;
+  /** The title a run uses to link back to its Automation definition. */
+  routineParent?: { id: string; title: string };
+  /** Whether an Automation currently has an occurrence running or in review. */
+  hasRunningOccurrence?: boolean;
   /**
    * API-only: the folder this task's deliverables live in, relative to the
    * workspace its rounds share — `artifacts`, one automation run's
@@ -227,6 +233,8 @@ export interface RelayTask {
   /** API-only, on a single-task read: the tasks that name this one as a
    *  prerequisite. */
   unblocks?: string[];
+  /** Titles and references for the Task's existing prerequisite links. */
+  prerequisiteSummaries?: Array<{ id: string; number?: number; title: string }>;
   linkedSessionIds: string[];
   activity: RelayTaskActivity[];
   createdAt: string;

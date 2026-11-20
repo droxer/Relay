@@ -29,6 +29,7 @@ import { TaskRecordDefinition } from "./TaskRecordDefinition";
 import { RecordPrerequisites } from "./RecordPrerequisites";
 import { useUserAgents } from "../../hooks/useUserAgents";
 import { useWorkflowName } from "../../hooks/useProjectWorkflows";
+import { teamWorkflowName } from "../../lib/workflowSelection";
 import { useTeams } from "../../hooks/useTeams";
 import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
 import type { HistoryNameResolver } from "./taskHistoryLabel";
@@ -81,11 +82,13 @@ export function TaskRecordPage({
   onEdit,
   onDelete,
   tasks = [],
+  loadPrerequisiteChoices = false,
   onOpenTask,
 }: {
   task: RelayTaskListItem;
   /** The tasks the board loaded: a project task's prerequisite candidates. */
   tasks?: readonly RelayTaskListItem[];
+  loadPrerequisiteChoices?: boolean;
   /** Open another task's record, for a prerequisite link. */
   onOpenTask?: (taskId: string) => void;
   /** Routines with a live occurrence — the one state a routine cannot derive alone. */
@@ -132,8 +135,11 @@ export function TaskRecordPage({
   const statusEdits = useInlineTaskEdits({ readOnly });
   /* The band names the assignee and the timeline names assignment targets;
      both resolve through the same directories the boards use. */
-  const { teams } = useTeams(currentUser.userId);
-  const workflowName = useWorkflowName(tab === "definition" ? task.assignedWorkflowId : undefined, task.projectId);
+  const { teams, isSuccess: teamsReady, error: teamsError } = useTeams(currentUser.userId);
+  const assignedTeam = teams.find((team) => team.id === task.assignedTeamId);
+  const cachedWorkflowName = teamWorkflowName(assignedTeam, task.assignedWorkflowId);
+  const fetchWorkflowName = tab === "definition" && !cachedWorkflowName && (!task.assignedTeamId || teamsReady || teamsError);
+  const workflowName = useWorkflowName(fetchWorkflowName ? task.assignedWorkflowId : undefined, task.projectId);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const historyNames = useMemo<HistoryNameResolver>(() => ({
     teamName: (teamId) => teams.find((team) => team.id === teamId)?.name,
@@ -276,9 +282,10 @@ export function TaskRecordPage({
           </TabsContent>
         )}
         <TabsContent value="definition">
-          <TaskRecordDefinition workflowLabel={workflowName.data ?? undefined} task={task} variant={variant} locale={i18n.language} team={teams.find((team) => team.id === task.assignedTeamId)} />
+          <TaskRecordDefinition workflowLabel={cachedWorkflowName ?? workflowName.data ?? undefined} task={task} variant={variant} locale={i18n.language} team={assignedTeam} />
           {onOpenTask ? (
-            <RecordPrerequisites task={task} tasks={tasks} readOnly={readOnly} onOpenTask={onOpenTask} />
+            <RecordPrerequisites task={task} tasks={tasks} readOnly={readOnly} onOpenTask={onOpenTask}
+              loadChoices={loadPrerequisiteChoices} />
           ) : null}
         </TabsContent>
         {/* What the task's runs produced, listed beside a preview of the

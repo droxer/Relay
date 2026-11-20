@@ -4,7 +4,7 @@ from functools import partial
 from typing import Any
 from ...projects.manager import initial_manager_id, manager_role_patch, ManagerError
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from ...core.ids import new_database_id
@@ -26,6 +26,7 @@ from ...projects.deletion import (
 from ..deps import AppContextDep
 from ..actors import request_actor
 from ..bodies import JsonBodyDep
+from ..conditional_get import private_conditional_json
 from .setup_task import close_setup_task
 from .access import project_for_owner, require_owned_project
 from .links import (
@@ -90,14 +91,51 @@ def _project_workspace_command(
     }
 
 
-@router.get("/projects")
-def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+@router.get("/projects", response_model=None)
+def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any] | Response:
     actor = request_actor(request, ctx.auth_store)
-    return {
-        "projects": ctx.project_store.list_projects(
-            actor["userId"], include_archived=True
-        )
-    }
+    view = request.query_params.get("view")
+    if view == "index":
+        return private_conditional_json(request, {"projects": ctx.project_store.list_project_index(actor["userId"])})
+    projects = ctx.project_store.list_projects(actor["userId"], include_archived=True)
+    if view == "directory":
+        return {"projects": [_project_directory_entry(project) for project in projects]}
+    if view == "summary":
+        return {"projects": [_project_summary(project) for project in projects]}
+    return {"projects": projects}
+
+
+def _project_summary(project: dict[str, Any]) -> dict[str, Any]:
+    context_fields = {"context", "contextSuggestions"}
+    summary = {key: value for key, value in project.items() if key not in context_fields}
+    suggestions = project.get("contextSuggestions") or []
+    if project.get("context") or suggestions:
+        summary["contextSummary"] = {"suggestionCount": len(suggestions)}
+    return summary
+
+
+PROJECT_DIRECTORY_FIELDS = (
+    "id", "ownerUserId", "name", "computerId", "workspaceLayout", "workspaceSubpath",
+    "leadAgentId", "managerAgentId", "managerThreadId", "enabled", "version",
+    "createdAt", "updatedAt", "archivedAt",
+)
+
+
+def _project_directory_entry(project: dict[str, Any]) -> dict[str, Any]:
+    result = {key: project[key] for key in PROJECT_DIRECTORY_FIELDS if key in project}
+    result["view"] = "directory"
+    result["members"] = [
+        {key: member[key] for key in ("agentId", "role", "enabled", "projectManager") if key in member}
+        for member in project["members"]
+    ]
+    if suggestions := project.get("contextSuggestions"):
+        result["contextSummary"] = {"suggestionCount": len(suggestions)}
+    if setup := project.get("setup"):
+        result["setupSummary"] = {
+            **{key: setup[key] for key in ("state", "mode", "threadId") if key in setup},
+            "hasProposal": bool(setup.get("proposal")),
+        }
+    return result
 
 
 @router.post("/projects/workspace-check")
@@ -175,8 +213,11 @@ async def create_project(
 @router.get("/projects/{project_id}")
 def get_project(
     project_id: str, request: Request, ctx: AppContextDep
-) -> dict[str, Any]:
-    return {"project": _readable_project(ctx, request, project_id)}
+) -> Response:
+    project = _readable_project(ctx, request, project_id)
+    if request.query_params.get("view") == "directory":
+        project = _project_directory_entry(project)
+    return private_conditional_json(request, {"project": project})
 
 
 @router.get("/projects/{project_id}/workspace/files")
@@ -268,7 +309,33 @@ def update_project(
     if "setupResolution" in body:
         # Applying or dismissing the proposal ends its drafting task.
         close_setup_task(ctx, project.get("setup"))
+    if (
+        request.query_params.get("view") == "member-update"
+        and body.keys() <= {"expectedVersion", "leadAgentId", "memberChange"}
+    ):
+        return {"projectMemberUpdate": _project_member_update(current, project)}
     return {"project": project}
+
+
+def _project_member_update(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    previous = {member["agentId"]: member for member in before["members"]}
+    saved = {member["agentId"]: member for member in after["members"]}
+    changes: list[dict[str, Any]] = [
+        {"op": "remove", "agentId": agent_id} for agent_id in previous if agent_id not in saved
+    ]
+    for agent_id, member in saved.items():
+        original = previous.get(agent_id, {})
+        fields = {
+            key: member.get(key) for key in sorted((original.keys() | member.keys()) - {"agentId"})
+            if original.get(key) != member.get(key)
+        }
+        if fields:
+            changes.append({"op": "update" if agent_id in previous else "add", "agentId": agent_id, "fields": fields})
+    return {
+        **{key: after[key] for key in ("id", "version", "updatedAt", "leadAgentId", "managerAgentId")},
+        "baseVersion": before["version"],
+        "memberChanges": changes,
+    }
 
 
 @router.post("/projects/{project_id}/archive")

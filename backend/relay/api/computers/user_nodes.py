@@ -14,7 +14,8 @@ from ...computer.node_agents import (
     assert_node_agent_runs_drained,
     remove_node_agents,
 )
-from ...core.daemon_capabilities import DAEMON_CAPABILITY_RUNTIME_REFRESH, has_capability
+from ...core.computer_identity import computer_id
+from ...core.daemon_capabilities import DAEMON_CAPABILITY_DURABLE_REPORTS, DAEMON_CAPABILITY_RUNTIME_REFRESH, has_capability
 from ...core.ids import new_database_id
 from ...daemon_registry.records import public_sandbox_record
 from ..actors import (
@@ -31,7 +32,7 @@ router = APIRouter()
 
 
 @router.get("/daemon-nodes")
-def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_daemon_nodes(request: Request, ctx: AppContextDep, view: str = "") -> dict[str, Any]:
     actor = request_actor_or_none(request, ctx.auth_store)
     token = bearer_token(request)
     if token and actor is None:
@@ -40,11 +41,33 @@ def list_daemon_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             managed_ids = {
                 node["managedNodeId"] for node in nodes if node.get("managedNodeId")
             }
-            return {"nodes": present_computer_inventory(ctx, nodes, managed_ids=managed_ids)}
+            inventory = present_computer_inventory(ctx, nodes, managed_ids=managed_ids)
+            return {"nodes": _web_inventory(ctx, inventory) if view == "web" else inventory}
     if actor:
         nodes = ctx.registry.monitor_nodes_for_user(actor["userId"])
-        return {"nodes": present_computer_inventory(ctx, nodes, owner_user_id=actor["userId"])}
+        inventory = present_computer_inventory(ctx, nodes, owner_user_id=actor["userId"])
+        return {"nodes": _web_inventory(ctx, inventory, owner_user_id=actor["userId"]) if view == "web" else inventory}
     raise HTTPException(401, "Authentication required.")
+
+
+def _web_inventory(
+    ctx: AppContextDep, inventory: list[dict[str, Any]], *, owner_user_id: str | None = None,
+) -> list[dict[str, Any]]:
+    identities = {
+        node["id"]: computer_id(node)
+        for node in inventory
+        if owner_user_id is not None and node.get("userId") == owner_user_id
+        and node.get("lastSeenAt")
+        and has_capability(node, DAEMON_CAPABILITY_DURABLE_REPORTS)
+    }
+    transport = ctx.daemon_store.transport_summaries(set(identities.values()))
+    for node in inventory:
+        # The UI uses timestamps. Derived ages would change the ETag on every read.
+        node.pop("lastSeenAgeMs", None)
+        node.pop("lastPollAgeMs", None)
+        if summary := transport.get(identities.get(node["id"], "")):
+            node["transport"] = summary
+    return inventory
 
 
 @router.patch("/daemon-nodes/{sandbox_id}")

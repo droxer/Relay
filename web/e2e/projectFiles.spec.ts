@@ -12,6 +12,52 @@ const entries = ["docs", "src", "README.md", "quarterly-planning-notes-with-a-lo
 }));
 const readme = `# Relay product development\n\nA long paragraph that should wrap nicely on a phone screen and not overflow the pane at all, even with long words like supercalifragilisticexpialidocious.\n\n| Column | Another column | Third |\n| --- | --- | --- |\n| a | b | c |\n\n\`\`\`ts\nexport const SOMETHING_VERY_LONG_IDENTIFIER = computeTheThing(withArguments, andMoreArguments, andEvenMore);\n\`\`\`\n`;
 
+test("project context loads once when opening the Settings tab", async ({ page }) => {
+  const context = "Keep this project context when editing settings.";
+  const reads: string[] = [];
+  const rosterReads: string[] = [];
+  await page.route("**/api/**", async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/teams") || (url.pathname.endsWith("/agents") && url.searchParams.get("view") === "summary")) {
+      rosterReads.push(url.pathname);
+    }
+    if (url.pathname.endsWith(`/projects/${project.id}`)) {
+      reads.push(url.pathname + url.search);
+      await route.fulfill({ json: { project: url.searchParams.get("view") === "directory"
+        ? { ...project, view: "directory" } : { ...project, context } } });
+      return;
+    }
+    if (url.pathname.endsWith("/projects")) {
+      reads.push(url.pathname + url.search);
+      await route.fulfill({ json: { projects: [{
+        id: project.id, name: project.name, enabled: true, version: 1, memberCount: 0,
+      }] } });
+      return;
+    }
+    await route.fulfill({ json: url.pathname.endsWith("/auth/me") ? { authenticated: true, user: USER }
+      : { sessions: [], agents: [], teams: [], tasks: [], nodes: [] } });
+  });
+  await page.goto(`/projects/${project.id}?tab=tasks`);
+  await expect(page.getByRole("tab", { name: "Tasks", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(reads).toEqual(["/api/v1/projects?view=index", `/api/v1/projects/${project.id}?view=directory`]);
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  const field = page.getByRole("textbox", { name: "Project context" });
+  await expect(field).toHaveValue(context);
+  await page.getByRole("tab", { name: "Tasks", exact: true }).click();
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await expect(field).toHaveValue(context);
+  expect(reads).toEqual([
+    "/api/v1/projects?view=index", `/api/v1/projects/${project.id}?view=directory`, `/api/v1/projects/${project.id}`,
+  ]);
+  reads.length = 0;
+  rosterReads.length = 0;
+  await page.goto(`/projects/${project.id}?tab=settings`);
+  await page.waitForLoadState("networkidle");
+  await expect(field).toHaveValue(context);
+  expect(reads).toEqual(["/api/v1/projects?view=index", `/api/v1/projects/${project.id}`]);
+  expect(rosterReads).toEqual([]);
+});
+
 test("Activity loads one listing and previews a handoff from a historical directory", async ({ page }) => {
   const requests: [string | null, string | null][] = [];
   const historicalFile = "threads/mixed/HANDOFF.md";

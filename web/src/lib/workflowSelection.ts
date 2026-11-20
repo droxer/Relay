@@ -1,10 +1,27 @@
 import type { AgentTeam, CollaborationStyle, RelayTaskListItem } from "../types.ts";
 
 export const PREDEFINED_WORKFLOWS = ["build_review", "pipeline", "lead_led"] as const;
-export type WorkflowOption = { id: string; kind: "predefined" | "steps"; name?: string; projectId?: string | null; template?: CollaborationStyle; enabled: boolean };
+export type WorkflowOption = {
+  id: string;
+  kind: "predefined" | "steps";
+  name?: string;
+  projectId?: string | null;
+  template?: CollaborationStyle;
+  enabled: boolean;
+  stepAgentIds?: string[];
+};
 
 export function predefinedStyle(id?: string | null): CollaborationStyle | undefined {
   return PREDEFINED_WORKFLOWS.find(style => id === `preset:${style}`);
+}
+
+export function teamWorkflowPreviews(team: Pick<AgentTeam, "workflows" | "workflowPreviews">) {
+  return team.workflowPreviews ?? team.workflows ?? [];
+}
+
+export function teamWorkflowName(team: Pick<AgentTeam, "workflows" | "workflowOptions"> | undefined, id?: string | null) {
+  if (!id) return undefined;
+  return team?.workflowOptions?.find(item => item.id === id)?.name ?? team?.workflows?.find(item => item.id === id)?.name;
 }
 
 export function defaultWorkflowId(team?: Pick<AgentTeam, "defaultWorkflowId" | "collaborationStyle" | "id" | "projectId" | "workflowSteps" | "projectWorkflowDefaults">, projectId?: string): string {
@@ -37,7 +54,8 @@ export function workflowParticipantsAllowed(team: AgentTeam | undefined, id: str
   if (!team) return false;
   const participants = predefinedStyle(id)
     ? team.memberAgentIds
-    : (team.workflows?.find(item => item.id === id)?.workflowSteps
+    : team.workflowOptions?.find(item => item.id === id)?.stepAgentIds
+    ?? (team.workflows?.find(item => item.id === id)?.workflowSteps
       ?? (id === team.id ? team.workflowSteps : undefined))?.map(step => step.agentId);
   return Boolean(participants?.length && participants.every(agentId => projectAgentIds.includes(agentId)
     && team.memberAgentIds.includes(agentId)));

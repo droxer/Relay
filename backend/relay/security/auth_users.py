@@ -29,6 +29,7 @@ from .user_handles import slugify_handle
 from ..core.ids import new_database_id
 from ..persistence.db_time import format_db_time
 from ..persistence.engine import store_transaction
+from ..persistence.sql import names_no_uuid_row
 
 
 class AuthUsers(AuthStoreState):
@@ -191,6 +192,33 @@ class AuthUsers(AuthStoreState):
             .values(email=normalized, updated_at=datetime.now(UTC))
         )
         return normalized
+
+    def user_labels(self, user_ids: list[str]) -> dict[str, dict[str, str]]:
+        user_ids = [user_id for user_id in user_ids if not names_no_uuid_row(self.engine, user_id)]
+        if not user_ids:
+            return {}
+        labels = {}
+        with store_transaction(self.engine) as conn:
+            for start in range(0, len(user_ids), 500):
+                rows = conn.execute(
+                    select(self.users.c.id, self.users.c.display_name, self.users.c.handle)
+                    .where(self.users.c.id.in_(user_ids[start:start + 500]), self.users.c.deleted_at.is_(None))
+                )
+                labels.update({
+                    str(row.id): {"displayName": row.display_name, "handle": row.handle}
+                    for row in rows
+                })
+        return labels
+
+    def user_directory_fields(self) -> list[dict[str, Any]]:
+        users, departments = self.users, self.departments
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(select(
+                users.c.id, users.c.display_name.label("displayName"), users.c.email,
+                departments.c.name.label("departmentName"),
+            ).select_from(users.outerjoin(departments, departments.c.id == users.c.department_id))
+              .where(users.c.deleted_at.is_(None))).mappings()
+            return [{**row, "id": str(row["id"])} for row in rows]
 
     def list_users(self, *, user_ids: list[str] | None = None) -> list[dict[str, Any]]:
         statement = select(self.users).where(self.users.c.deleted_at.is_(None))

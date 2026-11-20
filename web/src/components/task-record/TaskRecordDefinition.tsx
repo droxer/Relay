@@ -34,7 +34,7 @@ export function TaskRecordDefinition({
   variant: RecordVariant;
   locale: string;
   workflowLabel?: string;
-  team?: Pick<AgentTeam, "id" | "projectId" | "collaborationStyle" | "workflowSteps" | "workflows" | "defaultWorkflowId">;
+  team?: Pick<AgentTeam, "id" | "projectId" | "collaborationStyle" | "workflowSteps" | "workflowStepCount" | "workflows" | "workflowOptions" | "defaultWorkflowId" | "projectWorkflowDefaults">;
 }) {
   const { t } = useTranslation();
   const workflowName = useWorkflowName(team);
@@ -77,7 +77,7 @@ export function TaskRecordDefinition({
       value: explicitId ? name : t("workflow.inherit_default", { name }) });
   } else if (team && isWorkflowTeam(team)) rows.push({
     key: "workflow", label: t("workflow.section_title"),
-    value: t("workflow.step_count", { count: team.workflowSteps?.length ?? 0 }),
+    value: t("workflow.step_count", { count: team.workflowStepCount ?? team.workflowSteps?.length ?? 0 }),
   });
   if (!task.assignedTeamId && task.assignedWorkflowId) rows.push({
     key: "workflow", label: t("workflow.select_workflow"), value: workflowLabel ?? t("workflow.assigned_workflow"),

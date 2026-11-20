@@ -1,14 +1,14 @@
 "use client";
 
 import { useRef, useState, type KeyboardEvent } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listTaskRuns } from "../../api";
 import { RecordFailure } from "./RecordFailure";
 import { runTriggerLabel } from "../../lib/automationTrigger";
 import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { formatRunDuration, runDurationMs, runOutcome } from "../../lib/taskRuns";
-import type { TaskRun } from "../../types";
+import type { TaskRun, TaskRunsResponse } from "../../types";
 import { StateMark } from "../StateMark";
 import { RecordRunDetail, TONE_FOR_OUTCOME } from "./RecordRunDetail";
 import { RecordWorkspace } from "./RecordWorkspace";
@@ -39,6 +39,15 @@ import { runDate, runTime } from "./runDates";
 
 /** How many runs the ledger asks for before the reader asks for more. */
 const RUN_PAGE_SIZE = 25;
+const LEGACY_RUN_LIMIT = 200;
+
+function precedes(run: TaskRun, tail: TaskRun): boolean {
+  const when = run.scheduledFor ?? "";
+  const tailWhen = tail.scheduledFor ?? "";
+  if (when !== tailWhen) return when < tailWhen;
+  if (run.createdAt !== tail.createdAt) return run.createdAt < tail.createdAt;
+  return run.taskId < tail.taskId;
+}
 
 function isTerminal(run: TaskRun): boolean {
   const outcome = runOutcome(run);
@@ -66,20 +75,34 @@ export function RecordRuns({
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const [limit, setLimit] = useState(RUN_PAGE_SIZE);
+  const [limit, setLegacyLimit] = useState(RUN_PAGE_SIZE);
   /* Null until the reader picks one: the newest run is what they came to
      see, and deriving it (rather than storing it) keeps it the newest as a
      fresh run lands. */
   const [pickedRunId, setPickedRunId] = useState<string | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
 
-  /* Through the query cache, like every other read in the app: a tab switch
-     re-renders this panel from cache instead of refetching the ledger, and
-     "show earlier" widens the ask without the list going back to a spinner
-     (`keepPreviousData`) — it used to blank itself on every click. */
+  const headKey = ["task-runs", taskId, limit] as const;
+  const earlierKey = ["task-runs", taskId, "earlier"] as const;
   const runsQuery = useQuery({
-    queryKey: ["task-runs", taskId, limit],
-    queryFn: ({ signal }) => listTaskRuns(taskId, { limit }, signal),
+    queryKey: headKey,
+    queryFn: async ({ client, signal }) => {
+      const page = await listTaskRuns(taskId, { limit }, signal);
+      const earlier = client.getQueryState(earlierKey);
+      if (!earlier?.data && earlier?.fetchStatus !== "fetching") return page;
+      const previous = client.getQueryData<TaskRunsResponse>(headKey);
+      const ids = new Set(page.runs.map(run => run.taskId));
+      const tail = page.runs.at(-1);
+      if (!tail || !page.nextCursor || !previous?.runs.some(run => ids.has(run.taskId))) {
+        // The first page moved past the old window. Start any next read from
+        // the new boundary so a burst of runs cannot leave a gap.
+        if (!signal.aborted) void client.resetQueries({ queryKey: earlierKey, exact: true });
+        return page;
+      }
+      // A new run can push rows off the head while someone reads an old page.
+      // Keep that overlap without repeating the historical requests.
+      return { ...page, runs: [...page.runs, ...previous.runs.filter(run => !ids.has(run.taskId) && precedes(run, tail))] };
+    },
     placeholderData: keepPreviousData,
     // Tab panels unmount on switch and the tab strip activates on arrow keys,
     // so without a staleness horizon surfing the tabs refires every panel's
@@ -91,7 +114,23 @@ export function RecordRuns({
       query.state.data?.runs.some((run) => !isTerminal(run))
         ? RELAY_POLL_INTERVALS_MS.tasks : RELAY_POLL_INTERVALS_MS.runDiscovery,
   });
-  const runs = runsQuery.data?.runs;
+  const cursor = runsQuery.data?.nextCursor;
+  const earlier = useInfiniteQuery({
+    queryKey: earlierKey,
+    initialPageParam: cursor ?? "",
+    queryFn: ({ pageParam, signal }) => listTaskRuns(taskId, { limit: RUN_PAGE_SIZE, before: pageParam }, signal),
+    getNextPageParam: (page) => page.nextCursor,
+    enabled: false,
+  });
+  const byId = new Map(runsQuery.data?.runs.map(run => [run.taskId, run] as const));
+  for (const page of earlier.data?.pages ?? []) {
+    for (const run of page.runs) {
+      if (!byId.has(run.taskId)) byId.set(run.taskId, run);
+    }
+  }
+  const runs = runsQuery.data ? [...byId.values()] : undefined;
+  const canLoadEarlier = earlier.data ? earlier.hasNextPage : Boolean(cursor);
+  const legacyMore = cursor === undefined && (runs?.length ?? 0) >= limit && limit < LEGACY_RUN_LIMIT;
 
   if (runsQuery.isError) {
     return (
@@ -150,14 +189,17 @@ export function RecordRuns({
             />
           ))}
         </ol>
-        {/* The runs endpoint caps a page and has no cursor, so "earlier" is a
-            larger ask rather than a next page. */}
-        {runs.length >= limit ? (
+        {earlier.isError ? <RecordFailure message={t("backlog.runs.error")}
+          onRetry={() => { void earlier.fetchNextPage({ cancelRefetch: false }); }} /> : null}
+        {!earlier.isError && (canLoadEarlier || legacyMore) ? (
           <button
             type="button"
             className="record-run-more"
-            disabled={runsQuery.isFetching}
-            onClick={() => setLimit((current) => current + RUN_PAGE_SIZE)}
+            disabled={runsQuery.isFetching || earlier.isFetching}
+            onClick={() => {
+              if (legacyMore) setLegacyLimit(current => Math.min(LEGACY_RUN_LIMIT, current + RUN_PAGE_SIZE));
+              else void earlier.fetchNextPage({ cancelRefetch: false });
+            }}
           >
             {t("record.runs_show_earlier")}
           </button>

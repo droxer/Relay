@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { RoutinesPage } from "../src/components/RoutinesPage";
 import type { CurrentUser, ProjectRecord, RelayTaskListItem } from "../src/types";
 
-const { create, table } = vi.hoisted(() => ({ create: vi.fn(), table: vi.fn() }));
+const { create, update, table } = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), table: vi.fn() }));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
-  createTaskMutation: { mutateAsync: create }, startTaskMutation: {}, updateTaskMutation: {},
+  createTaskMutation: { mutateAsync: create }, startTaskMutation: {}, updateTaskMutation: { mutateAsync: update },
   deleteTaskMutation: {}, deleteTasksMutation: {},
 }) }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ announce: vi.fn(), confirm: vi.fn() }) }));
@@ -27,7 +27,7 @@ function page(readOnly = false, tasks: RelayTaskListItem[] = []) {
     readOnly={readOnly} tasks={tasks} nodes={[]} currentUser={{ userId: "u", username: "u" } as CurrentUser}
     onOpenRecord={vi.fn()} onOpenThread={vi.fn()} /></QueryClientProvider>);
 }
-beforeEach(() => { create.mockReset(); table.mockClear(); window.history.replaceState({}, "", "/projects/p?tab=automations"); });
+beforeEach(() => { create.mockReset(); update.mockReset(); table.mockClear(); window.history.replaceState({}, "", "/projects/p?tab=automations"); });
 it("creates an automation in the current project with the project fixed", async () => {
   create.mockResolvedValue({ id: "r" });
   page();
@@ -40,6 +40,21 @@ it("creates an automation in the current project with the project fixed", async 
 it("offers no creation action for a closed project", () => {
   page(true);
   expect(screen.queryByRole("button", { name: "routine.new" })).toBeNull();
+});
+
+it("saves metadata without resending the automation prompt or trigger configuration", async () => {
+  const routine = {
+    id: "auto", projectId: "p", isRoutine: true, title: "Weekly review", tags: [],
+    routineTriggers: [{ kind: "webhook" }], description: "Long automation prompt. ".repeat(2000),
+  } as unknown as RelayTaskListItem;
+  page(false, [routine]);
+  act(() => table.mock.lastCall?.[0].handlersFor(routine).onAssign());
+  fireEvent.change(screen.getByRole("textbox", { name: "Title" }), { target: { value: "Monthly review" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(update).toHaveBeenCalledWith({ taskId: "auto", input: expect.objectContaining({ title: "Monthly review" }) }));
+  expect(Object.hasOwn(update.mock.lastCall?.[0].input, "description")).toBe(false);
+  expect(Object.hasOwn(update.mock.lastCall?.[0].input, "routineTriggers")).toBe(false);
+  expect(Object.hasOwn(update.mock.lastCall?.[0].input, "routineState")).toBe(false);
 });
 it("lists only live automations in the current project", () => {
   const routine = (id: string, projectId: string, extra = {}) => ({ id, projectId, isRoutine: true, title: id, tags: [], routineTriggers: [], ...extra }) as RelayTaskListItem;

@@ -15,7 +15,10 @@ responses it compresses.
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .contract import API_PREFIX
@@ -35,6 +38,17 @@ def etag_matches(header: bytes, etag: bytes) -> bool:
     """RFC 9110 weak comparison against an If-None-Match list."""
     candidates = {part.strip() for part in header.split(b",")}
     return b"*" in candidates or etag in candidates or etag[2:] in candidates
+
+
+def private_conditional_json(request: Request, content: dict[str, Any]) -> Response:
+    """Revalidate a sensitive response held in memory by the signed-in client."""
+    response = JSONResponse(content)
+    etag = weak_etag(bytes(response.body))
+    headers = {"Cache-Control": "no-store", "ETag": etag.decode("ascii")}
+    if (validator := request.headers.get("if-none-match")) and etag_matches(validator.encode("latin-1"), etag):
+        return Response(status_code=304, headers=headers)
+    response.headers.update(headers)
+    return response
 
 
 class ConditionalGetMiddleware:

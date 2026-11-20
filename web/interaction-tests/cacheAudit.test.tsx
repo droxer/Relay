@@ -4,12 +4,12 @@ import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { useRelayData } from "../src/hooks/useRelayData";
 import { useTaskThreadLifecycle } from "../src/hooks/useTaskThreadLifecycle";
-import { useUserAgents } from "../src/hooks/useUserAgents";
+import { USER_AGENTS_QUERY_KEY, useAgentSetup, useUserAgents } from "../src/hooks/useUserAgents";
 import { useTeams } from "../src/hooks/useTeams";
 import { useDefaultAgentOffers } from "../src/hooks/useDefaultAgentOffers";
 import { useWorkflowName } from "../src/hooks/useProjectWorkflows";
 import { useThreadQueue } from "../src/hooks/useThreadQueue";
-import { getWorkflow, listDefaultAgentOffers, listSessionSummaries, listTasks, listTaskEvents, listUserAgents, listWorkflows, RelayApiError } from "../src/api";
+import { getWorkflowName, listAgentSetup, listDefaultAgentOffers, listSessionSummaries, listTasks, listTaskEvents, listUserAgents, listWorkflowPreviews, RelayApiError } from "../src/api";
 import { apiJson } from "../src/api-client/client";
 import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
 import type { RelayTaskListItem } from "../src/types";
@@ -21,12 +21,13 @@ vi.mock("../src/api", async () => ({
   listSessionSummaries: vi.fn(async () => ({ sessions: [], nextCursor: "older" })),
   listTasks: vi.fn(async () => ({ tasks: [] })),
   listProjects: vi.fn(async () => ({ projects: [] })),
+  listAgentSetup: vi.fn(async () => ({ view: "setup", onboardingAgents: [], defaultAgentOffers: [] })),
   listUserAgents: vi.fn(async () => ({ agents: [] })),
   listDefaultAgentOffers: vi.fn(async () => ({ offers: [] })),
   listTeams: vi.fn(async () => ({ teams: [] })),
   listTaskEvents: vi.fn(async () => ({ events: [] })),
-  listWorkflows: vi.fn(),
-  getWorkflow: vi.fn(),
+  listWorkflowPreviews: vi.fn(),
+  getWorkflowName: vi.fn(),
 }));
 vi.mock("../src/api-client/client", () => ({ apiJson: vi.fn(async () => ({ messages: [], paused: false })) }));
 vi.mock("../src/api-client/sessions", () => ({ cancelRun: vi.fn() }));
@@ -37,17 +38,17 @@ function setup() {
   return { client, wrapper };
 }
 
-it("reuses a fresh Workflow catalog row and falls back to one detail read after invalidation", async () => {
+it("reuses a fresh Workflow catalog row and falls back to one name read after invalidation", async () => {
   const { client, wrapper } = setup();
-  client.setQueryData(["workflows", "project"], { workflows: [{ id: "workflow", name: "Cached workflow" }] });
-  vi.mocked(getWorkflow).mockResolvedValue({ workflow: { id: "workflow", name: "Renamed workflow" } } as Awaited<ReturnType<typeof getWorkflow>>);
+  client.setQueryData(["workflows", "preview", "project"], { workflows: [{ id: "workflow", name: "Cached workflow" }] });
+  vi.mocked(getWorkflowName).mockResolvedValue({ workflow: { id: "workflow", name: "Renamed workflow" } } as Awaited<ReturnType<typeof getWorkflowName>>);
   const view = renderHook(() => useWorkflowName("workflow", "project"), { wrapper });
   await waitFor(() => expect(view.result.current.data).toBe("Cached workflow"));
-  expect(getWorkflow).not.toHaveBeenCalled();
+  expect(getWorkflowName).not.toHaveBeenCalled();
   await act(() => client.invalidateQueries({ queryKey: ["workflows"] }));
   await waitFor(() => expect(view.result.current.data).toBe("Renamed workflow"));
-  expect(getWorkflow).toHaveBeenCalledExactlyOnceWith("workflow", expect.any(AbortSignal));
-  expect(listWorkflows).not.toHaveBeenCalled();
+  expect(getWorkflowName).toHaveBeenCalledExactlyOnceWith("workflow", expect.any(AbortSignal), expect.any(Object));
+  expect(listWorkflowPreviews).not.toHaveBeenCalled();
   view.unmount(); client.clear();
 });
 
@@ -55,20 +56,20 @@ it("revalidates the assigned Workflow by ID while Definition stays open", async 
   vi.useFakeTimers();
   focusManager.setFocused(true);
   const { client, wrapper } = setup();
-  vi.mocked(getWorkflow).mockResolvedValueOnce({ workflow: { id: "workflow", name: "Original" } } as Awaited<ReturnType<typeof getWorkflow>>);
-  vi.mocked(getWorkflow).mockResolvedValueOnce({ workflow: { id: "workflow", name: "Renamed elsewhere" } } as Awaited<ReturnType<typeof getWorkflow>>);
-  vi.mocked(getWorkflow).mockRejectedValueOnce(new RelayApiError("Workflow deleted", 404));
+  vi.mocked(getWorkflowName).mockResolvedValueOnce({ workflow: { id: "workflow", name: "Original" } } as Awaited<ReturnType<typeof getWorkflowName>>);
+  vi.mocked(getWorkflowName).mockResolvedValueOnce({ workflow: { id: "workflow", name: "Renamed elsewhere" } } as Awaited<ReturnType<typeof getWorkflowName>>);
+  vi.mocked(getWorkflowName).mockRejectedValueOnce(new RelayApiError("Workflow deleted", 404));
   const view = renderHook(() => useWorkflowName("workflow", "project"), { wrapper });
   try {
     await act(() => vi.advanceTimersByTimeAsync(29_999));
     expect(view.result.current.data).toBe("Original");
-    expect(getWorkflow).toHaveBeenCalledTimes(1);
+    expect(getWorkflowName).toHaveBeenCalledTimes(1);
     await act(() => vi.advanceTimersByTimeAsync(2));
     expect(view.result.current.data).toBe("Renamed elsewhere");
-    expect(getWorkflow).toHaveBeenCalledTimes(2);
+    expect(getWorkflowName).toHaveBeenCalledTimes(2);
     await act(() => vi.advanceTimersByTimeAsync(30_000));
     expect(view.result.current.data).toBeNull();
-    expect(listWorkflows).not.toHaveBeenCalled();
+    expect(listWorkflowPreviews).not.toHaveBeenCalled();
   } finally {
     view.unmount();
     client.clear();
@@ -84,8 +85,8 @@ it("keeps predefined Workflow labels local while Definition stays open", async (
   const view = renderHook(() => useWorkflowName("preset:pipeline"), { wrapper });
   try {
     await act(() => vi.advanceTimersByTimeAsync(60_001));
-    expect(getWorkflow).not.toHaveBeenCalled();
-    expect(listWorkflows).not.toHaveBeenCalled();
+    expect(getWorkflowName).not.toHaveBeenCalled();
+    expect(listWorkflowPreviews).not.toHaveBeenCalled();
   } finally {
     view.unmount();
     client.clear();
@@ -112,13 +113,17 @@ it("backs off offscreen workspace reads and reuses fresh tasks when returning", 
   const { client, wrapper } = setup();
   const view = renderHook(({ visible }) => useRelayData(undefined, true, visible, visible), { wrapper, initialProps: { visible: false } });
   await waitFor(() => expect(client.isFetching()).toBe(0));
-  const interval = (name: string) => client.getQueryCache().find({ queryKey: ["relay", name], exact: true })?.observers[0]?.options.refetchInterval;
+  const interval = (name: string) => {
+    const query = client.getQueryCache().find({ queryKey: ["relay", name], exact: true })!;
+    const option = query.observers[0]?.options.refetchInterval;
+    return typeof option === "function" ? option(query) : option;
+  };
   expect(interval("sessions")).toBe(60_000);
   expect(interval("daemon-nodes")).toBe(60_000);
   view.rerender({ visible: true });
   await act(async () => {});
   expect(listTasks).toHaveBeenCalledTimes(1);
-  expect(interval("sessions")).toBe(RELAY_POLL_INTERVALS_MS.sessions);
+  expect(interval("sessions")).toBe(RELAY_POLL_INTERVALS_MS.idleCollections);
   view.unmount(); client.clear();
 });
 
@@ -198,6 +203,24 @@ it("does not poll a second endpoint when the Agent roster includes default offer
   }
 });
 
+it("reuses a fresh Agent roster for setup and fetches the compact view after invalidation", async () => {
+  const { client, wrapper } = setup();
+  const offer = { computerId: "computer", computerName: "Development", executorKinds: ["codex"] };
+  client.setQueryData([USER_AGENTS_QUERY_KEY, "owner"], { agents: [], defaultAgentOffers: [offer] });
+  const view = renderHook(() => useAgentSetup("owner", true), { wrapper });
+  try {
+    await waitFor(() => expect(view.result.current.offers).toEqual([offer]));
+    expect(listAgentSetup).not.toHaveBeenCalled();
+    await act(() => client.invalidateQueries({ queryKey: [USER_AGENTS_QUERY_KEY] }));
+    await waitFor(() => expect(view.result.current.offers).toEqual([]));
+    expect(listAgentSetup).toHaveBeenCalledTimes(1);
+    expect(listUserAgents).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    client.clear();
+  }
+});
+
 
 it("performs one workspace reconciliation per minute offscreen and catches up on return", async () => {
   vi.useFakeTimers();
@@ -212,6 +235,8 @@ it("performs one workspace reconciliation per minute offscreen and catches up on
   await act(async () => {});
   expect(listSessionSummaries).toHaveBeenCalledTimes(2);
   await act(() => vi.advanceTimersByTimeAsync(5_000));
+  expect(listSessionSummaries).toHaveBeenCalledTimes(2);
+  await act(() => vi.advanceTimersByTimeAsync(25_000));
   expect(listSessionSummaries).toHaveBeenCalledTimes(3);
   focusManager.setFocused(false);
   await act(() => vi.advanceTimersByTimeAsync(20_000));

@@ -51,8 +51,7 @@ function draftKey(draft: MemberDraft): string {
   return JSON.stringify(draft);
 }
 
-/* The update API replaces the roster wholesale, so every member save (add,
-   edit, remove) re-serializes the current record with one entry changed. */
+/** Normalize the roster draft for validation and version-conflict rebasing. */
 function rosterPayload(project: ProjectRecord) {
   return project.members.map((member) => ({
     agentId: member.agentId,
@@ -193,7 +192,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     setLeadError(null);
     const result = await projectSave.save(baseProject, {
       expectedVersion: baseProject.version, leadAgentId, members,
-    });
+    }, draft.agentId);
     if (result) onClose();
   }
 
@@ -219,7 +218,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     setLeadError(null);
     const result = await projectSave.save(baseProject, {
       expectedVersion: baseProject.version, leadAgentId, members,
-    });
+    }, member.agentId);
     if (result) onClose();
   }
 

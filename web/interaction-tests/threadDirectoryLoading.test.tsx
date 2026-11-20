@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { listControlPanelDaemonNodes } from "../src/api";
 import { useLocalDaemonNodes } from "../src/hooks/useLocalDaemonNodes";
 import { useThreadDirectory } from "../src/hooks/useThreadDirectory";
+import { CONTROL_PANEL_NODES_KEY } from "../src/lib/controlPanelQueries";
 import { mergeThreadRuntimeNodes, mergeVisibleDaemonNodes } from "../src/lib/daemonNodes";
 import type { ControlPanelDaemonNodeRecord, DaemonNodeMonitorRecord, RelaySession } from "../src/types";
 
@@ -23,7 +24,7 @@ function renderDirectory(enabled: boolean) {
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   const view = renderHook(({ query }) => {
-    const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(enabled);
+    const localNodes = useLocalDaemonNodes(enabled);
     // The same query -> node merge -> directory chain used by App.
     const visibleNodes = useMemo(() => mergeVisibleDaemonNodes(nodes, localNodes), [localNodes]);
     const runtimeNodes = useMemo(() => mergeThreadRuntimeNodes(nodes, localNodes), [localNodes]);
@@ -31,7 +32,7 @@ function renderDirectory(enabled: boolean) {
       route: "main", myThreads: threads, projects, routedProjectId: null,
       threadQuery: query, tasks, visibleNodes, runtimeNodes, logicalAgents,
     });
-    return { ...directory, refreshLocalDaemonNodes };
+    return directory;
   }, { wrapper, initialProps: { query: "" } });
   return { ...view, client };
 }
@@ -77,13 +78,13 @@ it("applies discovered runs and keeps them visible if a later refresh fails", as
 
   vi.mocked(listControlPanelDaemonNodes).mockResolvedValue({ nodes: [node] });
   await act(async () => {
-    expect(await view.result.current.refreshLocalDaemonNodes()).toEqual([node]);
+    await view.client.refetchQueries({ queryKey: CONTROL_PANEL_NODES_KEY });
   });
   await waitFor(() => expect(view.result.current.directoryThreads[0].runningAgent).toBe("codex"));
 
   vi.mocked(listControlPanelDaemonNodes).mockRejectedValue(new Error("Unavailable"));
   await act(async () => {
-    expect(await view.result.current.refreshLocalDaemonNodes()).toEqual([]);
+    await view.client.refetchQueries({ queryKey: CONTROL_PANEL_NODES_KEY });
   });
   expect(view.result.current.directoryThreads[0].runningAgent).toBe("codex");
   view.unmount();

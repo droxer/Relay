@@ -33,8 +33,11 @@ export interface SkillRecord {
   grantedAgentCount?: number;
   assignmentCount?: number;
 }
-export interface SkillDetail extends SkillRecord {
+export interface SkillRevisionPage {
   revisions: SkillRevision[];
+  nextRevisionBefore?: number | null;
+}
+export interface SkillDetail extends SkillRecord, SkillRevisionPage {
   files: SkillFileSummary[];
   grantedAgentIds: string[];
   assignments: SkillAssignment[];

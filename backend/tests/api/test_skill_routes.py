@@ -7,6 +7,7 @@ import zipfile
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from relay.app import create_app
 from relay.skills.bundle import resolve_bundle
 
@@ -90,6 +91,41 @@ def test_private_skill_does_not_leak_and_shared_skill_is_owner_mutable(client):
         assert client.delete(url).status_code == expected
         assert client.post(f"{url}/revisions", json={"files": bundle()["files"]}).status_code == expected
 
+
+def test_skill_detail_bounds_revision_pages_without_changing_the_default(client):
+    skill = publish(client)
+    url = f"/api/v1/skills/{skill['id']}"
+    for i in range(2, 6):
+        response = client.post(f"{url}/revisions", json={"files": bundle()["files"], "note": str(i)})
+        assert response.status_code == 201, response.text
+    first = client.get(url, params={"revision_limit": 2}).json()
+    assert [item["revision"] for item in first["revisions"]] == [5, 4]
+    assert first["nextRevisionBefore"] == 4
+    second = client.get(f"{url}/revisions", params={"before": first["nextRevisionBefore"], "limit": 2}).json()
+    assert [item["revision"] for item in second["revisions"]] == [3, 2]
+    last = client.get(f"{url}/revisions", params={"before": second["nextRevisionBefore"], "limit": 2}).json()
+    assert [item["revision"] for item in last["revisions"]] == [1]
+    assert last["nextRevisionBefore"] is None
+    assert len(client.get(url).json()["revisions"]) == 5
+    login(client, "bob")
+    assert client.get(f"{url}/revisions", params={"before": 4}).status_code == 404
+
+
+def test_skill_catalog_reads_history_in_one_query(client):
+    ids = {publish(client, name=f"skill-{i}")["id"] for i in range(4)}
+    engine = client.app.state.context.skill_store.engine
+    queries = []
+
+    def record(_conn, _cursor, statement, *_args):
+        if statement.lstrip().upper().startswith("SELECT") and "skill_events" in statement:
+            queries.append(statement)
+
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        assert {row["id"] for row in client.get("/api/v1/skills").json()["skills"]} == ids
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+    assert len(queries) == 1
 
 @pytest.mark.parametrize("mutation,expected", [
     ({"files": [{"path": "SKILL.md", "contentBase64": "not base64!"}]}, 422),

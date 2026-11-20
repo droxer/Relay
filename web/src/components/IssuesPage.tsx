@@ -3,6 +3,7 @@
 import { useCallback, memo, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
+import { useIssuesPage } from "../hooks/useIssuesPage";
 import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
 import { projectReadOnly } from "../lib/projectPage";
 import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
@@ -18,12 +19,13 @@ import { useListSort } from "../hooks/useListSort";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
+import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/Pagination";
 import { SortMenu } from "@/components/ui/SortMenu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { agentReadyForTask, filterTasks, isoToday, tasksByStatus } from "../lib/backlog";
 import { applySort } from "../lib/listSort";
-import { LANE_PAGE_SIZE, paginate, type Page } from "../lib/pagination";
+import { describePage, LANE_PAGE_SIZE, paginate, type Page } from "../lib/pagination";
 import { TASK_FLOW_STAGES, type TaskWorkflowStage } from "../lib/taskFlow";
 import { writeViewPreference } from "../lib/viewPreference";
 import {
@@ -73,13 +75,14 @@ import {
 } from "./task-board/backlogVocabulary";
 import { IssueQueueNav } from "./issues/IssueQueueNav";
 import { IssuesTable, type IssueRowContext } from "./issues/IssuesTable";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelayTaskListItem } from "../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectListItem, RelayTaskListItem } from "../types";
 import { TagFilterContext, useTagFilters } from "./tagFilter";
 
 type Lanes = Record<TaskWorkflowStage, Page<RelayTaskListItem>>;
 
 /** A table read across projects wants more rows per page than a board lane. */
 const ISSUE_PAGE_SIZE = 50;
+const NO_TASKS: RelayTaskListItem[] = [];
 
 /**
  * Issues: every piece of work, across every project, as one table.
@@ -105,20 +108,20 @@ function IssuesPageView({
   onCreateProject,
   recordTaskId,
   onOpenRecord,
-  tasks,
+  tasks: providedTasks,
   nodes,
   currentUser,
   isRefreshing = false,
   onRefresh,
   onOpenThread,
 }: {
-  projects: ProjectRecord[];
+  projects: ProjectListItem[];
   projectNotice?: ReactNode;
   onCreateProject?: (onCreated: (id: string) => void) => void;
   /** The issue whose record is open, from `/tasks/<id>`. */
   recordTaskId?: string | null;
   onOpenRecord: (taskId: string | null) => void;
-  tasks: RelayTaskListItem[];
+  tasks?: RelayTaskListItem[];
   nodes: DaemonNodeMonitorRecord[];
   currentUser: CurrentUser;
   isRefreshing?: boolean;
@@ -185,31 +188,52 @@ function IssuesPageView({
   }), [projectName, logicalAgents, teams, t]);
   const sortColumns = useMemo(() => issueSortColumns(labels), [labels]);
   const { sort, toggleSort, setSort } = useListSort(sortColumns);
+  const { result: issuePage, waitingForSearch } = useIssuesPage({
+    filters, view, queue, group: groupBy, projectId: projectFilter, sort, page, lanes: lanePages,
+    labels: {
+      missingAgent: t("backlog.assignment_unavailable_agent"), missingTeam: t("backlog.assignment_unavailable_team"),
+      workflow: t("workflow.assigned_workflow"), unassigned: t("backlog.unassigned"),
+    },
+    enabled: mounted && providedTasks === undefined,
+  });
+  const response = waitingForSearch ? undefined : issuePage.data;
+  const resultTags = response?.tags;
+  const resultPage = response?.page;
+  const resultGroupTotals = response?.groupTotals;
+  const resultLanes = response?.lanes;
+  const remote = response?.page !== undefined || response?.lanes !== undefined;
+  const tasks = providedTasks ?? response?.tasks ?? NO_TASKS;
+  const loading = providedTasks === undefined && (waitingForSearch || issuePage.isPending);
+  const loadFailed = providedTasks === undefined && !waitingForSearch && issuePage.isError;
 
   /* Archived projects are closed rooms; their work leaves the global view
      unless someone asks for that project by name. */
   const issues = useMemo(() => {
+    if (remote) return tasks;
     const archived = new Set(projects.filter((project) => project.archivedAt).map((project) => project.id));
     return tasks.filter((task) => !task.deletedAt && !task.isRoutine
       && (!task.projectId || !archived.has(task.projectId) || task.projectId === projectFilter));
-  }, [tasks, projects, projectFilter]);
-  const tagOptions = useMemo(() => collectTags(issues), [issues]);
+  }, [tasks, projects, projectFilter, remote]);
+  const tagOptions = useMemo(() => resultTags ? collectTags([{ tags: resultTags }]) : collectTags(issues), [issues, resultTags]);
   const queueContext = useMemo(
     () => ({ userId: currentUser.userId ?? "", today: isoToday() }),
     [currentUser.userId],
   );
-  const scoped = useMemo(() => filterTasks(issues, { ...filters, status: "all" })
-    .filter((task) => !projectFilter || task.projectId === projectFilter), [issues, filters, projectFilter]);
-  const counts = useMemo(() => issueQueueCounts(scoped, queueContext), [scoped, queueContext]);
+  const scoped = useMemo(() => remote ? issues : filterTasks(issues, { ...filters, status: "all" })
+    .filter((task) => !projectFilter || task.projectId === projectFilter), [issues, filters, projectFilter, remote]);
+  const counts = useMemo(() => response?.counts ?? issueQueueCounts(scoped, queueContext), [response?.counts, scoped, queueContext]);
   const visible = useMemo(
-    () => applySort(issuesInQueue(scoped, queue, queueContext), sortColumns, sort),
-    [scoped, queue, queueContext, sortColumns, sort],
+    () => remote ? scoped : applySort(issuesInQueue(scoped, queue, queueContext), sortColumns, sort),
+    [scoped, queue, queueContext, sortColumns, sort, remote],
   );
-  const listPage = useMemo(() => paginate(visible, page, ISSUE_PAGE_SIZE), [visible, page]);
+  const listPage = useMemo(() => resultPage
+    ? describePage(visible, resultPage, ISSUE_PAGE_SIZE)
+    : paginate(visible, page, ISSUE_PAGE_SIZE), [visible, page, resultPage]);
   const groups = useMemo(() => groupIssues(listPage.items, groupBy, labels), [listPage.items, groupBy, labels]);
   const groupTotals = useMemo(
-    () => new Map(groupIssues(visible, groupBy, labels).map((group) => [group.key, group.tasks.length])),
-    [visible, groupBy, labels],
+    () => resultGroupTotals ? new Map(Object.entries(resultGroupTotals))
+      : new Map(groupIssues(visible, groupBy, labels).map((group) => [group.key, group.tasks.length])),
+    [visible, groupBy, labels, resultGroupTotals],
   );
   /* On the board the lanes are the grouping and each lane pages on its own;
      the table's grouping and page cursor do not apply there. */
@@ -217,9 +241,10 @@ function IssuesPageView({
   const pagedLanes = useMemo(
     () => Object.fromEntries(TASK_FLOW_STAGES.map((status) => [
       status,
-      paginate(laneTasks[status], lanePages[status] ?? 1, LANE_PAGE_SIZE),
+      resultLanes ? describePage(laneTasks[status], resultLanes[status], LANE_PAGE_SIZE)
+        : paginate(laneTasks[status], lanePages[status] ?? 1, LANE_PAGE_SIZE),
     ])) as Lanes,
-    [laneTasks, lanePages],
+    [laneTasks, lanePages, resultLanes],
   );
   /* Selection follows what is on screen in either view, so "select all" then
      Delete cannot reach a card on a lane page the reader never saw. */
@@ -229,7 +254,7 @@ function IssuesPageView({
   );
   const visibleIds = useMemo(() => onScreen.map((task) => task.id), [onScreen]);
   const visibleSelection = useMemo(() => pruneSelection(selection, visibleIds), [selection, visibleIds]);
-  const selected = useMemo(() => selectedTasks(visible, visibleSelection), [visible, visibleSelection]);
+  const selected = useMemo(() => selectedTasks(onScreen, visibleSelection), [onScreen, visibleSelection]);
   const movable = selected.filter((task) => issueNeedsProject(task) && task.status !== "done");
   const openProjects = projects.filter((project) => project.enabled && !project.archivedAt);
 
@@ -336,7 +361,7 @@ function IssuesPageView({
       <section id="backlog-panel" className="backlog-page issues-page sec-shell" data-view={view} aria-label={t("issues.title")} tabIndex={-1}>
         <div className="sec-rail">
           <PageHeader title={t("issues.title")} titleAs="h2"
-            count={t("issues.sub", { count: issues.length })} titleVariant="title" layout="stacked" />
+            count={loading ? undefined : t("issues.sub", { count: response?.issueCount ?? issues.length })} titleVariant="title" layout="stacked" />
           <IssueQueueNav value={queue} counts={counts} onChange={(next) => { setQueue(next); setPage(1); }} />
         </div>
         <div className="sec-main">
@@ -359,6 +384,12 @@ function IssuesPageView({
             )}
           />
           {projectNotice}
+          {loadFailed ? (
+            <div className="task-project-notice" role="alert">
+              <span>{t("issues.load_failed")}</span>
+              <Button variant="ghost" onClick={() => void issuePage.refetch()}>{t("project.retry")}</Button>
+            </div>
+          ) : null}
           <BacklogFiltersBar
             filters={filters}
             extraField={projectField}
@@ -397,7 +428,9 @@ function IssuesPageView({
             )}
           />
 
-          {visible.length === 0 ? (
+          {loading ? <p className="record-empty" role="status">{t("issues.loading")}</p>
+          : loadFailed && !response ? null
+          : visible.length === 0 ? (
             <BoardEmpty
               title={filtered ? t("backlog.no_match_title") : t(`issues.empty.${queue}`)}
               body={filtered ? t("backlog.no_match_body") : t("issues.empty_body")}
@@ -409,7 +442,7 @@ function IssuesPageView({
           ) : board ? (
             <BacklogBoard
               lanes={pagedLanes}
-              laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, laneTasks[status].length])) as Record<TaskWorkflowStage, number>}
+              laneTotals={Object.fromEntries(TASK_FLOW_STAGES.map((status) => [status, pagedLanes[status].total])) as Record<TaskWorkflowStage, number>}
               cardProps={(task) => {
                 const context = rowContext(task);
                 return {
@@ -480,6 +513,7 @@ function IssuesPageView({
               taskId={drawerRecordId}
               currentUser={currentUser}
               tasks={tasks}
+              compactList={remote}
               drawer={{ open: Boolean(recordTaskId), onClose: () => onOpenRecord(null), onClosed: recordMirror.release }}
               onEdit={editTask}
               onOpenThread={(sessionId) => onOpenThread(sessionId, drawerRecordId)}

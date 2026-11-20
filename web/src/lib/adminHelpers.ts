@@ -1,7 +1,7 @@
 import type { TFunction } from "i18next";
 import { backendPublicOrigin } from "./apiOrigin.ts";
 import { byNumber, byText, type SortColumn } from "./listSort.ts";
-import type { AgentName, AgentRuntimeStatus, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, LogicalAgentAvailability, Tone } from "../types.js";
+import type { AgentName, AgentRuntimeStatus, ControlPanelDaemonNodeRecord, UserAgent, UserRecord, UserRosterComputer, LogicalAgentAvailability, Tone } from "../types.js";
 import { formatThreadStamp } from "./threadStamp.ts";
 import { AGENT_RUNTIME_DISPLAY_ORDER } from "./agentRuntimeOrder.ts";
 import { DEFAULT_TASK_CAPACITY } from "./taskCapacity.ts";
@@ -88,12 +88,12 @@ let volatileNodeTokens: StoredNodeTokenMap = {};
  * web never re-derives it from `lastSeenAt` against its own clock, or the two
  * would disagree the moment the timeout is tuned.
  */
-export function isStale(node: ControlPanelDaemonNodeRecord): boolean {
+export function isStale(node: Pick<UserRosterComputer, "stale" | "online">): boolean {
   if (typeof node.stale === "boolean") return node.stale;
   return !node.online;
 }
 
-export function visualStatus(node: ControlPanelDaemonNodeRecord): string {
+export function visualStatus(node: Pick<UserRosterComputer, "stale" | "online" | "status">): string {
   return isStale(node) ? "stale" : node.status;
 }
 
@@ -138,7 +138,7 @@ export type NodeQuickFilter = "all" | "ready" | "running" | "provisioning" | "fa
 /** Match the fleet lifecycle slices while keeping an intentional stop distinct
  * from a lost heartbeat. Assignment remains an overlapping facet. */
 export function matchesNodeQuickFilter(
-  node: ControlPanelDaemonNodeRecord,
+  node: Pick<UserRosterComputer, "stale" | "online" | "status" | "userId">,
   filter: NodeQuickFilter,
 ): boolean {
   if (filter === "all") return true;
@@ -155,7 +155,7 @@ export function matchesNodeQuickFilter(
 }
 
 /** A computer is "online" when its daemon is connected and its heartbeat is fresh. */
-export function isNodeOnline(node: ControlPanelDaemonNodeRecord): boolean {
+export function isNodeOnline(node: Pick<UserRosterComputer, "stale" | "online">): boolean {
   return Boolean(node.online) && !isStale(node);
 }
 
@@ -258,7 +258,7 @@ export interface UserNodeSummary {
   readyCount: number;
   runningCount: number;
   failedCount: number;
-  nodes: ControlPanelDaemonNodeRecord[];
+  nodes: UserRosterComputer[];
   /** Pinned personal-computer limit, or null when the org default applies. */
   maxLocalComputers: number | null;
   maxConcurrentTasks?: number | null;
@@ -389,10 +389,10 @@ export function userEmptyStateTranslationKey(
 
 export function buildUserSummaries(
   users: UserRecord[],
-  nodes: ControlPanelDaemonNodeRecord[],
+  nodes: UserRosterComputer[],
 ): UserNodeSummary[] {
   const userById = new Map(users.map((user) => [user.id, user]));
-  const nodesByUser = new Map<string, ControlPanelDaemonNodeRecord[]>();
+  const nodesByUser = new Map<string, UserRosterComputer[]>();
 
   for (const node of nodes) {
     if (!node.userId) continue;
@@ -540,7 +540,7 @@ type NodeSandboxProfile = "boxlite" | "host" | "pending";
 type NodeLocalityKind = "this_host" | "saved_here" | "remote";
 
 /** Management ownership is independent of the daemon's sandbox implementation. */
-export function nodeOwnershipProfile(node: Pick<ControlPanelDaemonNodeRecord, "nodeLocation" | "sandboxMode">): NodeOwnershipProfile {
+export function nodeOwnershipProfile(node: Pick<Partial<ControlPanelDaemonNodeRecord>, "nodeLocation" | "sandboxMode">): NodeOwnershipProfile {
   if (node.nodeLocation === "managed") return "managed";
   if (node.nodeLocation === "user-device") return "local";
   return "pending";

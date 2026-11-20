@@ -2,12 +2,13 @@
 
 import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useMutation } from "@tanstack/react-query";
-import { saveWorkflow, deleteWorkflow } from "../../api";
-import { useInvalidateWorkflows } from "../../hooks/useProjectWorkflows";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { saveWorkflow, deleteWorkflow, updateWorkflowDraft, type WorkflowSaveResponse } from "../../api";
+import { RelayApiError } from "../../api-client/client";
+import { useInvalidateWorkflows, useWorkflowRecord, workflowRecordIsOlder, WORKFLOWS_QUERY_KEY } from "../../hooks/useProjectWorkflows";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
-import type { AgentTeam, Workflow, ProjectRecord, UserAgent } from "../../types";
+import type { AgentTeam, Workflow, WorkflowPreview, ProjectListItem, UserAgent } from "../../types";
 import {
   WORKFLOW_LIMITS,
   draftFromTeam,
@@ -16,7 +17,8 @@ import {
   moveWorkflowStep,
   replaceWorkflowStep,
   validateWorkflowDraft,
-  workflowDraftChanged,
+  workflowDraftPatch,
+  workflowDraftUpdate,
   workflowDraftValid,
   workflowInput,
   type WorkflowDraftErrors,
@@ -30,19 +32,49 @@ import { Input } from "@/components/ui/input";
 import { ActionAdd, AdminDelete, ICON } from "../icons";
 import { WorkflowStepCard } from "./WorkflowStepCard";
 
+export type WorkflowAgent = Pick<UserAgent, "id" | "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability" | "deletedAt">;
+
 type Props = {
   open: boolean;
-  project?: ProjectRecord;
+  project?: ProjectListItem;
   team?: AgentTeam;
   /** Optional Project choices for a new Workflow; `project`
    *  is the first choice. Absent, the Workflow stays in `project`. */
-  projects?: ProjectRecord[];
+  projects?: ProjectListItem[];
   /** Null creates an independent Workflow in the selected Project. */
   workflow: Workflow | null;
   teams: AgentTeam[];
-  agents: UserAgent[];
+  agents: readonly WorkflowAgent[];
   onClose: () => void;
 };
+
+function isWorkflowDefinition(workflow: WorkflowPreview): workflow is Workflow {
+  return workflow.workflowSteps.every(step => "instructions" in step && "acceptanceCriteria" in step);
+}
+
+export function WorkflowEditorForPreview({ workflow, ...props }: Omit<Props, "workflow"> & { workflow: WorkflowPreview | null }) {
+  const { t } = useTranslation();
+  const [opening, setOpening] = useState({ open: props.open, workflow });
+  // Keep the draft mounted if a background refresh advances the preview.
+  if (opening.open !== props.open || opening.workflow?.id !== workflow?.id) {
+    setOpening({ open: props.open, workflow });
+  }
+  const preview = opening.workflow;
+  const definition = workflow && isWorkflowDefinition(workflow) ? workflow : null;
+  const record = useWorkflowRecord(props.open && !definition ? preview : undefined);
+  const saved = definition ?? record.data?.workflow;
+  if (!props.open || !workflow || definition || (saved && preview && !workflowRecordIsOlder(saved, preview))) {
+    return <WorkflowEditor {...props} workflow={workflow ? saved ?? null : null} />;
+  }
+
+  return <Drawer open onClose={props.onClose} title={t("workflow.edit_title")}
+    subtitle={workflow.name} width="form" closeLabel={t("admin.v2.close_drawer")}>
+    {record.isError ? <div role="alert">
+      <p>{t("workflow.load_failed")}</p>
+      <Button type="button" variant="outline" onClick={() => void record.refetch()}>{t("workspace.retry")}</Button>
+    </div> : <p aria-busy="true">{t("workflow.loading")}</p>}
+  </Drawer>;
+}
 
 export function WorkflowEditor(props: Props) {
   // Re-key per opening so a closed drawer never leaks its draft into the next.
@@ -56,12 +88,17 @@ export function WorkflowEditor(props: Props) {
 function WorkflowEditorBody({ open, project: initialProject, team, projects, workflow, teams, agents, onClose }: Props) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateWorkflows();
   const [projectId, setProjectId] = useState(initialProject?.id ?? "");
   const project = projects?.find(item => item.id === projectId) ?? initialProject;
   const pickProject = !workflow && (projects?.length ?? 0) > 1;
-  const saveMutation = useMutation({ mutationFn: (input: Parameters<typeof saveWorkflow>[0]) => saveWorkflow(input, workflow?.id), onSuccess: invalidate });
-  const deleteMutation = useMutation({ mutationFn: () => deleteWorkflow(workflow!.id), onSuccess: invalidate });
+  const [originalWorkflow] = useState(workflow);
+  const saveMutation = useMutation({
+    mutationFn: (save: () => Promise<WorkflowSaveResponse>) => save(),
+    onSuccess: data => invalidate(data, originalWorkflow),
+  });
+  const deleteMutation = useMutation({ mutationFn: () => deleteWorkflow(workflow!.id), onSuccess: () => invalidate() });
   const [failure, setFailure] = useState<string | null>(null);
   const allowedAgentIds = useMemo(() => (team ? team.memberAgentIds : project ? enabledProjectAgentIds(project) : []), [project, team]);
   const stepAgents = useMemo(() => {
@@ -70,8 +107,8 @@ function WorkflowEditorBody({ open, project: initialProject, team, projects, wor
   }, [agents, allowedAgentIds]);
   // A new workflow opens with one step owned by the Project lead; the person
   // names it and adds the rest.
-  const [saved] = useState<WorkflowTeamDraft>(() => workflow
-    ? draftFromTeam(workflow)
+  const [saved] = useState<WorkflowTeamDraft>(() => originalWorkflow
+    ? draftFromTeam(originalWorkflow)
     : { name: "", steps: [emptyWorkflowStep([], stepAgents.find(agent => agent.id === (team?.leadAgentId ?? project?.leadAgentId))?.id ?? stepAgents[0]?.id ?? "")] });
   const [draft, setDraft] = useState<WorkflowTeamDraft>(saved);
   const [errors, setErrors] = useState<WorkflowDraftErrors | null>(null);
@@ -81,7 +118,8 @@ function WorkflowEditorBody({ open, project: initialProject, team, projects, wor
   const nameErrorId = useId();
   const stepsId = useId();
   const busy = saveMutation.isPending || deleteMutation.isPending;
-  const dirty = workflowDraftChanged(draft, saved);
+  const changes = useMemo(() => workflowDraftUpdate(draft, saved), [draft, saved]);
+  const dirty = Object.keys(changes).length > 0;
   const confirmDiscard = useUnsavedChangesGuard(open && dirty && !busy);
   const shown = errors ?? { fields: {} };
   const atLimit = draft.steps.length >= WORKFLOW_LIMITS.steps;
@@ -132,11 +170,25 @@ function WorkflowEditorBody({ open, project: initialProject, team, projects, wor
       else listRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
       return;
     }
-    const input = workflowInput(draft, project?.id ?? "", workflow?.enabled ?? true);
+    setFailure(null);
     try {
-      await saveMutation.mutateAsync(team ? { ...input, projectId: null, ownerTeamId: team.id } : input);
+      if (originalWorkflow) {
+        if (dirty) {
+          await saveMutation.mutateAsync(() => originalWorkflow.version === undefined
+            ? saveWorkflow(workflowDraftPatch(draft, saved), originalWorkflow.id)
+            : updateWorkflowDraft(originalWorkflow, changes));
+        }
+      } else {
+        const input = workflowInput(draft, project?.id ?? "");
+        await saveMutation.mutateAsync(() => saveWorkflow(team ? { ...input, projectId: null, ownerTeamId: team.id } : input, undefined));
+      }
       onClose();
     } catch (error) {
+      if (originalWorkflow && error instanceof RelayApiError && error.code === "workflow_version_conflict") {
+        setFailure(t("workflow.version_conflict"));
+        void queryClient.invalidateQueries({ queryKey: [WORKFLOWS_QUERY_KEY, "record", originalWorkflow.id], exact: true });
+        return;
+      }
       setFailure(error instanceof Error ? error.message : String(error));
     }
   }

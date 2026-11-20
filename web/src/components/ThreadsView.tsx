@@ -7,7 +7,7 @@ import {
   ICON,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
-import type { AgentName, AgentTeam, CurrentUser, DaemonNodeMonitorRecord, UserAgent, ProjectRecord, RelayArtifact, RelaySession, RelayTaskListItem } from "../types";
+import type { AgentName, AgentTeam, CurrentUser, DaemonNodeMonitorRecord, UserAgent, ProjectListItem, ProjectRailItem, ProjectDashboardSummary, RelayArtifact, RelaySession, RelayTaskListItem } from "../types";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import type { ThreadPermissionMode } from "relay-core";
 import {
@@ -109,13 +109,20 @@ type ThreadsViewProps = {
   /** The shell's task list — the project board reads its lanes from it
    *  rather than opening a second observer on the same query. */
   tasks: RelayTaskListItem[];
+  projectDashboard?: ProjectDashboardSummary;
+  canAdoptNextStep?: boolean;
   currentUser: CurrentUser;
   /** The onboarding wizard, shown instead of the empty transcript while the
    *  person is still setting up. */
   onboardingPanel?: ReactNode;
   filteredThreads: ThreadItem[];
-  projects: ProjectRecord[];
+  projects: ProjectListItem[];
+  projectRows: ProjectRailItem[];
   selectedProjectId: string | null;
+  selectedProject: ProjectListItem | null;
+  selectedProjectStatus: ProjectCollectionStatus;
+  selectedProjectError?: string;
+  onRetrySelectedProject: () => void;
   projectsStatus: ProjectCollectionStatus;
   projectsError: string;
   onRetryProjects: () => void;
@@ -221,11 +228,18 @@ export function ThreadsView({
   listOnScreen,
   directoryMode,
   tasks,
+  projectDashboard,
+  canAdoptNextStep = true,
   currentUser,
   onboardingPanel,
   filteredThreads,
   projects,
+  projectRows,
   selectedProjectId,
+  selectedProject,
+  selectedProjectStatus,
+  selectedProjectError,
+  onRetrySelectedProject,
   projectsStatus,
   projectsError,
   onRetryProjects,
@@ -483,10 +497,6 @@ export function ThreadsView({
     () => threadHasMultipleProducers(activeSession?.agentRuns),
     [activeSession?.agentRuns],
   );
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId],
-  );
   const activeProjectId = activeSession?.projectId ?? null;
   const activeThreadProject = useMemo(
     () => (activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null),
@@ -497,14 +507,14 @@ export function ThreadsView({
   const nextStepAdoption = useNextStepAdoption({
     projectId: activeProjectId,
     projectName: activeThreadProject?.name ?? null,
-    readOnly: Boolean(projectReadOnly),
+    readOnly: Boolean(projectReadOnly) || !canAdoptNextStep,
     tasks,
     onOpenTaskRecord,
   });
   const projectOverviewState = resolveProjectOverviewState({
     showProjectOverview,
     project: selectedProject,
-    collectionStatus: projectsStatus,
+    collectionStatus: selectedProjectStatus,
   });
 
   return (
@@ -514,7 +524,7 @@ export function ThreadsView({
         directoryMode={directoryMode}
         threads={filteredThreads}
         tasks={tasks}
-        projects={projects}
+        projects={projectRows}
         projectsStatus={projectsStatus}
         projectsError={projectsError}
         onRetryProjects={onRetryProjects}
@@ -549,6 +559,8 @@ export function ThreadsView({
             project={selectedProject}
             agents={logicalAgents}
             tasks={tasks}
+            pageOwnsTasks
+            dashboard={projectDashboard}
             currentUser={currentUser}
             computers={runtimeNodes}
             onOpenThread={onSelectThread}
@@ -569,9 +581,9 @@ export function ThreadsView({
           <RelayEmptyState feature="projects"
             fill
             title={t("project.load_failed")}
-            body={projectsError || t("project.load_failed_body")}
+            body={selectedProjectError || projectsError || t("project.load_failed_body")}
             actions={(
-              <Button type="button" variant="outline" size="dense" onClick={onRetryProjects}>
+              <Button type="button" variant="outline" size="dense" onClick={onRetrySelectedProject}>
                 {t("workspace.retry")}
               </Button>
             )}

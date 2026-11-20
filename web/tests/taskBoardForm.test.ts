@@ -52,6 +52,14 @@ describe("taskBoardForm", () => {
     assert.deepEqual(body.routineTriggers, []);
   });
 
+  it("sends changed status or triggers in an Automation edit", () => {
+    const stored = { ...emptyRoutineForm(user), routineState: "active" as const };
+    assert.deepEqual(routineMutationFields(stored, stored), { isRoutine: true });
+    assert.deepEqual(routineMutationFields({ ...stored, routineState: "paused" }, stored), { isRoutine: true, routineState: "paused" });
+    assert.deepEqual(routineMutationFields({ ...stored, routineTriggers: [{ kind: "webhook" }] }, stored),
+      { isRoutine: true, routineTriggers: [{ kind: "webhook" }] });
+  });
+
   it("reads the automation fields of a saved task", () => {
     assert.deepEqual(routineFormFields({ routineTriggers: [{ kind: "webhook" }], routineState: "paused_by_relay", routinePauseReason: "failing" }),
       { routineTriggers: [{ kind: "webhook" }], routineState: "paused_by_relay", routinePauseReason: "failing" });

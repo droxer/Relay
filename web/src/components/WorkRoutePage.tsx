@@ -3,11 +3,10 @@
 import { lazy, memo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { UnplacedComputerWork } from "./UnplacedComputerWork";
 import { ComputerWorkspaceNav } from "./ComputerWorkspaceNav";
 
 import { RelayEmptyState } from "./RelayEmptyState";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, TasksResponse, UserAgent } from "../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskSummary, TasksResponse, UserAgent } from "../types";
 import type { HomeItem } from "../lib/homeQueue";
 import type { HomeSetupProgress } from "../lib/onboarding";
 import type { Language, Theme } from "../lib/appStorage";
@@ -71,10 +70,9 @@ interface WorkRoutePageProps {
   computerReadOnly?: boolean;
   notFound: boolean;
   user: CurrentUser;
-  projects: ProjectRecord[];
+  projects: ProjectListItem[];
   projectsStatus: ProjectCollectionStatus;
   tasks: RelayTaskSummary[];
-  unplacedTasks?: RelayTaskSummary[];
   sessions: RelaySession[];
   homeItems: HomeItem[];
   homeTaskProjects?: TasksResponse["homeProjects"];
@@ -175,13 +173,13 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
   ) : route === "channels" ? <ChannelsPage /> : route === "backlog" ? (
     props.computerId ? <div className="tasks-workspace computer-workspace">
       <ComputerWorkspaceNav computerId={props.computerId} label={props.computerLabel ?? props.computerId} route={route} />
-      {!props.computerReadOnly ? <UnplacedComputerWork computerId={props.computerId} tasks={(props.unplacedTasks ?? []).filter(task => !task.isRoutine)} /> : null}
       <div className="tasks-workspace-content"><BacklogPage
-        readOnly={props.computerReadOnly} computerId={props.computerId} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
+        key={props.computerId} readOnly={props.computerReadOnly} computerId={props.computerId} sessions={props.sessions}
+        nodes={props.runtimeNodes} currentUser={user}
         recordTaskId={props.recordTaskId} onOpenRecord={props.onOpenTaskRecord} onOpenThread={openTaskThread}
       /></div>
     </div> : <TasksWorkspace
-      projects={props.projects} projectsStatus={props.projectsStatus} tasks={props.tasks}
+      projects={props.projects} projectsStatus={props.projectsStatus}
       nodes={props.visibleNodes} currentUser={user} recordTaskId={props.recordTaskId}
       onOpenRecord={props.onOpenTaskRecord} onOpenThread={openTaskThread}
       isRefreshing={props.isRefreshing} onRefresh={props.onRefresh}
@@ -189,14 +187,13 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
   ) : route === "routine" ? (
     props.computerId ? <div className="tasks-workspace computer-workspace">
       <ComputerWorkspaceNav computerId={props.computerId} label={props.computerLabel ?? props.computerId} route={route} />
-      {!props.computerReadOnly ? <UnplacedComputerWork computerId={props.computerId} tasks={(props.unplacedTasks ?? []).filter(task => task.isRoutine)} /> : null}
       <div className="tasks-workspace-content"><RoutinesPage
-        readOnly={props.computerReadOnly} computerId={props.computerId} recordTaskId={props.recordTaskId} recordRunId={props.recordRunId}
-        onOpenRecord={props.onOpenRoutineRecord} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
+        key={props.computerId} readOnly={props.computerReadOnly} computerId={props.computerId} recordTaskId={props.recordTaskId} recordRunId={props.recordRunId}
+        onOpenRecord={props.onOpenRoutineRecord} sessions={props.sessions} nodes={props.runtimeNodes} currentUser={user}
         onOpenThread={onOpenThread}
       /></div>
     </div> : <RoutinesPage
-      projects={props.projects} tasks={props.tasks} nodes={props.visibleNodes} currentUser={user}
+      projects={props.projects} nodes={props.visibleNodes} currentUser={user}
       recordTaskId={props.recordTaskId} recordRunId={props.recordRunId}
       onOpenRecord={props.onOpenRoutineRecord} onOpenThread={onOpenThread}
       isRefreshing={props.isRefreshing} onRefresh={props.onRefresh}

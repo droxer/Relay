@@ -2,13 +2,13 @@
 
 import { useTranslation } from "react-i18next";
 import { setupAwaitingApply } from "../lib/projectSetup";
-import type { ProjectRecord } from "../types";
+import type { ProjectListItem } from "../types";
 import { Button } from "@/components/ui/button";
 
 /** Under a setup thread's last turn: the draft is done, but nothing changes
  *  until the owner applies it on the project dashboard. */
 export function ProjectSetupCue({ project, threadId, onOpenProject }: {
-  project: ProjectRecord | null | undefined;
+  project: ProjectListItem | null | undefined;
   threadId: string | null | undefined;
   onOpenProject: (projectId: string) => void;
 }) {

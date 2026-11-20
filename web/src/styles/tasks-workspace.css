@@ -109,11 +109,16 @@
   min-width: 0;
 }
 
-.computer-workspace:has(.computer-unplaced-work) {
-  grid-template-rows: auto auto minmax(0, 1fr);
+.computer-workspace .routine-page:has(> .computer-unplaced-work) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.computer-workspace .routine-page > .computer-unplaced-work {
+  grid-column: 1 / -1;
 }
 
 .computer-unplaced-work {
+  flex: none;
   padding: var(--sp-3) var(--page-gutter);
   max-height: 35vh;
   overflow: auto;

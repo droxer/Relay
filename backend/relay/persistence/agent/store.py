@@ -97,6 +97,8 @@ class DatabaseAgentStore:
         )
 
     def get_agent(self, agent_id: str) -> dict[str, Any] | None:
+        if names_no_uuid_row(self.engine, agent_id):
+            return None
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
@@ -172,6 +174,43 @@ class DatabaseAgentStore:
                 agent["id"],
             ),
         )
+
+    def list_agent_summaries(
+        self, owner: str, *, include_deleted: bool = False, include_instructions: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Read roster fields without hydrating every Agent configuration."""
+        agents = self.agents
+        snapshot = agents.c.snapshot
+        columns = [
+            agents.c.id, agents.c.display_name.label("displayName"), agents.c.executor_kind.label("executorKind"),
+            agents.c.enabled, agents.c.agent_version.label("version"), agents.c.model,
+            agents.c.created_at, agents.c.updated_at, agents.c.deleted_at,
+            snapshot["computerId"].as_string().label("computerId"),
+            snapshot["defaultRole"].as_string().label("defaultRole"),
+            snapshot["profileImageUrl"].as_string().label("profileImageUrl"),
+        ]
+        instructions = snapshot["instructions"].as_string()
+        columns.append(
+            instructions.label("instructions") if include_instructions
+            else func.coalesce(instructions != "", False).label("hasInstructions")
+        )
+        statement = select(*columns).where(agents.c.supervisor_user_id == owner)
+        if not include_deleted:
+            statement = statement.where(agents.c.deleted_at.is_(None))
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).mappings().all()
+        summaries = []
+        for record in rows:
+            item = dict(record)
+            model = item.pop("model")
+            item.update(
+                createdAt=format_db_time(item.pop("created_at")), updatedAt=format_db_time(item.pop("updated_at")),
+                modelPolicy={"model": model} if model else {}, skillPolicy={}, toolPolicy={},
+            )
+            if deleted_at := item.pop("deleted_at"):
+                item["deletedAt"] = format_db_time(deleted_at)
+            summaries.append(_normalized_agent_snapshot(item, owner))
+        return sorted(summaries, key=lambda item: (item["displayName"].casefold(), item["id"]))
 
     def update_agent(self, agent_id: str, patch: dict[str, Any]) -> dict[str, Any]:
         current = self.get_agent(agent_id)

@@ -31,9 +31,7 @@ from ...computer.names import computer_display_name
 from ...projects.catalog import agent_has_active_project
 from ...teams.membership import remove_agent_from_teams
 from ..deps import AppContextDep
-from ...computer.default_agents import default_agent_offers
-from ...security.onboarding import declined_default_agents
-from ..actors import chat_service_user_header, request_actor
+from ..actors import request_actor
 from ..bodies import JsonBodyDep, json_body, string_field
 from ...skills.bundle import resolve_bundle
 from ...skills.assignments import effective_assignments
@@ -49,31 +47,6 @@ router = APIRouter()
 # agent, not an edit. The role is the agent's own default; a team may assign
 # its member a different one.
 AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy", "defaultRole", "delegationAgentIds"})
-
-
-@router.get("/agents")
-def list_agents(request: Request, ctx: AppContextDep) -> dict[str, Any]:
-    actor = request_actor(request, ctx.auth_store)
-    include_offers = request.query_params.get("include") == "default-offers" and not chat_service_user_header(request)
-    records = ctx.agent_store.list_agents(supervisor_user_id=actor["userId"], include_deleted=include_offers)
-    agents = [
-        agent for agent in records if agent.get("enabled", True) and not agent.get("deletedAt")
-    ]
-    nodes = _node_map(ctx)
-    fleet = list(nodes.values())
-    # An agent a user explicitly created always stays on the roster.
-    # If its computer or runtime is gone, flag it — let the user decide
-    # whether to delete it. The system doesn't make that call for them.
-    return {
-        "agents": [
-            {**view, "bindingStatus": binding_status(agent, fleet)}
-            for agent, view in zip(agents, _agent_views(ctx, agents, nodes=nodes), strict=True)
-        ],
-        **({"defaultAgentOffers": default_agent_offers(
-            ctx, actor["userId"], declined_default_agents(actor.get("account", {}).get("onboarding")),
-            fleet=fleet, history=records,
-        )} if include_offers else {}),
-    }
 
 
 @router.post("/agents", status_code=201)
@@ -439,17 +412,18 @@ def _agent_has_active_run(ctx: AppContextDep, agent_id: str) -> bool:
 NodeMap = dict[str, dict[str, Any]]
 
 
-def _node_map(ctx: AppContextDep) -> NodeMap:
+def _node_map(ctx: AppContextDep, *, owner: str | None = None) -> NodeMap:
     """The fleet by node id, read once per request and threaded down.
 
     ``monitor_nodes`` derives liveness for every node, so every helper that
     needs a node takes this map instead of asking the registry again.
     """
-    return {node["id"]: node for node in ctx.registry.monitor_nodes()}
+    nodes = ctx.registry.monitor_nodes_for_user(owner) if owner else ctx.registry.monitor_nodes()
+    return {node["id"]: node for node in nodes}
 
 
 def _placements_by_agent(
-    ctx: AppContextDep, agent_ids: list[str]
+    ctx: AppContextDep, agent_ids: list[str], *, owner: str | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Live placements grouped by agent, loaded in one query for a batch."""
     if not agent_ids:
@@ -458,7 +432,7 @@ def _placements_by_agent(
     if len(wanted) == 1:
         rows = ctx.agent_placement_store.list_placements(agent_id=agent_ids[0])
     else:
-        rows = ctx.agent_placement_store.list_placements()
+        rows = ctx.agent_placement_store.list_placements(supervisor_user_id=owner)
     grouped: dict[str, list[dict[str, Any]]] = {agent_id: [] for agent_id in wanted}
     for placement in rows:
         if placement["agentId"] in grouped:
@@ -471,13 +445,15 @@ def _agent_views(
     agents: list[dict[str, Any]],
     *,
     nodes: NodeMap | None = None,
+    owner: str | None = None,
+    summary: bool = False,
 ) -> list[dict[str, Any]]:
     """``_agent_with_placements`` for a batch: one node read, one placement read."""
     node_map = _node_map(ctx) if nodes is None else nodes
-    placements = _placements_by_agent(ctx, [agent["id"] for agent in agents])
+    placements = _placements_by_agent(ctx, [agent["id"] for agent in agents], owner=owner)
     return [
         _agent_with_placements(
-            ctx, agent, nodes=node_map, placements=placements.get(agent["id"], [])
+            ctx, agent, nodes=node_map, placements=placements.get(agent["id"], []), summary=summary,
         )
         for agent in agents
     ]
@@ -489,6 +465,7 @@ def _agent_with_placements(
     *,
     nodes: NodeMap | None = None,
     placements: list[dict[str, Any]] | None = None,
+    summary: bool = False,
 ) -> dict[str, Any]:
     node_map = _node_map(ctx) if nodes is None else nodes
     raw_placements = (
@@ -507,6 +484,12 @@ def _agent_with_placements(
         availability = "busy"
     elif any(placement["status"] == "pending" for placement in placement_views):
         availability = "pending"
+    if summary:
+        # Live routing only needs placement identity and status. Configuration
+        # and diagnostic messages are read with the Agent record.
+        return {**agent, "availability": availability, "placements": [
+            {**view, "workspacePolicy": {}, "conditions": []} for view in placement_views
+        ]}
     runtime_nodes = _runtime_nodes(node_map, placement_views)
     # The role shapes what a team member is told to contribute, so the people
     # who own the agent need to see it.

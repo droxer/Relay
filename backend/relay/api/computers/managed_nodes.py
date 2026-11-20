@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from loguru import logger
 
 from ...security.request_auth import require_admin_session
@@ -16,6 +16,7 @@ from ...computer.node_agents import (
 from ..deps import AppContext, AppContextDep
 from ...security.user_handles import user_record
 from ..bodies import JsonBodyDep
+from .admin_nodes import with_owner_labels
 
 router = APIRouter()
 
@@ -62,8 +63,25 @@ def create_managed_node(
 
 
 @router.get("/admin/managed-nodes")
-def list_managed_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+def list_managed_nodes(
+    request: Request, ctx: AppContextDep, view: str = "",
+    limit: int = Query(20, ge=1, le=100), cursor: str | None = Query(None, max_length=256),
+) -> dict[str, Any]:
     require_admin_session(request, ctx.auth_store)
+    if view == "history":
+        before = None
+        if cursor is not None:
+            at, _, node_id = cursor.partition("|")
+            if not at or not node_id or "|" in node_id:
+                raise HTTPException(422, "Invalid Computer history cursor.")
+            before = at, node_id
+        rows = ctx.managed_node_store.list_deleted_nodes(limit=limit + 1, before=before)
+        page = rows[:limit]
+        next_cursor = None
+        if len(rows) > limit:
+            last = page[-1]
+            next_cursor = f"{last.get('updatedAt') or last['createdAt']}|{last['id']}"
+        return {"nodes": with_owner_labels(ctx, page), "nextCursor": next_cursor}
     # Deleting resources remain visible to the reconciler until provider
     # cleanup has converged.
     return {"nodes": ctx.managed_node_store.list_nodes(include_deleted=True)}

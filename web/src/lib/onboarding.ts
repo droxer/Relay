@@ -4,7 +4,7 @@ import type {
   DaemonNodeMonitorRecord,
   OnboardingCard,
   RelaySession,
-  UserAgent,
+  OnboardingAgentCandidate,
 } from "../types.js";
 import { isVisibleAgentRuntime } from "./agentRuntimeOrder.ts";
 import { agentsForThreadNode } from "./threadRuntime.ts";
@@ -37,12 +37,12 @@ export type OnboardingBlock = "computer_limit" | "no_ready_runtime";
 export type OnboardingInputs = {
   user: Pick<CurrentUser, "userId" | "effectiveMaxLocalComputers" | "onboarding">;
   nodes: readonly DaemonNodeMonitorRecord[];
-  agents: readonly Pick<UserAgent, "id" | "executorKind" | "placements" | "availability" | "enabled" | "deletedAt">[];
+  agents: readonly OnboardingAgentCandidate[];
   /** The user's own threads. */
   threads: readonly Pick<RelaySession, "status" | "agentRuns">[];
 };
 
-export type OnboardingAgent = Pick<UserAgent, "id" | "executorKind">;
+export type OnboardingAgent = Pick<OnboardingAgentCandidate, "id" | "executorKind">;
 export type OnboardingTarget = { nodeId: string; agent: OnboardingAgent };
 
 export type OnboardingComputer = { id: string; name: string; readyRuntimes: AgentName[] };

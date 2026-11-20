@@ -9,11 +9,15 @@ async function serveOffer(page: Page, theme: "light" | "dark"): Promise<Answer[]
   let answered = false;
   await page.route("**/api/**", async route => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
+    const { pathname: path, searchParams } = new URL(request.url());
     let body: unknown = { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme, language: "en", onboarding: { dismissedAt: new Date().toISOString() } } };
+    const offers = answered ? [] : [{ computerId: "device:review:mac", computerName: "Studio Mac", executorKinds: ["claude", "codex"] }];
+    if (path.endsWith("/agents") && searchParams.get("view") === "setup") {
+      body = { view: "setup", onboardingAgents: [], defaultAgentOffers: offers };
+    }
     if (path.endsWith("/agents/default-offers")) {
-      body = { offers: answered ? [] : [{ computerId: "device:review:mac", computerName: "Studio Mac", executorKinds: ["claude", "codex"] }] };
+      body = { offers };
     }
     if (request.method() === "POST" && path.includes("/agents/default-offers/")) {
       answers.push({ path, body: request.postDataJSON() });
@@ -46,9 +50,9 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
-test("skip declines every offered runtime", async ({ page }) => {
+test("settings shows the same default-agent offer and skip declines every runtime", async ({ page }) => {
   const answers = await serveOffer(page, "light");
-  await page.goto("/threads");
+  await page.goto("/settings/language");
 
   await page.getByRole("dialog").getByRole("button", { name: "Skip" }).click();
 

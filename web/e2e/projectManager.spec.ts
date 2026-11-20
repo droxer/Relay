@@ -10,13 +10,16 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     const session={id:'manager-thread',taskGoal:'Autumn launch · Project Lead',projectId:'launch',ownerUserId:'u',participantAgentIds:['ada'],participants:['human'],status:'completed',phase:'done',events:[],agentRuns:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
     const sessions=[session];
     let sent=0; let managerReads=0; let conversations=0;
+    const agentReads:string[]=[];
     const applications: unknown[]=[];const tasks: Array<Record<string,unknown>>=[];
     const proposal={id:'proposal',projectId:'launch',threadId:'manager-thread',agentId:'ada',runId:'run',state:'pending',revision:1,createdAt:stamp,operations:[{id:'0',kind:'create',key:'design',fields:{title:'Design login',description:'List accepted login states.',priority:'high'},after:[],afterTaskIds:[]}]};
     await page.route('**/api/**', async route => {
-      const path=new URL(route.request().url()).pathname;const method=route.request().method();
+      const {pathname:path, searchParams}=new URL(route.request().url());const method=route.request().method();
       let body: unknown={sessions,agents:[agent],teams:[],nodes:[],projects:[project],tasks,sandboxes:[],skills:[]};
       if(path.endsWith('/queue')) body={messages:[],paused:false};
       if(path.endsWith('/auth/me')) body={authenticated:true,user:{id:'u',userId:'u',username:'Fei',role:'user',theme:zh?'dark':'light',language:zh?'zh-CN':'en'}};
+      if(path.endsWith('/agents') && searchParams.get('view')==='summary') agentReads.push('roster');
+      if(path.endsWith('/agents/ada') && searchParams.get('view')==='badge') {agentReads.push('badge');body={agent};}
       if(path.endsWith('/manager/conversation') && method==='POST') {
         const threadId=`discussion-${++conversations}`;
         sessions.push({...session,id:threadId,taskGoal:''});
@@ -38,6 +41,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     await expect(page.getByRole('button',{name:zh?'对话':'Chat',exact:true})).toHaveCount(0);
     await expect(line.getByRole('button',{name:zh?'发起讨论':'Discuss',exact:true})).toBeVisible();
     expect(managerReads).toBe(0);
+    expect(agentReads).toEqual(['badge']);
     await page.screenshot({path:`../output/playwright/project-manager-line-${mobile?'mobile':'desktop'}-${zh?'zh-dark':'en'}.png`,fullPage:true});
     // A quick topic opens a new Thread with its question drafted, unsent.
     await line.getByRole('button',{name:zh?'选择讨论话题':'Start with a topic',exact:true}).click();

@@ -3,6 +3,7 @@ import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
 import { DEFAULT_PROJECT_PAGE_TAB, parseProjectPageTab, PROJECT_PAGE_TAB_ALIASES, PROJECT_PAGE_TABS } from "./projectPage.ts";
 import { readConnectionResult } from "../domain-types/connections.ts";
+import type { TaskListScope } from "../domain-types/tasks.ts";
 import {
   DEFAULT_ADMIN_SECTION,
   DEFAULT_SETTINGS_SECTION,
@@ -87,7 +88,7 @@ export type AppLocationState = {
   notFound?: boolean;
 };
 
-/** Full Task rows drive Home, work boards, and the open Thread's Task history. */
+/** Task summaries drive Home, work boards, and the open Thread's Task history. */
 export function needsTaskCollection(location: AppLocationState, search?: URLSearchParams): boolean {
   if (location.notFound || location.login || location.publicPage) return false;
   if (location.route === "projects") {
@@ -99,6 +100,19 @@ export function needsTaskCollection(location: AppLocationState, search?: URLSear
   }
   return ["home", "backlog", "routine"].includes(location.route)
     || (location.route === "main" && Boolean(location.sessionId));
+}
+
+export function taskListScope(location: AppLocationState, search: URLSearchParams): TaskListScope | undefined {
+  if (!needsTaskCollection(location, search) || location.sessionId) return undefined;
+  if (location.route === "home") return "home";
+  if (location.route === "backlog") return location.computerId ? "board" : "issues";
+  if (location.route === "routine") return "automations";
+  if (location.route !== "projects") return undefined;
+  if (search.get("task")) return "board";
+  const tab = parseProjectPageTab(search.get("tab"));
+  if (tab === "automations") return "automations";
+  if (tab === "dashboard") return "project-dashboard";
+  if (tab === "tasks") return "board";
 }
 
 /** Signed-out destinations beside `/login`. A signed-in visitor has no use

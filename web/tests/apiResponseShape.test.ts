@@ -105,7 +105,7 @@ describe("API response shape validation", () => {
     const secondRevision = "b".repeat(64);
     const snapshot = session({ agentRuns: [{ id: "run" }] });
     globalThis.fetch = async (input) => {
-      assert.match(String(input), /\?view=transcript$/);
+      assert.match(String(input), /\?view=transcript&window=compact$/);
       return new Response(JSON.stringify({
         ...snapshot, events: [firstEvent], eventCount: 51, eventStart: 50, eventOffset: 50, eventsRevision: firstRevision,
       }), { headers: { ETag: 'W/"first"' } });

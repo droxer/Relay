@@ -91,6 +91,181 @@ def _login_alice(client: TestClient) -> None:
     )
 
 
+def test_project_summary_defers_context_to_detail(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap(client)
+    node = _register_computer(app, "node_alice_summary", "summary-machine")
+    _login_alice(client)
+    context = ("Keep project conventions in the context editor. " * 50).strip()
+    created = client.post("/api/v1/projects", json={
+        "name": "Project directory", "context": context, "daemonNodeId": node["id"], "members": [],
+    })
+    assert created.status_code == 201, created.text
+    project = created.json()["project"]
+    summaries = client.get("/api/v1/projects?view=summary")
+    assert summaries.status_code == 200
+    summary, = summaries.json()["projects"]
+    assert summary["id"] == project["id"]
+    assert summary["version"] == project["version"]
+    assert summary["contextSummary"] == {"suggestionCount": 0}
+    assert "context" not in summary
+    assert len(summaries.content) < len(context)
+    assert client.get("/api/v1/projects").json()["projects"][0]["context"] == context
+    assert client.get(f"/api/v1/projects/{project['id']}").json()["project"]["context"] == context
+
+
+def test_project_directory_defers_member_contracts_and_setup_proposals(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap(client)
+    node = _register_computer(app, "node_alice_directory", "directory-machine")
+    agent = _agent(client, app, node, "Directory engineer", "codex")
+    _login_alice(client)
+    created = client.post("/api/v1/projects", json={
+        "name": "Directory", "context": "Full context", "description": "Full description", "goal": "Full goal",
+        "daemonNodeId": node["id"], "leadAgentId": agent["id"], "members": [{
+            "agentId": agent["id"], "role": "implementer", "enabled": True,
+            "responsibilities": "Write the release plan", "instructions": "Private instructions",
+        }],
+    })
+    assert created.status_code == 201, created.text
+    project = created.json()["project"]
+    setup = {
+        "state": "proposed", "mode": "plan", "agentId": agent["id"], "threadId": "setup-thread",
+        "startedAt": project["createdAt"], "intent": "Draft the release",
+        "proposal": {"tasks": [{"title": "Review the release", "description": "Detailed proposal"}]},
+    }
+    project = app.state.project_store.update_project(project["id"], {"setup": setup}, expected_version=project["version"])
+    path = "/api/v1/projects?view=directory"
+    result = client.get(path)
+    assert result.status_code == 200
+    row, = result.json()["projects"]
+    assert row["view"] == "directory"
+    assert row["id"] == project["id"] and row["version"] == project["version"]
+    assert row["leadAgentId"] == agent["id"]
+    assert row["members"] == [{
+        "agentId": agent["id"], "role": "implementer", "enabled": True, "projectManager": True,
+    }]
+    assert row["setupSummary"] == {
+        "state": "proposed", "mode": "plan", "threadId": "setup-thread", "hasProposal": True,
+    }
+    assert "contextSummary" not in row
+    assert not {"context", "goal", "description", "setup"} & row.keys()
+    index_path = "/api/v1/projects?view=index"
+    index = client.get(index_path)
+    assert index.json() == {"projects": [{
+        "id": project["id"], "name": project["name"], "version": project["version"],
+        "enabled": True, "memberCount": 1,
+    }]}
+    assert client.get(index_path, headers={"If-None-Match": index.headers["etag"]}).status_code == 304
+    assert TestClient(app).get(index_path, headers={"If-None-Match": index.headers["etag"]}).status_code == 401
+    unchanged = client.get(path, headers={"If-None-Match": result.headers["etag"]})
+    assert unchanged.status_code == 304 and not unchanged.content
+    detail_path = f"/api/v1/projects/{project['id']}"
+    assert client.get(f"{detail_path}?view=directory").json() == {"project": row}
+    detail = client.get(detail_path)
+    assert detail.headers["cache-control"] == "no-store"
+    assert detail.json()["project"] == project
+    assert client.get(detail_path, headers={"If-None-Match": detail.headers["etag"]}).status_code == 304
+    assert "Private instructions" in client.get("/api/v1/projects?view=summary").text
+    assert TestClient(app).get(detail_path, headers={"If-None-Match": detail.headers["etag"]}).status_code == 401
+
+
+def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap(client)
+    node = _register_computer(app, "node_alice_member_patch", "member-patch-machine")
+    lead = _agent(client, app, node, "Lead engineer", "codex")["id"]
+    reviewer = _agent(client, app, node, "Reviewer", "codex")["id"]
+    new_member = _agent(client, app, node, "Builder", "codex")["id"]
+    _login_alice(client)
+    created = client.post("/api/v1/projects", json={
+        "name": "Member edits", "daemonNodeId": node["id"], "leadAgentId": lead,
+        "members": [
+            {"agentId": lead, "role": "implementer", "responsibilities": "Lead", "instructions": "Keep this"},
+            {"agentId": reviewer, "role": "reviewer", "responsibilities": "Review", "instructions": "Retain this too"},
+        ],
+    })
+    assert created.status_code == 201, created.text
+    base = created.json()["project"]
+    path = f"/api/v1/projects/{base['id']}"
+    update = {"op": "update", "agentId": lead, "fields": {"responsibilities": "  Update the release plan  "}}
+    response = client.patch(path, json={"expectedVersion": base["version"], "memberChange": update})
+    assert response.status_code == 200, response.text
+    edited = response.json()["project"]
+    assert edited["members"][0] == {**base["members"][0], "responsibilities": "Update the release plan"}
+    assert edited["members"][1] == base["members"][1]
+
+    stale = client.patch(path, json={
+        "expectedVersion": base["version"], "memberChange": {"op": "remove", "agentId": new_member},
+    })
+    assert stale.status_code == 409 and stale.json()["detail"] == "project_version_conflict"
+
+    for invalid in (
+        {"members": base["members"], "memberChange": update},
+        {"memberChange": {**update, "fields": {"agentId": reviewer}}},
+        {"memberChange": {"op": "add", "agentId": reviewer, "fields": {"role": "reviewer", "responsibilities": "Review"}}},
+        {"memberChange": {"op": "update", "agentId": new_member, "fields": {"instructions": None}}},
+        {"memberChange": {"op": "remove", "agentId": lead}},
+    ):
+        assert client.patch(path, json={"expectedVersion": edited["version"], **invalid}).status_code == 400
+    assert client.get(path).json()["project"] == edited
+
+    compact_path = f"{path}?view=member-update"
+    added = client.patch(compact_path, json={
+        "expectedVersion": edited["version"],
+        "memberChange": {"op": "add", "agentId": new_member, "fields": {
+            "role": "implementer", "responsibilities": "Build", "instructions": "Run the tests",
+        }},
+    })
+    assert added.status_code == 200, added.text
+    after_add = client.get(path).json()["project"]
+    receipt = added.json()["projectMemberUpdate"]
+    assert receipt["baseVersion"] == edited["version"]
+    assert receipt["version"] == after_add["version"]
+    assert receipt["memberChanges"] == [{
+        "op": "add", "agentId": new_member,
+        "fields": {"role": "implementer", "responsibilities": "Build", "instructions": "Run the tests", "enabled": True},
+    }]
+    assert [member["agentId"] for member in after_add["members"]] == [lead, reviewer, new_member]
+
+    removed = client.patch(compact_path, json={
+        "expectedVersion": after_add["version"], "leadAgentId": new_member,
+        "memberChange": {"op": "remove", "agentId": lead},
+    })
+    assert removed.status_code == 200, removed.text
+    after_remove = client.get(path).json()["project"]
+    assert after_remove["managerAgentId"] == after_remove["leadAgentId"] == new_member
+    assert after_remove["members"] == [base["members"][1], {**after_add["members"][2], "projectManager": True}]
+    assert removed.json()["projectMemberUpdate"]["memberChanges"] == [
+        {"op": "remove", "agentId": lead},
+        {"op": "update", "agentId": new_member, "fields": {"projectManager": True}},
+    ]
+    cleared = client.patch(compact_path, json={
+        "expectedVersion": after_remove["version"],
+        "memberChange": {"op": "update", "agentId": new_member, "fields": {"instructions": None}},
+    })
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["projectMemberUpdate"]["memberChanges"] == [
+        {"op": "update", "agentId": new_member, "fields": {"instructions": None}},
+    ]
+    assert "instructions" not in client.get(path).json()["project"]["members"][1]
+
+    reassigned = client.patch(compact_path, json={
+        "expectedVersion": cleared.json()["projectMemberUpdate"]["version"], "leadAgentId": reviewer,
+    })
+    assert reassigned.status_code == 200, reassigned.text
+    assert reassigned.json()["projectMemberUpdate"]["memberChanges"] == [
+        {"op": "update", "agentId": reviewer, "fields": {"projectManager": True}},
+        {"op": "update", "agentId": new_member, "fields": {"projectManager": None}},
+    ]
+
+
 def test_user_creates_and_updates_computer_bound_project(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

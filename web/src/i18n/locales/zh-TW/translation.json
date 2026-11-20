@@ -1224,6 +1224,8 @@
     "place_work_here": "放到此計算機"
   },
   "routine": {
+    "loading": "正在載入自動化…",
+    "load_failed": "無法載入自動化。",
     "schedule": "觸發器",
     "enabled_needs_target": "啟用此自動化前，請選擇專案、智慧體或團隊。",
     "project_hint": "可選。不選專案時，每次執行共用該自動化自己的工作區。",
@@ -1650,6 +1652,7 @@
       "history_description": "已刪除的託管電腦會保留，用於審計和配置歷史。",
       "history_deleted": "刪除於 {{time}}",
       "history_count": "{{count}} 臺已刪除的電腦",
+      "history_load_more": "載入較早的電腦記錄",
       "history_delete_action": "永久刪除",
       "history_deleting": "正在刪除…",
       "history_delete_confirm": "永久刪除 {{name}}（{{id}}）？",
@@ -2412,6 +2415,8 @@
     "bundle": "技能包",
     "bytes_other": "{{value}} 位元組",
     "revision_history": "版本記錄",
+    "load_older_revisions": "載入較早的版本",
+    "revision_history_load_failed": "無法載入較早的版本。",
     "stable_revision": "穩定版",
     "promote_revision": "設為穩定版",
     "promote_revision_label": "將 v{{revision}} 設為穩定版",
@@ -2892,6 +2897,8 @@
     "operator_contains": "包含"
   },
   "issues": {
+    "loading": "正在載入任務…",
+    "load_failed": "無法載入任務。",
     "clear_assignment": "清除分配",
     "title": "任務",
     "sub_other": "{{count}} 個任務",
@@ -3936,6 +3943,7 @@
     "start": "開始執行",
     "loading": "正在加載工作流…",
     "load_failed": "無法加載工作流。",
+    "version_conflict": "編輯期間工作流程已更新。當前草稿仍在，請重新開啟工作流程以載入最新版本。",
     "empty": "尚無工作流程。可使用此專案電腦上的團隊建立。",
     "empty_read_only": "尚無可用工作流程。需要此專案電腦上的團隊才能建立。",
     "steps_of": "{{name}} 的步驟",

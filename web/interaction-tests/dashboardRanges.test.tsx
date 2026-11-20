@@ -17,7 +17,7 @@ function show() {
   vi.mocked(getDashboardTokens).mockClear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(<QueryClientProvider client={client}>
-    <DashboardView nodes={[]} users={[]} metrics={{ total: 0, queued: 0 } as NodeMetrics} onManageNodes={() => {}} />
+    <DashboardView nodes={[]} metrics={{ total: 0, queued: 0 } as NodeMetrics} onManageNodes={() => {}} />
   </QueryClientProvider>);
   return { client, view };
 }

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response
 from loguru import logger
 
 from ...tasks.review import task_review
@@ -29,11 +31,13 @@ from ...teams.dispatch import TeamDispatchError, task_thread_ownership
 from ..actors import (
     assignee_user_id_for_task,
     get_task_for_actor,
+    get_task_header_for_actor,
     get_task_or_404,
     owner_user_id_for_create,
     request_actor,
 )
 from ..bodies import JsonBodyDep, string_field
+from ..conditional_get import private_conditional_json
 from ..deps import AppContext, AppContextDep
 from ..projects.access import ensure_task_project_writable, project_for_owner, project_session_fields
 from ..schemas import (
@@ -44,6 +48,9 @@ from ..schemas import (
     openapi_body,
 )
 from .prerequisites import task_with_prerequisite_view, with_waiting_on, with_dependency_summaries
+from .automation_lists import read_automation_page
+from .issues import read_issue_page, task_page_number
+from .thread_tasks import read_thread_tasks
 from ..connections.routes import connection_errors, service as connection_service
 from ...persistence.engine import store_transaction
 from .payloads import (
@@ -80,25 +87,73 @@ def task_list_limit(raw_limit: str | None) -> int | None:
     return min(max(1, requested_limit), TASK_LIST_MAX_LIMIT)
 
 
+def _user_task_flow(ctx: AppContext, user_id: str) -> dict[str, Any]:
+    return {
+        "flowPolicy": {"wipLimit": ctx.task_store.wip_limit_for_user(user_id), "scope": "user"},
+        "flowUsage": {"userId": user_id, "occupied": ctx.task_store.count_wip(user_id)},
+    }
+
+
 @router.get("/tasks")
 def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     view = request.query_params.get("view")
-    if view == "summary" and request.query_params.get("scope") == "home":
-        rows, projects = ctx.task_store.home_tasks(actor["userId"])
+    if view == "summary" and (thread_id := request.query_params.get("threadId")):
+        return read_thread_tasks(ctx, actor, thread_id)
+    scope = request.query_params.get("scope")
+    layout = request.query_params.get("layout")
+    if view == "summary" and scope in ("issues", "board") and layout in ("list", "board"):
+        return read_issue_page(ctx, actor, request, layout, workspace_board=scope == "board")
+    if view == "summary" and scope == "automations" and layout == "list":
+        return read_automation_page(ctx, actor, request)
+    if view == "summary" and scope == "project-dashboard":
+        project_id = request.query_params.get("projectId", "")
+        if not project_id:
+            raise HTTPException(400, "projectId is required.")
+        raw_today = request.query_params.get("today")
+        try:
+            today = date.fromisoformat(raw_today) if raw_today else datetime.now(UTC).date()
+        except ValueError as error:
+            raise HTTPException(400, "Invalid calendar date.") from error
+        return {
+            "tasks": [], "projectDashboard": ctx.task_store.project_dashboard(actor["userId"], project_id, today),
+            **_user_task_flow(ctx, actor["userId"]),
+        }
+    if view == "prerequisite-choices":
+        project_id = request.query_params.get("projectId", "")
+        project = project_for_owner(ctx, project_id, actor["userId"], require_enabled=False)
+        if project and (task_id := request.query_params.get("taskId")):
+            task = get_task_header_for_actor(ctx.task_store, task_id, actor)
+            if task.get("projectId") != project["id"] or task.get("isRoutine"):
+                raise HTTPException(404, "Task not found in this Project.")
+            query = request.query_params.get("q", "").strip().lower()
+            if "\x00" in query:
+                raise HTTPException(400, "Invalid prerequisite search.")
+            return ctx.task_store.prerequisite_choice_page(
+                actor["userId"], project["id"], task_id, query, task_page_number(request.query_params.get("page", "")),
+            )
+        return {"tasks": ctx.task_store.prerequisite_choices(actor["userId"], project["id"])} if project else {"tasks": []}
+    if view == "summary" and scope == "home":
+        rows, projects, untriaged = ctx.task_store.home_tasks(actor["userId"])
         tasks = with_dependency_summaries(ctx, actor, with_waiting_on(ctx, [public_task(task) for task in rows]))
         return {
             "tasks": [{"description": "", **{name: value for name, value in task.items() if name in HOME_TASK_FIELDS}}
                       for task in tasks],
             "homeProjects": projects,
+            "homeUntriaged": untriaged,
         }
     summary_view = view == "summary"
     limit = task_list_limit(request.query_params.get("limit"))
     if summary_view and hasattr(ctx.task_store, "list_task_summaries"):
+        computer_id = request.query_params.get("computerId") or None
+        if computer_id and "\x00" in computer_id:
+            raise HTTPException(400, "Invalid Computer id.")
         tasks = ctx.task_store.list_task_summaries(
             user_id=actor["userId"],
             limit=limit,
             project_id=request.query_params.get("projectId") or None,
+            scope=scope,
+            computer_id=computer_id,
         )
     else:
         tasks = ctx.task_store.list_tasks(
@@ -107,8 +162,7 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         )
     return {
         "tasks": with_dependency_summaries(ctx, actor, with_waiting_on(ctx, [public_task(task) for task in tasks])),
-        "flowPolicy": {"wipLimit": ctx.task_store.wip_limit_for_user(actor["userId"]), "scope": "user"},
-        "flowUsage": {"userId": actor["userId"], "occupied": ctx.task_store.count_wip(actor["userId"])},
+        **_user_task_flow(ctx, actor["userId"]),
     }
 
 
@@ -146,13 +200,25 @@ def create_task(
     return public_task(task)
 
 
-@router.get("/tasks/{task_id}")
-def get_task(task_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
+@router.get("/tasks/{task_id}", response_model=None)
+def get_task(task_id: str, request: Request, ctx: AppContextDep) -> Response | dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(
-        ctx.task_store, task_id, actor, record_view=request.query_params.get("view") == "record",
-    )
-    return task_with_prerequisite_view(ctx, public_task(task))
+    record_view = request.query_params.get("view") == "record"
+    task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=record_view)
+    if (record_view and task.get("ownerUserId") and not task.get("projectId") and not task.get("computerId")
+            and not (task.get("workspaceBinding") or {}).get("computerId") and task.get("linkedSessionIds")):
+        identity = ctx.task_store.linked_computer(task["ownerUserId"], task["linkedSessionIds"])
+        if identity:
+            task = {**task, "linkedComputerId": identity}
+    if record_view and (task.get("isRoutine") or task.get("sourceRoutineId")):
+        task = {**task, **ctx.task_store.automation_record_context(actor["userId"], task)}
+    result = task_with_prerequisite_view(ctx, public_task(task), include_summaries=record_view)
+    if not record_view:
+        return result
+    # The record's Runs and Activity tabs read their own pages.
+    result.pop("occurrenceIds", None)
+    result.pop("lastActivity", None)
+    return private_conditional_json(request, result)
 
 
 @router.patch("/tasks/{task_id}", openapi_extra=openapi_body(TaskPatchBody))

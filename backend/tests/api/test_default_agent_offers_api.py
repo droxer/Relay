@@ -90,6 +90,37 @@ def test_agent_roster_can_include_offers_without_repeating_inventory_reads(alice
     path = "/api/v1/agents?include=default-offers"
     assert client.get(path).json() == {"agents": [], "defaultAgentOffers": offers}
     assert calls == ["agents", "inventory"]
+    assert client.get(f"{path}&view=summary").json() == {
+        "agents": [], "defaultAgentOffers": offers, "view": "summary", "searchesInstructions": False,
+    }
+    assert calls == ["agents", "inventory"]
+    assert TestClient(client.app).get(path).status_code == 401
+
+
+def test_setup_view_returns_only_onboarding_candidates_and_offers(alice) -> None:
+    client, computer = alice
+    accepted = client.post(f"{OFFERS}/accept", json={"computerId": computer, "executorKinds": ["codex"]})
+    assert accepted.status_code == 201, accepted.text
+    assert client.post("/api/v1/agents", json={
+        "computerId": computer, "executorKind": "codex", "displayName": "Another ready agent", "defaultRole": "reviewer",
+    }).status_code == 201
+    summary = client.get("/api/v1/agents?view=summary").json()["agents"]
+    candidates = [agent for agent in summary if agent["availability"] in ("ready", "busy")]
+    assert len(candidates) == 2
+    path = "/api/v1/agents?include=default-offers&view=setup"
+    response = client.get(path)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["view"] == "setup"
+    assert data["defaultAgentOffers"] == client.get(OFFERS).json()["offers"]
+    [candidate] = data["onboardingAgents"]
+    assert candidate == {
+        **{key: candidates[0][key] for key in ("id", "enabled", "executorKind", "availability")},
+        "placements": [{key: placement[key] for key in ("daemonNodeId", "runtimeNodeId", "desiredState") if key in placement}
+                       for placement in candidates[0]["placements"] if placement["desiredState"] == "active"],
+    }
+    assert "agents" not in data
+    assert client.get(path, headers={"If-None-Match": response.headers["etag"]}).status_code == 304
     assert TestClient(client.app).get(path).status_code == 401
 
 

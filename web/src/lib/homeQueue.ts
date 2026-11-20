@@ -16,7 +16,7 @@
  * that happens to it brings it back.
  */
 import type { PermissionRequest, TaskAwaiting } from "relay-core";
-import type { DaemonNodeMonitorRecord, RelaySession, RelayTaskListItem } from "../types.js";
+import type { DaemonNodeMonitorRecord, HomeUntriagedSummary, RelaySession, RelayTaskListItem } from "../types.js";
 import { dueTone } from "./backlog.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
 import { threadNextSteps } from "./nextSteps.ts";
@@ -44,7 +44,7 @@ export type HomeItem =
   | HomeItemBase & { kind: "wait"; task: RelayTaskListItem; awaiting: TaskAwaiting }
   | HomeItemBase & { kind: "review" | "blocked" | "overdue"; task: RelayTaskListItem }
   | HomeItemBase & { kind: "offline"; node: DaemonNodeMonitorRecord; waitingToStart: number }
-  | HomeItemBase & { kind: "untriaged"; tasks: RelayTaskListItem[] }
+  | HomeItemBase & { kind: "untriaged"; count: number }
   | HomeItemBase & { kind: "suggested"; session: RelaySession; step: string };
 
 export type HomeItemKind = HomeItem["kind"];
@@ -56,6 +56,7 @@ export interface HomeSnooze {
 
 export interface HomeQueueInput {
   tasks: readonly RelayTaskListItem[];
+  untriaged?: HomeUntriagedSummary | null;
   sessions: readonly RelaySession[];
   nodes: readonly DaemonNodeMonitorRecord[];
   userId: string;
@@ -70,7 +71,7 @@ export function homeQueue(input: HomeQueueInput): HomeItem[] {
     ...permissionItems(input.sessions, input.userId),
     ...taskItems(mine, input.today),
     ...offlineItems(input.nodes, mine, input.userId),
-    ...untriagedItems(mine),
+    ...untriagedItems(input.untriaged === undefined ? summarizeUntriaged(mine) : input.untriaged),
     ...suggestionItems(input.sessions, input.userId),
   ];
   const snoozed = new Map((input.snoozes ?? []).map((snooze) => [snooze.key, snooze.stamp]));
@@ -153,18 +154,22 @@ function offlineItems(
     });
 }
 
-function untriagedItems(mine: readonly RelayTaskListItem[]): HomeItem[] {
+function summarizeUntriaged(mine: readonly RelayTaskListItem[]): HomeUntriagedSummary | null {
   const intake = mine.filter(issueNeedsProject);
-  if (!intake.length) return [];
   const created = intake.map((task) => task.createdAt).sort();
+  return created.length ? { count: created.length, firstCreatedAt: created[0]!, lastCreatedAt: created.at(-1)! } : null;
+}
+
+function untriagedItems(intake: HomeUntriagedSummary | null): HomeItem[] {
+  if (!intake) return [];
   return [{
     kind: "untriaged",
     key: "untriaged",
     // New intake brings a snoozed pile back; triaging some of it does not.
-    stamp: created.at(-1)!,
+    stamp: intake.lastCreatedAt,
     tier: "worth_doing",
-    since: created[0],
-    tasks: intake,
+    since: intake.firstCreatedAt,
+    count: intake.count,
   }];
 }
 

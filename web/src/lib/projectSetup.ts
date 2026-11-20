@@ -2,12 +2,15 @@ import type {
   ProjectRole,
   ApplySetupTasksInput,
   ProjectRecord,
+  ProjectListItem,
   ProjectSetup,
   ProjectSetupMemberIssue,
   ProjectSetupMode,
   ProjectSetupProposal,
+  ProjectSetupSummary,
   UpdateProjectInput,
 } from "../types.ts";
+import { isProjectDirectoryEntry } from "./projectDirectory.ts";
 
 /** Longest provisional name; the backend caps names at 120. */
 const PROVISIONAL_NAME_MAX = 60;
@@ -62,7 +65,7 @@ export function provisionalProjectName(intent: string, fallback: string): string
 }
 
 /** The setup states the review panel shows; resolved setups stay out of the way. */
-export function setupNeedsAttention(setup: ProjectSetup | undefined | null): setup is ProjectSetup {
+export function setupNeedsAttention<T extends Pick<ProjectSetup, "state">>(setup: T | undefined | null): setup is T {
   return Boolean(setup && (setup.state === "drafting" || setup.state === "proposed" || setup.state === "failed"));
 }
 
@@ -182,10 +185,15 @@ function changed<K extends "goal" | "description" | "context">(key: K, draft: st
  *  thread only drafts; applying happens on the project dashboard, so the
  *  thread points there until the owner applies or dismisses it. */
 export function setupAwaitingApply(
-  project: ProjectRecord | null | undefined,
+  project: ProjectListItem | null | undefined,
   threadId: string | null | undefined,
-): ProjectSetup | null {
-  const setup = project?.setup;
-  if (!setup || !threadId || setup.threadId !== threadId) return null;
+): ProjectSetup | ProjectSetupSummary | null {
+  if (!project || !threadId) return null;
+  if (isProjectDirectoryEntry(project)) {
+    const setup = project.setupSummary;
+    return setup?.threadId === threadId && setup.state === "proposed" && setup.hasProposal ? setup : null;
+  }
+  const setup = project.setup;
+  if (!setup || setup.threadId !== threadId) return null;
   return setup.state === "proposed" && setup.proposal ? setup : null;
 }

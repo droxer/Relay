@@ -87,7 +87,7 @@ it("loads older Activity on demand and uses the earlier status to label a resume
   expect(screen.getAllByRole("listitem").map((row) => row.getAttribute("data-status"))).toEqual(["review", "running"]);
   fireEvent.click(screen.getByRole("button", { name: "list.pagination_next" }));
   await screen.findByText("backlog.history.created");
-  expect(listTaskEvents).toHaveBeenLastCalledWith("task_1", { activity: true, before: 12 }, expect.any(AbortSignal));
+  expect(listTaskEvents).toHaveBeenLastCalledWith("task_1", { view: "activity", before: 12 }, expect.any(AbortSignal));
   fireEvent.click(screen.getByRole("button", { name: "list.pagination_previous" }));
   await screen.findByText("thread.lifecycle.resumed");
 });

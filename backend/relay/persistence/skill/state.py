@@ -51,6 +51,9 @@ class SkillStoreState:
         def _replay(self, conn: Any, skill_id: str) -> dict[str, Any]:
             ...
 
+        def _replay_matching(self, conn: Any, predicate: Any) -> list[dict[str, Any]]:
+            ...
+
         @staticmethod
         def _integrity_error(error: IntegrityError) -> SkillValidationError:
             ...

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
 
 from ...accounts.user_lifecycle import soft_delete_user as soft_delete_user_cascade
+from ...accounts.user_directory import USER_FILTERS, USER_SORTS, user_directory_page
 from ...computer.limits import decorate_user_limits
+from ...computer.names import present_computer_inventory
 from ...core.email_address import normalize_email_address
 from ...core.task_capacity import normalize_task_capacity
 from ...tasks.flow import wip_limit
@@ -21,6 +23,7 @@ from ...security.request_auth import require_admin_session
 from ...security.user_handles import normalize_user_handle, resolve_user_id, user_record
 from ..bodies import JsonBodyDep, string_field
 from ..computers.admin_nodes import public_control_panel_node
+from ..conditional_get import private_conditional_json
 from ..deps import AppContextDep
 
 router = APIRouter()
@@ -83,9 +86,32 @@ def create_department(
     return {"department": department}
 
 
-@router.get("/admin/users")
-def list_users(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+_USER_COMPUTER_FIELDS = ("id", "displayName", "userId", "nodeLocation", "status", "online", "stale", "lastSeenAt")
+
+
+@router.get("/admin/users", response_model=None)
+def list_users(request: Request, ctx: AppContextDep, view: str = "") -> dict[str, Any] | Response:
     require_admin_session(request, ctx.auth_store)
+    if view == "web":
+        params = request.query_params
+        node_rows = present_computer_inventory(ctx, ctx.registry.monitor_nodes())
+        user_filter = params.get("filter", "all")
+        sort = params.get("sort", "")
+        raw_page = params.get("page", "")
+        page = int(raw_page) if raw_page.isascii() and raw_page.isdecimal() and len(raw_page) <= 16 else 1
+        user_ids, nodes, metadata = user_directory_page(
+            ctx.auth_store.user_directory_fields(), node_rows,
+            query=params.get("q", "").strip().lower(), user_filter=user_filter if user_filter in USER_FILTERS else "all",
+            sort=sort if sort.removeprefix("-") in USER_SORTS else "", page=page,
+        )
+        usage = metadata.pop("localUsage")
+        users = ctx.auth_store.list_users(user_ids=user_ids) if user_ids else []
+        by_id = {user["id"]: user for user in _with_task_capacity(ctx, users, local_usage=usage)}
+        return private_conditional_json(request, {
+            **metadata,
+            "users": [by_id[user_id] for user_id in user_ids if user_id in by_id],
+            "nodes": [{key: node[key] for key in _USER_COMPUTER_FIELDS if key in node} for node in nodes],
+        })
     return {"users": _user_records(ctx)}
 
 
@@ -270,8 +296,10 @@ def create_user(
     }
 
 
-def _with_task_capacity(ctx: Any, users: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _with_task_capacity(
+    ctx: Any, users: list[dict[str, Any]], *, local_usage: dict[str, int] | None = None,
+) -> list[dict[str, Any]]:
     default = wip_limit()
     return [{**user, "maxConcurrentTasks": user.get("maxConcurrentTasks"),
              "effectiveMaxConcurrentTasks": user.get("maxConcurrentTasks") or default}
-            for user in decorate_user_limits(ctx, users)]
+            for user in decorate_user_limits(ctx, users, local_usage=local_usage)]

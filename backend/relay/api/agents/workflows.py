@@ -4,13 +4,22 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.responses import Response
 
 from ...persistence.sql import names_no_uuid_row
-from ...core.workflows import team_workflows, project_workflow_definition, workflow_definition, workflow_execution_snapshot, workflow_catalog
+from ...core.workflows import (
+    project_workflow_definition,
+    team_workflows,
+    workflow_catalog,
+    workflow_definition,
+    workflow_execution_snapshot,
+    workflow_step_agent_ids,
+)
 from ...security.request_auth import require_user_session
 from ...teams.workflow import validate_workflow_write, validate_team_definition
 from ..actors import chat_service_user_header
 from ..bodies import JsonBodyDep
+from ..conditional_get import private_conditional_json
 from ..deps import AppContextDep
 
 router = APIRouter()
@@ -34,6 +43,32 @@ def owned_workflow_team(request: Request, ctx: AppContextDep, team_id: str) -> d
 def list_workflows(team_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     team = owned_workflow_team(request, ctx, team_id)
     return {'workflows': team_workflows(team), 'workflowOptions': workflow_catalog(team)}
+
+
+@router.get('/teams/{team_id}/workflow-choices')
+def list_workflow_choices(team_id: str, request: Request, ctx: AppContextDep) -> Response:
+    team = owned_workflow_team(request, ctx, team_id)
+    owner, computer = team['ownerUserId'], team.get('computerId')
+    linked_project_ids = {
+        item['projectId'] for item in team.get('workflows', [])
+        if item.get('projectId') and not item.get('ownerTeamId')
+    }
+    # Legacy workflow Teams can still display their original Project.
+    if team.get('projectId') and team.get('workflowSteps'):
+        linked_project_ids.add(team['projectId'])
+    projects = ctx.project_store.workflow_projects(owner, computer, linked_project_ids)
+    eligible_projects = {project_id for project_id, _, eligible in projects if eligible}
+    members = set(team['memberAgentIds'])
+    choices = [
+        {key: item[key] for key in ('id', 'name', 'projectId')}
+        for item in ctx.workflow_store.list_workflows(owner, project_ids=eligible_projects)
+        if item['enabled'] and not item.get('ownerTeamId') and members.issuperset(workflow_step_agent_ids(item))
+    ]
+    visible_project_ids = linked_project_ids | {item['projectId'] for item in choices}
+    return private_conditional_json(request, {
+        'workflows': choices,
+        'projects': [{'id': project_id, 'name': name} for project_id, name, _ in projects if project_id in visible_project_ids],
+    })
 
 
 def _save(team: dict[str, Any], body: dict[str, Any], ctx: AppContextDep,

@@ -14,6 +14,7 @@ export function taskComputer(task: RelayTaskListItem, nodes: readonly NodeLike[]
   if (task.projectId) return null;
   if (task.workspaceBinding?.computerId) return task.workspaceBinding.computerId;
   if (task.computerId) return task.computerId;
+  if (task.linkedComputerId) return task.linkedComputerId;
   // Older records predate explicit scope: recover only from recorded execution
   // without choosing an arbitrary Computer.
   for (const id of [...(task.linkedSessionIds ?? [])].reverse()) {

@@ -14,6 +14,7 @@ export function useTaskQueryRevision(
   taskId: string | null,
   revision: string | undefined,
   fetching: boolean,
+  matchesRevision = false,
 ): void {
   const queryClient = useQueryClient();
   useEffect(() => {
@@ -33,10 +34,10 @@ export function useTaskQueryRevision(
       if (revisions.get(key) === revision || fetching) return;
       revisions.set(key, revision);
     }
-    if (revision === undefined) return;
+    if (revision === undefined || matchesRevision) return;
     void queryClient.invalidateQueries(
       { queryKey: [collection, taskId] },
       { cancelRefetch: false },
     );
-  }, [collection, fetching, queryClient, revision, taskId]);
+  }, [collection, fetching, matchesRevision, queryClient, revision, taskId]);
 }

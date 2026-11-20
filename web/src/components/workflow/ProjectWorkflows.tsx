@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { startProjectWorkflow } from "../../api";
 import { useTeams } from "../../hooks/useTeams";
 import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
-import type { Workflow, AgentTeam, ProjectRecord, UserAgent } from "../../types";
+import { workflowOptions } from "../../lib/workflowSelection";
+import type { WorkflowPreview, AgentTeam, ProjectListItem, UserAgent } from "../../types";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
@@ -14,10 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActionAdd, ActionStart, ICON } from "../icons";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
-import { WorkflowEditor } from "./WorkflowEditor";
+import { WorkflowEditorForPreview } from "./WorkflowEditor";
 
 type Props = {
-  project: ProjectRecord;
+  project: ProjectListItem;
   agents: UserAgent[];
   userId?: string;
   readOnly: boolean;
@@ -29,16 +30,16 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
   const { teams } = useTeams(userId);
   const query = useProjectWorkflows(project.id);
   const workflows = useMemo(() => query.data?.workflows ?? [], [query.data]);
-  const [editing, setEditing] = useState<{ workflow: Workflow | null } | null>(null);
-  const [starting, setStarting] = useState<Workflow | null>(null);
+  const [editing, setEditing] = useState<{ workflow: WorkflowPreview | null } | null>(null);
+  const [starting, setStarting] = useState<WorkflowPreview | null>(null);
   const canManage = Boolean(userId) && userId === project.ownerUserId && !readOnly;
   const canCreate = canManage && project.members.some(member => member.enabled);
   const agentName = (id: string) => agents.find(agent => agent.id === id)?.displayName ?? t("project.member_unavailable");
-  const linkedTeams = (workflow: Workflow) => teams.filter(team => team.enabled && !team.deletedAt
-    && team.workflows?.some(item => item.id === workflow.id)
+  const linkedTeams = (workflow: WorkflowPreview) => teams.filter(team => team.enabled && !team.deletedAt
+    && workflowOptions(team).some(item => item.id === workflow.id)
     && workflow.workflowSteps.every(step => team.memberAgentIds.includes(step.agentId)));
   // Approvals are named only when there are some; "0 approvals" is noise.
-  const processMeta = (workflow: Workflow) => {
+  const processMeta = (workflow: WorkflowPreview) => {
     const gates = workflow.workflowSteps.filter(step => step.requiresApproval).length;
     const steps = t("workflow.step_count", { count: workflow.workflowSteps.length });
     return gates ? `${steps} · ${t("workflow.approval_count", { count: gates })}` : steps;
@@ -78,7 +79,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
         })}
       </ul>}
     {canManage ? <>
-      <WorkflowEditor open={editing !== null} project={project} workflow={editing?.workflow ?? null} teams={teams} agents={agents} onClose={() => setEditing(null)} />
+      <WorkflowEditorForPreview open={editing !== null} project={project} workflow={editing?.workflow ?? null} teams={teams} agents={agents} onClose={() => setEditing(null)} />
       <WorkflowRunStarter key={starting?.id ?? "closed"} workflow={starting} teams={starting ? linkedTeams(starting) : []} project={project} onClose={() => setStarting(null)} onStarted={sid => { setStarting(null); onOpenThread(sid); }} />
     </> : null}
   </section>;
@@ -100,9 +101,9 @@ function newRequestId(): string {
 function WorkflowRunStarter({
   workflow, project, teams, onClose, onStarted,
 }: {
-  workflow: Workflow | null;
+  workflow: WorkflowPreview | null;
   teams: AgentTeam[];
-  project: ProjectRecord;
+  project: ProjectListItem;
   onClose: () => void;
   onStarted: (sessionId: string) => void;
 }) {

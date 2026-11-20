@@ -1,4 +1,4 @@
-import type { AgentTeam, ProjectRecord, TeamMutationInput, TeamWorkflow, WorkflowMutationInput } from "../types.ts";
+import type { AgentTeam, ProjectListItem, TeamMutationInput, TeamWorkflow, WorkflowDraftUpdate, WorkflowMutationInput } from "../types.ts";
 
 /**
  * The Project workflow Team editor's draft and its translation to the Team
@@ -39,8 +39,8 @@ export type WorkflowDraftErrors = {
   fields: Record<string, Partial<Record<WorkflowStepField, WorkflowFieldError>>>;
 };
 
-export function isWorkflowTeam(team: Pick<AgentTeam, "workflowSteps" | "projectId">): boolean {
-  return Boolean(team.projectId || team.workflowSteps?.length);
+export function isWorkflowTeam(team: Pick<AgentTeam, "workflowSteps" | "workflowStepCount" | "projectId">): boolean {
+  return Boolean(team.projectId || team.workflowStepCount || team.workflowSteps?.length);
 }
 
 /** A new stable step id; kept across edits and reorders. */
@@ -105,7 +105,7 @@ function lines(value: string): string[] {
 }
 
 /** Agents a step may name: the Project's enabled members. */
-export function enabledProjectAgentIds(project: Pick<ProjectRecord, "members">): string[] {
+export function enabledProjectAgentIds(project: Pick<ProjectListItem, "members">): string[] {
   return project.members.filter((member) => member.enabled).map((member) => member.agentId);
 }
 
@@ -146,7 +146,7 @@ export function workflowDraftValid(errors: WorkflowDraftErrors): boolean {
  *  the Project lead leads when it owns a step, else the first step's Agent. */
 export function workflowTeamInput(
   draft: WorkflowTeamDraft,
-  project: Pick<ProjectRecord, "id" | "computerId" | "leadAgentId">,
+  project: Pick<ProjectListItem, "id" | "computerId" | "leadAgentId">,
   enabled = true,
 ): TeamMutationInput {
   const memberAgentIds = [...new Set(draft.steps.map((step) => step.agentId))];
@@ -173,16 +173,43 @@ export function workflowTeamInput(
 
 /** Whether the draft differs from what was saved (normalized, order kept). */
 export function workflowDraftChanged(draft: WorkflowTeamDraft, saved: WorkflowTeamDraft): boolean {
-  const normalize = (value: WorkflowTeamDraft) => JSON.stringify({
-    name: value.name.trim(),
-    steps: value.steps.map((step) => ({
-      ...step,
-      name: step.name.trim(),
-      instructions: step.instructions.trim(),
-      acceptanceCriteria: lines(step.acceptanceCriteria),
-    })),
-  });
-  return normalize(draft) !== normalize(saved);
+  return Object.keys(workflowDraftUpdate(draft, saved)).length > 0;
+}
+
+export function workflowDraftUpdate(draft: WorkflowTeamDraft, saved: WorkflowTeamDraft): WorkflowDraftUpdate {
+  const previous = workflowDraftFields(saved);
+  const next = workflowDraftFields(draft);
+  const originals = new Map(previous.workflowSteps.map(step => [step.id, step]));
+  const byId = Object.fromEntries(next.workflowSteps.flatMap(({ id, ...fields }) => {
+    const original = originals.get(id);
+    const patch = Object.fromEntries(Object.entries(fields).filter(([key, value]) => {
+      const before = original?.[key as keyof typeof fields];
+      return Array.isArray(value) ? JSON.stringify(value) !== JSON.stringify(before) : value !== before;
+    }));
+    return Object.keys(patch).length ? [[id, patch]] : [];
+  }));
+  const order = next.workflowSteps.map(step => step.id);
+  const orderChanged = order.length !== originals.size || order.some((id, index) => id !== previous.workflowSteps[index]?.id);
+  return {
+    ...(next.name !== previous.name ? { name: next.name } : {}),
+    ...(Object.keys(byId).length || orderChanged ? { workflowStepChanges: {
+      ...(Object.keys(byId).length ? { byId } : {}),
+      ...(orderChanged ? { order } : {}),
+    } } : {}),
+  };
+}
+
+export function workflowDraftPatch(
+  draft: WorkflowTeamDraft, saved: WorkflowTeamDraft,
+): Partial<Pick<WorkflowMutationInput, "name" | "workflowSteps">> {
+  const current = workflowDraftFields(draft);
+  const previous = workflowDraftFields(saved);
+  return {
+    ...(current.name !== previous.name ? { name: current.name } : {}),
+    ...(JSON.stringify(current.workflowSteps) !== JSON.stringify(previous.workflowSteps)
+      ? { workflowSteps: current.workflowSteps }
+      : {}),
+  };
 }
 
 /** Workflow Teams that belong to this Project. */
@@ -202,7 +229,7 @@ export function projectWorkflows(teams: readonly AgentTeam[], projectId: string)
   )).filter(workflow => workflow.projectId === projectId);
 }
 
-export function workflowTeams(teams: readonly AgentTeam[], project: ProjectRecord): AgentTeam[] {
+export function workflowTeams(teams: readonly AgentTeam[], project: ProjectListItem): AgentTeam[] {
   const enabled = new Set(enabledProjectAgentIds(project));
   return teams.filter(team => !team.deletedAt && team.enabled && team.computerId === project.computerId
     && team.memberAgentIds.some(id => enabled.has(id)));
@@ -212,7 +239,7 @@ export function workflowTeams(teams: readonly AgentTeam[], project: ProjectRecor
 /** Projects where `userId` may give `team` a custom Workflow: their own
  *  open Projects on the Team's Computer with at least one enabled Project
  *  Agent from its roster, since every step needs an Agent in both rosters. */
-export function workflowProjects(team: AgentTeam, projects: readonly ProjectRecord[], userId: string | undefined): ProjectRecord[] {
+export function workflowProjects(team: AgentTeam, projects: readonly ProjectListItem[], userId: string | undefined): ProjectListItem[] {
   if (!userId) return [];
   return projects
     .filter(project => project.ownerUserId === userId && project.enabled && !project.archivedAt && workflowTeams([team], project).length > 0)
@@ -220,8 +247,12 @@ export function workflowProjects(team: AgentTeam, projects: readonly ProjectReco
 }
 
 export function workflowInput(draft: WorkflowTeamDraft, projectId: string, enabled = true): WorkflowMutationInput {
+  return { ...workflowDraftFields(draft), projectId, enabled };
+}
+
+function workflowDraftFields(draft: WorkflowTeamDraft): Pick<WorkflowMutationInput, "name" | "workflowSteps"> {
   return {
-    name: draft.name.trim(), projectId, enabled,
+    name: draft.name.trim(),
     workflowSteps: draft.steps.map(step => ({
       id: step.id, name: step.name.trim(), agentId: step.agentId,
       instructions: step.instructions.trim(), acceptanceCriteria: lines(step.acceptanceCriteria),

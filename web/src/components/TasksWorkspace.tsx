@@ -6,7 +6,7 @@ import { IssuesPage } from "./IssuesPage";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { Button } from "@/components/ui/button";
 import type { ProjectCollectionStatus } from "../lib/projectPage";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelayTaskListItem } from "../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectListItem, RelayTaskListItem } from "../types";
 
 /**
  * The global Issues route. A project's own board lives on its Tasks tab;
@@ -14,9 +14,9 @@ import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelayTaskList
  */
 function TasksWorkspaceView({ projects, projectsStatus, tasks, nodes,
   currentUser, recordTaskId, onOpenRecord, onOpenThread, isRefreshing, onRefresh }: {
-  projects: ProjectRecord[];
+  projects: ProjectListItem[];
   projectsStatus: ProjectCollectionStatus;
-  tasks: RelayTaskListItem[];
+  tasks?: RelayTaskListItem[];
   nodes: DaemonNodeMonitorRecord[];
   currentUser: CurrentUser;
   recordTaskId: string | null;

@@ -7,6 +7,7 @@ for (const mobile of [false, true]) {
     const project = { id: "launch", name: "Autumn launch", description: "Ship the autumn release: landing page, pricing, and notes.",
       ownerUserId: "u", computerId: "c", enabled: true,
       members: [], leadAgentId: null, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/launch", createdAt: stamp, updatedAt: stamp };
+    const directory = { ...project, description: undefined, view: "directory" };
     const tasks = ["backlog", "assigned", "running", "review", "done", "blocked"].map((status, i) => ({
       id: `task_${i}abcdef`, title: ["Write the release brief", "Polish onboarding", "Build the launch page", "Review final copy", "Choose the release date", "Resolve the deployment issue"][i],
       projectId: "launch", status, workflowStage: status === "blocked" ? "running" : status,
@@ -16,10 +17,37 @@ for (const mobile of [false, true]) {
     // Another project's task must never reach this project's board.
     const elsewhere = { ...tasks[0], id: "task_elsewhere", title: "Another project's task", projectId: "other" };
     const created: Array<Record<string, unknown>> = [];
+    const taskScopes: Array<string | null> = [];
+    const projectReads: string[] = [];
+    const teamReads: string[] = [];
     await page.route("**/api/**", async (route) => {
-      const path = new URL(route.request().url()).pathname;
-      let body: unknown = { sessions: [], agents: [], teams: [], workflows: [], nodes: [], projects: [project], tasks: [...tasks, elsewhere], sandboxes: [], skills: [] };
+      const { pathname: path, searchParams } = new URL(route.request().url());
+      let body: unknown = { sessions: [], agents: [], teams: [], workflows: [], nodes: [], projects: [directory], tasks: [...tasks, elsewhere], sandboxes: [], skills: [] };
+      if (path.endsWith("/teams")) teamReads.push(path);
+      if (path.endsWith("/projects")) {
+        projectReads.push(searchParams.get("view") ?? "full-directory");
+        if (searchParams.get("view") === "index") body = { projects: [{
+          id: project.id, name: project.name, enabled: project.enabled, version: project.version, memberCount: 0,
+        }] };
+      }
+      if (path.endsWith("/projects/launch")) {
+        const preview = searchParams.get("view") === "directory";
+        projectReads.push(preview ? "selected-directory" : "record");
+        body = { project: preview ? directory : project };
+      }
       if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
+      if (path.endsWith("/tasks") && route.request().method() === "GET") {
+        const scope = searchParams.get("scope");
+        taskScopes.push(scope);
+        if (scope === "project-dashboard") {
+          const { id, title, isRoutine } = tasks[5];
+          body = { tasks: [], projectDashboard: {
+            metrics: { total: 6, active: 2, blocked: 1, overdue: 0, done: 1 },
+            attentionTotal: 1, hasQueuedOrRunning: true,
+            attention: [{ task: { id, title, isRoutine }, reason: "blocked", overdue: false }],
+          } };
+        }
+      }
       if (path.endsWith("/tasks") && route.request().method() === "POST") {
         const input = route.request().postDataJSON();
         created.push(input);
@@ -40,6 +68,10 @@ for (const mobile of [false, true]) {
     await expect(page.getByRole("group", { name: "Task summary", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Flow", exact: true })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Resolve the deployment issue/ })).toBeVisible();
+    expect(taskScopes).toEqual(["project-dashboard"]);
+    expect(projectReads).toEqual(["index", "selected-directory"]);
+    expect(teamReads).toEqual([]);
     await expect(page.locator('[data-nav="projects"]')).toHaveAttribute("aria-current", "page");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-dashboard-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
@@ -48,6 +80,7 @@ for (const mobile of [false, true]) {
     await page.getByRole("tab", { name: "Collaboration", exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/launch\?tab=members$/);
     await expect(page.getByRole("heading", { name: /Project agents/ })).toBeVisible();
+    await expect.poll(() => teamReads).toEqual(["/api/v1/teams"]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `test-results/project-members-${mobile ? "mobile" : "desktop"}.png`, fullPage: true });
 
@@ -57,6 +90,7 @@ for (const mobile of [false, true]) {
     await expect(details).toBeVisible();
     // The brief and the workspace folder moved here with the General tab.
     await expect(details.getByRole("textbox", { name: "Description" })).toHaveValue(project.description);
+    expect(projectReads).toEqual(["index", "selected-directory", "record"]);
     await expect(details.getByText("projects/launch")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Danger zone", exact: true })).toBeVisible();
     // On a short window the panel scrolls rather than the shell clipping
@@ -349,11 +383,16 @@ test("edits a task's priority, status and due date from its row", async ({ page 
     placements: [{ computerId: "c", desiredState: "active" }], deletedAt: null, createdAt: stamp, updatedAt: stamp };
   const outsider = { ...atlas, id: "agent-outsider", displayName: "Neighbour" };
   const patches: Array<Record<string, unknown>> = [];
+  const workflowReads: string[] = [];
   await page.route("**/api/**", async (route) => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
+    const { pathname: path, search } = new URL(request.url());
     let body: unknown = { sessions: [], agents: [atlas, outsider], teams: [], nodes: [], projects: [project], tasks: [task], sandboxes: [], skills: [] };
     if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
+    if (path.endsWith("/workflows")) {
+      workflowReads.push(search);
+      body = { workflows: [{ id: "release", name: "Release brief", projectId: project.id, enabled: true, stepAgentIds: [atlas.id] }] };
+    }
     if (path.endsWith(`/tasks/${task.id}`) && request.method() === "PATCH") {
       const input = request.postDataJSON();
       patches.push(input);
@@ -384,7 +423,12 @@ test("edits a task's priority, status and due date from its row", async ({ page 
   // After the 15th, this same saved date is correctly announced as overdue.
   await expect(row.getByRole("button", { name: /^(?:Due |Overdue, was due )/ })).toBeVisible();
   // The assignee is the row's own chip; the shared roster picker opens from it.
+  expect(workflowReads).toEqual([]);
   await row.getByRole("combobox", { name: /^Assignee: Unassigned/ }).click();
+  await page.getByRole("radio", { name: /^Workflows/ }).click();
+  await expect(page.getByRole("option", { name: "Release brief", exact: true })).toBeVisible();
+  expect(workflowReads).toEqual(["?view=choices&projectId=launch"]);
+  await page.getByRole("radio", { name: /^Agents/ }).click();
   await expect(page.getByRole("option", { name: /Neighbour/ })).toHaveCount(0);
   await page.screenshot({ path: "test-results/project-tasks-inline-assignee.png", clip: { x: 900, y: 320, width: 540, height: 360 } });
   await page.getByRole("option", { name: /Atlas/ }).click();

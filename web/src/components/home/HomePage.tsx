@@ -24,7 +24,7 @@ import { taskRef } from "../../lib/taskRef";
 import { formatThreadStamp } from "../../lib/threadStamp";
 import { greetingName, greetingPeriod } from "../../lib/welcomeRecap";
 import type { AgentName } from "relay-core";
-import type { CurrentUser, DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskListItem, TasksResponse } from "../../types";
+import type { CurrentUser, DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskListItem, TasksResponse } from "../../types";
 import { HomeQueue } from "./HomeQueue";
 import { FinishedPanel, HomeLink, ProjectsPanel, RunningPanel } from "./HomePanels";
 import { HomeSetupFocus, HomeSetupPanel } from "./HomeSetupPanel";
@@ -47,7 +47,7 @@ export interface HomePageProps {
   tasks: readonly RelayTaskListItem[];
   taskProjects?: TasksResponse["homeProjects"];
   sessions: readonly RelaySession[];
-  projects: readonly ProjectRecord[];
+  projects: readonly ProjectListItem[];
   nodes: readonly DaemonNodeMonitorRecord[];
   onOpenThread: (sessionId: string, replace?: boolean, parentTaskId?: string) => void;
   onOpenTaskRecord: (taskId: string | null) => void;

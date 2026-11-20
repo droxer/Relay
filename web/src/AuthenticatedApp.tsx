@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { logout, reconcileExecution, retryExecutionRecovery } from "./api";
 import type { AgentName, AgentTeam, CollaborationStyle, CurrentUser, UserAgent, RelayArtifact, ThreadMessageInput } from "./types";
@@ -9,7 +10,10 @@ import type { ThreadPermissionMode } from "relay-core";
 import { ScreenErrorBoundary } from "./components/ScreenErrorBoundary";
 import { WorkRoutePage, showsWorkRoutePage, skipLinkTarget } from "./components/WorkRoutePage";
 import { useRelayData } from "./hooks/useRelayData";
-import { useLocationPathname, useProjectDashboardTaskScope, useTaskCollectionVisible } from "./hooks/useLocationPathname";
+import { taskRecordQueryOptions } from "./hooks/useTaskRecord";
+import { useThreadTaskContext } from "./hooks/useThreadTaskContext";
+import { useLocationPathname, useProjectTaskRecordId, useProjectTaskScope, useTaskCollectionVisible, useTaskListScope } from "./hooks/useLocationPathname";
+import { useLocationSearch } from "./hooks/useLocationSearch";
 import { useRelayMutations } from "./hooks/useRelayMutations";
 import { useMutationError } from "./hooks/useMutationError";
 import { useAppRouter } from "./hooks/useAppRouter";
@@ -51,15 +55,13 @@ import { myThreadSessions, pickActiveThreadSession, threadDirectoryMode } from "
 import { faviconState } from "./lib/faviconState";
 import { useLiveFavicon } from "./hooks/useLiveFavicon";
 import { shouldTailSessionEvents } from "./lib/sessionEventStream";
-import { useUserProvisioning } from "./hooks/useUserProvisioning";
-import { useLocalNodeAdoption } from "./hooks/useLocalNodeAdoption";
-import { useUserAgents } from "./hooks/useUserAgents";
+import { useAgentSetup, useUserAgents } from "./hooks/useUserAgents";
 import { useTeams } from "./hooks/useTeams";
 import { useRosterAvailabilityRefresh } from "./hooks/useRosterAvailabilityRefresh";
 import { isAwaitingFeedbackDecision } from "./lib/workflow";
 import { AppShell, RouteFallback } from "./components/AppShell";
 import { computerId as stableComputerId, computerName } from "./lib/createAgent";
-import { sessionComputer, taskComputer } from "./lib/workspaceScope";
+import { sessionComputer } from "./lib/workspaceScope";
 import { useWorkspaceRoute } from "./hooks/useWorkspaceRoute";
 import { ThreadsView } from "./components/ThreadsView";
 import { OnboardingPanel } from "./components/onboarding/OnboardingPanel";
@@ -71,7 +73,9 @@ import { latestThreadArtifacts, visibleThreadArtifacts } from "./lib/threadArtif
 import { resolveNewThreadComputer, threadOwnAgentId } from "./lib/threadRuntime";
 import { navigateToAppPath, parseAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
-import { showThreadChrome } from "./lib/projectPage";
+import { parseProjectPageTab, queryCollectionStatus, showThreadChrome } from "./lib/projectPage";
+import { projectDirectoryEntryOptions, projectIndexOptions, projectRecordOptions } from "./hooks/projectQueries";
+import { RELAY_POLL_INTERVALS_MS } from "./lib/relayPolling";
 import { useNotifications } from "./hooks/useNotifications";
 import { computerManagementDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
 import { hrefForSettingsSection } from "./lib/appRoute";
@@ -133,17 +137,40 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const [threadKindFilter, setThreadKindFilter] = useState<ThreadKindFilter>(THREAD_KIND_FILTER_ALL);
   const mounted = useClientMounted();
   const panels = usePanelLayout(mounted);
-  const { agents: logicalAgents, isSuccess: agentsReady, defaultAgentOffers } = useUserAgents(user.userId, true);
-  const { teams, isSuccess: teamsReady } = useTeams(user.userId, true);
   const composerRef = useRef<ComposerHandle>(null);
   const messageOperationIdsRef = useRef(new Map<string, string>());
   const recoveryOperationIdsRef = useRef(new Map<string, string>());
 
   const selectedUserToken = tokens[selectedUser];
   const pathname = useLocationPathname();
+  const search = useLocationSearch();
   const openingRoute = pathname ? parseAppPath(pathname) : null;
+  const surface = openingRoute?.route;
+  const workspaceDirectories = Boolean(openingRoute && !openingRoute.notFound
+    && ["home", "main", "projects", "backlog", "routine"].includes(openingRoute.route));
+  const projectRailVisible = surface === "projects" && !openingRoute?.notFound && !openingRoute?.sessionId && !composingNew;
+  const projectTaskRecordId = useProjectTaskRecordId();
+  const projectTab = projectTaskRecordId ? "tasks" : parseProjectPageTab(new URLSearchParams(search ?? "").get("tab"));
+  const projectOverview = projectRailVisible && Boolean(openingRoute?.projectId);
+  const workspaceRosters = workspaceDirectories && !projectRailVisible;
+  const agentRosterVisible = workspaceRosters || surface === "agents"
+    || (projectOverview && ["tasks", "automations", "members"].includes(projectTab));
+  const teamRosterVisible = workspaceRosters || surface === "teams"
+    || (projectOverview && ["tasks", "automations", "members"].includes(projectTab));
+  const setupOnly = openingRoute !== null && !agentRosterVisible;
+  const { agents: logicalAgents, isSuccess: agentsReady, defaultAgentOffers } = useUserAgents(user.userId, true, agentRosterVisible);
+  const { teams, isSuccess: teamsReady } = useTeams(user.userId, true, teamRosterVisible);
+  const agentSetup = useAgentSetup(user.userId, setupOnly);
+  const taskProjectId = useProjectTaskScope();
+  const taskScope = useTaskListScope();
+  const pageOwnsTasks = openingRoute?.route === "backlog" && !openingRoute.sessionId
+    || taskScope === "automations" || taskScope === "board" && Boolean(taskProjectId);
   const taskListVisible = useTaskCollectionVisible();
-  const taskProjectId = useProjectDashboardTaskScope();
+  const routeRecordId = pageOwnsTasks ? openingRoute?.runId ?? openingRoute?.taskId ?? projectTaskRecordId : null;
+  const routeRecord = useQuery({
+    ...taskRecordQueryOptions(routeRecordId),
+    enabled: Boolean(routeRecordId),
+  });
   const workspaceVisible = !openingRoute
     || ["home", "main", "projects", "computers"].includes(openingRoute.route)
     || Boolean(openingRoute.sessionId);
@@ -159,6 +186,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     tasks,
     homeTaskNeedsYou,
     homeTaskProjects,
+    homeUntriaged,
+    threadTaskContext,
+    projectDashboard,
     projects,
     projectsStatus,
     homeStatus,
@@ -167,15 +197,37 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     isRefreshing,
     refresh,
   } = useRelayData(selectedUserToken, true,
-    taskListVisible,
+    taskListVisible && !pageOwnsTasks,
     workspaceVisible,
-    !taskListVisible,
+    !taskListVisible || pageOwnsTasks,
     taskProjectId,
-    openingRoute?.route === "home");
+    taskScope,
+    { pageOwned: pageOwnsTasks, threadId: openingRoute?.sessionId ?? undefined, projectDirectory: workspaceDirectories && !projectRailVisible });
+  const projectIndex = useQuery({
+    ...projectIndexOptions(),
+    enabled: projectRailVisible,
+    refetchInterval: RELAY_POLL_INTERVALS_MS.projects,
+  });
+  const projectRows = projectRailVisible ? projectIndex.data ?? projects : projects;
+  const projectRailStatus = projectRailVisible ? queryCollectionStatus(projectIndex) : projectsStatus;
+  const selectedProjectRow = projectRailVisible ? projectRows.find(project => project.id === openingRoute?.projectId) : undefined;
+  const needsProjectRecord = projectTab === "members" || projectTab === "settings";
+  const projectId = selectedProjectRow?.id ?? "";
+  const projectVersion = selectedProjectRow?.version ?? 0;
+  const projectEntry = useQuery({
+    ...projectDirectoryEntryOptions(projectId, projectVersion),
+    enabled: Boolean(selectedProjectRow) && !needsProjectRecord,
+  });
+  const selectedProjectRecord = useQuery({
+    ...projectRecordOptions(projectId, projectVersion),
+    enabled: Boolean(selectedProjectRow) && needsProjectRecord,
+  });
+  const selectedProjectQuery = needsProjectRecord ? selectedProjectRecord : projectEntry;
+  const selectedProject = selectedProjectQuery.data?.project ?? projectEntry.data?.project ?? null;
   useRosterAvailabilityRefresh(nodes, nodesReady);
-  const { localNodes, refreshLocalDaemonNodes } = useLocalDaemonNodes(
+  const localNodes = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel()
-      && workspaceVisible,
+      && workspaceVisible && openingRoute?.route !== "computers",
   );
   const visibleNodes = useMemo(() => mergeVisibleDaemonNodes(nodes, localNodes), [nodes, localNodes]);
   const runtimeNodes = useMemo(
@@ -194,20 +246,21 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const homeItems = useMemo(
     () => homeQueue({
       tasks: homeTaskNeedsYou === undefined ? tasks : [],
+      untriaged: homeUntriaged,
       sessions,
       nodes: runtimeNodes,
       userId: selectedUser,
       today: homeToday,
       snoozes: user.homeSnoozes,
     }),
-    [homeToday, homeTaskNeedsYou, runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
+    [homeToday, homeTaskNeedsYou, homeUntriaged, runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
   );
   const homeNeedsYou = homeNeedsYouCount(homeItems) + (homeTaskNeedsYou ?? 0);
   const onboarding = useOnboarding({
     user,
     setUser,
     nodes: runtimeNodes,
-    agents: logicalAgents,
+    agents: setupOnly ? agentSetup.agents ?? logicalAgents : logicalAgents,
     threads: myThreads,
   });
   const { activeSessionId } = useActiveSession(selectedUser, myThreads);
@@ -227,6 +280,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     }),
     [activeSessionId, composingNew, myThreads, selectedSessionId, requestedSessionId, openingRoute?.route, openingComputerId, openingProjectId, runtimeNodes],
   );
+  const threadTasksCurrent = useThreadTaskContext(activeSession, threadTaskContext);
   const space = useThreadSpace(activeSession?.id);
   const targetComputerId = openingRoute?.computerId ?? projects.find(project => project.id === openingRoute?.projectId)?.computerId;
   const threadTargetNodes = useMemo(() => targetComputerId ? runtimeNodes.filter(node => stableComputerId(node) === targetComputerId) : runtimeNodes,
@@ -322,14 +376,13 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     onApplySessionFromPath: applySessionFromHash,
     onSetComposingNewFromPath: setComposingNewFromPath,
   });
-  const workspacePending = useWorkspaceRoute({ location: openingRoute, tasks, sessions: myThreads, nodes: runtimeNodes,
-    ready: tasksStatus === "ready" && !sessionsLoading && nodesReady, failed: homeStatus === "error" });
+  const workspacePending = useWorkspaceRoute({
+    location: openingRoute, tasks: routeRecord.data ? [routeRecord.data] : tasks,
+    sessions: myThreads, nodes: runtimeNodes,
+    ready: (routeRecordId ? routeRecord.isSuccess : pageOwnsTasks || tasksStatus === "ready") && !sessionsLoading && nodesReady,
+    failed: homeStatus === "error" || routeRecord.isError,
+  });
   const workspaceNode = runtimeNodes.find(node => stableComputerId(node) === routedComputerId);
-  const workspaceTasks = useMemo(() => routedComputerId ? tasks.filter(task => !task.projectId
-    && taskComputer(task, runtimeNodes, myThreads) === routedComputerId) : tasks,
-    [tasks, routedComputerId, runtimeNodes, myThreads]);
-  const unplacedTasks = useMemo(() => tasks.filter(task => !task.deletedAt && !task.projectId && !task.computerId && !task.sourceRoutineId
-    && (!taskComputer(task, runtimeNodes, myThreads) || taskComputer(task, runtimeNodes, myThreads) === routedComputerId)), [tasks, runtimeNodes, myThreads, routedComputerId]);
   const workspaceNodes = useMemo(() => routedComputerId ? runtimeNodes.filter(node => stableComputerId(node) === routedComputerId) : visibleNodes,
     [routedComputerId, runtimeNodes, visibleNodes]);
   /* The inbox. A computer notice opens wherever that computer is managed:
@@ -375,8 +428,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   }), [computerDestination, navigateToSettings, notificationController]);
   const activeProject = useMemo(() => {
     const id = routedProjectId ?? activeSession?.projectId;
-    return id ? projects.find((project) => project.id === id) ?? null : null;
-  }, [activeSession?.projectId, projects, routedProjectId]);
+    return id ? selectedProject?.id === id ? selectedProject : projects.find((project) => project.id === id) ?? null : null;
+  }, [activeSession?.projectId, projects, routedProjectId, selectedProject]);
   const projectRoom = useMemo(
     () => (activeProject
       ? {
@@ -483,7 +536,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const { directoryProjects, directoryThreads, threadItems, projectFilterOptions, projectFilter } = useThreadDirectory({
     route: directoryMode === "threads" ? "main" : route,
     myThreads,
-    projects,
+    projects: projectRows,
     routedProjectId,
     threadQuery,
     threadProjectFilter,
@@ -499,18 +552,6 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const tabState = useMemo(() => faviconState(threadItems, tasks), [threadItems, tasks]);
   useLiveFavicon(tabState);
 
-  const refreshWithToken = useCallback(async (tokenOverride?: string) => {
-    await refresh(undefined, tokenOverride);
-  }, [refresh]);
-
-  const { adoptLocalDaemonNodes } = useUserProvisioning({
-    nodes,
-    refreshLocalDaemonNodes,
-    refreshWithToken,
-  });
-
-  useLocalNodeAdoption(user.role === "admin" && canUseLocalControlPanel(), adoptLocalDaemonNodes);
-  // Admin local-node polling now lives in useLocalDaemonNodes (refetchInterval).
   useEffect(() => {
     if (selectedUser) {
       localStorage.setItem(selectedUserKey, selectedUser);
@@ -757,8 +798,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             user={user}
             projects={projects}
             projectsStatus={projectsStatus}
-            tasks={workspaceTasks}
-            unplacedTasks={unplacedTasks}
+            tasks={tasks}
             sessions={sessions}
             homeItems={homeItems}
             homeTaskProjects={homeTaskProjects}
@@ -799,13 +839,19 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             listOnScreen={mobileView === "threads"}
             directoryMode={directoryMode}
             tasks={tasks}
+            projectDashboard={projectDashboard}
             currentUser={user}
             onboardingPanel={onboardingPanel}
             filteredThreads={directoryThreads}
-            projects={directoryMode === "projects" ? directoryProjects : projects}
+            projects={projects}
+            projectRows={directoryMode === "projects" ? directoryProjects : projects}
             selectedProjectId={directoryMode === "projects" ? routedProjectId : null}
-            projectsStatus={projectsStatus}
-            projectsError={projectsError}
+            selectedProject={selectedProject}
+            selectedProjectStatus={selectedProjectRow ? queryCollectionStatus(selectedProjectQuery) : projectRailStatus}
+            selectedProjectError={selectedProjectQuery.error?.message}
+            onRetrySelectedProject={() => selectedProjectRow ? void selectedProjectQuery.refetch() : void refresh()}
+            projectsStatus={projectRailStatus}
+            projectsError={projectRailVisible ? projectIndex.error?.message ?? "" : projectsError}
             onRetryProjects={() => void refresh()}
             showProjectOverview={showProjectOverview}
             showProjectDirectoryEmpty={showProjectDirectoryEmpty}
@@ -817,6 +863,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             threadKindFilter={threadKindFilter}
             onThreadKindFilterChange={setThreadKindFilter}
             activeSession={activeSession}
+            canAdoptNextStep={tasksStatus === "ready" && threadTasksCurrent}
             transcriptVisible={transcriptVisible}
             threadDetailsReady={threadDetail.ready}
             threadLoadError={threadDetail.error}
@@ -906,7 +953,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       </ScreenErrorBoundary>
       {/* A connecting computer asks, once, whether to create a default agent
           per ready runtime it brought. */}
-      {user.userId ? <DefaultAgentsPrompt userId={user.userId} rosterOffers={defaultAgentOffers} /> : null}
+      {user.userId ? <DefaultAgentsPrompt userId={user.userId} rosterOffers={setupOnly ? agentSetup.offers : defaultAgentOffers} /> : null}
     </AppShell>
     </ListRailWidthContext.Provider>
   );

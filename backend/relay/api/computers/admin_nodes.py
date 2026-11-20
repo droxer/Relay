@@ -17,6 +17,7 @@ from ...daemon_registry.records import public_sandbox_record
 from ...security.request_auth import require_admin_session
 from ...security.user_handles import user_record
 from ..bodies import JsonBodyDep, string_field
+from ..conditional_get import private_conditional_json
 from ..deps import AppContextDep
 from .node_install import (
     assert_user_device_runtime,
@@ -171,11 +172,26 @@ def delete_control_panel_daemon_node(
     return Response(status_code=204)
 
 
-@router.get("/admin/daemon-nodes")
-def control_panel_nodes(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+@router.get("/admin/daemon-nodes", response_model=None)
+def control_panel_nodes(request: Request, ctx: AppContextDep, view: str = "") -> dict[str, Any] | Response:
     require_admin_session(request, ctx.auth_store)
     inventory = present_computer_inventory(ctx, ctx.registry.control_panel_nodes())
+    if view == "web":
+        for node in inventory:
+            node.pop("lastSeenAgeMs", None)
+            node.pop("lastPollAgeMs", None)
+        return private_conditional_json(request, {"nodes": with_owner_labels(ctx, inventory)})
     return {"nodes": [with_legacy_user_id(node) for node in inventory]}
+
+
+def with_owner_labels(ctx: AppContextDep, inventory: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    owner_ids = sorted({node["userId"] for node in inventory if node.get("userId")})
+    labels = ctx.auth_store.user_labels(owner_ids)
+    return [
+        {**node, "ownerLabel": {"id": owner_id, **labels[owner_id]}}
+        if (owner_id := node.get("userId")) in labels else node
+        for node in inventory
+    ]
 
 
 @router.post("/admin/daemon-nodes", status_code=201)

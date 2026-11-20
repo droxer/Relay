@@ -301,6 +301,7 @@ class DatabaseAgentPlacementStore:
         *,
         agent_id: str | None = None,
         daemon_node_id: str | None = None,
+        supervisor_user_id: str | None = None,
         include_removed: bool = False,
     ) -> list[dict[str, Any]]:
         statement = select(
@@ -313,6 +314,8 @@ class DatabaseAgentPlacementStore:
             statement = statement.where(
                 self.placements.c.daemon_node_id == daemon_node_id
             )
+        if supervisor_user_id is not None:
+            statement = statement.where(self.placements.c.supervisor_user_id == supervisor_user_id)
         if not include_removed:
             statement = statement.where(self.placements.c.desired_state != "removed")
         with store_transaction(self.engine) as conn:

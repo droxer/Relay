@@ -1,4 +1,4 @@
-import type { ProjectMember, ProjectRecord, UpdateProjectInput } from "../types";
+import type { ProjectMember, ProjectMemberChange, ProjectRecord, UpdateProjectInput } from "../types";
 
 interface ProjectEditConflict {
   field: string;
@@ -18,6 +18,34 @@ const labels: Record<string, string> = {
 function normalizeMember(member: NonNullable<UpdateProjectInput["members"]>[number]): ProjectMember {
   const { instructions, ...rest } = member;
   return { ...rest, enabled: member.enabled ?? true, ...(instructions ? { instructions } : {}) };
+}
+
+/** The member editor works with a roster draft for validation and rebasing.
+ *  The request carries the selected member's changes against that revision. */
+export function projectMemberPatch(base: ProjectRecord, input: UpdateProjectInput, agentId: string): UpdateProjectInput {
+  const { members, leadAgentId, ...fieldsToUpdate } = input;
+  const patch: UpdateProjectInput = fieldsToUpdate;
+  if (leadAgentId !== undefined && leadAgentId !== base.leadAgentId) patch.leadAgentId = leadAgentId;
+  const previous = base.members.find(member => member.agentId === agentId);
+  const desired = members?.find(member => member.agentId === agentId);
+  if (!members) return patch;
+
+  if (!desired) {
+    if (previous) patch.memberChange = { op: "remove", agentId };
+  } else if (!previous) {
+    const { role, responsibilities, instructions, enabled } = normalizeMember(desired);
+    patch.memberChange = { op: "add", agentId, fields: { role, responsibilities, enabled, ...(instructions ? { instructions } : {}) } };
+  } else {
+    const next = normalizeMember(desired);
+    const fields: Extract<ProjectMemberChange, { op: "update" }>["fields"] = {
+      ...(next.role !== previous.role ? { role: next.role } : {}),
+      ...(next.responsibilities.trim() !== previous.responsibilities.trim() ? { responsibilities: next.responsibilities } : {}),
+      ...(next.enabled !== previous.enabled ? { enabled: next.enabled } : {}),
+      ...((next.instructions?.trim() ?? "") !== (previous.instructions?.trim() ?? "") ? { instructions: next.instructions ?? null } : {}),
+    };
+    if (Object.keys(fields).length) patch.memberChange = { op: "update", agentId, fields };
+  }
+  return patch;
 }
 
 /** Reapply only the user's changes onto a freshly fetched revision. */

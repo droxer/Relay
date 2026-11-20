@@ -30,10 +30,8 @@ function taskHref(task: RelayTaskListItem): string {
 /**
  * The task a thread works on, and every status change it went through here.
  *
- * Reads the task's event log under the record timeline's cache key, so opening
- * the task after its thread (or the reverse) costs no second request. It does
- * not poll: the task list already polls, and a change in the task's status —
- * the only thing these markers show — is what refetches the log.
+ * Cache the lifecycle events per Task so its Threads share the same history.
+ * The Task list's revision triggers revalidation when the underlying Task changes.
  */
 export function useTaskThreadLifecycle({ tasks, session, currentUserId, onOpenTaskRecord }: {
   tasks: readonly RelayTaskListItem[];
@@ -53,7 +51,7 @@ export function useTaskThreadLifecycle({ tasks, session, currentUserId, onOpenTa
 
   const eventsQuery = useQuery({
     queryKey: ["task-events", taskId],
-    queryFn: ({ signal }) => listTaskEvents(taskId as string, {}, signal),
+    queryFn: ({ signal }) => listTaskEvents(taskId as string, { view: "lifecycle" }, signal),
     enabled: Boolean(taskId),
     staleTime: RELAY_POLL_INTERVALS_MS.tasks,
   });

@@ -6,9 +6,7 @@ import type {
   DaemonNodeMonitorRecord,
   DaemonNodesResponse,
   SandboxesResponse,
-  SandboxRecord,
 } from "../types.ts";
-import type { ComputerTransportSnapshot } from "../lib/computerConnection.ts";
 import { apiJson } from "./client.ts";
 
 export function listSandboxes(token?: string, signal?: AbortSignal): Promise<SandboxesResponse> {
@@ -16,12 +14,7 @@ export function listSandboxes(token?: string, signal?: AbortSignal): Promise<San
 }
 
 export function listDaemonNodes(token?: string, signal?: AbortSignal): Promise<DaemonNodesResponse> {
-  return apiJson<DaemonNodesResponse>("/daemon-nodes", { token, signal });
-}
-
-/** A computer's last self-reported transport diagnostics; its owner only. */
-export function getComputerTransport(nodeId: string, signal?: AbortSignal): Promise<ComputerTransportSnapshot> {
-  return apiJson<ComputerTransportSnapshot>(`/daemon-nodes/${encodeURIComponent(nodeId)}/transport`, { signal });
+  return apiJson<DaemonNodesResponse>("/daemon-nodes?view=web", { token, signal });
 }
 
 export function updateComputerDisplayName(
@@ -72,20 +65,6 @@ export function createLocalDeviceEnrollment(
       workspacePath: input.workspacePath,
       ...(input.displayName ? { displayName: input.displayName } : {}),
       sandboxMode: "none",
-    },
-  });
-}
-
-export function provisionSandbox(userId: string, token?: string, nodeToken?: string): Promise<SandboxRecord> {
-  // No workspacePath: the daemon matches by user, so we attach to the
-  // user's registered daemon node (whatever workspace it runs in) instead
-  // of provisioning a dead placeholder under a fabricated path.
-  return apiJson<SandboxRecord>("/sandboxes", {
-    method: "POST",
-    token,
-    body: {
-      userId,
-      ...(nodeToken ? { nodeToken } : {}),
     },
   });
 }

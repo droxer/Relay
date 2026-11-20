@@ -12,14 +12,12 @@ import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { RelayEmptyState } from "@/components/RelayEmptyState";
 import { SearchInput } from "@/components/ui/search-input";
-import type { ControlPanelDaemonNodeRecord } from "../../types";
+import type { UserRosterComputer } from "../../types";
 import { applySort } from "../../lib/listSort";
-import { paginate } from "../../lib/pagination";
-import { usePagination } from "../../hooks/usePagination";
+import { DEFAULT_PAGE_SIZE, describePage, paginate } from "../../lib/pagination";
 import { Pagination } from "@/components/ui/Pagination";
-import { useListSort } from "../../hooks/useListSort";
+import type { useAdminUsers } from "../../hooks/useAdminUsers";
 import { SortMenu } from "@/components/ui/SortMenu";
-import { userSortColumns } from "../../lib/adminHelpers";
 import { UserTable } from "./UserRow";
 import {
   buildUserSummaries,
@@ -32,8 +30,9 @@ import { AdminLayoutToggle, type AdminLayout } from "./AdminLayoutToggle";
 import { Alert } from "@/components/ui/alert";
 
 interface UsersViewProps {
+  directory: ReturnType<typeof useAdminUsers>;
   users: import("../../types").UserRecord[];
-  nodes: ControlPanelDaemonNodeRecord[];
+  nodes: UserRosterComputer[];
   layout: AdminLayout;
   onLayoutChange: (next: AdminLayout) => void;
   onDeleteUser?: (user: import("../../types").UserRecord) => Promise<void>;
@@ -59,6 +58,7 @@ function filterLabel(filter: UserQuickFilter, t: TFunction): string {
 }
 
 export function UsersView({
+  directory,
   users,
   nodes,
   layout,
@@ -69,8 +69,8 @@ export function UsersView({
 }: UsersViewProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<UserQuickFilter>("all");
+  const { response, loading, error, refetch, query, setQuery, filter, setFilter,
+    sortColumns, sort, toggleSort, setSort, page, setPage } = directory;
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -98,9 +98,21 @@ export function UsersView({
     }
   }
 
-  const summaries = useMemo(() => buildUserSummaries(users, nodes), [users, nodes]);
+  const displayOrder = response?.displayOrder;
+  const resultPage = response?.page;
+  const resultCounts = response?.counts;
+  const summaries = useMemo(() => {
+    const rows = buildUserSummaries(users, nodes);
+    if (!displayOrder) return rows;
+    const byId = new Map(rows.map(row => [row.id, row]));
+    return displayOrder.flatMap(id => {
+      const row = byId.get(id);
+      return row ? [row] : [];
+    });
+  }, [users, nodes, displayOrder]);
 
   const counts = useMemo(() => {
+    if (resultPage && resultCounts) return resultCounts;
     const result: Record<UserQuickFilter, number> = { all: summaries.length, running: 0, ready: 0, idle: 0, failed: 0, unassigned: 0 };
     for (const member of summaries) {
       if (matchesUserQuickFilter(member, "running")) result.running += 1;
@@ -110,15 +122,10 @@ export function UsersView({
       if (matchesUserQuickFilter(member, "unassigned")) result.unassigned += 1;
     }
     return result;
-  }, [summaries]);
-
-  const sortColumns = useMemo(() => userSortColumns(), []);
-  // A distinct param: the admin page keeps Users and Nodes on one route,
-  // so a bare `sort` would have the two tables fighting over one key.
-  const { sort, toggleSort, setSort } = useListSort(sortColumns, "userSort");
-  const { page, setPage } = usePagination("userPage");
+  }, [summaries, resultPage, resultCounts]);
 
   const filtered = useMemo(() => {
+    if (resultPage) return summaries;
     const q = query.trim().toLowerCase();
     const matching = summaries.filter((item) => {
       if (!matchesUserQuickFilter(item, filter)) return false;
@@ -138,13 +145,12 @@ export function UsersView({
     });
     // Unsorted, `buildUserSummaries`' id order stands — applySort is identity.
     return applySort(matching, sortColumns, sort);
-  }, [summaries, query, filter, sort, sortColumns]);
+  }, [summaries, query, filter, sort, sortColumns, resultPage]);
 
-  // One cursor for both layouts: switching card/list keeps the reader on the
-  // same people rather than resetting them to the top of the roster.
-  const paged = paginate(filtered, page);
+  const paged = resultPage
+    ? describePage(filtered, resultPage, DEFAULT_PAGE_SIZE) : paginate(filtered, page);
 
-  if (summaries.length === 0) {
+  if (!loading && !error && counts.all === 0) {
     return (
       <RelayEmptyState
         className="adm-users-empty"
@@ -173,7 +179,7 @@ export function UsersView({
                 className="adm-fleet-chip"
                 data-active={active ? "true" : "false"}
                 aria-pressed={active}
-                onClick={() => setFilter(id)}
+                onClick={() => { setFilter(id); setPage(1); }}
               >
                 <span>{filterLabel(id, t)}</span>
                 <span className="adm-fleet-chip-count tnum">{counts[id]}</span>
@@ -187,7 +193,7 @@ export function UsersView({
           label={t("admin.v2.search_users_placeholder")}
           name="admin-users-search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => { setQuery(event.target.value); setPage(1); }}
           placeholder={t("admin.v2.search_users_placeholder")}
         />
         {/* Sits with the layout toggle, not inside the filter chips: at the
@@ -209,7 +215,11 @@ export function UsersView({
         <Alert className="mb-4">{t("admin.v2.action_failed", { message: deleteError })}</Alert>
       ) : null}
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="route-loading" role="status">{t("admin.loading")}</div>
+      ) : error && !response ? (
+        <Button variant="ghost" onClick={() => void refetch()}>{t("project.retry")}</Button>
+      ) : filtered.length === 0 ? (
         <RelayEmptyState
           className="adm-users-empty"
           fill

@@ -18,7 +18,7 @@ import { TaskHoldupLine } from "./TaskHoldupLine";
 import { recordHrefForLocation } from "../../lib/workspaceScope";
 import { TaskRefLink } from "./TaskRefLink";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "./InlineTaskFields";
-import type { AgentTeam, UserAgent, ProjectRecord } from "../../types";
+import type { AgentTeam, UserAgent, ProjectListItem } from "../../types";
 import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
 
 export function hrefForTaskRecord(taskId: string): string {
@@ -156,7 +156,7 @@ type ColumnChrome = { headClass?: string; cellClass?: string };
 interface BacklogRowContext {
   projectName?: string;
   /** The task's project — its computer decides who may take the task. */
-  project?: ProjectRecord | null;
+  project?: ProjectListItem | null;
   ready: boolean;
   agentDisplayName?: string;
   agentImageUrl?: string | null;

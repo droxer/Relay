@@ -39,6 +39,323 @@ function session(id: string, index: number, turns = 0) {
 const THREADS = Array.from({ length: 400 }, (_, index) => session(`s-${index}`, index));
 const LONG_THREAD = session("s-0", 0, 150);
 
+test("the shared Agent roster omits configuration and opens only the selected record", async ({ page }) => {
+  const stamp = hoursAgo(1);
+  const base = { supervisorUserId: USER_ID, executorKind: "codex", defaultRole: "reviewer", enabled: true,
+    availability: "offline", placements: [], modelPolicy: {}, skillPolicy: {}, toolPolicy: {}, createdAt: stamp, updatedAt: stamp, version: 1 };
+  const other = { ...base, id: "helper", displayName: "Build helper" };
+  let chosen = { ...base, id: "reviewer", displayName: "Release reviewer", instructions: "Inspect the quokka fixture before merging." };
+  const summaryReads: string[] = [];
+  const setupReads: string[] = [];
+  const matches: string[] = [];
+  const records: string[] = [];
+  const writes: unknown[] = [];
+  await page.route("**/api/**", async route => {
+    const { pathname, searchParams } = new URL(route.request().url());
+    let body: unknown = { user: USER, sessions: [], agents: [], teams: [], projects: [], nodes: [computer], homeTaskNeedsYou: 0 };
+    if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    if (pathname.endsWith("/agents")) {
+      if (searchParams.get("view") === "matches") {
+        const query = searchParams.get("q") ?? "";
+        matches.push(query);
+        body = { agentIds: chosen.instructions.includes(query) ? [chosen.id] : [] };
+      } else if (searchParams.get("view") === "setup") {
+        setupReads.push(pathname);
+        body = { view: "setup", defaultAgentOffers: [], onboardingAgents: [] };
+      } else {
+        summaryReads.push(searchParams.get("view") ?? "");
+        const { instructions: _, ...summary } = chosen;
+        body = { view: "summary", searchesInstructions: true, defaultAgentOffers: [], agents: [other, summary] };
+      }
+    } else if (pathname.endsWith(`/agents/${chosen.id}`)) {
+      if (route.request().method() === "PATCH") {
+        const change = route.request().postDataJSON();
+        writes.push(change);
+        chosen = { ...chosen, ...change, version: chosen.version + 1 };
+      } else records.push(chosen.id);
+      body = { agent: chosen };
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+
+  await page.goto("/settings/language");
+  await expect.poll(() => setupReads).toEqual(["/api/v1/agents"]);
+  expect(summaryReads).toEqual([]);
+  expect(records).toEqual([]);
+  await page.getByRole("link", { name: "Agents", exact: true }).click();
+  const roster = page.locator(".agents-roster-list");
+  await expect(roster.getByRole("button", { name: /Build helper/ })).toBeVisible();
+  expect(summaryReads).toEqual(["summary"]);
+  await page.getByRole("searchbox", { name: "Search agents" }).fill("quokka fixture");
+  await expect(roster.getByRole("button", { name: /Release reviewer/ })).toBeVisible();
+  await expect(roster.getByRole("button", { name: /Build helper/ })).toHaveCount(0);
+  expect(matches).toEqual(["quokka fixture"]);
+  expect(records).toEqual([]);
+
+  await roster.getByRole("button", { name: /Release reviewer/ }).click();
+  const detail = page.locator("#agent-detail-panel");
+  await expect(detail.getByText(chosen.instructions, { exact: true })).toBeVisible();
+  await detail.getByRole("button", { name: "Edit profile", exact: true }).click();
+  await expect(detail.locator('textarea[name="agent-personality"]')).toHaveValue(chosen.instructions);
+  await detail.locator('input[name="agent-profile-name"]').fill("Release auditor");
+  await detail.getByRole("button", { name: "Save profile", exact: true }).click();
+  await expect(detail.getByRole("heading", { name: "Release auditor", exact: true })).toBeVisible();
+  expect(writes).toEqual([{ displayName: "Release auditor" }]);
+  expect(records).toEqual([chosen.id]);
+});
+
+test("the admin roster only loads one user page and its Computer labels", async ({ page }) => {
+  const admin = { ...USER, role: "admin" };
+  const users = Array.from({ length: 29 }, (_, index) => ({
+    id: `user-${index}`, displayName: `Roster member ${index}`, handle: `member-${index}`,
+  }));
+  const target = users[28];
+  const node = { ...computer, userId: target.id, displayName: "Workshop workstation" };
+  const requests: string[][] = [];
+  const workspaceDirectories: string[] = [];
+  let fleetReads = 0;
+  await page.route("**/api/**", async route => {
+    const { pathname, searchParams } = new URL(route.request().url());
+    let body: unknown = {
+      agents: [], teams: [], tasks: [], nodes: [], projects: [], sessions: [],
+      homeTaskNeedsYou: 0, settings: {},
+    };
+    if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: admin };
+    if (pathname === "/api/v1/agents" && searchParams.get("view") === "setup") {
+      body = { view: "setup", onboardingAgents: [], defaultAgentOffers: [] };
+    } else if (/^\/api\/v1\/(agents|teams|projects)$/.test(pathname)) {
+      workspaceDirectories.push(pathname);
+    }
+    if (pathname.endsWith("/admin/daemon-nodes")) fleetReads += 1;
+    if (pathname.endsWith("/admin/users")) {
+      requests.push(["view", "page", "q"].map(key => searchParams.get(key) ?? ""));
+      const query = searchParams.get("q");
+      const pageNumber = Number(searchParams.get("page") ?? 1);
+      const matches = query ? [target] : users;
+      const visible = matches.slice((pageNumber - 1) * 25, pageNumber * 25);
+      body = {
+        users: visible,
+        nodes: visible.includes(target) ? [node] : [],
+        page: { page: pageNumber, total: matches.length },
+        counts: { all: 29, running: 0, ready: 1, failed: 0, idle: 0, unassigned: 28 },
+        displayOrder: visible.map(user => user.id), userCount: 29,
+      };
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/admin/users");
+  await expect(page.locator(".adm-emp-card")).toHaveCount(25);
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(page.locator(".adm-emp-card")).toHaveCount(4);
+  const result = page.waitForResponse(response => new URL(response.url()).searchParams.get("q") === node.displayName);
+  await page.locator('input[name="admin-users-search"]').fill(node.displayName);
+  await result;
+  await expect(page.locator(".adm-emp-card")).toHaveCount(1);
+  await expect(page.getByText(node.displayName, { exact: true })).toBeVisible();
+  expect(requests).toEqual([["web", "1", ""], ["web", "2", ""], ["web", "1", node.displayName]]);
+  expect(fleetReads).toBe(0);
+  expect(workspaceDirectories).toEqual([]);
+});
+
+test("global Issues requests one filtered window at a time", async ({ page }) => {
+  const requests: { layout: string | null; page: string | null; query: string | null; lanes: string | null }[] = [];
+  const tasks = Array.from({ length: 54 }, (_, index) => ({
+    id: `issue-${index + 1}`, number: index + 1, title: `Queue item ${index + 1}`,
+    status: "backlog", priority: "normal", description: "", isRoutine: false, linkedSessionIds: [],
+    createdAt: hoursAgo(1), updatedAt: hoursAgo(1), ownerUserId: USER_ID,
+  }));
+  await page.route("**/api/**", async (route) => {
+    const { pathname, searchParams } = new URL(route.request().url());
+    let body: unknown = {
+      agents: [], teams: [], tasks: [], nodes: [computer], projects: [],
+      sessions: [], homeTaskNeedsYou: 0, user: USER,
+    };
+    if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    if (pathname.endsWith("/tasks")) {
+      const layout = searchParams.get("layout");
+      const requestedPage = searchParams.get("page");
+      const query = searchParams.get("q");
+      const lanes = searchParams.get("lanes");
+      requests.push({ layout, page: requestedPage, query, lanes });
+      const actualPage = Number(requestedPage ?? 1);
+      const matches = query ? tasks.filter((task) => task.title.includes(query)) : tasks;
+      const lanePage = Number(lanes?.split(":")[1] ?? 1);
+      body = {
+        ...(layout === "board" ? {
+          tasks: matches.slice((lanePage - 1) * 10, lanePage * 10),
+          lanes: Object.fromEntries(["backlog", "assigned", "queued", "running", "review", "done", "cancelled"]
+            .map(lane => [lane, lane === "backlog" ? { page: lanePage, total: matches.length } : { page: 1, total: 0 }])),
+        } : {
+          tasks: matches.slice((actualPage - 1) * 50, actualPage * 50),
+          page: { page: actualPage, total: matches.length },
+        }),
+        issueCount: tasks.length,
+        counts: { needs_me: 0, untriaged: matches.length, blocked: 0, running: 0, overdue: 0, open: matches.length, done: 0, cancelled: 0 },
+        groupTotals: { none: matches.length }, tags: [],
+      };
+    }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+
+  await page.goto("/issues");
+  await expect(page.getByText("Queue item 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("Queue item 54", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(page.getByText("Queue item 54", { exact: true })).toBeVisible();
+  const results = page.waitForResponse(response => new URL(response.url()).searchParams.get("q") === "Queue item 2");
+  await page.locator('input[name="backlog-query"]').fill("Queue item 2");
+  await results;
+  await expect(page.getByText("Queue item 2", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Next page" })).toBeVisible();
+  await expect(page.getByText("Queue item 29", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(page.getByText("Queue item 29", { exact: true })).toBeVisible();
+  expect(requests).toEqual([
+    { layout: "list", page: null, query: null, lanes: null },
+    { layout: "list", page: "2", query: null, lanes: null },
+    { layout: "list", page: null, query: "Queue item 2", lanes: null },
+    { layout: "board", page: null, query: "Queue item 2", lanes: null },
+    { layout: "board", page: null, query: "Queue item 2", lanes: "backlog:2" },
+  ]);
+});
+
+for (const isProject of [true, false]) {
+  test(`${isProject ? "Project" : "Computer"} Tasks only requests its visible window and the exact record`, async ({ page }) => {
+    const project = { id: "perf-project", name: "Sample project", computerId: "node:perf-node", ownerUserId: USER_ID, enabled: true, members: [],
+      workspaceLayout: "project", version: 1, createdAt: hoursAgo(2), updatedAt: hoursAgo(1) };
+    const params = isProject ? { projectId: project.id } : { computerId: "node:perf-node" };
+    const tasks = Array.from({ length: 28 }, (_, index) => ({
+      id: `workspace-task-${index + 1}`, title: `Workspace work ${index + 1}`, ...params,
+      ownerUserId: USER_ID, status: "backlog", priority: "normal", isRoutine: false, linkedSessionIds: [],
+      description: "", createdAt: hoursAgo(2), updatedAt: hoursAgo(1),
+    }));
+    const target = tasks.at(-1)!;
+    const reads: string[][] = [];
+    const details: string[] = [];
+    const choices: string[][] = [];
+    await page.route("**/api/**", async route => {
+      const { pathname, searchParams } = new URL(route.request().url());
+      let body: unknown = { agents: [], teams: [], tasks: [], nodes: [computer], projects: [project], sessions: [], homeTaskNeedsYou: 0 };
+      if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+      if (pathname.endsWith("/tasks") && searchParams.get("view") === "prerequisite-choices") {
+        choices.push(["taskId", "q", "page"].map(key => searchParams.get(key) ?? ""));
+        const candidates = searchParams.has("q") ? [tasks[26]] : tasks.slice(0, 25);
+        body = { tasks: candidates, page: { page: 1, total: searchParams.has("q") ? 1 : 27 } };
+      } else if (pathname.endsWith("/tasks")) {
+        reads.push(["scope", "layout", "projectId", "computerId", "page", "q"].map(key => searchParams.get(key) ?? ""));
+        const items = searchParams.has("q") ? [target] : tasks;
+        const position = Number(searchParams.get("page") ?? 1);
+        body = { tasks: items.slice((position - 1) * 25, position * 25), issueCount: tasks.length,
+          page: { page: position, total: items.length }, tags: [] };
+      } else if (pathname.endsWith(`/tasks/${target.id}`)) {
+        details.push(searchParams.get("view") ?? "");
+        body = { ...target, description: "Full description loaded for this task only" };
+      }
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    await page.goto(isProject ? `/projects/${project.id}?tab=tasks` : `${workPath}/tasks`);
+    const rows = page.locator(".backlog-rows");
+    await expect(rows.getByRole("link", { name: "Workspace work 1", exact: true })).toBeVisible();
+    const record = rows.getByRole("link", { name: target.title, exact: true });
+    await expect(record).toHaveCount(0);
+    await rows.getByRole("button", { name: "Next page" }).click();
+    await expect(record).toBeVisible();
+    await page.locator('input[name="backlog-query"]').fill("needle in the description");
+    await expect(rows.getByRole("link", { name: /Workspace work/ })).toHaveCount(1);
+    await record.click();
+    await expect(page.getByRole("dialog")).toContainText("Full description loaded for this task only");
+    const scope = isProject ? [project.id, ""] : ["", "node:perf-node"];
+    expect(reads).toEqual([
+      ["board", "list", ...scope, "", ""],
+      ["board", "list", ...scope, "2", ""],
+      ["board", "list", ...scope, "", "needle in the description"],
+    ]);
+    expect(details).toEqual(["record"]);
+    expect(choices).toEqual([]);
+    if (isProject) {
+      await page.getByRole("button", { name: "Add prerequisite", exact: true }).click();
+      await expect(page.getByRole("button", { name: /Workspace work 1$/ })).toBeVisible();
+      await page.getByRole("searchbox", { name: "Search tasks" }).fill("Workspace work 27");
+      await expect(page.getByRole("button", { name: /Workspace work 27$/ })).toBeVisible();
+      expect(choices).toEqual([[target.id, "", ""], [target.id, "Workspace work 27", ""]]);
+    }
+  });
+}
+
+for (const scope of ["global", "project", "computer"] as const) {
+  test(`${scope} Automations pages definitions without loading occurrences`, async ({ page }) => {
+    const project = { id: "perf-project", name: "Sample project", computerId: "node:perf-node", ownerUserId: USER_ID, enabled: true,
+      members: [], workspaceLayout: "project", version: 1, createdAt: hoursAgo(2), updatedAt: hoursAgo(1) };
+    const placement = scope === "project" ? { projectId: project.id } : scope === "computer" ? { computerId: "node:perf-node" } : {};
+    const tasks = Array.from({ length: 29 }, (_, index) => ({
+      id: `definition-${index + 1}`, title: `Automation work ${index + 1}`, ...placement,
+      description: "", ownerUserId: USER_ID, status: "backlog", priority: "normal", isRoutine: true,
+      routineState: "paused", routineTriggers: [], linkedSessionIds: [], eventCount: 2, createdAt: hoursAgo(2), updatedAt: hoursAgo(1),
+    }));
+    const target = tasks.at(-1)!;
+    const runId = "historical-run";
+    const reads: string[][] = [];
+    const details: string[] = [];
+    await page.route("**/api/**", async route => {
+      const { pathname, searchParams } = new URL(route.request().url());
+      let body: unknown = { agents: [], teams: [], tasks: [], nodes: [computer], projects: [project], sessions: [], runs: [], homeTaskNeedsYou: 0 };
+      if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+      if (pathname.endsWith("/tasks")) {
+        reads.push(["scope", "layout", "projectId", "computerId", "page", "q"].map(key => searchParams.get(key) ?? ""));
+        const items = searchParams.has("q") ? [target] : tasks;
+        const position = Number(searchParams.get("page") ?? 1);
+        body = { tasks: items.slice((position - 1) * 25, position * 25), automationCount: tasks.length,
+          page: { page: position, total: items.length }, tags: [],
+          counts: { running: 0, scheduled: 0, due: 0, listening: 0, on_demand: 0, paused: items.length },
+          states: {}, hasLiveRuns: false };
+      } else if (pathname.endsWith(`/tasks/${runId}`)) {
+        details.push(runId);
+        body = { ...target, id: runId, title: "Old occurrence", description: "Archived run instructions", isRoutine: false, status: "done",
+          sourceRoutineId: target.id, routineParent: { id: target.id, title: target.title }, scheduledFor: "2026-09-17T00:00:00Z" };
+      } else if (pathname.endsWith(`/tasks/${target.id}`)) {
+        details.push(target.id);
+        body = { ...target, description: "Full automation instructions" };
+      }
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    });
+    const projectUrl = `/projects/${project.id}?tab=automations`;
+    const listUrl = scope === "project" ? projectUrl : scope === "computer" ? `${workPath}/automations` : "/automations";
+    await page.goto(listUrl);
+    const rows = page.locator(".backlog-rows");
+    await expect(rows.getByRole("link", { name: "Automation work 1", exact: true })).toBeVisible();
+    const record = rows.getByRole("link", { name: target.title, exact: true });
+    await expect(record).toHaveCount(0);
+    await page.getByRole("button", { name: "Next page" }).click();
+    await expect(record).toBeVisible();
+    await page.locator('input[name="routine-query"]').fill("needle in instructions");
+    await expect(rows.getByRole("link", { name: /Automation work/ })).toHaveCount(1);
+    if (scope === "computer") {
+      await rows.getByRole("button", { name: "Assign agent or team", exact: true }).click();
+      await expect(page.locator('textarea[name="routine-description"]')).toHaveValue("Full automation instructions");
+      await page.getByRole("button", { name: "Close drawer", exact: true }).click();
+    }
+    await record.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect.poll(() => details).toEqual([target.id]);
+    const expectedScope = scope === "project" ? [project.id, ""] : scope === "computer" ? ["", "node:perf-node"] : ["", ""];
+    expect(reads).toEqual([
+      ["automations", "list", ...expectedScope, "", ""],
+      ["automations", "list", ...expectedScope, "2", ""],
+      ["automations", "list", ...expectedScope, "", "needle in instructions"],
+    ]);
+
+    reads.length = 0;
+    details.length = 0;
+    const runUrl = scope === "project" ? `${projectUrl}&automation=${target.id}&run=${runId}` : `${listUrl}/${target.id}/runs/${runId}`;
+    await page.goto(runUrl);
+    await expect(page.getByRole("dialog").getByRole("link", { name: target.title, exact: true })).toBeVisible();
+    await expect(rows.getByRole("link", { name: "Automation work 1", exact: true })).toBeVisible();
+    expect(reads).toEqual([["automations", "list", ...expectedScope, "", ""]]);
+    expect(details).toEqual([runId]);
+  });
+}
+
 test("a mobile deep link keeps the composer docked while summary and detail arrive", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -211,7 +528,7 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
     }
     await route.fulfill({ json: {
       sessions: THREADS.map((session, index) => ({
-        ...session, taskActivity: {
+        ...session, ...(index === 0 ? { status: "running" } : {}), taskActivity: {
           origin: index === 0 ? { kind: "backlog", taskId: "linked-task", ref: "#41", title: "Linked issue", status: "waiting_for_human" } : null,
           awaitsHuman: index === 0,
         },
@@ -505,22 +822,64 @@ test("a deep link outside the first page loads only its requested transcript", a
   } finally { release(); }
 });
 
-test("settings does not preload the first page's transcripts", async ({ page }) => {
+test("settings loads onboarding and defers workspace directories and transcripts", async ({ page }) => {
   const details: string[] = [];
+  const directories: string[] = [];
   await page.route("**/api/**", async route => {
-    const path = new URL(route.request().url()).pathname;
+    const { pathname: path, searchParams } = new URL(route.request().url());
     if (/\/threads\/[^/]+$/.test(path)) details.push(path);
+    const setup = path.endsWith("/agents") && searchParams.get("view") === "setup";
+    if (!setup && /\/(agents|teams|projects)$/.test(path)) directories.push(path);
     const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
-      : { sessions: THREADS.slice(0, 20), agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
+      : setup ? {
+        view: "setup", defaultAgentOffers: [],
+        onboardingAgents: [{
+          id: "setup-agent", enabled: true, executorKind: "claude", availability: "ready",
+          placements: [{ daemonNodeId: computer.id, desiredState: "active" }],
+        }],
+      } : { sessions: THREADS.slice(0, 20), agents: [], teams: [], tasks: [], nodes: [computer], projects: [], sandboxes: [] };
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.goto("/settings");
   await expect(page.locator(".sidenav-panel")).toBeVisible();
+  await expect(page.locator(".sidenav-onboarding-count")).toHaveText("2/3");
   await page.waitForLoadState("networkidle");
   // Past the old preloader's idle timeout, even on a busy startup.
   await page.waitForTimeout(1600);
   expect(details).toEqual([]);
+  expect(directories).toEqual([]);
+
+  await page.getByRole("link", { name: "Projects", exact: true }).click();
+  await expect(page.locator(".project-directory-empty")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(directories).toEqual(["/api/v1/projects"]);
 });
+
+for (const { route, panel, reads } of [
+  { route: "/agents", panel: "#agents-panel", reads: ["agents:summary"] },
+  { route: "/teams", panel: "#teams-panel", reads: ["agents:setup", "teams:summary"] },
+  { route: "/computers", panel: "#computer-panel", reads: ["agents:setup"] },
+  { route: "/skills", panel: "#skills-panel", reads: ["agents:setup"] },
+  { route: "/projects", panel: ".project-directory-empty", reads: ["agents:setup", "projects:index"] },
+]) {
+  test(`${route} reads only the directory data it displays`, async ({ page }) => {
+    const directoryRequests: string[] = [];
+    await page.route("**/api/**", async request => {
+      const { pathname, searchParams } = new URL(request.request().url());
+      const catalog = pathname.match(/^\/api\/v1\/(agents|teams|projects)$/)?.[1];
+      const view = searchParams.get("view");
+      if (catalog) directoryRequests.push(`${catalog}:${view}`);
+      const body = pathname.endsWith("/auth/me") ? { authenticated: true, user: USER }
+        : view === "setup" ? { view, onboardingAgents: [], defaultAgentOffers: [] }
+        : { agents: [], defaultAgentOffers: [], teams: [], nodes: [computer], sessions: [], skills: [], projects: [], homeTaskNeedsYou: 0 };
+      await request.fulfill({ contentType: "application/json", json: body });
+    });
+    await page.goto(route);
+    await expect(page.locator(panel)).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    expect(directoryRequests.sort()).toEqual(reads);
+  });
+}
 
 test("a missing deep link shows a retry without another conversation or an enabled composer", async ({ page }) => {
   let missing = true;

@@ -9,7 +9,7 @@ import type { SkillDetail } from "../src/types";
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }) }));
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
-const api = vi.hoisted(() => ({ listSkills: vi.fn(), getSkill: vi.fn(), promoteSkillRevision: vi.fn() }));
+const api = vi.hoisted(() => ({ listSkills: vi.fn(), getSkill: vi.fn(), getSkillRevisionPage: vi.fn(), promoteSkillRevision: vi.fn() }));
 vi.mock("../src/api", () => ({ ...api, createSkill: vi.fn(), importSkill: vi.fn(), deleteSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn() }));
 
 let skill: SkillDetail;
@@ -63,6 +63,26 @@ it("does not offer promotion to another publication's viewer", async () => {
   show("viewer");
   await screen.findByRole("heading", { name: "Review" });
   expect(screen.queryByRole("button", { name: "skills.promote_revision_label" })).toBeNull();
+});
+
+it("only fetches older revisions when requested and can retry a failed page", async () => {
+  const [latest, older] = skill.revisions;
+  skill = { ...skill, revisions: [latest!], nextRevisionBefore: 2 };
+  api.getSkillRevisionPage.mockReset()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce({ revisions: [older], nextRevisionBefore: null });
+  show();
+  const user = userEvent.setup();
+  const load = await screen.findByRole("button", { name: "skills.load_older_revisions" });
+  expect(api.getSkillRevisionPage).not.toHaveBeenCalled();
+  expect(screen.queryByText("v1")).toBeNull();
+  await user.click(load);
+  await screen.findByRole("alert");
+  expect(api.getSkillRevisionPage).toHaveBeenCalledTimes(1);
+  await user.click(load);
+  await screen.findByText("skills.stable_revision");
+  expect(api.getSkillRevisionPage).toHaveBeenCalledWith("skill", 2, expect.any(AbortSignal));
+  expect(screen.queryByRole("button", { name: "skills.load_older_revisions" })).toBeNull();
 });
 
 

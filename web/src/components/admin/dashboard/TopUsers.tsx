@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Card,
@@ -9,34 +9,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { UserAvatar } from "../../UserAvatar";
-import type { UserRecord } from "../../../types";
+import type { DashboardSessionsResponse } from "../../../api";
 import { AVATAR } from "../../icons";
 import { userHandleOf } from "../../../lib/userHandle";
 
 interface TopUsersProps {
-  users: UserRecord[];
-  ranked: Array<{ userId: string; sessionCount: number }>;
+  ranked: DashboardSessionsResponse["topUsers"];
   error?: string | null;
   className?: string;
 }
 
-export function TopUsers({ users, ranked, error, className }: TopUsersProps) {
+export function TopUsers({ ranked, error, className }: TopUsersProps) {
   const { t } = useTranslation();
   const titleId = useId();
 
-  const rows = useMemo(() => {
-    const userMap = new Map(users.map((e) => [e.id, e] as const));
-    return ranked.map((row) => {
-      const user = userMap.get(row.userId);
-      return {
-        id: row.userId,
-        // A ranked user can have left the roster; the handle helper keeps
-        // their UUID off the screen either way.
-        displayName: user?.displayName || userHandleOf(user ?? { id: row.userId }),
-        sessionCount: row.sessionCount,
-      };
-    });
-  }, [ranked, users]);
+  const rows = ranked.map(({ userId: id, displayName, handle, sessionCount }) => ({
+    id,
+    displayName: displayName || userHandleOf({ id, handle }),
+    sessionCount,
+  }));
   const leader = Math.max(1, ...rows.map((row) => row.sessionCount));
 
   return (

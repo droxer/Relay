@@ -2,7 +2,7 @@
 
 import { forwardRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { UserAgent } from "../types";
+import type { TeamMemberChoice } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { LeadBadge } from "./LeadBadge";
@@ -40,7 +40,7 @@ export function removeTeamMember(current: TeamMembership, agentId: string): Team
    the lead is chosen on the row it applies to, and the list never grows past
    the team itself. */
 export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
-  agents: UserAgent[];
+  agents: TeamMemberChoice[];
   value: TeamMembership;
   onChange: (next: TeamMembership) => void;
   disabled?: boolean;
@@ -57,7 +57,7 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
   const members = useMemo(
     () => value.memberIds
       .map((id) => agents.find((agent) => agent.id === id))
-      .filter((agent): agent is UserAgent => Boolean(agent)),
+      .filter((agent): agent is TeamMemberChoice => Boolean(agent)),
     [agents, value.memberIds],
   );
   const candidates = useMemo(

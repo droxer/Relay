@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
+import { projectRecordOptions } from "../hooks/projectQueries";
 import { useProjectLeadDiscussion } from "../hooks/useProjectLeadDiscussion";
+import { useOwnAgentBadge, useUserAgents } from "../hooks/useUserAgents";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import {
@@ -18,7 +21,8 @@ import type {
   DaemonNodeMonitorRecord,
   UserAgent,
   ProjectMember,
-  ProjectRecord,
+  ProjectListItem,
+  ProjectDashboardSummary,
   RelayTaskListItem,
 } from "../types";
 import { ICON, NavBack } from "./icons";
@@ -41,6 +45,7 @@ import { ProjectDashboard } from "./ProjectDashboard";
 import { ProjectContextSuggestions } from "./ProjectContextUpkeep";
 import { ProjectManagerLine } from "./ProjectManagerLine";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
+import { isProjectDirectoryEntry } from "../lib/projectDirectory";
 
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the ones that are not it. */
@@ -66,18 +71,20 @@ export function ProjectWorkspacePage({
   project,
   agents,
   tasks,
+  pageOwnsTasks = false,
+  dashboard,
   currentUser,
   computers,
   onOpenThread,
   onDeleted,
   onBack,
 }: {
-  project: ProjectRecord;
+  project: ProjectListItem;
   agents: UserAgent[];
-  /* The shell already polls the task list; a second observer on the same
-     query key with its own interval polled the whole table twice over for
-     one project's lanes. */
+  /** The shell supplies a legacy Dashboard fallback. */
   tasks: RelayTaskListItem[];
+  pageOwnsTasks?: boolean;
+  dashboard?: ProjectDashboardSummary;
   currentUser: CurrentUser;
   computers: DaemonNodeMonitorRecord[];
   onOpenThread: (sessionId: string) => void;
@@ -118,6 +125,29 @@ export function ProjectWorkspacePage({
     void navigateToAppPath(canonicalBrowserUrl(url.pathname, url.search));
   };
   const pageTab: ProjectPageTab = recordTaskId ? "tasks" : urlTab;
+  const directoryEntry = isProjectDirectoryEntry(project);
+  const setup = directoryEntry ? project.setupSummary : project.setup;
+  const showingSetup = pageTab === "dashboard" && !projectReadOnly(project) && setupNeedsAttention(setup);
+  const { agents: setupAgents } = useUserAgents(currentUser.userId, true, showingSetup);
+  const lead = useOwnAgentBadge(currentUser.userId, project.leadAgentId, pageTab === "dashboard" && !showingSetup);
+  const dashboardAgents = showingSetup && setupAgents.length ? setupAgents : agents;
+  const managerAgents = lead ? [lead] : dashboardAgents;
+  const needsDashboardRecord = pageTab === "dashboard"
+    && (Boolean(project.contextSummary?.suggestionCount) || (setupNeedsAttention(setup) && (directoryEntry || Boolean(project.contextSummary))));
+  const needsProjectRecord = needsDashboardRecord
+    || (pageTab === "members" && directoryEntry)
+    || (pageTab === "settings" && (directoryEntry || Boolean(project.contextSummary)));
+  const detail = useQuery({
+    ...projectRecordOptions(project.id, project.version),
+    enabled: needsProjectRecord,
+  });
+  const projectRecord = detail.data?.project ?? (needsProjectRecord || directoryEntry ? undefined : project);
+  const detailStatus = detail.isError ? (
+    <div className="route-loading" role="alert">
+      {t("project.load_failed")}
+      <Button variant="outline" onClick={() => void detail.refetch()}>{t("workspace.retry")}</Button>
+    </div>
+  ) : <div className="route-loading" role="status">{t("project.loading")}</div>;
   /* Opening or closing a record is one write that pins the Tasks tab, so
      closing it returns to the board rather than to the default tab, and the
      board's filters in the query string ride along untouched. */
@@ -157,7 +187,7 @@ export function ProjectWorkspacePage({
 
   /* Archived/disabled projects are read-only rooms — no member management. */
   const membersReadOnly = projectReadOnly(project);
-  const leadDiscussion = useProjectLeadDiscussion({ projectId: project.id, currentUser, agents, onOpenThread });
+  const leadDiscussion = useProjectLeadDiscussion({ projectId: project.id, currentUser, agents: managerAgents, onOpenThread });
   /* Only the owner talks to the lead here (the conversation route is
      owner-scoped), and only while the project can take new work. */
   const canDiscuss = !membersReadOnly
@@ -211,11 +241,11 @@ export function ProjectWorkspacePage({
       <div className="workspace-body">
         <TabsContent value="dashboard">
           <ProjectDashboard
-            review={setupNeedsAttention(project.setup) && !membersReadOnly ? (
+            review={projectRecord && setupNeedsAttention(projectRecord.setup) && !membersReadOnly ? (
               <ProjectSetupPanel
-                project={project}
-                setup={project.setup}
-                agents={agents}
+                project={projectRecord}
+                setup={projectRecord.setup}
+                agents={dashboardAgents}
                 onOpenThread={onOpenThread}
                 onOpenTask={openTaskRecord}
                 onManual={() => setPageTab("members")}
@@ -224,26 +254,28 @@ export function ProjectWorkspacePage({
             steward={(
               <ProjectManagerLine
                 project={project}
-                agents={agents}
+                agents={managerAgents}
                 onManage={membersReadOnly ? undefined : () => setPageTab("members")}
                 onDiscuss={canDiscuss ? leadDiscussion.discuss : undefined}
                 discussing={leadDiscussion.pending}
               />
             )}
-            proposals={(
-              <ProjectContextSuggestions project={project} readOnly={membersReadOnly} onOpenThread={onOpenThread} />
-            )}
+            proposals={projectRecord
+              ? <ProjectContextSuggestions project={projectRecord} readOnly={membersReadOnly} onOpenThread={onOpenThread} />
+              : needsDashboardRecord ? detailStatus : null}
             tasks={boardTasks}
+            summary={dashboard}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}
             onOpenBoard={() => setPageTab("tasks")}
           />
         </TabsContent>
         <TabsContent value="members">
           <ProjectMembersPanel
-            project={project}
+            project={projectRecord ?? project}
             agents={agents}
-            onAddMember={membersReadOnly ? undefined : () => setMemberEditor({ member: null })}
-            onEditMember={membersReadOnly ? undefined : (member) => setMemberEditor({ member })}
+            detailStatus={projectRecord ? undefined : detailStatus}
+            onAddMember={membersReadOnly || !projectRecord ? undefined : () => setMemberEditor({ member: null })}
+            onEditMember={membersReadOnly || !projectRecord ? undefined : (member) => setMemberEditor({ member })}
           >
             <ProjectWorkflows
               project={project}
@@ -261,7 +293,7 @@ export function ProjectWorkspacePage({
             readOnly={membersReadOnly}
             projectId={project.id}
             projects={[project]}
-            tasks={boardTasks}
+            tasks={pageOwnsTasks ? undefined : boardTasks}
             nodes={computers}
             currentUser={currentUser}
             recordTaskId={recordTaskId}
@@ -275,7 +307,7 @@ export function ProjectWorkspacePage({
             projectId={project.id}
             readOnly={membersReadOnly}
             projects={[project]}
-            tasks={projectTasks}
+            tasks={pageOwnsTasks ? undefined : projectTasks}
             nodes={computers}
             currentUser={currentUser}
             recordTaskId={automationId}
@@ -288,24 +320,26 @@ export function ProjectWorkspacePage({
           <ProjectWorkspaceFiles projectId={project.id} />
         </TabsContent>
         <TabsContent value="settings">
-          <ProjectSettingsPanel
-            key={project.id}
-            project={project}
-            computer={computerSummary}
-            onDeleted={onDeleted}
-            onOpenThread={onOpenThread}
-          />
+          {projectRecord ? (
+            <ProjectSettingsPanel
+              key={project.id}
+              project={projectRecord}
+              computer={computerSummary}
+              onDeleted={onDeleted}
+              onOpenThread={onOpenThread}
+            />
+          ) : detailStatus}
         </TabsContent>
       </div>
 
-      <ProjectMemberEditor
+      {projectRecord ? <ProjectMemberEditor
         open={memberEditor !== null}
         member={memberEditor?.member ?? null}
-        project={project}
+        project={projectRecord}
         agents={agents}
         computers={computers}
         onClose={() => setMemberEditor(null)}
-      />
+      /> : null}
 
     </Tabs>
   );

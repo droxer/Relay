@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { RelaySession, SessionSummariesResponse } from "../src/types";
 import { applySessionEvent } from "../src/lib/sessionEvents";
-import { useProjectDashboardTaskScope, useTaskCollectionVisible } from "../src/hooks/useLocationPathname";
+import { useProjectTaskScope, useTaskCollectionVisible, useTaskListScope } from "../src/hooks/useLocationPathname";
 import { useRelayData } from "../src/hooks/useRelayData";
+import { useThreadTaskContext } from "../src/hooks/useThreadTaskContext";
 import { listDaemonNodes, listSandboxes, listSessionSummaries, listTasks } from "../src/api";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
@@ -31,48 +32,17 @@ function setup(threadListOnly = false) {
 beforeEach(() => { setSessionStreamConnected(false); });
 afterEach(() => { setSessionStreamConnected(false); });
 
-it("keeps a refresh's token override while an overlapping plain refresh settles", async () => {
-  const tokens: string[] = [];
-  let failNextMinted = true;
-  let releasePlainSessions: (() => void) | undefined;
-  vi.mocked(listDaemonNodes).mockImplementation(async (token?: string) => {
-    tokens.push(token ?? "");
-    if (token === "minted" && failNextMinted) {
-      failNextMinted = false;
-      throw new Error("transient");
-    }
-    return { nodes: [] };
-  });
-  const { client, view } = setup();
-  await waitFor(() => expect(tokens).toEqual(["user-token"]));
-  await waitFor(() => expect(client.isFetching()).toBe(0));
-
-  // A plain refresh whose nodes fetch lands while the Thread list hangs.
-  vi.mocked(listSessionSummaries).mockImplementationOnce(() => new Promise((resolve) => {
-    releasePlainSessions = () => resolve({ sessions: [] });
-  }));
-  let plain!: Promise<void>;
-  act(() => { plain = view.result.current.refresh(); });
-  await waitFor(() => expect(tokens).toEqual(["user-token", "user-token"]));
-  await waitFor(() => expect(client.isFetching({ queryKey: ["relay", "daemon-nodes"] })).toBe(0));
-
-  // The override refresh retries the nodes request under the minted token
-  // while the plain refresh settles.
-  let minted!: Promise<void>;
-  act(() => { minted = view.result.current.refresh(undefined, "minted"); });
-  releasePlainSessions?.();
-  await act(async () => { await Promise.all([plain, minted]); });
-
-  expect(tokens.slice(2)).toEqual(["minted", "minted"]);
-  expect(view.result.current.isRefreshing).toBe(false);
-  view.unmount(); client.clear();
-});
-
 it("backs the sessions poll off while the session stream is connected", async () => {
   vi.mocked(listSandboxes).mockResolvedValue({ sandboxes: [] } as never);
   const { client, view } = setup();
   const sessionsQuery = () => client.getQueryCache().find({ queryKey: ["relay", "sessions"], exact: true });
-  const interval = () => (sessionsQuery()?.observers[0]?.options.refetchInterval);
+  const interval = () => {
+    const query = sessionsQuery()!;
+    const option = query.observers[0]?.options.refetchInterval;
+    return typeof option === "function" ? option(query) : option;
+  };
+  await waitFor(() => expect(interval()).toBe(RELAY_POLL_INTERVALS_MS.idleCollections));
+  act(() => client.setQueryData(["relay", "sessions"], [{ id: "live", status: "running", events: [] }]));
   await waitFor(() => expect(interval()).toBe(RELAY_POLL_INTERVALS_MS.sessions));
   act(() => setSessionStreamConnected(true));
   await waitFor(() => expect(interval()).toBe(RELAY_POLL_INTERVALS_MS.sessionsWhileStreaming));
@@ -161,26 +131,31 @@ it("does not use Project Dashboard rows or their validator for the account Task 
   });
   go("/projects/project-a");
   const view = renderHook(() => {
-    const scope = useProjectDashboardTaskScope();
+    const projectId = useProjectTaskScope();
     const visible = useTaskCollectionVisible();
-    return useRelayData(undefined, true, visible, true, !visible, scope);
+    const scope = useTaskListScope();
+    return useRelayData(undefined, true, visible, true, !visible, projectId, scope);
   }, { wrapper });
   try {
     await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(listTasks).mock.calls[0][1]).toMatchObject({ projectId: "project-a" });
-    go("/projects/project-b?tab=dashboard");
+    expect(vi.mocked(listTasks).mock.calls[0][1]).toMatchObject({ projectId: "project-a", scope: "project-dashboard" });
+    go("/projects/project-b?tab=tasks");
     await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(listTasks).mock.calls[1][1]).toMatchObject({ projectId: "project-b" });
-    go("/tasks");
+    expect(vi.mocked(listTasks).mock.calls[1][1]).toMatchObject({ projectId: "project-b", scope: "board" });
+    go("/projects/project-b?task=task-b");
+    go("/projects/project-b?tab=automations");
     await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(listTasks).mock.calls[2][1]).toMatchObject({ projectId: "project-b", scope: "automations" });
+    go("/tasks");
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(4));
     const calls = vi.mocked(listTasks).mock.calls;
-    expect(calls[2][1]?.projectId).toBeUndefined();
-    expect(new Set(calls.map(call => call[1])).size).toBe(3);
+    expect(calls[3][1]).toMatchObject({ projectId: undefined, scope: "issues" });
+    expect(new Set(calls.map(call => call[1])).size).toBe(4);
     calls[0][1]!.etag = '"project-a-validator"';
     await act(() => client.invalidateQueries({ queryKey: ["relay", "tasks", "project-a"], refetchType: "none" }));
     go("/projects/project-a");
-    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(4));
-    expect(vi.mocked(listTasks).mock.calls[3][1]?.etag).toBe('"project-a-validator"');
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(5));
+    expect(vi.mocked(listTasks).mock.calls[4][1]?.etag).toBe('"project-a-validator"');
   } finally {
     view.unmount();
     window.history.replaceState(null, "", original);
@@ -196,7 +171,12 @@ it("slows task reconciliation off task surfaces and refreshes when they become v
   const view = renderHook(({ visible }) => useRelayData("user-token", true, visible), { wrapper, initialProps: { visible: false } });
   await waitFor(() => expect(client.isFetching()).toBe(0));
   const taskQuery = () => client.getQueryCache().find({ queryKey: ["relay", "tasks"], exact: true });
-  expect(taskQuery()?.observers[0]?.options.refetchInterval).toBe(60_000);
+  const interval = () => {
+    const query = taskQuery()!;
+    const option = query.observers[0]?.options.refetchInterval;
+    return typeof option === "function" ? option(query) : option;
+  };
+  expect(interval()).toBe(60_000);
   const before = vi.mocked(listTasks).mock.calls.length;
   view.rerender({ visible: true });
   await act(async () => {});
@@ -206,8 +186,56 @@ it("slows task reconciliation off task surfaces and refreshes when they become v
   act(() => client.setQueryData(["relay", "tasks"], [], { updatedAt: Date.now() - 60_000 }));
   view.rerender({ visible: true });
   await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(before + 1));
-  expect(taskQuery()?.observers[0]?.options.refetchInterval).toBe(RELAY_POLL_INTERVALS_MS.tasks);
+  expect(interval()).toBe(RELAY_POLL_INTERVALS_MS.idleCollections);
+  act(() => client.setQueryData(["relay", "tasks"], [{ id: "active", status: "running" }]));
+  expect(interval()).toBe(RELAY_POLL_INTERVALS_MS.tasks);
   view.unmount(); client.clear();
+});
+
+it("reconciles new suggestions for the open Thread without refreshing for ordinary transcript output", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const list = vi.mocked(listTasks).mockClear();
+  const context = { threadId: "thread", eventCount: 3, activeTaskId: null, nextSteps: [] };
+  const suggestion = "Write the follow-up test";
+  list.mockResolvedValueOnce({ tasks: [], threadTaskContext: context });
+  list.mockResolvedValueOnce({ tasks: [], threadTaskContext: { ...context, eventCount: 6, nextSteps: [suggestion] } });
+  const view = renderHook(({ session }: { session?: RelaySession }) => {
+    const data = useRelayData(undefined, true, true, true, false, undefined, undefined, { threadId: "thread" });
+    return useThreadTaskContext(session, data.threadTaskContext);
+  }, { wrapper, initialProps: { session: undefined } as { session?: RelaySession } });
+  try {
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(list.mock.calls[0][1]).toMatchObject({ threadId: "thread" });
+    view.rerender({ session: { id: "thread", eventStart: 4, events: [] } as unknown as RelaySession });
+    await act(async () => {});
+    expect(list).toHaveBeenCalledTimes(1);
+    view.rerender({ session: { id: "thread", eventStart: 6, events: [], nextSteps: [suggestion] } as unknown as RelaySession });
+    expect(view.result.current).toBe(false);
+    await waitFor(() => expect(view.result.current).toBe(true));
+    expect(list.mock.calls.map(call => call[1]?.threadId)).toEqual(["thread", "thread"]);
+  } finally {
+    view.unmount(); client.clear();
+  }
+});
+
+it("uses a separate Task query and validator for each Computer board", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const api = vi.mocked(listTasks).mockClear();
+  const view = renderHook(({ computerId }) =>
+    useRelayData(undefined, true, true, true, false, undefined, "board", { computerId }),
+  { wrapper, initialProps: { computerId: "device:first" } });
+  try {
+    await waitFor(() => expect(view.result.current.tasksStatus).toBe("ready"));
+    view.rerender({ computerId: "device:second" });
+    await waitFor(() => expect(api).toHaveBeenCalledTimes(2));
+    expect(api.mock.calls.map(call => call[1]?.computerId)).toEqual(["device:first", "device:second"]);
+    expect(api.mock.calls[0][1]).not.toBe(api.mock.calls[1][1]);
+  } finally {
+    view.unmount(); client.clear();
+  }
 });
 
 it("commits a summary poll over the event history already written by SSE", async () => {

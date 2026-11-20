@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { useTeams } from "../hooks/useTeams";
+import { teamRecordOptions, useTeams } from "../hooks/useTeams";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { selectedTeamForWorkspace } from "../lib/teamWorkspace";
+import { teamWorkflowPreviews } from "../lib/workflowSelection";
 import { teamAvailability } from "../lib/taskAssignment";
 import { StatusPill, TonePill } from "./StatusPill";
-import type { CurrentUser } from "../types";
+import type { AgentTeam, CurrentUser } from "../types";
 import {
   ActionAdd,
   ICON,
@@ -25,6 +27,12 @@ import { SearchInput } from "@/components/ui/search-input";
 import { ListSkeleton } from "./ListSkeleton";
 import { ListRailResizeHandle } from "@/components/ListRailResize";
 
+function compareTeamVersions(left: AgentTeam, right: AgentTeam): number {
+  return left.version !== undefined && right.version !== undefined
+    ? left.version - right.version
+    : left.updatedAt.localeCompare(right.updatedAt);
+}
+
 export function TeamsPage({
   currentUser,
   onOpenThread,
@@ -37,7 +45,7 @@ export function TeamsPage({
   onSelectTeam: (teamId: string | null) => void;
 }) {
   const { t } = useTranslation();
-  const { teams, isFetching, error, refetch } = useTeams(currentUser.userId);
+  const { teams, summarized, isFetching, error, refetch } = useTeams(currentUser.userId);
   const [addTeam, setAddTeam] = useUrlSearchState(
     "dialog",
     false,
@@ -62,6 +70,46 @@ export function TeamsPage({
   }, [query, sortedTeams]);
   const loading = isFetching && teams.length === 0;
   const selectedTeam = selectedTeamForWorkspace(sortedTeams, teamId);
+  const record = useQuery({
+    ...teamRecordOptions(currentUser.userId, selectedTeam?.id),
+    enabled: summarized && Boolean(selectedTeam),
+  });
+  const { data: recordData, refetch: refetchRecord } = record;
+  const previousSelection = useRef(selectedTeam);
+  useEffect(() => {
+    const previous = previousSelection.current;
+    previousSelection.current = selectedTeam;
+    const detail = recordData?.team;
+    if (!summarized || !selectedTeam || !detail) return;
+    if (compareTeamVersions(selectedTeam, detail) > 0) {
+      void refetchRecord({ cancelRefetch: false });
+    } else if (previous?.id === selectedTeam.id && previous.workflowOptions !== selectedTeam.workflowOptions) {
+      // Linking or editing a Workflow can change the library on its own.
+      const options = selectedTeam.workflowOptions?.filter(option => option.kind === "steps");
+      const previews = teamWorkflowPreviews(detail);
+      if (options && (options.length !== previews.length || options.some((option, index) => {
+        const preview = previews[index];
+        if (option.id !== preview.id) return true;
+        if (option.version !== undefined && preview.version !== undefined) return option.version > preview.version;
+        return option.updatedAt && option.updatedAt > preview.updatedAt;
+      }))) {
+        void refetchRecord({ cancelRefetch: false });
+      }
+    }
+  }, [recordData, refetchRecord, selectedTeam, summarized]);
+  const teamDetail = useMemo(() => {
+    if (!summarized) return selectedTeam;
+    const team = record.data?.team;
+    if (!team || !selectedTeam) return undefined;
+    // The shared roster owns the availability poll.
+    if (compareTeamVersions(selectedTeam, team) !== 0) return team;
+    const previewMembers = new Map(team.members.map(member => [member.id, member]));
+    return {
+      ...team,
+      members: selectedTeam.members.map(member => ({ ...previewMembers.get(member.id), ...member })),
+      lead: selectedTeam.lead,
+    };
+  }, [record.data, selectedTeam, summarized]);
   const selectedRowRef = useRef<HTMLLIElement>(null);
 
   /* The roster is a bounded scroll region (46vh once it stacks above the
@@ -226,13 +274,19 @@ export function TeamsPage({
                 </Button>
               )}
             />
-            <TeamWorkspacePage
+            {teamDetail ? <TeamWorkspacePage
               key={selectedTeam.id}
-              team={selectedTeam}
+              team={teamDetail}
               userId={currentUser.userId}
               onOpenThread={onOpenThread}
               onDeleted={() => onSelectTeam(null)}
-            />
+            /> : record.isError ? (
+              <RelayEmptyState feature="teams"
+                title={t("workspace.load_failed")}
+                body={record.error.message}
+                actions={<Button type="button" variant="outline" onClick={() => void record.refetch()}>{t("workspace.retry")}</Button>}
+              />
+            ) : <ListSkeleton label={t("admin.loading")} />}
           </>
         ) : (
           <RelayEmptyState feature="teams" fill title={t("teams.select_title")} body={t("teams.select_body")} />

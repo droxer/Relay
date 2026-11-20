@@ -39,6 +39,22 @@ it('saves a new standalone Task in the selected Computer workspace', async () =>
   expect(result.current.open).toBe(false);
 });
 
+it('omits unchanged descriptions from edits and sends an explicit clear', async () => {
+  const { result } = renderHook(() => useBacklogTaskForm({ currentUser: user }));
+  const initial = { ...emptyBacklogForm(user), id: 'task', title: 'Work', description: 'Long description. '.repeat(2000) };
+  act(() => result.current.openForm(initial));
+  act(() => result.current.setForm({ ...initial, title: 'Renamed work' }));
+  await act(async () => result.current.submit({ preventDefault: vi.fn() } as never));
+  expect(update.mock.lastCall?.[0].input).toMatchObject({ title: 'Renamed work' });
+  expect(Object.hasOwn(update.mock.lastCall?.[0].input, 'description')).toBe(false);
+
+  act(() => result.current.openForm(initial));
+  act(() => result.current.setForm({ ...initial, description: '' }));
+  await act(async () => result.current.submit({ preventDefault: vi.fn() } as never));
+  expect(update.mock.lastCall?.[0].input).toMatchObject({ description: '' });
+  update.mockClear();
+});
+
 it('requires an explicit action before placing legacy work on a Computer', async () => {
   update.mockResolvedValueOnce({ id: 'old' });
   render(<UnplacedComputerWork computerId="device:u:host" tasks={[{ id: 'old', title: 'Legacy work' } as RelayTaskListItem]} />);

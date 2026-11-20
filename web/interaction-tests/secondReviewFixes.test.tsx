@@ -19,7 +19,7 @@ function setup() {
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   return { client, wrapper };
 }
-const task = (id: string) => ({ id, priority: "normal", status: "backlog", updatedAt: "2026-11-10", eventCount: 0, events: [], activity: [] });
+const task = (id: string) => ({ id, projectId: "project", priority: "normal", status: "backlog", updatedAt: "2026-11-10", eventCount: 0, events: [], activity: [] });
 it("invalidates cached Agent and Team Activities after a Thread rename or delete", async () => {
   const { client, wrapper } = setup();
   const keys = [["workspace-activity", { agentId: "agent" }], ["workspace-activity", { teamId: "team" }]];
@@ -37,7 +37,8 @@ it("invalidates cached Agent and Team Activities after a Thread rename or delete
 });
 it.each(["a", "b"])("keeps a newer successful edit on task %s when an earlier edit fails", async (secondId) => {
   const { client, wrapper } = setup();
-  client.setQueryData(["relay", "tasks"], [task("a"), task("b")]);
+  const keys = [["relay", "tasks"], ["relay", "tasks", "project"]];
+  for (const key of keys) client.setQueryData(key, [task("a"), task("b")]);
   let rejectFirst!: (error: Error) => void;
   vi.mocked(updateTask).mockReset()
     .mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectFirst = reject; }))
@@ -48,9 +49,22 @@ it.each(["a", "b"])("keeps a newer successful edit on task %s when an earlier ed
   await act(async () => { first = view.result.current.updateTaskMutation.mutateAsync({ taskId: "a", input: { priority: "high" } }).catch(() => {}); });
   await act(async () => { await view.result.current.updateTaskMutation.mutateAsync({ taskId: secondId, input: { priority: "low" } }); });
   await act(async () => { rejectFirst(new Error("failed")); await first; });
-  const rows = client.getQueryData<ReturnType<typeof task>[]>(["relay", "tasks"])!;
-  expect(rows.find(row => row.id === secondId)?.priority).toBe("low");
-  if (secondId !== "a") expect(rows.find(row => row.id === "a")?.priority).toBe("normal");
+  for (const key of keys) {
+    const rows = client.getQueryData<ReturnType<typeof task>[]>(key)!;
+    expect(rows.find(row => row.id === secondId)?.priority).toBe("low");
+    if (secondId !== "a") expect(rows.find(row => row.id === "a")?.priority).toBe("normal");
+  }
+  view.unmount(); client.clear();
+});
+it("does not seed an incomplete account Task list from a Project Task edit", async () => {
+  const { client, wrapper } = setup();
+  const projectKey = ["relay", "tasks", "project"];
+  client.setQueryData(projectKey, [task("a")]);
+  vi.mocked(updateTask).mockResolvedValue({ ...task("a"), priority: "high", updatedAt: "2026-11-11" } as RelayTask);
+  const view = renderHook(() => useRelayMutations(), { wrapper });
+  await act(() => view.result.current.updateTaskMutation.mutateAsync({ taskId: "a", input: { priority: "high" } }));
+  expect(client.getQueryData(projectKey)).toMatchObject([{ id: "a", priority: "high" }]);
+  expect(client.getQueryData(["relay", "tasks"])).toBeUndefined();
   view.unmount(); client.clear();
 });
 it.each([{ runs: [] }, { runs: [{ taskId: "old", status: "done", createdAt: "2026-11-01", artifactCount: 0 }] }])("discovers newly scheduled runs after a settled ledger: %j", async ({ runs }) => {

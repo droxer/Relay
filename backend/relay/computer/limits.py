@@ -81,7 +81,7 @@ def decorate_account_limits(ctx: Any, account: dict[str, Any]) -> dict[str, Any]
 
 
 def decorate_user_limits(
-    ctx: Any, users: list[dict[str, Any]]
+    ctx: Any, users: list[dict[str, Any]], *, local_usage: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Attach the resolved limit and current usage to user records.
 
@@ -99,7 +99,8 @@ def decorate_user_limits(
             "effectiveMaxLocalComputers": (
                 override if override is not None else global_limit
             ),
-            "localComputerCount": count_local_computers(ctx, user.get("id", "")),
+            "localComputerCount": count_local_computers(ctx, user.get("id", "")) if local_usage is None
+            else local_usage.get(user["id"], 0),
         })
     return decorated
 

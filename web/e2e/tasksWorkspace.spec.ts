@@ -16,8 +16,10 @@ for (const mobile of [false, true]) {
       { ...tasks[0], id: "project-task", title: "Project-only work", computerId: undefined, projectId: "launch" },
       { ...tasks[0], id: "other-task", title: "Another Computer work", computerId: "node:other" },
     ];
+    const boardReads: Array<string | null> = [];
     await page.route("**/api/**", async route => {
-      const path = new URL(route.request().url()).pathname;
+      const { pathname: path, searchParams } = new URL(route.request().url());
+      if (path.endsWith("/tasks")) boardReads.push(searchParams.get("computerId"));
       let body: unknown = { sessions: [], agents: [], teams: [], nodes: [computer], projects: [], tasks: [...tasks, ...foreign], sandboxes: [], skills: [], files: [], entries: [] };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Designer", role: "user", theme: "light", language: "en" } };
       const detail = tasks.find(task => path.endsWith(`/tasks/${task.id}`));
@@ -38,6 +40,7 @@ for (const mobile of [false, true]) {
     const rows = panel.getByRole("table", { name: "Tasks", exact: true });
     await expect(rows.getByRole("link", { name: "Ship the release", exact: true })).toBeVisible();
     await expect(rows.getByRole("link", { name: "Answer customers", exact: true })).toBeVisible();
+    expect(boardReads).toEqual(["node:workspace"]);
     await expect(panel.getByText("Project-only work")).toHaveCount(0);
     await expect(panel.getByText("Another Computer work")).toHaveCount(0);
     await panel.getByRole("button", { name: "Add filter", exact: true }).click();
@@ -51,6 +54,7 @@ for (const mobile of [false, true]) {
     await expect(page).toHaveURL(url => url.pathname === tasksPath && url.searchParams.get("priority") === "high");
     // A legacy record/tab link still resolves to this Computer's Files tab.
     await page.goto("/tasks/ship?tab=workspace");
+    await expect(page).toHaveURL(url => url.pathname === `${tasksPath}/ship`);
     await expect(drawer.getByRole("tab", { name: "Files", exact: true })).toHaveAttribute("aria-selected", "true");
     await drawer.getByRole("button", { name: /release-notes.md/ }).click();
     await expect(drawer.getByRole("heading", { name: "Release notes", exact: true })).toBeVisible();
