@@ -9,12 +9,13 @@ import { useTeams } from "../src/hooks/useTeams";
 import { useDefaultAgentOffers } from "../src/hooks/useDefaultAgentOffers";
 import { useWorkflowName } from "../src/hooks/useProjectWorkflows";
 import { useThreadQueue } from "../src/hooks/useThreadQueue";
-import { getWorkflow, listDefaultAgentOffers, listSessionSummaries, listTasks, listTaskEvents, listUserAgents, listWorkflows } from "../src/api";
+import { getWorkflow, listDefaultAgentOffers, listSessionSummaries, listTasks, listTaskEvents, listUserAgents, listWorkflows, RelayApiError } from "../src/api";
 import { apiJson } from "../src/api-client/client";
 import { RELAY_POLL_INTERVALS_MS } from "../src/lib/relayPolling";
 import type { RelayTaskListItem } from "../src/types";
 
-vi.mock("../src/api", () => ({
+vi.mock("../src/api", async () => ({
+  RelayApiError: (await vi.importActual<typeof import("../src/api-client/client")>("../src/api-client/client")).RelayApiError,
   listSandboxes: vi.fn(async () => ({ sandboxes: [] })),
   listDaemonNodes: vi.fn(async () => ({ nodes: [] })),
   listSessionSummaries: vi.fn(async () => ({ sessions: [], nextCursor: "older" })),
@@ -48,6 +49,32 @@ it("reuses a fresh Workflow catalog row and falls back to one detail read after 
   expect(getWorkflow).toHaveBeenCalledExactlyOnceWith("workflow", expect.any(AbortSignal));
   expect(listWorkflows).not.toHaveBeenCalled();
   view.unmount(); client.clear();
+});
+
+it("revalidates the assigned Workflow by ID while Definition stays open", async () => {
+  vi.useFakeTimers();
+  focusManager.setFocused(true);
+  const { client, wrapper } = setup();
+  vi.mocked(getWorkflow).mockResolvedValueOnce({ workflow: { id: "workflow", name: "Original" } } as Awaited<ReturnType<typeof getWorkflow>>);
+  vi.mocked(getWorkflow).mockResolvedValueOnce({ workflow: { id: "workflow", name: "Renamed elsewhere" } } as Awaited<ReturnType<typeof getWorkflow>>);
+  vi.mocked(getWorkflow).mockRejectedValueOnce(new RelayApiError("Workflow deleted", 404));
+  const view = renderHook(() => useWorkflowName("workflow", "project"), { wrapper });
+  try {
+    await act(() => vi.advanceTimersByTimeAsync(29_999));
+    expect(view.result.current.data).toBe("Original");
+    expect(getWorkflow).toHaveBeenCalledTimes(1);
+    await act(() => vi.advanceTimersByTimeAsync(2));
+    expect(view.result.current.data).toBe("Renamed elsewhere");
+    expect(getWorkflow).toHaveBeenCalledTimes(2);
+    await act(() => vi.advanceTimersByTimeAsync(30_000));
+    expect(view.result.current.data).toBeNull();
+    expect(listWorkflows).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    client.clear();
+    focusManager.setFocused(undefined);
+    vi.useRealTimers();
+  }
 });
 
 it("reuses fresh collection data and paging cursors across remounts", async () => {

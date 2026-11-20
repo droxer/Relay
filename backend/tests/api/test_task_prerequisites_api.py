@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import update
+from sqlalchemy import delete, update
 
 from relay.app import create_app
 from relay.persistence.events import relay_task_event
@@ -102,6 +102,29 @@ def test_activity_pages_preserve_status_context_and_skip_task_replay(project_con
     assert [event["status"] for event in second["events"]] == ["running", "waiting_for_human"]
     assert second["previousStatus"] == "backlog"
     assert TestClient(app).get(route, params={"view": "activity"}).status_code == 401
+
+
+def test_snapshot_only_task_activity_honors_limit_and_cursor(project_context):
+    app, client, project = project_context
+    task_id = _task(client, project, "Snapshot-only Activity")["id"]
+    store = app.state.task_store
+    for status in ("running", "waiting_for_human", "running", "review"):
+        store.append_event(task_id, relay_task_event("task.status", task_id, {"status": status}))
+    snapshot = store.get_task(task_id)
+    with store.engine.begin() as conn:
+        conn.execute(update(store.tasks).where(store.tasks.c.id == task_id).values(snapshot=snapshot))
+        conn.execute(delete(store.events).where(store.events.c.task_id == task_id))
+
+    route = f"/api/v1/tasks/{task_id}/events"
+    first = client.get(route, params={"view": "activity", "limit": 2}).json()
+    assert [event["status"] for event in first["events"]] == ["running", "review"]
+    assert first["previousStatus"] == "waiting_for_human"
+    second = client.get(route, params={"view": "activity", "limit": 2, "before": first["nextBefore"]}).json()
+    assert [event["status"] for event in second["events"]] == ["running", "waiting_for_human"]
+    last = client.get(route, params={"view": "activity", "limit": 2, "before": second["nextBefore"]}).json()
+    assert [event["type"] for event in last["events"]] == ["task.created"]
+    assert last["nextBefore"] is None
+    assert client.get(route).json()["events"] == snapshot["events"]
 
 
 def test_set_read_and_clear_prerequisites(project_context):

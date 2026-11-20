@@ -74,11 +74,9 @@ def task_events(
     if view == "activity" and include != "occurrences":
         task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
         try:
-            page = ctx.task_store.task_activity_page(task["id"], limit=limit, before=before)
+            return ctx.task_store.task_activity_page(task["id"], limit=limit, before=before)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
-        if page is not None:
-            return page
     task = get_task_for_actor(ctx.task_store, task_id, actor)
     events = list(task["events"])
     if include == "occurrences":

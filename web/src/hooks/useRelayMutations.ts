@@ -38,6 +38,7 @@ import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { HOME_TASKS_QUERY_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
+import { WORKSPACE_ACTIVITY_QUERY_KEY } from "./useWorkspaceActivity";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { TEAMS_QUERY_KEY } from "./useTeams";
 import { TASK_RECORD_QUERY_KEY } from "./useTaskRecord";
@@ -61,6 +62,7 @@ export function useRelayMutations() {
   const { reportMutationError } = useMutationError();
 
   const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
+  const invalidateWorkspaceActivity = () => queryClient.invalidateQueries({ queryKey: WORKSPACE_ACTIVITY_QUERY_KEY });
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
   const invalidateTaskProjections = (task: RelayTask) => {
     void queryClient.invalidateQueries({ queryKey: HOME_TASKS_QUERY_KEY, exact: true });
@@ -110,7 +112,10 @@ export function useRelayMutations() {
   const renameSessionMutation = useMutation({
     mutationFn: ({ sessionId, title, token }: { sessionId: string; title: string } & TokenArg) =>
       renameSession(sessionId, title, token),
-    onSuccess: cacheSession,
+    onSuccess: (session) => {
+      cacheSession(session);
+      void invalidateWorkspaceActivity();
+    },
     onError: onRelayError("Failed to rename thread", "errors.rename_thread"),
   });
 
@@ -126,6 +131,7 @@ export function useRelayMutations() {
       void invalidateSessions();
       void invalidateTasks();
       void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY] });
+      void invalidateWorkspaceActivity();
     },
     onError: onRelayError("Failed to delete thread", "errors.delete_thread"),
   });

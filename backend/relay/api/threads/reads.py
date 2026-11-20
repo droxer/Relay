@@ -187,26 +187,17 @@ def _workspace_activity(
     sessions = ctx.session_store.list_workspace_threads(
         owner_user_id=user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
     )
-    session_ids = {session["id"] for session in sessions}
-    runs = []
-    for node in ctx.registry.monitor_nodes():
-        if project and resolve_computer_id(node) != project.get("computerId"):
-            continue
-        if not (agent or team or project) and node.get("userId") != user_id:
-            continue
-        for run in node.get("activeRuns", []):
-            if agent_id and run.get("logicalAgentId") != agent_id:
-                continue
-            if (team_id or project_id) and run.get("sessionId") not in session_ids:
-                continue
-            runs.append({key: run[key] for key in ("runId", "sessionId", "taskGoal", "agent", "startedAt") if key in run})
+    runs = ctx.registry.daemon_store.list_workspace_active_runs(
+        user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+        computer_id=project.get("computerId") if project else None,
+    )
     tasks = ctx.task_store.list_task_summaries(
         user_id=user_id, limit=10, project_id=project_id,
         assigned_agent_id=agent_id, assigned_team_id=team_id, statuses=ACTIVE_TASK_STATUSES,
     )
     return {
         "sessions": sessions,
-        "activeRuns": sorted(runs, key=lambda item: item.get("startedAt") or "", reverse=True),
+        "activeRuns": runs,
         "tasks": [task_brief_item(task) for task in tasks],
     }
 

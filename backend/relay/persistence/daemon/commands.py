@@ -575,25 +575,6 @@ class CommandQueueRows(DaemonStoreState):
             # Routine lease extensions are a projection update, not an audit
             # event. Delivery and terminal transitions retain their own events.
 
-    def list_active_runs(
-        self, node_id: str | None = None, *, node_ids: set[str] | None = None,
-        session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None,
-    ) -> list[dict[str, Any]]:
-        statement = select(self.runs).where(self.runs.c.status == "running")
-        if node_id is not None:
-            statement = statement.where(self.runs.c.node_id == node_id)
-        if node_ids is not None:
-            statement = statement.where(self.runs.c.node_id.in_(node_ids))
-        if session_ids is not None:
-            statement = statement.where(self.runs.c.session_id.in_(session_ids))
-        if after_id is not None:
-            statement = statement.where(self.runs.c.id > after_id)
-        if limit is not None:
-            statement = statement.order_by(self.runs.c.id).limit(max(1, limit))
-        with store_transaction(self.engine) as conn:
-            rows = conn.execute(statement).mappings().all()
-        return [row_to_run(row) for row in rows]
-
     def mark_command_completed(self, node_id: str, event: dict[str, Any]) -> bool:
         return self._mark_command_terminal(
             node_id, event, "completed", event.get("exitCode"), None

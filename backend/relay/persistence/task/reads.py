@@ -43,6 +43,30 @@ _ACTIVITY_EVENT_TYPES = (
 )
 
 
+def _snapshot_activity_page(
+    history: list[dict[str, Any]], *, limit: int, before: int | None,
+) -> dict[str, Any]:
+    activity = sorted(
+        ((sequence, event) for sequence, event in enumerate(history) if event.get("type") in _ACTIVITY_EVENT_TYPES),
+        key=lambda item: (item[1].get("timestamp") or "", item[0]),
+    )
+    end = len(activity)
+    if before is not None:
+        anchor = next((index for index, (sequence, _) in enumerate(activity) if sequence == before), None)
+        if anchor is None:
+            raise ValueError("Invalid Task Activity cursor.")
+        end = anchor
+    start = max(0, end - limit)
+    previous = next((
+        event.get("status") for _, event in reversed(activity[:start]) if event.get("type") == "task.status"
+    ), None)
+    return {
+        "events": [event for _, event in activity[start:end]],
+        "nextBefore": activity[start][0] if start else None,
+        "previousStatus": previous or "backlog",
+    }
+
+
 class TaskReadRows(TaskStoreState):
     def work_page(
         self, owner: str, *, project_id: str | None, automation: bool,
@@ -85,7 +109,7 @@ class TaskReadRows(TaskStoreState):
     def get_task_record(self, task_id: str) -> dict[str, Any]:
         return self._read_task(task_id, include_history=False)
 
-    def task_activity_page(self, task_id: str, *, limit: int, before: int | None) -> dict[str, Any] | None:
+    def task_activity_page(self, task_id: str, *, limit: int, before: int | None) -> dict[str, Any]:
         events = self.events
         owned = events.c.task_id == task_id
         position = tuple_(events.c.timestamp, events.c.sequence)
@@ -99,13 +123,14 @@ class TaskReadRows(TaskStoreState):
                     owned, events.c.sequence == before,
                 )).first()
                 if anchor is None:
-                    raise ValueError("Invalid Task Activity cursor.")
+                    return self._legacy_task_activity(conn, task_id, limit=limit, before=before)
                 page = page.where(position < tuple_(anchor.timestamp, anchor.sequence))
             rows = conn.execute(page).mappings().all()
             window = rows[:limit]
             if not window:
-                # A legacy snapshot can still hold the only copy of the log.
-                return None if before is None else {"events": [], "nextBefore": None, "previousStatus": "backlog"}
+                if before is None:
+                    return self._legacy_task_activity(conn, task_id, limit=limit, before=None)
+                return {"events": [], "nextBefore": None, "previousStatus": "backlog"}
             oldest = window[-1]
             previous = conn.scalar(select(events.c.payload["status"].as_string()).where(
                 owned, events.c.type == "task.status", position < tuple_(oldest["timestamp"], oldest["sequence"]),
@@ -115,6 +140,13 @@ class TaskReadRows(TaskStoreState):
             "nextBefore": oldest["sequence"] if len(rows) > limit else None,
             "previousStatus": previous or "backlog",
         }
+
+    def _legacy_task_activity(self, conn: Any, task_id: str, *, limit: int, before: int | None) -> dict[str, Any]:
+        # Treat the snapshot as the log only when no durable event rows exist.
+        events = self.events
+        has_events = conn.scalar(select(select(events.c.sequence).where(events.c.task_id == task_id).exists()))
+        history = [] if has_events else conn.scalar(select(self.tasks.c.snapshot["events"]).where(self.tasks.c.id == task_id))
+        return _snapshot_activity_page(history or [], limit=limit, before=before)
 
     def _read_task(self, task_id: str, *, include_history: bool) -> dict[str, Any]:
         if names_no_uuid_row(self.engine, task_id):

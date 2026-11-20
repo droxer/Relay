@@ -2,8 +2,10 @@ from __future__ import annotations
 
 
 from fastapi.testclient import TestClient
+from sqlalchemy import insert
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.persistence.daemon.rows import run_to_row
 from relay.persistence.events import relay_event
 from user_ids import user_id
 
@@ -176,6 +178,36 @@ def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
     changed = client.get(activity_path, headers=headers)
     assert changed.status_code == 200
     assert changed.headers["etag"] != activity.headers["etag"]
+
+
+def test_workspace_activity_reads_only_owned_active_runs_without_fleet_monitor(monkeypatch, tmp_path):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    _bootstrap(client)
+    agent = _agent(client)
+    assert client.post("/api/v1/admin/accounts", json={
+        "username": "bob", "email": "bob@example.com", "password": "userpass", "userId": "bob",
+    }).status_code == 201
+    owned = app.state.session_store.create_session({"ownerUserId": ALICE, "taskGoal": "Owned", "workspacePath": "/workspace"})
+    other = app.state.session_store.create_session({"ownerUserId": BOB, "taskGoal": "Other", "workspacePath": "/workspace"})
+    store = app.state.daemon_store
+    with store.engine.begin() as conn:
+        conn.execute(insert(store.runs), [run_to_row({
+            "runId": run_id, "nodeId": "offline_node_alice", "sessionId": session["id"],
+            "logicalAgentId": agent["id"], "agent": "codex", "taskGoal": session["taskGoal"],
+            "status": "running", "startedAt": "2026-07-23T00:00:00Z",
+        }) for run_id, session in (("owned", owned), ("other", other))])
+
+    def reject_fleet_monitor():
+        raise AssertionError("Activity should read scoped active runs directly")
+
+    monkeypatch.setattr(app.state.registry, "monitor_nodes", reject_fleet_monitor)
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
+    for scope in ("", f"&agentId={agent['id']}"):
+        response = client.get(f"/api/v1/workspace/brief?view=activity{scope}")
+        assert response.status_code == 200, response.text
+        assert [run["sessionId"] for run in response.json()["activeRuns"]] == [owned["id"]]
 
 
 def test_agent_workspace_brief_uses_authorized_placements_for_user(

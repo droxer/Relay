@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useQueries, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useQueries, useQueryClient, type Query, type UseQueryResult } from "@tanstack/react-query";
 import { listDaemonNodes, listProjects, listSessionSummaries, listTasks } from "../api";
 import type { DaemonNodeMonitorRecord, ProjectRecord, RelaySession, RelayTaskSummary, SessionSummary, TasksResponse } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
@@ -115,7 +115,8 @@ export function useRelayData(
 ): RelayDataResult {
   const queryClient = useQueryClient();
   const tasksKey = useMemo(() => homeTaskView ? HOME_TASKS_QUERY_KEY : taskProjectId ? [...TASKS_KEY, taskProjectId] : TASKS_KEY, [homeTaskView, taskProjectId]);
-  const taskListCache = useRef<TaskListCache>({});
+  // Keep each validator with its owning query, including across route switches.
+  const taskListCaches = useRef(new WeakMap<Query, TaskListCache>());
   const sessionHeadCache = useRef<SessionHeadCache>({});
   // Background reconciliation must stay visually silent. Only a user/app
   // initiated refresh drives page-level refresh chrome.
@@ -202,11 +203,10 @@ export function useRelayData(
         enabled: enabled && fetchFullTasks,
         refetchInterval: taskListVisible ? RELAY_POLL_INTERVALS_MS.tasks : 60_000,
         queryFn: async ({ signal }: { signal: AbortSignal }): Promise<RelayTaskSummary[] | TasksResponse> => {
-          let cache = taskListCache.current;
-          if (cache.projectId !== taskProjectId || cache.home !== homeTaskView) {
-            cache = { projectId: taskProjectId, home: homeTaskView };
-            taskListCache.current = cache;
-          }
+          const query = queryClient.getQueryCache().find({ queryKey: tasksKey, exact: true });
+          const cached = query && taskListCaches.current.get(query);
+          const cache = cached ?? { projectId: taskProjectId, home: homeTaskView };
+          if (query && !cached) taskListCaches.current.set(query, cache);
           const result = await listTasks(signal, cache);
           if (result.flowPolicy) queryClient.setQueryData(["task-flow-policy"], result.flowPolicy);
           if (result.flowUsage) queryClient.setQueryData(["task-flow-usage"], result.flowUsage);
@@ -259,7 +259,7 @@ export function useRelayData(
   // refetches because this only runs while the queries are disabled.
   useEffect(() => {
     if (!enabled) {
-      taskListCache.current = {};
+      taskListCaches.current = new WeakMap();
       sessionHeadCache.current = {};
       void queryClient.resetQueries({ queryKey: RELAY_KEY });
     }

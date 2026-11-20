@@ -26,6 +26,7 @@
 /* Rail shell, on the .agents-roster recipe: the shared list elevation between
    the nav rail and the detail canvas, not the canvas itself. */
 .skills-list {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;

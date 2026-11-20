@@ -176,6 +176,11 @@ it("does not use Project Dashboard rows or their validator for the account Task 
     const calls = vi.mocked(listTasks).mock.calls;
     expect(calls[2][1]?.projectId).toBeUndefined();
     expect(new Set(calls.map(call => call[1])).size).toBe(3);
+    calls[0][1]!.etag = '"project-a-validator"';
+    await act(() => client.invalidateQueries({ queryKey: ["relay", "tasks", "project-a"], refetchType: "none" }));
+    go("/projects/project-a");
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(4));
+    expect(vi.mocked(listTasks).mock.calls[3][1]?.etag).toBe('"project-a-validator"');
   } finally {
     view.unmount();
     window.history.replaceState(null, "", original);
