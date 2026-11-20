@@ -4,7 +4,7 @@ import { sessionTrailsSummary } from "./sessionPollMerge.ts";
 export type ThreadPanelLayout = {
   /** A new thread with nothing sent yet: the composer is the page (chat.css). */
   landing: boolean;
-  /** The transcript has nothing true to draw yet and stays empty. */
+  /** The selected transcript has not loaded enough detail to render its turns. */
   transcriptPending: boolean;
 };
 

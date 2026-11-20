@@ -443,6 +443,7 @@
     "count_more": "{{count}}+ activities",
     "load_more": "Load older activities",
     "loading_more": "Loading older activities…",
+    "transcript_loading": "Loading conversation…",
     "load_earlier_messages": "Load earlier messages",
     "earlier_messages_failed": "Could not load earlier messages. Try again.",
     "runtime_label": "Computer",

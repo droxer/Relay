@@ -378,15 +378,15 @@ export function ThreadsView({
     () => activeLogicalAgent?.displayName ?? displayNameForExecutor(activeAgent, logicalAgents),
     [activeAgent, activeLogicalAgent, logicalAgents],
   );
-  // Before and while the thread arrives the panel keeps its docked shape and
-  // an empty transcript rather than drawing a guess it would snap out of.
+  // Keep the composer docked while the initial transcript loads.
   const { landing, transcriptPending } = threadPanelLayout({
     threadsLoading,
     activeSession,
     hasPendingMessage: Boolean(pendingUserMessage),
     hasOnboardingPanel: Boolean(onboardingPanel),
   });
-  const needsFirstMessages = transcriptVisible && !transcriptPending && !threadLoadError
+  const initialThreadLoadError = transcriptPending ? threadLoadError : null;
+  const needsFirstMessages = transcriptVisible && !transcriptPending
     && displayMessages.length === 0 && !earlierPending && !earlierFailed;
   useEffect(() => {
     // A page of file or status events can leave the transcript with no turns
@@ -666,12 +666,14 @@ export function ThreadsView({
            answer) speaks through its own role="status" regions instead. */
         <div className="transcript" ref={transcriptRef} onScroll={onTranscriptScroll} role="log" aria-live="off">
           <div className="transcript-inner">
-            {threadLoadError ? (
+            {initialThreadLoadError ? (
               <div role="alert">
-                <p>{threadLoadError}</p>
+                <p>{initialThreadLoadError}</p>
                 <Button variant="outline" type="button" onClick={onRetryThread}>{t("workspace.retry")}</Button>
               </div>
-            ) : transcriptPending ? null : activeSession || pendingUserMessage ? (
+            ) : transcriptPending ? (
+              transcriptVisible ? <div className="route-loading" role="status" aria-live="polite">{t("thread.transcript_loading")}</div> : null
+            ) : activeSession || pendingUserMessage ? (
               <>
                 {transcriptStart === 0 && hasEarlierMessages ? (
                   <div className="transcript-history">

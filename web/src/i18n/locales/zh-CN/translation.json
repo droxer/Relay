@@ -437,6 +437,7 @@
     "count_more": "{{count}}+ 个活动",
     "load_more": "加载更早的活动",
     "loading_more": "正在加载更早的活动…",
+    "transcript_loading": "正在加载会话…",
     "load_earlier_messages": "加载更早的消息",
     "earlier_messages_failed": "无法加载更早的消息，请重试。",
     "runtime_label": "电脑",
