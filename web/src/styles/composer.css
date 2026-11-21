@@ -211,6 +211,12 @@
     display: none;
   }
 
+  /* The disabled picker has no menu to open. Give its status label and the
+     tool permissions picker the space the chevron would occupy. */
+  .chat-agent-select:disabled > svg:last-child {
+    display: none;
+  }
+
   .thread-runtime-select { max-width: 100%; }
 }
 
