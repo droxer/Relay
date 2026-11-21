@@ -1370,8 +1370,7 @@ Errors are the `detail` codes `github_repository_required`,
 in thread detail and list responses. It reports `phase`, `executionConfirmed`,
 `computerOnline` (daemon heartbeat liveness, or null when unknown),
 `canDelete`, `blockingReason`, `deletionRequested`, `lastConfirmedAt`,
-`queuedAt` (when a `queued` run was admitted; null in every other phase), and
-`nextRecoveryAt`, plus `canRetrySave` and `canReportGone`. These capabilities
+`queuedAt`, `nextRecoveryAt`, `canRetrySave`, and `canReportGone`. These capabilities
 reflect current execution state; operation routes still check actor authorization
 and revalidate state. `canReportGone` is false outside `recovery_required` and
 when a terminal result is retained for finalization (a finalizing request or a
@@ -1383,6 +1382,9 @@ execution ownership; task/session outcome alone never proves remote termination.
 A fresh computer heartbeat also does not prove execution exit. An online computer
 with unconfirmed execution receives process inspection guidance rather than a
 connection-loss message.
+
+In the `queued` phase, `queuedAt` uses the current command's creation time and
+falls back to the run request's creation time. In other phases, `queuedAt` is null.
 
 `DELETE /api/v1/threads/{id}?stop=true` records an event-backed deletion request
 and stops outstanding work. It returns `204` when deleted or `202` with the
