@@ -242,9 +242,9 @@
   background: var(--surface-2);
   color: var(--ink-1);
   font-family: var(--font-sans);
-  /* The weight ramp is 400/500/700 — identity initials take the name
-     register's 700. */
-  font-weight: 700;
+  /* The weight ramp is 400/500/600 — identity initials take the name
+     register's 600. */
+  font-weight: 600;
   position: relative;
 }
 

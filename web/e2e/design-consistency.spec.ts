@@ -176,7 +176,11 @@ for (const theme of ["light", "dark"] as const) {
       expect(measured.reference).not.toBeNull();
       for (const key of ["inventory", "emptyTag", "langBadge"] as const) {
         expect(measured[key], `${key} is missing from the specimen`).not.toBeNull();
-        expect(measured[key], `${key} drifted from the Badge geometry`).toEqual(measured.reference);
+        // The inventory pill is also `.code`: Space Mono ships Regular only
+        // and font-synthesis is off, so the code face is set at 400 rather
+        // than claiming a 500 it cannot draw. Every other property must match.
+        const expected = key === "inventory" ? { ...measured.reference, fontWeight: "400" } : measured.reference;
+        expect(measured[key], `${key} drifted from the Badge geometry`).toEqual(expected);
       }
     });
 

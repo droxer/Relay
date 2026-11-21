@@ -386,7 +386,7 @@
 
 .adm-assign-operator-name {
   /* The drawer subject leads the 14px name rows beneath it, so it takes the
-     700 heading role rather than a lighter title. */
+     600 heading role rather than a lighter title. */
   font: var(--type-heading);
   letter-spacing: var(--type-heading-track);
   color: var(--ink-1);

@@ -296,7 +296,7 @@ describe("weight ladder", () => {
     const weights = new Set(
       [...stripComments(roles).matchAll(/--type-[a-z-]+:\s*(\d{3})\s/g)].map((m) => m[1]),
     );
-    assert.deepEqual([...weights].sort(), ["400", "500", "700"]);
+    assert.deepEqual([...weights].sort(), ["400", "500", "600"]);
 
     const offenders: string[] = [];
     for (const sheet of surfaceSheets) {
@@ -316,7 +316,7 @@ describe("weight ladder", () => {
     for (const name of named) {
       const value = bridge.match(new RegExp(`--font-weight-${name}:\\s*(\\d{3});`))?.[1];
       assert.ok(value, `--font-weight-${name} is unmapped, so it falls back to Tailwind's default`);
-      assert.ok(["400", "500", "700"].includes(value), `--font-weight-${name} resolves to ${value}`);
+      assert.ok(["400", "500", "600"].includes(value), `--font-weight-${name} resolves to ${value}`);
     }
   });
 
@@ -331,7 +331,7 @@ describe("weight ladder", () => {
     // --type-label. A primitive that sets font-bold at those sizes puts the
     // same visual register on screen at two different weights depending on
     // which layer styled it, which reads as inconsistency rather than emphasis.
-    // 700 stays available above them — card.tsx pairs it with text-lg, the
+    // 600 stays available above them — card.tsx pairs it with text-lg, the
     // --type-heading rung, which is exactly right.
     const offenders: string[] = [];
     for (const { rel, text } of sources.filter((f) => f.rel.endsWith(".tsx"))) {
