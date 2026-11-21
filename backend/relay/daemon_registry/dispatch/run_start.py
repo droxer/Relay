@@ -41,7 +41,7 @@ def _run_start_command(
     context: dict[str, Any] | None,
     handoff_validation: dict[str, Any] | None,
     task_snapshot: dict[str, Any] | None = None,
-    permission_task: dict[str, Any] | None = None,
+    task_yolo: bool = False,
 ) -> dict[str, Any]:
     """The ``run.start`` command before skills and delivery bookkeeping."""
     images = (run_request.get("state") or {}).get("input_attachments")
@@ -59,14 +59,6 @@ def _run_start_command(
     task_id = run_request.get("taskId")
     workspace_task_id = task_id or (
         task_snapshot.get("id") if task_snapshot and workspace_layout == "task" else None
-    )
-    # A Task can supply permission consent without claiming execution.
-    task_owner = (permission_task or {}).get("ownerUserId")
-    task_yolo = (
-        permission_task is not None
-        and task_owner
-        and task_owner == session_snapshot.get("ownerUserId")
-        and permission_task.get("permissionMode") == "yolo"
     )
     return {
         "id": new_database_id(),

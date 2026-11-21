@@ -106,6 +106,7 @@ export interface ThreadTaskContext {
   threadId: string;
   eventCount: number;
   activeTaskId: string | null;
+  permissionMode?: TaskPermissionMode;
   nextSteps: string[];
 }
 

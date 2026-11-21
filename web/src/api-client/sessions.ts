@@ -265,13 +265,11 @@ export function answerPermissionRequest(
   sessionId: string,
   requestId: string,
   { decision, note, answers, always }: PermissionAnswerInput,
-  token?: string,
 ): Promise<RelaySession> {
   return apiJson<RelaySession>(
     `/threads/${encodeURIComponent(sessionId)}/permission-requests/${encodeURIComponent(requestId)}`,
     {
       method: "POST",
-      token,
       body: { decision, ...(note ? { note } : {}), ...(answers ? { answers } : {}), ...(always ? { always: true } : {}) },
     },
   );

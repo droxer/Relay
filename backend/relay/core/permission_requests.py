@@ -1,6 +1,6 @@
 """Runtime permission prompts: a live run asks a person before a tool runs.
 
-On a local computer with the native permission policy, the runtime's adapter
+On a Computer outside BoxLite with the native permission policy, the runtime's adapter
 forwards prompts through the daemon's permission broker. Each prompt reaches the
 backend as a `run.permission_requested` daemon event and is recorded as
 `agent.permission_requested`; a person answers through

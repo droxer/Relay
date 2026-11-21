@@ -78,8 +78,7 @@ export interface PermissionBroker {
   close(): Promise<void>;
 }
 
-/** Only a run on a local computer under the native policy asks a person, and
- *  only on a runtime whose registry entry names a permission adapter. */
+/** Runs outside BoxLite can ask through a runtime adapter under the native policy. */
 export function permissionPromptsApply(
   agent: AgentName,
   sandboxMode: DaemonNodeSandboxMode,
@@ -103,8 +102,8 @@ export async function startPermissionBroker(options: PermissionBrokerOptions): P
     serveConnection(socket, secret, options, brokerSignal);
   });
   try {
-    await listen(server, socketPath);
     writeFileSync(addressFile, JSON.stringify({ socket: socketPath, secret }), { mode: 0o600 });
+    await listen(server, socketPath);
   } catch (error) {
     rmSync(privateDir, { recursive: true, force: true });
     throw error;
@@ -190,8 +189,9 @@ function parseRequest(line: string, secret: string): PermissionQuestion | undefi
   }
   if (!parsed || typeof parsed !== "object" || !secretMatches(parsed.secret, secret)) return undefined;
   const questions = parsed.kind === "question" ? parseQuestions(parsed.questions) : undefined;
+  if (parsed.kind === "question" && !questions) return undefined;
   return {
-    kind: questions ? "question" : isQuestionKind(parsed.kind) && parsed.kind !== "question" ? parsed.kind : "tool",
+    kind: isQuestionKind(parsed.kind) ? parsed.kind : "tool",
     toolName: typeof parsed.toolName === "string" ? parsed.toolName : "",
     input: parsed.input ?? {},
     ...(typeof parsed.toolUseId === "string" && parsed.toolUseId ? { toolUseId: parsed.toolUseId } : {}),
@@ -205,8 +205,8 @@ function isQuestionKind(value: unknown): value is PermissionQuestion["kind"] {
 }
 
 /**
- * The questions a runtime asks, within the backend's bounds; undefined when
- * there are none well-formed, so the prompt falls back to a plain approval.
+ * The questions a runtime asks, within the backend's bounds. A prompt with
+ * no answerable questions cannot be forwarded to the backend.
  */
 export function parseQuestions(value: unknown): PermissionQuestionItem[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -255,6 +255,10 @@ export async function askPerson(
     runId: command.runId,
     agent: command.agent,
   };
+  const timeoutMs = options.timeoutMs ?? permissionTimeoutMs();
+  const deadline = new AbortController();
+  const timer = timeoutMs > 0 ? setTimeout(() => deadline.abort(timedOut(timeoutMs)), timeoutMs) : undefined;
+  const waiting = AbortSignal.any([signal, deadline.signal]);
   try {
     await options.postEvent({
       type: "run.permission_requested",
@@ -266,27 +270,20 @@ export async function askPerson(
         input: cappedInput(withReason(request)),
         ...(request.questions ? { questions: request.questions } : {}),
       },
-    }, signal);
+    }, waiting);
+    const answer = await pollDecision(requestId, options, waiting);
+    return waiting.aborted ? deny(cannotAsk(waiting.reason)) : answer;
   } catch (error) {
-    if (signal.aborted) return deny(cannotAsk(signal.reason));
+    if (waiting.aborted) return deny(cannotAsk(waiting.reason));
     options.logger?.warn("permission request not delivered", { ...scopeFields(command), requestId, error: errorMessage(error) });
     return deny(`${CANNOT_ASK}: the backend did not accept the request.`);
-  }
-  const timeoutMs = options.timeoutMs ?? permissionTimeoutMs();
-  const deadline = new AbortController();
-  const timer = timeoutMs > 0 ? setTimeout(() => deadline.abort(timedOut(timeoutMs)), timeoutMs) : undefined;
-  const waiting = AbortSignal.any([signal, deadline.signal]);
-  try {
-    const answer = await pollDecision(requestId, options, waiting);
-    // Nobody is waiting on an answer any more: the run gave up, the runtime
-    // hung up, or the deadline passed. Only the run ending leaves nothing
-    // open — the backend expires its prompts itself.
-    if (answer.behavior === "deny" && waiting.aborted && typeof waiting.reason === "string" && !options.signal?.aborted) {
-      await withdraw(requestId, waiting.reason, scope, options);
-    }
-    return answer;
   } finally {
     if (timer) clearTimeout(timer);
+    // The backend may have saved the prompt even if its acknowledgement never
+    // arrived. Try to close it without keeping the runtime waiting any longer.
+    if (waiting.aborted && typeof waiting.reason === "string" && !options.signal?.aborted) {
+      void withdraw(requestId, waiting.reason, scope, options);
+    }
   }
 }
 

@@ -211,6 +211,7 @@ type ThreadsViewProps = {
   onAnswerPermission: (requestId: string, answer: PermissionAnswerInput) => Promise<void>;
   onPermissionModeChange?: (mode: ThreadPermissionMode) => void;
   permissionModePending?: boolean;
+  inheritedPermissionMode?: ThreadPermissionMode;
   onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"], options?: import("./composer/Composer").ComposerDispatchOptions) => void | Promise<boolean | void>;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
@@ -316,6 +317,7 @@ export function ThreadsView({
   onAnswerPermission,
   onPermissionModeChange,
   permissionModePending,
+  inheritedPermissionMode,
   onSend,
   onCancelRun,
   onRetryAgent,
@@ -814,7 +816,7 @@ export function ThreadsView({
           onRuntimeNodeChange={onRuntimeNodeChange}
           running={running}
           permissionMode={activeSession
-            ? activeSession.permissionMode ?? activeSession.execution?.permissionMode ?? lifecycle.permissionMode ?? "ask"
+            ? activeSession.permissionMode ?? activeSession.execution?.permissionMode ?? inheritedPermissionMode ?? "ask"
             : undefined}
           permissionModePending={permissionModePending}
           onPermissionModeChange={!activeSession?.deletionRequestedAt

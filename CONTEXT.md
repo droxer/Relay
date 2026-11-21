@@ -407,9 +407,9 @@ _Avoid_: Reply (any message)
 A live run paused before a tool call, asking a person to allow or deny it
 (`permissionRequests` on the Thread). Unlike a Wait, the run is still
 executing and no Task changes status; it closes once — allowed, denied, or
-expired when its run ends first. Only a local computer with the native
-permission policy produces one; every runtime asks through its own adapter
-on one broker.
+expired when its run ends first. A Computer running outside BoxLite with
+the native permission policy can produce one. Each supported Runtime asks
+through its own adapter on one broker.
 _Avoid_: approval request, pending approval (both read as a turn decision),
 Wait
 
@@ -424,8 +424,10 @@ the setting to each new occurrence when it is created.
 The Thread owner's choice of `ask` or `yolo` for tool Permission Prompts,
 available in the chat input during a run. An explicit choice applies to
 current and later runs in that Thread. Without one, a Task run uses its
-dispatch-time mode and other runs use `ask`. Switching to `yolo` also allows
-open tool approvals. Runtime questions still require a person's answer.
+dispatch-time mode. A conversational run can inherit from a single Task
+linked in the same Project scope and owned by the Thread owner. Other runs
+use `ask`. Switching to `yolo` also allows open tool approvals. Runtime
+questions still require a person's answer.
 
 **Task Review**:
 A view of the newest linked Thread's recorded work for one Task: the requested

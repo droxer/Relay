@@ -99,8 +99,8 @@ function claudeQuestionKind(toolName: string): PermissionQuestion["kind"] {
 /** The broker question for one tool use; AskUserQuestion carries its questions. */
 export function claudeQuestion(toolName: string, input: unknown, toolUseId?: string): PermissionQuestion {
   const base = { toolName, input, ...(toolUseId ? { toolUseId } : {}) };
-  const questions = toolName === ASK_USER_QUESTION ? askUserQuestions(input) : undefined;
-  return questions ? { kind: "question", ...base, questions } : { kind: claudeQuestionKind(toolName), ...base };
+  if (toolName !== ASK_USER_QUESTION) return { kind: claudeQuestionKind(toolName), ...base };
+  return { kind: "question", ...base, questions: askUserQuestions(input) };
 }
 
 /** AskUserQuestion's `questions`, keyed by their text — that is how Claude keys the answers. */

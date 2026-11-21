@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { TaskPermissionMode } from "relay-core";
 import { listTaskEvents } from "../api";
 import { pathForAppState } from "../lib/appRoute";
 import { useTaskQueryRevision } from "./useTaskQueryRevision";
@@ -16,7 +15,6 @@ export type OpenTaskRecord = (target: { taskId: string; routineId?: string }) =>
 export type ThreadTaskLifecycle = {
   /** The header's task chip; undefined for a thread no task owns. */
   task?: ThreadTaskFact;
-  permissionMode?: TaskPermissionMode;
   /** The task's status changes in this thread, oldest first. */
   markers: LifecycleMarker[];
 };
@@ -83,7 +81,6 @@ export function useTaskThreadLifecycle({ tasks, session, currentUserId, onOpenTa
     return {
       markers,
       task: fact,
-      permissionMode: task.permissionMode,
     };
   }, [markers, onOpenTaskRecord, sessionId, task]);
 }

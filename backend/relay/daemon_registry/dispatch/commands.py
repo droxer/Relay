@@ -238,7 +238,7 @@ class CommandQueueMixin(RegistryState):
         self._assert_authorized(sandbox_id, token)
         self._mark_seen(sandbox_id)
         try:
-            session = self.store.get_session(session_id)
+            session = self.store.get_session_header(session_id)
         except (KeyError, FileNotFoundError):
             return None
         if permission_request_node(session, request_id) != sandbox_id:

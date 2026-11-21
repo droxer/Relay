@@ -42,12 +42,16 @@ def _create_session(client: TestClient) -> str:
     return response.json()["id"]
 
 
-def _dispatched_run(app, session_id: str, agent: str = "claude", **command_fields: object) -> dict:
+def _dispatched_run(
+    app, session_id: str, agent: str = "claude", *, ui_token: str | None = None,
+    **command_fields: object,
+) -> dict:
     registry = app.state.registry
+    owner = app.state.session_store.get_session_header(session_id)["ownerUserId"]
     registry.register({
-        "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
+        "sandboxId": "sbx_alice", "userId": owner, "token": "node_token",
         "protocolVersion": 1, "supportedAgents": [agent], "status": "ready",
-    })
+    }, ui_token=ui_token)
     request = registry.daemon_store.create_run_request({
         "nodeId": "sbx_alice", "sessionId": session_id, "taskGoal": "work",
         "assignments": [{"executorKind": agent}], "state": {},
@@ -130,6 +134,7 @@ def test_a_prompt_waits_on_the_thread_until_a_person_allows_it(monkeypatch) -> N
         [decision] = answered.json()["permissionDecisions"]
         assert decision["decision"] == "allow"
         assert decision["decidedBy"]
+        assert answered.json()["execution"]["permissionMode"] == "ask"
         assert _poll(client, session_id).json() == {"status": "allow"}
 
         assert _answer(client, session_id, decision="deny").status_code == 409
@@ -187,9 +192,13 @@ def test_only_the_asking_computer_may_poll_and_the_node_token_cannot_answer(
         client = TestClient(app)
         _bootstrap(client)
         session_id = _create_session(client)
-        _ask(client, _dispatched_run(app, session_id))
+        _ask(client, _dispatched_run(app, session_id, ui_token="legacy_ui_token"))
+        bob = client.post("/api/v1/admin/accounts", json={
+            "username": "bob", "email": "bob@example.com", "password": "kestrel-vault-8820", "role": "user",
+        })
+        assert bob.status_code == 201
         app.state.registry.register({
-            "sandboxId": "sbx_bob", "userId": "bob", "token": "bob_token",
+            "sandboxId": "sbx_bob", "userId": bob.json()["account"]["userId"], "token": "bob_token",
             "protocolVersion": 1, "supportedAgents": ["claude"], "status": "ready",
         })
 
@@ -208,13 +217,14 @@ def test_only_the_asking_computer_may_poll_and_the_node_token_cannot_answer(
         assert _poll(client, session_id, "perm_ffffffffffffffff").status_code == 404
 
         anonymous = TestClient(app)
-        answered = anonymous.post(
-            f"/api/v1/threads/{session_id}/permission-requests/{REQUEST_ID}",
-            json={"decision": "allow"},
-            headers=NODE_AUTH,
-        )
-        assert answered.status_code in (401, 403)
-        assert _poll(client, session_id).json() == {"status": "pending"}
+        for headers in (NODE_AUTH, {"Authorization": "Bearer legacy_ui_token"}):
+            answered = anonymous.post(
+                f"/api/v1/threads/{session_id}/permission-requests/{REQUEST_ID}",
+                json={"decision": "allow"},
+                headers=headers,
+            )
+            assert answered.status_code == 401
+            assert _poll(client, session_id).json() == {"status": "pending"}
 
 
 def test_a_malformed_prompt_is_refused(monkeypatch) -> None:

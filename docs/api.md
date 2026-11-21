@@ -1463,6 +1463,16 @@ decisions. Questions still require an answer, and existing standing grants
 continue to apply in Ask mode. The setting governs requests sent through
 Relay's Permission Prompt broker.
 
+`GET /tasks?view=summary&threadId={id}` includes
+`threadTaskContext.permissionMode`, the Task default for a future
+conversational run. A single Task owned by the Thread owner and linked in
+the same Project scope can supply this default. Other Threads default to
+`ask`. An Automation occurrence can supply its own mode.
+
+`POST /threads/{id}/permission-requests/{requestId}` takes the Thread owner's
+signed-in session and returns the updated Thread with its execution status.
+The daemon's prompt deadline covers delivery retries and polling for a decision.
+
 ## Team responsibilities and work acceptance
 
 ### Collaboration styles

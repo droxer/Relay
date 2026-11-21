@@ -80,6 +80,75 @@ test("standalone Thread renders real null Project summaries after reload and pol
   } finally { await stop(context.request, sessionId); }
 });
 
+test("Task tool permissions reach a running Codex turn and can be changed in the Thread", async ({ page, context }) => {
+  const { agent, identity, path } = await setup(page, context);
+  const api = context.request;
+  const task = await post(api, "/tasks", {
+    title: "Permission probe", computerId: identity, assignedAgentId: agent.id, createSession: true,
+  });
+  const [sessionId] = task.linkedSessionIds;
+  try {
+    await page.goto(`${path}/tasks/${task.id}`);
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit task", exact: true });
+    await editor.getByRole("combobox", { name: "Tool permissions" }).click();
+    await page.getByRole("option", { name: "YOLO (auto-approve)", exact: true }).click();
+    await editor.getByRole("button", { name: "Save task", exact: true }).click();
+    await expect.poll(async () => (await get(api, `/tasks/${task.id}`)).permissionMode).toBe("yolo");
+
+    await page.goto(`${path}/threads/${sessionId}`);
+    const mode = page.getByRole("combobox", { name: "Tool permissions" });
+    await expect(mode).toHaveText(/YOLO/);
+    await page.getByRole("textbox", { name: `Message ${agent.displayName}`, exact: true }).fill("Permission probe");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+
+    const transcript = page.getByRole("log");
+    const thread = () => get(api, `/threads/${sessionId}`);
+    const chooseMode = async (option: string) => {
+      await mode.click();
+      await page.getByRole("option", { name: option, exact: true }).click();
+    };
+    const answer = async (value: string) => {
+      await page.getByRole("textbox", { name: "Your answer", exact: true }).fill(value);
+      await page.getByRole("button", { name: "Answer", exact: true }).click();
+    };
+    await expect(page.getByText("Which color?", { exact: true })).toBeVisible();
+    await expect(transcript).toContainText('inherited: {"decision":"accept"}');
+    expect((await thread()).execution.permissionMode).toBe("yolo");
+    const updated = await api.patch(`/api/v1/tasks/${task.id}`, { data: { permissionMode: "ask" } });
+    expect(updated.ok(), await updated.text()).toBeTruthy();
+    expect((await thread()).execution.permissionMode).toBe("yolo");
+    await expect(mode).toHaveText(/YOLO/);
+    await chooseMode("Ask for approval");
+    await expect(mode).toHaveText(/Ask/);
+    await answer("Blue");
+    await expect(page.getByRole("button", { name: "Allow once", exact: true })).toBeVisible();
+    await chooseMode("YOLO · Auto-approve tool requests");
+    await expect(transcript).toContainText('pending: {"decision":"accept"}');
+    await expect(page.getByText("Which shape?", { exact: true })).toBeVisible();
+    await chooseMode("Ask for approval");
+    await expect(mode).toHaveText(/Ask/);
+    await page.reload();
+    await expect(mode).toHaveText(/Ask/);
+    await expect(page.getByText("Which shape?", { exact: true })).toBeVisible();
+    await answer("Circle");
+    await page.getByRole("button", { name: "Deny", exact: true }).click();
+    await expect(transcript).toContainText('restored: {"decision":"decline"}');
+    await expect(transcript).toContainText('first-question: {"answers":{"color":{"answers":["Blue"]}}}');
+    await expect(transcript).toContainText('second-question: {"answers":{"shape":{"answers":["Circle"]}}}');
+    await expect.poll(async () => (await thread()).execution.phase).toBe("terminal");
+    const finished = await thread();
+    expect(finished.permissionMode).toBe("ask");
+    expect(finished.agentRuns).toHaveLength(1);
+    expect(finished.permissionRequests ?? []).toEqual([]);
+  } finally {
+    const current = await get(api, `/threads/${sessionId}`);
+    if (!current.execution.canDelete) await stop(api, sessionId);
+    const response = await api.delete(`/api/v1/tasks/${task.id}`);
+    expect(response.ok(), await response.text()).toBeTruthy();
+  }
+});
+
 test("Project roster Automation exposes Run now and dashboard opens its own Tasks", async ({ page, context }) => {
   const { node, identity, agent } = await setup(page, context);
   // Occupy both real daemon slots so Run now must return an accepted queue
