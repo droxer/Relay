@@ -121,17 +121,32 @@
   margin-top: 0;
 }
 
-/* Six content levels, one compact ladder: 16/16/14/14/14/14, with weight splitting the
-   shared sizes (700 over 500). The ladder stays under the 16px pane title so
-   a content heading never rivals chrome, and h3/h4 sit at the 14px transcript
-   body where the rung is carried by weight alone — the same move the rest of
-   the system uses to separate roles inside one size. */
-.md-body h1 { font-size: var(--fs-title); } /* 16px/700 — weight from the shared rule */
-.md-body h2 { font-size: var(--fs-heading); } /* 16px/700 */
-.md-body h3 { font-size: var(--fs-transcript); } /* 14px/700 */
-.md-body h4 { font-size: var(--fs-transcript); font-weight: 500; } /* 14px/500 */
-.md-body h5 { font-size: var(--fs-transcript); font-weight: 500; }
-.md-body h6 { font-size: var(--fs-transcript); font-weight: 500; font-style: italic; }
+/* Six content levels, one compact ladder: 16/16/14/14/14/14, every level at
+   700. The ladder stays at the 16px thread title so a content heading never
+   rivals chrome, and the weight ladder has no 600, so levels that share a
+   size split by ink (and h1 by a soft rule) instead. A 500 heading read
+   weaker than the 700 `**bold**` in the paragraph under it.
+     h1 16 ink-1 + rule · h2 16 ink-1
+     h3 14 ink-1 · h4 14 ink-2 · h5/h6 14 ink-3 */
+.md-body h1 {
+  padding-bottom: var(--sp-2);
+  border-bottom: var(--hairline-soft);
+  font-size: var(--fs-title);
+}
+.md-body h2 { font-size: var(--fs-heading); }
+.md-body h3 { font-size: var(--fs-transcript); }
+.md-body h4 { font-size: var(--fs-transcript); color: var(--ink-2); }
+.md-body h5 { font-size: var(--fs-transcript); color: var(--ink-3); }
+.md-body h6 { font-size: var(--fs-transcript); color: var(--ink-3); }
+
+/* Transcript prose measure. The transcript column is wide enough for a code
+   fence or table, which at the 14px transcript size ran a paragraph past 110
+   characters — the eye loses the next line's start. Text blocks cap at
+   --measure-transcript; fences, tables, math, and diagrams keep the column.
+   A max, so on a phone or a narrow pane the column still governs. */
+.agent-prose > :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6, dl, .md-plain) {
+  max-width: var(--measure-transcript);
+}
 
 .md-body ul,
 .md-body ol {
@@ -542,6 +557,9 @@ html:lang(zh-TW) .md-body blockquote {
 .doc-prose h5,
 .doc-prose h6 {
   margin: var(--sp-7) 0 var(--sp-2);
+  /* The transcript ladder steps deep levels down in ink; a document's deep
+     headings already sit at the reading size, so they keep full ink. */
+  color: var(--ink-1);
   font-weight: 500;
 }
 

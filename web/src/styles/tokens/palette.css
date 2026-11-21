@@ -484,12 +484,18 @@
        --measure-tight  captions, empty-state lines, one-line hints
        --measure        the default — descriptions, summaries, side copy
        --measure-wide   long-form document body (agent-authored prose)
+       --measure-transcript  prose lines inside a thread turn
 
      Anything under --measure-tight is a layout width, not a measure; give it a
      px value and a reason. */
   --measure-tight: 34ch;
   --measure: 48ch;
   --measure-wide: 72ch;
+  /* The transcript column (--thread-measure) is sized for code fences and
+     tables, and at the 14px transcript size it ran a paragraph to ~120
+     characters. Prose blocks cap here instead (~600px), so a line holds ~90
+     characters (measured) while wide blocks keep the whole column. */
+  --measure-transcript: 68ch;
 
   /* Document inset — the gutter around a whole rendered FILE (Markdown prose,
      highlighted source, an HTML frame), as opposed to the --page-gutter that
@@ -698,10 +704,10 @@
   --leading-caps: 1.5;
   --leading-normal: 1.5;
   --leading-loose: 1.65;
-  /* Long-form prose (transcript answers, document previews). Loose is the
-     list/code rhythm; prose is one step above it because agent answers are
-     long mixed-script paragraphs that are read, not scanned — at 1.65 CJK
-     glyphs sit on each other's shoulders. */
+  /* Long-form prose in document previews (.doc-prose). One step above loose
+     because a document is long mixed-script paragraphs that are read, not
+     scanned. The thread transcript does not use it: it reads at
+     --leading-transcript (loose), the denser chat rhythm. */
   --leading-prose: 1.75;
 
   /* Tracking — READING roles set solid. The source system tightened its body

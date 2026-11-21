@@ -306,6 +306,32 @@ describe("markdown stylesheet", () => {
     assert.match(readWeb("src/styles/app.css"), /@import "katex\/dist\/katex\.min\.css" layer\(relay\)/);
   });
 
+  it("caps transcript prose at a reading measure while wide blocks keep the column", () => {
+    const rule = markdownCss.match(/\.agent-prose > :is\(([^)]*)\) \{([^}]*)\}/);
+    assert.ok(rule, "transcript prose needs its own measure rule");
+    const [, selectors, body] = rule;
+    for (const block of ["p", "ul", "ol", "blockquote", "h2", "h3", ".md-plain"]) {
+      assert.ok(selectors.split(/,\s*/).includes(block), `${block} must cap at the prose measure`);
+    }
+    // Fences, tables, and math are wide content: capping them would push a
+    // table into scroll at a width the column could have given it.
+    for (const wide of [".md-fence", ".md-table", "pre", "table", ".katex-display"]) {
+      assert.ok(!selectors.includes(wide), `${wide} must keep the full transcript column`);
+    }
+    assert.match(body, /max-width: var\(--measure-transcript\)/);
+  });
+
+  it("never sets a transcript heading lighter than inline bold", () => {
+    // `**bold**` is 700; a 500 heading read weaker than emphasis in the
+    // paragraph beneath it.
+    for (const level of ["h1", "h2", "h3", "h4", "h5", "h6"]) {
+      const rule = markdownCss.match(new RegExp(`^\\.md-body ${level} \\{([^}]*)\\}`, "m"));
+      assert.ok(rule, `missing .md-body ${level} rule`);
+      const weight = rule[1].match(/font-weight: (\d+)/);
+      assert.ok(!weight || Number(weight[1]) >= 700, `${level} must stay at 700, got ${weight?.[1]}`);
+    }
+  });
+
   it("keeps document previews at their own reading size with a reading measure", () => {
     assert.match(markdownCss, /\.doc-prose \{[^}]*font-size: var\(--fs-document\)/s);
     assert.match(markdownCss, /max-width: var\(--measure-wide\)/);
