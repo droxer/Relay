@@ -276,27 +276,41 @@ export function AssignmentField({
   fieldId,
   summaryId,
   emptyHint,
+  switcher,
+  alternate,
   ...select
 }: Parameters<typeof AssignmentSelect>[0] & {
   fieldId: string;
   summaryId: string;
   emptyHint: string;
+  /** A control above the picker that chooses what kind of assignee this is
+   *  (the drawer's Agent | Workflow switch). */
+  switcher?: ReactNode;
+  /** Replaces the picker and its summary while the switcher chooses another
+   *  kind. Kept inside this one field so flipping the switch never remounts
+   *  it and focus stays on the segment the reader pressed. */
+  alternate?: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
     <Field
       label={t("backlog.assignment_label")}
       wrapper="div"
-      htmlFor={fieldId}
+      htmlFor={alternate ? undefined : fieldId}
       className="task-assignment-field"
     >
-      <AssignmentSelect {...select} triggerId={fieldId} describedBy={summaryId} />
-      <AssignmentSummary
-        id={summaryId}
-        agent={select.selectedAgent}
-        team={select.selectedTeam}
-        emptyHint={emptyHint}
-      />
+      {switcher}
+      {alternate ?? (
+        <>
+          <AssignmentSelect {...select} triggerId={fieldId} describedBy={summaryId} />
+          <AssignmentSummary
+            id={summaryId}
+            agent={select.selectedAgent}
+            team={select.selectedTeam}
+            emptyHint={emptyHint}
+          />
+        </>
+      )}
     </Field>
   );
 }

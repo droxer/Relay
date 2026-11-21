@@ -15,6 +15,8 @@ import { ProjectWorkflowSelect } from "../workflow/ProjectWorkflowSelect";
 import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
 import { WorkflowSelect } from "../workflow/WorkflowSelect";
 import { workflowSelectionIssue } from "../../lib/workflowSelection";
+import { useKeyChange } from "../../hooks/useKeyChange";
+import { AssignmentKindSwitch, type AssignmentKind } from "./AssignmentKindSwitch";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -241,7 +243,14 @@ export function TaskDrawer({
   const assignmentSummaryId = `${fieldPrefix}-assignment-summary`;
   const busy = saving || deleting;
   const project = projects.find((item) => item.id === form.projectId);
-  const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project) && !form.assignedAgentId);
+  /* What the reader chose to assign before choosing who. A saved agent or
+     workflow decides it; with neither, the switch remembers the choice until
+     the drawer opens on another record. */
+  const [kindChoice, setKindChoice] = useState<AssignmentKind>("agent");
+  useKeyChange(`${open}:${form.id ?? ""}`, () => setKindChoice("agent"));
+  const assignmentKind: AssignmentKind = form.assignedWorkflowId && !form.assignedTeamId ? "workflow"
+    : form.assignedAgentId || form.assignedTeamId ? "agent" : kindChoice;
+  const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project) && assignmentKind === "workflow");
   const availableProjects = projects.filter((item) => item.enabled && !item.archivedAt);
   const projectLabelId = useId();
   const projectTriggerRef = useRef<HTMLButtonElement>(null);
@@ -299,6 +308,9 @@ export function TaskDrawer({
      agent or team — the server refuses one — only the way into a project. */
   const intake = form.variant === "backlog" && projectChoice !== "required" && !form.projectId && !form.computerId && !form.sourceRoutineId;
   const selectedTeam = teamOptions.find((team) => team.id === form.assignedTeamId);
+  /* Project work runs with one Project Agent or one Project Workflow; teams
+     are hidden there, so the switch is all that decides between the two. */
+  const offersWorkflow = Boolean(project) && !intake && !form.assignedTeamId;
   const projectAgentIds = project?.members.filter(member => member.enabled).map(member => member.agentId);
   const teamWorkflowIssue = workflowSelectionIssue(selectedTeam,
     form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
@@ -347,6 +359,22 @@ export function TaskDrawer({
         selectedAgent={assignedAgentView}
         selectedTeam={assignedTeamView}
         emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
+        switcher={offersWorkflow ? (
+          <AssignmentKindSwitch value={assignmentKind} disabled={saving} onChange={(kind) => {
+            setKindChoice(kind);
+            if (kind !== assignmentKind && (form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId)) {
+              onChange(clearTaskAssignment(form));
+            }
+          }} />
+        ) : undefined}
+        alternate={offersWorkflow && assignmentKind === "workflow" ? (
+          <ProjectWorkflowSelect triggerId={assignmentFieldId}
+            workflows={(workflowQuery.data?.workflows ?? []).filter(item => item.projectId === project?.id && item.enabled && item.stepAgentIds.every(id => projectAgentIds?.includes(id)))}
+            value={form.assignedWorkflowId || ""}
+            onChange={id => updateBase({ assignedWorkflowId: id, assignedAgentId: "", assignedAgent: "", assignedTeamId: "", collaborationStyle: null })}
+            disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
+            issue={Boolean(workflowIssue)} onRetry={() => void workflowQuery.refetch()} />
+        ) : undefined}
         onSelect={(selection) => {
           if (selection.kind === "none") {
             onChange(clearTaskAssignment(form));
@@ -470,11 +498,6 @@ export function TaskDrawer({
           <WorkflowSelect team={selectedTeam} projectId={project?.id} projectAgentIds={projectAgentIds} restrictToProject predefinedOnly={!project} inherit disabled={saving}
             value={form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null)}
             onChange={workflowId => onChange({ ...form, assignedWorkflowId: workflowId ?? "", collaborationStyle: null })} />
-        </Field> : project && !form.assignedAgentId ? <Field label={t("workflow.select_workflow")} hint={t("workflow.optional_assignment_hint")} wrapper="div">
-          <ProjectWorkflowSelect workflows={(workflowQuery.data?.workflows ?? []).filter(item => item.projectId === project.id && item.enabled && item.stepAgentIds.every(id => projectAgentIds?.includes(id)))} value={form.assignedWorkflowId || ""}
-            onChange={id => updateBase({ assignedWorkflowId: id, assignedAgentId: "", assignedAgent: "", assignedTeamId: "", collaborationStyle: null })}
-            disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
-            issue={Boolean(workflowIssue)} onRetry={() => void workflowQuery.refetch()} />
         </Field> : null}
         {form.variant === "backlog" ? (
           <div className={form.id ? undefined : "task-drawer-form-grid"}>
