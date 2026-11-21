@@ -73,7 +73,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
                 <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting(workflow)}><ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}</Button>
               </div> : null}
             </div>
-            <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={agentName} />
+            <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={agentName} agentImage={id => agents.find(agent => agent.id === id)?.profileImageUrl} />
             {availableTeams.length ? <p className="workflow-library-meta">{t("workflow.optional_teams", { names: availableTeams.map(team => team.name).join(", ") })}</p> : null}
           </li>;
         })}

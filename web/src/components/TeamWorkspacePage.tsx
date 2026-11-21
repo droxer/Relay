@@ -346,7 +346,8 @@ function TeamProfile({
                   <TeamWorkflowPreview team={team} workflowId={workflowId} members={memberIds.map((id) => ({
                     id, role: memberConfigs[id]?.role ?? agents.find((a) => a.id === id)?.defaultRole,
                     onRequest: memberConfigs[id]?.participation === "on_request",
-                  }))} leadId={leadId} approval={humanApproval} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id} />
+                  }))} leadId={leadId} approval={humanApproval} nameOf={(id) => agents.find((a) => a.id === id)?.displayName ?? id}
+                    imageOf={(id) => agents.find((a) => a.id === id)?.profileImageUrl} />
                   {style ? <div className="team-work-flags">
                     <label className="team-work-flag">
                       <Checkbox
@@ -394,7 +395,8 @@ function TeamProfile({
                 id: member.id, role: team.memberConfigs?.[member.id]?.role ?? member.defaultRole,
                 onRequest: team.memberConfigs?.[member.id]?.participation === "on_request",
               }))} leadId={team.leadAgentId ?? undefined} approval={team.humanApproval === true}
-                nameOf={(id) => team.members.find((member) => member.id === id)?.displayName ?? t("project.member_unavailable")} />
+                nameOf={(id) => team.members.find((member) => member.id === id)?.displayName ?? t("project.member_unavailable")}
+                imageOf={(id) => team.members.find((member) => member.id === id)?.profileImageUrl} />
             </section>}
           </form>
           {!editing ? <TeamWorkflowLibrary team={team} agents={workflowAgents} userId={userId} /> : null}

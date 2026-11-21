@@ -18,11 +18,12 @@ function isOpenRun(run: WorkflowRun): boolean {
 
 /** Each execution owns its frozen ledger. Reading every linked Thread also
  *  preserves earlier failed/cancelled runs after a Task starts again. */
-export function TaskWorkflowTimeline({ taskId, currentUserId, sessionIds, agentName, onOpenThread }: {
+export function TaskWorkflowTimeline({ taskId, currentUserId, sessionIds, agentName, agentImage, onOpenThread }: {
   taskId: string;
   currentUserId: string | undefined;
   sessionIds: readonly string[];
   agentName: (agentId: string) => string;
+  agentImage?: (agentId: string) => string | null | undefined;
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -78,7 +79,7 @@ export function TaskWorkflowTimeline({ taskId, currentUserId, sessionIds, agentN
   const renderRun = (entry: (typeof runs)[number]) => (
     <TaskWorkflowRun key={entry.run.workflowRunId} run={entry.run} sessionId={entry.sessionId}
       showApproval={entry === active && entry.canDecide && entry.run.status === "awaiting_approval"}
-      agentName={agentName} onOpenThread={onOpenThread} />
+      agentName={agentName} agentImage={agentImage} onOpenThread={onOpenThread} />
   );
 
   return <>
@@ -103,18 +104,19 @@ export function TaskWorkflowTimeline({ taskId, currentUserId, sessionIds, agentN
   </>;
 }
 
-function TaskWorkflowRun({ run, sessionId, showApproval, agentName, onOpenThread }: {
+function TaskWorkflowRun({ run, sessionId, showApproval, agentName, agentImage, onOpenThread }: {
   run: WorkflowRun;
   sessionId: string;
   showApproval: boolean;
   agentName: (agentId: string) => string;
+  agentImage?: (agentId: string) => string | null | undefined;
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   const started = new Date(run.startedAt);
   return (
     <article className="record-workflow-run">
-      <WorkflowRunSummary run={run} agentName={agentName} />
+      <WorkflowRunSummary run={run} agentName={agentName} agentImage={agentImage} />
       <div className="record-workflow-actions">
         {Number.isFinite(started.getTime()) ? (
           <time dateTime={run.startedAt}>{started.toLocaleString(i18n.language || undefined)}</time>
@@ -134,7 +136,7 @@ function TaskWorkflowRun({ run, sessionId, showApproval, agentName, onOpenThread
           <span>{t("workflow.run_steps")}</span>
           <DisclosureChevron size={ICON.sm} className="record-workflow-chevron" aria-hidden="true" />
         </summary>
-        <WorkflowRunLedger run={run} agentName={agentName} />
+        <WorkflowRunLedger run={run} agentName={agentName} agentImage={agentImage} />
       </details>
     </article>
   );
