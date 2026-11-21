@@ -128,6 +128,47 @@ test("uses a compact Home Task list and full Project counts", async ({ page }) =
   expect(scopes).toEqual(["home"]);
 });
 
+test("idle Home revalidates each compact collection once per poll", async ({ page }) => {
+  await page.clock.install();
+  await serve(page, "light");
+  await page.route("**/api/v1/daemon-nodes*", route =>
+    route.fulfill({ json: { nodes: [{ ...node, activeRuns: [] }, darkNode] } }));
+  const reads: { path: string; query: string; validator: string | null }[] = [];
+  const taskValidator = 'W/"home-tasks"';
+  const threadValidator = 'W/"thread-head"';
+  await page.route(/\/api\/v1\/(tasks|threads)(\?|\/|$)/, async route => {
+    const request = route.request();
+    const { pathname: path, search } = new URL(request.url());
+    const validator = await request.headerValue("if-none-match");
+    reads.push({ path, query: search, validator });
+    const isTasks = path === "/api/v1/tasks";
+    const etag = isTasks ? taskValidator : threadValidator;
+    if (validator === etag) return route.fulfill({ status: 304, headers: { etag } });
+    await route.fulfill({ headers: { etag }, json: isTasks
+      ? { tasks: tasks.filter(task => task.id === "t-retry") }
+      : { sessions: [pricing, webhook], homeTaskNeedsYou: 1 } });
+  });
+
+  await page.goto("/home");
+  await expect(queue(page)).toContainText("Add retry budget to webhook sender");
+  await expect.poll(() => reads.length).toBe(2);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 250));
+  const initial = [
+    { path: "/api/v1/tasks", query: "?view=summary&scope=home", validator: null },
+    { path: "/api/v1/threads", query: "?view=summary&limit=20&include=activity", validator: null },
+  ];
+  expect(reads).toEqual(expect.arrayContaining(initial));
+  await page.clock.runFor(24_000);
+  expect(reads).toHaveLength(2);
+  await page.clock.runFor(12_000);
+  await expect.poll(() => reads.length).toBe(4);
+  expect(reads.slice(2)).toEqual(expect.arrayContaining([
+    { ...initial[0], validator: taskValidator },
+    { ...initial[1], validator: threadValidator },
+  ]));
+  await expect(queue(page)).toContainText("Add retry budget to webhook sender");
+});
+
 test("loads notification details once when the bell opens", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await serve(page, "light");

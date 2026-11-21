@@ -14,9 +14,7 @@ def thread_list_activity(
 ) -> dict[str, Any]:
     user_id = actor["userId"]
     links, waits = ctx.task_store.thread_list_task_links([row["id"] for row in rows], user_id)
-    by_session: dict[str, dict[str, Any]] = {}
-    for link in links:
-        by_session.setdefault(str(link["sessionId"]), link)
+    by_session = {str(link["sessionId"]): link for link in links}
     for row in rows:
         task = by_session.get(row["id"])
         row["taskActivity"] = {

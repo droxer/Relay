@@ -247,7 +247,7 @@ def get_session(
 @router.get("/threads/{session_id}/execution")
 def get_execution_status(session_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
-    session = get_session_for_actor(ctx.session_store, session_id, actor)
+    session = get_session_header_for_actor(ctx.session_store, session_id, actor)
     return ctx.execution_lifecycle.status(session)
 
 

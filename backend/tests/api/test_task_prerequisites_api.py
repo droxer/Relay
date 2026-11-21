@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, update
+from sqlalchemy import delete, event, update
 
 from relay.app import create_app
 from relay.persistence.events import relay_event, relay_task_event
@@ -235,6 +235,42 @@ def test_home_summarizes_untriaged_work_and_keeps_due_intake_rows(project_contex
         "firstCreatedAt": quiet["createdAt"],
         "lastCreatedAt": due["createdAt"],
     }
+
+
+def test_home_checks_prerequisite_projects_in_one_compact_read(project_context):
+    app, client, project = project_context
+    projects = app.state.project_store
+    tasks = app.state.task_store
+    owner = project["ownerUserId"]
+    dependencies = {}
+    for index in range(8):
+        item = projects.create_project(owner, {
+            "name": f"Project {index}", "computerId": project["computerId"], "members": [],
+            "context": "Long context " * 10_000,
+        })
+        scope = {"ownerUserId": owner, "projectId": item["id"]}
+        upstream = tasks.create_task({**scope, "title": "Design"})
+        downstream = tasks.create_task({**scope, "title": "Build"})
+        tasks.set_task_prerequisites(downstream["id"], [upstream["id"]])
+        dependencies[downstream["id"]] = upstream["id"]
+
+    project_reads = []
+
+    def record_read(_conn, _cursor, statement, *_args):
+        if statement.startswith("SELECT projects."):
+            project_reads.append(statement)
+
+    event.listen(projects.engine, "before_cursor_execute", record_read)
+    try:
+        response = client.get("/api/v1/tasks?view=summary&scope=home")
+    finally:
+        event.remove(projects.engine, "before_cursor_execute", record_read)
+
+    assert response.status_code == 200
+    rows = response.json()["tasks"]
+    assert {row["id"]: row["waitingOnSummaries"][0]["id"] for row in rows} == dependencies
+    assert len(project_reads) == 1
+    assert "projects.snapshot" not in project_reads[0]
 
 
 def test_computer_board_scope_keeps_bound_and_unplaced_candidates(project_context):
@@ -732,7 +768,7 @@ def test_pickup_and_claim_refuse_a_waiting_task(project_context):
     assert store.claim_task_for_dispatch(second["id"], "codex") is None
 
 
-def test_list_dependency_summary_respects_project_access(project_context, monkeypatch):
+def test_list_dependency_summary_respects_task_and_project_access(project_context):
     app, client, project = project_context
     store = app.state.task_store
     bob = app.state.auth_store.ensure_user("bob", display_name="Sam Lee")
@@ -744,10 +780,26 @@ def test_list_dependency_summary_respects_project_access(project_context, monkey
     assert rows[dependent["id"]]["waitingOnSummaries"] == []
     assert client.get(f"/api/v1/tasks/{upstream['id']}").status_code == 403
 
-    # An accessible task alone does not grant the project's private metadata.
-    monkeypatch.setattr(app.state.project_store, "get_project", lambda _id: {**project, "ownerUserId": "bob"})
-    hidden_rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
-    assert hidden_rows[dependent["id"]]["waitingOnSummaries"] == []
+    foreign = app.state.project_store.create_project(bob["id"], {
+        "name": "Foreign Project", "computerId": project["computerId"], "members": [],
+    })
+    scope = {"ownerUserId": project["ownerUserId"], "projectId": foreign["id"]}
+    own_upstream = store.create_task({**scope, "title": "Visible Task in a foreign Project"})
+    own_dependent = store.create_task({**scope, "title": "Dependent Task in a foreign Project"})
+    store.set_task_prerequisites(own_dependent["id"], [own_upstream["id"]])
+    rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert own_upstream["id"] in rows
+    assert rows[own_dependent["id"]]["waitingOn"] == [own_upstream["id"]]
+    assert rows[own_dependent["id"]]["waitingOnSummaries"] == []
+
+    local = _task(client, project, "Visible Task in an owned Project")
+    assert _set(client, dependent, [local["id"]]).status_code == 200
+    rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert [summary["id"] for summary in rows[dependent["id"]]["waitingOnSummaries"]] == [local["id"]]
+    app.state.project_store.archive_project(project["id"], expected_version=project["version"])
+    rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert rows[dependent["id"]]["waitingOn"] == [local["id"]]
+    assert rows[dependent["id"]]["waitingOnSummaries"] == []
 
 
 def test_list_reuses_prerequisites_already_in_the_task_page(project_context, monkeypatch):

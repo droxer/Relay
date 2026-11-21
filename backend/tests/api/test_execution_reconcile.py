@@ -13,9 +13,11 @@ from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 
 from relay.app import create_app
 from relay.core.ids import new_database_id
+from relay.persistence.events import relay_event
 from relay.sessions.controller import SessionController
 from datetime import UTC
 
@@ -77,6 +79,50 @@ def _stop_requested_long_ago(app, request_id: str) -> None:
     state["_relay_stop_command_id"] = "cmd_stop"
     state["_relay_stop_requested_at"] = "2020-01-01T00:00:00+00:00"
     store.update_run_request(request_id, {"state": state})
+
+
+def test_execution_status_read_stays_scoped_with_a_long_transcript(monkeypatch, tmp_path):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap(client)
+    session_id = _create_session(client)
+    sessions = app.state.session_store
+    SessionController(sessions).record_agent_started(session_id, {
+        "runId": "legacy-running", "agent": "claude",
+    })
+    for sequence in range(64):
+        sessions.append_event(session_id, relay_event("agent.output", session_id, {
+            "runId": "legacy-running", "agent": "claude", "stream": "stdout",
+            "text": "x" * 8192, "sequence": sequence,
+        }), hydrate_events=False)
+
+    queries = []
+
+    def record_read(_conn, _cursor, statement, *_args):
+        if statement.startswith("SELECT"):
+            queries.append(statement)
+
+    store = app.state.registry.daemon_store
+    find_runs = store.list_active_runs
+    run_scopes = []
+
+    def record_scope(**options):
+        run_scopes.append(options.get("session_ids"))
+        return find_runs(**options)
+
+    monkeypatch.setattr(store, "list_active_runs", record_scope)
+    event.listen(sessions.engine, "before_cursor_execute", record_read)
+    try:
+        response = client.get(f"/api/v1/threads/{session_id}/execution")
+    finally:
+        event.remove(sessions.engine, "before_cursor_execute", record_read)
+
+    assert response.status_code == 200
+    assert response.json()["blockingReason"] == "orphaned_run"
+    assert not any("session_events" in query for query in queries)
+    assert sum("FROM sessions" in query for query in queries) == 1
+    assert run_scopes == [{session_id}]
 
 
 def test_delete_releases_an_execution_whose_computer_never_reported_exit(monkeypatch) -> None:

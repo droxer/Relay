@@ -232,9 +232,9 @@ class ExecutionLifecycleService:
         command = store.get_command(request["currentCommandId"]) if request and request.get("currentCommandId") else None
         if not request:
             # Preserve protection for old commands that predate run requests.
-            run = next((r for r in store.list_active_runs() if r.get("sessionId") == session["id"]), None)
-            if run:
-                command = store.get_command(run["commandId"])
+            runs = store.list_active_runs(session_ids={session["id"]})
+            if runs:
+                command = store.get_command(runs[0]["commandId"])
                 if command and command.get("status") not in TERMINAL:
                     request = {"status": "running", "state": {}}
         node_id = (request or {}).get("nodeId") or (command or {}).get("nodeId")

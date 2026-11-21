@@ -92,6 +92,19 @@ jobs:
           npm run build -w web
           node --test dist/web/tests/*.test.js
           npm run test:react -w web
+      - name: Check browser performance budgets
+        if: needs.changes.outputs.web == 'true'
+        working-directory: web
+        run: |
+          npx playwright install chromium
+          npx playwright test -c playwright.recovery.config.ts performance.spec.ts home.spec.ts --workers=2
+      - uses: actions/upload-artifact@v4
+        if: failure() && needs.changes.outputs.web == 'true'
+        with:
+          name: web-performance-traces
+          path: web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   concurrency-e2e:
     needs: changes
@@ -188,6 +201,13 @@ jobs:
       - name: Run Python tests including PostgreSQL migrations
         working-directory: backend
         run: uv run pytest
+      - name: Check page read budgets on PostgreSQL
+        working-directory: backend
+        env:
+          RELAY_TEST_STORE_BACKEND: postgres
+        run: |
+          uv run pytest tests/api/test_thread_summary_paging.py tests/api/test_task_prerequisites_api.py \
+            tests/api/test_execution_reconcile.py -k 'many_linked or compact_read or project_access or long_transcript' -q -n0
       - name: Exercise daemon connections and report recovery on PostgreSQL
         working-directory: backend
         env:

@@ -358,17 +358,30 @@ class TaskReadRows(TaskStoreState):
         waiting_session = tasks.c.snapshot["waitingSessionId"].as_string()
         source_routine = tasks.c.snapshot["sourceRoutineId"].as_string()
         filters = _live_owned_tasks(tasks, user_id)
+        # Rank narrow link rows first so only the winning Tasks need snapshot
+        # fields and parent titles. A Thread can have many historical links.
+        ranked = (
+            select(
+                links.c.session_id, tasks.c.id.label("task_id"),
+                func.row_number().over(
+                    partition_by=links.c.session_id,
+                    order_by=(tasks.c.updated_at.desc(), tasks.c.id.desc()),
+                ).label("position"),
+            )
+            .select_from(links.join(tasks, links.c.task_id == tasks.c.id))
+            .where(links.c.session_id.in_(session_ids), *filters)
+            .subquery()
+        )
         linked = (
-            select(links.c.session_id.label("sessionId"), tasks.c.id, tasks.c.number,
+            select(ranked.c.session_id.label("sessionId"), tasks.c.id, tasks.c.number,
                    tasks.c.title, tasks.c.status, tasks.c.is_routine.label("isRoutine"),
                    source_routine.label("sourceRoutineId"), parent.c.title.label("sourceTitle"),
                    waiting_session.label("waitingSessionId"))
-            .select_from(links.join(tasks, links.c.task_id == tasks.c.id))
+            .select_from(ranked.join(tasks, tasks.c.id == ranked.c.task_id))
             .outerjoin(parent, and_(cast(parent.c.id, Text) == source_routine, *_live_owned_tasks(parent, user_id)))
-            .where(links.c.session_id.in_(session_ids), *filters)
-            .order_by(tasks.c.updated_at.desc(), tasks.c.id.desc())
+            .where(ranked.c.position == 1)
         )
-        named_waits = select(waiting_session).where(
+        named_waits = select(waiting_session).distinct().where(
             *filters, tasks.c.is_routine.is_(False), tasks.c.status == "waiting_for_human",
             waiting_session.in_(session_ids),
         )
