@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, update
+from sqlalchemy import delete, event, update
 
 from relay.app import create_app
 from relay.persistence.events import relay_event, relay_task_event
@@ -235,6 +235,42 @@ def test_home_summarizes_untriaged_work_and_keeps_due_intake_rows(project_contex
         "firstCreatedAt": quiet["createdAt"],
         "lastCreatedAt": due["createdAt"],
     }
+
+
+def test_home_checks_prerequisite_projects_in_one_compact_read(project_context):
+    app, client, project = project_context
+    projects = app.state.project_store
+    tasks = app.state.task_store
+    owner = project["ownerUserId"]
+    dependencies = {}
+    for index in range(8):
+        item = projects.create_project(owner, {
+            "name": f"Project {index}", "computerId": project["computerId"], "members": [],
+            "context": "Long context " * 10_000,
+        })
+        scope = {"ownerUserId": owner, "projectId": item["id"]}
+        upstream = tasks.create_task({**scope, "title": "Design"})
+        downstream = tasks.create_task({**scope, "title": "Build"})
+        tasks.set_task_prerequisites(downstream["id"], [upstream["id"]])
+        dependencies[downstream["id"]] = upstream["id"]
+
+    project_reads = []
+
+    def record_read(_conn, _cursor, statement, *_args):
+        if statement.startswith("SELECT projects."):
+            project_reads.append(statement)
+
+    event.listen(projects.engine, "before_cursor_execute", record_read)
+    try:
+        response = client.get("/api/v1/tasks?view=summary&scope=home")
+    finally:
+        event.remove(projects.engine, "before_cursor_execute", record_read)
+
+    assert response.status_code == 200
+    rows = response.json()["tasks"]
+    assert {row["id"]: row["waitingOnSummaries"][0]["id"] for row in rows} == dependencies
+    assert len(project_reads) == 1
+    assert "projects.snapshot" not in project_reads[0]
 
 
 def test_computer_board_scope_keeps_bound_and_unplaced_candidates(project_context):

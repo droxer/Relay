@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select, update
 
 from relay.app import create_app
 from relay.persistence.events import relay_task_event
@@ -117,6 +118,42 @@ def test_summary_pages_walk_every_owned_thread_once_in_list_order(paged_threads)
     # tie, so pages must still split the one order without overlap.
     assert [len(page) for page in pages] == [2, 2, 1]
     assert [session_id for page in pages for session_id in page] == whole
+
+
+def test_thread_activity_reads_one_origin_per_thread_with_many_linked_tasks(paged_threads, monkeypatch):
+    client, _alice, _created = paged_threads
+    store = client.app.state.task_store
+    owner = user_id("alice")
+    first, second, *_ = _whole_list(client)
+    parent = store.create_task({"title": "Automation title", "ownerUserId": owner, "isRoutine": True})
+    candidates = []
+    for index in range(40):
+        task = store.create_task({"title": f"Occurrence {index}", "ownerUserId": owner, "sourceRoutineId": parent["id"]})
+        store.link_session(task["id"], first)
+        store.link_session(task["id"], second)
+        candidates.append(task["id"])
+    # When all timestamps tie, both SQL backends must pick the same winner.
+    with store.engine.begin() as conn:
+        stamp = conn.scalar(select(store.tasks.c.created_at).where(store.tasks.c.id == parent["id"]))
+        conn.execute(update(store.tasks).where(store.tasks.c.id.in_(candidates)).values(updated_at=stamp))
+
+    lookup = store.thread_list_task_links
+    reads = []
+
+    def bounded(session_ids, user_id):
+        origins, waits = lookup(session_ids, user_id)
+        reads.append((len(session_ids), len(origins)))
+        return origins, waits
+
+    monkeypatch.setattr(store, "thread_list_task_links", bounded)
+    response = client.get("/api/v1/threads?view=summary&include=activity&limit=2")
+    assert response.status_code == 200
+    assert reads == [(2, 2)]
+    winner = store.get_task(max(candidates))
+    assert [row["taskActivity"]["origin"] for row in response.json()["sessions"]] == [
+        {"kind": "routine", "taskId": winner["id"], "ref": f"#{winner['number']}",
+         "title": parent["title"], "status": "backlog"},
+    ] * 2
 
 
 def test_summary_thread_moved_to_top_is_not_served_twice(paged_threads):
