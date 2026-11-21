@@ -501,11 +501,18 @@ html:lang(zh-TW) .md-body blockquote {
   font-size: var(--fs-heading);
 }
 
+/* A displayed equation is read on its own: one rung larger than inline math,
+   a wider gap than a paragraph's, and block padding so sum limits, radicals,
+   and stacked fractions clear the scroll box's clipped edges. */
 .md-body .katex-display {
-  margin: var(--sp-4) 0;
-  padding-bottom: var(--sp-1);
+  margin: var(--sp-6) 0;
+  padding: var(--sp-2) 0;
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+.md-body .katex-display > .katex {
+  font-size: var(--fs-document-subheading);
 }
 
 /* ---- document variant ----
