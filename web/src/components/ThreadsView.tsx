@@ -662,6 +662,7 @@ export function ThreadsView({
             key={workflowRun.workflowRunId}
             run={workflowRun}
             agentName={(agentId) => logicalAgentNames[agentId] ?? t("project.member_unavailable")}
+            agentImage={(agentId) => logicalAgentImages[agentId]}
           />
         ) : null}
         {/* The wizard is instructions, not a chat log: it gets a plain scroller,

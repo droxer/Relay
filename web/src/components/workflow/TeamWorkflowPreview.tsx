@@ -13,13 +13,14 @@ import { useWorkflowName } from "./WorkflowSelect";
  *  what it means, then who does what — role slots for a predefined Workflow,
  *  numbered steps for a custom one. Both answer the same question, so they
  *  share one frame. */
-export function TeamWorkflowPreview({ team, workflowId, members, leadId, approval, nameOf }: {
+export function TeamWorkflowPreview({ team, workflowId, members, leadId, approval, nameOf, imageOf }: {
   team: AgentTeam;
   workflowId: string;
   members: SlotMember[];
   leadId?: string;
   approval?: boolean;
   nameOf: (agentId: string) => string;
+  imageOf?: (agentId: string) => string | null | undefined;
 }) {
   const { t } = useTranslation();
   const workflowName = useWorkflowName(team);
@@ -36,7 +37,7 @@ export function TeamWorkflowPreview({ team, workflowId, members, leadId, approva
     {style ? <>
       <p className="workflow-preview-hint">{t(`collab_style.${style}_hint`)}</p>
       <RoleSlots members={members} leadId={leadId} style={style} approval={approval} nameOf={nameOf} />
-    </> : custom ? <WorkflowStepSummary steps={custom.workflowSteps} agentName={nameOf} label={t("workflow.steps_of", { name: custom.name })} />
+    </> : custom ? <WorkflowStepSummary steps={custom.workflowSteps} agentName={nameOf} agentImage={imageOf} label={t("workflow.steps_of", { name: custom.name })} />
       : null}
   </div>;
 }

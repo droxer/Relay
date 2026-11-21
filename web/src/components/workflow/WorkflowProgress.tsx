@@ -18,6 +18,7 @@ import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useSheetDrag } from "../../hooks/useSheetDrag";
 import { DisclosureChevron, ICON } from "../icons";
 import { Button } from "../ui/button";
+import { WorkflowAgentFace } from "./WorkflowAgentFace";
 import {
   Dialog, DialogBackdrop, DialogClose, DialogContent, DialogPortal,
   DialogTitle, DialogTrigger, DialogViewport,
@@ -103,9 +104,10 @@ function AttemptResult({ result }: { result: WorkflowAttemptResult }) {
 type RunViewProps = {
   run: WorkflowRun;
   agentName: (agentId: string) => string;
+  agentImage?: (agentId: string) => string | null | undefined;
 };
 
-export function WorkflowRunSummary({ run, agentName }: RunViewProps) {
+export function WorkflowRunSummary({ run, agentName, agentImage }: RunViewProps) {
   const { t } = useTranslation();
   const current = currentWorkflowAssignment(run);
   const done = run.status === "completed" ? run.assignments.length : run.currentIndex;
@@ -121,14 +123,17 @@ export function WorkflowRunSummary({ run, agentName }: RunViewProps) {
       {current && run.status !== "completed" ? (
         <div className="workflow-run-step">
           <span>{workflowStepName(run, current)}</span>
-          <span className="workflow-run-agent">{agentName(current.workOwnerAgentId)}</span>
+          <span className="workflow-run-agent">
+            <WorkflowAgentFace imageUrl={agentImage?.(current.workOwnerAgentId)} />
+            {agentName(current.workOwnerAgentId)}
+          </span>
         </div>
       ) : null}
     </div>
   );
 }
 
-export function WorkflowProgress({ run, agentName }: RunViewProps) {
+export function WorkflowProgress({ run, agentName, agentImage }: RunViewProps) {
   const { t } = useTranslation();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [open, setOpen] = useState(false);
@@ -151,7 +156,7 @@ export function WorkflowProgress({ run, agentName }: RunViewProps) {
 
   return (
     <section className="workflow-progress" aria-label={t("workflow.timeline_title")}>
-      <WorkflowRunSummary run={run} agentName={agentName} />
+      <WorkflowRunSummary run={run} agentName={agentName} agentImage={agentImage} />
       {/* The phone band's progress: one segment per step, so how far the run
           has come reads before any number. Decorative; the count says it. */}
       <span className="workflow-progress-meter" aria-hidden="true"
@@ -177,12 +182,12 @@ export function WorkflowProgress({ run, agentName }: RunViewProps) {
               </header>
               <div ref={revealLiveStep} className="workflow-run-scroll" tabIndex={0} role="region" aria-label={t("workflow.run_steps")}>
                 <div className="workflow-run-dialog-summary">
-                  <WorkflowRunSummary run={run} agentName={agentName} />
+                  <WorkflowRunSummary run={run} agentName={agentName} agentImage={agentImage} />
                   {reason ? <p className="workflow-timeline-reason">{t(reason[0], reason[1])}</p> : null}
                   {block?.kind === "result" && block.note ? <p className="workflow-timeline-meta">{block.note}</p> : null}
                   {question?.question ? <p className="workflow-timeline-meta">{question.question}</p> : null}
                 </div>
-                <WorkflowRunLedger run={run} agentName={agentName} />
+                <WorkflowRunLedger run={run} agentName={agentName} agentImage={agentImage} />
               </div>
             </DialogContent>
           </DialogViewport>
@@ -193,7 +198,7 @@ export function WorkflowProgress({ run, agentName }: RunViewProps) {
 }
 
 /** The run's frozen steps, attempts and decisions in their recorded order. */
-export function WorkflowRunLedger({ run, agentName }: RunViewProps) {
+export function WorkflowRunLedger({ run, agentName, agentImage }: RunViewProps) {
   const { t } = useTranslation();
   const states = workflowStepStates(run);
   const block = workflowBlock(run);
@@ -213,7 +218,8 @@ export function WorkflowRunLedger({ run, agentName }: RunViewProps) {
               <span className="workflow-timeline-name">{workflowStepName(run, assignment)}</span>
               <span className="workflow-timeline-state">{t(STEP_STATE_KEY[state])}</span>
             </div>
-            <p className="workflow-timeline-meta">
+            <p className="workflow-timeline-meta workflow-timeline-owner">
+              <WorkflowAgentFace imageUrl={agentImage?.(assignment.workOwnerAgentId)} />
               {agentName(assignment.workOwnerAgentId)}
               {assignment.workflowAttempt > 1 ? ` · ${t("workflow.attempt", { attempt: assignment.workflowAttempt })}` : ""}
               {assignment.awaitApproval ? ` · ${t("workflow.gate_badge")}` : ""}

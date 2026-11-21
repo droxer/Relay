@@ -337,6 +337,39 @@
   color: var(--ink-3);
 }
 
+/* The owner's profile image leads their name wherever a step names one. */
+.workflow-agent-face {
+  display: inline-flex;
+  flex: none;
+  width: var(--avatar-xs);
+  height: var(--avatar-xs);
+  vertical-align: middle;
+}
+
+.workflow-agent-face > .profile-image {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-2);
+}
+
+.workflow-run-agent,
+.workflow-timeline-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+}
+
+.workflow-flow .workflow-agent-face {
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+}
+
+/* The step's order, small ahead of its name now the avatar is the owner's. */
+.workflow-flow-index {
+  margin-right: var(--sp-1);
+  color: var(--ink-3);
+}
+
 .workflow-progress-status {
   color: var(--tone, var(--ink-2));
   font: var(--type-label-strong);

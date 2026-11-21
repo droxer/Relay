@@ -100,7 +100,7 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
               {!workflow.ownerTeamId ? <Button type="button" variant="ghost" size="dense" disabled={change.isPending || isDefault} onClick={() => apply(() => linkTeamWorkflow(team.id, workflow.id, false))}>{t("workflow.unassign")}</Button> : <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>}
             </div> : null}
           </div>
-          <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={id => agents.find(agent => agent.id === id)?.displayName ?? t("project.member_unavailable")} />
+          <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={id => agents.find(agent => agent.id === id)?.displayName ?? t("project.member_unavailable")} agentImage={id => agents.find(agent => agent.id === id)?.profileImageUrl} />
         </li>;
       })}
     </ul>
