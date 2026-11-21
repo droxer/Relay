@@ -19,22 +19,32 @@ const fontsDir = path.join(repoRoot, "web", "src", "app", "fonts");
 const readWebSource = (rel: string) => readFileSync(path.join(repoRoot, "web", "src", rel), "utf8");
 
 describe("local typography assets", () => {
-  it("ships the technical face locally with its license", () => {
-    const mono = path.join(fontsDir, "JetBrainsMono-Variable.woff2");
-    assert.ok(existsSync(mono), "missing JetBrainsMono-Variable.woff2");
-    assert.ok(statSync(mono).size > 1024, "JetBrainsMono-Variable.woff2 is not a materialized font binary");
-    assert.equal(readFileSync(mono).subarray(0, 4).toString("ascii"), "wOF2", "JetBrainsMono-Variable.woff2 is not WOFF2");
+  const VENDORED = [
+    ["InterVariable-Latin.woff2", "OFL-Inter.txt"],
+    ["BricolageGrotesque-Variable-Latin.woff2", "OFL-BricolageGrotesque.txt"],
+    ["JetBrainsMono-Variable.woff2", "OFL-JetBrainsMono.txt"],
+  ] as const;
 
+  it("ships each vendored face locally with its license", () => {
     const attributes = readFileSync(path.join(repoRoot, ".gitattributes"), "utf8");
     assert.doesNotMatch(attributes, /web\/src\/app\/fonts\/.*filter=lfs/);
-    assert.ok(existsSync(path.join(fontsDir, "OFL-JetBrainsMono.txt")), "missing JetBrains Mono license");
+    for (const [face, license] of VENDORED) {
+      const file = path.join(fontsDir, face);
+      assert.ok(existsSync(file), `missing ${face}`);
+      assert.ok(statSync(file).size > 1024, `${face} is not a materialized font binary`);
+      // Latin subsets stay small; a full multi-script build checked in by
+      // mistake would put every visitor on a several-hundred-KB download.
+      assert.ok(statSync(file).size < 120 * 1024, `${face} is larger than a Latin subset should be`);
+      assert.equal(readFileSync(file).subarray(0, 4).toString("ascii"), "wOF2", `${face} is not WOFF2`);
+      assert.ok(existsSync(path.join(fontsDir, license)), `missing ${license}`);
+    }
 
-    // The mono is the ONLY vendored face; a retired binary left in the tree
+    // These are the ONLY vendored files; a retired binary left in the tree
     // would ship bytes no stylesheet names.
-    assert.deepEqual(readdirSync(fontsDir).sort(), ["JetBrainsMono-Variable.woff2", "OFL-JetBrainsMono.txt"]);
+    assert.deepEqual(readdirSync(fontsDir).sort(), VENDORED.flat().slice().sort());
   });
 
-  it("loads no sans web font — the reading face is the platform's own", () => {
+  it("loads only the vendored faces — no font package, Google Fonts, or CDN", () => {
     const manifest = JSON.parse(readFileSync(path.join(repoRoot, "web", "package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
@@ -44,8 +54,8 @@ describe("local typography assets", () => {
     assert.deepEqual(fontPackages, [], "the web app must not depend on a font package");
 
     const layout = readWebSource("app/layout.tsx");
-    assert.doesNotMatch(layout, /next\/font\/google|@fontsource/, "the layout must not load a sans web font");
-    assert.equal([...layout.matchAll(/localFont\(/g)].length, 1, "the mono is the only locally loaded face");
+    assert.doesNotMatch(layout, /next\/font\/google|@fontsource/, "faces are vendored, never fetched at build time");
+    assert.equal([...layout.matchAll(/localFont\(/g)].length, VENDORED.length, "every vendored face loads once, and nothing else does");
     assert.doesNotMatch(layout, /fonts\.(?:googleapis|gstatic)\.com/, "the layout must not reach a font CDN");
   });
 
@@ -54,7 +64,7 @@ describe("local typography assets", () => {
       const code = readWebSource(file).replace(/\/\*[\s\S]*?\*\//g, "");
       assert.doesNotMatch(
         code,
-        /Geist|IBM Plex|Optimistic VF|Montserrat|Mona Sans|Noto Sans (?:SC |TC )?Variable|--font-app-(?:sans|cjk)/,
+        /Geist|IBM Plex|Optimistic VF|Montserrat|Mona Sans|Noto Sans (?:SC |TC )?Variable|--font-app-cjk/,
         `${file} still references a retired family`,
       );
     }
@@ -130,29 +140,40 @@ describe("application typography roles", () => {
     }
   });
 
-  it("wires the system sans for every reading and display role, mono for technical text only", () => {
+  it("wires Inter for reading, Bricolage Grotesque for display, mono for technical text only", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");
 
-    // The sans leads with the platform faces in a fixed order: Apple, then
-    // Windows, then Android/ChromeOS, then the older and Linux fallbacks.
+    // Each vendored face is injected by the layout as a --font-app-* variable
+    // and every one of them is put on <html>.
+    for (const [face, variable] of [
+      ["InterVariable-Latin.woff2", "--font-app-sans"],
+      ["BricolageGrotesque-Variable-Latin.woff2", "--font-app-display"],
+      ["JetBrainsMono-Variable.woff2", "--font-app-mono"],
+    ]) {
+      assert.match(layout, new RegExp(`src:\\s*["']\\./fonts/${face.replace(/\./g, "\\.")}["']`));
+      assert.match(layout, new RegExp(`variable:\\s*["']${variable}["']`));
+    }
+    assert.match(layout, /className=\{`\$\{appSans\.variable\} \$\{appDisplay\.variable\} \$\{appMono\.variable\}`\}/);
+
+    // The sans leads with Inter, then the platform faces in a fixed order:
+    // Apple, then Windows, then Android/ChromeOS, then the older and Linux
+    // fallbacks — they carry any glyph outside the Latin subset.
     assert.match(
       palette,
-      /--font-sans:\s*-apple-system,\s*BlinkMacSystemFont,\s*"Segoe UI",\s*Roboto,\s*"Helvetica Neue",\s*"Noto Sans",\s*Arial,/,
+      /--font-sans:\s*var\(--font-app-sans\),\s*"Inter",\s*-apple-system,\s*BlinkMacSystemFont,\s*"Segoe UI",\s*Roboto,\s*"Helvetica Neue",\s*"Noto Sans",\s*Arial,/,
     );
     // It ends on its generic and carries the color-emoji faces after it so a
     // pictograph never renders as a monochrome outline.
     assert.match(palette, /--font-sans:[^;]*sans-serif,\s*"Apple Color Emoji",\s*"Segoe UI Emoji",\s*"Segoe UI Symbol",\s*"Noto Color Emoji";/);
 
-    // The technical face is the vendored JetBrains Mono, injected by the layout.
-    assert.match(layout, /src:\s*["']\.\/fonts\/JetBrainsMono-Variable\.woff2["']/);
-    assert.match(layout, /variable:\s*["']--font-app-mono["']/);
+    // The technical face is the vendored JetBrains Mono.
     assert.match(palette, /--font-mono:\s*var\(--font-app-mono\),\s*["']JetBrains Mono["']/);
 
-    // The display tier is the SANS family at a heavier weight — hierarchy
-    // comes from weight and size, never from a second face. The mono is
-    // technical text only.
-    assert.match(palette, /--font-display:\s*var\(--font-sans\);/);
+    // The display tier is Bricolage Grotesque, falling back to the whole sans
+    // stack so Han and non-Latin titles resolve exactly as reading text does.
+    // The mono is technical text only.
+    assert.match(palette, /--font-display:\s*var\(--font-app-display\),\s*"Bricolage Grotesque",\s*var\(--font-sans\);/);
     assert.doesNotMatch(
       palette,
       /--font-display:[^;]*(--font-app-mono|JetBrains|Mono)/,
@@ -214,7 +235,8 @@ describe("application typography roles", () => {
   it("sets the reading tiers solid and tightens only the display tier and the caps", () => {
     const palette = readWebSource("styles/tokens/palette.css");
 
-    // The system UI faces carry their own per-size tracking, so no READING
+    // Inter (via its optical-size axis) and the platform fallbacks carry their
+    // own per-size tracking, so no READING
     // role adds one. The zero-valued tokens are the design, not missing
     // values; they keep the paired-track contract greppable.
     assert.match(palette, /--track-body:\s*0;/);
@@ -373,12 +395,11 @@ describe("application typography roles", () => {
 
     // Agent output can be Chinese while the surrounding controls remain in
     // English, so glyph coverage cannot depend on html:lang(zh-CN).
-    // --font-display aliases --font-sans, so resolve one level of indirection
-    // before checking the stack.
+    // --font-display ends on var(--font-sans), so expand token references
+    // (one level) before checking the stack.
+    const familyOf = (role: string) => root.match(new RegExp(`--font-${role}:\\s*([^;]+);`))?.[1] ?? "";
     for (const role of ["sans", "display", "mono"]) {
-      let family = root.match(new RegExp(`--font-${role}:\\s*([^;]+);`))?.[1] ?? "";
-      const alias = family.match(/^var\(--font-([a-z-]+)\)$/)?.[1];
-      if (alias) family = root.match(new RegExp(`--font-${alias}:\\s*([^;]+);`))?.[1] ?? "";
+      const family = familyOf(role).replace(/var\(--font-(sans|display|mono)\)/g, (_, alias: string) => familyOf(alias));
       assert.match(family, /"PingFang SC"/, `${role} is missing the macOS CJK fallback`);
       assert.match(family, /"Microsoft YaHei/, `${role} is missing the Windows CJK fallback`);
       assert.match(family, /"Noto Sans/, `${role} is missing the Linux CJK fallback`);

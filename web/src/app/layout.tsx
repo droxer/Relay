@@ -13,8 +13,29 @@ import { earlyAuthProbeScript } from "../lib/earlyAuthProbe";
 import { LANDING_HERO_SHOT, LANDING_HERO_SIZES, landingShotSrc, landingShotSrcSet } from "../lib/landing";
 import { Providers } from "./providers";
 
-// The reading face is the platform's own UI face (see --font-sans in
-// styles/tokens/palette.css), so no sans web font is loaded.
+// Relay's own faces, vendored and subset to Latin (Basic, Latin-1, Extended-A,
+// general punctuation): Han and every other script falls through the stacks
+// in styles/tokens/palette.css to the platform's faces, so Chinese reads in
+// PingFang / Microsoft YaHei exactly as before. Inter carries reading and
+// control text (wght 400–700, optical sizes 14–32); Bricolage Grotesque
+// carries the display roles only (titles, page names, numbers, the landing
+// hero) at the 500/700 weights they use. next/font sizes a local fallback to
+// each face's metrics, so the swap after first paint does not shift layout.
+const appSans = localFont({
+  src: "./fonts/InterVariable-Latin.woff2",
+  variable: "--font-app-sans",
+  display: "swap",
+  weight: "400 700",
+  style: "normal",
+});
+
+const appDisplay = localFont({
+  src: "./fonts/BricolageGrotesque-Variable-Latin.woff2",
+  variable: "--font-app-display",
+  display: "swap",
+  weight: "500 700",
+  style: "normal",
+});
 
 // Technical text stays on the compact JetBrains Mono face already vendored by
 // the application. Its Latin subset is sufficient because the mono stacks
@@ -145,7 +166,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={appMono.variable}
+      className={`${appSans.variable} ${appDisplay.variable} ${appMono.variable}`}
       suppressHydrationWarning
     >
       <head>

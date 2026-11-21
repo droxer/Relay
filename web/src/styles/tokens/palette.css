@@ -738,26 +738,36 @@
      sentence case since 2026-10-09 and set solid. */
   --track-caps: 0.03em;
 
-  /* Families — the platform's own UI face carries reading, control, and display
-     text, separated by the 400/500/700 product ladder rather than by face:
-     San Francisco on Apple, Segoe UI on Windows, Roboto on Android/ChromeOS,
-     Noto Sans on Linux. No sans web font is loaded, so reading text never
-     swaps after first paint, and the stack is one list for English and
-     Chinese alike. JetBrains Mono (--font-app-mono, vendored and injected by
-     app/layout.tsx) remains technical text only and is sized to its own
-     metrics. */
+  /* Families — three vendored faces, each injected by app/layout.tsx as a
+     --font-app-* variable and subset to Latin (2026-11-21):
+     - Inter (--font-app-sans) carries reading and control text. Relay is for
+       everyone who hands work to agents, not only developers, so the reading
+       face is the clearest neutral one rather than a developer-coded grotesk.
+       Its optical-size axis follows font-size (font-optical-sizing: auto).
+     - Bricolage Grotesque (--font-app-display) carries the display roles only
+       — titles, page names, numbers, the landing hero — and is where Relay's
+       typographic voice lives. Hierarchy below the display tier still rides
+       the 400/500/700 ladder inside Inter.
+     - JetBrains Mono (--font-app-mono) remains technical text only and is
+       sized to its own metrics.
+     Behind each vendored face the platform UI faces follow (San Francisco,
+     Segoe UI, Roboto, Noto Sans), so a glyph outside the Latin subset — or a
+     failed font load — still lands on a native face, and the stack stays one
+     list for English and Chinese alike. */
   /* Transcript content is multilingual even when the UI language is English.
      The Simplified Chinese faces sit behind the Latin ones so agent-authored
      Han never depends on a browser's last-resort substitution (which, under
      lang="en", may pick a Japanese or Traditional face). */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-display: var(--font-sans);
+  --font-sans: var(--font-app-sans), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-display: var(--font-app-display), "Bricolage Grotesque", var(--font-sans);
   --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans SC", "Noto Sans TC", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 
-  /* OpenType — the base feature recipe every face starts from. System UI faces
-     assign their stylistic sets differently (on San Francisco ss01/ss02 redraw
-     the 6, 9 and 4), so none is switched on: the recipe is the default kerning
-     only. (The vendored mono carries neither set, so code is unaffected.) It
+  /* OpenType — the base feature recipe every face starts from. It is shared by
+     Inter, Bricolage Grotesque, JetBrains Mono and the platform fallbacks, and
+     each face assigns its stylistic sets and character variants differently
+     (Inter's cv05 tails the l, the mono's character variants mean other
+     things, and on San Francisco ss01/ss02 redraw the 6, 9 and 4), so none is
+     switched on: the recipe is the default kerning only. It
      stays a token because `font-feature-settings` REPLACES rather than
      adds — rules that want tabular figures lead with this and append "tnum". */
   --font-features: "kern" 1;
