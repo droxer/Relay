@@ -10,12 +10,16 @@ from typing import Any
 from loguru import logger
 from ...collaboration.models import (
     COLLABORATION_MANIFEST_STATE_KEY,
+    project_id_for_task_handoff,
 )
 from ...core.ids import new_database_id, new_relay_id, now_iso
 from ...core.models import AGENT_NAMES
 from ...core.runtime_status import executor_not_ready_message
 from ...core.next_steps import NEXT_STEPS_RELATIVE_PATH
+from ...core.project_roles import project_member_ids
 from ...core.workspace_layout import workspace_artifacts_dir
+from ...persistence.engine import store_transaction
+from ...sessions.controller import SessionController
 from ...tasks.execution import request_execution_owner
 from ...tasks.workspace import task_workspace_subpath
 from ...core.daemon_capabilities import (
@@ -506,13 +510,51 @@ class AssignmentDeliveryMixin(RegistryState):
             return self.daemon_store.get_run_request(run_request["id"]) or run_request
         # A staged command is not claimable. Publish it only after its durable
         # run-request link exists; reaping can safely publish after a crash.
-        published = self.daemon_store.publish_command(
-            command["id"], request_id=updated["id"]
-        )
+        published = self._publish_run_start(updated, command)
         if not published:
             return self.daemon_store.get_run_request(updated["id"]) or updated
         self._track_active_command(node_id, command)
         return updated
+
+    def _publish_run_start(
+        self, request: dict[str, Any], command: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        command_id = command["id"]
+        manifest = (request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+        task_id = request.get("taskId")
+        project_id = project_id_for_task_handoff(manifest, task_id)
+        if project_id is None:
+            return self.daemon_store.publish_command(command_id, request_id=request["id"])
+
+        # Roster edits lock the same Project row. Hold it until the command
+        # becomes claimable or the undelivered reservation is settled.
+        session_id = request["sessionId"]
+        with self.dispatch_scope([request["nodeId"]]), store_transaction(self.daemon_store.engine):
+            project = (
+                self.project_store.get_project(project_id, for_update=True)
+                if self.project_store else None
+            )
+            agent_id = command.get("logicalAgentId")
+            with self.store.mutation_scope(session_id):
+                if isinstance(agent_id, str) and agent_id in project_member_ids(project or {}):
+                    published = self.daemon_store.publish_command(command_id, request_id=request["id"])
+                    if published and published["status"] == "queued":
+                        session = self.store.get_session_header(session_id)
+                        decision_id = manifest["handoffContext"].get("decisionId")
+                        actor = next((d.get("actorUserId") for d in session.get("decisions", [])
+                                      if d.get("id") == decision_id), None)
+                        SessionController(self.store).record_participants_joined(session_id, [agent_id], actor)
+                    return published
+                staged = self.daemon_store.get_command(command_id)
+                if staged and staged["status"] == "pending":
+                    reason = "project_agent_not_member"
+                    cancelled = self.cancel_run_request_before_delivery(request["id"], reason)
+                    if cancelled:
+                        SessionController(
+                            self.store, task_store=self.task_store, task_id=task_id,
+                            task_execution_owner=request_execution_owner(cancelled),
+                        ).fail_session(session_id, reason)
+                return None
 
     def _ensure_agent_started_for_command(
         self, run_request: dict[str, Any], command: dict[str, Any]

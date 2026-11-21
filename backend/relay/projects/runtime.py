@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, is_project_manager
+from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, is_project_manager, project_member_ids
 
 from ..collaboration.styles import resolve_collaboration_style
 from ..core.computer_identity import computer_id
@@ -26,14 +26,6 @@ def project_work_error(project: dict[str, Any] | None) -> str | None:
     if not project.get("enabled", True):
         return "project_disabled"
     return None
-
-
-def project_member_ids(project: dict[str, Any]) -> set[str]:
-    return {
-        member["agentId"]
-        for member in project.get("members", [])
-        if member.get("enabled", True)
-    }
 
 
 def project_listed_agent_ids(project: dict[str, Any]) -> set[str]:

@@ -102,7 +102,7 @@ def apply_proposal(ctx: Any, actor: Actor, project: dict[str, Any], proposal_id:
     key = body.get("idempotencyKey")
     if not isinstance(key, str) or not 1 <= len(key) <= 200:
         raise ManagerError("manager_idempotency_key_required", 400)
-    with ctx.project_store.manager_transaction(project["id"]) as current:
+    with ctx.registry.dispatch_lock, ctx.project_store.manager_transaction(project["id"]) as current:
         if current["ownerUserId"] != actor["userId"]:
             raise ManagerError("project_forbidden", 403)
         if code := project_work_error(current):

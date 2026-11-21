@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 
 from sqlalchemy import (
     Index,
 )
 
-from ..engine import create_all_tables, shared_engine
+from ..engine import after_store_commit, create_all_tables, shared_engine
 from ..sql import metadata as shared_metadata
 from ..tables import daemon as daemon_tables
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
@@ -64,7 +65,7 @@ class DatabaseDaemonStore(
         self._command_changes.attach(listener, database_channel)
 
     def _notify_command(self, node_id: str) -> None:
-        self._command_changes.fire(node_id)
+        after_store_commit(self.engine, partial(self._command_changes.fire, node_id))
 
     def set_workspace_listener(
         self, listener: Callable[[str], None], *, database_channel: str | None = None

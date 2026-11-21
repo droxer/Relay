@@ -86,6 +86,9 @@ class RegistryState:
         def _dispatch_run_start(self, run_request: dict[str, Any], node_id: str, command: dict[str, Any]) -> dict[str, Any]:
             ...
 
+        def _publish_run_start(self, request: dict[str, Any], command: dict[str, Any]) -> dict[str, Any] | None:
+            ...
+
         # Methods one mixin calls on another, declared so each mixin type-checks
         # alone. This list is the registry's internal interface between concerns.
         def _age_ms(self, iso_timestamp: str) -> int:

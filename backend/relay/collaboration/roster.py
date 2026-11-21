@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..core.human_waits import QUESTION_ID_PREFIX
+from ..core.project_roles import project_member_ids
 from ..core.workflow_selection import default_workflow_id, predefined_style
 from ..projects.runtime import (
     ProjectDispatchError,
-    project_member_ids,
     project_thread_assignments,
     project_computer_assignment_error,
     project_runtime_snapshot,

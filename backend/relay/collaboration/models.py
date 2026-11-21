@@ -15,6 +15,14 @@ COLLABORATION_ADMISSION_EXPIRED_OUTCOME = (
 COLLABORATION_ADMISSION_EXPIRED_ERROR = "Collaboration admission expired before its authoritative round event was committed."
 
 
+def project_id_for_task_handoff(manifest: dict[str, Any], task_id: str | None) -> str | None:
+    if task_id and manifest.get("handoffContext"):
+        project_id = (manifest.get("projectSnapshot") or {}).get("projectId")
+        if isinstance(project_id, str) and project_id:
+            return project_id
+    return None
+
+
 class CollaborationIdempotencyError(ValueError):
     """The caller reused an admission key for a different semantic request."""
 

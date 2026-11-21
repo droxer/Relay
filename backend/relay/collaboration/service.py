@@ -27,6 +27,7 @@ from .models import (
     MessageIntent,
     RecoveryIntent,
     RunIntent,
+    project_id_for_task_handoff,
 )
 from .request import RoundRequestMixin
 from .roster import RosterMixin, _room_agent_ids
@@ -127,7 +128,8 @@ class CollaborationConductor(
     ) -> dict[str, Any]:
         dispatch = await run_in_threadpool(self._prepare_dispatch, intent, actor, fingerprint)
         dispatched = await self.ctx.backend.run(dispatch.node_id, dispatch.request)
-        if dispatch.resolved is None:
+        manifest = (dispatch.request.get("collaboration") or {}).get("manifest") or {}
+        if dispatch.resolved is None or project_id_for_task_handoff(manifest, dispatch.request.get("taskId")):
             return dispatched
         return await run_in_threadpool(self._admit_addressed_agents, dispatched, dispatch.resolved, actor)
 

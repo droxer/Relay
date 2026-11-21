@@ -23,7 +23,7 @@ from ...agents.routing import (
 )
 from ...tasks.workspace import recorded_task_session_id, recorded_task_workspace, resolve_task_workspace
 from ...agents.delegation import delegation_candidates
-from ...projects.runtime import project_member_ids
+from ...core.project_roles import project_member_ids
 from .state import NodeBackendState
 
 

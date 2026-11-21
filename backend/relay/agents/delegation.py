@@ -4,7 +4,7 @@ from typing import Any
 
 from ..core.agent_delegation import delegation_agent_ids
 from ..core.daemon_capabilities import DAEMON_CAPABILITY_DIRECT_DELEGATION, has_capability
-from ..projects.runtime import project_member_ids
+from ..core.project_roles import project_member_ids
 from .routing import resolve_agent_assignments
 
 

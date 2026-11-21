@@ -77,19 +77,14 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
             raise
         return project
 
-    def get_project(self, project_id: str) -> dict[str, Any] | None:
+    def get_project(self, project_id: str, *, for_update: bool = False) -> dict[str, Any] | None:
         if names_no_uuid_row(self.engine, project_id):
             return None
+        statement = select(self.projects.c.snapshot).where(self.projects.c.id == project_id)
+        if for_update:
+            statement = statement.with_for_update()
         with store_transaction(self.engine) as conn:
-            row = (
-                conn.execute(
-                    select(self.projects.c.snapshot).where(
-                        self.projects.c.id == project_id
-                    )
-                )
-                .mappings()
-                .first()
-            )
+            row = conn.execute(statement).mappings().first()
         return project_with_manager(dict(row["snapshot"])) if row else None
 
     def list_projects(
