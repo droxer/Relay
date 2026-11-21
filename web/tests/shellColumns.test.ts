@@ -284,4 +284,28 @@ describe("transcript measure", () => {
     const measure = Number(shape[1]);
     assert.ok(measure >= 720 && measure <= 960, `a reading measure sits between 720px and 960px, got ${measure}px`);
   });
+
+  it("caps transcript prose lines in ch, narrower than the column", () => {
+    // The column is sized for tables and fences; prose takes a character
+    // measure so a line stays ~90 characters at the 14px transcript size.
+    const shape = token("--measure-transcript").match(/^(\d+)ch$/);
+    assert.ok(shape, "--measure-transcript must be a ch measure");
+    const ch = Number(shape[1]);
+    assert.ok(ch >= 60 && ch <= 75, `prose measure sits between 60ch and 75ch, got ${ch}ch`);
+  });
+});
+
+describe("transcript line boxes", () => {
+  it("drafts in the composer at the transcript line box", () => {
+    assert.match(
+      readFileSync("web/src/styles/composer.css", "utf8"),
+      /font: 400 var\(--fs-transcript\)\/var\(--leading-transcript\)/,
+    );
+  });
+
+  it("sizes the question slip from its own line box, not a literal leading", () => {
+    const css = readFileSync("web/src/styles/awaiting-input.css", "utf8");
+    assert.match(css, /max-height: calc\(1lh \* 6\)/);
+    assert.doesNotMatch(css, /var\(--fs-transcript\) \* 1\.6/);
+  });
 });

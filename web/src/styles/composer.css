@@ -415,8 +415,9 @@
   min-width: 0;
   border: 0;
   padding: var(--sp-4) var(--composer-inline) var(--sp-1);
-  /* The draft reads at the transcript size it is about to join. */
-  font: 400 var(--fs-transcript)/var(--leading-normal) var(--font-sans);
+  /* The draft reads at the transcript size and line box it is about to join,
+     so a sent message does not reflow. */
+  font: 400 var(--fs-transcript)/var(--leading-transcript) var(--font-sans);
   /* Both layers must break text identically or the pills slide off the names
      they belong to. */
   white-space: pre-wrap;

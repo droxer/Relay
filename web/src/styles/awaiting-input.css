@@ -15,7 +15,9 @@
    inside the slip rather than shoving the composer off the screen. */
 .awaiting-input-quote {
   --awaiting-rail: var(--warn);
-  max-height: calc(var(--fs-transcript) * 1.6 * 6);
+  /* Six of its own lines, whatever leading the locale resolves (1.65 Latin,
+     1.8 Han) — a literal multiplier clipped the sixth line. */
+  max-height: calc(1lh * 6);
   margin: 0;
   padding: 0 0 0 var(--sp-3);
   overflow-y: auto;
