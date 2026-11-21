@@ -123,7 +123,7 @@ for (const computerOnline of [true, false]) {
     const queued = page.getByRole("region", { name: "Queued", exact: true });
     await expect(queued).toBeVisible();
     await expect(queued.getByRole("listitem")).toHaveText(["Sent", "In queue", "Running"]);
-    await expect(queued).toContainText(computerOnline ? "no need to send it again" : "is offline");
+    await expect(queued).toContainText(computerOnline ? "Waiting for the run to start" : "is offline");
     await expect(queued.getByRole("link", { name: "Open Computers" })).toHaveCount(computerOnline ? 0 : 1);
     await expect(page.getByRole("region", { name: "Next steps" })).toHaveCount(0);
     await expect(queued.getByRole("button", { name: "Retry saving results" })).toHaveCount(0);

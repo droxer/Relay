@@ -110,7 +110,7 @@ for (const automation of [false, true]) test(`connection access in a new ${autom
   await page.goto(`/computers/device%3Au1%3Ahost/${automation ? "automations" : "tasks"}`);
   await page.getByRole("button", { name: automation ? "New automation" : "New task", exact: true }).first().click();
   const form = page.getByRole("dialog", { name: automation ? "New automation" : "New task", exact: true });
-  await form.getByRole("textbox", { name: "Title", exact: true }).fill("Read connected issues");
+  await form.getByRole("textbox", { name: "Goal", exact: true }).fill("Read connected issues");
   if (automation) {
     await form.locator("summary").filter({ hasText: "Connections" }).click();
     await form.getByRole("checkbox", { name: /Personal GitHub/ }).check();
@@ -133,7 +133,7 @@ for (const automation of [false, true]) test(`Inbox access in a new ${automation
   await page.goto(`/computers/device%3Au1%3Ahost/${automation ? "automations" : "tasks"}`);
   await page.getByRole("button", { name, exact: true }).first().click();
   const form = page.getByRole("dialog", { name, exact: true });
-  await form.getByRole("textbox", { name: "Title", exact: true }).fill("Summarize the Inbox");
+  await form.getByRole("textbox", { name: "Goal", exact: true }).fill("Summarize the Inbox");
   await form.locator("summary").filter({ hasText: "Connections" }).click();
   await expect(form.getByRole("checkbox", { name: /outlook@example\.net/ })).toBeVisible();
   for (const provider of mailProviders) await expect(form.locator(`img[src="/brand/${provider.id}.svg"]`)).toBeVisible();

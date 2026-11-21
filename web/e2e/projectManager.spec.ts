@@ -61,7 +61,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     expect(sent).toBe(0);
     // Proposals a manager run staged still show in the Thread that produced them.
     await page.goto('/threads/manager-thread');expect(sent).toBe(0);
-    const title=page.getByRole('textbox',{name:zh?'标题':'Title',exact:true});
+    const title=page.getByRole('textbox',{name:zh?'目标':'Goal',exact:true});
     await expect(title).toHaveValue('Design login');await page.reload();await expect(title).toHaveValue('Design login');
     await title.fill('Design sign in');
     // The proposal sits inline in the Thread: no fold or close control over it.

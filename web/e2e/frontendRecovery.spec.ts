@@ -72,13 +72,16 @@ test("mobile Back asks once before discarding an agent draft", async ({ page }) 
 
 test("an expired session returns to sign-in with the current destination", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+  await page.locator('[data-nav="backlog"]').click();
+  await expect(page).toHaveURL(url => url.pathname === "/tasks");
+  // The session expires only now: the app polls the task list in the
+  // background, so expiring it earlier signs out before the click lands.
   await page.route("**/api/v1/auth/me", route => route.fulfill({
     status: 200, contentType: "application/json", body: JSON.stringify({ authenticated: false }),
   }));
   await page.route("**/api/v1/tasks?*", route => route.fulfill({
     status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Authentication required" }),
   }));
-  await page.locator('[data-nav="backlog"]').click();
   // Threads and Tasks share the cached task list; explicitly request a read.
   await page.reload();
   await expect(page).toHaveURL(url => url.pathname === "/login" && url.searchParams.get("returnTo") === "/tasks");
