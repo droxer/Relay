@@ -42,6 +42,18 @@ describe("queue grace", () => {
     assert.equal(shownExecutionPhase(run, { now: admitted + QUEUE_GRACE_MS }), "queued");
   });
 
+  it("keeps a stale starting snapshot out of the queue until a fresh read confirms the wait", () => {
+    const read = { phase: "queued", computerOnline: true, queuedAt: admittedAt } as const;
+    const starting = session({ ...read, queueWaitConfirmed: false });
+    const later = { now: admitted + 15_000 };
+    assert.equal(shownExecutionPhase(starting, later), "running");
+    assert.equal(queuedRun(starting, later), null);
+    assert.equal(nextQueueGraceEnd([starting], admitted), null);
+    assert.equal(queuedRun(starting, { ...later, nodeOffline: true })?.cause, "offline");
+    assert.equal(queuedRun(session({ ...read, queueWaitConfirmed: true }), later)?.cause, "dispatch");
+    assert.equal(queuedRun(session({ phase: "running" }), later), null);
+  });
+
   it("treats a server clock a little ahead of the reader as inside the grace", () => {
     const run = session({ phase: "queued", computerOnline: null, queuedAt: admittedAt });
     assert.equal(queuedRun(run, { now: admitted - 2_000 }), null);

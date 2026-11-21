@@ -33,6 +33,7 @@ from ..sessions.task_scope import thread_task_scope
 TERMINAL = {"completed", "failed", "cancelled"}
 # How long a requested stop may go unconfirmed before Relay gives up on it.
 STOP_GRACE_SECONDS = STOP_ACK_GRACE_SECONDS
+QUEUE_STARTUP_GRACE_SECONDS = 10
 RECONCILED_ERROR = (
     "Execution reported gone by an operator; the computer never sent exit evidence."
 )
@@ -46,6 +47,17 @@ UNRESPONSIVE_RECOVERY_SECONDS = float(
 
 def _parse_time(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _queue_wait_confirmed(queued_at: object, now: datetime) -> bool:
+    """Only a fresh execution read can confirm a wait past the startup grace."""
+    if isinstance(queued_at, str):
+        try:
+            return (now - _parse_time(queued_at)).total_seconds() >= QUEUE_STARTUP_GRACE_SECONDS
+        except (TypeError, ValueError):
+            pass
+    # Older requests without an admission time have no startup grace.
+    return True
 
 
 def _parked_workflow_reason(session: dict[str, Any]) -> str | None:
@@ -145,6 +157,7 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
     retained_result = request is not None and not evidence_lost and (
         request.get("status") == "finalizing" or (command or {}).get("status") in TERMINAL
     )
+    queued_at = (request or {}).get("createdAt") if phase == "queued" else None
     return {
         "phase": phase, "executionConfirmed": confirmed,
         "computerOnline": computer_online,
@@ -159,7 +172,8 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         "lastConfirmedAt": (request or {}).get("currentProgressAt"),
         # When the waiting run was admitted, so a queued thread can say how
         # long it has waited; absent once the computer has taken it.
-        "queuedAt": (request or {}).get("createdAt") if phase == "queued" else None,
+        "queuedAt": queued_at,
+        **({"queueWaitConfirmed": _queue_wait_confirmed(queued_at, now)} if phase == "queued" else {}),
         "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
         **(
             {"permissionMode": effective_permission_mode(session, command.get("command") or {})}

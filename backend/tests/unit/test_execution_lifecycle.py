@@ -26,6 +26,16 @@ def test_execution_truth_does_not_trust_session_outcome(run_request, command, ph
     assert status["executionConfirmed"] == (phase in {"running", "stopping"})
 
 
+@pytest.mark.parametrize(("admitted", "confirmed"), [
+    ("2026-09-15T23:59:51Z", False),
+    ("2026-09-15T23:59:50Z", True),
+    (None, True),
+])
+def test_queue_wait_requires_an_observation_after_startup_grace(admitted, confirmed):
+    request = {"status": "prepared", "createdAt": admitted}
+    assert execution_status({}, request, None, now=NOW)["queueWaitConfirmed"] is confirmed
+
+
 def test_a_queued_run_reports_when_it_entered_the_queue():
     request = {"status": "prepared", "createdAt": "2026-09-15T23:58:00Z"}
     queued = execution_status({"status": "running", "agentRuns": []}, request, None,
