@@ -3313,8 +3313,12 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
             lookups.append(scope)
             return list_ready(**scope)
 
+        def reject_sorting(*_args, **_kwargs):
+            pytest.fail("A single Computer does not need a run lookup for ordering")
+
         with monkeypatch.context() as scoped:
             scoped.setattr(app.state.registry, "list_ready", record_scope)
+            scoped.setattr(app.state.registry, "_active_runs_by_node", reject_sorting)
             listed = token_client.get("/api/v1/threads", headers=headers)
         assert listed.status_code == 200
         assert [item["id"] for item in listed.json()["sessions"]] == [session_id]

@@ -127,8 +127,10 @@ class NodeLivenessMixin(RegistryState):
         else:
             self._refresh_persisted_liveness()
             nodes = list(self.sandboxes.values())
-        if not nodes:
-            return []
+        # Active runs only break ties between candidates. A singly scoped
+        # credential or owner does not need a second read to pick its node.
+        if len(nodes) < 2:
+            return nodes
         scope = {node["id"] for node in nodes} if user_id is not None or ui_token is not None else None
         active_runs_by_node = self._active_runs_by_node(node_ids=scope)
         return sorted(
