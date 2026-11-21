@@ -21,6 +21,7 @@ from sqlalchemy import (
     tuple_,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from ...core.permission_requests import DEFAULT_TASK_PERMISSION_MODE
 from .flow import wip_count_query, user_wip_limit
 from .reducer import materialize_task_events
 from ..engine import store_transaction
@@ -264,6 +265,23 @@ class TaskReadRows(TaskStoreState):
                 for row in rows
                 if not row["snapshot"].get("deletedAt")
             ]
+
+    def thread_permission_mode(self, user_id: str, thread_id: str, *, project_id: str | None) -> str:
+        """Only an unambiguous, owned Task link in the Thread's scope supplies consent."""
+        tasks = self.tasks
+        links = self.task_sessions
+        statement = select(tasks.c.snapshot["permissionMode"].as_string()).join(
+            links, links.c.task_id == tasks.c.id,
+        ).where(
+            links.c.session_id == thread_id,
+            tasks.c.owner_user_id == user_id,
+            tasks.c.project_id == project_id,
+            tasks.c.deleted_at.is_(None),
+            tasks.c.is_routine.is_(False),
+        ).limit(2)
+        with store_transaction(self.engine) as conn:
+            modes = conn.scalars(statement).all()
+        return "yolo" if modes == ["yolo"] else DEFAULT_TASK_PERMISSION_MODE
 
     def thread_tasks(
         self, user_id: str, thread_id: str, *, active_task_id: str | None,

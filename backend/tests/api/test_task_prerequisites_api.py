@@ -91,12 +91,14 @@ def test_thread_task_view_keeps_origin_wait_and_adopted_steps(project_context, m
     assert rows[waiting["id"]]["awaiting"]["questionId"] == "q1"
     assert payload["threadTaskContext"]["nextSteps"] == [suggestion]
     assert payload["threadTaskContext"]["activeTaskId"] == active["id"]
+    assert payload["threadTaskContext"]["permissionMode"] == "yolo"
     assert len(response.content) < 3_000
     assert client.get("/api/v1/tasks", params=params, headers={
         "If-None-Match": response.headers["ETag"],
     }).status_code == 304
     with store.engine.begin() as conn:
         conn.execute(delete(store.task_sessions).where(store.task_sessions.c.task_id == origin["id"]))
+    payload["threadTaskContext"]["permissionMode"] = "ask"
     assert client.get("/api/v1/tasks", params=params).json() == payload
     other = TestClient(app)
     assert other.post("/api/v1/auth/login", json={

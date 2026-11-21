@@ -318,10 +318,17 @@ class AssignmentDeliveryMixin(RegistryState):
         if role:
             state = {**state, "agent_role": role}
         workspace_task = self._workspace_task(run_request, session_snapshot)
-        permission_task = (
-            workspace_task if run_request.get("taskId")
-            else self._thread_permission_task(session_snapshot)
-        )
+        task_yolo = False
+        thread_owner = session_snapshot.get("ownerUserId")
+        if thread_owner and run_request.get("taskId"):
+            task_yolo = bool(
+                workspace_task and workspace_task.get("ownerUserId") == thread_owner
+                and workspace_task.get("permissionMode") == "yolo"
+            )
+        elif thread_owner and self.task_store:
+            task_yolo = self.task_store.thread_permission_mode(
+                thread_owner, session_snapshot["id"], project_id=session_snapshot.get("projectId")
+            ) == "yolo"
         command = _run_start_command(
             run_request=run_request,
             assignment=assignment,
@@ -336,7 +343,7 @@ class AssignmentDeliveryMixin(RegistryState):
             context=context,
             handoff_validation=handoff_validation,
             task_snapshot=workspace_task,
-            permission_task=permission_task,
+            task_yolo=task_yolo,
         )
         command = self._with_skill_bundle(command, sandbox, session_snapshot.get("projectId"))
         if self.connection_grant_resolver:
@@ -381,19 +388,6 @@ class AssignmentDeliveryMixin(RegistryState):
                 task_workspace_subpath(task, shared_automation=False),
             )
         ), None)
-
-    def _thread_permission_task(self, session: dict[str, Any]) -> dict[str, Any] | None:
-        """An unambiguous Task link can supply consent for a Thread round."""
-        owner = session.get("ownerUserId")
-        if not self.task_store or not owner:
-            return None
-        tasks = [
-            task for task in self.task_store.list_tasks_for_session(session["id"])
-            if not task.get("isRoutine")
-            and task.get("ownerUserId") == owner
-            and task.get("projectId") == session.get("projectId")
-        ]
-        return tasks[0] if len(tasks) == 1 else None
 
     def _artifacts_dir(
         self,

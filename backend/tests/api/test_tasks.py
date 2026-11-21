@@ -717,6 +717,8 @@ def test_task_thread_message_applies_tool_permission_mode(
     client = TestClient(app)
     _bootstrap_admin(client)
     _create_account(client, "alice", user_id="alice")
+    if link == "foreign":
+        _create_account(client, "bob", user_id="bob")
     registered = client.post(
         "/api/v1/daemon-node-registrations",
         json={
@@ -747,6 +749,13 @@ def test_task_thread_message_applies_tool_permission_mode(
         })
         app.state.task_store.link_session(other_task["id"], thread_id)
     thread_path = f"/api/v1/threads/{thread_id}"
+    context = client.get("/api/v1/tasks", params={
+        "view": "summary", "scope": "thread", "threadId": thread_id,
+    })
+    assert context.status_code == 200, context.text
+    assert context.json()["threadTaskContext"]["permissionMode"] == (
+        task_mode if link == "owned" else "ask"
+    )
     if thread_mode:
         assert client.put(f"{thread_path}/permission-mode", json={"mode": thread_mode}).status_code == 200
 

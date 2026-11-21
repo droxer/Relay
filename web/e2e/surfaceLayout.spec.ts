@@ -89,8 +89,18 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
 test("Task Thread shows the Task tool permission when idle", async ({ browser }) => {
   const page = await openPage(browser, "/threads/review-thread", false, undefined, undefined, {
     tasks: [{ ...task, permissionMode: "yolo" }, routine],
+    threadTaskContext: { threadId: session.id, eventCount: session.eventCount, nextSteps: [], permissionMode: "yolo" },
   });
   await expect(page.getByRole("combobox", { name: "Tool permissions" })).toContainText("YOLO");
+  await page.context().close();
+});
+
+test("Task Thread displays Ask when the linked Task cannot supply its permission mode", async ({ browser }) => {
+  const page = await openPage(browser, "/threads/review-thread", false, undefined, undefined, {
+    tasks: [{ ...task, permissionMode: "yolo" }, routine],
+    threadTaskContext: { threadId: session.id, eventCount: session.eventCount, nextSteps: [], permissionMode: "ask" },
+  });
+  await expect(page.getByRole("combobox", { name: "Tool permissions" })).toContainText("Ask");
   await page.context().close();
 });
 

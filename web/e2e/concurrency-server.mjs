@@ -1,6 +1,6 @@
 // Real backend and daemon; only the third-party agent CLI is controlled.
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,6 +70,9 @@ try {
   });
   if (!provision.ok) throw new Error(`Provision failed: ${await provision.text()}`);
   const { node, nodeToken } = await provision.json();
+  const permissionCodex = join(root, "permission-codex");
+  await copyFile(join(repo, "web/e2e/permission-codex.cjs"), permissionCodex);
+  await chmod(permissionCodex, 0o700);
   const agentScript = join(root, "agent.cjs");
   // A real, cancellable child process. No model credentials or network calls.
   await writeFile(agentScript, `
@@ -82,7 +85,12 @@ setInterval(() => {}, 1000);
 `);
   const execution = {
     ensureAgentReady: async () => undefined,
-    async execStream(_command, _args, options) {
+    async execStream(command, args, options) {
+      if (args?.some(arg => arg.includes("Permission probe"))) {
+        return localProcessExecStream(command, args, {
+          ...options, env: { ...options.env, RELAY_CODEX_BIN: permissionCodex },
+        });
+      }
       const result = await localProcessExecStream(process.execPath, [agentScript], options);
       // Process exit precedes terminal evidence reaching the backend. Keep that
       // interval observable so browser cleanup cannot rely on local PID checks.
@@ -91,6 +99,7 @@ setInterval(() => {}, 1000);
     },
     release() {},
   };
+  process.env.RELAY_LOCAL_PERMISSION_POLICY = "native";
   daemon = runRelayDaemon({
     backendUrl, sandboxId: node.id, userId: account.user.userId, token: nodeToken,
     workspacePath: workspace, workspaceId: "concurrency-e2e-host",

@@ -657,7 +657,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const handleAnswerPermission = useStableEvent(async (requestId: string, answer: PermissionAnswerInput) => {
     if (!activeSession) return;
     try {
-      await answerPermissionMutation.mutateAsync({ sessionId: activeSession.id, requestId, answer, token: selectedToken });
+      await answerPermissionMutation.mutateAsync({ sessionId: activeSession.id, requestId, answer });
     } catch {
       // mutation onError surfaces a toast.
     }
@@ -932,6 +932,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onAnswerPermission={handleAnswerPermission}
             onPermissionModeChange={handlePermissionModeChange}
             permissionModePending={threadPermissionModeMutation.isPending && threadPermissionModeMutation.variables?.sessionId === activeSession?.id}
+            inheritedPermissionMode={threadTaskContext && threadTaskContext.threadId === activeSession?.id
+              ? threadTaskContext.permissionMode : undefined}
             onSend={handleComposerSend}
             onCancelRun={handleCancelRun}
             onRetryAgent={handleRetryAgent}

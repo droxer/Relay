@@ -146,35 +146,35 @@ def answer_permission_request(
     *,
     _request_body: JsonBodyDep,
 ) -> dict[str, Any]:
-    # Like a decision, only a person answers: the node token an agent can
-    # reach never authenticates as one.
-    actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
-    get_session_for_actor(ctx.session_store, session_id, actor)
-    body = _request_body
-    decision = body.get("decision")
-    if decision not in PERMISSION_DECISIONS:
-        raise HTTPException(400, "decision must be allow or deny.")
-    note = string_field(body, "note")
-    if len(note) > PERMISSION_NOTE_MAX_CHARS:
-        raise HTTPException(400, "note is too long.")
-    always = body.get("always", False)
-    if not isinstance(always, bool):
-        raise HTTPException(400, "always must be a boolean.")
+    account = require_user_session(request, ctx.auth_store)
+    owner = account.get("userId") or account.get("username") or account["id"]
     try:
-        result = SessionController(ctx.session_store).resolve_permission_request(
-            session_id,
-            request_id,
-            decision,
-            note or None,
-            answers=body.get("answers"),
-            always=always,
-            actor_user_id=actor["userId"],
-        )
+        with ctx.session_store.mutation_scope(session_id):
+            session = ctx.session_store.get_session_header(session_id)
+            if session.get("ownerUserId") != owner:
+                raise HTTPException(403, "Session access denied.")
+            if session.get("deletionRequestedAt"):
+                raise HTTPException(409, "thread_deletion_pending")
+            decision = _request_body.get("decision")
+            if decision not in PERMISSION_DECISIONS:
+                raise HTTPException(400, "decision must be allow or deny.")
+            note = string_field(_request_body, "note")
+            if len(note) > PERMISSION_NOTE_MAX_CHARS:
+                raise HTTPException(400, "note is too long.")
+            always = _request_body.get("always", False)
+            if not isinstance(always, bool):
+                raise HTTPException(400, "always must be a boolean.")
+            result = SessionController(ctx.session_store).resolve_permission_request(
+                session_id, request_id, decision, note or None,
+                answers=_request_body.get("answers"), always=always, actor_user_id=owner,
+            )
+    except KeyError as error:
+        raise HTTPException(404, "Session not found.") from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     if result is None:
         raise HTTPException(409, "permission_request_closed")
-    return result
+    return {**result, "execution": ctx.execution_lifecycle.status(result)}
 
 
 @router.put("/threads/{session_id}/permission-mode")

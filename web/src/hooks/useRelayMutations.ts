@@ -230,8 +230,8 @@ export function useRelayMutations() {
   });
 
   const answerPermissionMutation = useMutation({
-    mutationFn: ({ sessionId, requestId, answer, token }: { sessionId: string; requestId: string; answer: PermissionAnswerInput } & TokenArg) =>
-      answerPermissionRequest(sessionId, requestId, answer, token),
+    mutationFn: ({ sessionId, requestId, answer }: { sessionId: string; requestId: string; answer: PermissionAnswerInput }) =>
+      answerPermissionRequest(sessionId, requestId, answer),
     onSuccess: (session) => cacheSession(session),
     onError: (error: unknown) => {
       // Someone answered first, or the run ended: the stream will drop the card.

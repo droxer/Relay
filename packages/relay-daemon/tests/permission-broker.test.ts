@@ -224,6 +224,25 @@ describe("permission broker", () => {
     });
   });
 
+  it("times out delivery even when the backend keeps failing to acknowledge the prompt", async () => {
+    const h = harness([json({ status: "pending" })], { timeoutMs: 20 });
+    h.options.postEvent = async (event, signal) => {
+      h.posted.push(event);
+      if (event.type === "run.permission_requested") {
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+          // Bound the test against the old broker, which never aborts delivery.
+          setTimeout(() => reject(new Error("delivery was not cancelled")), 100).unref();
+        });
+      }
+    };
+    const decision = await ask(h.options, { toolName: "Write", input: {} });
+    assert.equal(decision.behavior, "deny");
+    assert.match(decision.message ?? "", /No one answered in time/);
+    assert.equal(h.polls.length, 0);
+    assert.equal(withdrawn(h.posted).length, 1);
+  });
+
   it("withdraws a prompt whose runtime hung up before the answer", async () => {
     const h = harness([json({ status: "pending" })]);
     const broker = await startPermissionBroker(h.options);
@@ -270,10 +289,11 @@ describe("permission broker", () => {
     assert.deepEqual(decision, { behavior: "allow", answers: { "Which?": ["B"] } });
     const request = (h.posted[0] as Extract<DaemonNodeEvent, { type: "run.permission_requested" }>).request;
     assert.deepEqual(request.questions, questions);
-    // A question with no well-formed questions is an ordinary approval.
+    // A question without an answerable payload must never become an approval.
     const plain = harness([json({ status: "allow" })]);
-    await ask(plain.options, { kind: "question", toolName: "AskUserQuestion", input: {}, questions: [{ id: "", text: "", options: [] }] });
-    assert.equal((plain.posted[0] as Extract<DaemonNodeEvent, { type: "run.permission_requested" }>).request.questions, undefined);
+    const malformed = await ask(plain.options, { kind: "question", toolName: "AskUserQuestion", input: {}, questions: [{ id: "", text: "", options: [] }] });
+    assert.equal(malformed.behavior, "deny");
+    assert.deepEqual(plain.posted, []);
   });
 
   it("answers overlapping questions independently", async () => {

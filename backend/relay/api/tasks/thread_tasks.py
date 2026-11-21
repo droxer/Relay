@@ -39,6 +39,9 @@ def read_thread_tasks(ctx: AppContext, actor: Actor, thread_id: str) -> dict[str
             "eventCount": thread["eventCount"],
             "activeTaskId": active_task_id,
             "nextSteps": next_steps,
+            "permissionMode": ctx.task_store.thread_permission_mode(
+                actor["userId"], thread_id, project_id=thread.get("projectId"),
+            ),
         },
     }
 
