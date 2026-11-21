@@ -298,6 +298,8 @@ export interface ExecutionStatus {
   lastConfirmedAt: string | null;
   /** When a `queued` run was admitted; null in every other phase. */
   queuedAt?: string | null;
+  /** Whether the backend still observed this queue after the startup grace. */
+  queueWaitConfirmed?: boolean;
   nextRecoveryAt: string | null;
 }
 

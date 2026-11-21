@@ -43,6 +43,11 @@ export function queueGraceEndsAt(
 
 /** A queued run still inside its grace, which every surface shows as running. */
 export function inQueueGrace(session: Pick<RelaySession, "execution">, { nodeOffline, now }: QueueReading = {}): boolean {
+  const execution = session.execution;
+  if (execution?.phase === "queued" && execution.queueWaitConfirmed !== undefined) {
+    return !execution.queueWaitConfirmed && execution.computerOnline !== false && !nodeOffline;
+  }
+  // Older servers only provide the admission time.
   if (now === undefined) return false;
   const endsAt = queueGraceEndsAt(session, { nodeOffline });
   return endsAt !== null && now < endsAt;
@@ -65,6 +70,7 @@ export function nextQueueGraceEnd(
 ): number | null {
   let next: number | null = null;
   for (const session of sessions) {
+    if (session.execution?.queueWaitConfirmed !== undefined) continue;
     const endsAt = queueGraceEndsAt(session);
     if (endsAt !== null && endsAt > now && (next === null || endsAt < next)) next = endsAt;
   }
