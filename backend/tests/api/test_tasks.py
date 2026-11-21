@@ -698,6 +698,82 @@ def test_task_start_uses_agent_selected_execution(monkeypatch, permission_mode, 
             assert not thread.get("permissionGrants")
 
 
+@pytest.mark.parametrize(
+    "task_mode,thread_mode,link,expected",
+    [
+        ("yolo", None, "owned", "allow"),
+        ("ask", None, "owned", "pending"),
+        ("yolo", "ask", "owned", "pending"),
+        ("yolo", None, "none", "pending"),
+        ("yolo", None, "foreign", "pending"),
+        ("yolo", None, "ambiguous", "pending"),
+    ],
+)
+def test_task_thread_message_applies_tool_permission_mode(
+    monkeypatch, tmp_path, task_mode, thread_mode, link, expected,
+) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap_admin(client)
+    _create_account(client, "alice", user_id="alice")
+    registered = client.post(
+        "/api/v1/daemon-node-registrations",
+        json={
+            "sandboxId": "sbx_alice", "userId": ALICE, "token": "node_token",
+            "workspacePath": "/workspace/alice", "protocolVersion": 1,
+            "supportedAgents": ["codex"], "sandboxMode": "none", "status": "ready",
+            "capabilities": ["workspace-scope", "thread-workspaces", PROJECT_CAPABILITY],
+        },
+        headers={"Authorization": "Bearer ui_token"},
+    )
+    assert registered.status_code == 200, registered.text
+    agent = _create_agent(client, ALICE, node_id="sbx_alice")
+    project = project_for_agents(app.state.project_store, ALICE, [agent])
+    _login(client, "alice")
+    created = client.post("/api/v1/tasks", json={
+        "projectId": project["id"], "title": "Task discussion", "assignedAgentId": agent["id"],
+        "createSession": True, "permissionMode": task_mode,
+    })
+    assert created.status_code == 201, created.text
+    task = created.json()
+    [thread_id] = task["linkedSessionIds"]
+    if link in ("none", "foreign"):
+        app.state.task_store.unlink_session(task["id"], thread_id)
+    if link in ("foreign", "ambiguous"):
+        other_task = app.state.task_store.create_task({
+            "projectId": project["id"], "title": "Another task", "permissionMode": "yolo",
+            "ownerUserId": BOB if link == "foreign" else ALICE,
+        })
+        app.state.task_store.link_session(other_task["id"], thread_id)
+    thread_path = f"/api/v1/threads/{thread_id}"
+    if thread_mode:
+        assert client.put(f"{thread_path}/permission-mode", json={"mode": thread_mode}).status_code == 200
+
+    sent = client.post(f"{thread_path}/messages", json={"text": "Explain the approach"})
+    assert sent.status_code == 202, sent.text
+    assert sent.json()["collaborationRounds"][-1]["workScope"] == {"kind": "thread"}
+    assert app.state.registry.daemon_store.active_run_request_for_task(task["id"]) is None
+    node_path = "/api/v1/daemon-nodes/sbx_alice"
+    headers = {"Authorization": "Bearer node_token"}
+    [command] = client.get(f"{node_path}/commands", headers=headers).json()["commands"]
+    _mark_run_executing(client, command)
+    actual_mode = client.get(thread_path).json()["execution"]["permissionMode"]
+    for request_id, questions, verdict in (
+        ("perm_0000000000000001", [], expected),
+        ("perm_0000000000000002", [{"id": "q1", "text": "Which draft?", "options": []}], "pending"),
+    ):
+        prompt = client.post(f"{node_path}/events", headers=headers, json={
+            "type": "run.permission_requested", "commandId": command["id"], "leaseId": command["leaseId"],
+            "sessionId": thread_id, "runId": command["runId"], "agent": command["agent"],
+            "request": {"id": request_id, "toolName": "test-tool", "input": "{}", "questions": questions},
+        })
+        assert prompt.status_code == 200, prompt.text
+        answer = client.get(f"{node_path}/permission-requests/{request_id}", headers=headers, params={"sessionId": thread_id})
+        assert answer.json() == {"status": verdict}
+    assert actual_mode == ("yolo" if expected == "allow" else "ask")
+
+
 def test_task_start_requests_managed_capacity_when_no_node_is_ready(
     monkeypatch,
 ) -> None:

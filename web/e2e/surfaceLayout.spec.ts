@@ -86,6 +86,14 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   return page;
 }
 
+test("Task Thread shows the Task tool permission when idle", async ({ browser }) => {
+  const page = await openPage(browser, "/threads/review-thread", false, undefined, undefined, {
+    tasks: [{ ...task, permissionMode: "yolo" }, routine],
+  });
+  await expect(page.getByRole("combobox", { name: "Tool permissions" })).toContainText("YOLO");
+  await page.context().close();
+});
+
 for (const touch of [false, true]) {
   for (const theme of ["light", "dark"] as const) {
     test(`Chat Input switches live tool permissions (${touch ? "touch" : "pointer"}, ${theme})`, async ({ browser }) => {
@@ -95,7 +103,9 @@ for (const touch of [false, true]) {
         events: session.events.slice(0, 2) as Record<string, unknown>[], eventCount: 2,
         execution: { phase: "running", executionConfirmed: true, permissionMode: "ask" },
       };
-      const page = await openPage(browser, "/threads/review-thread", touch, undefined, running, { sessions: [running] });
+      const page = await openPage(browser, "/threads/review-thread", touch, undefined, running, {
+        sessions: [running], tasks: [{ ...task, permissionMode: "yolo" }, routine],
+      });
       await page.route("**/auth/me", (route) => route.fulfill({ json: { authenticated: true, user: { ...USER, theme } } }));
       let current = { ...running, permissionMode: undefined as "ask" | "yolo" | undefined };
       let nextMode: "ask" | "yolo" = "yolo";

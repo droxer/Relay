@@ -814,7 +814,7 @@ export function ThreadsView({
           onRuntimeNodeChange={onRuntimeNodeChange}
           running={running}
           permissionMode={activeSession
-            ? activeSession.permissionMode ?? activeSession.execution?.permissionMode ?? "ask"
+            ? activeSession.permissionMode ?? activeSession.execution?.permissionMode ?? lifecycle.permissionMode ?? "ask"
             : undefined}
           permissionModePending={permissionModePending}
           onPermissionModeChange={!activeSession?.deletionRequestedAt
