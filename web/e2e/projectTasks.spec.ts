@@ -141,7 +141,7 @@ for (const mobile of [false, true]) {
       await page.getByRole("menuitem", { name: "New task", exact: true }).click();
     }
     const form = page.getByRole("dialog", { name: "New task", exact: true });
-    await form.getByRole("textbox", { name: "Title", exact: true }).fill("Prepare release notes");
+    await form.getByRole("textbox", { name: "Goal", exact: true }).fill("Prepare release notes");
     await form.getByRole("button", { name: "Create task", exact: true }).click();
     await expect(form).toHaveCount(0);
     expect(created[0]).toMatchObject({ title: "Prepare release notes", projectId: "launch" });
@@ -246,7 +246,7 @@ test("a Computer Task draft does not require a Project", async ({ page }) => {
   await page.goto("/computers/node%3Adraft-computer/tasks");
   await page.getByRole("button", { name: "New task", exact: true }).first().click();
   const form = page.getByRole("dialog", { name: "New task", exact: true });
-  await form.getByRole("textbox", { name: "Title", exact: true }).fill("Keep this draft");
+  await form.getByRole("textbox", { name: "Goal", exact: true }).fill("Keep this draft");
   await expect(form.getByRole("combobox", { name: "Project", exact: true })).toHaveCount(0);
   await form.getByRole("button", { name: "Create task", exact: true }).click();
   await expect(page.getByRole("link", { name: "Keep this draft", exact: true })).toBeVisible();

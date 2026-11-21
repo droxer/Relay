@@ -1017,7 +1017,7 @@ const leadProject = {
 
 for (const width of [320, 390]) {
   test(`the Project Lead line keeps the name and its discuss controls inside a ${width}px phone`, async ({ browser }) => {
-    const page = await openPage(browser, "/projects/launch", true, undefined, undefined, { agents: [leadAgent], projects: [leadProject], tasks: [], sessions: [] });
+    const page = await openPage(browser, "/projects/launch", true, undefined, undefined, { agent: leadAgent, agents: [leadAgent], projects: [leadProject], tasks: [], sessions: [] });
     await page.setViewportSize({ width, height: 844 });
     const line = page.getByRole("group", { name: "Project Lead", exact: true });
     await expect(line.getByRole("button", { name: "Discuss", exact: true })).toBeVisible();

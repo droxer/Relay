@@ -271,14 +271,15 @@ test("a Project Task selects and clears its Project Workflow", async ({ page }) 
   const { patches } = await fixture(page, false, "light", 1, false, false, true, false);
   await page.goto("/projects/project?task=task&recordTab=definition");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("radio", { name: "Workflow", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
   await option(page, "Release").click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_release");
   await expect.poll(() => patches.at(-1)?.assignedTeamId).toBeNull();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
-  await page.getByRole("option", { name: "Use Project Agents", exact: true }).click();
+  // Running with Project Agents is the Agent side of the switch, not a workflow item.
+  await page.getByRole("radio", { name: "Agent", exact: true }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBeNull();
 });
@@ -388,6 +389,10 @@ test("Project Tasks can choose a custom workflow from a larger Team", async ({ p
   await page.goto("/projects/project?task=task&recordTab=definition");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save task", exact: true })).toBeDisabled();
+  // The Team is not eligible in this Project; clearing it offers the Agent | Workflow switch.
+  await page.getByRole("combobox", { name: "Assign to", exact: true }).click();
+  await page.getByRole("option", { name: "Assign later", exact: true }).click();
+  await page.getByRole("radio", { name: "Workflow", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
   await expect(page.getByRole("option", { name: /^Pipeline/ })).toHaveCount(0);
   await page.getByRole("option", { name: /^Project delivery/ }).click();
@@ -425,6 +430,7 @@ test("a Project Task selects an independent workflow with no Teams", async ({ pa
   });
   await page.goto("/projects/project?task=task&recordTab=definition");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("radio", { name: "Workflow", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
   await page.getByRole("option", { name: "Release", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Team (optional)", exact: true })).toHaveCount(0);
