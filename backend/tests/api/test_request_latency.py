@@ -146,6 +146,39 @@ def test_placement_list_reads_the_fleet_once(roster, monkeypatch) -> None:
     assert nodes[0] == 1
 
 
+def test_personal_teams_only_read_member_placements_and_related_nodes(roster, monkeypatch):
+    app, client, agent_ids = roster
+    _register_node(app, "unrelated_node")
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
+    path = "/api/v1/teams?view=summary&format=compact"
+    baseline = client.get(path).json()
+    fleet_reads = _count_calls(monkeypatch, app.state.registry, "monitor_nodes")
+    find_placements = app.state.agent_placement_store.list_placements
+    find_nodes = app.state.daemon_store.list_nodes_for_computers
+    filters = []
+    related = []
+
+    def scoped_placements(**kwargs):
+        filters.append(kwargs)
+        return find_placements(**kwargs)
+
+    def scoped_nodes(computers, node_ids):
+        rows = find_nodes(computers, node_ids)
+        related.append([row["id"] for row in rows])
+        return rows
+
+    monkeypatch.setattr(app.state.agent_placement_store, "list_placements", scoped_placements)
+    monkeypatch.setattr(app.state.daemon_store, "list_nodes_for_computers", scoped_nodes)
+    result = client.get(path)
+    assert result.status_code == 200
+    assert result.json() == baseline
+    assert all(member["availability"] == "ready" for member in baseline["memberDirectory"])
+    assert fleet_reads == [0]
+    assert len(filters) == 1
+    assert set(filters[0]["agent_ids"]) == set(agent_ids)
+    assert related == [["node_a"]]
+
+
 # ── Fix 3: the session cookie resolves from the cache between store changes ──
 
 

@@ -6,13 +6,16 @@ A mixin of ``DatabaseDaemonStore``; it shares the store's engine and tables
 
 from __future__ import annotations
 
+from itertools import batched
 from typing import Any
 from sqlalchemy import (
     case,
     delete,
     func,
     insert,
+    or_,
     select,
+    tuple_,
     update,
 )
 from sqlalchemy.exc import IntegrityError
@@ -480,8 +483,49 @@ class NodeRows(DaemonStoreState):
         if ui_token_hash is not None:
             statement = statement.where(self.nodes.c.ui_token_hash == ui_token_hash)
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(statement).mappings().all()
-            agents = self._node_agents_by_node(conn, [str(row["id"]) for row in rows])
+            return self._read_node_rows(conn, statement)
+
+    def list_nodes_for_computers(
+        self, computer_ids: set[str], node_ids: set[str],
+    ) -> list[dict[str, Any]]:
+        """Read runtime candidates for stable Computer identities and legacy node links."""
+        cols = self.nodes.c
+        direct = set(node_ids)
+        managed = set()
+        devices = set()
+        for computer in computer_ids:
+            kind, _, identity = computer.partition(":")
+            if kind == "node":
+                direct.add(identity)
+            elif kind == "managed" and not names_no_uuid_row(self.engine, identity):
+                managed.add(identity)
+            elif kind == "device":
+                owner, _, machine = identity.partition(":")
+                if owner and machine and not names_no_uuid_row(self.engine, owner):
+                    devices.add((owner, machine))
+        direct = {key for key in direct if not names_no_uuid_row(self.engine, key)}
+        predicates = [
+            *(cols.id.in_(batch) for batch in batched(sorted(direct), 250)),
+            *(cols.managed_node_id.in_(batch) for batch in batched(sorted(managed), 250)),
+            *(tuple_(cols.user_id, func.trim(cols.workspace_id)).in_(batch) & cols.managed_node_id.is_(None)
+              for batch in batched(sorted(devices), 250)),
+        ]
+        if not predicates:
+            return []
+        with store_transaction(self.engine) as conn:
+            if len(predicates) <= 1:
+                return self._read_node_rows(conn, select(self.nodes).where(or_(*predicates)))
+            # Keep the number of bound values below SQLite's limit even when
+            # a Team directory spans several batches of Computers.
+            unique = {}
+            for predicate in predicates:
+                for node in self._read_node_rows(conn, select(self.nodes).where(predicate)):
+                    unique[node["id"]] = node
+            return list(unique.values())
+
+    def _read_node_rows(self, conn: Any, statement: Any) -> list[dict[str, Any]]:
+        rows = conn.execute(statement).mappings().all()
+        agents = self._node_agents_by_node(conn, [str(row["id"]) for row in rows])
         return [
             apply_node_agents(row_to_node(row), agents.get(str(row["id"]), []))
             for row in rows

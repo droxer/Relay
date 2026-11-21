@@ -97,6 +97,8 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         owner_user_id: str | None = None,
         *,
         include_archived: bool = False,
+        project_ids: Collection[str] | None = None,
+        computer_id: str | None = None,
     ) -> list[dict[str, Any]]:
         statement = select(self.projects.c.snapshot)
         if owner_user_id is not None:
@@ -105,8 +107,19 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
             )
         if not include_archived:
             statement = statement.where(self.projects.c.archived_at.is_(None))
+        if computer_id is not None:
+            statement = statement.where(self.projects.c.computer_id == computer_id)
+        if project_ids is not None:
+            project_ids = {key for key in project_ids if not names_no_uuid_row(self.engine, key)}
+            if not project_ids:
+                return []
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(statement).mappings().all()
+            rows = (
+                conn.execute(statement).mappings().all() if project_ids is None else [
+                    row for batch in batched(sorted(project_ids), 500)
+                    for row in conn.execute(statement.where(self.projects.c.id.in_(batch))).mappings()
+                ]
+            )
         return sorted(
             (project_with_manager(dict(row["snapshot"])) for row in rows),
             key=lambda project: (project["name"].casefold(), project["id"]),

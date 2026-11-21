@@ -3272,6 +3272,7 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
+        app.state.auth_store.ensure_user("alice")
 
         register = admin_client.post(
             "/api/v1/daemon-node-registrations",
@@ -3305,9 +3306,19 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
         session_id = session["id"]
         assert session["ownerUserId"] == ALICE
 
-        listed = token_client.get("/api/v1/threads", headers=headers)
+        lookups = []
+        list_ready = app.state.registry.list_ready
+
+        def record_scope(**scope):
+            lookups.append(scope)
+            return list_ready(**scope)
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(app.state.registry, "list_ready", record_scope)
+            listed = token_client.get("/api/v1/threads", headers=headers)
         assert listed.status_code == 200
         assert [item["id"] for item in listed.json()["sessions"]] == [session_id]
+        assert lookups == [{"ui_token": "ui_token"}]
 
         opened = token_client.get(f"/api/v1/threads/{session_id}", headers=headers)
         assert opened.status_code == 200

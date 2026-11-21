@@ -531,7 +531,9 @@ export function TeamWorkspacePage({
                 className={`workspace-page-tab${pageTab === tab ? " is-active" : ""}`}
               >
                 {tab === "profile" ? t("workspace.tab_profile") : t("workspace.tab_activities")}
-                {tab === "activities" && threadCount > 0 ? <span className="workspace-page-tab-count tnum">{threadCount}</span> : null}
+                {tab === "activities" && threadCount > 0 ? (
+                  <span className="workspace-page-tab-count tnum">{threadCount}{briefQuery.hasOlder ? "+" : ""}</span>
+                ) : null}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -557,6 +559,7 @@ export function TeamWorkspacePage({
           ) : (
             <WorkspaceActivities
               brief={briefQuery.data}
+              threadPagination={briefQuery}
               emptyMark={<IdentityMark kind="team" variant="bare" size={ICON.lg} />}
               onOpenThread={onOpenThread}
               agents={team.members}

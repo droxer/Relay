@@ -155,7 +155,9 @@ RUN_LEDGER_MAX_LIMIT = 200
 RUN_TERMINAL_STATUSES = ("done", "blocked", "cancelled")
 
 
-def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
+def run_row(
+    ctx: Any, task: dict[str, Any], *, artifact_sessions: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """One run of `task`, summarized for the ledger.
 
     Timing comes from the status events rather than the snapshot: `updatedAt`
@@ -179,7 +181,8 @@ def run_row(ctx: Any, task: dict[str, Any]) -> dict[str, Any]:
         failure_message = None
     session_ids = list(task.get("linkedSessionIds", []))
     artifacts = newest_artifacts_by_file(
-        ctx, [(task["id"], session_id) for session_id in session_ids], owner_user_id=task.get("ownerUserId")
+        ctx, [(task["id"], session_id) for session_id in session_ids], owner_user_id=task.get("ownerUserId"),
+        artifact_sessions=artifact_sessions,
     )
     return {
         "taskId": task["id"],
@@ -237,8 +240,11 @@ def task_runs(
     )
     page = positions[:page_size]
     runs = occurrence_tasks(ctx, task, actor, occurrence_ids=[key for _, _, key in page])
+    artifact_sessions = ctx.session_store.list_artifact_sources(
+        {key for run in runs for key in run.get("linkedSessionIds") or []}, actor["userId"],
+    )
     return {
         "taskId": task_id,
-        "runs": [run_row(ctx, occurrence) for occurrence in runs],
+        "runs": [run_row(ctx, occurrence, artifact_sessions=artifact_sessions) for occurrence in runs],
         "nextCursor": "|".join(page[-1]) if len(positions) > page_size else None,
     }

@@ -175,6 +175,78 @@ def test_issue_window_filters_the_collection_and_pages_table_and_lanes(project_c
     assert archived["page"]["total"] == 55
 
 
+def test_global_issues_reads_only_one_window_with_full_collection_counts(project_context):
+    app, client, project = project_context
+    store = app.state.task_store
+    owner = project["ownerUserId"]
+    for index in range(65):
+        store.create_task({
+            "ownerUserId": owner, "projectId": project["id"], "title": f"Work {index}",
+            "description": "large content " * 400, "priority": "normal", "tags": ["Café"],
+        })
+    store.create_task({"ownerUserId": owner, "title": "Separate priority", "priority": "high", "tags": ["Intake"]})
+    statements = []
+
+    def capture(_conn, cursor, statement, *_args):
+        if "FROM tasks" in statement:
+            statements.append((statement, cursor.rowcount))
+
+    event.listen(store.engine, "after_cursor_execute", capture)
+    try:
+        response = client.get("/api/v1/tasks", params={
+            "view": "summary", "scope": "issues", "layout": "list", "priority": "normal", "page": 2,
+        })
+    finally:
+        event.remove(store.engine, "after_cursor_execute", capture)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["issueCount"] == 66
+    assert data["page"] == {"page": 2, "total": 65}
+    assert data["counts"]["open"] == 65
+    assert data["groupTotals"] == {project["id"]: 65}
+    assert data["tags"] == ["Intake", "Café"]
+    assert len(data["tasks"]) == 15
+    assert any("LIMIT" in sql and "OFFSET" in sql for sql, _ in statements)
+    if store.engine.dialect.name == "postgresql":
+        assert max(rows for _, rows in statements) <= 15
+
+
+def test_global_issues_sql_windows_match_compatibility_projection(project_context, monkeypatch):
+    app, client, project = project_context
+    store = app.state.task_store
+    owner = project["ownerUserId"]
+    for i, status in enumerate(("backlog", "assigned", "queued", "running", "waiting_for_human", "review", "blocked", "done", "cancelled") * 3):
+        store.create_task({
+            "ownerUserId": owner, "title": f"Work {i}", "status": status,
+            **({"projectId": project["id"]} if i % 2 else {}),
+            **({"assignedAgent": "codex"} if i % 3 else {}),
+            **({"dueDate": f"2026-11-{i + 1:02}"} if i % 4 else {}),
+            "priority": ("low", "normal", "high")[i % 3],
+            "tags": ["Start", "CAFÉ"] if i % 2 else ["Café", "New"],
+        })
+    selections = [
+        {}, {"group": "none"}, {"group": "status", "sort": "-status"},
+        {"priority": "normal", "assignment": "assigned", "sort": "-updated"},
+        {"source": "direct", "sort": "-priority"},
+        {"due": "next_week", "sort": "due"}, {"due": "today", "queue": "done"},
+        {"due": "overdue", "queue": "needs_me"}, {"due": "unscheduled", "queue": "untriaged"},
+        {"projectId": project["id"]}, {"layout": "board", "lanes": "backlog:2,running:99"},
+        {"layout": "board", "queue": "closed"}, {"layout": "board", "queue": "done"},
+    ]
+
+    def read(distinct_filters):
+        response = client.get("/api/v1/tasks", params={
+            "view": "summary", "scope": "issues", "layout": "list", "today": "2026-11-12",
+            **distinct_filters,
+        })
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    sql_pages = [read(params) for params in selections]
+    monkeypatch.setattr("relay.persistence.task.issue_pages.supports_sql_window", lambda _request: False)
+    assert sql_pages == [read(params) for params in selections]
+
+
 def test_project_scope_filters_summaries_before_limit(project_context):
     _app, client, project = project_context
     first, second = _task(client, project, "Design"), _task(client, project, "Build")

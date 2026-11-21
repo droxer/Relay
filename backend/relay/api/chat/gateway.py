@@ -87,7 +87,7 @@ def chat_conversation_mapping(
     if not session_id:
         raise HTTPException(400, "sessionId is required.")
     try:
-        session = ctx.session_store.get_session(session_id)
+        session = ctx.session_store.get_session_header(session_id)
     except KeyError:
         raise HTTPException(404, "Session not found.") from None
     if not _owned_by(session, identity["userId"]):

@@ -514,7 +514,7 @@ def test_browse_uses_recorded_subpath_after_daemon_replacement(client, backlog_t
     assert captured["workspaceSubpath"] == "tasks/original-location"
 
 
-def test_wait_status_tracks_daemon_queue_events_and_clears_on_acquire(client, task_with_run):
+def test_wait_status_tracks_daemon_queue_events_and_clears_on_acquire(client, task_with_run, monkeypatch):
     task, node = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
     app = client.app
     token = f"token_{node['id']}"
@@ -525,7 +525,13 @@ def test_wait_status_tracks_daemon_queue_events_and_clears_on_acquire(client, ta
     url = f"/api/v1/daemon-nodes/{node['id']}/events"
     response = client.post(url, json=event, headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200, response.text
-    status = client.get(f"/api/v1/tasks/{task['id']}/workspace/status")
+    def reject_history(*_args, **_kwargs):
+        pytest.fail("Workspace wait polls must use the current Task record and indexed run lookups")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(app.state.task_store, "get_task", reject_history)
+        scoped.setattr(app.state.daemon_store, "list_active_runs", reject_history)
+        status = client.get(f"/api/v1/tasks/{task['id']}/workspace/status")
     assert status.json() == {"waiting": True}
     response = client.post(url, json={**event, "waiting": False}, headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
@@ -626,6 +632,48 @@ def test_task_workspace_status_denies_other_user(client, task_with_run, other_us
     task, _ = task_with_run(capabilities=["task-workspaces", "workspace-read-shared"])
     response = client.get(f"/api/v1/tasks/{task['id']}/workspace/status", headers=other_user.headers)
     assert response.status_code == 403
+
+
+def test_task_artifacts_batches_linked_thread_metadata_without_event_logs(client, backlog_task, monkeypatch):
+    from sqlalchemy import event
+
+    app = client.app
+    task_id = backlog_task["id"]
+    sessions = app.state.session_store
+    from relay.core.ids import new_database_id
+
+    latest = None
+    for index in range(8):
+        session = sessions.create_session({
+            "taskGoal": f"Pass {index}", "workspacePath": "/workspace", "ownerUserId": ALICE,
+        })
+        app.state.task_store.link_session(task_id, session["id"])
+        latest, _ = sessions.index_workspace_artifact(session["id"], {
+            "id": new_database_id(), "kind": "workspace_file", "title": "result.txt",
+            "path": "/workspace/result.txt", "workspaceRelativePath": "result.txt",
+            "createdAt": f"2026-11-{index + 1:02}T00:00:00.000Z",
+        }, str(index).encode())
+
+    def reject_history(*_args, **_kwargs):
+        pytest.fail("Artifact metadata does not need Thread or Task history")
+
+    monkeypatch.setattr(sessions, "get_session", reject_history)
+    monkeypatch.setattr(app.state.task_store, "get_task", reject_history)
+    reads = []
+
+    def capture(_conn, _cursor, statement, *_args):
+        if "FROM sessions" in statement:
+            reads.append(statement)
+
+    event.listen(sessions.engine, "before_cursor_execute", capture)
+    try:
+        response = client.get(f"/api/v1/tasks/{task_id}/artifacts")
+    finally:
+        event.remove(sessions.engine, "before_cursor_execute", capture)
+    assert response.status_code == 200
+    assert latest is not None
+    assert [item["id"] for item in response.json()["artifacts"]] == [latest["id"]]
+    assert len(reads) == 1
 
 
 def _thread_with_unsnapshotted_artifact(app, backlog_task, node) -> tuple[dict, dict]:

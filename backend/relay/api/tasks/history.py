@@ -24,6 +24,7 @@ router = APIRouter()
 
 def occurrence_tasks(
     ctx: Any, task: dict[str, Any], actor: Actor, *, occurrence_ids: list[str] | None = None,
+    record_view: bool = False,
 ) -> list[dict[str, Any]]:
     """The routine's promoted occurrences the actor may read.
 
@@ -38,7 +39,7 @@ def occurrence_tasks(
     occurrences: list[dict[str, Any]] = []
     for occurrence_id in occurrence_ids if occurrence_ids is not None else task.get("occurrenceIds") or []:
         try:
-            occurrences.append(get_task_for_actor(ctx.task_store, occurrence_id, actor))
+            occurrences.append(get_task_for_actor(ctx.task_store, occurrence_id, actor, record_view=record_view))
         except HTTPException:
             continue
         except Exception:  # noqa: BLE001 - one unreadable occurrence must not block the rest
@@ -91,7 +92,8 @@ def task_events(
 
 
 def newest_artifacts_by_file(
-    ctx: Any, sources: list[tuple[str, str]], *, owner_user_id: str | None, all_versions: bool = False
+    ctx: Any, sources: list[tuple[str, str]], *, owner_user_id: str | None, all_versions: bool = False,
+    artifact_sessions: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Workspace artifacts across `(taskId, sessionId)` pairs, newest per file.
 
@@ -100,20 +102,14 @@ def newest_artifacts_by_file(
     or lists a task's generated files goes through here so the ledger's counts
     and the artifact list can never disagree.
     """
+    if not sources:
+        return {}
+    if artifact_sessions is None:
+        artifact_sessions = ctx.session_store.list_artifact_sources({key for _, key in sources}, owner_user_id)
     newest: dict[str, dict[str, Any]] = {}
     for origin_task_id, session_id in sources:
-        try:
-            session = ctx.session_store.get_session(session_id)
-        except (KeyError, FileNotFoundError):
-            continue  # A linked session may have been deleted; skip it.
-        except Exception:  # noqa: BLE001 - one unreadable linked session must not block the rest
-            logger.warning(
-                "Unexpected error reading linked session for artifact aggregation",
-                session_id=session_id,
-                exc_info=True,
-            )
-            continue
-        if session.get("ownerUserId") != owner_user_id:
+        session = artifact_sessions.get(session_id)
+        if not session or session.get("ownerUserId") != owner_user_id:
             continue
         for artifact in workspace_artifacts(session):
             # Continuity checkpoints are retained artifacts too, but they are
@@ -149,11 +145,11 @@ def task_artifacts(
     files are always produced by an occurrence's sessions.
     """
     actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
     sources: list[tuple[str, str]] = [
         (task_id, session_id) for session_id in task.get("linkedSessionIds", [])
     ]
-    for occurrence in occurrence_tasks(ctx, task, actor):
+    for occurrence in occurrence_tasks(ctx, task, actor, record_view=True):
         sources.extend(
             (occurrence["id"], session_id)
             for session_id in occurrence.get("linkedSessionIds", [])

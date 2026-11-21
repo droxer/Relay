@@ -130,7 +130,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any] | Re
     actor = request_actor_or_sandbox(request, ctx.auth_store, ctx.registry)
     agent, team, project, user_id = _workspace_scope(ctx, actor, request)
     if request.query_params.get("view") == "activity":
-        payload = _workspace_activity(ctx, user_id, agent, team, project)
+        payload = _workspace_activity(ctx, user_id, agent, team, project, request)
         response = JSONResponse(payload)
         etag = weak_etag(bytes(response.body))
         headers = {"ETag": etag.decode("ascii"), "Cache-Control": CACHE_CONTROL.decode("ascii")}
@@ -180,13 +180,28 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any] | Re
 def _workspace_activity(
     ctx: AppContext, user_id: str,
     agent: dict[str, Any] | None, team: dict[str, Any] | None, project: dict[str, Any] | None,
+    request: Request,
 ) -> dict[str, Any]:
     agent_id = agent["id"] if agent else None
     team_id = team["id"] if team else None
     project_id = project["id"] if project else None
-    sessions = ctx.session_store.list_workspace_threads(
+    raw_limit = request.query_params.get("threadLimit")
+    cursor = request.query_params.get("threadCursor")
+    limit = None
+    if raw_limit is not None or cursor:
+        try:
+            limit = min(max(1, int(raw_limit if raw_limit is not None else "20")), 100)
+        except ValueError as error:
+            raise HTTPException(400, "threadLimit must be an integer.") from error
+    sessions, next_position = ctx.session_store.list_workspace_threads(
         owner_user_id=user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+        limit=limit, before=decode_summary_cursor(cursor) if cursor else None,
     )
+    page: dict[str, Any] = {"sessions": sessions}
+    if limit is not None:
+        page["nextThreadCursor"] = encode_summary_cursor(next_position) if next_position else None
+    if cursor:
+        return page
     runs = ctx.registry.daemon_store.list_workspace_active_runs(
         user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
         computer_id=project.get("computerId") if project else None,
@@ -196,7 +211,7 @@ def _workspace_activity(
         assigned_agent_id=agent_id, assigned_team_id=team_id, statuses=ACTIVE_TASK_STATUSES,
     )
     return {
-        "sessions": sessions,
+        **page,
         "activeRuns": runs,
         "tasks": [task_brief_item(task) for task in tasks],
     }

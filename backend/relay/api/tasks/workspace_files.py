@@ -102,11 +102,11 @@ async def _task_directory_listings(
 
 def _prepare_task_files(task_id: str, request: Request, ctx: AppContext) -> Any:
     actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
     sources: list[tuple[str, str]] = [
         (task_id, session_id) for session_id in task.get("linkedSessionIds", [])
     ]
-    for occurrence in occurrence_tasks(ctx, task, actor):
+    for occurrence in occurrence_tasks(ctx, task, actor, record_view=True):
         sources.extend(
             (occurrence["id"], session_id)
             for session_id in occurrence.get("linkedSessionIds", [])
@@ -156,7 +156,7 @@ def _task_workspace_target(
     binding = recorded_task_workspace(task, ctx.session_store, nodes)
     if task.get("isRoutine"):
         # A routine is a browse-only parent; each occurrence owns its binding.
-        for occurrence in reversed(occurrence_tasks(ctx, task, actor)):
+        for occurrence in reversed(occurrence_tasks(ctx, task, actor, record_view=True)):
             binding = recorded_task_workspace(occurrence, ctx.session_store, nodes)
             if binding:
                 if binding["layout"] == "task":
@@ -205,16 +205,18 @@ def task_workspace_status(
 ) -> dict[str, Any]:
     """Small polling response; never dispatches a filesystem read just to show a wait."""
     actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(ctx.task_store, task_id, actor)
+    task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
     waiting = task.get("workspaceWaiting")
-    active = ctx.daemon_store.list_active_runs() if waiting else []
-    if not waiting or not any(run["runId"] == waiting["runId"] for run in active):
+    if not waiting:
+        return {"waiting": False}
+    blocker = waiting.get("blockingSessionId")
+    active, blocked = ctx.daemon_store.active_workspace_wait(waiting["runId"], blocker)
+    if not active:
         return {"waiting": False}
     result: dict[str, Any] = {"waiting": True}
-    blocker = waiting.get("blockingSessionId")
-    if blocker and any(run["sessionId"] == blocker for run in active):
+    if blocker and blocked:
         try:
-            session = ctx.session_store.get_session(blocker)
+            session = ctx.session_store.get_session_header(blocker)
         except (KeyError, FileNotFoundError):
             session = None
         if session and actor_can_access_record(actor, session):
@@ -233,7 +235,7 @@ async def task_workspace_files(
     durable record of what a task produced.
     """
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
-    task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
+    task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor, record_view=True)
     path = workspace_path(request.query_params.get("path"))
     node, workspace_layout, workspace_subpath = await run_in_threadpool(_task_workspace_target, ctx, task, actor)
     event = await workspace_listing_event(
@@ -269,7 +271,7 @@ async def task_workspace_file(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
-    task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor)
+    task = await run_in_threadpool(get_task_for_actor, ctx.task_store, task_id, actor, record_view=True)
     path = workspace_path(request.query_params.get("path"), required=True)
     node, workspace_layout, workspace_subpath = await run_in_threadpool(_task_workspace_target, ctx, task, actor)
     event = await dispatch_workspace_command(

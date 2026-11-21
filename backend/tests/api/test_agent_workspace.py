@@ -117,6 +117,44 @@ def test_agent_workspace_brief_includes_owned_session_before_first_run(
     assert sessions[0]["runCount"] == 0
 
 
+def test_workspace_activity_pages_history_without_reloading_live_work(monkeypatch, tmp_path):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    _bootstrap(client)
+    agent = _agent(client)
+    store = app.state.session_store
+    expected = [
+        store.create_session({
+            "workspacePath": "/workspace", "ownerUserId": ALICE, "ownerAgentId": agent["id"],
+            "taskGoal": f"Thread {index}",
+        })
+        for index in range(43)
+    ]
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
+    path = f"/api/v1/workspace/brief?view=activity&agentId={agent['id']}"
+    head = client.get(f"{path}&threadLimit=20")
+    assert head.status_code == 200
+    payload = head.json()
+    assert len(payload["sessions"]) == 20
+    assert client.get(f"{path}&threadLimit=20", headers={"If-None-Match": head.headers["ETag"]}).status_code == 304
+
+    def reject_live_read(*_args, **_kwargs):
+        raise AssertionError("Older Thread pages do not fetch live runs or Tasks")
+
+    monkeypatch.setattr(app.state.daemon_store, "list_workspace_active_runs", reject_live_read)
+    monkeypatch.setattr(app.state.task_store, "list_task_summaries", reject_live_read)
+    ids = [row["id"] for row in payload["sessions"]]
+    while payload["nextThreadCursor"]:
+        response = client.get(f"{path}&threadLimit=20&threadCursor={payload['nextThreadCursor']}")
+        assert response.status_code == 200
+        payload = response.json()
+        assert set(payload) == {"sessions", "nextThreadCursor"}
+        assert len(payload["sessions"]) <= 20
+        ids.extend(row["id"] for row in payload["sessions"])
+    assert ids == [row["id"] for row in sorted(expected, key=lambda row: (row["updatedAt"], row["id"]), reverse=True)]
+
+
 def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
     monkeypatch, tmp_path
 ):

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event, select, update
 
 from relay.app import create_app
+from relay.core.ids import new_database_id
 from relay.persistence.events import relay_task_event
 from relay.sessions.controller import SessionController
 from test_tasks import _bootstrap_admin, _create_account, _login
@@ -53,6 +54,37 @@ def test_summary_last_page_has_no_cursor(paged_threads):
     client, _alice, created = paged_threads
 
     assert sorted(_whole_list(client)) == sorted(created)
+
+
+def test_thread_summary_reads_linked_computer_liveness_once(paged_threads):
+    client, _alice, created = paged_threads
+    app = client.app
+    owner = user_id("alice")
+    for session in created:
+        node_id = new_database_id()
+        app.state.registry.register({
+            "sandboxId": node_id, "token": f"token-{node_id}", "userId": owner,
+            "workspaceId": node_id, "protocolVersion": 1, "supportedAgents": ["codex"],
+        })
+        app.state.daemon_store.create_run_request({
+            "nodeId": node_id, "sessionId": session, "taskGoal": "Wait",
+            "assignments": [{"executorKind": "codex"}], "state": {},
+        })
+    reads = []
+
+    def capture(_conn, _cursor, statement, *_args):
+        if "FROM daemon_nodes" in statement or "FROM daemon_node_agents" in statement:
+            reads.append(statement)
+
+    event.listen(app.state.daemon_store.engine, "before_cursor_execute", capture)
+    try:
+        response = client.get("/api/v1/threads?view=summary&limit=20")
+    finally:
+        event.remove(app.state.daemon_store.engine, "before_cursor_execute", capture)
+    assert response.status_code == 200
+    assert all(row["execution"]["computerOnline"] is True for row in response.json()["sessions"])
+    assert len(reads) == 1
+    assert reads[0].startswith("SELECT daemon_nodes.id, daemon_nodes.status, daemon_nodes.last_seen_at")
 
 
 def test_thread_activity_projects_only_the_page_and_counts_snoozed_home_work(paged_threads, monkeypatch):

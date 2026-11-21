@@ -4,17 +4,33 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 
 from ...core.computer_identity import computer_id as resolve_computer_id
 from ..db_time import format_db_time
 from ..engine import store_transaction
+from ..sql import names_no_uuid_row
 from ..tables.sessions import sessions
 from .rows import row_to_run
 from .state import DaemonStoreState
 
 
 class DaemonRunReads(DaemonStoreState):
+    def active_workspace_wait(self, run_id: str, blocker_session_id: str | None) -> tuple[bool, bool]:
+        """Is the waiting run alive, and is the reported blocker still active?"""
+        if names_no_uuid_row(self.engine, run_id):
+            return False, False
+        runs = self.runs.c
+        active = select(runs.id).where(runs.status == "running")
+        blocker = (
+            active.where(runs.session_id == blocker_session_id).exists()
+            if blocker_session_id and not names_no_uuid_row(self.engine, blocker_session_id)
+            else false()
+        )
+        with store_transaction(self.engine) as conn:
+            waiting, blocked = conn.execute(select(active.where(runs.id == run_id).exists(), blocker)).one()
+        return waiting, blocked
+
     def list_active_runs(
         self, node_id: str | None = None, *, node_ids: set[str] | None = None,
         session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None,

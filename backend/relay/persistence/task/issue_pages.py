@@ -14,6 +14,7 @@ from ..tables.agents import agents
 from ..tables.projects import projects
 from ..tables.teams import teams
 from .computer_scope import bound_computer, computer_list_columns, latest_computer, linked_computers, with_effective_computers
+from .global_issues import global_issue_window, supports_sql_window
 from .rows import compact_task_summary
 from .state import TaskStoreState
 
@@ -24,6 +25,29 @@ class TaskIssueRows(TaskStoreState):
             return latest_computer(session_ids, linked_computers(conn, owner, set(session_ids)))
 
     def issue_page(self, request: IssueListRequest) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        tasks = self.tasks
+        with store_transaction(self.engine) as conn:
+            if supports_sql_window(request):
+                ids, metadata = global_issue_window(conn, tasks, request)
+            else:
+                ids, metadata = self._compat_issue_window(conn, request)
+            if not ids:
+                return [], metadata
+            rows = conn.execute(select(tasks.c.id, tasks.c.snapshot, tasks.c.version).where(
+                tasks.c.id.in_(ids), tasks.c.owner_user_id == request.owner, tasks.c.deleted_at.is_(None),
+            )).mappings()
+            summaries = {
+                row["id"]: compact_task_summary(
+                    row["snapshot"], event_count=int(row["version"] or 0),
+                    activity_count=int(row["snapshot"].get("activityCount") or 0),
+                )
+                for row in rows
+            }
+        return [summaries[key] for key in ids if key in summaries], metadata
+
+    def _compat_issue_window(
+        self, conn: Any, request: IssueListRequest,
+    ) -> tuple[list[str], dict[str, Any]]:
         tasks = self.tasks
         snapshot = tasks.c.snapshot
         relation = tasks.outerjoin(projects, projects.c.id == tasks.c.project_id)
@@ -69,7 +93,7 @@ class TaskIssueRows(TaskStoreState):
         if request.workspace_board:
             if request.project_id:
                 if sql.names_no_uuid_row(self.engine, request.project_id):
-                    return [], workspace_board_window([], request)[1]
+                    return workspace_board_window([], request)
                 scope = tasks.c.project_id == request.project_id
             else:
                 bound = bound_computer(snapshot)
@@ -80,28 +104,13 @@ class TaskIssueRows(TaskStoreState):
             tasks.c.owner_user_id == request.owner, tasks.c.deleted_at.is_(None), tasks.c.is_routine.is_(False),
             scope,
         ).order_by(tasks.c.updated_at.desc(), tasks.c.id.desc())
-        with store_transaction(self.engine) as conn:
-            metadata_rows_result = list(conn.execute(metadata_rows).mappings())
-            if request.computer_id:
-                scoped_rows = with_effective_computers(conn, request.owner, metadata_rows_result)
-                ids, metadata = workspace_board_window(scoped_rows, request)
-            elif request.workspace_board:
-                ids, metadata = workspace_board_window(metadata_rows_result, request)
-            else:
-                ids, metadata = issue_window(metadata_rows_result, request)
-            if not ids:
-                return [], metadata
-            rows = conn.execute(select(tasks.c.id, tasks.c.snapshot, tasks.c.version).where(
-                tasks.c.id.in_(ids), tasks.c.owner_user_id == request.owner, tasks.c.deleted_at.is_(None),
-            )).mappings()
-            summaries = {
-                row["id"]: compact_task_summary(
-                    row["snapshot"], event_count=int(row["version"] or 0),
-                    activity_count=int(row["snapshot"].get("activityCount") or 0),
-                )
-                for row in rows
-            }
-        return [summaries[key] for key in ids if key in summaries], metadata
+
+        metadata = list(conn.execute(metadata_rows).mappings())
+        if request.computer_id:
+            return workspace_board_window(with_effective_computers(conn, request.owner, metadata), request)
+        if request.workspace_board:
+            return workspace_board_window(metadata, request)
+        return issue_window(metadata, request)
 
     def prerequisite_choices(self, owner: str, project_id: str, task_ids: list[str] | None = None) -> list[dict[str, Any]]:
         tasks = self.tasks

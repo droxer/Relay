@@ -27,7 +27,7 @@ from ...agents.location import AgentMoveError, place_agent_on_node
 from ...agents.creation import AgentCreationError, create_agent_for_user
 from ...agents.delegation import validate_delegation_targets
 from ...agents.routing import placement_node
-from ...computer.names import computer_display_name
+from ...computer.names import computer_display_name, computer_display_names
 from ...projects.catalog import agent_has_active_project
 from ...teams.membership import remove_agent_from_teams
 from ..deps import AppContextDep
@@ -423,7 +423,7 @@ def _node_map(ctx: AppContextDep, *, owner: str | None = None) -> NodeMap:
 
 
 def _placements_by_agent(
-    ctx: AppContextDep, agent_ids: list[str], *, owner: str | None = None,
+    ctx: AppContextDep, agent_ids: list[str], *, owner: str | None = None, exact: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     """Live placements grouped by agent, loaded in one query for a batch."""
     if not agent_ids:
@@ -431,6 +431,8 @@ def _placements_by_agent(
     wanted = set(agent_ids)
     if len(wanted) == 1:
         rows = ctx.agent_placement_store.list_placements(agent_id=agent_ids[0])
+    elif exact:
+        rows = ctx.agent_placement_store.list_placements(agent_ids=wanted)
     else:
         rows = ctx.agent_placement_store.list_placements(supervisor_user_id=owner)
     grouped: dict[str, list[dict[str, Any]]] = {agent_id: [] for agent_id in wanted}
@@ -447,13 +449,22 @@ def _agent_views(
     nodes: NodeMap | None = None,
     owner: str | None = None,
     summary: bool = False,
+    scope_to_placements: bool = False,
 ) -> list[dict[str, Any]]:
     """``_agent_with_placements`` for a batch: one node read, one placement read."""
-    node_map = _node_map(ctx) if nodes is None else nodes
-    placements = _placements_by_agent(ctx, [agent["id"] for agent in agents], owner=owner)
+    placements = _placements_by_agent(ctx, [agent["id"] for agent in agents], owner=owner, exact=scope_to_placements)
+    if scope_to_placements:
+        related = ctx.registry.monitor_nodes_for_placements(
+            placement for group in placements.values() for placement in group
+        )
+        node_map = {node["id"]: node for node in related}
+        node_names = computer_display_names(ctx, related)
+    else:
+        node_map = _node_map(ctx) if nodes is None else nodes
+        node_names = None
     return [
         _agent_with_placements(
-            ctx, agent, nodes=node_map, placements=placements.get(agent["id"], []), summary=summary,
+            ctx, agent, nodes=node_map, placements=placements.get(agent["id"], []), summary=summary, node_names=node_names,
         )
         for agent in agents
     ]
@@ -466,6 +477,7 @@ def _agent_with_placements(
     nodes: NodeMap | None = None,
     placements: list[dict[str, Any]] | None = None,
     summary: bool = False,
+    node_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     node_map = _node_map(ctx) if nodes is None else nodes
     raw_placements = (
@@ -474,7 +486,7 @@ def _agent_with_placements(
         else placements
     )
     placement_views = [
-        _placement_view(ctx, placement, nodes=node_map, agent=agent)
+        _placement_view(ctx, placement, nodes=node_map, agent=agent, node_names=node_names)
         for placement in raw_placements
     ]
     availability = "offline"
@@ -635,6 +647,7 @@ def _placement_view(
     *,
     nodes: NodeMap | None = None,
     agent: dict[str, Any] | None = None,
+    node_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     node_map = _node_map(ctx) if nodes is None else nodes
     node = placement_node(placement, node_map)
@@ -657,7 +670,7 @@ def _placement_view(
         return {**view, "nodeOwnership": "unknown"}
     return {
         **view,
-        "nodeDisplayName": computer_display_name(ctx, node),
+        "nodeDisplayName": node_names[node["id"]] if node_names is not None else computer_display_name(ctx, node),
         "nodeOwnership": node.get("nodeLocation") or "unknown",
         **(
             {"nodeSandboxMode": node["sandboxMode"]}

@@ -140,7 +140,7 @@ def _member_configs(
 
 
 def _member_views(
-    ctx: AppContextDep, teams: list[dict[str, Any]]
+    ctx: AppContextDep, teams: list[dict[str, Any]], *, scoped: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Agent views for every live member across ``teams``, computed once.
 
@@ -156,14 +156,14 @@ def _member_views(
     agents = ctx.agent_store.get_agents_by_ids(list(member_ids))
     return {
         view["id"]: view
-        for view in _agent_views(ctx, agents, summary=True)
+        for view in _agent_views(ctx, agents, summary=True, scope_to_placements=scoped)
     }
 
 
 def _team_views(
-    ctx: AppContextDep, teams: list[dict[str, Any]], *, summary: bool = False,
+    ctx: AppContextDep, teams: list[dict[str, Any]], *, summary: bool = False, scoped: bool = False,
 ) -> list[dict[str, Any]]:
-    views = _member_views(ctx, teams)
+    views = _member_views(ctx, teams, scoped=scoped)
     return [_team_view(ctx, team, member_views=views, view="summary" if summary else "full") for team in teams]
 
 
@@ -229,8 +229,9 @@ def _team_view(
     *,
     member_views: dict[str, dict[str, Any]] | None = None,
     view: Literal["full", "summary", "record", "preview"] = "full",
+    scoped: bool = False,
 ) -> dict[str, Any]:
-    views = _member_views(ctx, [team]) if member_views is None else member_views
+    views = _member_views(ctx, [team], scoped=scoped) if member_views is None else member_views
     members = [_member_summary(views[agent_id]) for agent_id in team.get("memberAgentIds", []) if agent_id in views]
     lead = next(
         (member for member in members if member["id"] == team.get("leadAgentId")),
@@ -264,14 +265,14 @@ def list_teams(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     summary = request.query_params.get("view") == "summary"
     teams = ctx.team_store.list_teams(actor["userId"])
     if summary and request.query_params.get("format") == "compact":
-        members = _member_views(ctx, teams)
+        members = _member_views(ctx, teams, scoped=True)
         return {
             "view": "summary",
             "teams": [_team_summary(team, include_presets=False) for team in teams],
             "memberDirectory": [_member_summary(members[agent_id]) for agent_id in sorted(members)],
             "predefinedWorkflows": PREDEFINED_WORKFLOWS,
         }
-    return {"teams": _team_views(ctx, teams, summary=summary), **({"view": "summary"} if summary else {})}
+    return {"teams": _team_views(ctx, teams, summary=summary, scoped=True), **({"view": "summary"} if summary else {})}
 
 
 @router.get("/teams/{team_id}")
@@ -279,7 +280,7 @@ def get_team(team_id: str, request: Request, ctx: AppContextDep) -> Response:
     actor = request_actor(request, ctx.auth_store)
     team = _owned_team(ctx, team_id, actor["userId"])
     view: Literal["preview", "record"] = "preview" if request.query_params.get("view") == "preview" else "record"
-    return private_conditional_json(request, {"team": _team_view(ctx, team, view=view)})
+    return private_conditional_json(request, {"team": _team_view(ctx, team, view=view, scoped=True)})
 
 
 def _active_computers(agent: dict[str, Any]) -> list[str]:

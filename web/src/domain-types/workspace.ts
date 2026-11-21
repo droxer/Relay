@@ -78,8 +78,12 @@ export interface WorkspaceBriefResponse {
   generatedAt: string;
 }
 
-export interface WorkspaceActivityResponse {
+export interface WorkspaceActivityThreads {
   sessions: Pick<WorkspaceBriefSession, "id" | "title" | "taskGoal" | "status" | "runCount" | "updatedAt">[];
+  nextThreadCursor?: string | null;
+}
+
+export interface WorkspaceActivityResponse extends WorkspaceActivityThreads {
   activeRuns: Pick<DaemonNodeMonitorRecord["activeRuns"][number], "runId" | "sessionId" | "taskGoal" | "agent" | "startedAt">[];
   tasks: WorkspaceBriefTask[];
 }

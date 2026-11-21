@@ -109,7 +109,7 @@ def test_execution_annotations_batch_commands_and_scope_sessions():
         def list_active_run_requests(self, *, session_ids=None):
             assert session_ids == {"s1", "s2"}
             return [
-                {"sessionId": s, "currentCommandId": s, "status": "running"}
+                {"sessionId": s, "currentCommandId": s, "nodeId": f"node-{s}", "status": "running"}
                 for s in session_ids
             ]
 
@@ -124,9 +124,18 @@ def test_execution_annotations_batch_commands_and_scope_sessions():
         def get_command(self, command_id):
             raise AssertionError("N+1 command lookup")
 
-    service = ExecutionLifecycleService(SimpleNamespace(daemon_store=Store()), None)
-    assert len(service.annotate([{"id": "s1"}, {"id": "s2"}])) == 2
-    assert seen == [{"s1", "s2"}]
+        def get_node(self, node_id):
+            raise AssertionError("N+1 Computer lookup")
+
+        def get_node_liveness(self, node_ids):
+            seen.append(node_ids)
+            return {"node-s1": {"status": "stopped"}}
+
+    registry = SimpleNamespace(daemon_store=Store(), _liveness=lambda node: {"online": node["status"] != "stopped"})
+    service = ExecutionLifecycleService(registry, None)
+    rows = service.annotate([{"id": "s1"}, {"id": "s2"}])
+    assert [row["execution"]["computerOnline"] for row in rows] == [False, None]
+    assert seen == [{"s1", "s2"}, {"node-s1", "node-s2"}]
 
 
 def test_scheduler_database_phase_runs_off_event_loop(monkeypatch):
