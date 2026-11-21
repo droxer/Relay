@@ -207,7 +207,7 @@ jobs:
           RELAY_TEST_STORE_BACKEND: postgres
         run: |
           uv run pytest tests/api/test_thread_summary_paging.py tests/api/test_task_prerequisites_api.py \
-            -k 'many_linked or compact_read or project_access' -q -n0
+            tests/api/test_execution_reconcile.py -k 'many_linked or compact_read or project_access or long_transcript' -q -n0
       - name: Exercise daemon connections and report recovery on PostgreSQL
         working-directory: backend
         env:
