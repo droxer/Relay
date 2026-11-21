@@ -86,24 +86,21 @@ def with_dependency_summaries(
     excludes descriptions, evidence, history and runtime/workspace details.
     Reuse tasks already in the response and read missing prerequisites in batches.
     """
-    ids = list(dict.fromkeys(key for task in tasks for key in task.get("waitingOn") or []))
+    project_ids = {task["projectId"] for task in tasks if task.get("waitingOn") and task.get("projectId")}
+    projects = ctx.project_store.live_owned_project_ids(actor["userId"], project_ids) if project_ids else set()
+    ids = dict.fromkeys(
+        key for task in tasks if task.get("projectId") in projects for key in task.get("waitingOn") or []
+    )
     summaries = {task["id"]: task for task in tasks if task.get("status") != "done"}
     missing = [key for key in ids if key not in summaries]
     for offset in range(0, len(missing), 500):
         for task in ctx.task_store.list_task_summaries(task_ids=missing[offset:offset + 500]):
             summaries[task["id"]] = task
-    projects: dict[str, bool] = {}
     result: list[dict[str, Any]] = []
     for task in tasks:
         project_id = task.get("projectId")
-        if task.get("waitingOn") and project_id and project_id not in projects:
-            project = ctx.project_store.get_project(project_id)
-            projects[project_id] = bool(
-                project and not project.get("archivedAt")
-                and project.get("ownerUserId") == actor["userId"]
-            )
         visible: list[dict[str, Any]] = []
-        if project_id and projects.get(project_id):
+        if project_id in projects:
             for key in task.get("waitingOn") or []:
                 source = summaries.get(key)
                 if (
@@ -113,7 +110,7 @@ def with_dependency_summaries(
                     continue
                 visible.append({
                     **{name: source[name] for name in ("id", "number", "title", "status", "ownerUserId", "assigneeUserId") if name in source},
-                    "canOpen": actor_can_access_record(actor, source),
+                    "canOpen": True,
                 })
         result.append({**task, "waitingOnSummaries": visible})
     user_ids = list({

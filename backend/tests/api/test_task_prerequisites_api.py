@@ -768,7 +768,7 @@ def test_pickup_and_claim_refuse_a_waiting_task(project_context):
     assert store.claim_task_for_dispatch(second["id"], "codex") is None
 
 
-def test_list_dependency_summary_respects_project_access(project_context, monkeypatch):
+def test_list_dependency_summary_respects_task_and_project_access(project_context):
     app, client, project = project_context
     store = app.state.task_store
     bob = app.state.auth_store.ensure_user("bob", display_name="Sam Lee")
@@ -780,10 +780,26 @@ def test_list_dependency_summary_respects_project_access(project_context, monkey
     assert rows[dependent["id"]]["waitingOnSummaries"] == []
     assert client.get(f"/api/v1/tasks/{upstream['id']}").status_code == 403
 
-    # An accessible task alone does not grant the project's private metadata.
-    monkeypatch.setattr(app.state.project_store, "get_project", lambda _id: {**project, "ownerUserId": "bob"})
-    hidden_rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
-    assert hidden_rows[dependent["id"]]["waitingOnSummaries"] == []
+    foreign = app.state.project_store.create_project(bob["id"], {
+        "name": "Foreign Project", "computerId": project["computerId"], "members": [],
+    })
+    scope = {"ownerUserId": project["ownerUserId"], "projectId": foreign["id"]}
+    own_upstream = store.create_task({**scope, "title": "Visible Task in a foreign Project"})
+    own_dependent = store.create_task({**scope, "title": "Dependent Task in a foreign Project"})
+    store.set_task_prerequisites(own_dependent["id"], [own_upstream["id"]])
+    rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert own_upstream["id"] in rows
+    assert rows[own_dependent["id"]]["waitingOn"] == [own_upstream["id"]]
+    assert rows[own_dependent["id"]]["waitingOnSummaries"] == []
+
+    local = _task(client, project, "Visible Task in an owned Project")
+    assert _set(client, dependent, [local["id"]]).status_code == 200
+    rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert [summary["id"] for summary in rows[dependent["id"]]["waitingOnSummaries"]] == [local["id"]]
+    app.state.project_store.archive_project(project["id"], expected_version=project["version"])
+    rows = {t["id"]: t for t in client.get("/api/v1/tasks?view=summary").json()["tasks"]}
+    assert rows[dependent["id"]]["waitingOn"] == [local["id"]]
+    assert rows[dependent["id"]]["waitingOnSummaries"] == []
 
 
 def test_list_reuses_prerequisites_already_in_the_task_page(project_context, monkeypatch):

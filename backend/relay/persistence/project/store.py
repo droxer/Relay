@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Collection
+from itertools import batched
 from typing import Any
 
 from sqlalchemy import (
@@ -110,6 +111,16 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
             (project_with_manager(dict(row["snapshot"])) for row in rows),
             key=lambda project: (project["name"].casefold(), project["id"]),
         )
+
+    def live_owned_project_ids(self, owner_user_id: str, project_ids: Collection[str]) -> set[str]:
+        """Check ownership and archive state using only the requested Project IDs."""
+        ids = [project_id for project_id in set(project_ids) if not names_no_uuid_row(self.engine, project_id)]
+        if not ids:
+            return set()
+        columns = self.projects.c
+        statement = select(columns.id).where(columns.owner_user_id == owner_user_id, columns.archived_at.is_(None))
+        with store_transaction(self.engine) as conn:
+            return {str(key) for batch in batched(ids, 500) for key in conn.scalars(statement.where(columns.id.in_(batch)))}
 
     def workflow_projects(
         self, owner_user_id: str, computer_id: str | None, linked_ids: Collection[str],

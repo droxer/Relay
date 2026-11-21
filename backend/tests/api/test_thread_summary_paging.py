@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
 
 from relay.app import create_app
 from relay.persistence.events import relay_task_event
@@ -132,6 +132,10 @@ def test_thread_activity_reads_one_origin_per_thread_with_many_linked_tasks(page
         store.link_session(task["id"], first)
         store.link_session(task["id"], second)
         candidates.append(task["id"])
+    waiting = store.create_task({"title": "Needs a reply", "ownerUserId": owner})
+    store.append_events(waiting["id"], [relay_task_event("task.status", waiting["id"], {
+        "status": "waiting_for_human", "sessionId": second,
+    })])
     # When all timestamps tie, both SQL backends must pick the same winner.
     with store.engine.begin() as conn:
         stamp = conn.scalar(select(store.tasks.c.created_at).where(store.tasks.c.id == parent["id"]))
@@ -139,6 +143,11 @@ def test_thread_activity_reads_one_origin_per_thread_with_many_linked_tasks(page
 
     lookup = store.thread_list_task_links
     reads = []
+    link_queries = []
+
+    def record_links(_conn, cursor, statement, *_args):
+        if statement.startswith("SELECT") and "FROM task_sessions JOIN tasks" in statement:
+            link_queries.append(cursor.rowcount)
 
     def bounded(session_ids, user_id):
         origins, waits = lookup(session_ids, user_id)
@@ -146,14 +155,22 @@ def test_thread_activity_reads_one_origin_per_thread_with_many_linked_tasks(page
         return origins, waits
 
     monkeypatch.setattr(store, "thread_list_task_links", bounded)
-    response = client.get("/api/v1/threads?view=summary&include=activity&limit=2")
+    event.listen(store.engine, "after_cursor_execute", record_links)
+    try:
+        response = client.get("/api/v1/threads?view=summary&include=activity&limit=2")
+    finally:
+        event.remove(store.engine, "after_cursor_execute", record_links)
     assert response.status_code == 200
     assert reads == [(2, 2)]
+    # psycopg reports the rows returned by SELECT, while sqlite3 reports -1.
+    assert link_queries == ([2] if store.engine.dialect.name == "postgresql" else [-1])
+    rows = response.json()["sessions"]
     winner = store.get_task(max(candidates))
-    assert [row["taskActivity"]["origin"] for row in response.json()["sessions"]] == [
+    assert [row["taskActivity"]["origin"] for row in rows] == [
         {"kind": "routine", "taskId": winner["id"], "ref": f"#{winner['number']}",
          "title": parent["title"], "status": "backlog"},
     ] * 2
+    assert [row["taskActivity"]["awaitsHuman"] for row in rows] == [False, True]
 
 
 def test_summary_thread_moved_to_top_is_not_served_twice(paged_threads):
