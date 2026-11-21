@@ -127,8 +127,10 @@ class NodeLivenessMixin(RegistryState):
         else:
             self._refresh_persisted_liveness()
             nodes = list(self.sandboxes.values())
-        if not nodes:
-            return []
+        # Active runs only break ties between candidates. A singly scoped
+        # credential or owner does not need a second read to pick its node.
+        if len(nodes) < 2:
+            return nodes
         scope = {node["id"] for node in nodes} if user_id is not None or ui_token is not None else None
         active_runs_by_node = self._active_runs_by_node(node_ids=scope)
         return sorted(
@@ -164,6 +166,24 @@ class NodeLivenessMixin(RegistryState):
 
     def monitor_nodes_for_user(self, user_id: str) -> list[dict[str, Any]]:
         records = self.daemon_store.list_nodes(user_id=user_id)
+        return self._monitor_persisted_scope(records)
+
+    def monitor_nodes_for_placements(self, placements: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+        computers: set[str] = set()
+        legacy: set[str] = set()
+        for placement in placements:
+            if computer := placement.get("computerId"):
+                computers.add(computer)
+            elif node := placement.get("daemonNodeId"):
+                legacy.add(node)
+        return self.monitor_nodes_for_computers(computers, legacy_node_ids=legacy)
+
+    def monitor_nodes_for_computers(
+        self, computer_ids: set[str], *, legacy_node_ids: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        if not computer_ids and not legacy_node_ids:
+            return []
+        records = self.daemon_store.list_nodes_for_computers(computer_ids, legacy_node_ids or set())
         return self._monitor_persisted_scope(records)
 
     def _monitor_persisted_scope(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:

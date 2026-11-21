@@ -13,7 +13,10 @@ from .errors import McpError
 def list_projects(ctx: Any, grant: dict[str, Any]) -> dict[str, Any]:
     if grant.get("computerId") and not grant.get("commandId"):
         return {"projects": []}
-    projects = ctx.project_store.list_projects(grant["ownerUserId"], include_archived=True)
+    projects = ctx.project_store.list_projects(
+        grant["ownerUserId"], include_archived=True,
+        project_ids=grant.get("projectIds"), computer_id=grant.get("computerId") or None,
+    )
     return {
         "projects": [
             {k: p.get(k) for k in ("id", "name", "goal", "computerId", "managerAgentId", "archivedAt")}
@@ -37,7 +40,8 @@ def invoke(ctx: Any, grant: dict[str, Any], project_id: str, tool: str, argument
         if tool == "workspace":
             if code := project_work_error(project):
                 raise ManagerError(code)
-            node = next((n for n in ctx.registry.monitor_nodes() if computer_id(n) == project["computerId"]), None)
+            nodes = ctx.registry.monitor_nodes_for_computers({project["computerId"]})
+            node = next((node for node in nodes if computer_id(node) == project["computerId"]), None)
             return {
                 "workspace": {
                     "root": (node or {}).get("workspacePath"),

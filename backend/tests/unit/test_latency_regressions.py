@@ -94,8 +94,7 @@ def test_throttled_fleet_liveness_refresh_never_takes_the_dispatch_lock(monkeypa
 
 class _NodeStore:
     def __init__(self) -> None:
-        self.get_calls: list[str] = []
-        self.list_calls = 0
+        self.liveness_reads: list[set[str]] = []
 
     def list_active_run_requests(self, *, session_ids: set[str]) -> list[dict[str, Any]]:
         return [
@@ -109,13 +108,9 @@ class _NodeStore:
     def get_commands(self, command_ids: set[str]) -> dict[str, dict[str, Any]]:
         return {cid: {"id": cid, "status": "dispatched", "nodeId": "node_1"} for cid in command_ids}
 
-    def get_node(self, node_id: str) -> dict[str, Any] | None:
-        self.get_calls.append(node_id)
-        return {"id": node_id, "status": "ready", "lastSeenAt": "2030-01-01T00:00:00Z"}
-
-    def list_nodes(self) -> list[dict[str, Any]]:
-        self.list_calls += 1
-        raise AssertionError("annotate must not read the whole fleet")
+    def get_node_liveness(self, node_ids: set[str]) -> dict[str, dict[str, Any]]:
+        self.liveness_reads.append(node_ids)
+        return {"node_1": {"status": "ready", "lastSeenAt": "2030-01-01T00:00:00Z"}}
 
 
 class _Registry:
@@ -126,15 +121,14 @@ class _Registry:
         return {"online": True}
 
 
-def test_annotate_fetches_referenced_nodes_by_id_once_each() -> None:
+def test_annotate_deduplicates_referenced_nodes_before_the_batch_read() -> None:
     store = _NodeStore()
     service = ExecutionLifecycleService(_Registry(store), chat_store=None)
 
     annotated = service.annotate([{"id": "s1", "status": "running"}, {"id": "s2", "status": "running"}])
 
     assert [item["execution"]["computerOnline"] for item in annotated] == [True, True]
-    assert store.get_calls == ["node_1"]
-    assert store.list_calls == 0
+    assert store.liveness_reads == [{"node_1"}]
 
 
 # ── Fix 6: the web UI revalidates with a strong ETag; SSE is never gzipped ──

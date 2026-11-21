@@ -55,6 +55,15 @@ def _display_name(node: dict[str, Any], managed_node: dict[str, Any] | None) -> 
     return (managed_node or {}).get("displayName") or node.get("displayName") or node["id"]
 
 
+def computer_display_names(ctx: ComputerContext, nodes: list[dict[str, Any]]) -> dict[str, str]:
+    managed_ids = {node["managedNodeId"] for node in nodes if node.get("managedNodeId")}
+    managed = {
+        node["id"]: node
+        for node in ctx.managed_node_store.list_nodes(include_deleted=True, include_ids=managed_ids)
+    } if managed_ids else {}
+    return {node["id"]: _display_name(node, managed.get(node.get("managedNodeId"))) for node in nodes}
+
+
 def present_computer(ctx: ComputerContext, node: dict[str, Any]) -> dict[str, Any]:
     return {**node, "displayName": computer_display_name(ctx, node)}
 

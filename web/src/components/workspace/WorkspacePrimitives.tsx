@@ -114,7 +114,7 @@ export function WorkspaceError({
   );
 }
 
-function ActivitySection({ title, count, children }: { title: string; count: number; index?: number; children: ReactNode }) {
+function ActivitySection({ title, count, children }: { title: string; count: number | string; index?: number; children: ReactNode }) {
   return (
     <section className="workspace-activity-section">
       <header className="workspace-activity-head">
@@ -215,12 +215,19 @@ export function WorkspaceActivities({
   emptyMark,
   emptyPulse = false,
   agents,
+  threadPagination,
 }: {
   brief?: WorkspaceActivityResponse;
   onOpenThread: (sessionId: string) => void;
   emptyMark?: ReactNode;
   emptyPulse?: boolean;
   agents?: ReadonlyArray<{ id: string; displayName: string }>;
+  threadPagination?: {
+    hasOlder: boolean;
+    loadingOlder: boolean;
+    olderError: boolean;
+    loadOlder: () => void;
+  };
 }) {
   const { t, i18n } = useTranslation();
   const activeRuns = brief?.activeRuns ?? [];
@@ -257,7 +264,7 @@ export function WorkspaceActivities({
         ) : null}
 
         {sessions.length ? (
-          <ActivitySection title={t("workspace.activity_threads")} count={sessions.length} index={activeRuns.length ? 1 : 0}>
+          <ActivitySection title={t("workspace.activity_threads")} count={threadPagination?.hasOlder ? `${sessions.length}+` : sessions.length} index={activeRuns.length ? 1 : 0}>
             <ul className="workspace-pick-list">
               {sessions.map((session) => (
                 <li key={session.id}>
@@ -273,6 +280,14 @@ export function WorkspaceActivities({
                 </li>
               ))}
             </ul>
+            {threadPagination?.hasOlder && (
+              <>
+                {threadPagination.olderError && <p role="alert">{t("workspace.activity_threads_load_failed")}</p>}
+                <Button type="button" variant="ghost" onClick={threadPagination.loadOlder} disabled={threadPagination.loadingOlder}>
+                  {t(threadPagination.loadingOlder ? "workspace.activity_threads_loading" : "workspace.activity_threads_load_more")}
+                </Button>
+              </>
+            )}
           </ActivitySection>
         ) : null}
 

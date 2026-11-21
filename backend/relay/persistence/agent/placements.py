@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import batched
 from threading import RLock
 from typing import Any
 
@@ -300,6 +301,7 @@ class DatabaseAgentPlacementStore:
         self,
         *,
         agent_id: str | None = None,
+        agent_ids: set[str] | None = None,
         daemon_node_id: str | None = None,
         supervisor_user_id: str | None = None,
         include_removed: bool = False,
@@ -319,7 +321,14 @@ class DatabaseAgentPlacementStore:
         if not include_removed:
             statement = statement.where(self.placements.c.desired_state != "removed")
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(statement).mappings().all()
+            if agent_ids is None:
+                rows = conn.execute(statement).mappings().all()
+            else:
+                rows = [
+                    row
+                    for batch in batched(sorted(agent_ids), 500)
+                    for row in conn.execute(statement.where(self.placements.c.agent_id.in_(batch))).mappings()
+                ]
         return sorted(
             (
                 _normalized_placement_snapshot(

@@ -49,7 +49,7 @@ def authorize(ctx: Any, token: str | None) -> dict[str, Any]:
         computer_id(node) == grant["computerId"]
         and node.get("userId") == grant["ownerUserId"]
         and not node.get("retiredAt")
-        for node in ctx.registry.monitor_nodes()
+        for node in ctx.registry.monitor_nodes_for_computers({grant["computerId"]})
     ):
         raise McpError(401, "This Computer is no longer connected to its owner.")
     # A local CLI credential identifies its owner/Computer, never a Project

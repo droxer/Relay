@@ -157,6 +157,54 @@ test("the admin roster only loads one user page and its Computer labels", async 
   expect(workspaceDirectories).toEqual([]);
 });
 
+test("Agent Activity polls the head and loads older Threads only on request", async ({ page }) => {
+  await page.clock.install();
+  const agent = {
+    id: "perf-agent", supervisorUserId: USER_ID, executorKind: "codex", defaultRole: "reviewer", enabled: true,
+    displayName: "Activity reviewer", availability: "offline", placements: [], modelPolicy: {}, skillPolicy: {},
+    toolPolicy: {}, createdAt: hoursAgo(4), updatedAt: hoursAgo(1), version: 1,
+  };
+  const first = THREADS[0];
+  const older = THREADS[20];
+  const requests: { limit: string | null; cursor: string | null; validator: string | null }[] = [];
+  const etag = 'W/"workspace-activity"';
+  await page.route("**/api/**", async route => {
+    const request = route.request();
+    const { pathname, searchParams } = new URL(request.url());
+    if (pathname.endsWith("/workspace/brief")) {
+      const cursor = searchParams.get("threadCursor");
+      const validator = await request.headerValue("if-none-match");
+      requests.push({ limit: searchParams.get("threadLimit"), cursor, validator });
+      if (validator === etag) return route.fulfill({ status: 304, headers: { etag } });
+      if (cursor) return route.fulfill({ json: { sessions: [older], nextThreadCursor: null } });
+      return route.fulfill({ headers: { etag }, json: {
+        sessions: [first], activeRuns: [], tasks: [], nextThreadCursor: "older-threads",
+      } });
+    }
+    const json = pathname.endsWith("/auth/me") ? { authenticated: true, user: USER }
+      : pathname.endsWith(`/agents/${agent.id}`) ? { agent }
+      : { user: USER, sessions: [], agents: [agent], teams: [], projects: [], nodes: [computer], homeTaskNeedsYou: 0 };
+    await route.fulfill({ json });
+  });
+
+  await page.goto(`/agents/${agent.id}?tab=activities`);
+  const detail = page.locator("#agent-detail-panel");
+  await expect(detail.getByRole("button", { name: first.title })).toBeVisible();
+  await expect(detail.getByRole("button", { name: older.title })).toHaveCount(0);
+  expect(requests).toEqual([{ limit: "20", cursor: null, validator: null }]);
+
+  await detail.getByRole("button", { name: "Load older threads" }).click();
+  await expect(detail.getByRole("button", { name: older.title })).toBeVisible();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 250));
+  await page.clock.runFor(16_000);
+  await expect.poll(() => requests).toEqual([
+    { limit: "20", cursor: null, validator: null },
+    { limit: "20", cursor: "older-threads", validator: null },
+    { limit: "20", cursor: null, validator: etag },
+  ]);
+  await expect(detail.getByRole("button", { name: older.title })).toBeVisible();
+});
+
 test("global Issues requests one filtered window at a time", async ({ page }) => {
   const requests: { layout: string | null; page: string | null; query: string | null; lanes: string | null }[] = [];
   const tasks = Array.from({ length: 54 }, (_, index) => ({

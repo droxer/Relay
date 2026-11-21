@@ -135,18 +135,12 @@ def test_personal_computer_inventory_reads_only_visible_runtime_rows(monkeypatch
         response = client.get("/api/v1/sandboxes", headers={"Authorization": "Bearer ui_bob"})
         assert response.status_code == 200, response.text
         assert [row["id"] for row in response.json()["sandboxes"]] == [visible["alice"]]
-        assert scopes == {
-            "list_nodes": [{"user_id": ALICE}],
-            "list_active_runs": [{"node_ids": {visible["alice"]}}],
-        }
+        assert scopes == {"list_nodes": [{"user_id": ALICE}]}
         scopes.clear()
         response = legacy.get("/api/v1/sandboxes", headers={"Authorization": "Bearer ui_bob"})
         assert response.status_code == 200, response.text
         assert [row["id"] for row in response.json()["sandboxes"]] == [visible["bob"]]
-        assert scopes == {
-            "list_nodes": [{"ui_token_hash": hash_daemon_node_token("ui_bob")}],
-            "list_active_runs": [{"node_ids": {visible["bob"]}}],
-        }
+        assert scopes == {"list_nodes": [{"ui_token_hash": hash_daemon_node_token("ui_bob")}]}
         assert legacy.get("/api/v1/sandboxes", headers={"Authorization": "Bearer node_bob"}).status_code == 401
 
 
@@ -3272,6 +3266,7 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
         admin_client = TestClient(app)
         _bootstrap_admin(admin_client)
         _login_admin(admin_client)
+        app.state.auth_store.ensure_user("alice")
 
         register = admin_client.post(
             "/api/v1/daemon-node-registrations",
@@ -3305,9 +3300,23 @@ def test_sandbox_ui_token_can_manage_owned_sessions(monkeypatch) -> None:
         session_id = session["id"]
         assert session["ownerUserId"] == ALICE
 
-        listed = token_client.get("/api/v1/threads", headers=headers)
+        lookups = []
+        list_ready = app.state.registry.list_ready
+
+        def record_scope(**scope):
+            lookups.append(scope)
+            return list_ready(**scope)
+
+        def reject_sorting(*_args, **_kwargs):
+            pytest.fail("A single Computer does not need a run lookup for ordering")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(app.state.registry, "list_ready", record_scope)
+            scoped.setattr(app.state.registry, "_active_runs_by_node", reject_sorting)
+            listed = token_client.get("/api/v1/threads", headers=headers)
         assert listed.status_code == 200
         assert [item["id"] for item in listed.json()["sessions"]] == [session_id]
+        assert lookups == [{"ui_token": "ui_token"}]
 
         opened = token_client.get(f"/api/v1/threads/{session_id}", headers=headers)
         assert opened.status_code == 200

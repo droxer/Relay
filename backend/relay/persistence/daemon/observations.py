@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from itertools import batched
 from typing import Any
 
 from sqlalchemy import DateTime, case, func, or_, select, update
@@ -32,6 +33,19 @@ def observation_from_row(row: Any) -> dict[str, Any]:
 
 
 class NodeObservationRows(DaemonStoreState):
+    def get_node_liveness(self, node_ids: set[str]) -> dict[str, dict[str, Any]]:
+        ids = sorted(node_id for node_id in node_ids if not sql.names_no_uuid_row(self.engine, node_id))
+        if not ids:
+            return {}
+        nodes = self.nodes.c
+        statement = select(nodes.id, nodes.status, nodes.last_seen_at)
+        with store_transaction(self.engine) as conn:
+            return {
+                str(node_id): {"status": status, "lastSeenAt": format_db_time(seen)}
+                for batch in batched(ids, 500)
+                for node_id, status, seen in conn.execute(statement.where(nodes.id.in_(batch)))
+            }
+
     def _observation_clock(self, seconds_ago: float = 0) -> Any:
         if self.engine.dialect.name == 'sqlite':
             return func.strftime('%Y-%m-%d %H:%M:%f', 'now', f'-{seconds_ago} seconds', type_=DateTime())

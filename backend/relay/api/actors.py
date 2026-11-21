@@ -227,7 +227,7 @@ def authorized_sandbox_for_token(
     return next(
         (
             sandbox
-            for sandbox in registry.list_ready()
+            for sandbox in registry.list_ready(ui_token=token)
             if sandbox_ui_token_matches(sandbox, token)
         ),
         None,

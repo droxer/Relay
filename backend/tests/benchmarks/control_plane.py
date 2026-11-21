@@ -52,6 +52,8 @@ SCOPE: ContextVar[str] = ContextVar("probe_scope", default="setup")
 PATHS = {
     "threads": "/api/v1/threads?view=summary&limit=100",
     "tasks": "/api/v1/tasks?view=summary&limit=100",
+    "workspaceActivity": "/api/v1/workspace/brief?view=activity&threadLimit=20",
+    "issues": "/api/v1/tasks?view=summary&scope=issues&layout=list",
     "artifacts": "/api/v1/artifacts?limit=50",
     "sessionMetrics": "/api/v1/admin/dashboard/sessions",
     "tokenMetrics": "/api/v1/admin/dashboard/tokens?tz=America/New_York",
@@ -107,7 +109,7 @@ def schema(base: str):
 
 
 class Traffic:
-    """Observe checkout duration, query count and checked-out connection peak."""
+    """Observe SQL traffic and connection pool use."""
 
     def __init__(self, engine):
         self.engine = engine
@@ -128,11 +130,17 @@ class Traffic:
     def clear(self):
         self.pool_ms: dict[str, list[float]] = defaultdict(list)
         self.queries: Counter[str] = Counter()
+        self.select_rows: Counter[str] = Counter()
         self.active = self.peak = 0
 
     def query(self, *args):
         with self.lock:
             self.queries[SCOPE.get()] += 1
+
+    def result(self, _conn, cursor, statement, *_args):
+        if statement.lstrip().upper().startswith("SELECT") and cursor.rowcount >= 0:
+            with self.lock:
+                self.select_rows[SCOPE.get()] += cursor.rowcount
 
     def checkout(self, *args):
         with self.lock:
@@ -147,6 +155,7 @@ class Traffic:
         self.engine.pool.connect = self.acquire
         for kind, callback in (
             ("before_cursor_execute", self.query),
+            ("after_cursor_execute", self.result),
             ("checkout", self.checkout),
             ("checkin", self.checkin),
         ):
@@ -157,6 +166,7 @@ class Traffic:
         self.engine.pool.connect = self.original
         for kind, callback in (
             ("before_cursor_execute", self.query),
+            ("after_cursor_execute", self.result),
             ("checkout", self.checkout),
             ("checkin", self.checkin),
         ):
@@ -346,6 +356,7 @@ async def phase(client, app, traffic, *, owner: str, concurrency: int, requests:
                 "latencyMs": distribution(values),
                 "decodedResponseBytes": distribution(sizes[name]),
                 "queries": traffic.queries[name],
+                "selectRows": traffic.select_rows[name],
                 "poolAcquisitionMs": distribution(traffic.pool_ms[name]),
             }
             for name, values in latencies.items()

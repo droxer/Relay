@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+from itertools import batched
 from typing import Any
 from loguru import logger
 from sqlalchemy import (
@@ -24,6 +25,7 @@ from ...core.ids import new_database_id, now_iso
 from ..events import relay_event
 from ..engine import store_transaction
 from .rows import (
+    _canonical_database_session_id,
     artifact_snapshot_extension,
     compact_session_snapshot,
     database_artifact_uri,
@@ -36,6 +38,33 @@ from .state import SessionStoreState
 
 
 class SessionArtifactRows(SessionStoreState):
+    def list_artifact_sources(
+        self, session_ids: set[str], owner_user_id: str | None,
+    ) -> dict[str, dict[str, Any]]:
+        """Artifact metadata for linked Threads. No transcript or run fields."""
+        canonical_ids = {}
+        for key in session_ids:
+            try:
+                canonical_ids[key] = _canonical_database_session_id(key)
+            except KeyError:
+                continue
+        if not canonical_ids:
+            return {}
+        sessions = self.sessions.c
+        snapshot = sessions.snapshot
+        fields = ("title", "taskGoal", "ownerUserId", "workspacePath", "updatedAt")
+        statement = select(
+            sessions.id, *(snapshot[field].as_string().label(field) for field in fields),
+            snapshot["artifacts"].label("artifacts"),
+        ).where(sessions.owner_user_id == owner_user_id)
+        with store_transaction(self.engine) as conn:
+            found = {
+                row["id"]: {**row, "artifacts": row["artifacts"] or []}
+                for batch in batched(sorted(set(canonical_ids.values())), 500)
+                for row in conn.execute(statement.where(sessions.id.in_(batch))).mappings()
+            }
+        return {key: found[canonical] for key, canonical in canonical_ids.items() if canonical in found}
+
     def list_artifact_summaries(
         self, *, owner_user_id: str | None = None,
         workspace_path: str | None = None, limit: int = 200

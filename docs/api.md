@@ -791,9 +791,13 @@ Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
 exclusive.
 
 The Agent and Team Activities tabs use `GET /api/v1/workspace/brief?view=activity`
-with the same scope selectors. It returns the visible Thread rows, active runs,
-and up to ten active Tasks. An unchanged projection returns `304` after the
-normal access check when the request carries its ETag.
+with the same scope selectors. The browser passes `threadLimit=20` to receive
+the newest Thread page, active runs, up to ten active Tasks, and a
+`nextThreadCursor` when older Threads exist. Requests with `threadCursor`
+return only the older Thread page and its next cursor. Thread limits are
+clamped to 1–100. Omitting both parameters still returns the complete scoped
+Thread list. An unchanged projection returns `304` after the access check
+when the request carries its ETag.
 
 Projects and Tasks are separate browser destinations. `/projects` opens the
 project directory; `/projects/{id}` opens Dashboard, and `?tab=tasks` opens the

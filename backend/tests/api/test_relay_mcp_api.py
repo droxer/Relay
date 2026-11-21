@@ -13,15 +13,28 @@ def _token(client, project):
     return response.json()
 
 
-def test_mcp_token_reads_its_project_and_is_never_revealed_again(setup_env):
+def test_mcp_token_reads_its_project_and_is_never_revealed_again(setup_env, monkeypatch):
     app,client,node,project,*_=setup_env
     grant=_token(client,project)
     assert grant['token'].startswith('relay_mcp_')
     external=TestClient(app)
     headers={'Authorization':f"Bearer {grant['token']}"}
-    projects=external.get('/api/v1/mcp/projects',headers=headers)
+    assert client.post("/api/v1/projects", json={
+        "name": "An unrelated owned Project", "daemonNodeId": node["id"], "members": [],
+    }).status_code == 201
+    project_filters = []
+    list_projects = app.state.project_store.list_projects
+
+    def capture_scope(*args, **kwargs):
+        project_filters.append(kwargs.get("project_ids"))
+        return list_projects(*args, **kwargs)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(app.state.project_store, "list_projects", capture_scope)
+        projects=external.get('/api/v1/mcp/projects',headers=headers)
     assert projects.status_code == 200,projects.text
     assert [p['id'] for p in projects.json()['projects']] == [project['id']]
+    assert project_filters == [[project["id"]]]
     overview=external.post(f"/api/v1/mcp/projects/{project['id']}/tools",headers=headers,json={'tool':'overview','arguments':{}})
     assert overview.status_code == 200,overview.text
     assert overview.json()['project']['id'] == project['id']

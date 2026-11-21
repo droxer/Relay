@@ -25,12 +25,14 @@ def _bootstrap(client: TestClient) -> None:
     assert response.status_code == 200
 
 
-def _register_node(app: Any, node_id: str, *, user: str = ALICE) -> dict[str, Any]:
+def _register_node(
+    app: Any, node_id: str, *, user: str = ALICE, workspace_id: str | None = None,
+) -> dict[str, Any]:
     return app.state.registry.register(
         {
             "sandboxId": node_id,
             "userId": user,
-            "workspaceId": f"machine-{node_id}",
+            "workspaceId": workspace_id or f"machine-{node_id}",
             "token": f"token-{node_id}",
             "workspacePath": f"/workspace/{node_id}",
             "nodeLocation": "user-device",
@@ -65,7 +67,9 @@ def roster(monkeypatch):
             "/api/v1/admin/users",
             json={"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "userpass", "displayName": "Alice"},
         ).status_code == 201
-        node = _register_node(app, "node_a")
+        # Existing registrations can store surrounding whitespace. The stable
+        # Computer identity strips it before Agents and Placements use it.
+        node = _register_node(app, "node_a", workspace_id="\tmachine-node_a\u2003")
         agent_ids = []
         for index in range(3):
             created = client.post(
@@ -144,6 +148,39 @@ def test_placement_list_reads_the_fleet_once(roster, monkeypatch) -> None:
 
     assert listed == baseline
     assert nodes[0] == 1
+
+
+def test_personal_teams_only_read_member_placements_and_related_nodes(roster, monkeypatch):
+    app, client, agent_ids = roster
+    _register_node(app, "unrelated_node")
+    assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
+    path = "/api/v1/teams?view=summary&format=compact"
+    baseline = client.get(path).json()
+    fleet_reads = _count_calls(monkeypatch, app.state.registry, "monitor_nodes")
+    find_placements = app.state.agent_placement_store.list_placements
+    find_nodes = app.state.daemon_store.list_nodes_for_computers
+    filters = []
+    related = []
+
+    def scoped_placements(**kwargs):
+        filters.append(kwargs)
+        return find_placements(**kwargs)
+
+    def scoped_nodes(computers, node_ids):
+        rows = find_nodes(computers, node_ids)
+        related.append([row["id"] for row in rows])
+        return rows
+
+    monkeypatch.setattr(app.state.agent_placement_store, "list_placements", scoped_placements)
+    monkeypatch.setattr(app.state.daemon_store, "list_nodes_for_computers", scoped_nodes)
+    result = client.get(path)
+    assert result.status_code == 200
+    assert result.json() == baseline
+    assert all(member["availability"] == "ready" for member in baseline["memberDirectory"])
+    assert fleet_reads == [0]
+    assert len(filters) == 1
+    assert set(filters[0]["agent_ids"]) == set(agent_ids)
+    assert related == [["node_a"]]
 
 
 # ── Fix 3: the session cookie resolves from the cache between store changes ──

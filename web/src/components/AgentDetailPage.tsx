@@ -180,6 +180,7 @@ export function AgentDetailPage({
             ) : (
               <WorkspaceActivities
                 brief={brief}
+                threadPagination={activityQuery}
                 emptyPulse
                 onOpenThread={onOpenThread}
                 agents={[agent]}

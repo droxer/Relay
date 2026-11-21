@@ -87,11 +87,16 @@ def test_conversation_mapping_round_trip(monkeypatch) -> None:
         assert unbound.json()["session"] is None
 
         # Bind the thread to alice's session.
-        bind = client.post(
-            "/api/v1/internal/chat/conversation/mapping",
-            headers=CHAT_HEADERS,
-            json={**CONVERSATION, "sessionId": session_id, "messageId": "provider_reply_1"},
-        )
+        def reject_history(*_args, **_kwargs):
+            pytest.fail("Chat conversation mapping only needs the Thread owner")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(client.app.state.session_store, "get_session", reject_history)
+            bind = client.post(
+                "/api/v1/internal/chat/conversation/mapping",
+                headers=CHAT_HEADERS,
+                json={**CONVERSATION, "sessionId": session_id, "messageId": "provider_reply_1"},
+            )
         assert bind.status_code == 200
         assert bind.json()["mapping"]["sessionId"] == session_id
         assert bind.json()["mapping"]["ownerUserId"] == user_id("alice")

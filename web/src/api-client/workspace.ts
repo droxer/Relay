@@ -5,10 +5,11 @@ import type {
   TaskWorkspaceFileResponse,
   TaskWorkspaceFilesResponse,
   WorkspaceActivityResponse,
+  WorkspaceActivityThreads,
   WorkspaceBriefResponse,
   WorkspaceFileEntry,
 } from "../types.ts";
-import { apiJson } from "./client.ts";
+import { apiJson, privateConditionalJson, type PrivateResponseCache } from "./client.ts";
 import { DEFAULT_WORKSPACE_FILE_ROOTS, OLDER_THREAD_RECORDS_ROOTS } from "../lib/workspaceFileTabs.ts";
 
 const THREAD_RECORDS_ROOT = DEFAULT_WORKSPACE_FILE_ROOTS.activities;
@@ -41,10 +42,15 @@ export function getWorkspaceBrief(input: WorkspaceScope = {}, signal?: AbortSign
   return apiJson(workspaceBriefPath(input), { signal });
 }
 
-export function getWorkspaceActivity(input: WorkspaceScope, signal?: AbortSignal): Promise<WorkspaceActivityResponse> {
-  return apiJson(workspaceBriefPath(input, "activity"), { signal });
+export function getWorkspaceActivity(
+  input: WorkspaceScope, signal?: AbortSignal, cache?: PrivateResponseCache<WorkspaceActivityResponse>,
+): Promise<WorkspaceActivityResponse> {
+  return privateConditionalJson(`${workspaceBriefPath(input, "activity")}&threadLimit=20`, signal, cache);
 }
 
+export function getOlderWorkspaceThreads(input: WorkspaceScope, cursor: string, signal?: AbortSignal): Promise<WorkspaceActivityThreads> {
+  return apiJson(`${workspaceBriefPath(input, "activity")}&threadLimit=20&threadCursor=${encodeURIComponent(cursor)}`, { signal });
+}
 
 export function listProjectWorkspaceFiles(
   input: { projectId: string; path?: string },
