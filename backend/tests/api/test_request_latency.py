@@ -25,12 +25,14 @@ def _bootstrap(client: TestClient) -> None:
     assert response.status_code == 200
 
 
-def _register_node(app: Any, node_id: str, *, user: str = ALICE) -> dict[str, Any]:
+def _register_node(
+    app: Any, node_id: str, *, user: str = ALICE, workspace_id: str | None = None,
+) -> dict[str, Any]:
     return app.state.registry.register(
         {
             "sandboxId": node_id,
             "userId": user,
-            "workspaceId": f"machine-{node_id}",
+            "workspaceId": workspace_id or f"machine-{node_id}",
             "token": f"token-{node_id}",
             "workspacePath": f"/workspace/{node_id}",
             "nodeLocation": "user-device",
@@ -65,7 +67,9 @@ def roster(monkeypatch):
             "/api/v1/admin/users",
             json={"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "userpass", "displayName": "Alice"},
         ).status_code == 201
-        node = _register_node(app, "node_a")
+        # Existing registrations can store surrounding whitespace. The stable
+        # Computer identity strips it before Agents and Placements use it.
+        node = _register_node(app, "node_a", workspace_id="\tmachine-node_a\u2003")
         agent_ids = []
         for index in range(3):
             created = client.post(

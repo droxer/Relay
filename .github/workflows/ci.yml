@@ -210,7 +210,7 @@ jobs:
             tests/api/test_execution_reconcile.py tests/api/test_agent_workspace.py \
             tests/api/test_request_latency.py tests/api/test_task_workspace_routes.py tests/api/test_chat_conversations.py \
             tests/api/test_daemon_api.py tests/api/test_relay_mcp_api.py \
-            -k 'many_linked or compact_read or project_access or long_transcript or pages_history or personal_teams or reads_only_one_window or sql_windows or linked_computer_liveness or wait_status_tracks or batches_linked_thread or mapping_round_trip or sandbox_ui_token_can_manage or reads_its_project' \
+            -k 'many_linked or compact_read or project_access or long_transcript or pages_history or personal_teams or reads_only_one_window or sql_windows or linked_computer_liveness or wait_status_tracks or batches_linked_thread or mapping_round_trip or personal_computer_inventory or sandbox_ui_token_can_manage or reads_its_project' \
             -q -n0
       - name: Exercise daemon connections and report recovery on PostgreSQL
         working-directory: backend

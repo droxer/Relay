@@ -45,6 +45,13 @@ from .rows import (
 )
 from .state import DaemonStoreState
 
+# Match str.strip() in computer_id() for Workspace IDs stored by older daemons.
+_WORKSPACE_ID_WHITESPACE = (
+    "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
+
 
 class NodeRows(DaemonStoreState):
     def _write_node_agents(self, conn: Any, node_pk: str, node: dict[str, Any]) -> None:
@@ -504,10 +511,12 @@ class NodeRows(DaemonStoreState):
                 if owner and machine and not names_no_uuid_row(self.engine, owner):
                     devices.add((owner, machine))
         direct = {key for key in direct if not names_no_uuid_row(self.engine, key)}
+        trim = func.btrim if self.engine.dialect.name == "postgresql" else func.trim
+        workspace_id = trim(cols.workspace_id, _WORKSPACE_ID_WHITESPACE)
         predicates = [
             *(cols.id.in_(batch) for batch in batched(sorted(direct), 250)),
             *(cols.managed_node_id.in_(batch) for batch in batched(sorted(managed), 250)),
-            *(tuple_(cols.user_id, func.trim(cols.workspace_id)).in_(batch) & cols.managed_node_id.is_(None)
+            *(tuple_(cols.user_id, workspace_id).in_(batch) & cols.managed_node_id.is_(None)
               for batch in batched(sorted(devices), 250)),
         ]
         if not predicates:

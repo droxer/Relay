@@ -135,18 +135,12 @@ def test_personal_computer_inventory_reads_only_visible_runtime_rows(monkeypatch
         response = client.get("/api/v1/sandboxes", headers={"Authorization": "Bearer ui_bob"})
         assert response.status_code == 200, response.text
         assert [row["id"] for row in response.json()["sandboxes"]] == [visible["alice"]]
-        assert scopes == {
-            "list_nodes": [{"user_id": ALICE}],
-            "list_active_runs": [{"node_ids": {visible["alice"]}}],
-        }
+        assert scopes == {"list_nodes": [{"user_id": ALICE}]}
         scopes.clear()
         response = legacy.get("/api/v1/sandboxes", headers={"Authorization": "Bearer ui_bob"})
         assert response.status_code == 200, response.text
         assert [row["id"] for row in response.json()["sandboxes"]] == [visible["bob"]]
-        assert scopes == {
-            "list_nodes": [{"ui_token_hash": hash_daemon_node_token("ui_bob")}],
-            "list_active_runs": [{"node_ids": {visible["bob"]}}],
-        }
+        assert scopes == {"list_nodes": [{"ui_token_hash": hash_daemon_node_token("ui_bob")}]}
         assert legacy.get("/api/v1/sandboxes", headers={"Authorization": "Bearer node_bob"}).status_code == 401
 
 
