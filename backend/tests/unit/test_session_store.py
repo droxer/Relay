@@ -11,6 +11,7 @@ import pytest
 from relay.persistence.session.store import DatabaseSessionStore
 from relay.persistence.session.reducer import materialize_events
 from relay.persistence.events import relay_event
+from relay.persistence.engine import store_transaction
 from relay.persistence.task.store import DatabaseTaskStore
 from relay.sessions.controller import SessionController
 from relay.sessions.errors import SessionRunInFlightError
@@ -320,14 +321,16 @@ def test_session_stores_notify_after_committed_events() -> None:
             )
             notified.clear()
 
-            store.append_event(
-                created["id"],
-                relay_event(
-                    "session.status",
+            with store_transaction(store.engine):
+                store.append_event(
                     created["id"],
-                    {"status": "completed", "phase": "completed"},
-                ),
-            )
+                    relay_event(
+                        "session.status",
+                        created["id"],
+                        {"status": "completed", "phase": "completed"},
+                    ),
+                )
+                assert notified == []
 
             assert notified == [created["id"]]
 

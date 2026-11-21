@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from functools import partial
 from typing import Any
 
 from sqlalchemy import (
@@ -11,7 +12,7 @@ from sqlalchemy import (
 )
 
 from ..blob.store import BlobStore
-from ..engine import create_all_tables, shared_engine, store_transaction
+from ..engine import after_store_commit, create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata
 from ..tables import sessions as sessions_tables
 from .rows import (
@@ -162,7 +163,7 @@ class DatabaseSessionStore(
 
 
     def _notify_event(self, session_id: str) -> None:
-        self._event_changes.fire(session_id)
+        after_store_commit(self.engine, partial(self._event_changes.fire, session_id))
 
     @contextmanager
     def mutation_scope(self, session_id: str) -> Iterator[None]:

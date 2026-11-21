@@ -13,20 +13,23 @@ export function directDelegations(session?: RelaySession | null): DirectDelegati
   const executing = (run: AgentRun) => Boolean(run.agentLog) || session.events.some((event) =>
     (event.type === "collaboration.delivery" && event.assignmentId === run.assignmentId && event.status === "running")
     || (event.type === "agent.output" && event.runId === run.id && Boolean(event.text)));
-  return (session.collaborationRounds ?? []).flatMap((round) => {
-    const receipt = round.delegation;
-    if (!receipt) return [];
+  const receipts = (session.collaborationRounds ?? []).flatMap(({ delegation }) => delegation ? [delegation] : []);
+  const requesterAssignments = new Set(receipts.map((receipt) => receipt.requesterAssignmentId));
+  return receipts.map((receipt) => {
     const child = latestRun(receipt.childAssignmentId);
     const resume = latestRun(receipt.resumeAssignmentId);
     let status: DirectDelegationStatus = "queued";
     if (resume && resume.status !== "running") {
-      status = resume.status === "completed" && resume.workResult?.status === "done" && resume.workResult.evidence.length > 0
-        ? "reported_done" : "needs_attention";
+      status = "needs_attention";
+      if (resume.status === "completed") {
+        if (requesterAssignments.has(receipt.resumeAssignmentId)) status = "resuming";
+        else if (resume.workResult?.status === "done" && resume.workResult.evidence.length > 0) status = "reported_done";
+      }
     } else if (session.status === "cancelled") status = "cancelled";
     else if (resume && executing(resume)) status = "resuming";
     else if (child && child.status !== "running") status = "returned";
     else if (child && executing(child)) status = "working";
     else if (session.status === "failed") status = "needs_attention";
-    return [{ ...receipt, requesterRunId: latestRun(receipt.requesterAssignmentId)?.id, child, status }];
+    return { ...receipt, requesterRunId: latestRun(receipt.requesterAssignmentId)?.id, child, status };
   });
 }

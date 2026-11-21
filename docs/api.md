@@ -531,6 +531,14 @@ logical agent. The legacy `/threads/{id}/handoffs` and handoff decisions under
 `/threads/{id}/decisions` record session metadata only; they do not dispatch an
 agent. A successful metadata response is not evidence that a receiver started.
 
+For a Project Task or an Automation occurrence, Relay rechecks whether the
+receiving Project Agent is enabled before publishing the start command. The
+same check applies when Relay recovers a staged command. The receiver joins
+the Thread when Relay publishes the command. If the receiver was
+disabled or removed, Relay cancels the undelivered command and blocks the Task
+with `project_agent_not_member`. You can rerun the Task with an eligible Agent
+in the same Thread and workspace.
+
 New rounds record `workScope`: `{ "kind": "thread" }` for thread contributions,
 or `{ "kind": "task", "taskId": "..." }` for task executions. Recovery inherits
 the active source round's scope, including task workspace checks and required

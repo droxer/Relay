@@ -11,6 +11,7 @@ from ...collaboration.models import (
     COLLABORATION_FINGERPRINT_STATE_KEY,
     COLLABORATION_MANIFEST_STATE_KEY,
     CollaborationIdempotencyError,
+    project_id_for_task_handoff,
 )
 from ...sessions.controller import SessionController
 from ...core.run_request_ids import idempotent_run_request_id
@@ -91,7 +92,7 @@ class RunIdempotencyMixin(NodeBackendState):
         manifest = (run_request.get("state") or {}).get(
             COLLABORATION_MANIFEST_STATE_KEY
         )
-        if not isinstance(manifest, dict):
+        if not isinstance(manifest, dict) or project_id_for_task_handoff(manifest, run_request.get("taskId")):
             return session
         agent_ids = [
             assignment["agentId"]

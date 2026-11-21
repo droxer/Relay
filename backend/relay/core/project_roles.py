@@ -33,6 +33,14 @@ def is_project_manager(member: dict[str, Any]) -> bool:
     return member.get("projectManager") is True or member.get("role") == LEGACY_PROJECT_MANAGER_ROLE
 
 
+def project_member_ids(project: dict[str, Any]) -> set[str]:
+    return {
+        member["agentId"]
+        for member in project.get("members", [])
+        if member.get("enabled", True)
+    }
+
+
 def project_manager_id(members: list[dict[str, Any]]) -> str | None:
     return next((m["agentId"] for m in members if is_project_manager(m)), None)
 

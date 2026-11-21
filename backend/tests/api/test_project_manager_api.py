@@ -243,8 +243,8 @@ def test_existing_foreign_task_and_thread_are_inaccessible(managed_env):
     assert _tool(managed_env, command, 'threads').status_code == 200
 
 
-def test_cycle_apply_rolls_back_metadata_and_rejects_dismissed_proposal(managed_env):
-    _, client, _, project, *_ = managed_env
+def test_cycle_apply_rolls_back_metadata_and_rejects_dismissed_proposal(managed_env, monkeypatch):
+    app, client, _, project, *_ = managed_env
     _, command = _start(managed_env)
     first = client.post('/api/v1/tasks',json={'title':'First','projectId':project['id']}).json()
     second = client.post('/api/v1/tasks',json={'title':'Second','projectId':project['id']}).json()
@@ -254,7 +254,15 @@ def test_cycle_apply_rolls_back_metadata_and_rejects_dismissed_proposal(managed_
         {'kind':'prerequisites','taskId':first['id'],'afterTaskIds':[second['id']]},
     ]}).json()['proposal']
     url=f"/api/v1/projects/{project['id']}/manager/proposals/{staged['id']}"
-    applied=client.post(f'{url}/apply',json={'idempotencyKey':'cycle'})
+    manager_transaction = app.state.project_store.manager_transaction
+
+    def lock_project(*args, **kwargs):
+        assert app.state.registry.dispatch_lock._held_here()
+        return manager_transaction(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(app.state.project_store, 'manager_transaction', lock_project)
+        applied = client.post(f'{url}/apply', json={'idempotencyKey': 'cycle'})
     assert applied.status_code == 409, applied.text
     assert client.get(f"/api/v1/tasks/{first['id']}").json()['title'] == 'First'
     assert client.post(f'{url}/dismiss').status_code == 200

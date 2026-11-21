@@ -7,7 +7,7 @@ from typing import Any
 
 from ..core.ids import new_relay_id
 from ..agents.delegation import delegation_candidates
-from ..projects.runtime import project_member_ids
+from ..core.project_roles import project_member_ids
 from ..sessions.handoff_context import capture_handoff_context
 from ..security.actor import Actor
 from .errors import CollaborationError

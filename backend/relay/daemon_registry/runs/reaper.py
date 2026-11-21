@@ -535,7 +535,7 @@ class RunReaperMixin(RegistryState):
             )
             if not linked:
                 return
-        published = self.daemon_store.publish_command(command["id"], request_id=linked["id"])
+        published = self._publish_run_start(linked, command)
         if published:
             self._track_active_command(staged["nodeId"], command)
 
@@ -564,13 +564,12 @@ class RunReaperMixin(RegistryState):
             if self._follow_up_backing_off(request):
                 return
             with self._delivery_failure_budget(request):
-                published = self.daemon_store.publish_command(
-                    command_id, request_id=request["id"]
+                published = self._publish_run_start(request, command_record["command"])
+                if not published:
+                    return
+                self._track_active_command(
+                    command_record["nodeId"], command_record["command"]
                 )
-                if published:
-                    self._track_active_command(
-                        command_record["nodeId"], command_record["command"]
-                    )
         if command_record and command_record.get("status") in TERMINAL_COMMAND_STATUSES:
             terminal_event = command_record["command"].get("_terminalEvent")
             if isinstance(terminal_event, dict):

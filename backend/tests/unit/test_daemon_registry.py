@@ -24,6 +24,7 @@ from relay.daemon_registry.records import _confined_workspace_path
 from store_fixtures import make_agent_placement_store
 from store_fixtures import make_agent_store
 from relay.persistence.daemon.store import DatabaseDaemonStore
+from relay.persistence.engine import store_transaction
 from store_fixtures import make_daemon_store, sqlite_url
 from store_fixtures import make_session_store
 from store_fixtures import drain_artifact_indexing
@@ -211,7 +212,9 @@ def test_daemon_store_notifies_when_command_becomes_visible(
         store.set_command_listener(notified.append)
         store.register_node(store_node_payload())
 
-        store.enqueue_command("sbx_alice", run_start_command("cmd_one", "run_one"))
+        with store_transaction(store.engine):
+            store.enqueue_command("sbx_alice", run_start_command("cmd_one", "run_one"))
+            assert notified == []
 
         assert notified == ["sbx_alice"]
 
