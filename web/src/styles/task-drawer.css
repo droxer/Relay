@@ -33,6 +33,54 @@
   letter-spacing: var(--type-label-track);
 }
 
+/* Agent | Workflow — the segmented switch over a Project's assignment picker,
+   so the field never shows two pickers that undo each other. The same skin as
+   the thread rail's kind filter (inputs.css), drawn on radio semantics: two
+   equal segments at any drawer width, colour from tokens only. */
+.task-assignment-kind {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-2);
+  background: var(--control-fill);
+}
+
+.task-assignment-kind-item {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--control-h-2xs);
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+  text-align: center;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.task-assignment-kind-item:hover {
+  color: var(--ink-1);
+}
+
+.task-assignment-kind-item[data-checked] {
+  background: var(--surface-0);
+  color: var(--ink-1);
+  box-shadow: 0 0 0 var(--sp-hairline) var(--line-1);
+}
+
+.task-assignment-kind-item[data-disabled] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+@media (pointer: coarse) {
+  .task-assignment-kind-item {
+    min-height: 2.25rem;
+  }
+}
+
 .task-assignment-summary {
   position: relative;
   display: grid;

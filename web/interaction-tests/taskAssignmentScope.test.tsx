@@ -46,6 +46,36 @@ it.each(["backlog", "routine"] as const)("repairs a saved stale Workflow in the 
   expect(submit).toHaveBeenCalledOnce();
 });
 
+it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never both, in a new %s", async variant => {
+  const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
+  mount({ ...form, title: "Work", projectId: "p" });
+  const agentKind = screen.getByRole("radio", { name: "backlog.assignment_kind_agent" });
+  const workflowKind = screen.getByRole("radio", { name: "backlog.assignment_kind_workflow" });
+  expect(agentKind.getAttribute("aria-checked")).toBe("true");
+  expect(screen.queryByRole("combobox", { name: "workflow.select_workflow" })).toBeNull();
+
+  fireEvent.click(workflowKind);
+  await waitFor(() => expect(workflowKind.getAttribute("aria-checked")).toBe("true"));
+  // The agent picker gives way; the workflow picker offers workflows only.
+  expect(screen.queryByText("backlog.assign_later")).toBeNull();
+  fireEvent.click(screen.getByRole("combobox", { name: "workflow.select_workflow" }));
+  expect(screen.queryByRole("option", { name: "workflow.project_default_agents" })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: "Ship workflow" }));
+  expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("Ship workflow");
+
+  // Back to Agent drops the workflow rather than keeping both.
+  fireEvent.click(agentKind);
+  await waitFor(() => expect(screen.queryByRole("combobox", { name: "workflow.select_workflow" })).toBeNull());
+  fireEvent.click(workflowKind);
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("workflow.choose"));
+});
+
+it("opens a saved Workflow assignment on the Workflow side", () => {
+  mount({ ...emptyBacklogForm(currentUser), id: "saved", title: "Work", projectId: "p", assignedWorkflowId: "w" });
+  expect(screen.getByRole("radio", { name: "backlog.assignment_kind_workflow" }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("Ship workflow");
+});
+
 it("clears Workflow assignment when an Automation leaves its Project", async () => {
   const { submit } = mount({ ...emptyRoutineForm(currentUser), title: "Automation", routineTriggers: [], projectId: "p", assignedWorkflowId: "w" });
   fireEvent.click(screen.getByRole("combobox", { name: "project.project" }));
