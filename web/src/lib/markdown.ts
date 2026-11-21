@@ -110,6 +110,111 @@ export function normalizeOverEscapedQuotes(code: string): string {
   return code.replace(/\\"/g, '"');
 }
 
+/** A fence opener or closer: three or more backticks or tildes. */
+const FENCE_LINE = /^\s*(`{3,}|~{3,})/;
+
+/** An inline code span; math is never read inside one. */
+const CODE_SPAN = /(`+)[\s\S]*?[^`]\1(?!`)/g;
+
+/** Math in prose, in priority order: `$$…$$` (what the renderer already reads,
+ * kept as is so its dollars never feed the single-dollar arm), `\[…\]`,
+ * `\(…\)`, then `$…$`. A backslash before an opener escapes it. The
+ * single-dollar arm follows Pandoc's rule — no space just inside either
+ * dollar, no word character or digit right after the closing one — so
+ * "$5 and $10" or "$HOME/$USER" never pair up. */
+const MATH_SPAN =
+  /\$\$[\s\S]+?\$\$|(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\\\(([\s\S]+?)\\\)|(?<![\\$\w])\$(?![\s$])((?:\\.|[^$\n\\])+?)(?<![\s\\])\$(?![\w$])/g;
+
+/** What a single-dollar span needs to read as math rather than a price or a
+ * shell variable: a TeX command or operator, or a lone letter (`$x$`). */
+const TEX_SIGNAL = /[\\^_{}=<>+]|^[A-Za-z]$/;
+
+function lineBefore(text: string, offset: number): string {
+  return text.slice(text.lastIndexOf("\n", offset - 1) + 1, offset);
+}
+
+function lineAfter(text: string, offset: number): string {
+  const end = text.indexOf("\n", offset);
+  return text.slice(offset, end < 0 ? text.length : end);
+}
+
+/** `\[…\]` standing on its own lines becomes a `$$` flow block, every line
+ * keeping the indentation and `>` markers that hold it in its list item or
+ * quote. Mid-sentence it can only be inline math. */
+function displayMath(body: string, source: string, start: number, end: number): string {
+  const prefix = lineBefore(source, start);
+  if (!/^[ \t>]*$/.test(prefix) || lineAfter(source, end).trim() !== "") return `$$${body.trim()}$$`;
+  const lines = body.split("\n");
+  const first = lines[0].trim();
+  const last = lines.length > 1 ? lines[lines.length - 1] : "";
+  const middle = lines.slice(1, lines.length > 1 ? -1 : 1);
+  const inner = [
+    ...(first ? [`${prefix}${first}`] : []),
+    ...middle,
+    ...(last.replace(/^[ \t>]*/, "").trim() ? [last.trimEnd()] : []),
+  ];
+  return ["$$", ...inner, `${prefix}$$`].join("\n");
+}
+
+function normalizeProse(source: string): string {
+  return source.replace(MATH_SPAN, (match: string, display: string | undefined, inline: string | undefined, dollar: string | undefined, offset: number) => {
+    const body = display ?? inline ?? dollar;
+    // `$$…$$` is already right; math across a blank line is two paragraphs.
+    if (body === undefined || /\n[ \t>]*\n/.test(body)) return match;
+    if (display !== undefined) return displayMath(display, source, offset, offset + match.length);
+    if (inline !== undefined) return `$$${inline.trim()}$$`;
+    return TEX_SIGNAL.test(body) ? `$$${body}$$` : match;
+  });
+}
+
+/** Normalizes prose between inline code spans, leaving the spans as written. */
+function normalizeOutsideCodeSpans(chunk: string): string {
+  let out = "";
+  let last = 0;
+  for (const span of chunk.matchAll(CODE_SPAN)) {
+    out += normalizeProse(chunk.slice(last, span.index)) + span[0];
+    last = span.index + span[0].length;
+  }
+  return out + normalizeProse(chunk.slice(last));
+}
+
+/**
+ * Rewrites the TeX delimiters agents write into the one the renderer parses.
+ *
+ * remark-math reads only `$$…$$` here — its single-dollar mode is off because
+ * "$5 and $10" is money, not an equation. But models write `\(…\)`, `\[…\]`
+ * and `$x^2$` as often as `$$`, and CommonMark reads `\[` as an escaped
+ * bracket, so those arrived as literal source. This turns `\[…\]` on its own
+ * lines into a `$$` display block, `\(…\)` into inline `$$…$$`, and `$…$`
+ * into inline math only when it passes Pandoc's spacing rule and reads as
+ * TeX. Fenced code and inline code spans are left as written.
+ */
+export function normalizeMathDelimiters(text: string): string {
+  if (!/[$\\]/.test(text)) return text;
+  const out: string[] = [];
+  let prose: string[] = [];
+  let fence: string | null = null;
+  const flush = () => {
+    if (prose.length > 0) out.push(normalizeOutsideCodeSpans(prose.join("\n")));
+    prose = [];
+  };
+  for (const line of text.split("\n")) {
+    const marker = FENCE_LINE.exec(line)?.[1];
+    if (fence !== null) {
+      out.push(line);
+      if (marker && marker[0] === fence[0] && marker.length >= fence.length && line.trim() === marker) fence = null;
+    } else if (marker) {
+      flush();
+      out.push(line);
+      fence = marker;
+    } else {
+      prose.push(line);
+    }
+  }
+  flush();
+  return out.join("\n");
+}
+
 /** What a Markdown link or image target points at, which decides how it renders.
  *
  * - `external`: an absolute `http:`/`https:`/`mailto:` URL or a `//host`

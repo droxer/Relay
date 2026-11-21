@@ -16,6 +16,7 @@ import {
   shouldRenderDiagram,
   markdownLinkKind,
   mermaidConfig,
+  normalizeMathDelimiters,
   normalizeOverEscapedQuotes,
 } from "../src/lib/markdown.js";
 
@@ -28,9 +29,9 @@ const readWeb = (rel: string) => readFileSync(`web/${rel}`, "utf8");
 function render(markdown: string): string {
   return renderToStaticMarkup(
     createElement(ReactMarkdown, {
-      remarkPlugins: [remarkGfm, remarkBreaks, remarkMath],
+      remarkPlugins: [remarkGfm, remarkBreaks, [remarkMath, { singleDollarTextMath: false }]],
       rehypePlugins: [[rehypeKatex, { throwOnError: false, trust: false }], rehypeSlug],
-      children: markdown,
+      children: normalizeMathDelimiters(markdown),
     }),
   );
 }
@@ -112,6 +113,47 @@ describe("normalizeOverEscapedQuotes", () => {
   });
 });
 
+describe("normalizeMathDelimiters", () => {
+  it("turns a standalone \\[…\\] into a $$ display block", () => {
+    assert.equal(normalizeMathDelimiters("\\[\nx^2\n\\]"), "$$\nx^2\n$$");
+    assert.equal(normalizeMathDelimiters("\\[ x^2 \\]"), "$$\nx^2\n$$");
+  });
+
+  it("keeps a display block inside its quote or list item", () => {
+    assert.equal(normalizeMathDelimiters("> \\[ a+b \\]"), "> $$\n> a+b\n> $$");
+    assert.equal(normalizeMathDelimiters("- item\n\n  \\[ a+b \\]"), "- item\n\n  $$\n  a+b\n  $$");
+  });
+
+  it("reads mid-sentence \\[…\\] and \\(…\\) as inline math", () => {
+    assert.equal(normalizeMathDelimiters("so \\[a+b\\] holds"), "so $$a+b$$ holds");
+    assert.equal(normalizeMathDelimiters("where \\( \\alpha \\) is"), "where $$\\alpha$$ is");
+  });
+
+  it("takes $…$ only when it reads as TeX", () => {
+    assert.equal(normalizeMathDelimiters("let $x$ be"), "let $$x$$ be");
+    assert.equal(normalizeMathDelimiters("then $a^2 + b^2 = c^2$."), "then $$a^2 + b^2 = c^2$$.");
+    assert.equal(normalizeMathDelimiters("costs $5 or $10"), "costs $5 or $10");
+    assert.equal(normalizeMathDelimiters("run $FOO_BAR/$BAZ"), "run $FOO_BAR/$BAZ");
+    assert.equal(normalizeMathDelimiters("echo $HOME"), "echo $HOME");
+  });
+
+  it("leaves $$…$$, escapes, and code untouched", () => {
+    assert.equal(normalizeMathDelimiters("$$\nx^2\n$$"), "$$\nx^2\n$$");
+    assert.equal(normalizeMathDelimiters("a \\\\[b\\\\] c"), "a \\\\[b\\\\] c");
+    assert.equal(normalizeMathDelimiters("use `$x^2$` and `\\(y\\)`"), "use `$x^2$` and `\\(y\\)`");
+    const fence = "```tex\n\\[ x \\]\n$y^2$\n```";
+    assert.equal(normalizeMathDelimiters(fence), fence);
+  });
+
+  it("does not pair delimiters across a paragraph break", () => {
+    assert.equal(normalizeMathDelimiters("\\[ a\n\nb \\]"), "\\[ a\n\nb \\]");
+  });
+
+  it("leaves a half-streamed opener for the next frame", () => {
+    assert.equal(normalizeMathDelimiters("\\[\n\\frac{1}{"), "\\[\n\\frac{1}{");
+  });
+});
+
 describe("markdown pipeline", () => {
   it("keeps a single newline as a line break", () => {
     // Agent CLIs hard-wrap prose and expect the wrap to show; CommonMark alone
@@ -127,6 +169,18 @@ describe("markdown pipeline", () => {
   it("renders inline and display math", () => {
     assert.match(render("$x^2$"), /katex/);
     assert.match(render("$$\n x^2 \n$$"), /katex-display/);
+  });
+
+  it("renders LaTeX bracket and paren delimiters", () => {
+    assert.match(render("\\[\n\\int_0^1 x\\,dx = \\tfrac12\n\\]"), /katex-display/);
+    assert.match(render("Energy \\(E = mc^2\\) is conserved."), /class="katex"/);
+    assert.doesNotMatch(render("Energy \\(E = mc^2\\) is conserved."), /\\\(/);
+  });
+
+  it("keeps money and shell variables as text", () => {
+    for (const prose of ["costs $5 per seat and $10 for pro", "set $HOME/$USER first", "between $5-$10", "$PATH:$HOME"]) {
+      assert.doesNotMatch(render(prose), /katex/, prose);
+    }
   });
 
   it("does not throw on half-written display math", () => {

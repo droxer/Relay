@@ -9,6 +9,7 @@ import remarkMath from "remark-math";
 import {
   fenceLanguage,
   markdownLinkKind,
+  normalizeMathDelimiters,
   normalizeOverEscapedQuotes,
   type MarkdownVariant,
 } from "../lib/markdown";
@@ -35,10 +36,9 @@ const REMARK_PLUGINS: MarkdownOptions["remarkPlugins"] = [
   // Agent CLIs emit hard-wrapped prose and expect the wrap to show. CommonMark
   // folds a single newline into a space; remark-breaks keeps it a line break.
   remarkBreaks,
-  // Display math only. `$…$` is not math in this transcript, it is money and
-  // shell variables — "costs $5 per seat and $10 for pro" was typeset as an
-  // equation, dollar signs and spacing gone. `$$…$$` is unambiguous enough to
-  // keep, so a real equation still renders.
+  // `$$` only. remark-math's own `$…$` typeset "costs $5 per seat and $10 for
+  // pro" as an equation; normalizeMathDelimiters decides which `$…$`, `\(…\)`
+  // and `\[…\]` are math and rewrites just those to `$$`.
   [remarkMath, { singleDollarTextMath: false }],
 ];
 
@@ -104,8 +104,9 @@ const MARKDOWN_COMPONENTS: Components = {
 
 /**
  * Renders agent-authored Markdown: GFM tables/strikethrough/task lists/
- * footnotes, highlighted code fences with a copy control, `$$…$$` display math
- * via KaTeX, and ```mermaid fences as diagrams.
+ * footnotes, highlighted code fences with a copy control, TeX math via KaTeX
+ * (`$$…$$`, `\[…\]`, `\(…\)`, and `$…$` that reads as TeX — see
+ * normalizeMathDelimiters), and ```mermaid fences as diagrams.
  *
  * Output is HTML-escaped — raw HTML is not parsed, highlight.js escapes fence
  * bodies, and Mermaid renders under its strict security level. Absolute links
@@ -142,7 +143,7 @@ export const MarkdownContent = memo(function MarkdownContent({ text, live = fals
         rehypePlugins={REHYPE_PLUGINS}
         components={MARKDOWN_COMPONENTS}
       >
-        {text}
+        {normalizeMathDelimiters(text)}
       </ReactMarkdown>
     </MarkdownModeProvider>
   );
