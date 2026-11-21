@@ -1,7 +1,10 @@
 """Project Task admission uses the frozen workflow ledger, not legacy Team rounds."""
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from relay.daemon_registry.dispatch.workflow_admission import workflow_request_id
+from relay.persistence.daemon import run_requests
 from relay.persistence.events import relay_task_event
 from test_team_workflows import workflow_world
 from test_workflow_progression import decision, finish, take as poll
@@ -37,6 +40,49 @@ def start_task(client, task):
     assert response.status_code == 202, response.text
     assert response.json()["dispatch"]["state"] == "started", response.text
     return response.json()["session"]
+
+
+def test_late_workflow_approval_starts_a_fresh_queue_grace(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
+        task, _ = task_workflow(client, project, payload)
+        # Age the request without sleeping or aging the Computer heartbeat.
+        requested_at = datetime.now(UTC) - timedelta(seconds=15)
+        with monkeypatch.context() as clock:
+            clock.setattr(run_requests, "now_iso", requested_at.isoformat)
+            session = start_task(client, task)
+
+        registry = app.state.registry
+        first, = take(registry, node)
+        finish(registry, node, first, {"Design": "design ready"})
+        sid = session["id"]
+        path = f"/api/v1/threads/{sid}"
+        parked = client.get(path).json()
+        assert parked["execution"]["blockingReason"] == "workflow_waiting_for_human"
+
+        approval_started = datetime.now(UTC)
+        response = client.post(f"{path}/workflow-decisions", json=decision(parked, "approve"))
+        assert response.status_code == 200, response.text
+        execution = response.json()["execution"]
+        assert execution["phase"] == "queued"
+        assert execution["computerOnline"] is True
+        assert execution["queueWaitConfirmed"] is False
+        queued_at = datetime.fromisoformat(execution["queuedAt"])
+        assert approval_started - timedelta(milliseconds=1) <= queued_at <= datetime.now(UTC)
+        assert client.get(path).json()["execution"] == execution
+        summary = client.get("/api/v1/threads?view=summary").json()["sessions"]
+        assert next(row["execution"] for row in summary if row["id"] == sid) == execution
+
+        with monkeypatch.context() as clock:
+            clock.setattr(app.state.execution_lifecycle, "clock", lambda: queued_at + timedelta(seconds=10))
+            waiting = client.get(path).json()["execution"]
+            assert waiting["queueWaitConfirmed"] is True
+            assert waiting["queuedAt"] == execution["queuedAt"]
+
+        second, = take(registry, node)
+        assert second["id"] != first["id"]
+        running = client.get(path).json()["execution"]
+        assert running["phase"] == "running"
+        assert running["queuedAt"] is None
 
 
 def test_task_workflow_gate_retry_and_completion_keep_one_execution(monkeypatch):

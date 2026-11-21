@@ -157,7 +157,10 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
     retained_result = request is not None and not evidence_lost and (
         request.get("status") == "finalizing" or (command or {}).get("status") in TERMINAL
     )
-    queued_at = (request or {}).get("createdAt") if phase == "queued" else None
+    queued_at = None
+    if phase == "queued":
+        # A Workflow can reuse its request across steps and approval gates.
+        queued_at = (command or {}).get("createdAt") or (request or {}).get("createdAt")
     return {
         "phase": phase, "executionConfirmed": confirmed,
         "computerOnline": computer_online,
@@ -170,8 +173,6 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         "canReportGone": phase == "recovery_required" and reason != "finalization_failed"
         and not retained_result,
         "lastConfirmedAt": (request or {}).get("currentProgressAt"),
-        # When the waiting run was admitted, so a queued thread can say how
-        # long it has waited; absent once the computer has taken it.
         "queuedAt": queued_at,
         **({"queueWaitConfirmed": _queue_wait_confirmed(queued_at, now)} if phase == "queued" else {}),
         "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
