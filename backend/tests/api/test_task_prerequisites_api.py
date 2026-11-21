@@ -53,6 +53,7 @@ def test_thread_task_view_keeps_origin_wait_and_adopted_steps(project_context, m
     origin = store.create_task({
         "ownerUserId": owner, "projectId": project["id"], "title": "Related work",
         "sourceRoutineId": parent["id"], "description": "Verbose work context. " * 2000,
+        "permissionMode": "yolo",
     })
     store.link_session(origin["id"], session_id)
     waiting = store.create_task({"ownerUserId": owner, "title": "Wait for the reader"})
@@ -86,6 +87,7 @@ def test_thread_task_view_keeps_origin_wait_and_adopted_steps(project_context, m
     rows = {item["id"]: item for item in payload["tasks"]}
     assert set(rows) == {origin["id"], waiting["id"], parent["id"], newest["id"], active["id"]}
     assert rows[origin["id"]]["linkedSessionIds"] == [session_id]
+    assert rows[origin["id"]]["permissionMode"] == "yolo"
     assert rows[waiting["id"]]["awaiting"]["questionId"] == "q1"
     assert payload["threadTaskContext"]["nextSteps"] == [suggestion]
     assert payload["threadTaskContext"]["activeTaskId"] == active["id"]
