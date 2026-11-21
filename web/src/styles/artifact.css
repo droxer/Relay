@@ -108,7 +108,7 @@
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code);
-  line-height: var(--leading-normal);
+  line-height: var(--leading-code);
   overflow-x: auto;
   color: var(--ink-1);
   background: var(--surface-1);
@@ -172,7 +172,7 @@
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code);
-  line-height: var(--leading-normal);
+  line-height: var(--leading-code);
   white-space: pre-wrap;
   overflow-x: auto;
   overflow-wrap: anywhere;

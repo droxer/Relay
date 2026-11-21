@@ -322,13 +322,13 @@ describe("markdown stylesheet", () => {
   });
 
   it("never sets a transcript heading lighter than inline bold", () => {
-    // `**bold**` is 700; a 500 heading read weaker than emphasis in the
+    // `**bold**` is 600; a 500 heading read weaker than emphasis in the
     // paragraph beneath it.
     for (const level of ["h1", "h2", "h3", "h4", "h5", "h6"]) {
       const rule = markdownCss.match(new RegExp(`^\\.md-body ${level} \\{([^}]*)\\}`, "m"));
       assert.ok(rule, `missing .md-body ${level} rule`);
       const weight = rule[1].match(/font-weight: (\d+)/);
-      assert.ok(!weight || Number(weight[1]) >= 700, `${level} must stay at 700, got ${weight?.[1]}`);
+      assert.ok(!weight || Number(weight[1]) >= 600, `${level} must stay at 600, got ${weight?.[1]}`);
     }
   });
 

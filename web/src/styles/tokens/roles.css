@@ -162,8 +162,8 @@
   --focus-outline-danger: var(--focus-w) dashed var(--err);
 
   /* Type roles — the platform UI face carries every tier. Hierarchy
-     comes from WEIGHT and SIZE, not face: display and title tiers are 500,
-     heading and emphasis tiers are 700, and reading is 400. The mono face is
+     comes from WEIGHT and SIZE, not face: display is 500, title, page,
+     heading and emphasis tiers are 600, and reading is 400. The mono face is
      technical text only, set 400 untracked.
 
      EVERY role ships a paired *-track token. The `font:` shorthand cannot carry
@@ -183,17 +183,17 @@
   --type-display:      500 var(--fs-6)/var(--leading-display) var(--font-display);
   /* The display tier is 28px/500 — the display weight in this system is the
      MIDDLE of the ramp, not the top of it. Emphasis at reading sizes runs
-     heavier (700) than the headline tier does, which is the source system's
+     heavier (600) than the display tier does, which is the source system's
      signature: size carries hierarchy, weight carries emphasis. (The brand
      publishes this tier at 48px; palette.css documents why the app ladder
      runs a console-density step below the marketing one.) */
-  /* --type-title is 16px/500 — the fixed-noun tier for rail, section,
-     drawer and dialog titles. The page h1 takes the 22px rung below. */
-  --type-title:        500 var(--fs-title-lg)/var(--leading-tight) var(--font-display);
-  /* Page h1: 22px/500. 28px (--type-display) against a 16px h2 made the page
-     title shout over its own sections; 22 sits one clean rung above. */
-  --type-page:         500 var(--fs-5)/var(--leading-tight) var(--font-display);
-  --type-heading:      700 var(--fs-heading)/var(--leading-heading) var(--font-display);
+  /* --type-title is 16/24 at 600 — the fixed-noun tier for rail, section,
+     panel, drawer and dialog titles. The page h1 takes the 24px rung below. */
+  --type-title:        600 var(--fs-title-lg)/var(--leading-title) var(--font-display);
+  /* Page h1: 24/32 at 600. 28px (--type-display) against a 16px h2 made the
+     page title shout over its own sections; 24 sits one clean rung above. */
+  --type-page:         600 var(--fs-5)/var(--leading-page) var(--font-display);
+  --type-heading:      600 var(--fs-heading)/var(--leading-title) var(--font-display);
   --type-body:         400 var(--fs-4)/var(--leading-normal) var(--font-sans);
   /* Supporting SENTENCES — hints, descriptions, empty-state copy — at the
      one reading size. It was 12px, and with meta and micro also on that
@@ -201,15 +201,16 @@
      The caption rung now belongs to the caption roles alone (meta lines,
      group labels); a sentence someone has to read is never a caption. */
   --type-body-sm:      400 var(--fs-2)/var(--leading-normal) var(--font-sans);
-  --type-label:        500 var(--fs-2)/var(--leading-snug) var(--font-sans);
-  --type-label-strong: 700 var(--fs-2)/var(--leading-snug) var(--font-sans);
-  /* Micro is STRUCTURE, not emphasis, so it does not spend the 700 tier —
+  /* Labels and buttons share the 14/22 reading line box at 500. */
+  --type-label:        500 var(--fs-2)/var(--leading-normal) var(--font-sans);
+  --type-label-strong: 600 var(--fs-2)/var(--leading-normal) var(--font-sans);
+  /* Micro is STRUCTURE, not emphasis, so it does not spend the 600 tier —
      at 12px in a variable face the counters close up. It is also the app's most-applied role (63
      rules), and the inverted ramp documented above only reads as emphasis
-     while 700 stays SCARCE: with micro on it, two elements in five were bold.
+     while 600 stays SCARCE: with micro on it, two elements in five were bold.
 
      It lands on 500 rather than 600 because the weight ladder is three rungs
-     on purpose — shadcn-bridge.css maps font-semibold onto 700 precisely so a
+     on purpose — shadcn-bridge.css maps font-bold onto 600 precisely so a
      fourth weight cannot creep back in, and dimensionScales.test.ts pins the
      set. Micro stays below the 14px label role through its 12px size,
      dimmer ink, and caption leading. */
@@ -228,7 +229,7 @@
      shares its 14px with the reading rung today by coincidence, not by
      design — it has its own token so the sans ladder can move without
      dragging the code face with it. */
-  --type-code:         400 var(--fs-code)/var(--leading-snug) var(--font-mono);
+  --type-code:         400 var(--fs-code)/var(--leading-code) var(--font-mono);
 
   /* ----- Content-origin roles -----
      The three roles above the label tier answer "how loud", but the app also
@@ -238,26 +239,26 @@
      roles split the question by ORIGIN rather than by size.
 
      --type-name  the identity of the thing a row or card is ABOUT —
-                  14px/500 (see the note below for why not 700). It shares
+                  14px/500 (see the note below for why not 600). It shares
                   the 14px reading size with labels; position, weight, and ink
                   distinguish a name from the description below it.
      --type-title-content
                   a title whose text comes from a user or an agent. 16px,
-                  the same size as --type-title and one weight calmer (400) —
-                  The source system's editorial-subhead move, where a lighter weight
-                  at a display size introduces visual rest rather than
-                  shouting someone's words back at them.
+                  the same 16/24 box and 600 weight as --type-title (2026-11-22:
+                  task detail and record titles read as panel titles); it
+                  stays a separate role because it is set in the sans, not
+                  the display stack.
      Structural group labels are NOT a fourth role: --type-micro above is
      the register for them, in sentence case. The
      .eyebrow and .page-header-kicker utilities deliberately stay SENTENCE CASE
      on the same size: they are generic containers for arbitrary translated
      copy, where forced uppercase is a localization hazard. That carve-out is
      pinned by typographyTokens.test.ts — do not "converge" it. */
-  /* --type-name runs 500, not 700 (2026-10-09). Every row and card in a list
-     carries a name, so at 700 a whole table of titles was bold and nothing in
+  /* --type-name runs 500, not 600 (2026-10-09). Every row and card in a list
+     carries a name, so at the emphasis weight a whole table of titles was bold and nothing in
      it could stand out — the "Needs project" flag and an overdue date had no
      quieter text to rise from. Names lead by ink (--ink-1 against --ink-3
-     meta) and position; 700 is back to being scarce emphasis. */
+     meta) and position; 600 is back to being scarce emphasis. */
   --type-name:          500 var(--fs-4)/var(--leading-normal) var(--font-sans);
   /* --type-meta  supporting text at the caption size, in SENTENCE case: row
      meta lines ("3 agents · updated 2h ago"), eyebrows, kickers. It shares the
@@ -268,7 +269,7 @@
      used to hand-roll this as `font: var(--type-label)` followed by
      `font-size: var(--fs-1)`, which is how a role announces it is missing. */
   --type-meta:          400 var(--fs-1)/var(--leading-caps) var(--font-sans);
-  --type-title-content: 400 var(--fs-title)/var(--leading-tight) var(--font-sans);
+  --type-title-content: 600 var(--fs-title)/var(--leading-title) var(--font-sans);
 
   --type-display-track:      var(--track-display); /* the one tightened tier — see palette.css */
   --type-title-track:        var(--track-title);

@@ -143,7 +143,8 @@
   --text-4xl: var(--fs-6);
 
   /* Weights → font-* utilities. THE LADDER IS THREE RUNGS: 400 reading, 500
-     display/title, 700 heading and emphasis (roles.css). Tailwind ships
+     labels and controls, 600 titles, headings and emphasis (roles.css; the
+     top rung moved 700 → 600 with Space Grotesk on 2026-11-22). Tailwind ships
      nine weight utilities and this block previously overrode none of them, so
      the six rungs the system does not have stayed reachable by default —
      `font-semibold` (600) shipped in field.tsx and syntax.css set three rules
@@ -153,17 +154,17 @@
      owns, rather than deleted: deleting a step does not remove the utility,
      it hands the name back to Tailwind's default (the same trap the radius
      and text blocks document above). So `font-semibold` still works — it just
-     renders 700 like every other emphasis in the app, instead of quietly
+     renders 600 like every other emphasis in the app, instead of quietly
      introducing a fourth weight. */
   --font-weight-thin: 400;
   --font-weight-extralight: 400;
   --font-weight-light: 400;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
-  --font-weight-semibold: 700;
-  --font-weight-bold: 700;
-  --font-weight-extrabold: 700;
-  --font-weight-black: 700;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 600;
+  --font-weight-black: 600;
 
   /* Leading → leading-tight / leading-loose. These read as self-references
      but are not: `@theme inline` makes each utility emit the right-hand

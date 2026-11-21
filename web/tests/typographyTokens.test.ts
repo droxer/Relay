@@ -20,9 +20,8 @@ const readWebSource = (rel: string) => readFileSync(path.join(repoRoot, "web", "
 
 describe("local typography assets", () => {
   const VENDORED = [
-    ["InterVariable-Latin.woff2", "OFL-Inter.txt"],
-    ["BricolageGrotesque-Variable-Latin.woff2", "OFL-BricolageGrotesque.txt"],
-    ["JetBrainsMono-Variable.woff2", "OFL-JetBrainsMono.txt"],
+    ["SpaceGrotesk-Variable-Latin.woff2", "OFL-SpaceGrotesk.txt"],
+    ["SpaceMono-Regular-Latin.woff2", "OFL-SpaceMono.txt"],
   ] as const;
 
   it("ships each vendored face locally with its license", () => {
@@ -82,9 +81,9 @@ describe("application typography roles", () => {
     const expectedPixels = new Map([
       ["--fs-1", 12],
       ["--fs-2", 14],
-      ["--fs-code", 14],
+      ["--fs-code", 13],
       ["--fs-title", 16],
-      ["--fs-5", 22],
+      ["--fs-5", 24],
       ["--fs-6", 28],
     ]);
     for (const [name, expected] of expectedPixels) {
@@ -102,7 +101,7 @@ describe("application typography roles", () => {
     assert.match(palette, /--fs-document:\s*var\(--fs-title\);/);
     const roles = readWebSource("styles/tokens/roles.css");
     assert.match(roles, /--type-label:\s+500 var\(--fs-2\)\//);
-    assert.match(roles, /--type-label-strong:\s+700 var\(--fs-2\)\//);
+    assert.match(roles, /--type-label-strong:\s+600 var\(--fs-2\)\//);
 
     // One reading rung: --fs-3/--fs-4 name jobs, not sizes, so they alias
     // --fs-2 instead of restating its value — and compact density, which has
@@ -116,6 +115,32 @@ describe("application typography roles", () => {
     assert.ok(hero, "--fs-hero must remain a responsive clamp");
     assert.ok(Math.abs(Number(hero[1]) * 14 - 22) < 0.01, "the hero floor should resolve to 22px");
     assert.ok(Math.abs(Number(hero[2]) * 14 - 36) < 0.01, "the hero ceiling should resolve to 36px");
+  });
+
+  it("pins each tier's line box to the Relay type table", () => {
+    // 2026-11-22: page 24/32, panel and record titles 16/24, conversation
+    // 16/26, lists, tables and forms 14/22, meta 12/18, code 13/20.
+    const palette = readWebSource("styles/tokens/palette.css");
+    const roles = readWebSource("styles/tokens/roles.css");
+    const ratio = (name: string) => Number(palette.match(new RegExp(`${name}:\\s*([\\d.]+);`))?.[1]);
+    for (const [name, size, lineBox] of [
+      ["--leading-page", 24, 32],
+      ["--leading-title", 16, 24],
+      ["--leading-transcript", 16, 26],
+      ["--leading-normal", 14, 22],
+      ["--leading-caps", 12, 18],
+      ["--leading-code", 13, 20],
+    ] as const) {
+      assert.ok(Math.abs(ratio(name) * size - lineBox) < 0.05, `${name} should give ${size}/${lineBox}`);
+    }
+    assert.match(palette, /--fs-transcript:\s*var\(--fs-title\);/);
+    assert.match(roles, /--type-page:\s+600 var\(--fs-5\)\/var\(--leading-page\)/);
+    assert.match(roles, /--type-title:\s+600 var\(--fs-title-lg\)\/var\(--leading-title\)/);
+    assert.match(roles, /--type-title-content:\s+600 var\(--fs-title\)\/var\(--leading-title\)/);
+    assert.match(roles, /--type-body:\s+400 var\(--fs-4\)\/var\(--leading-normal\)/);
+    assert.match(roles, /--type-label:\s+500 var\(--fs-2\)\/var\(--leading-normal\)/);
+    assert.match(roles, /--type-meta:\s+400 var\(--fs-1\)\/var\(--leading-caps\)/);
+    assert.match(roles, /--type-code:\s+400 var\(--fs-code\)\/var\(--leading-code\)/);
   });
 
   it("holds every code surface on the code size, off the sans ladder", () => {
@@ -140,44 +165,34 @@ describe("application typography roles", () => {
     }
   });
 
-  it("wires Inter for reading, Bricolage Grotesque for display, mono for technical text only", () => {
+  it("wires Space Grotesk for the interface, Space Mono for technical text, CJK by language", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");
 
-    // Each vendored face is injected by the layout as a --font-app-* variable
-    // and every one of them is put on <html>.
     for (const [face, variable] of [
-      ["InterVariable-Latin.woff2", "--font-app-sans"],
-      ["BricolageGrotesque-Variable-Latin.woff2", "--font-app-display"],
-      ["JetBrainsMono-Variable.woff2", "--font-app-mono"],
+      ["SpaceGrotesk-Variable-Latin.woff2", "--font-app-sans"],
+      ["SpaceMono-Regular-Latin.woff2", "--font-app-mono"],
     ]) {
       assert.match(layout, new RegExp(`src:\\s*["']\\./fonts/${face.replace(/\./g, "\\.")}["']`));
       assert.match(layout, new RegExp(`variable:\\s*["']${variable}["']`));
     }
-    assert.match(layout, /className=\{`\$\{appSans\.variable\} \$\{appDisplay\.variable\} \$\{appMono\.variable\}`\}/);
+    assert.match(layout, /className=\{`\$\{appSans\.variable\} \$\{appMono\.variable\}`\}/);
 
-    // The sans leads with Inter, then the platform faces in a fixed order:
-    // Apple, then Windows, then Android/ChromeOS, then the older and Linux
-    // fallbacks — they carry any glyph outside the Latin subset.
+    // Space Grotesk, then Arial / Helvetica Neue, then the language's CJK
+    // faces, then the system faces; the color-emoji faces close the stack.
     assert.match(
       palette,
-      /--font-sans:\s*var\(--font-app-sans\),\s*"Inter",\s*-apple-system,\s*BlinkMacSystemFont,\s*"Segoe UI",\s*Roboto,\s*"Helvetica Neue",\s*"Noto Sans",\s*Arial,/,
+      /--font-sans:\s*var\(--font-app-sans\),\s*"Space Grotesk",\s*Arial,\s*"Helvetica Neue",\s*var\(--font-cjk\),\s*system-ui,/,
     );
-    // It ends on its generic and carries the color-emoji faces after it so a
-    // pictograph never renders as a monochrome outline.
     assert.match(palette, /--font-sans:[^;]*sans-serif,\s*"Apple Color Emoji",\s*"Segoe UI Emoji",\s*"Segoe UI Symbol",\s*"Noto Color Emoji";/);
+    assert.match(palette, /--font-mono:\s*var\(--font-app-mono\),\s*"Space Mono",\s*ui-monospace,[^;]*var\(--font-cjk\),\s*monospace;/);
+    assert.match(palette, /--font-display:\s*var\(--font-sans\);/);
 
-    // The technical face is the vendored JetBrains Mono.
-    assert.match(palette, /--font-mono:\s*var\(--font-app-mono\),\s*["']JetBrains Mono["']/);
-
-    // The display tier is Bricolage Grotesque, falling back to the whole sans
-    // stack so Han and non-Latin titles resolve exactly as reading text does.
-    // The mono is technical text only.
-    assert.match(palette, /--font-display:\s*var\(--font-app-display\),\s*"Bricolage Grotesque",\s*var\(--font-sans\);/);
-    assert.doesNotMatch(
+    // Simplified faces by default, Traditional under zh-TW / zh-Hant / zh-HK.
+    assert.match(palette, /:root\s*\{[\s\S]*?--font-cjk:\s*"PingFang SC",\s*"Hiragino Sans GB",\s*"Microsoft YaHei UI"/);
+    assert.match(
       palette,
-      /--font-display:[^;]*(--font-app-mono|JetBrains|Mono)/,
-      "the display tier is not mono — it resolves to the sans stack",
+      /html:lang\(zh-TW\),\s*html:lang\(zh-Hant\),\s*html:lang\(zh-HK\)\s*\{\s*--font-cjk:\s*"PingFang TC",\s*"Microsoft JhengHei UI",\s*"Microsoft JhengHei",\s*"Noto Sans TC"/,
     );
   });
 
@@ -191,28 +206,25 @@ describe("application typography roles", () => {
     assert.doesNotMatch(code, /"ss\d\d"/);
   });
 
-  it("sets the display tiers at 500, emphasis at 700, and keeps code at 400", () => {
+  it("sets display at 500, titles and emphasis at 600, and keeps code at 400", () => {
     const roles = readWebSource("styles/tokens/roles.css");
 
-    // The source system's weight ramp is inverted against the usual expectation: the
-    // display and heading-sm tiers are 500 and the heaviest weight in the
-    // system (700) belongs to the SMALL roles — button labels, badges, body
-    // emphasis. Size carries hierarchy; weight carries emphasis. The product
-    // deliberately exposes only the 400/500/700 ladder even though the system
-    // faces support more weights.
+    // The ladder is 400 reading, 500 labels and controls, 600 titles, headings
+    // and emphasis (Relay's type table, 2026-11-22). The product deliberately
+    // exposes only these three rungs even though Space Grotesk supports more.
     assert.match(roles, /--type-display:\s+500[^;]+var\(--font-display\);/);
-    assert.match(roles, /--type-title:\s+500[^;]+var\(--font-display\);/);
-    assert.match(roles, /--type-heading:\s+700[^;]+var\(--font-display\);/);
+    assert.match(roles, /--type-title:\s+600[^;]+var\(--font-display\);/);
+    assert.match(roles, /--type-heading:\s+600[^;]+var\(--font-display\);/);
     assert.match(roles, /--type-number:\s+500[^;]+var\(--font-display\);/);
-    assert.match(roles, /--type-label-strong:\s+700[^;]+var\(--font-sans\);/);
-    // A name is not emphasis: every row carries one, so at 700 a list was a
+    assert.match(roles, /--type-label-strong:\s+600[^;]+var\(--font-sans\);/);
+    // A name is not emphasis: every row carries one, so at 600 a list was a
     // wall of bold. Names lead by ink instead (see roles.css).
     assert.match(roles, /--type-name:\s+500[^;]+var\(--font-sans\);/);
     // Micro is deliberately NOT on the emphasis weight: uppercase already marks
-    // it, and it is the most-applied role in the app, so putting it at 700 made
+    // it, and it is the most-applied role in the app, so putting it at the emphasis weight made
     // 42% of all typed elements bold and the emphasis tier stopped reading. It
-    // takes 500 rather than 600 because the ladder stays three rungs — see the
-    // weight-ladder test in dimensionScales.test.ts.
+    // takes 500, the label rung — see the weight-ladder test in
+    // dimensionScales.test.ts.
     assert.match(roles, /--type-micro:\s+500[^;]+var\(--font-sans\);/);
     // Meta is supporting PROSE at the caption size, so it reads at the reading
     // weight. At 500 it was a byte-for-byte copy of micro, and a row's meta
@@ -226,7 +238,7 @@ describe("application typography roles", () => {
     assert.match(roles, /--type-body-sm:\s+400 var\(--fs-2\)\//);
     assert.match(roles, /--type-meta:\s+400 var\(--fs-1\)\//);
     assert.match(roles, /--type-micro:\s+500 var\(--fs-1\)\//);
-    assert.doesNotMatch(roles, /--type-[a-z-]+:\s+800/, "the product ladder deliberately stops at 700");
+    assert.doesNotMatch(roles, /--type-[a-z-]+:\s+[78]00/, "the product ladder deliberately stops at 600");
     assert.match(roles, /--type-code:\s+400[^;]+var\(--font-mono\);/);
     assert.match(roles, /--type-body:\s+400[^;]+var\(--font-sans\);/);
     assert.match(roles, /--type-label:\s+500[^;]+var\(--font-sans\);/);
@@ -235,7 +247,7 @@ describe("application typography roles", () => {
   it("sets the reading tiers solid and tightens only the display tier and the caps", () => {
     const palette = readWebSource("styles/tokens/palette.css");
 
-    // Inter (via its optical-size axis) and the platform fallbacks carry their
+    // Space Grotesk and the platform fallbacks carry their
     // own per-size tracking, so no READING
     // role adds one. The zero-valued tokens are the design, not missing
     // values; they keep the paired-track contract greppable.
@@ -374,14 +386,15 @@ describe("application typography roles", () => {
     const localeBlock = palette.match(/html:lang\(zh-CN\),\s*html:lang\(zh-TW\)\s*\{([^}]*)\}/s)?.[1] ?? "";
     assert.notEqual(localeBlock.trim(), "", "the zh-CN metrics block went missing");
     assert.doesNotMatch(localeBlock, /--font-(?:sans|display):/, "zh-CN must not fork the reading stack");
-    assert.match(localeBlock, /--font-mono:\s*var\(--font-app-mono\),\s*"JetBrains Mono"[^;]*"Noto Sans Mono CJK SC"/);
+    assert.doesNotMatch(localeBlock, /--font-(?:mono|cjk):/, "the CJK faces follow --font-cjk, not a per-block mono list");
     assert.match(localeBlock, /--track-display:\s*0;/);
     assert.match(localeBlock, /--track-title:\s*0;/);
     assert.match(localeBlock, /--track-body:\s*0;/);
     assert.match(localeBlock, /--leading-normal:\s*1\.7;/);
-    // Traditional Chinese narrows the mono's Han fallback to the TC faces.
-    const traditionalBlock = palette.match(/\}\s*html:lang\(zh-TW\)\s*\{([^}]*)\}/s)?.[1] ?? "";
-    assert.match(traditionalBlock, /--font-mono:[^;]*"Noto Sans Mono CJK TC"/);
+    // Traditional Chinese swaps --font-cjk to the TC faces; sans and mono
+    // both end in it, so Han resolves to TC in both.
+    const traditionalBlock = palette.match(/html:lang\(zh-HK\)\s*\{([^}]*)\}/s)?.[1] ?? "";
+    assert.match(traditionalBlock, /--font-cjk:[^;]*"Noto Sans CJK TC"/);
 
     const eyebrowRule = base.match(/\.eyebrow\s*\{([^}]*)\}/)?.[1] ?? "";
     const headerKickerRule = atelier.match(/\.page-header-kicker,[^{]+\{([^}]*)\}/s)?.[1] ?? "";
@@ -396,10 +409,13 @@ describe("application typography roles", () => {
     // Agent output can be Chinese while the surrounding controls remain in
     // English, so glyph coverage cannot depend on html:lang(zh-CN).
     // --font-display ends on var(--font-sans), so expand token references
-    // (one level) before checking the stack.
+    // (to a fixed depth) before checking the stack.
     const familyOf = (role: string) => root.match(new RegExp(`--font-${role}:\\s*([^;]+);`))?.[1] ?? "";
     for (const role of ["sans", "display", "mono"]) {
-      const family = familyOf(role).replace(/var\(--font-(sans|display|mono)\)/g, (_, alias: string) => familyOf(alias));
+      let family = familyOf(role);
+      for (let depth = 0; depth < 3; depth += 1) {
+        family = family.replace(/var\(--font-(sans|display|mono|cjk)\)/g, (_, alias: string) => familyOf(alias));
+      }
       assert.match(family, /"PingFang SC"/, `${role} is missing the macOS CJK fallback`);
       assert.match(family, /"Microsoft YaHei/, `${role} is missing the Windows CJK fallback`);
       assert.match(family, /"Noto Sans/, `${role} is missing the Linux CJK fallback`);

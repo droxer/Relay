@@ -154,10 +154,10 @@ function FilterPathSeparator() {
          hosts, 3px a side against a 12px glyph; the chip's old 8px read as
          three names. Centred by two tokens each inert in the other host, and
          NOT `align-middle`, which resolves against the x-height and sat the
-         glyph 1.27px low; 0.3635em is half Inter's cap height, 0.375rem half
+         glyph 1.27px low; 0.35em is half Space Grotesk's cap height, 0.375rem half
          `size-3`. `inline-block` because the reset makes every `svg` a block,
          which broke the builder's inline `Repository > Stars` into three. */
-      className="text-muted-foreground mx-[3px] inline-block size-3 shrink-0 self-center align-[calc(0.3635em_-_0.375rem)]"
+      className="text-muted-foreground mx-[3px] inline-block size-3 shrink-0 self-center align-[calc(0.35em_-_0.375rem)]"
       lucide="ChevronRightIcon"
       tabler="IconChevronRight"
       hugeicons="ArrowRight01Icon"

@@ -435,7 +435,7 @@
   font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code);
-  line-height: var(--leading-normal);
+  line-height: var(--leading-code);
 }
 
 .code-view .code-gutter,
