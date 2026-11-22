@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ActionAdd, ActionStart, ICON } from "../icons";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
+import { workflowProcessMeta } from "./processMeta";
 import { WorkflowEditorForPreview } from "./WorkflowEditor";
 
 type Props = {
@@ -38,13 +39,6 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
   const linkedTeams = (workflow: WorkflowPreview) => teams.filter(team => team.enabled && !team.deletedAt
     && workflowOptions(team).some(item => item.id === workflow.id)
     && workflow.workflowSteps.every(step => team.memberAgentIds.includes(step.agentId)));
-  // Approvals are named only when there are some; "0 approvals" is noise.
-  const processMeta = (workflow: WorkflowPreview) => {
-    const gates = workflow.workflowSteps.filter(step => step.requiresApproval).length;
-    const steps = t("workflow.step_count", { count: workflow.workflowSteps.length });
-    return gates ? `${steps} · ${t("workflow.approval_count", { count: gates })}` : steps;
-  };
-
   return <section className="project-general-section workflow-project-library" aria-labelledby="project-workflows-title">
     {/* The tab's lede already says what a workflow is; the head only counts. */}
     <div className="workflow-library-head">
@@ -66,7 +60,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
                 <div className="workflow-team-row-name"><h3 className="workflow-library-name">{workflow.name}</h3>
                   {!workflow.enabled ? <span className="workflow-preview-kind">{t("teams.disabled")}</span> : null}
                 </div>
-                <p className="workflow-library-meta">{processMeta(workflow)}</p>
+                <p className="workflow-library-meta">{workflowProcessMeta(t, workflow.workflowSteps)}</p>
               </div>
               {canManage ? <div className="workflow-team-actions">
                 <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>

@@ -14,7 +14,8 @@ import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
 import { WorkflowEditorForPreview, type WorkflowAgent } from "./WorkflowEditor";
 import type { WorkflowPreview } from "../../types";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
-import { ICON, NavProjects } from "../icons";
+import { workflowProcessMeta } from "./processMeta";
+import { ActionAdd, ICON, NavProjects } from "../icons";
 
 /** Teams reference Project processes; definitions survive unassignment. */
 export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam; agents: readonly WorkflowAgent[]; userId?: string }) {
@@ -63,13 +64,13 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
           <SelectTrigger size="sm" className="w-auto" aria-label={t("workflow.assign_workflow")}><SelectValue>{t("workflow.assign_workflow")}</SelectValue></SelectTrigger>
           <SelectContent>{available.map(workflow => <SelectItem key={workflow.id} value={workflow.id}>{workflow.name} · {projectNames.get(workflow.projectId)}</SelectItem>)}</SelectContent>
         </Select>
-        <Button type="button" variant="outline" size="sm" onClick={() => setEditing({ workflow: null })}>{t("workflow.create")}</Button>
+        <Button type="button" variant="default" size="sm" onClick={() => setEditing({ workflow: null })}><ActionAdd size={ICON.sm} aria-hidden="true" />{t("workflow.create")}</Button>
       </div> : null}
     </div>
     <p className="workflow-editor-note">{t("workflow.team_reference_hint")}</p>
-    {failure ? <p role="alert" className="text-destructive">{failure}</p> : null}
-    {loading ? <p aria-busy="true">{t("workflow.loading")}</p> : null}
-    {loadFailed ? <div role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="outline" size="dense" onClick={() => void catalog.refetch()}>{t("workspace.retry")}</Button></div> : null}
+    {failure ? <p role="alert" className="workflow-teams-state text-destructive">{failure}</p> : null}
+    {loading ? <p className="workflow-teams-state" aria-busy="true">{t("workflow.loading")}</p> : null}
+    {loadFailed ? <div className="workflow-teams-state" role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="outline" size="dense" onClick={() => void catalog.refetch()}>{t("workspace.retry")}</Button></div> : null}
     <ul className="workflow-team-list">
       {/* The glyph marks a predefined row and the step flow a custom one, so
           neither needs a kind chip; only the default is called out. */}
@@ -88,7 +89,7 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
           <div className="workflow-project-row-head">
             <div className="workflow-library-main">
               <span className="workflow-team-row-name"><span className="workflow-library-name">{workflow.name}</span>{badge(t(workflow.ownerTeamId ? "workflow.team_owned" : "workflow.project_owned"))}{isDefault ? badge(t(workflow.ownerTeamId ? "workflow.default_badge" : "workflow.project_default")) : null}{!workflow.enabled ? badge(t("teams.disabled")) : null}</span>
-              <span className="workflow-library-meta">{t("workflow.step_count", { count: workflow.workflowSteps.length })}{!projectOwned ? ` · ${team.name}` : null}</span>
+              <span className="workflow-library-meta">{workflowProcessMeta(t, workflow.workflowSteps)}{!projectOwned ? ` · ${team.name}` : null}</span>
               {projectOwned ? <span className="workflow-project-origin">
                 <NavProjects size={ICON.sm} aria-hidden="true" />
                 <span>{t("workflow.project_origin")} <a className="record-inline-action" href={projectUrl} title={t("workflow.open_project")}>{projectName ?? t("workflow.project_unavailable")}</a></span>
