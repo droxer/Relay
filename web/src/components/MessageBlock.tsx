@@ -228,6 +228,7 @@ export const MessageBlock = memo(function MessageBlock({
             ))}</div> : null}
           </div>
         </div>
+        {message.live ? <p className="msg-user-note">{t("message.sent_live")}</p> : null}
         <MsgTime value={message.timestamp} />
       </article>
     );

@@ -11,7 +11,14 @@
 // an agent that can reach the broker can put questions of its own in front of
 // the person. Verified against Pi 0.73.1 (`tool_call` carries `toolName`,
 // `toolCallId`, `input`; returning `{ block, reason }` stops the call).
-import { BROKER_UNAVAILABLE, askBroker, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
+import {
+  BROKER_UNAVAILABLE,
+  askBroker,
+  listenForLiveMessages,
+  type LiveMessageHandler,
+  type PermissionAnswer,
+  type PermissionQuestion,
+} from "./protocol.js";
 
 /** The slice of Pi's `tool_call` event this extension reads. */
 export interface PiToolCallEvent {
@@ -28,6 +35,8 @@ export type PiToolCallHandler = (event: PiToolCallEvent, ctx?: unknown) => Promi
 /** The slice of Pi's ExtensionAPI this extension uses; typed structurally so the daemon never depends on the Pi package. */
 export interface PiExtensionApi {
   on(event: "tool_call", handler: PiToolCallHandler): unknown;
+  /** Pi 0.73.1: while the agent streams, `deliverAs: "steer"` joins the turn in progress. */
+  sendUserMessage?(content: string, options?: { deliverAs?: "steer" | "followUp" }): unknown;
 }
 
 export type AskBroker = (question: PermissionQuestion) => Promise<PermissionAnswer>;
@@ -118,8 +127,23 @@ export function captureBrokerEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.P
   return captured;
 }
 
+/**
+ * Hands a person's live message to Pi as a steer: it joins the turn in
+ * progress, so Pi keeps its context. A Pi without the API refuses it, and the
+ * daemon falls back to stopping the run.
+ */
+export function createLiveMessageHandler(pi: PiExtensionApi): LiveMessageHandler {
+  return async (message) => {
+    if (typeof pi.sendUserMessage !== "function") throw new Error("This Pi version cannot take a message while it works.");
+    await pi.sendUserMessage(message.text, { deliverAs: "steer" });
+    return "steer";
+  };
+}
+
 /** The extension factory Pi calls once at load. */
 export default function relayPermissionExtension(pi: PiExtensionApi): void {
   const brokerEnv = captureBrokerEnv();
   pi.on("tool_call", createToolCallHandler((question) => askBroker(question, brokerEnv)));
+  // The listener never holds Pi open; it ends with the process.
+  listenForLiveMessages(createLiveMessageHandler(pi), brokerEnv);
 }

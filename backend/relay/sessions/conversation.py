@@ -110,6 +110,26 @@ def _questions_asked(session: dict[str, Any]) -> list[tuple[tuple[str, int], str
     return items
 
 
+def _live_messages(session: dict[str, Any]) -> list[tuple[tuple[str, int], str, str]]:
+    """What the human told a run while it worked (`user.live_message`).
+
+    Kept even after the latest user turn: a live message changes course
+    mid-round, and the next agent in that round must know it did. It never
+    becomes the turn boundary itself — that stays the message that opened
+    the round.
+    """
+    items: list[tuple[tuple[str, int], str, str]] = []
+    for index, event in enumerate(session.get("events", [])):
+        if event.get("type") != "user.live_message":
+            continue
+        text = event.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        agent = event.get("agent") or "agent"
+        items.append(((event.get("timestamp") or "", index), "live", f"[User, to @{agent} while it worked]\n{text.strip()}"))
+    return items
+
+
 def _history_len(blocks: list[str]) -> int:
     return len("\n\n".join(blocks))
 
@@ -209,6 +229,7 @@ def compute_conversation_history(
     items.extend(
         item for item in _questions_asked(session) if not latest_user or item[0] < latest_user
     )
+    items.extend(_live_messages(session))
 
     items.sort(key=lambda item: item[0])
 

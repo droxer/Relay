@@ -40,6 +40,11 @@ def _steering(state: dict[str, Any]) -> bool:
     return state.get("steeringUntil", "") > datetime.now(UTC).isoformat()
 
 
+def live_pending(state: dict[str, Any]) -> bool:
+    """A message was handed to the live run and its computer has not answered yet."""
+    return (state.get("live") or {}).get("until", "") > datetime.now(UTC).isoformat()
+
+
 def _promote(state: dict[str, Any], message_id: str) -> None:
     if state.get("sending") or _steering(state):
         raise ValueError("This message is being sent. Wait for it to finish.")
@@ -209,6 +214,9 @@ class ThreadQueueDispatcher:
                 or session.get("deletionRequestedAt")
             ):
                 return None
+            if live_pending(state):
+                # Handed to the live run; its computer's answer decides what happens next.
+                return None
             if state.get("sending"):
                 if state["leaseUntil"] > datetime.now(UTC).isoformat():
                     return None
@@ -220,6 +228,10 @@ class ThreadQueueDispatcher:
                 if not queue_can_continue(session):
                     return None
                 message = state["messages"][0]
+            if (state.get("live") or {}).get("id") == message["id"]:
+                # Its computer never answered: send it after the run instead.
+                state.pop("live")
+                state.pop("steeringUntil", None)
             state["sending"] = message["id"]
             state["leaseUntil"] = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
             store.append_event(

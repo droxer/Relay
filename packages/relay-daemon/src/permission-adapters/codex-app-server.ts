@@ -15,11 +15,21 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { CodexExecEventTranslator, type ExecEvent } from "./codex-exec-events.js";
 import type { PermissionAnswers, PermissionQuestionItem } from "relay-core";
-import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
+import {
+  askBroker,
+  listenForLiveMessages,
+  runtimeEnv,
+  type LiveMessageHandler,
+  type LiveMessageListener,
+  type PermissionAnswer,
+  type PermissionQuestion,
+} from "./protocol.js";
 
 type Json = Record<string, unknown>;
 /** Asks about one request; `signal` fires once the turn is over and nobody can act on the answer. */
 type Ask = (question: PermissionQuestion, signal?: AbortSignal) => Promise<PermissionAnswer>;
+/** Starts listening for a person's live messages; undefined when the run has no broker. */
+type Listen = (handler: LiveMessageHandler) => LiveMessageListener | undefined;
 
 export interface CodexAdapterOptions {
   config: string[];
@@ -133,7 +143,7 @@ class RpcPeer {
  */
 export async function runCodexTurn(
   options: CodexAdapterOptions,
-  io: { codexBin?: string; emit(event: ExecEvent): void; ask?: Ask; signal?: AbortSignal },
+  io: { codexBin?: string; emit(event: ExecEvent): void; ask?: Ask; signal?: AbortSignal; listen?: Listen },
 ): Promise<number> {
   const ask = io.ask ?? ((question: PermissionQuestion, signal?: AbortSignal) => askBroker(question, process.env, signal));
   // A question still open when the turn ends hangs up, so the broker
@@ -163,12 +173,16 @@ export async function runCodexTurn(
   };
   // Only this run's thread finishes the run; a sub-agent's turn does not.
   let threadId: string | undefined;
+  // The turn a live message steers; `turn/steer` refuses any other.
+  let activeTurnId: string | undefined;
   const ownsThread = (params: Json): boolean => params.threadId === threadId;
   const peer = new RpcPeer(child, {
     notification: (method, params) => {
       if (method === "item/started" || method === "item/completed") rememberFileChange(record(params.item), fileChanges);
       emitAll(translator.notification(method, params));
+      if (method === "turn/started" && ownsThread(params)) activeTurnId = str(record(params.turn).id) || activeTurnId;
       if (method === "turn/completed" && ownsThread(params)) {
+        activeTurnId = undefined;
         settle(record(params.turn).status === "completed" ? 0 : 1);
       }
     },
@@ -191,6 +205,16 @@ export async function runCodexTurn(
   });
   const onAbort = (): void => settle(130);
   io.signal?.addEventListener("abort", onAbort, { once: true });
+  // A person's message joins the turn in progress at its next step.
+  const listener = (io.listen ?? listenForLiveMessages)(async (message) => {
+    if (settled || !threadId || !activeTurnId) throw new Error("Codex has no turn in progress to take the message.");
+    await peer.request("turn/steer", {
+      threadId,
+      expectedTurnId: activeTurnId,
+      input: [{ type: "text", text: message.text, text_elements: [] }],
+    });
+    return "steer";
+  });
 
   void (async () => {
     try {
@@ -215,7 +239,9 @@ export async function runCodexTurn(
         threadId,
         input: [{ type: "text", text: options.prompt, text_elements: [] }, ...(options.images ?? []).map((path) => ({ type: "localImage", path }))],
       });
-      translator.turnStarted(str(record(turn.turn).id));
+      const turnId = str(record(turn.turn).id);
+      translator.turnStarted(turnId);
+      if (!settled) activeTurnId = turnId;
     } catch (error) {
       io.emit({ type: "error", message: errorMessage(error) });
       settle(1);
@@ -226,6 +252,7 @@ export async function runCodexTurn(
     return await done;
   } finally {
     io.signal?.removeEventListener("abort", onAbort);
+    listener?.close();
     asks.abort();
     child.removeAllListeners("exit");
     stop();

@@ -2085,10 +2085,23 @@ without the tools, and the manager view reports
 
 Thread follow-up queues are database-backed `session.queue` events. The owner
 may `enqueue` text with a stable message `id`, `remove`, `edit` (take the message
-back into a local draft), `promote` a message to send next, `steer` to stop the
-current execution and send a message next, `pause`, or `resume`.
+back into a local draft), `promote` a message to send next, `steer` to send a
+message to the running agent now, `pause`, or `resume`.
 `import` accepts legacy browser messages in a paused queue. The response is
-`{ messages: [{ id, text, addressAgentIds? }], paused, sending?, error? }`.
+`{ messages: [{ id, text, addressAgentIds? }], paused, sending?, live?, error? }`.
+
+`steer` first hands the message to the live run when the run's Computer
+advertises `live-messages` and the message is for the agent that is working (not
+a team or another agent): the queue records `live: { id, commandId, until }`,
+holds the message from edits and other sends, and queues a `run.steer` command.
+The Computer's `run.steered` answer settles it — `delivered` removes the message
+from the queue and appends a `user.live_message` event (shown in the transcript
+as the person's message, marked as sent while the agent worked; it is not a new
+user turn, but later runs see it in their conversation history); `unavailable`
+or `failed` falls back to stopping the run and sending the message next. A
+message with no answer before `until` (two minutes) is sent after the run like
+any other queued follow-up. Otherwise `steer` stops the current execution and
+sends the message next.
 Enqueue retries use durable receipts, including after a message has been sent.
 There are at most 20 messages, each at most 100,000 characters. Leading mentions
 resolve when enqueued; runtime placement and authorization are checked again

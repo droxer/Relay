@@ -141,6 +141,21 @@ it("requests Stop & send next in one action and localizes failures", async () =>
   expect(hook.result.current.error).toBe("queue.errors.change_failed");
 });
 
+it("shows a message handed to the live run as sending until its computer answers", async () => {
+  const until = new Date(Date.now() + 60_000).toISOString();
+  vi.mocked(apiJson).mockResolvedValue({ messages: [{ id: "q1", text: "Use staging" }], paused: false, live: { id: "q1", until } } as any);
+  const hook = open();
+  await waitFor(() => expect(hook.result.current.sending).toBe("q1"));
+});
+
+it("treats a handed-over message whose answer window passed as queued again", async () => {
+  const until = new Date(Date.now() - 1_000).toISOString();
+  vi.mocked(apiJson).mockResolvedValue({ messages: [{ id: "q1", text: "Use staging" }], paused: false, live: { id: "q1", until } } as any);
+  const hook = open();
+  await waitFor(() => expect(hook.result.current.messages).toHaveLength(1));
+  expect(hook.result.current.sending).toBeUndefined();
+});
+
 it("promotes a message without requesting Stop when the thread is idle", async () => {
   const hook = open("owner:thread", false);
   await waitFor(() => expect(apiJson).toHaveBeenCalled());

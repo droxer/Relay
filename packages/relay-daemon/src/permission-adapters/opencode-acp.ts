@@ -12,7 +12,16 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { AcpConnection, asRecord, contentText, MethodNotFound, permissionOptions, selected, withAcpChild, type JsonRpcMessage } from "./acp-connection.js";
-import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion, type PermissionQuestionKind } from "./protocol.js";
+import {
+  askBroker,
+  listenForLiveMessages,
+  runtimeEnv,
+  type LiveMessageHandler,
+  type LiveMessageListener,
+  type PermissionAnswer,
+  type PermissionQuestion,
+  type PermissionQuestionKind,
+} from "./protocol.js";
 
 /** Asks about one request; `signal` fires once the prompt is over and nobody can act on the answer. */
 export type AskBroker = (question: PermissionQuestion, signal?: AbortSignal) => Promise<PermissionAnswer>;
@@ -35,7 +44,12 @@ export interface OpenCodeAcpIo {
   ask: AskBroker;
   signal?: AbortSignal;
   env?: NodeJS.ProcessEnv;
+  /** Starts listening for a person's live messages; defaults to the run's broker. */
+  listen?: Listen;
 }
+
+/** Starts listening for live messages; undefined when the run has no broker. */
+export type Listen = (handler: LiveMessageHandler) => LiveMessageListener | undefined;
 
 interface ToolState {
   status: "pending" | "running" | "completed" | "error";
@@ -191,7 +205,11 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
       },
       async (connection) => {
         try {
-          const stopReason = await runPrompt(connection, options);
+          const stopReason = await runPrompt(
+            connection,
+            options,
+            io.listen ?? ((handler) => listenForLiveMessages(handler, io.env ?? process.env)),
+          );
           if (stopReason !== "end_turn") {
             reportFailure(io, writer, `OpenCode stopped the turn (${stopReason}).`);
             return 1;
@@ -213,7 +231,7 @@ function reportFailure(io: OpenCodeAcpIo, writer: RunJsonWriter, message: string
   io.stderr.write(`error: failed to run prompt: ${message}\n`);
 }
 
-async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions): Promise<string> {
+async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions, listen: Listen): Promise<string> {
   await connection.request("initialize", {
     protocolVersion: ACP_PROTOCOL_VERSION,
     // OpenCode runs its own tools; the adapter offers no file system or terminal.
@@ -225,11 +243,34 @@ async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions)
   if (options.model) {
     await connection.request("session/set_config_option", { sessionId, configId: "model", value: options.model });
   }
-  const result = asRecord(await connection.request("session/prompt", {
-    sessionId,
-    prompt: [{ type: "text", text: options.prompt }],
-  }));
-  return typeof result.stopReason === "string" ? result.stopReason : "unknown";
+  // ACP has no steer. A person's message ends the turn in flight
+  // (`session/cancel`) and becomes the next prompt of the same session, so
+  // OpenCode keeps everything it did; the run ends with the last turn's reason.
+  const queued: string[] = [];
+  let inFlight = false;
+  let finished = false;
+  const listener = listen(async (message) => {
+    if (finished) throw new Error("OpenCode has no turn in progress to take the message.");
+    queued.push(message.text);
+    if (inFlight) connection.notify("session/cancel", { sessionId });
+    return "interrupt";
+  });
+  try {
+    let text = options.prompt;
+    for (;;) {
+      inFlight = true;
+      const result = asRecord(await connection.request("session/prompt", {
+        sessionId,
+        prompt: [{ type: "text", text }],
+      }));
+      inFlight = false;
+      if (queued.length === 0) return typeof result.stopReason === "string" ? result.stopReason : "unknown";
+      text = queued.splice(0).join("\n\n");
+    }
+  } finally {
+    finished = true;
+    listener?.close();
+  }
 }
 
 function outputText(update: Record<string, unknown>): string {

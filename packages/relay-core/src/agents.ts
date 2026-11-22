@@ -40,6 +40,21 @@ export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "openc
 /** Whether a local, native-policy run of this runtime can ask a person before a tool use. */
 export type PermissionPromptSupport = { kind: "none" } | { kind: "adapter"; adapter: PermissionPromptAdapter };
 
+/**
+ * What a message a person sends into a live run does, through the run's adapter:
+ * - `steer`: joins the turn in progress at its next step (Codex `turn/steer`,
+ *   Pi `sendUserMessage(…, { deliverAs: "steer" })`).
+ * - `follow-up`: the runtime finishes its turn, then answers the message in the
+ *   same process and session (Claude's stream-json input queue).
+ * - `interrupt`: the turn in progress stops and the message starts the next one
+ *   in the same session (OpenCode ACP `session/cancel` + `session/prompt`).
+ * None of them ends the process, so the runtime keeps its full context.
+ */
+export type LiveMessageDelivery = "steer" | "follow-up" | "interrupt";
+
+/** Whether a live run of this runtime can take a message before it exits. Only adapter-launched runs can. */
+export type LiveMessageSupport = { kind: "none" } | { kind: "adapter"; delivery: LiveMessageDelivery };
+
 export interface AgentDefinition {
   name: AgentName;
   /** Human-facing name used in readiness output and avatars. */
@@ -58,6 +73,8 @@ export interface AgentDefinition {
   skillDelivery: SkillDelivery;
   /** How live permission prompts reach a person on a local, native-policy run. */
   permissionPrompts: PermissionPromptSupport;
+  /** How a message reaches a live run; the same adapter that carries its permission prompts carries it. */
+  liveMessages: LiveMessageSupport;
   preflight: { label: string; command(): string };
 }
 
@@ -80,6 +97,9 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     },
     // Claude asks through its --permission-prompt-tool MCP hook.
     permissionPrompts: { kind: "adapter", adapter: "claude-mcp" },
+    // `-p --input-format stream-json` queues a mid-turn message and answers it
+    // as the next turn of the same session (verified on Claude Code 2.1.323).
+    liveMessages: { kind: "adapter", delivery: "follow-up" },
     preflight: {
       label: "Claude Code auth",
       command: () => runAsAgent(
@@ -108,6 +128,8 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     // posture Claude's default has: every command and edit asks a person;
     // reads pass.
     permissionPrompts: { kind: "adapter", adapter: "pi-extension" },
+    // The extension calls `pi.sendUserMessage(text, { deliverAs: "steer" })` (Pi 0.73.1).
+    liveMessages: { kind: "adapter", delivery: "steer" },
     preflight: { label: "Pi coding agent", command: buildPiPreflightCommand },
   },
   codex: {
@@ -128,6 +150,8 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     },
     // `codex exec` never asks; approvals exist only over `codex app-server`.
     permissionPrompts: { kind: "adapter", adapter: "codex-app-server" },
+    // app-server's `turn/steer` adds input to the active turn (codex-cli 0.171.0).
+    liveMessages: { kind: "adapter", delivery: "steer" },
     preflight: {
       label: "Codex auth",
       command: () => runAsAgent(
@@ -152,6 +176,9 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     // OpenCode asks through `opencode acp`'s session/request_permission. Its
     // `always` choice is never sent: the broker grants one approval at a time.
     permissionPrompts: { kind: "adapter", adapter: "opencode-acp" },
+    // ACP has no steer: `session/cancel` ends the turn and `session/prompt`
+    // continues the same session with the message.
+    liveMessages: { kind: "adapter", delivery: "interrupt" },
     preflight: { label: "OpenCode", command: () => runAsAgent(nativeWindowsExecution() ? 'await relayRun(["opencode", "--version"]); await relayRun(["opencode", "auth", "list"], { capture: true, discardStdout: true });' : "opencode --version && opencode auth list > /dev/null") },
   },
 };
