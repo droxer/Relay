@@ -206,7 +206,12 @@ for (const theme of ["light", "dark"] as const) {
         await page.getByRole("combobox", { name, exact: true }).click();
         const popup = page.locator('[data-slot="select-content"][data-open]');
         await check(popup, popup.getByRole("option").first());
+        /* The popup opens over the trigger, under the resting pointer, so a
+           hover can take the highlight back from the keyboard. Park the
+           pointer and confirm End landed before Enter commits it. */
+        await page.mouse.move(0, 0);
         await page.keyboard.press("End");
+        await expect(popup.getByRole("option", { name: "Second option" })).toHaveAttribute("data-highlighted", "");
         await page.keyboard.press("Enter");
         await expect(page.getByRole("combobox", { name, exact: true })).toContainText("Second option");
       }
