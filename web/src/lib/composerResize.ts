@@ -3,7 +3,7 @@ const TEXTAREA_MAX_ROWS = 6;
 export function resizeComposerTextarea(el: HTMLTextAreaElement | null): void {
   if (!el) return;
   const style = getComputedStyle(el);
-  const fontSize = parseFloat(style.fontSize) || 15;
+  const fontSize = parseFloat(style.fontSize) || 14;
   const lineHeight = Number.isFinite(parseFloat(style.lineHeight))
     ? parseFloat(style.lineHeight)
     : fontSize * 1.5;

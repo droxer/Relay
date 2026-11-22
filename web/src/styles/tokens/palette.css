@@ -638,9 +638,9 @@
   /* Compact application typography (2026-10-02; sizes and line boxes re-cut
      for Space Grotesk 2026-11-22): 12/18 timestamps and status meta, ONE
      14/22 reading size for navigation, lists, tables and forms, 16/24 panel
-     and record titles, 16/26 agent conversation, 24/32 page titles and
+     and record titles, 14/23 agent conversation, 22/30 page titles and
      numerals, 28px display; code, commands and logs read 13/20 in the mono.
-     The ladder is 12/14/16/24/28.
+     The ladder is 12/14/16/22/28.
 
      There is one reading rung, not three. --fs-3 and --fs-4 survive only as
      names for the jobs call sites already ask for (dense prose, body copy),
@@ -671,11 +671,11 @@
      in-message heading ladder, and the composer draft read from these two
      tokens, so the size stays one decision. Document previews (.doc-prose)
      keep --fs-document and --leading-prose. */
-  /* 2026-11-22: the conversation is the one surface read at length, so it
-     takes the 16px title size on a 26px line (16/26) while lists and forms
-     stay on the 14px rung. */
-  --fs-transcript: var(--fs-title);          /* 16px */
-  --leading-transcript: 1.625;               /* 26px at 16px */
+  /* 2026-11-22: 16/26 in Space Grotesk read oversized — the face is wide,
+     so the transcript returns to the 14px reading rung on a 23px line
+     (14/23), a step looser than lists and forms (14/22) for long reading. */
+  --fs-transcript: var(--fs-2);              /* 14px */
+  --leading-transcript: 1.6429;              /* 23px at 14px */
   /* Code set inside the transcript. A monospace face reads a size up from
      the sans at the same px, so code sits on the 13px mono size everywhere —
      transcript chips and command lines as well as the file viewer, diffs and
@@ -686,7 +686,7 @@
   --fs-title: 1.1429rem;   /* 16px — section, pane, drawer, and dialog titles */
   --fs-heading: var(--fs-title);
   --fs-title-lg: var(--fs-title);
-  --fs-5: 1.7143rem; /* 24px — page titles, KPI numerals */
+  --fs-5: 1.5714rem; /* 22px — page titles, KPI numerals (24px shouted in Space Grotesk 600) */
   --fs-6: 2rem;      /* 28px — display: section-opener display */
   /* Hero display — the one place a headline owns the viewport (login, empty
      section openers). A clamp, not a rung: it tracks the viewport between the
@@ -711,10 +711,10 @@
   --leading-caps: 1.5;
   /* 22px on the 14px reading rung (14/22). */
   --leading-normal: 1.5714;
-  /* Fixed line boxes for the title, page and code tiers: 16/24, 24/32 and
+  /* Fixed line boxes for the title, page and code tiers: 16/24, 22/30 and
      13/20 (2026-11-22). */
   --leading-title: 1.5;
-  --leading-page: 1.3333;
+  --leading-page: 1.3636;
   --leading-code: 1.5385;
   --leading-loose: 1.65;
   /* Long-form prose in document previews (.doc-prose). One step above loose

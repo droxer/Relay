@@ -83,7 +83,7 @@ describe("application typography roles", () => {
       ["--fs-2", 14],
       ["--fs-code", 13],
       ["--fs-title", 16],
-      ["--fs-5", 24],
+      ["--fs-5", 22],
       ["--fs-6", 28],
     ]);
     for (const [name, expected] of expectedPixels) {
@@ -117,23 +117,30 @@ describe("application typography roles", () => {
     assert.ok(Math.abs(Number(hero[2]) * 14 - 36) < 0.01, "the hero ceiling should resolve to 36px");
   });
 
+  it("synthesizes italic but never weight, because neither face ships an italic", () => {
+    const base = readWebSource("styles/tokens/base.css");
+    assert.doesNotMatch(base, /font-synthesis:\s*none/, "a blanket font-synthesis: none renders every italic upright");
+    assert.match(base, /font-synthesis-weight:\s*none;/);
+    assert.match(base, /font-synthesis-style:\s*auto;/);
+  });
+
   it("pins each tier's line box to the Relay type table", () => {
-    // 2026-11-22: page 24/32, panel and record titles 16/24, conversation
-    // 16/26, lists, tables and forms 14/22, meta 12/18, code 13/20.
+    // 2026-11-22: page 22/30, panel and record titles 16/24, conversation
+    // 14/23, lists, tables and forms 14/22, meta 12/18, code 13/20.
     const palette = readWebSource("styles/tokens/palette.css");
     const roles = readWebSource("styles/tokens/roles.css");
     const ratio = (name: string) => Number(palette.match(new RegExp(`${name}:\\s*([\\d.]+);`))?.[1]);
     for (const [name, size, lineBox] of [
-      ["--leading-page", 24, 32],
+      ["--leading-page", 22, 30],
       ["--leading-title", 16, 24],
-      ["--leading-transcript", 16, 26],
+      ["--leading-transcript", 14, 23],
       ["--leading-normal", 14, 22],
       ["--leading-caps", 12, 18],
       ["--leading-code", 13, 20],
     ] as const) {
       assert.ok(Math.abs(ratio(name) * size - lineBox) < 0.05, `${name} should give ${size}/${lineBox}`);
     }
-    assert.match(palette, /--fs-transcript:\s*var\(--fs-title\);/);
+    assert.match(palette, /--fs-transcript:\s*var\(--fs-2\);/);
     assert.match(roles, /--type-page:\s+600 var\(--fs-5\)\/var\(--leading-page\)/);
     assert.match(roles, /--type-title:\s+600 var\(--fs-title-lg\)\/var\(--leading-title\)/);
     assert.match(roles, /--type-title-content:\s+600 var\(--fs-title\)\/var\(--leading-title\)/);
