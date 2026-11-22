@@ -55,10 +55,14 @@ describe("apiJson", () => {
       leadAgentId: lead.id, defaultWorkflowId: custom.id, workflowOptions: [custom] };
     let calls = 0;
     globalThis.fetch = (async (input: RequestInfo | URL, options?: RequestInit) => {
-      assert.equal(String(input), "/api/v1/teams?view=summary&format=compact");
+      const url = new URL(String(input), "http://relay.local");
+      assert.equal(url.pathname, "/api/v1/teams");
+      assert.equal(url.searchParams.get("view"), "summary");
+      assert.equal(url.searchParams.get("format"), "compact");
       calls++;
       if (calls === 2) {
-        assert.equal(new Headers(options?.headers).get("if-none-match"), 'W/"roster"');
+        assert.equal(url.searchParams.get("relayRevision"), 'W/"roster"');
+        assert.equal(new Headers(options?.headers).get("if-none-match"), null);
         return new Response(null, { status: 304 });
       }
       return Response.json({
@@ -936,7 +940,7 @@ describe("thread collaboration messages", () => {
     }
 
     assert.deepEqual(calls, [{
-      url: "/api/v1/threads/ses_1/messages",
+      url: "/api/v1/threads/ses_1/messages?view=compact",
       body: {
         text: "@Support check this",
         intent: "review",

@@ -9,7 +9,7 @@ import { isTerminalSessionStatus } from "../lib/sessionEventStream";
 import { readSessionDetails, removeSessionDetail, writeSessionDetail } from "../lib/sessionDetailCache";
 import { workflowSnapshotDue } from "../lib/workflowRuns";
 import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
-import { THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
+import { cacheThreadQueue, EMPTY_THREAD_QUEUE } from "../lib/threadQueue";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
@@ -46,10 +46,11 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
     type Hydration = { status: RelaySession["status"]; hydratedAt: number };
     let initial = queryClient.getQueryData<Hydration>(hydrationKey);
     let current = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)?.find(s => s.id === sessionId);
-    const primeQueue = (snapshot: RelaySession, updatedAt: number) => {
-      const key = [...THREAD_QUEUE_QUERY_KEY, sessionId];
-      if (snapshot.transcriptRevision && queryClient.getQueryData(key) === undefined) {
-        queryClient.setQueryData(key, snapshot.messageQueue ?? { messages: [], paused: false }, { updatedAt });
+    const primeQueue = (snapshot: RelaySession) => {
+      if (snapshot.transcriptRevision) {
+        cacheThreadQueue(queryClient, sessionId, {
+          ...(snapshot.messageQueue ?? EMPTY_THREAD_QUEUE), eventCount: observedSessionEventCount(snapshot),
+        });
       }
     };
     if (!initial && ownerId) {
@@ -67,7 +68,7 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
     }
     // Metadata alone is insufficient if the list evicted the actual detail.
     if (!current || sessionTrailsSummary(current)) initial = undefined;
-    if (current && initial) primeQueue(current, initial.hydratedAt);
+    if (current && initial) primeQueue(current);
     let hydratedStatus = forceRetry.current ? undefined : initial?.status;
     forceRetry.current = false;
     setReadySessionId(hydratedStatus === undefined ? undefined : sessionId);
@@ -104,7 +105,7 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
         if (controller.signal.aborted) return;
         hydratedStatus = snapshot.status;
         hydratedAt = Date.now();
-        primeQueue(snapshot, hydratedAt);
+        primeQueue(snapshot);
         queryClient.setQueryData(hydrationKey, { status: snapshot.status, hydratedAt });
         setFailure(null);
         setReadySessionId(sessionId);

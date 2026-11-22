@@ -3,8 +3,9 @@
 The web UI polls a handful of list endpoints every few seconds; most answers
 are byte-identical to the previous one. These responses carry a weak ETag and
 ``private, no-cache``, so the browser keeps its copy and revalidates it, and an
-unchanged list costs a 304 instead of the full JSON. The body is still built
-per request: this saves the transfer and the client's work, not the query.
+unchanged list costs a 304 instead of the full JSON. Routes that can validate
+from stored revisions handle conditional reads before building the body.
+The middleware derives a validator from the body for the other lists.
 
 Only lists free of secrets are allowlisted, because ``no-cache`` lets the
 browser store them (``/sandboxes`` can carry a sandbox token, so it stays
@@ -15,6 +16,7 @@ responses it compresses.
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
 
 from starlette.requests import Request
@@ -28,6 +30,17 @@ POLLED_LISTS = frozenset(
     for path in ("/threads", "/tasks", "/projects", "/daemon-nodes", "/agents", "/teams")
 )
 CACHE_CONTROL = b"private, no-cache"
+_BROWSER_ETAG = re.compile(r'W/"[0-9a-f]{32}"')
+
+
+def request_validator(request: Request) -> bytes:
+    # Browser requests can send Relay's opaque validator in the URL to stay
+    # CORS-simple. Standard conditional requests still use If-None-Match.
+    header = request.headers.get("if-none-match")
+    if header is not None:
+        return header.encode("latin-1")
+    revision = request.query_params.get("relayRevision", "")
+    return revision.encode("ascii") if _BROWSER_ETAG.fullmatch(revision) else b""
 
 
 def weak_etag(body: bytes) -> bytes:
@@ -45,7 +58,7 @@ def private_conditional_json(request: Request, content: dict[str, Any]) -> Respo
     response = JSONResponse(content)
     etag = weak_etag(bytes(response.body))
     headers = {"Cache-Control": "no-store", "ETag": etag.decode("ascii")}
-    if (validator := request.headers.get("if-none-match")) and etag_matches(validator.encode("latin-1"), etag):
+    if (validator := request_validator(request)) and etag_matches(validator, etag):
         return Response(status_code=304, headers=headers)
     response.headers.update(headers)
     return response
@@ -60,14 +73,18 @@ class ConditionalGetMiddleware:
         if scope["type"] != "http" or scope["method"] != "GET" or scope["path"] not in self.paths:
             await self.app(scope, receive, send)
             return
-        if_none_match = dict(scope.get("headers", [])).get(b"if-none-match")
+        if_none_match = request_validator(Request(scope))
         start: Message | None = None
         chunks: list[bytes] = []
 
         async def buffered(message: Message) -> None:
             nonlocal start
             if message["type"] == "http.response.start":
-                start = message
+                # A route with a revision-first validator has already handled the precondition.
+                if any(key == b"etag" for key, _ in message.get("headers", [])):
+                    await send(message)
+                else:
+                    start = message
                 return
             if message["type"] != "http.response.body" or start is None:
                 await send(message)

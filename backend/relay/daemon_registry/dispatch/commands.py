@@ -518,10 +518,10 @@ class CommandQueueMixin(RegistryState):
         records = self.daemon_store.take_queued_commands(
             sandbox_id, limit=limit, lease_seconds=lease_seconds, admit_runs=admit_runs
         )
-        if recover_delivery and admit_runs and has_capability(sandbox, 'durable-reports'):
-            already = {record['id'] for record in records}
-            recovered = self.daemon_store.recover_start_deliveries(sandbox_id, limit=limit, lease_seconds=lease_seconds)
-            records.extend(record for record in recovered if record['id'] not in already and len(records) < limit)
+        if len(records) < limit and recover_delivery and admit_runs and has_capability(sandbox, 'durable-reports'):
+            records.extend(self.daemon_store.recover_start_deliveries(
+                sandbox_id, limit=limit - len(records), lease_seconds=lease_seconds,
+            ))
         records = [
             record
             for record in records

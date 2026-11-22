@@ -20,6 +20,7 @@ from ..actors import get_session_for_actor, get_session_header_for_actor, reques
 from ..bodies import json_body, string_field
 from ..schemas import ThreadMessageBody, openapi_body, parse_request_body
 from .lifecycle import steer_thread_queue
+from .transcript import compact_message_snapshot
 
 router = APIRouter()
 
@@ -177,7 +178,10 @@ async def submit_thread_message(
             ),
             actor,
         )
-        return {**session, "execution": await run_in_threadpool(ctx.execution_lifecycle.status, session)}
+        execution = await run_in_threadpool(ctx.execution_lifecycle.status, session)
+        if request.query_params.get("view") == "compact":
+            session = await run_in_threadpool(compact_message_snapshot, session)
+        return {**session, "execution": execution}
     except CollaborationError as error:
         if error.status == 409:
             logger.info(
@@ -228,7 +232,10 @@ async def request_thread_recovery(
 def read_thread_queue(thread_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     actor = request_actor(request, ctx.auth_store)
     session = get_session_header_for_actor(ctx.session_store, thread_id, actor)
-    return queue_state(session)
+    state = queue_state(session)
+    if request.query_params.get("view") == "versioned":
+        state["eventCount"] = session["eventCount"]
+    return state
 
 
 @router.post("/threads/{thread_id}/queue")
@@ -276,6 +283,14 @@ async def update_thread_queue(thread_id: str, request: Request, ctx: AppContextD
             "This message was already changed on another device.": "queue_changed",
         }
         raise HTTPException(409, {"code": codes.get(str(error), "queue_change_failed"), "message": str(error)}) from error
+    latest = None
+    if request.query_params.get("view") == "versioned":
+        # Pair the queue and revision from one read. A newer writer can win
+        # this read, which is preferable to acknowledging an already stale queue.
+        try:
+            latest = await run_in_threadpool(ctx.session_store.get_session_header, thread_id)
+        except KeyError:
+            pass
     if action in ("promote", "steer") and state.get("sendRequested"):
         ThreadQueueDispatcher(ctx).follow_requested_send(thread_id)
-    return state
+    return {**queue_state(latest), "eventCount": latest["eventCount"]} if latest else state

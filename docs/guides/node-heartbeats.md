@@ -70,11 +70,11 @@ and do not append routine renewal events; command delivery and terminal
 transitions retain their events. Lease responses report the actual persisted
 expiry, so execution watchdogs never assume an extension that did not happen.
 
-Transport diagnostics are still sampled locally every second. The daemon sends
-health transitions immediately, coalesces activity changes to at most one report
-per 5 seconds, and refreshes an unchanged healthy snapshot every 30 seconds.
-Unresolved incidents refresh every 5 seconds to preserve recovery/progress
-observations. Failed deliveries back off from 5 seconds to a maximum of 60
+Transport diagnostics are sampled locally every second. The daemon sends
+health transitions immediately and refreshes steady snapshots every 30 seconds,
+including changes to run IDs or pending report counts. Once a Computer is
+healthy during an unresolved incident, it refreshes every 5 seconds so the
+backend can confirm recovery and progress. Failed deliveries back off from 5 seconds to a maximum of 60
 seconds, honor `Retry-After`, and warn at most once per 30 seconds. A successful
 upload resets the backoff. Sampling and heartbeat probes continue independently.
 Transport errors include nested DNS/TLS/socket codes when available, without
@@ -241,9 +241,9 @@ protection and remains visible without crashing the poll loop.
 
 Output batches are retained before sending and live output cannot pass an
 unacknowledged earlier sequence for the same command lease. Replay sends the
-pending sequences in order. Concurrent live/replay copies may arrive late, but
-only after a successful copy allowed the next sequence to proceed; backend
-per-stream high-water deduplication then suppresses those duplicates. A failed
+pending sequences in order. Each retained report has one in-flight sender.
+The sender waits up to 15 seconds for an acknowledgement before retrying, and
+the backend deduplicates retries by their durable receipts. A failed
 output upload does not prevent terminal evidence from releasing the run;
 retained output can be replayed after completion.
 
@@ -421,6 +421,8 @@ Only one daemon can hold the private state directory for admission and replay.
 A second daemon using the same directory exits before registration, and a
 replacement can reclaim the lock after its prior owner exits.
 An unacknowledged start may be redelivered with its original command and lease.
+The backend waits up to five seconds between delivery attempts, capped at a
+third of the requested lease duration.
 The daemon's execution journal distinguishes preparation from admission. A
 prepared entry can resume on matching redelivery or be acknowledged as
 cancelled, since no process could have launched. Once admission commits, the

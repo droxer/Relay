@@ -384,6 +384,10 @@ def test_plain_stop_pauses_the_queue_and_keeps_the_messages(monkeypatch):
         asyncio.run(ThreadQueueDispatcher(app.state.context).dispatch(tid))
         assert app.state.registry.take_commands(here["id"], "token_node_here") == []
         assert client.get(f"{path}/queue").json() == {"messages": [queued], "paused": True}
+        assert client.get(f"{path}/queue?view=versioned").json() == {
+            "messages": [queued], "paused": True,
+            "eventCount": app.state.session_store.session_version(tid),
+        }
 
 
 def test_steer_keeps_the_selected_agent_instead_of_the_whole_room(monkeypatch):

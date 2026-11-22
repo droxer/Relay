@@ -19,7 +19,7 @@ import type {
   TasksResponse,
   TaskReview,
 } from "../types.ts";
-import { apiJson, fetchWithSession, privateConditionalJson, readApiResponse, type PrivateResponseCache } from "./client.ts";
+import { apiJson, fetchWithSession, privateConditionalJson, readApiResponse, revisionPath, type PrivateResponseCache } from "./client.ts";
 import type { IssueQueue } from "../lib/issueQueues.ts";
 import type { TaskWorkflowStage } from "../lib/taskFlow.ts";
 import type { RoutineListState } from "../lib/routine.ts";
@@ -39,12 +39,11 @@ export async function listTasks(signal?: AbortSignal, cache?: TaskListCache): Pr
   if (cache?.computerId) params.set("computerId", cache.computerId);
   const path = `/tasks?${params}`;
   if (!cache) return apiJson<TasksResponse>(path, { signal, guard: tasksGuard });
-  const response = await fetchWithSession(relayApiEndpoint(path), {
+  const response = await fetchWithSession(relayApiEndpoint(revisionPath(path, cache.data ? cache.etag : undefined)), {
     signal,
     credentials: "include",
     // Handle revalidation ourselves so a 304 retains the parsed object too.
     cache: "no-store",
-    headers: cache.etag && cache.data ? { "If-None-Match": cache.etag } : {},
   });
   if (response.status === 304 && cache.data) return cache.data;
   const data = await readApiResponse(response, `GET ${path}`, tasksGuard);

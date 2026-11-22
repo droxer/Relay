@@ -6,7 +6,7 @@ import type {
   ThreadMessageInput,
   ThreadRecoveryInput,
 } from "../types.ts";
-import { apiJson, fetchWithSession, RelayApiError, RelayApiShapeError, readApiResponse } from "./client.ts";
+import { apiJson, fetchWithSession, RelayApiError, RelayApiShapeError, readApiResponse, revisionPath } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
@@ -28,11 +28,10 @@ export async function listSessionSummaries(
   if (!headCache) return apiJson(path, { signal, guard: sessionSummariesGuard });
   const cached = headCache.page;
   const validator = cached ? headCache.etag : undefined;
-  const response = await fetchWithSession(relayApiEndpoint(path), {
+  const response = await fetchWithSession(relayApiEndpoint(revisionPath(path, validator)), {
     signal,
     credentials: "include",
     cache: validator ? "no-store" : "default",
-    headers: validator ? { "If-None-Match": validator } : {},
   });
   if (response.status === 304 && cached) return cached;
   const result = await readApiResponse(response, `GET ${path}`, sessionSummariesGuard);
@@ -63,16 +62,13 @@ export async function getSession(sessionId: string, signal?: AbortSignal, cache?
 
   const previous = cache.snapshot?.id === sessionId ? cache.snapshot : undefined;
   const endpoint = `${path}?view=transcript&window=compact`;
-  const response = await fetchWithSession(relayApiEndpoint(endpoint), {
+  const knownEvents = previous && cache.eventsRevision
+    ? `${previous.eventStart ?? 0}:${previous.events.length}:${cache.eventsRevision}`
+    : undefined;
+  const response = await fetchWithSession(relayApiEndpoint(revisionPath(endpoint, previous ? cache.etag : undefined, knownEvents)), {
     signal,
     credentials: "include",
     cache: "no-store",
-    headers: {
-      ...(previous && cache.etag ? { "If-None-Match": cache.etag } : {}),
-      ...(previous && cache.eventsRevision
-        ? { "X-Relay-Thread-Events": `${previous.eventStart ?? 0}:${previous.events.length}:${cache.eventsRevision}` }
-        : {}),
-    },
   });
   if (response.status === 304 && previous) return previous;
 
@@ -185,7 +181,7 @@ export function submitThreadMessage(
   sessionId: string,
   input: ThreadMessageInput,
 ): Promise<RelaySession> {
-  return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/messages`, {
+  return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/messages?view=compact`, {
     method: "POST",
     body: {
       text: input.text,

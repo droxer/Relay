@@ -417,12 +417,20 @@ omits execution briefs from the snapshot. The default window and history pages
 budget 384 KiB for events. Every window admits its newest event, even if that
 event exceeds the budget. `eventCount` is the exclusive end sequence. Send
 `before=<eventStart>` to get the preceding window. A subsequent snapshot request can send
-`X-Relay-Thread-Events: <start>:<count>:<eventsRevision>` to reuse the matching
-prefix of a window. `eventOffset` identifies the first event returned. The
+`relayEvents=<start>:<count>:<eventsRevision>` or the equivalent header
+`X-Relay-Thread-Events` to reuse the matching prefix of a window. A supported
+browser read can send the previous ETag as `relayRevision` to revalidate
+with a CORS-simple GET. Standard `If-None-Match` also works.
+`eventOffset` identifies the first event returned. The
 server sends a new window starting at `eventStart` if older events changed
 or the window moved. An `If-None-Match` matching the whole snapshot returns
 `304` after access is checked. Transcript responses use `no-store` and the
 browser retains validators in its per-Account query cache.
+
+`POST /api/v1/threads/{id}/messages?view=compact` returns execution state
+with the bounded recent transcript. Queue reads and writes with `view=versioned` include the
+Thread's current `eventCount` so a poll or write response can reconcile with
+newer queue events received through SSE.
 
 `GET /api/v1/threads/{id}?view=workflow` returns the Thread's `id`,
 `ownerUserId`, `status`, `workflowRuns`, and `activeWorkflowRunId` for
@@ -1991,6 +1999,8 @@ unchanged for compatibility.
   through the ordinary Thread composer.
 - `GET /api/v1/projects/{id}/manager/overview` returns live Project context,
   complete task counts, recent tasks, capacity, and retrieval coverage.
+- `GET /api/v1/projects/{id}/manager/proposals?threadId={threadId}` returns the
+  most recent 50 proposals scoped to the owner's requested Project Thread.
 - `POST /api/v1/projects/{id}/manager/proposals/{proposalId}/apply` accepts an
   `idempotencyKey`, optional `expectedRevision`, optional `operationIds`, and an
   optional `fields` map keyed by operation ID. It atomically applies selected

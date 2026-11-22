@@ -200,3 +200,40 @@ def test_weak_comparison_accepts_either_form_and_lists():
     assert etag_matches(b'W/"other", ' + etag, etag)
     assert etag_matches(b"*", etag)
     assert not etag_matches(b'W/"other"', etag)
+
+
+def test_browser_validator_revalidates_with_a_simple_get(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    path = "/api/v1/threads"
+    initial = client.get(path, params={"view": "summary"})
+    unchanged = client.get(path, params={
+        "view": "summary", "relayRevision": initial.headers["etag"],
+    })
+    assert unchanged.status_code == 304
+    assert unchanged.content == b""
+    client.post("/api/v1/auth/logout")
+    assert client.get(path, params={"relayRevision": initial.headers["etag"]}).status_code == 401
+
+
+def test_unchanged_thread_page_skips_building_summaries(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    client.post("/api/v1/threads", json={"taskGoal": "Write the brief"})
+    path = "/api/v1/threads?view=summary&limit=20&include=activity"
+    initial = client.get(path)
+    validator = {"If-None-Match": initial.headers["etag"]}
+
+    def unexpected_page(**_kwargs):
+        raise AssertionError("An unchanged thread list must skip building summaries")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(client.app.state.session_store, "list_session_summary_page", unexpected_page)
+        assert client.get(path, headers=validator).status_code == 304
+
+    task = client.post("/api/v1/tasks", json={"title": "Needs review"}).json()
+    client.app.state.task_store.update_task(task["id"], {"status": "review"})
+    activity_changed = client.get(path, headers=validator)
+    assert activity_changed.status_code == 200
+    assert activity_changed.json()["homeTaskNeedsYou"] == 1
+
+    assert client.post("/api/v1/threads", json={"taskGoal": "New thread"}).status_code == 201
+    assert client.get(path, headers={"If-None-Match": activity_changed.headers["etag"]}).status_code == 200

@@ -26,6 +26,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
         body={threadId,agentId:agent.id};
       }
       if(path.endsWith('/manager')) {managerReads++;body={project,manager:{agentId:'ada',agentName:'Ada',threadId:'manager-thread',toolsAvailable:true,reason:null,candidates:[{id:'ada',displayName:'Ada'}]},proposals:[proposal]};}
+      if(path.endsWith('/manager/proposals')) body={proposals:searchParams.get('threadId')===proposal.threadId?[proposal]:[]};
       const thread=sessions.find(item=>path.endsWith(`/threads/${item.id}`));
       if(thread) body=thread;
       if(path.endsWith('/messages') && method==='POST') {sent++;body=session;}
@@ -92,6 +93,7 @@ test('manager handover replaces a saved target when reopening the normal Thread'
   if(path.endsWith('/auth/me'))body={authenticated:true,user:{id:'u',userId:'u',username:'Fei',role:'user',theme:'light',language:'en'}};
   if(path.endsWith('/threads/manager-thread'))body=session;
   if(path.endsWith('/manager'))body={project,manager:{agentId:'bea',agentName:'Bea',threadId:'manager-thread',reason:null,toolsAvailable:true,candidates:agents},proposals:[]};
+  if(path.endsWith('/manager/proposals'))body={proposals:[]};
   if(path.endsWith('/messages')&&route.request().method()==='POST'){sent.push(route.request().postDataJSON());body=session;}
   if(path.endsWith('/events')){await route.fulfill({status:200,contentType:'text/event-stream',body:''});return;}
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});

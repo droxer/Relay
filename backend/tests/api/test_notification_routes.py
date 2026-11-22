@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
+from relay.persistence.notification import store as notification_rows
 
 from user_ids import user_id
 
@@ -94,12 +95,19 @@ def test_marking_read_by_id_and_all(admin: TestClient, ada: TestClient) -> None:
     assert ada.post(f"{API}/notifications/read", json={"all": True}).json() == {"unreadCount": 0}
 
 
-def test_inbox_revalidates_without_sending_unchanged_details(admin: TestClient, ada: TestClient) -> None:
+def test_inbox_revalidates_without_building_unchanged_details(
+    admin: TestClient, ada: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _finish_task(ada, ADA)
     path = f"{API}/notifications?limit=50"
     first = ada.get(path)
     validator = {"If-None-Match": first.headers.get("etag", "")}
-    unchanged = ada.get(path, headers=validator)
+    def unexpected_projection(_row: object) -> None:
+        pytest.fail("An unchanged inbox must skip projecting the detail rows")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(notification_rows, "_public", unexpected_projection)
+        unchanged = ada.get(path, params={"relayRevision": validator["If-None-Match"]})
     assert unchanged.status_code == 304
     assert unchanged.content == b""
     assert first.headers["cache-control"] == "no-store"

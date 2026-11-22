@@ -138,9 +138,11 @@ test("idle Home revalidates each compact collection once per poll", async ({ pag
   const threadValidator = 'W/"thread-head"';
   await page.route(/\/api\/v1\/(tasks|threads)(\?|\/|$)/, async route => {
     const request = route.request();
-    const { pathname: path, search } = new URL(request.url());
-    const validator = await request.headerValue("if-none-match");
-    reads.push({ path, query: search, validator });
+    const url = new URL(request.url());
+    const path = url.pathname;
+    const validator = url.searchParams.get("relayRevision");
+    url.searchParams.delete("relayRevision");
+    reads.push({ path, query: url.search, validator });
     const isTasks = path === "/api/v1/tasks";
     const etag = isTasks ? taskValidator : threadValidator;
     if (validator === etag) return route.fulfill({ status: 304, headers: { etag } });

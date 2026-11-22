@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import os
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -17,9 +18,9 @@ from ...core.workspace_artifacts import (
 )
 from ...security.actor import Actor
 from ..actors import request_actor, request_actor_or_sandbox
-from ..conditional_get import CACHE_CONTROL, etag_matches, weak_etag
+from ..conditional_get import CACHE_CONTROL, etag_matches, request_validator, weak_etag
 from ..deps import AppContext, AppContextDep
-from .activity import thread_list_activity
+from .activity import ThreadListActivity, apply_thread_list_activity, read_thread_list_activity
 from .projections import (
     agent_for_workspace,
     agent_supervisor_user_id,
@@ -37,6 +38,7 @@ ACTIVE_TASK_STATUSES = frozenset(
     {"assigned", "queued", "running", "waiting_for_human", "review", "blocked"}
 )
 ACTIVE_SESSION_STATUSES = frozenset({"running", "waiting_for_human"})
+_SUMMARY_REPRESENTATION = ("thread-summary-v1", os.environ.get("RAILWAY_GIT_COMMIT_SHA"))
 
 
 def encode_summary_cursor(position: tuple[datetime, str]) -> str:
@@ -57,8 +59,8 @@ def decode_summary_cursor(cursor: str) -> tuple[datetime, str]:
     return updated_at, session_id
 
 
-@router.get("/threads")
-def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
+@router.get("/threads", response_model=dict[str, Any])
+def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any] | Response:
     summary_view = request.query_params.get("view") == "summary"
     include_activity = summary_view and request.query_params.get("include") == "activity"
     # Task projections use the same credentials as GET /tasks.
@@ -70,24 +72,48 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any]:
         except ValueError as error:
             raise HTTPException(400, "limit must be an integer.") from error
         cursor = request.query_params.get("cursor")
-        summaries, next_position = ctx.session_store.list_session_summary_page(
-            owner_user_id=actor["userId"],
-            limit=min(max(1, requested_limit), 200),
-            before=decode_summary_cursor(cursor) if cursor else None,
-        )
-        sessions = ensure_sessions_managed_affinity(ctx, summaries)
-        sessions = ctx.execution_lifecycle.annotate(sessions)
-        rows = [session_brief_item(session) for session in sessions]
-        activity = thread_list_activity(ctx, actor, rows, include_home_count=not cursor) if include_activity else {}
-        return {
-            "sessions": rows,
-            "nextCursor": encode_summary_cursor(next_position) if next_position else None,
-            **activity,
-        }
+        limit = min(max(1, requested_limit), 200)
+        before = decode_summary_cursor(cursor) if cursor else None
+        with ctx.session_store.summary_read_scope():
+            stamp = ctx.session_store.summary_page_stamp(owner_user_id=actor["userId"], limit=limit, before=before)
+            if stamp is not None:
+                ids, revision = stamp
+                activity = read_thread_list_activity(ctx, actor, ids, include_home_count=not cursor) if include_activity else None
+                activity_revision = (
+                    [sorted(activity[0], key=lambda link: str(link["sessionId"])), sorted(activity[1]), activity[2]]
+                    if activity is not None else None
+                )
+                etag = weak_etag(json.dumps(
+                    [_SUMMARY_REPRESENTATION, actor["userId"], revision, activity_revision], default=str, sort_keys=True,
+                ).encode())
+                headers = {"ETag": etag.decode("ascii"), "Cache-Control": CACHE_CONTROL.decode("ascii")}
+                if etag_matches(request_validator(request), etag):
+                    return Response(status_code=304, headers=headers)
+                payload = _session_summary_page(ctx, actor, limit, before, include_activity, activity)
+                return JSONResponse(payload, headers=headers)
+        return _session_summary_page(ctx, actor, limit, before, include_activity)
     visible = ctx.session_store.list_sessions(owner_user_id=actor["userId"])
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = ctx.execution_lifecycle.annotate(sessions)
     return {"sessions": sessions}
+
+
+def _session_summary_page(
+    ctx: AppContext, actor: Actor, limit: int, before: tuple[datetime, str] | None,
+    include_activity: bool, activity: ThreadListActivity | None = None,
+) -> dict[str, Any]:
+    summaries, next_position = ctx.session_store.list_session_summary_page(
+        owner_user_id=actor["userId"], limit=limit, before=before,
+    )
+    sessions = ctx.execution_lifecycle.annotate(ensure_sessions_managed_affinity(ctx, summaries))
+    rows = [session_brief_item(session) for session in sessions]
+    if include_activity and activity is None:
+        activity = read_thread_list_activity(ctx, actor, [row["id"] for row in rows], include_home_count=before is None)
+    return {
+        "sessions": rows,
+        "nextCursor": encode_summary_cursor(next_position) if next_position else None,
+        **(apply_thread_list_activity(rows, activity) if activity is not None else {}),
+    }
 
 
 ARTIFACT_INDEX_DEFAULT_LIMIT = 200
@@ -134,7 +160,7 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any] | Re
         response = JSONResponse(payload)
         etag = weak_etag(bytes(response.body))
         headers = {"ETag": etag.decode("ascii"), "Cache-Control": CACHE_CONTROL.decode("ascii")}
-        if etag_matches(request.headers.get("if-none-match", "").encode("latin-1"), etag):
+        if etag_matches(request_validator(request), etag):
             return Response(status_code=304, headers=headers)
         response.headers.update(headers)
         return response

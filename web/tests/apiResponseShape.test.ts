@@ -89,8 +89,9 @@ describe("API response shape validation", () => {
     const page = { sessions: [sessionSummary()], nextCursor: "older" };
     globalThis.fetch = async () => new Response(JSON.stringify(page), { headers: { ETag: 'W/"head"' } });
     const first = await listSessionSummaries(undefined, { limit: 20 }, cache);
-    globalThis.fetch = async (_input, init) => {
-      assert.equal(new Headers(init?.headers).get("If-None-Match"), 'W/"head"');
+    globalThis.fetch = async (input, init) => {
+      assert.equal(new URL(String(input), "http://relay.local").searchParams.get("relayRevision"), 'W/"head"');
+      assert.equal(new Headers(init?.headers).get("If-None-Match"), null);
       return new Response(null, { status: 304 });
     };
     assert.equal(await listSessionSummaries(undefined, { limit: 20 }, cache), first);
@@ -113,10 +114,13 @@ describe("API response shape validation", () => {
     const first = await getSession("ses_1", undefined, cache);
     assert.equal(first.agentRuns[0].agentLog, "previous output");
 
-    globalThis.fetch = async (_input, init) => {
+    globalThis.fetch = async (input, init) => {
+      const { searchParams } = new URL(String(input), "http://relay.local");
       const headers = new Headers(init?.headers);
-      assert.equal(headers.get("If-None-Match"), 'W/"first"');
-      assert.equal(headers.get("X-Relay-Thread-Events"), `50:1:${firstRevision}`);
+      assert.equal(headers.get("If-None-Match"), null);
+      assert.equal(headers.get("X-Relay-Thread-Events"), null);
+      assert.equal(searchParams.get("relayRevision"), 'W/"first"');
+      assert.equal(searchParams.get("relayEvents"), `50:1:${firstRevision}`);
       return new Response(JSON.stringify({
         ...snapshot, events: [secondEvent], eventCount: 52, eventStart: 50, eventOffset: 51, eventsRevision: secondRevision,
       }), { headers: { ETag: 'W/"second"' } });

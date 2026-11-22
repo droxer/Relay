@@ -294,15 +294,24 @@ def test_batch_replay_preserves_each_report_identity(tmp_path):
     assert response.json()['receipts'] == [{'id': report['id'], 'digest': report['digest'], 'status': 200} for report in reports]
 
 
-def test_lost_poll_response_redelivers_the_same_start_fence_until_acknowledged(tmp_path):
+def test_lost_poll_response_redelivers_the_same_start_fence_until_acknowledged(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta
+    from relay.persistence.daemon import delivery_recovery
+
     registry, _, event = fixture(tmp_path)
     daemons = registry.daemon_store
     first = daemons.get_command(event['commandId'])
+    clock = datetime.fromisoformat(first['dispatchedAt'])
+    monkeypatch.setattr(delivery_recovery, 'now_iso', lambda: clock.isoformat())
+    assert daemons.recover_start_deliveries('node', limit=10, lease_seconds=60) == []
+    clock += timedelta(seconds=6)
     recovered = daemons.recover_start_deliveries('node', limit=10, lease_seconds=60)
     assert [item['id'] for item in recovered] == [event['commandId']]
     assert recovered[0]['leaseId'] == first['leaseId']
     assert recovered[0]['attempt'] == first['attempt']
+    assert daemons.recover_start_deliveries('node', limit=10, lease_seconds=60) == []
     daemons.renew_command_leases('node', [(event['commandId'], first['leaseId'])])
+    clock += timedelta(seconds=6)
     assert daemons.recover_start_deliveries('node', limit=10, lease_seconds=60) == []
 
 

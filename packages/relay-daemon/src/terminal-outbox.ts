@@ -12,6 +12,13 @@ const permanentlyRejected = (status: number) => status >= 400 && status < 500 &&
 const outboxes = new WeakMap<typeof fetch, TerminalOutbox>();
 const terminalTypes = new Set(['run.completed', 'run.failed', 'run.cancelled']);
 const outputTypes = new Set(['run.output', 'run.output.batch', 'run.collaboration']);
+const REPORT_REQUEST_TIMEOUT_MS = 15_000;
+const REPORT_RETRY_MIN_MS = 1_000;
+const REPORT_RETRY_MAX_MS = 30_000;
+function reportSignal(signal?: AbortSignal | null): AbortSignal {
+  const deadline = AbortSignal.timeout(REPORT_REQUEST_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, deadline]) : deadline;
+}
 const durable = (event: Record<string, unknown>) => terminalTypes.has(String(event.type)) || outputTypes.has(String(event.type));
 const owner = (event: Record<string, unknown>) => JSON.stringify([event.commandId, event.leaseId ?? null]);
 const digest = (data: string) => createHash('sha256').update(data).digest('hex');
@@ -72,6 +79,7 @@ export class TerminalOutbox {
   private strictAcknowledgements = false;
   private replaying = false;
   private replayAfter = 0;
+  private replayFailures = 0;
   private readonly retryAt = new Map<string, number>();
   private readonly deliveries = new Set<string>();
   private readonly acceptedTerminalsAwaitingCleanup = new Set<string>();
@@ -328,12 +336,15 @@ export class TerminalOutbox {
     return !!current && !this.order.ready(record.key, current);
   }
   private async deliver(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
-    if (!terminalTypes.has(String(record.event.type))) return this.sendRecord(send, input, init, record);
     // Let duplicate callers retry under their own deadline rather than wait
     // on a request whose signal may outlive theirs during shutdown.
     if (this.deliveries.has(record.key)) return new Response('Report delivery already in progress.', { status: 503 });
     this.deliveries.add(record.key);
-    try { return await this.sendRecord(send, input, init, record); }
+    try { return await this.sendRecord(send, input, { ...init, signal: reportSignal(init.signal) }, record); }
+    catch (error) {
+      if (!init.signal?.aborted) this.deferReport(record.key);
+      throw error;
+    }
     finally { this.deliveries.delete(record.key); }
   }
   private async sendRecord(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
@@ -403,59 +414,95 @@ export class TerminalOutbox {
       if (!this.order.ready(key, current, selected)) continue;
       let record: TerminalRecord;
       try { await this.stored(key); if (!this.index.has(key)) continue; record = this.read(key); } catch { this.fail(new Error(`Unreadable retained report ${key}.`)); continue; }
+      if (this.deliveries.has(key) || this.rejected.has(key)) continue;
       const event = outputTypes.has(String(record.event.type)) ? { ...record.event, replayed: true } : record.event;
       const body = JSON.stringify(event);
       const size = Buffer.byteLength(JSON.stringify(body)) + 200;
       if (bytes + size > 2 * 1024 * 1024) {
         if (reports.length === 0) {
-          const response = await this.deliver(send, eventUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]) }, record);
-          await response.body?.cancel();
+          try {
+            const response = await this.deliver(send, eventUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, signal }, record);
+            if (!response.ok && this.index.has(key) && !this.rejected.has(key)) this.deferReport(key);
+            await response.body?.cancel();
+          } catch { /* This report has its own backoff. Continue with unrelated reports. */ }
           continue;
         }
         break;
       }
       reports.push({ id: key, digest: digest(body), body });
       selected.add(key);
+      this.deliveries.add(key);
       bytes += size;
     }
     if (!reports.length) return;
+    try {
+      await this.sendReplayBatch(send, eventUrl, token, reports, signal);
+    } finally {
+      for (const key of selected) this.deliveries.delete(key);
+    }
+  }
+
+  private deferReplay(retryAfter = 0) {
+    const delay = Math.min(REPORT_RETRY_MAX_MS, REPORT_RETRY_MIN_MS * 2 ** Math.min(this.replayFailures++, 5));
+    this.replayAfter = Date.now() + Math.max(delay, retryAfter);
+  }
+
+  private async sendReplayBatch(send: typeof fetch, eventUrl: string, token: string,
+    reports: Array<{ id: string; digest: string; body: string }>, signal?: AbortSignal,
+  ): Promise<void> {
     const response = await send(eventUrl.replace(/\/events$/, '/reports'), { method: 'POST', headers: {
       'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ reports }),
-      signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+      signal: reportSignal(signal),
     });
+    const sendIndividually = async (key: string) => {
+      if (!this.index.has(key)) return;
+      try {
+        const single = await this.sendRecord(send, eventUrl, { method: 'POST', headers: {
+          'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          signal: reportSignal(signal),
+        }, this.read(key));
+        if (!single.ok && this.index.has(key) && !this.rejected.has(key)) this.deferReport(key);
+        await single.body?.cancel();
+      } catch {
+        if (!signal?.aborted) this.deferReport(key);
+      }
+    };
     if (response.status === 413) {
       await response.body?.cancel();
       // A proxy may cap batches below our bound. Individual delivery lets
       // terminal reports negotiate their compact form with verified receipts.
-      for (const key of selected) {
+      for (const { id } of reports) {
         if (signal?.aborted) break;
-        if (!this.index.has(key)) continue;
-        const single = await this.deliver(send, eventUrl, { method: 'POST', headers: {
-          'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
-        }, this.read(key));
-        await single.body?.cancel();
+        await sendIndividually(id);
       }
       return;
     }
-    if (!response.ok) { this.replayAfter = Date.now() + retryAfterMs(response.headers.get("Retry-After")); await response.body?.cancel(); return; }
+    if (!response.ok) {
+      const retryAfter = retryAfterMs(response.headers.get("Retry-After"));
+      if (retryAfter > 0) this.deferReplay(retryAfter);
+      else for (const { id } of reports) this.retryAt.set(id, Date.now() + REPORT_RETRY_MIN_MS);
+      await response.body?.cancel();
+      return;
+    }
     const result = await response.json() as { receipts?: Array<{ id: string; digest: string; status: number; detail?: string }> };
+    this.replayFailures = 0;
     const expected = new Map(reports.map(report => [report.id, report.digest]));
     for (const receipt of result.receipts ?? []) {
       if (expected.get(receipt.id) !== receipt.digest) continue;
+      expected.delete(receipt.id);
       if (receipt.status === 200) this.acknowledge(receipt.id);
       else if (receipt.status === 409 && this.index.get(receipt.id)?.terminal) {
         // Batch receipts carry no rejection detail. Probe individually so only
         // an explicit identity collision can use the payload-bound fallback.
-        try {
-          const single = await this.deliver(send, eventUrl, { method: 'POST', headers: {
-            'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
-          }, this.read(receipt.id));
-          await single.body?.cancel();
-        } catch { /* Retain the report for the next replay attempt. */ }
+        await sendIndividually(receipt.id);
       } else if (permanentlyRejected(receipt.status)) this.quarantine(receipt.id, receipt.status, receipt.detail);
+      else this.retryAt.set(receipt.id, Date.now() + REPORT_RETRY_MIN_MS);
     }
+    for (const key of expected.keys()) this.retryAt.set(key, Date.now() + REPORT_RETRY_MIN_MS);
+  }
+
+  private deferReport(key: string) {
+    this.retryAt.set(key, Math.max(this.retryAt.get(key) ?? 0, Date.now() + REPORT_RETRY_MIN_MS));
   }
   async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {
     const paused = Date.now() < this.replayAfter;
@@ -476,7 +523,8 @@ export class TerminalOutbox {
         } else ordered.push([key, this.index.get(key)!]);
       }
       if (this.batching) {
-        try { await this.replayBatch(send, eventUrl, token, ordered, signal); } catch { /* Retry the same durable identities next tick. */ }
+        try { await this.replayBatch(send, eventUrl, token, ordered, signal); }
+        catch { if (!signal?.aborted) this.deferReplay(); }
         return;
       }
       let attempts = 0;
@@ -490,8 +538,9 @@ export class TerminalOutbox {
         try {
           const response = await this.deliver(send, eventUrl, { method: 'POST', headers: {
             'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(2000)]),
+            signal,
           }, record);
+          if (!response.ok && this.index.has(key) && !this.rejected.has(key)) this.deferReport(key);
           await response.body?.cancel();
         } catch { /* Retained evidence is retried; unrelated streams continue. */ }
       }

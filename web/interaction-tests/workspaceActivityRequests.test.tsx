@@ -47,11 +47,11 @@ it("loads older Threads on demand and polls only the conditional head", async ()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
   const thread = (id: string, day: number) => ({ id, title: id, updatedAt: `2026-11-${day}T00:00:00.000Z` });
-  const requests = vi.fn(async (path: string, options?: RequestInit) => {
+  const requests = vi.fn(async (path: string) => {
     if (path.includes("threadCursor=")) {
       return Response.json({ sessions: [thread("old", 19)], nextThreadCursor: null });
     }
-    if (new Headers(options?.headers).get("if-none-match")) {
+    if (new URL(path, "https://relay.test").searchParams.has("relayRevision")) {
       return new Response(null, { status: 304 });
     }
     return Response.json({
@@ -72,7 +72,7 @@ it("loads older Threads on demand and polls only the conditional head", async ()
     await act(() => vi.advanceTimersByTimeAsync(15_000));
     expect(requests.mock.calls.map(([path]) => new URL(path, "https://relay.test").searchParams.get("threadCursor")))
       .toEqual([null, "older", null]);
-    expect(new Headers(requests.mock.calls[2][1]?.headers).get("if-none-match")).toBe('W/"activity-head"');
+    expect(new URL(requests.mock.calls[2][0], "https://relay.test").searchParams.get("relayRevision")).toBe('W/"activity-head"');
     expect(view.result.current.data?.sessions.map(row => row.id)).toEqual(["new", "old"]);
   } finally {
     view.unmount();

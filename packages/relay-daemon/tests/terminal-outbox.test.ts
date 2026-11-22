@@ -4,8 +4,53 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { setTimeout as wait } from "node:timers/promises";
 import { postJsonWithRetry } from "../src/backend-transport.js";
 import { TerminalOutbox } from "../src/terminal-outbox.js";
+
+test("replay can receive a slow response past the former two-second deadline", async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-outbox-slow-receipt-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  outbox.negotiate(true, true);
+  outbox.retain({ type: 'run.cancelled', commandId: 'command', leaseId: 'lease' });
+  await outbox.replay(async (_url, init) => {
+    await wait(2_150, undefined, { signal: init?.signal ?? undefined });
+    const { reports } = JSON.parse(String(init?.body));
+    return Response.json({ receipts: reports.map((report: { id: string; digest: string }) => ({ ...report, status: 200 })) });
+  }, 'http://backend/events', 'token');
+  assert.equal(outbox.status().pending, 0);
+});
+
+test("an in-flight replay batch owns its reports until receipt processing finishes", async t => {
+  const root = mkdtempSync(join(tmpdir(), 'relay-outbox-batch-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const outbox = new TerminalOutbox(root);
+  outbox.negotiate(true, true);
+  const event = { type: 'run.cancelled', commandId: 'command', leaseId: 'lease' };
+  outbox.retain(event);
+  let started!: () => void;
+  const sending = new Promise<void>(resolve => { started = resolve; });
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  const replay = outbox.replay(async (_url, init) => {
+    started();
+    await gate;
+    const { reports } = JSON.parse(String(init?.body));
+    return Response.json({ receipts: reports.map((report: { id: string; digest: string }) => ({ ...report, status: 200 })) });
+  }, 'http://backend/events', 'token');
+  await sending;
+  try {
+    const response = await outbox.wrapFetch(async () => {
+      assert.fail('the live sender duplicated a report already in flight');
+    })('http://backend/events', { method: 'POST', body: JSON.stringify(event) });
+    assert.equal(response.status, 503);
+  } finally {
+    finish();
+    await replay;
+  }
+  assert.equal(outbox.status().pending, 0);
+});
 
 for (const batching of [false, true]) {
   test(`replay skips a live report in flight (batching=${batching})`, async t => {
@@ -414,10 +459,12 @@ for (const firstSender of ["live", "replay"] as const) {
     const entered = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const accepted: string[] = [];
+    const sentSequences: number[] = [];
     let highWater = -1;
     let delayed = false;
     const backend: typeof fetch = async (_url, init) => {
       const event = JSON.parse(String(init?.body));
+      sentSequences.push(...event.entries.map((entry: { sequence: number }) => entry.sequence));
       if (!delayed) {
         delayed = true;
         entered.resolve();
@@ -444,17 +491,14 @@ for (const firstSender of ["live", "replay"] as const) {
       // A later live batch must not pass the unacknowledged predecessor.
       assert.equal((await send(1)).status, 503);
       if (firstSender === "live") await outbox.replay(backend, "http://backend/events", "token");
-      else {
-        assert.equal((await send(0)).status, 200);
-        assert.equal((await send(1)).status, 200);
-      }
-      assert.equal((await send(2)).status, 200);
-      // The delayed duplicate arrives after newer sequences; dedupe is safe
-      // because a successful copy of every predecessor was already accepted.
+      else assert.equal((await send(0)).status, 503);
+      assert.equal((await send(2)).status, 503);
+      assert.deepEqual(sentSequences, [0]);
       release.resolve();
       await inFlight;
       await outbox.replay(backend, "http://backend/events", "token");
       assert.deepEqual(accepted, ["chunk-0", "chunk-1", "chunk-2"]);
+      assert.deepEqual(sentSequences, [0, 1, 2]);
       assert.equal(outbox.pending().length, 0);
     } finally {
       release.resolve();
@@ -467,6 +511,7 @@ for (const firstSender of ["live", "replay"] as const) {
 
 for (const delivery of ["live", "replay", "batch"] as const) {
   test(`${delivery} strict completion compacts HTTP 413 with payload-bound acceptance`, async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
     const root = mkdtempSync(join(tmpdir(), "relay-strict-compact-"));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const outbox = new TerminalOutbox(root);
@@ -504,6 +549,7 @@ for (const delivery of ["live", "replay", "batch"] as const) {
     restarted.negotiate(true, delivery === "batch");
     await restarted.replay(send, "http://backend/events", "token");
     assert.equal(restarted.pending().length, 1, "compact success without receipt proof must retain exit evidence");
+    t.mock.timers.tick(1000);
     await restarted.replay(send, "http://backend/events", "token");
     assert.equal(restarted.pending().length, 0);
     assert.ok(bodies.some(body => !JSON.parse(body).generatedFiles[0].contentBase64));

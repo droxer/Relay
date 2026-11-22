@@ -9,11 +9,27 @@ from ...security.home_snoozes import normalize_home_snoozes
 from ..deps import AppContext
 
 
-def thread_list_activity(
-    ctx: AppContext, actor: Actor, rows: list[dict[str, Any]], *, include_home_count: bool,
-) -> dict[str, Any]:
+ThreadListActivity = tuple[list[dict[str, Any]], set[str], dict[str, Any]]
+
+
+def read_thread_list_activity(
+    ctx: AppContext, actor: Actor, thread_ids: list[str], *, include_home_count: bool,
+) -> ThreadListActivity:
     user_id = actor["userId"]
-    links, waits = ctx.task_store.thread_list_task_links([row["id"] for row in rows], user_id)
+    links, waits = ctx.task_store.thread_list_task_links(thread_ids, user_id)
+    count = {}
+    if include_home_count:
+        snoozed = {
+            entry["key"].removeprefix("task:"): entry["stamp"]
+            for entry in normalize_home_snoozes(actor.get("account", {}).get("homeSnoozes"))
+            if entry["key"].startswith("task:")
+        }
+        count = {"homeTaskNeedsYou": ctx.task_store.count_home_tasks_needing_attention(user_id, snoozed)}
+    return links, waits, count
+
+
+def apply_thread_list_activity(rows: list[dict[str, Any]], activity: ThreadListActivity) -> dict[str, Any]:
+    links, waits, count = activity
     by_session = {str(link["sessionId"]): link for link in links}
     for row in rows:
         task = by_session.get(row["id"])
@@ -24,14 +40,7 @@ def thread_list_activity(
                 if task else row.get("workOutcome") == "blocked"
             ),
         }
-    if not include_home_count:
-        return {}
-    snoozed = {
-        entry["key"].removeprefix("task:"): entry["stamp"]
-        for entry in normalize_home_snoozes(actor.get("account", {}).get("homeSnoozes"))
-        if entry["key"].startswith("task:")
-    }
-    return {"homeTaskNeedsYou": ctx.task_store.count_home_tasks_needing_attention(user_id, snoozed)}
+    return count
 
 
 def _origin(task: dict[str, Any]) -> dict[str, Any]:

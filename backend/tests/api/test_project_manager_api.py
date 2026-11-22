@@ -642,3 +642,52 @@ def test_changing_only_the_lead_transfers_management_tools(managed_env):
     })
     assert staged.status_code == 200, staged.text
     assert staged.json()["proposal"]["state"] == "pending"
+
+
+def test_thread_proposal_reads_skip_the_manager_roster(managed_env, monkeypatch):
+    app, client, _, project, *_ = managed_env
+    result, command = _start(managed_env)
+    staged = _tool(managed_env, command, "propose", {
+        "operations": [{"kind": "create", "fields": {"title": "Generated task"}}],
+    })
+    assert staged.status_code == 200, staged.text
+    url = f"/api/v1/projects/{project['id']}/manager/proposals"
+
+    def unexpected_roster(*_args, **_kwargs):
+        raise AssertionError("A thread proposal read must not recalculate the roster")
+
+    monkeypatch.setattr(app.state.registry, "monitor_nodes", unexpected_roster)
+    monkeypatch.setattr(app.state.session_store, "get_session_header", unexpected_roster)
+    response = client.get(url, params={"threadId": result["threadId"]})
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()["proposals"]] == [staged.json()["proposal"]["id"]]
+    assert client.get(url, params={"threadId": project["id"]}).status_code == 404
+    client.cookies.clear()
+    assert client.get(url, params={"threadId": result["threadId"]}).status_code == 401
+
+
+def test_message_browser_response_only_returns_a_bounded_transcript(managed_env):
+    app, client, node, project, planner, _ = managed_env
+    _ready(app, node)
+    thread_id = client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()["threadId"]
+    path = f"/api/v1/threads/{thread_id}"
+    from relay.persistence.events import relay_event
+
+    for index in range(20):
+        app.state.session_store.append_event(
+            thread_id,
+            relay_event("agent.output", thread_id, {
+                "runId": "prior", "agent": "codex", "stream": "stdout", "sequence": index, "text": "x" * 16_000,
+            }),
+            hydrate_events=False,
+        )
+    response = client.post(f"{path}/messages?view=compact", json={
+        "text": "Continue", "intent": "accomplish", "addressAgentIds": [planner["id"]],
+        "idempotencyKey": "compact-turn",
+    })
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert 0 < body["eventStart"] < body["eventCount"]
+    assert body["eventStart"] + len(body["events"]) == body["eventCount"]
+    assert len(response.content) < 150_000
+    assert body["execution"]

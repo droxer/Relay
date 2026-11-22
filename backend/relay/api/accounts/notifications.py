@@ -9,12 +9,13 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from starlette.responses import JSONResponse
 
 from ...notifications.rules import NOTIFICATION_KINDS
 from ...notifications.watcher import recipient_id
 from ...persistence.notification.store import MAX_LIST_LIMIT, DatabaseNotificationStore
 from ...security.request_auth import require_user_session
-from ..conditional_get import private_conditional_json
+from ..conditional_get import etag_matches, request_validator
 from ..deps import AppContextDep, app_context
 from ..bodies import JsonBodyDep
 
@@ -40,7 +41,10 @@ def list_notifications(
     store = _store(request)
     if view == "count":
         return _unread_count(store, user_id)
-    return private_conditional_json(request, store.list_for_user(user_id, limit=limit))
+    validator = request_validator(request)
+    etag, inbox = store.read_versioned_inbox(user_id, limit, lambda version: etag_matches(validator, version))
+    headers = {"Cache-Control": "no-store", "ETag": etag.decode("ascii")}
+    return Response(status_code=304, headers=headers) if inbox is None else JSONResponse(inbox, headers=headers)
 
 
 def _target_ids(body: dict[str, Any]) -> list[str] | None:

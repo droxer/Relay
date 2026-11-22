@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from typing import Any
-from fastapi import APIRouter, HTTPException, Request
-from ...projects.manager import ManagerError, create_manager_conversation, manager_candidates, manager_role_patch, manager_view
+from fastapi import APIRouter, HTTPException, Query, Request
+from ...projects.manager import ManagerError, create_manager_conversation, manager_candidates, manager_role_patch, manager_view, visible_manager_proposals
 from ...projects.manager_reads import manager_overview, read_manager_tool
 from ...projects.manager_proposals import apply_proposal, stage_proposal
 from ...core.project_roles import command_project_access
@@ -38,6 +38,18 @@ def _owned(ctx: AppContextDep, request: Request, project_id: str, *, writable: b
 @router.get("/projects/{project_id}/manager")
 def get_manager(project_id: str, request: Request, ctx: AppContextDep) -> dict[str, Any]:
     return manager_view(ctx, _owned(ctx, request, project_id))
+
+
+@router.get("/projects/{project_id}/manager/proposals")
+def get_thread_proposals(
+    project_id: str, request: Request, ctx: AppContextDep,
+    thread_id: str = Query(alias="threadId", min_length=1, max_length=100),
+) -> dict[str, Any]:
+    project = _owned(ctx, request, project_id)
+    matched = ctx.session_store.project_thread_id(thread_id, project["id"], project["ownerUserId"])
+    if matched is None:
+        raise HTTPException(404, "thread_not_found")
+    return {"proposals": visible_manager_proposals(ctx, project["id"], thread_id=matched)}
 
 
 @router.put("/projects/{project_id}/manager")

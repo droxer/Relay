@@ -37,11 +37,14 @@ class ManagerRows:
                 conn.execute(select(tasks.c.id).where(tasks.c.id.in_(task_ids)).order_by(tasks.c.id).with_for_update()).all()
             yield project_with_manager(dict(project))
 
-    def manager_proposals(self, project_id: str) -> list[dict[str, Any]]:
+    def manager_proposals(self, project_id: str, *, thread_id: str | None = None) -> list[dict[str, Any]]:
+        statement = select(manager_proposals.c.snapshot).where(manager_proposals.c.project_id == project_id)
+        if thread_id is not None:
+            statement = statement.where(manager_proposals.c.snapshot["threadId"].as_string() == thread_id)
         with store_transaction(self.engine) as conn:
-            return list(conn.execute(select(manager_proposals.c.snapshot).where(
-                manager_proposals.c.project_id == project_id,
-            ).order_by(manager_proposals.c.created_at.desc(), manager_proposals.c.id.desc()).limit(50)).scalars())
+            return list(conn.scalars(statement.order_by(
+                manager_proposals.c.created_at.desc(), manager_proposals.c.id.desc(),
+            ).limit(50)))
 
     def manager_proposal(self, project_id: str, proposal_id: str) -> dict[str, Any] | None:
         if names_no_uuid_row(self.engine, proposal_id):

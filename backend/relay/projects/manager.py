@@ -73,6 +73,13 @@ def _manager_reason(ctx: Any, project: dict[str, Any], agent: dict[str, Any] | N
     return None
 
 
+def visible_manager_proposals(ctx: Any, project_id: str, *, thread_id: str | None = None) -> list[dict[str, Any]]:
+    return [
+        {key: value for key, value in proposal.items() if key not in ("result", "applicationInput")}
+        for proposal in ctx.project_store.manager_proposals(project_id, thread_id=thread_id)
+    ]
+
+
 def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
     """What the owner sees about the role. Reads only; never writes."""
     historical_ids: set[str] = set()
@@ -97,7 +104,7 @@ def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
         "agentName": (agent or {}).get("displayName"), "agentNames": names, "toolsAvailable": tools,
         "reason": _manager_reason(ctx, project, agent, nodes, tools),
         "candidates": [{"id": a["id"], "displayName": a["displayName"]} for a in candidates],
-    }, "proposals": [{k:v for k,v in p.items() if k not in ("result", "applicationInput")} for p in ctx.project_store.manager_proposals(project["id"])],
+    }, "proposals": visible_manager_proposals(ctx, project["id"]),
         "teams": [{"id": team["id"], "displayName": team.get("name") or team.get("displayName") or team["id"]}
                   for team in ctx.team_store.list_teams(project["ownerUserId"])
                   if team.get("projectId", project["id"]) == project["id"] and team.get("computerId") == project["computerId"] and team.get("enabled", True)]}

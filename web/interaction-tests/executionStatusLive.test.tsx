@@ -8,6 +8,7 @@ import { useSessionEvents } from "../src/hooks/useSessionEvents";
 import { useSessionDetail } from "../src/hooks/useSessionDetail";
 import { queuedRun } from "../src/lib/queuedRun";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
+import { THREAD_QUEUE_QUERY_KEY } from "../src/lib/threadQueue";
 import type { RelaySession } from "../src/types";
 
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: vi.fn() }) }));
@@ -90,6 +91,26 @@ it("removes the mounted queue card on the first SSE output without waiting for t
   expect(getSession).toHaveBeenCalledTimes(1);
   view.unmount();
   client.clear();
+});
+
+it("applies a streamed queue update alongside the thread's cached events", async () => {
+  vi.stubGlobal("EventSource", Source);
+  const client = new QueryClient();
+  client.setQueryData(key, [queued]);
+  vi.mocked(getSession).mockResolvedValue(queued);
+  const view = render(<QueryClientProvider client={client}><OpenThread /></QueryClientProvider>);
+  try {
+    await act(async () => {});
+    const queue = { paused: false, messages: [{ id: "other-device", text: "Follow-up" }] };
+    act(() => sources[0].onmessage({ data: JSON.stringify({
+      id: "queue-event", type: "session.queue", sessionId: "live",
+      timestamp: "2026-11-13T12:00:01Z", queue,
+    }) }));
+    expect(client.getQueryData([...THREAD_QUEUE_QUERY_KEY, "live"])).toEqual({ ...queue, eventCount: 1 });
+  } finally {
+    view.unmount();
+    client.clear();
+  }
 });
 
 it.each([
