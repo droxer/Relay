@@ -13,4 +13,11 @@ describe("dashboard compact number voice", () => {
     assert.equal(formatCompact(943_500, "en"), "943.5K");
     assert.equal(formatCompact(16_280_000, "en"), "16.3M");
   });
+
+  it("shows a dash rather than NaN when a payload is not a finite number", () => {
+    assert.equal(formatCompact(Number.NaN, "en"), "—");
+    assert.equal(formatCompact(Number.POSITIVE_INFINITY, "en"), "—");
+    assert.equal(formatCompact(undefined as unknown as number, "en"), "—");
+    assert.equal(formatCompact({ count: 3 } as unknown as number, "en"), "—");
+  });
 });

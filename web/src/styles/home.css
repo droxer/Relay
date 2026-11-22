@@ -297,6 +297,27 @@
   color: var(--ink-1);
 }
 
+/* Every row carried the word "Snooze" at the weight of its own meta line, so
+   down the queue the trailing column read as a list of identical buttons
+   beside the titles. With a pointer the clock stays as the quiet cue and the
+   word arrives with the row's hover or focus; it fades rather than collapses,
+   so the row never reflows. Touch keeps the label (no hover to reveal it). */
+@media (hover: hover) and (pointer: fine) {
+  /* The clock holds the trailing edge, so the hidden word's reserved width
+     opens to its left instead of floating the clock inward off the edge. */
+  .home-item-trail .home-snooze {
+    flex-direction: row-reverse;
+  }
+
+  .home-item .home-snooze-label {
+    transition: opacity var(--t-fast) var(--ease);
+  }
+
+  .home-item:not(:hover):not(:focus-within) .home-snooze-label {
+    opacity: 0;
+  }
+}
+
 .home-clear {
   padding: var(--sp-6) var(--sp-4);
   text-align: center;

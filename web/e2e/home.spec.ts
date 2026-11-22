@@ -225,7 +225,7 @@ for (const theme of ["dark", "light"] as const) {
     await expect(page.getByRole("region", { name: "Projects" })).toContainText("Billing v2");
     await expect(page.getByRole("region", { name: "Running now" })).toContainText("paused for permission");
     await expect(page.getByRole("region", { name: "Running now" })).not.toContainText("Orphaned import");
-    await expect(page.locator(".home-brief")).toContainText("1 thread running");
+    await expect(page.locator(".home-brief")).toContainText("1 run in progress");
     // The header counts the Start here item too, so it agrees with the brief.
     // The bands already say which items need the person: no tabs restate them,
     // and no status tiles repeat the queue.

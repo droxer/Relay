@@ -118,10 +118,10 @@ it("describes chart results using the selected range in both languages", async (
   const zh = (await import("../src/i18n/locales/zh-CN/translation.json")).default.admin.v2;
   expect(en.dash_range_today).toBe("Today");
   expect(zh.dash_range_today).toBe("今天");
-  expect(en.dash_sessions_title).toBe("Threads");
-  expect(en.dash_sessions_empty).toBe("No threads in the selected range.");
-  expect(zh.dash_sessions_title).toBe("对话趋势");
-  expect(zh.dash_sessions_empty).toBe("所选范围内暂无对话。");
+  expect(en.dash_sessions_title).toBe("Activities");
+  expect(en.dash_sessions_empty).toBe("No activities in the selected range.");
+  expect(zh.dash_sessions_title).toBe("活动趋势");
+  expect(zh.dash_sessions_empty).toBe("所选范围内暂无活动。");
 });
 
 it("offers all time and requests complete history for both historical queries", async () => {

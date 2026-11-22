@@ -4,6 +4,18 @@ import { useState } from "react";
 import type { TFunction } from "i18next";
 import type { ControlPanelDaemonNodeRecord } from "../types";
 import { useDialogs } from "@/components/ui/DialogProvider";
+import { computerName } from "../lib/computerNodes";
+
+/** The danger confirm for deleting a computer: named the way every other
+ *  surface names it, with the id only when the computer has no name. */
+export function nodeDeleteConfirm(node: ControlPanelDaemonNodeRecord, t: TFunction) {
+  return {
+    title: t("admin.v2.delete_confirm", { name: computerName(node) ?? node.id }),
+    message: t("admin.v2.delete_message"),
+    confirmLabel: t("admin.v2.delete_action"),
+    tone: "danger" as const,
+  };
+}
 
 /** Shared delete-confirm/pending/error flow for node surfaces (NodeRow, NodeCard). */
 export function useNodeDelete(
@@ -17,12 +29,7 @@ export function useNodeDelete(
 
   async function handleDelete() {
     if (!onDelete) return;
-    const ok = await confirm({
-      title: t("admin.v2.delete_confirm", { id: node.id }),
-      message: t("admin.v2.delete_message"),
-      confirmLabel: t("admin.v2.delete_action"),
-      tone: "danger",
-    });
+    const ok = await confirm(nodeDeleteConfirm(node, t));
     if (!ok) return;
     setDeletePending(true);
     setDeleteError(null);

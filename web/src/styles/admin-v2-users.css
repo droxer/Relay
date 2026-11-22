@@ -180,7 +180,6 @@ tr.is-pulse > td:first-child::after {
 .adm-emp-no-nodes {
   font-size: var(--fs-3);
   color: var(--ink-3);
-  font-style: italic;
 }
 
 /* Chip geometry is the neutral Badge variant's. The `cursor: pointer` and
