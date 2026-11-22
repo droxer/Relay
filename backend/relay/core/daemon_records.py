@@ -49,6 +49,7 @@ EXIT_UNCONFIRMED_STATE_KEY = "_relay_exit_unconfirmed_at"
 
 # A backend stop timed out without exit evidence. This opens human recovery;
 # unlike a terminal event it never releases the delivered reservation.
+RUNTIME_STARTED_COMMAND_STATE_KEY = "_relay_runtime_started_command"
 STOP_ACK_LOST_STATE_KEY = "_relay_stop_ack_lost_at"
 STOP_ACK_GRACE_SECONDS = 60
 
@@ -59,6 +60,11 @@ TERMINAL_CLAIM_EXPIRES_STATE_KEY = "_relay_terminal_claim_expires_at"
 # count as fresh. Distinct from "never polled", which gets the benefit of the
 # doubt, because the daemon told us it will not take work again.
 NODE_POLL_DRAINED_AT = "1970-01-01T00:00:00.000Z"
+
+
+def node_finished_draining(node: dict[str, Any]) -> bool:
+    """An explicit stop notice fences the node until its next registration."""
+    return node.get("status") == "stopped" and node.get("lastPollAt") == NODE_POLL_DRAINED_AT
 
 
 def infer_node_location(node: dict[str, Any]) -> str | None:

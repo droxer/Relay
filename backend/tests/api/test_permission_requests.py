@@ -6,7 +6,9 @@ run ends first closes as expired so the daemon stops waiting.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from tempfile import TemporaryDirectory
+from time import monotonic, sleep
 
 import pytest
 from fastapi.testclient import TestClient
@@ -636,3 +638,48 @@ def test_always_allow_also_answers_the_same_tools_prompts_already_waiting(monkey
         assert _poll(client, session_id, waiting).json() == {"status": "allow"}
         assert _poll(client, session_id, other).json() == {"status": "pending"}
         assert [item["id"] for item in _thread(client, session_id)["permissionRequests"]] == [other]
+
+
+def test_long_poll_wakes_on_committed_permission_answer(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        with TestClient(app) as client, ThreadPoolExecutor() as pool:
+            _bootstrap(client)
+            session_id = _create_session(client)
+            command = _dispatched_run(app, session_id)
+            _ask(client, command)
+            poll = pool.submit(
+                client.get,
+                f"/api/v1/daemon-nodes/sbx_alice/permission-requests/{REQUEST_ID}",
+                params={"sessionId": session_id, "waitSeconds": 10},
+                headers=NODE_AUTH,
+            )
+            notifier = app.state.context.control_plane_notifier
+            deadline = monotonic() + 2
+            while not poll.done() and not notifier.waiter_count and monotonic() < deadline:
+                sleep(0.01)
+            assert notifier.waiter_count == 1
+            assert _answer(client, session_id, decision="allow").status_code == 200
+            assert poll.result(timeout=2).json()["status"] == "allow"
+
+
+def test_native_run_stays_starting_until_the_runtime_is_ready(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap(client)
+        session_id = _create_session(client)
+        command = _dispatched_run(app, session_id, agent="codex", reportRuntimeStartup=True)
+        thread = f"/api/v1/threads/{session_id}"
+        assert client.get(thread).json()["execution"]["phase"] == "starting"
+        for sequence, ready in enumerate((False, True)):
+            response = client.post("/api/v1/daemon-nodes/sbx_alice/events", headers=NODE_AUTH, json={
+                "type": "run.output.batch",
+                "commandId": command["id"], "runId": command["runId"],
+                "sessionId": session_id, "agent": "codex", "runtimeStarted": ready,
+                "entries": [{"stream": "stdout", "sequence": sequence, "text": "frame"}],
+            })
+            assert response.status_code == 200, response.text
+            assert client.get(thread).json()["execution"]["phase"] == ("running" if ready else "starting")

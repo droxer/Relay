@@ -80,7 +80,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "durable-output-ack" | "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "workspace-list-thread-records" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope" | "live-messages";
+export type DaemonNodeCapability = "native-runtime-startup" | "durable-output-ack" | "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "workspace-list-thread-records" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope" | "live-messages";
 /** Waits for backend output receipts with a 60s default drain budget and durable replay. */
 export const DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK: DaemonNodeCapability = "durable-output-ack";
 export const DAEMON_CAPABILITY_DURABLE_REPORTS: DaemonNodeCapability = "durable-reports";
@@ -392,6 +392,7 @@ export interface DaemonNodeRunCommand {
   };
   reportWorkspaceStatus?: boolean;
   reportExecutionStarted?: boolean;
+  reportRuntimeStartup?: boolean;
   handoffValidation?: {
     contract: { name: "relay.handoff.validation"; version: 1 };
     assignmentId: string;
@@ -637,6 +638,7 @@ export type DaemonNodeEvent =
       sessionId: string;
       runId: string;
       agent: AgentName;
+      runtimeStarted?: boolean;
       entries: Array<{
         stream: "stdout" | "stderr";
         text: string;

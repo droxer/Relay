@@ -299,7 +299,7 @@ def _run_output_batch(value: dict[str, Any], envelope: EventFields) -> EventFiel
         if total_text > OUTPUT_BATCH_MAX_TEXT:
             raise ValueError("daemon node run.output.batch text is too large.")
         entries.append(_output_entry(raw_entry))
-    return {"entries": entries}
+    return {"entries": entries, **({"runtimeStarted": True} if value.get("runtimeStarted") is True else {})}
 
 
 def _is_collaboration_payload(collaboration: dict[str, Any]) -> bool:

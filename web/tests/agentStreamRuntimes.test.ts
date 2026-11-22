@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { stripVTControlCharacters } from "node:util";
-import { OpenCodeStreamRenderer, PiStreamRenderer } from "relay-core";
+import { CodexStreamRenderer, OpenCodeStreamRenderer, PiStreamRenderer } from "relay-core";
 
 import {
   AgentStreamAccumulator,
@@ -406,4 +406,26 @@ describe("runtime transcripts: codex failures", () => {
     const segments = parseAgentStream("codex", jsonl([{ type: "turn.failed", error: { message: "stream disconnected before completion" } }]));
     assert.deepEqual(segments, [{ kind: "narration", key: "agent_stream.codex_failed", params: { message: "stream disconnected before completion", tone: "bad" } }]);
   });
+});
+
+it("shows Codex text before completion and reconciles the final message by item", () => {
+  const first = jsonl([
+    { type: "turn.started" },
+    { type: "item.delta", item: { id: "m_1", type: "agent_message", delta: "First" } },
+  ]);
+  const second = jsonl([{ type: "item.delta", item: { id: "m_1", type: "agent_message", delta: " draft" } }]);
+  const complete = jsonl([{ type: "item.completed", item: { id: "m_1", type: "agent_message", text: "First reply." } }]);
+  const accumulator = new AgentStreamAccumulator("codex");
+  assert.deepEqual(texts(accumulator.update(first)), ["First"]);
+  assert.deepEqual(texts(accumulator.update(first + second)), ["First draft"]);
+  assert.deepEqual(texts(accumulator.update(first + second + complete)), ["First reply."]);
+  assert.deepEqual(streamed("codex", first + second + complete, 7), parseAgentStream("codex", first + second + complete));
+
+  const terminal = new CodexStreamRenderer();
+  assert.match(stripVTControlCharacters(terminal.feed(first)), /● First$/);
+  assert.equal(terminal.feed(second), " draft");
+  assert.match(stripVTControlCharacters(terminal.feed(complete)), /First reply\./);
+  const matching = new CodexStreamRenderer();
+  matching.feed(first + second);
+  assert.equal(matching.feed(jsonl([{ type: "item.completed", item: { id: "m_1", type: "agent_message", text: "First draft" } }])), "\n");
 });

@@ -13,7 +13,7 @@ import {
   OpenCodeStreamRenderer,
   PiStreamRenderer,
 } from "./renderers.js";
-import type { AgentName, AgentState } from "./state.js";
+import type { AgentName, AgentState, PiOutputMode } from "./state.js";
 
 /** Minimal contract every stream renderer satisfies: feed a chunk, get display text. */
 export interface StreamRenderer {
@@ -64,7 +64,7 @@ export interface AgentDefinition {
   /** Consecutive-failure budget before the workflow halts retries for this agent. */
   maxFailures: number;
   /** Script for commandExecution(): native Node on local Windows, Bash elsewhere. */
-  buildCommand(state: AgentState, workspacePath?: string): string;
+  buildCommand(state: AgentState, workspacePath?: string, piOutputMode?: PiOutputMode): string;
   createRenderer(): StreamRenderer;
   /** Label shown for the run artifact/log header. */
   label: string;

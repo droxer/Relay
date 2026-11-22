@@ -145,7 +145,17 @@ describe("permission broker", () => {
     const url = new URL(h.polls[0].url);
     assert.equal(url.pathname, `/api/v1/daemon-nodes/sandbox%2F1/permission-requests/${event.request.id}`);
     assert.equal(url.searchParams.get("sessionId"), "session-1");
+    assert.equal(url.searchParams.get("waitSeconds"), "10");
     assert.equal(h.polls[0].authorization, "Bearer node-token");
+  });
+
+  it("reopens an acknowledged long poll without the legacy polling delay", async () => {
+    const h = harness([
+      () => Response.json({ status: "pending" }, { headers: { "X-Relay-Permission-Wait": "1" } }),
+      json({ status: "allow" }),
+    ], { pollIntervalMs: 10_000, timeoutMs: 1_000 });
+    assert.deepEqual(await ask(h.options, { toolName: "Write", input: {} }), { behavior: "allow" });
+    assert.equal(h.polls.length, 2);
   });
 
   it("relays a denial with the person's note, or a default message", async () => {

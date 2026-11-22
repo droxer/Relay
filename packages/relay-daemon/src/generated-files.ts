@@ -91,6 +91,7 @@ const GENERATED_FILE_CONTENT_MAX_BYTES = 2 * 1024 * 1024;
 const GENERATED_FILE_CONTENT_TOTAL_MAX_BYTES = 8 * 1024 * 1024;
 /** Walk bound so a pathological workspace cannot stall the daemon. */
 const GENERATED_FILE_WALK_MAX_ENTRIES = 50_000;
+const GENERATED_FILE_STAT_BATCH_SIZE = 16;
 
 const CONTENT_TYPES: Record<string, string> = {
   ".csv": "text/csv",
@@ -138,6 +139,7 @@ interface GeneratedFileCandidate {
 type GeneratedFileSnapshot = Record<string, { mtimeMs: number; bytes: number }>;
 
 interface GeneratedFileScanOptions {
+  signal?: AbortSignal;
   /** Shared project/task workspaces contain records belonging to other threads. */
   ownThreadId?: string;
   /**
@@ -247,17 +249,42 @@ async function listCandidates(
   workspacePath: string | undefined,
   options: GeneratedFileScanOptions = {},
 ): Promise<GeneratedFileCandidate[]> {
+  const { signal } = options;
+  signal?.throwIfAborted();
   if (!workspacePath) return [];
   const ownAgentHomeSubdir = options.ownAgentHomeSubdir?.split(sep).join("/");
   const files: GeneratedFileCandidate[] = [];
   let visited = 0;
   const pending: string[] = [workspacePath];
+  const statBatch: string[] = [];
+  const readStats = async (): Promise<void> => {
+    signal?.throwIfAborted();
+    const observed = await Promise.all(statBatch.splice(0).map(async path => {
+      try { return { path, stat: await lstat(path) }; }
+      catch { return undefined; } // Removed or inaccessible while walking.
+    }));
+    signal?.throwIfAborted();
+    for (const entry of observed) {
+      if (!entry?.stat.isFile()) continue;
+      const { path, stat } = entry;
+      const relativePath = relative(workspacePath, path).split(sep).join("/");
+      const title = relativePath.slice(relativePath.lastIndexOf("/") + 1);
+      const extension = fileExtension(title);
+      files.push({
+        path, relativePath, title,
+        bytes: stat.size, mtimeMs: stat.mtimeMs,
+        contentType: CONTENT_TYPES[extension] ?? "application/octet-stream",
+        snapshotable: isSnapshotableFile(relativePath, extension),
+      });
+    }
+  };
   try {
     if (!(await lstat(workspacePath)).isDirectory()) return [];
   } catch {
     return [];
   }
-  while (pending.length > 0) {
+  while (pending.length > 0 && visited < GENERATED_FILE_WALK_MAX_ENTRIES) {
+    signal?.throwIfAborted();
     const dir = pending.pop() as string;
     let entries;
     try {
@@ -266,7 +293,7 @@ async function listCandidates(
       continue;
     }
     for (const entry of entries) {
-      if (visited >= GENERATED_FILE_WALK_MAX_ENTRIES) return files;
+      if (visited >= GENERATED_FILE_WALK_MAX_ENTRIES) break;
       visited += 1;
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -286,26 +313,11 @@ async function listCandidates(
       }
       if (!entry.isFile() || entry.name.startsWith("~$")) continue;
       if (isExcludedByName(entry.name) || GENERATED_FILE_EXCLUDED_NAMES.has(entry.name)) continue;
-      const extension = fileExtension(entry.name);
-      let stat;
-      try {
-        stat = await lstat(path);
-      } catch {
-        continue;
-      }
-      if (!stat.isFile()) continue;
-      const relativePath = relative(workspacePath, path).split(sep).join("/");
-      files.push({
-        path,
-        relativePath,
-        title: entry.name,
-        bytes: stat.size,
-        mtimeMs: stat.mtimeMs,
-        contentType: CONTENT_TYPES[extension] ?? "application/octet-stream",
-        snapshotable: isSnapshotableFile(relativePath, extension),
-      });
+      statBatch.push(path);
+      if (statBatch.length === GENERATED_FILE_STAT_BATCH_SIZE) await readStats();
     }
   }
+  if (statBatch.length) await readStats();
   return files;
 }
 

@@ -112,7 +112,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             : queueWait ? t("thread.queued_for", { duration: queueWait }) : t("thread.execution_queued"),
         }
       : executionPhase && executionPhase !== "terminal" && executionPhase !== "running"
-      ? { tone: "attn", text: t(`thread.execution_${executionPhase}`) }
+      ? { tone: executionPhase === "starting" ? "run" : "attn", text: t(`thread.execution_${executionPhase}`) }
       : executionPhase === "running" || tone === "run"
       ? {
           tone: "run",

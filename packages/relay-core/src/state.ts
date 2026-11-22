@@ -164,9 +164,13 @@ export interface PermissionPromptLaunch {
   liveLauncher?: { command: string; args: string[] };
 }
 
+export type PiOutputMode = "json" | "streaming" | "print";
+
 export interface AgentRunOptions {
   /** Daemon-owned run metadata; never copied from backend/Agent state. */
   runtimeEnv?: Record<string, string>;
+  piOutputMode?: PiOutputMode;
+  onRuntimeStarted?: () => void;
   sink?: AgentOutputSink;
   signal?: AbortSignal;
   execStream?: AgentExecutor;

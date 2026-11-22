@@ -3,7 +3,7 @@ import { nativeCommand } from "../native-command.js";
 // person drives `codex app-server` (JSON-RPC over stdio) instead: it starts or
 // resumes a thread with approvals on request inside the workspace-write
 // sandbox, runs one turn, relays each approval request to the run's broker,
-// and prints the same JSONL `codex exec --json` would (codex-exec-events.ts).
+// and prints exec-style JSONL with live reply deltas (codex-exec-events.ts).
 // A `request_user_input` from the agent becomes a question prompt the person
 // answers in Relay. Verified against codex-cli 0.163.0.
 // Usage: node codex-app-server.js [-c key=value]... --cwd <dir>
@@ -18,6 +18,7 @@ import type { PermissionAnswers, PermissionQuestionItem } from "relay-core";
 import {
   askBroker,
   listenForLiveMessages,
+  NATIVE_RUNTIME_STARTUP_TIMEOUT_MS,
   runtimeEnv,
   type LiveMessageHandler,
   type LiveMessageListener,
@@ -143,8 +144,16 @@ class RpcPeer {
  */
 export async function runCodexTurn(
   options: CodexAdapterOptions,
-  io: { codexBin?: string; emit(event: ExecEvent): void; ask?: Ask; signal?: AbortSignal; listen?: Listen },
+  io: {
+    codexBin?: string;
+    emit(event: ExecEvent): void;
+    ask?: Ask;
+    signal?: AbortSignal;
+    startupTimeoutMs?: number;
+    listen?: Listen;
+  },
 ): Promise<number> {
+  if (io.signal?.aborted) return 130;
   const ask = io.ask ?? ((question: PermissionQuestion, signal?: AbortSignal) => askBroker(question, process.env, signal));
   // A question still open when the turn ends hangs up, so the broker
   // withdraws its prompt and no open socket keeps this process alive.
@@ -175,12 +184,31 @@ export async function runCodexTurn(
   let threadId: string | undefined;
   // The turn a live message steers; `turn/steer` refuses any other.
   let activeTurnId: string | undefined;
-  const ownsThread = (params: Json): boolean => params.threadId === threadId;
+  const ownsThread = (params: Json): boolean => threadId !== undefined && params.threadId === threadId;
+  const startup = setTimeout(() => {
+    io.emit({ type: "error", message: "Starting Codex timed out before the turn began." });
+    settle(1);
+  }, io.startupTimeoutMs ?? NATIVE_RUNTIME_STARTUP_TIMEOUT_MS);
+  let turnStarted = false;
+  const markTurnStarted = (turnId: string): void => {
+    if (turnId && !activeTurnId) {
+      activeTurnId = turnId;
+      translator.turnStarted(turnId);
+    }
+    if (turnStarted) return;
+    turnStarted = true;
+    clearTimeout(startup);
+    io.emit({ type: "turn.started" });
+  };
   const peer = new RpcPeer(child, {
     notification: (method, params) => {
+      if (settled) return;
+      if (method === "turn/started" && ownsThread(params)) {
+        markTurnStarted(str(record(params.turn).id));
+        return;
+      }
       if (method === "item/started" || method === "item/completed") rememberFileChange(record(params.item), fileChanges);
       emitAll(translator.notification(method, params));
-      if (method === "turn/started" && ownsThread(params)) activeTurnId = str(record(params.turn).id) || activeTurnId;
       if (method === "turn/completed" && ownsThread(params)) {
         activeTurnId = undefined;
         settle(record(params.turn).status === "completed" ? 0 : 1);
@@ -188,11 +216,10 @@ export async function runCodexTurn(
     },
     request: (method, params) => answerServerRequest(method, params, (question) => ask(question, asks.signal), fileChanges),
   });
-  const stop = (): void => {
-    child.stdin.end();
-    child.kill("SIGTERM");
-    setTimeout(() => { if (child.exitCode === null) child.kill("SIGKILL"); }, KILL_GRACE_MS).unref();
-  };
+  const exited = new Promise<void>((resolve) => {
+    child.once("exit", () => resolve());
+    child.once("error", () => resolve());
+  });
   child.on("error", (error) => {
     io.emit({ type: "error", message: `Could not start codex app-server: ${error.message}` });
     settle(1);
@@ -234,15 +261,15 @@ export async function runCodexTurn(
         ? await peer.request("thread/resume", { threadId: options.resume, ...threadSettings })
         : await peer.request("thread/start", threadSettings);
       threadId = str(record(started.thread).id);
+      if (!threadId) throw new Error("Codex app-server did not open a thread.");
       emitAll(translator.threadStarted(threadId));
       const turn = await peer.request("turn/start", {
         threadId,
         input: [{ type: "text", text: options.prompt, text_elements: [] }, ...(options.images ?? []).map((path) => ({ type: "localImage", path }))],
       });
-      const turnId = str(record(turn.turn).id);
-      translator.turnStarted(turnId);
-      if (!settled) activeTurnId = turnId;
+      if (!settled) markTurnStarted(str(record(turn.turn).id));
     } catch (error) {
+      if (settled) return;
       io.emit({ type: "error", message: errorMessage(error) });
       settle(1);
     }
@@ -251,11 +278,24 @@ export async function runCodexTurn(
   try {
     return await done;
   } finally {
+    clearTimeout(startup);
     io.signal?.removeEventListener("abort", onAbort);
     listener?.close();
     asks.abort();
-    child.removeAllListeners("exit");
-    stop();
+    peer.failAll(new Error("The Codex turn ended."));
+    child.stdin.end();
+    child.kill("SIGTERM");
+    const kill = setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS);
+    kill.unref();
+    try {
+      await exited;
+    } finally {
+      clearTimeout(kill);
+      // The enclosing daemon verifies the process tree. A descendant holding
+      // a pipe must not keep the adapter alive after the app-server exits.
+      child.stdout.destroy();
+      child.stderr.destroy();
+    }
   }
 }
 

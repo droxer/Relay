@@ -324,6 +324,8 @@ export class CodexStreamRenderer {
   private readonly text = new BlockStreamRenderer(TEXT_MARK, ansi.live);
   private readonly reasoning = new BlockStreamRenderer(THINK_MARK, ansi.dim, [ansi.dim, ansi.italic]);
   private readonly lines = new JsonLineRenderer((line) => this.formatLine(line));
+  private readonly drafts = new Map<string, string>();
+  private openReply?: string;
 
   feed(chunk: string): string {
     return this.lines.feed(chunk);
@@ -333,8 +335,15 @@ export class CodexStreamRenderer {
     const event = parseJsonObject(line);
     if (!event) return this.text.feed(`${sanitizeUntrustedText(line)}\n`);
 
-    if (event.type === "turn.started") return `\n${status("info", "Codex started.")}\n`;
-    if (event.type === "turn.completed") return `\n${status("ok", "Codex finished.")}\n`;
+    if (event.type === "turn.started") {
+      this.drafts.clear();
+      this.openReply = undefined;
+      return `\n${status("info", "Codex started.")}\n`;
+    }
+    if (event.type === "turn.completed") {
+      this.openReply = undefined;
+      return `\n${status("ok", "Codex finished.")}\n`;
+    }
     if (event.type === "turn.failed") {
       const error = asRecord(event.error);
       return `\n${status("error", `Codex failed: ${codexErrorMessage(error.message, "turn failed")}`)}\n`;
@@ -343,8 +352,21 @@ export class CodexStreamRenderer {
 
     if (typeof event.type === "string" && event.type.startsWith("item.")) {
       const item = asRecord(event.item);
+      if (item.type === "agent_message" && event.type === "item.delta"
+        && typeof item.id === "string" && typeof item.delta === "string" && item.delta) {
+        return this.replyDelta(item.id, item.delta);
+      }
       if (item.type === "agent_message" && event.type === "item.completed") {
         const text = textFromContentRecord(item).trim();
+        const id = typeof item.id === "string" ? item.id : undefined;
+        const draft = id ? this.drafts.get(id) : undefined;
+        if (id) this.drafts.delete(id);
+        if (draft !== undefined && (!text || draft.trim() === text)) {
+          if (this.openReply !== id) return "";
+          this.openReply = undefined;
+          return "\n";
+        }
+        this.openReply = undefined;
         if (!text) return "";
         this.text.resetBlock();
         return `\n${this.text.feed(`${text}\n`)}`;
@@ -352,11 +374,14 @@ export class CodexStreamRenderer {
       if (item.type === "reasoning" && event.type === "item.completed") {
         const text = textFromContentRecord(item).trim();
         if (!text) return "";
+        this.openReply = undefined;
         this.reasoning.resetBlock();
         return `\n${this.reasoning.feed(`${text}\n`)}`;
       }
       if (item.type === "command_execution" && event.type === "item.started") {
-        return toolLine("command", String(item.command ?? "command"));
+        const boundary = this.openReply === undefined ? "" : "\n";
+        this.openReply = undefined;
+        return boundary + toolLine("command", String(item.command ?? "command"));
       }
       if (item.type === "file_change" && event.type === "item.completed") {
         return `\n${status("info", "Codex changed files.")}\n`;
@@ -369,6 +394,16 @@ export class CodexStreamRenderer {
       return `\n${this.text.feed(`${text}\n`)}`;
     }
     return "";
+  }
+
+  private replyDelta(id: string, raw: string): string {
+    const text = sanitizeUntrustedText(raw);
+    if (!text) return "";
+    this.drafts.set(id, (this.drafts.get(id) ?? "") + text);
+    if (this.openReply === id) return this.text.feed(text);
+    this.openReply = id;
+    this.text.resetBlock();
+    return "\n" + this.text.feed(text);
   }
 }
 

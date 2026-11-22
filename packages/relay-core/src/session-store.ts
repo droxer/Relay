@@ -284,8 +284,9 @@ export interface CollaborationRoundManifest {
 }
 
 export interface ExecutionStatus {
-  phase: "queued" | "running" | "stopping" | "unresponsive" | "finalizing" | "terminal" | "recovery_required";
+  phase: "queued" | "starting" | "running" | "stopping" | "unresponsive" | "finalizing" | "terminal" | "recovery_required";
   executionConfirmed: boolean;
+  startingRunId?: string | null;
   /** Effective mode for the command currently associated with this execution. */
   permissionMode?: ThreadPermissionMode;
   /** Daemon heartbeat liveness; independent of execution ownership or exit. */
@@ -614,6 +615,7 @@ export type RelayEvent =
       timestamp: string;
       runId: string;
       agent: AgentName;
+      runtimeStarted?: boolean;
       entries: Array<{
         stream: "stdout" | "stderr";
         text: string;

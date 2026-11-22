@@ -11,6 +11,8 @@ from relay.daemon_registry import config
 def connection(tmp_path, monkeypatch):
     h = DaemonE2E(tmp_path, monkeypatch, daemon_options={
         "commandPollWaitMs": 1000, "commandLeaseSeconds": 3, "unreachableGraceMs": 10000,
+        # Give the real HTTP cancellation report time to drain under CI load.
+        "shutdownGraceMs": 5000,
     })
     try:
         h.setup()
@@ -48,6 +50,9 @@ def test_blackholed_poll_does_not_block_heartbeats_or_recovery(connection, monke
     # the daemon subprocess look like a dead computer.
     monkeypatch.setattr(config, "COMMAND_POLL_MAX_WAIT_SECONDS", 1)
     monkeypatch.setattr(h.ctx.registry, "liveness_timeout_ms", 6000)
+    # Registration gives a new Computer the benefit of the doubt until its
+    # first command poll. Wait for that observation before testing its expiry.
+    eventually(lambda: (h.ctx.daemon_store.get_node(h.node_id) or {}).get("lastPollAt"))
     h.gate.fault = {"suffix": "/commands", "kind": "hold", "remaining": 100}
     eventually(lambda: any(entry.get("fault") == "hold" for entry in h.gate.requests))
     beats = len([entry for entry in h.gate.requests if entry["path"].endswith("/heartbeat")])

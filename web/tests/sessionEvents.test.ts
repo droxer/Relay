@@ -418,3 +418,19 @@ describe("queued execution follows live progress", () => {
     });
   }
 });
+
+it("only leaves native startup on readiness from the current runtime", () => {
+  const initial = session({
+    execution: {
+      phase: "starting", startingRunId: "current", executionConfirmed: true, deletionRequested: false,
+      canDelete: false, blockingReason: "runtime_starting", lastConfirmedAt: null, nextRecoveryAt: null,
+    },
+  });
+  const output = (runId: string, runtimeStarted: boolean) => relayEvent("agent.output.batch", initial.id, {
+    agent: "codex", runId, runtimeStarted, entries: [{ stream: "stdout", sequence: 0, text: "frame" }],
+  });
+  const metadata = applySessionEvent(initial, output("current", false));
+  assert.equal(metadata.execution?.phase, "starting");
+  assert.equal(applySessionEvent(metadata, output("older", true)).execution?.phase, "starting");
+  assert.equal(applySessionEvent(metadata, output("current", true)).execution?.phase, "running");
+});

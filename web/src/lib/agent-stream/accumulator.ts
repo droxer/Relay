@@ -2,6 +2,7 @@ import type { AgentName } from "../../types.ts";
 import { sameRenderedText } from "./builders.ts";
 import { agentCheckpointId, agentCheckpoints, parseAgentStream } from "./parse.ts";
 import type { AgentSegment } from "./segments.ts";
+import { CodexStreamParser } from "./codex.ts";
 import { OpenCodeStreamParser } from "./opencode.ts";
 
 /**
@@ -23,9 +24,17 @@ export class AgentStreamAccumulator {
   // Set once Claude's `result` frame is seen; from then on the log is parsed
   // canonically as a whole (see update).
   private settled = false;
-  private openCode = new OpenCodeStreamParser();
+  private incremental: CodexStreamParser | OpenCodeStreamParser | undefined;
 
-  constructor(private readonly agent: AgentName) {}
+  constructor(private readonly agent: AgentName) {
+    this.incremental = this.makeIncrementalParser();
+  }
+
+  private makeIncrementalParser() {
+    if (this.agent === "codex") return new CodexStreamParser();
+    if (this.agent === "opencode") return new OpenCodeStreamParser();
+    return undefined;
+  }
 
   update(raw: string): AgentSegment[] {
     if (raw === this.raw) return this.segments;
@@ -35,7 +44,7 @@ export class AgentStreamAccumulator {
       this.seenCheckpointIds.clear();
       this.turnTextSignatures.clear();
       this.settled = false;
-      this.openCode = new OpenCodeStreamParser();
+      this.incremental = this.makeIncrementalParser();
     }
     this.raw = raw;
 
@@ -44,15 +53,14 @@ export class AgentStreamAccumulator {
     // streamed delta cost the length of the run.
     const checkpoints = this.settled ? [] : agentCheckpoints(this.agent, raw, this.stableOffset);
 
-    if (this.agent === "opencode") {
-      // Commit complete records once, retaining the open text segment across
-      // checkpoints so ACP deltas extend it instead of mounting new paragraphs.
+    if (this.incremental) {
+      // Commit complete records once and keep the current reply across deltas.
       const checkpoint = checkpoints.at(-1);
       if (checkpoint) {
-        this.openCode.append(raw.slice(this.stableOffset, checkpoint.end));
+        this.incremental.append(raw.slice(this.stableOffset, checkpoint.end));
         this.stableOffset = checkpoint.end;
       }
-      this.segments = this.openCode.preview(raw.slice(this.stableOffset));
+      this.segments = this.incremental.preview(raw.slice(this.stableOffset));
       return this.segments;
     }
 

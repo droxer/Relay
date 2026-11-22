@@ -12,6 +12,7 @@ from ...core.computer_identity import computer_id
 from ...core.daemon_capabilities import (
     has_capability,
     DAEMON_CAPABILITY_AGENT_SKILLS,
+    DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP,
 )
 from ..records import (
     CARRIED_RUN_REQUEST_STATE_KEYS,
@@ -102,6 +103,13 @@ def _run_start_command(
         "_runRequestId": run_request["id"],
         **({"_permissionMode": "yolo"} if task_yolo else {}),
         "reportWorkspaceStatus": True,
+        **(
+            {"reportRuntimeStartup": True}
+            if sandbox.get("sandboxMode") == "none"
+            and assignment["executorKind"] in {"codex", "opencode"}
+            and has_capability(sandbox, DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP)
+            else {}
+        ),
         **(
             {"reportExecutionStarted": True}
             if context or run_request.get("taskId") or assignment.get("delegationId") or assignment.get("delegationReturnId")

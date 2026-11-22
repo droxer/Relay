@@ -184,6 +184,7 @@ const FAKE_CODEX = `#!/usr/bin/env node
 const { appendFileSync } = require("node:fs");
 const readline = require("node:readline");
 const send = (message) => process.stdout.write(JSON.stringify(message) + "\\n");
+let startRequestId;
 setInterval(() => {}, 1000);
 process.on("SIGTERM", () => process.exit(0));
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
@@ -192,11 +193,12 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
   if (message.method === "initialize") send({ id: message.id, result: {} });
   if (message.method === "thread/start") send({ id: message.id, result: { thread: { id: "thr_1" } } });
   if (message.method === "turn/start") {
-    send({ id: message.id, result: { turn: { id: "turn_1" } } });
+    startRequestId = message.id;
     send({ method: "turn/started", params: { threadId: "thr_1", turn: { id: "turn_1", status: "inProgress", items: [] } } });
   }
   if (message.method === "turn/steer") {
     if (message.params.expectedTurnId !== "turn_1") return send({ id: message.id, error: { code: -32600, message: "turn mismatch" } });
+    send({ id: startRequestId, result: { turn: { id: "turn_1" } } });
     send({ id: message.id, result: { turnId: "turn_1" } });
     send({ method: "turn/completed", params: { threadId: "thr_1", turn: { id: "turn_1", status: "completed", items: [], error: null } } });
   }
@@ -204,21 +206,26 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
 `;
 
 describe("Codex live messages", () => {
-  it("steers the active turn with turn/steer and keeps the run going", async () => {
+  it("steers a started turn before its turn/start reply arrives", async () => {
     const codexBin = script("codex", FAKE_CODEX);
     const log = join(scratch, "codex.jsonl");
     writeFileSync(log, "");
     process.env.FAKE_LOG = log;
     const { state, listen } = capturedListener();
+    const eventTypes: unknown[] = [];
+    const cancellation = new AbortController();
     try {
       const turn = runCodexTurn(
         { config: [], cwd: scratch, prompt: "fix the bug" },
-        { codexBin, emit: () => {}, ask: async () => ({ behavior: "deny" }), listen },
+        {
+          codexBin, emit: (event) => eventTypes.push(event.type),
+          ask: async () => ({ behavior: "deny" }), listen, signal: cancellation.signal,
+        },
       );
-      await waitFor(() => logLines(log).some((entry) => entry.method === "turn/start"), "the turn to start");
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitFor(() => eventTypes.includes("turn.started"), "the turn to start");
       assert.equal(await state.handler!({ id: "msg-1", text: "Use the staging database." }), "steer");
       assert.equal(await turn, 0);
+      assert.equal(eventTypes.filter((type) => type === "turn.started").length, 1);
       const steered = logLines(log).find((entry) => entry.method === "turn/steer");
       assert.deepEqual(steered?.params, {
         threadId: "thr_1",
@@ -229,6 +236,7 @@ describe("Codex live messages", () => {
       // After the turn, a message has nowhere to go.
       await assert.rejects(state.handler!({ id: "msg-2", text: "late" }), /no turn in progress/);
     } finally {
+      cancellation.abort();
       delete process.env.FAKE_LOG;
     }
   });
@@ -260,10 +268,11 @@ describe("OpenCode live messages", () => {
     const log = join(scratch, "opencode.jsonl");
     writeFileSync(log, "");
     const { state, listen } = capturedListener();
+    let stdout = "";
     const run = runOpenCodeAcp(
       { opencodeCommand: opencode, cwd: scratch, prompt: "do the thing" },
       {
-        stdout: { write: () => true },
+        stdout: { write: (chunk) => { stdout += chunk; } },
         stderr: { write: () => true },
         ask: async () => ({ behavior: "deny" }),
         env: { ...process.env, FAKE_LOG: log },
@@ -271,8 +280,10 @@ describe("OpenCode live messages", () => {
       },
     );
     await waitFor(() => logLines(log).some((entry) => entry.method === "session/prompt"), "the first prompt");
+    assert.match(stdout, /"type":"relay\.runtime\.started"/);
     assert.equal(await state.handler!({ id: "msg-1", text: "Stop and write tests first." }), "interrupt");
     assert.equal(await run, 0);
+    assert.equal((stdout.match(/"type":"relay\.runtime\.started"/g) ?? []).length, 1);
     const sent = logLines(log);
     assert.deepEqual(sent.filter((entry) => entry.method === "session/cancel").map((entry) => entry.params), [{ sessionId: "ses_1" }]);
     const prompts = sent.filter((entry) => entry.method === "session/prompt");

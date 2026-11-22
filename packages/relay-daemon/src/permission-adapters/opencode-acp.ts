@@ -15,6 +15,7 @@ import { AcpConnection, asRecord, contentText, MethodNotFound, permissionOptions
 import {
   askBroker,
   listenForLiveMessages,
+  NATIVE_RUNTIME_STARTUP_TIMEOUT_MS,
   runtimeEnv,
   type LiveMessageHandler,
   type LiveMessageListener,
@@ -43,6 +44,7 @@ export interface OpenCodeAcpIo {
   stderr: { write(text: string): unknown };
   ask: AskBroker;
   signal?: AbortSignal;
+  startupTimeoutMs?: number;
   env?: NodeJS.ProcessEnv;
   /** Starts listening for a person's live messages; defaults to the run's broker. */
   listen?: Listen;
@@ -77,6 +79,10 @@ export class RunJsonWriter {
 
   error(message: string): void {
     this.line({ type: "error", error: { message } });
+  }
+
+  started(): void {
+    this.line({ type: "relay.runtime.started" });
   }
 
   private line(event: Record<string, unknown>): void {
@@ -177,12 +183,16 @@ export function questionKind(acpKind: string | undefined): PermissionQuestionKin
 
 /** Runs one prompt; resolves to the process exit code. */
 export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAcpIo): Promise<number> {
+  if (io.signal?.aborted) return 130;
   const writer = new RunJsonWriter(io.stdout);
   const translator = new SessionUpdateTranslator(writer);
   // A question still open when the prompt ends hangs up, so the broker
   // withdraws its prompt and no open socket keeps this process alive.
   const asks = new AbortController();
   const ask: AskBroker = (question) => io.ask(question, asks.signal);
+  const startup = new AbortController();
+  const timer = setTimeout(() => startup.abort(new Error("Starting OpenCode timed out before the prompt began.")), io.startupTimeoutMs ?? NATIVE_RUNTIME_STARTUP_TIMEOUT_MS);
+  const signal = io.signal ? AbortSignal.any([io.signal, startup.signal]) : startup.signal;
   try {
     return await withAcpChild(
       {
@@ -192,7 +202,7 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
         cwd: options.cwd,
         env: runtimeEnv(io.env ?? process.env),
         stderr: io.stderr,
-        signal: io.signal,
+        signal,
         onRequest: async (message: JsonRpcMessage) => {
           if (message.method === "session/request_permission") {
             return await answerPermissionRequest(message.params ?? {}, translator, ask);
@@ -209,6 +219,10 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
             connection,
             options,
             io.listen ?? ((handler) => listenForLiveMessages(handler, io.env ?? process.env)),
+            () => {
+              clearTimeout(timer);
+              writer.started();
+            },
           );
           if (stopReason !== "end_turn") {
             reportFailure(io, writer, `OpenCode stopped the turn (${stopReason}).`);
@@ -222,6 +236,7 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
       },
     );
   } finally {
+    clearTimeout(timer);
     asks.abort();
   }
 }
@@ -231,7 +246,12 @@ function reportFailure(io: OpenCodeAcpIo, writer: RunJsonWriter, message: string
   io.stderr.write(`error: failed to run prompt: ${message}\n`);
 }
 
-async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions, listen: Listen): Promise<string> {
+async function runPrompt(
+  connection: AcpConnection,
+  options: OpenCodeAcpOptions,
+  listen: Listen,
+  onReady: () => void,
+): Promise<string> {
   await connection.request("initialize", {
     protocolVersion: ACP_PROTOCOL_VERSION,
     // OpenCode runs its own tools; the adapter offers no file system or terminal.
@@ -256,6 +276,7 @@ async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions,
     return "interrupt";
   });
   try {
+    onReady();
     let text = options.prompt;
     for (;;) {
       inFlight = true;

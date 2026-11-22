@@ -42,6 +42,9 @@ export function queuesOutputForReplay(send: typeof fetch, body: unknown): boolea
 export function hasPendingOutput(send: typeof fetch, commandId: string): boolean {
   return outboxes.get(send)?.hasPendingOutput(commandId) ?? false;
 }
+export function onOutputDrained(send: typeof fetch, commandId: string, listener: () => void): () => void {
+  return outboxes.get(send)?.onOutputDrained(commandId, listener) ?? (() => {});
+}
 export interface TerminalRecord { key: string; event: Record<string, unknown>; durable?: Promise<void> }
 interface RecordIndex { owner: string; sequence: number; terminal: boolean; bytes: number }
 export interface ReportRejection { status: number; detail: string; at?: string }
@@ -80,6 +83,7 @@ export class TerminalOutbox {
   private readonly writes = new Map<string, { event: Record<string, unknown>; done: Promise<void>; bytes: number }>();
   private writingBytes = 0;
   private readonly outputCounts = new Map<string, number>();
+  private readonly outputDrainListeners = new Map<string, Set<() => void>>();
   private readonly positions = new Map<string, number>();
   private onPressure?: () => void;
   private onAcceptance?: () => void;
@@ -115,6 +119,15 @@ export class TerminalOutbox {
   usesBatching(): boolean { return this.batching; }
   hasPendingOutput(commandId: string): boolean {
     return (this.outputCounts.get(commandId) ?? 0) > 0;
+  }
+  onOutputDrained(commandId: string, listener: () => void): () => void {
+    const listeners = this.outputDrainListeners.get(commandId) ?? new Set();
+    this.outputDrainListeners.set(commandId, listeners);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+      if (!listeners.size) this.outputDrainListeners.delete(commandId);
+    };
   }
   status(): { bytes: number; limitBytes: number; pending: number; quarantined: number; corrupt: number; persistenceFault: boolean; verified: boolean; accepted: number; quotaExceeded: boolean; capturingBytes: number; positions: Array<{ commandId: string; sequence: number }> } {
     return { bytes: this.bytes, limitBytes: this.maxOutputBytes, pending: this.index.size,
@@ -260,6 +273,12 @@ export class TerminalOutbox {
     const rejection = join(this.directory, `${key}.rejected`);
     if (existsSync(rejection)) { this.bytes -= statSync(rejection).size; rmSync(rejection); syncDirectory(this.directory); }
     this.rejected.delete(key);
+    if (!record.terminal) {
+      const commandId = String(JSON.parse(record.owner)[0]);
+      if (!this.hasPendingOutput(commandId)) {
+        for (const listener of this.outputDrainListeners.get(commandId) ?? []) listener();
+      }
+    }
   }
   quarantined(commandId: string, leaseId?: string): ({ reportId: string } & ReportRejection) | undefined {
     const reportId = digest(JSON.stringify([commandId, leaseId ?? null]));

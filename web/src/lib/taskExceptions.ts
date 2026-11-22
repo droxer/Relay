@@ -17,7 +17,7 @@ import { waitsOnPrerequisites } from "./taskPrerequisites.ts";
 export const UNKNOWN_BLOCKER_SENTINEL = "Execution needs attention.";
 
 /** Session phases that mean the run is proceeding, not recovering. */
-const SETTLED_EXECUTION_PHASES = ["running", "terminal"];
+const SETTLED_EXECUTION_PHASES = ["starting", "running", "terminal"];
 
 type TaskException =
   /** The session behind this task is reconciling rather than running. */

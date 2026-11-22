@@ -60,6 +60,7 @@ export {
   type AgentName,
   type AgentExecutor,
   type AgentRunOptions,
+  type PiOutputMode,
   type AgentState,
   type PermissionPromptLaunch,
   type ProjectSetupBrief,

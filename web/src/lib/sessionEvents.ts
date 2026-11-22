@@ -58,7 +58,8 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
 
   // A newly accepted run supersedes the last polled execution summary.
   // Keep deletion intent, which remains authoritative across every run event.
-  if (event.type === "agent.started" || (event.type === "session.status" && event.status === "running")) {
+  if ((event.type === "agent.started" && next.execution?.startingRunId !== event.runId)
+    || (event.type === "session.status" && event.status === "running")) {
     delete next.execution;
   }
 
@@ -69,12 +70,16 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
   const progressRunId = event.type === "agent.output" || event.type === "agent.output.batch"
     ? event.runId
     : event.type === "agent.permission_requested" ? event.request.runId : undefined;
-  if (next.execution?.phase === "queued" && progressRunId
+  const queuedProgress = next.execution?.phase === "queued" && progressRunId
     && next.agentRuns.some(run => run.id === progressRunId && run.status === "running")
-    && (!next.execution.queuedAt || Date.parse(event.timestamp) >= Date.parse(next.execution.queuedAt))) {
+    && (!next.execution.queuedAt || Date.parse(event.timestamp) >= Date.parse(next.execution.queuedAt));
+  const runtimeStarted = next.execution?.phase === "starting" && event.type === "agent.output.batch"
+    && event.runtimeStarted && next.execution.startingRunId === event.runId;
+  if (next.execution && (queuedProgress || runtimeStarted)) {
     next.execution = {
       ...next.execution,
       phase: "running",
+      startingRunId: undefined,
       blockingReason: "execution_active",
       queuedAt: null,
     };

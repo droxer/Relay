@@ -52,6 +52,13 @@ export class CodexExecEventTranslator {
         return [{ type: "turn.started" }];
       case "item/started":
         return this.ours(params) ? this.item("item.started", record(params.item)) : [];
+      case "item/agentMessage/delta": {
+        const itemId = str(params.itemId);
+        const delta = str(params.delta);
+        return this.ours(params) && itemId && delta
+          ? [{ type: "item.delta", item: { id: this.idFor(itemId), type: "agent_message", delta } }]
+          : [];
+      }
       case "item/completed":
         return this.ours(params) ? this.item("item.completed", record(params.item)) : [];
       case "turn/plan/updated":

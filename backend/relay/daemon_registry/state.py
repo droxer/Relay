@@ -171,7 +171,7 @@ class RegistryState:
         def _next_index_after_success(self, run_request: dict[str, Any], next_state: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             ...
 
-        def _note_run_progress(self, command: dict[str, Any]) -> None:
+        def _note_run_progress(self, command: dict[str, Any], *, runtime_started: bool = False) -> None:
             ...
 
         def _owes_round_result(self, run_request: dict[str, Any]) -> bool:

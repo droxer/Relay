@@ -10,7 +10,7 @@ import {
 } from "./prompts.js";
 import { escapeRegExp, shellCommand, shellQuote } from "./shell.js";
 import type { PermissionPromptAdapter } from "./agents.js";
-import type { AgentState, PermissionPromptLaunch } from "./state.js";
+import type { AgentState, PermissionPromptLaunch, PiOutputMode } from "./state.js";
 import { isResumableSessionId } from "./runtime-session.js";
 import { codexConnectionArgs, connectionServer } from "./connection-tools.js";
 
@@ -223,8 +223,8 @@ function permissionPromptLaunch(state: AgentState, adapter: PermissionPromptAdap
   return launch;
 }
 
-export function buildPiCommand(state: AgentState, workspacePath?: string): string {
-  return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model, permissionPromptLaunch(state, "pi-extension"));
+export function buildPiCommand(state: AgentState, workspacePath?: string, outputMode?: PiOutputMode): string {
+  return buildPiInvocation(piTaskPrompt(state), state.skill_paths, workspacePath, state.agent_model, permissionPromptLaunch(state, "pi-extension"), outputMode);
 }
 /**
  * Pi has no permission system, so a run that asks a person loads the Pi
@@ -239,6 +239,7 @@ function buildPiInvocation(
   workspacePath?: string,
   pinnedModel?: string,
   launch?: PermissionPromptLaunch,
+  outputMode?: PiOutputMode,
 ): string {
   const argv = [...agentArgv("pi"), "--no-session"];
   if (launch) argv.push("--extension", launch.args[0]);
@@ -259,7 +260,9 @@ function buildPiInvocation(
     "pi --help 2>&1 | grep -Eq '(^|[[:space:]])--mode([=,[:space:]]|$)'";
   const supportsStreamingPrint =
     "pi --help 2>&1 | grep -Eq '(^|[[:space:]])(-P|--print-streaming)([=,[:space:]]|$)'";
-  const invocation = nativeWindowsExecution()
+  const invocation = outputMode
+    ? { json: jsonCommand, streaming: streamingCommand, print: printCommand }[outputMode]
+    : nativeWindowsExecution()
     ? `const help = await relayRun(["pi", "--help"], { capture: true, allowFailure: true });
        if (/(^|\\s)--mode([=,\\s]|$)/m.test(help.stdout + help.stderr)) { ${jsonCommand}; }
        else if (/(^|\\s)(-P|--print-streaming)([=,\\s]|$)/m.test(help.stdout + help.stderr)) { ${streamingCommand}; }

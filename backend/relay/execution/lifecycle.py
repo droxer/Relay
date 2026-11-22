@@ -19,6 +19,7 @@ from ..daemon_registry.runs.run_cursor import CLEARED_RUN_CURSOR
 from ..core.daemon_records import (
     EXECUTION_INTERRUPTED_STATE_KEY,
     EXIT_UNCONFIRMED_STATE_KEY,
+    RUNTIME_STARTED_COMMAND_STATE_KEY,
     STOP_ACK_LOST_STATE_KEY,
     STOP_ACK_GRACE_SECONDS,
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
@@ -75,6 +76,7 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                      computer_online: bool | None = None) -> dict[str, Any]:
     now = now or datetime.now(UTC)
     state = (request or {}).get("state") or {}
+    command_payload = (command or {}).get("command") or {}
     phase, reason = "terminal", None
     confirmed = False
     parked_workflow = None
@@ -93,7 +95,7 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
             phase, reason = "recovery_required", state.get("_relay_recovery_reason") or "finalization_failed"
         elif request.get("status") == "finalizing" or (command or {}).get("status") in TERMINAL:
             phase, reason = "finalizing", "saving_results"
-        elif (command or {}).get("status") == "dispatched":
+        elif command and command.get("status") == "dispatched":
             confirmed = live
             if state.get(EXECUTION_INTERRUPTED_STATE_KEY):
                 # The daemon restarted and said it will not resume this run;
@@ -115,6 +117,9 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                 phase, reason = "stopping", "awaiting_termination"
             elif not live:
                 phase, reason = "unresponsive", "execution_unconfirmed"
+            elif (command_payload.get("reportRuntimeStartup")
+                  and state.get(RUNTIME_STARTED_COMMAND_STATE_KEY) != command["id"]):
+                phase, reason = "starting", "runtime_starting"
             else:
                 phase, reason = "running", "execution_active"
         else:
@@ -174,6 +179,7 @@ def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
         and not retained_result,
         "lastConfirmedAt": (request or {}).get("currentProgressAt"),
         "queuedAt": queued_at,
+        **({"startingRunId": command_payload.get("runId")} if phase == "starting" else {}),
         **({"queueWaitConfirmed": _queue_wait_confirmed(queued_at, now)} if phase == "queued" else {}),
         "nextRecoveryAt": state.get("_relay_finalization_retry_at"),
         **(

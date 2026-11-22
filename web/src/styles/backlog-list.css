@@ -79,6 +79,14 @@ tr[data-slot="table-row"]:not([data-selected="true"]):hover {
   max-width: 100%;
 }
 
+/* Keep the record link usable when a long Project name competes for the title column. */
+.backlog-row-lead-main > .task-project-label {
+  flex-shrink: 1000;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* In a list row the title is the fact and the tags are a hint, so the tags
    give way first: they shrink a thousand times faster than the title, and
    wrap inside a one-chip-high box (a badge is --avatar-xs tall, task-tags.css)

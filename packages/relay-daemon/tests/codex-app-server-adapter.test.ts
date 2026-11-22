@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, describe, it } from "node:test";
 
-import { answerServerRequest, parseCodexAdapterArgs, userInputQuestions } from "../src/permission-adapters/codex-app-server.js";
+import { answerServerRequest, parseCodexAdapterArgs, runCodexTurn, userInputQuestions } from "../src/permission-adapters/codex-app-server.js";
 import { CodexExecEventTranslator } from "../src/permission-adapters/codex-exec-events.js";
 import type { PermissionQuestion } from "../src/permission-adapters/protocol.js";
 
@@ -142,6 +142,26 @@ describe("Codex app-server adapter", () => {
       log: readFileSync(logFile, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, any>),
     })));
   }
+
+  it("times out initialization and reaps the silent app-server", async () => {
+    const silent = join(directory, "silent-codex");
+    writeFileSync(silent, [
+      "#!/bin/sh",
+      "IFS= read -r initialize",
+      'printf "%s\\n" "$$" > runtime.pid',
+      "while IFS= read -r request; do :; done",
+    ].join("\n"), { mode: 0o755 });
+    const events: Record<string, unknown>[] = [];
+    const code = await runCodexTurn({ cwd: directory, config: [], prompt: "test" }, {
+      codexBin: silent, emit: (event) => events.push(event),
+      startupTimeoutMs: 750, signal: AbortSignal.timeout(4_000),
+    });
+    assert.equal(code, 1);
+    assert.match(String(events[0]?.message), /starting Codex.*timed out/i);
+    const pid = Number(readFileSync(join(directory, "runtime.pid"), "utf8"));
+    assert.ok(pid > 0);
+    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  });
 
   it("prints exactly the JSONL codex exec --json would, and asks before escalations", async () => {
     const result = await run(["-c", "features.multi_agent=true", "--cwd", directory, "--model", "gpt-test", "--", "do", "it"]);
@@ -322,6 +342,20 @@ describe("Codex app-server adapter", () => {
 });
 
 describe("Codex exec event translation", () => {
+  it("forwards reply deltas for this turn using the final item's stable id", () => {
+    const translator = new CodexExecEventTranslator();
+    translator.threadStarted("thread");
+    translator.turnStarted("turn");
+    const params = { threadId: "thread", turnId: "turn", itemId: "message", delta: "Early" };
+    assert.deepEqual(translator.notification("item/agentMessage/delta", { ...params, turnId: "old" }), []);
+    assert.deepEqual(translator.notification("item/agentMessage/delta", params), [
+      { type: "item.delta", item: { id: "item_0", type: "agent_message", delta: "Early" } },
+    ]);
+    assert.deepEqual(translator.notification("item/completed", {
+      ...params, item: { id: "message", type: "agentMessage", text: "Early reply." },
+    }), [{ type: "item.completed", item: { id: "item_0", type: "agent_message", text: "Early reply." } }]);
+  });
+
   it("renders collaboration calls in exec's collab_tool_call shape", () => {
     const translator = new CodexExecEventTranslator();
     translator.threadStarted("thr");

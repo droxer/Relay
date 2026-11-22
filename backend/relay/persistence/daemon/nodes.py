@@ -35,7 +35,7 @@ from .rules import (
     preserve_node_poll,
     preserve_node_retirement,
 )
-from ...core.daemon_records import assigned_node_location, NODE_POLL_DRAINED_AT
+from ...core.daemon_records import assigned_node_location, node_finished_draining, NODE_POLL_DRAINED_AT
 from .rows import (
     _node_agent_identity,
     apply_node_agents,
@@ -248,7 +248,10 @@ class NodeRows(DaemonStoreState):
             agents = self._node_agents_by_node(conn, [node_pk])
             node = apply_node_agents(row_to_node(row), agents.get(node_pk, []))
             now = now_iso()
-            patch = patch or {}
+            # Report finalization can reach a replica after the stop notice
+            # reached another one. Preserve the stop under the node row lock.
+            if patch.get("status") in ("ready", "running") and node_finished_draining(node):
+                patch = {key: value for key, value in patch.items() if key not in ("status", "lastError")}
             updated = {
                 **node,
                 **{k: v for k, v in patch.items() if v is not None},

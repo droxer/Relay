@@ -62,6 +62,7 @@ DAEMON_CAPABILITY_DOT_THREAD_RECORDS = "dot-thread-records"
 # Thread records under `.relay/threads/`, moved there from `.threads/` and `threads/`.
 DAEMON_CAPABILITY_RELAY_THREAD_RECORDS = "relay-thread-records"
 
+DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP = "native-runtime-startup"
 DAEMON_CAPABILITY_DURABLE_REPORTS = "durable-reports"
 # Wait for backend output receipts before completion, with a 60s default drain
 # budget; keep unacknowledged output in the durable outbox for late replay.
@@ -121,6 +122,7 @@ DAEMON_CAPABILITY_LIVE_MESSAGES = "live-messages"
 # and stop-and-send stands in for live messages.
 DAEMON_RECOGNIZED_CAPABILITIES = DAEMON_NODE_CAPABILITIES | {
     DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS,
+    DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP,
     DAEMON_CAPABILITY_LIVE_MESSAGES,
 }
 

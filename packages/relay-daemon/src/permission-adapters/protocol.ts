@@ -13,6 +13,8 @@ import { readFileSync } from "node:fs";
 import { connect } from "node:net";
 import type { LiveMessageDelivery, PermissionAnswers, PermissionQuestionItem } from "relay-core";
 
+export const NATIVE_RUNTIME_STARTUP_TIMEOUT_MS = 15_000;
+
 export type PermissionQuestionKind = "command" | "file_change" | "tool" | "question";
 
 /** One tool use a runtime wants a person to approve, or a question it asks them. Keep `input` compact. */

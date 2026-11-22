@@ -89,3 +89,18 @@ test("session capture ignores runtimes without resume support", () => {
   stream.feed(JSON.stringify({ session_id: SESSION }) + "\n");
   assert.equal(stream.finish(), undefined);
 });
+
+test("startup readiness waits for the full native turn frame", async () => {
+  let started = 0;
+  await runAgentNode("codex", initialAgentState("test"), {
+    onRuntimeStarted: () => { started++; },
+    execStream: async (_command, _args, options) => {
+      options?.stdoutRenderer?.('{"type":"thread.started","thread_id":"session-1234"}\n{"type":"turn.sta');
+      assert.equal(started, 0);
+      options?.stdoutRenderer?.('rted"}\n{"type":"turn.started"}\n');
+      assert.equal(started, 1);
+      return { exit_code: 0, stdout: "", stderr: "" };
+    },
+  });
+  assert.equal(started, 1);
+});
