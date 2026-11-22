@@ -4,6 +4,7 @@ import os
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, nullcontext
+from functools import partial
 from pathlib import Path
 from dataclasses import fields
 from typing import Any, cast
@@ -184,12 +185,17 @@ def create_app(
         repair_records_before_serving(
             team_store=stores.teams, agent_store=stores.agents, agent_placement_store=stores.placements
         )
+    bundled_client_version = partial(
+        computer_installer_routes.bundle_client_version,
+        computer_installer_routes.bundle_path(settings.computer_bundle),
+    )
     registry = DaemonNodeRegistry(
         stores.sessions,
         stores.daemon,
         task_store=stores.tasks,
         project_store=stores.projects,
         notification_store=stores.notifications,
+        bundled_client_version=bundled_client_version,
     )
     connections = connection_service_from_env()
     backend = ServerDaemonNodeBackend(
@@ -233,6 +239,7 @@ def create_app(
     execution_lifecycle = ExecutionLifecycleService(registry, stores.chat)
     computer_notifications = ComputerNotificationWatcher(
         registry, stores.auth, stores.notifications, interval_seconds=watch_interval_from_env(),
+        bundled_client_version=bundled_client_version,
     )
     artifact_indexer = (
         ArtifactIndexWorker(

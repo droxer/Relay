@@ -21,6 +21,7 @@ from ...core.daemon_records import infer_node_location, node_finished_draining, 
 from ...core.daemon_capabilities import (
     client_outdated,
 )
+from ...core.client_version import client_update_available, client_version_key
 from ..credentials import (
     daemon_node_token_matches,
     hash_daemon_node_token,
@@ -208,6 +209,7 @@ class NodeLivenessMixin(RegistryState):
         else:
             active_runs_by_node = self._active_runs_by_node()
             queued_counts = self.daemon_store.queued_command_counts()
+        release = client_version_key(self.bundled_client_version()) if visible and self.bundled_client_version else None
         nodes = []
         for sandbox in sorted(
             visible,
@@ -228,6 +230,7 @@ class NodeLivenessMixin(RegistryState):
                     "stale": liveness["stale"],
                     "dispatchable": liveness["dispatchable"],
                     "clientOutdated": client_outdated(sandbox),
+                    "clientUpdateAvailable": client_update_available(sandbox, release),
                     **(
                         {"lastSeenAgeMs": liveness["lastSeenAgeMs"]}
                         if "lastSeenAgeMs" in liveness

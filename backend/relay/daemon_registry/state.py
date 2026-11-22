@@ -33,6 +33,7 @@ class RegistryState:
     project_store: Any
     notification_store: Any
     liveness_timeout_ms: int
+    bundled_client_version: Callable[[], str | None] | None
     sandboxes: dict[str, dict[str, Any]]
     active_commands: dict[str, dict[str, Any]]
     outputs: dict[str, list[str]]

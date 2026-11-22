@@ -36,6 +36,12 @@ jobs:
         run: python3 .github/scripts/ci_changes.py
       - name: Test suite selection
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Check the personal Computer installer version
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && github.event.before != '0000000000000000000000000000000000000000')
+        env:
+          PYTHONPATH: backend
+          RELEASE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 .github/scripts/daemon_release.py "$RELEASE_BASE" "$GITHUB_SHA"
 
   lint:
     name: Pre-commit checks

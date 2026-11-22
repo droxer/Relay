@@ -11,7 +11,7 @@ import { RuntimeMark } from "../RuntimeMark";
 import { StateMark } from "../StateMark";
 import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
-import { ClientOutdatedBadge } from "./ClientOutdatedBadge";
+import { ClientOutdatedBadge, hasClientUpdate } from "./ClientOutdatedBadge";
 import { ComputerConnectionNotice } from "./ComputerConnectionNotice";
 import { computerConnection, connectionNeedsNotice, type ComputerConnection } from "../../lib/computerConnection";
 import { HostOsBadge } from "./HostOsBadge";
@@ -136,7 +136,7 @@ export function ComputerCard({
           {/* The reader owns this machine, so the fix is theirs to make:
               name it in the open — the command, not only the badge's hover
               title — at the sub line's quiet weight, under the name. */}
-          {node.clientOutdated === true ? (
+          {hasClientUpdate(node) ? (
             <p className="computer-card-outdated">
               <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <code className="code" /> }} />
             </p>
