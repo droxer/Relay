@@ -82,7 +82,7 @@ const buttonVariants = cva(
         "icon-lg": "size-(--control-h-lg)",
       },
       /* Keep the legacy tinted prop compatible while all non-destructive
-         icon actions follow the neutral Geist-style hover treatment. */
+         icon actions follow the neutral hover treatment. */
       tinted: {
         true: "hover:border-(--line-2) hover:bg-(--control-fill-hover) hover:text-(--ink-1)",
         false: "",
