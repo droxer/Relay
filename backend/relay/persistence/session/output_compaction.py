@@ -63,10 +63,12 @@ REDACTED_PAYLOAD = {
         "agent.output": (
             "json_patch(session_events.payload, '{\"text\": \"\", \"compacted\": true}')"
         ),
+        # The scalar subquery can return plain text. Mark it as JSON where
+        # json_set inserts it so the entries remain an array.
         "agent.output.batch": (
             "json_set(json_patch(session_events.payload, '{\"compacted\": true}'), "
-            "'$.entries', (SELECT json_group_array(json(json_set(entry.value, "
-            "'$.text', ''))) FROM json_each(session_events.payload, '$.entries') AS entry))"
+            "'$.entries', json((SELECT json_group_array(json(json_set(entry.value, "
+            "'$.text', ''))) FROM json_each(session_events.payload, '$.entries') AS entry)))"
         ),
     },
 }
