@@ -186,14 +186,56 @@ test('quarantine interventions are explicit, audited, and never count discard as
   const send = outbox.wrapFetch(async () => new Response('conflict', { status: 409 }));
   await send('http://backend/events', { method: 'POST', body: JSON.stringify(output()) });
   const key = outbox.pending()[0]!.key;
-  assert.throws(() => outbox.discardQuarantined(key, 'operator', false), /acknowledge/);
+  assert.throws(() => outbox.discardReports({ report: key }, 'operator', false, () => {}), /acknowledge/);
   outbox.retryQuarantined(key, 'operator');
   assert.equal(outbox.status().quarantined, 0);
   await send('http://backend/events', { method: 'POST', body: JSON.stringify(output()) });
-  outbox.discardQuarantined(key, 'operator', true);
+  assert.equal(outbox.discardReports({ report: key }, 'operator', true, () => {}), 1);
   assert.equal(outbox.status().pending, 0);
   assert.equal(outbox.status().accepted, 0);
   assert.equal(readdirSync(root).filter(name => name.endsWith('.audit')).length, 2);
+});
+
+test('browser cleanup checks the confirmed revision and discards only the selected quarantine', async t => {
+  const root = fixture(t);
+  const outbox = new TerminalOutbox(root);
+  const signal = new AbortController().signal;
+  const fenced: string[] = [];
+  await outbox.wrapFetch(async () => new Response('Conflict', { status: 409 }))('http://backend/events', {
+    method: 'POST', body: JSON.stringify(output(0, 'rejected')),
+  });
+  const old = outbox.cleanupSnapshot();
+  await outbox.retain(output(0, 'new')).durable;
+  const changed = await outbox.discardLiveReports('all', old.revision, 'account:alice', id => fenced.push(id), () => false, signal);
+  assert.equal(changed.outcome, 'changed');
+  assert.deepEqual([changed.pending, changed.quarantined], [2, 1]);
+  assert.equal(fenced.length, 0);
+
+  const busy = await outbox.discardLiveReports('quarantined', changed.revision, 'account:alice', id => fenced.push(id), id => id === 'rejected', signal);
+  assert.equal(busy.outcome, 'busy');
+  assert.equal(busy.pending, 2);
+  assert.equal(fenced.length, 0);
+  const result = await outbox.discardLiveReports('quarantined', changed.revision, 'account:alice', id => fenced.push(id), () => false, signal);
+  assert.equal(result.outcome, 'discarded');
+  assert.equal(result.discarded, 1);
+  assert.deepEqual([result.pending, result.quarantined, outbox.status().accepted], [1, 0, 0]);
+  assert.deepEqual(fenced, ['rejected']);
+  assert.equal(new TerminalOutbox(root).pending()[0]?.event.commandId, 'new');
+  const audit = readdirSync(root).find(name => name.endsWith('.audit'));
+  assert.equal(JSON.parse(readFileSync(join(root, audit!), 'utf8')).actor, 'account:alice');
+});
+
+test('browser cleanup preserves reports captured after it starts', async t => {
+  const outbox = new TerminalOutbox(fixture(t));
+  for (let seq = 0; seq < 10; seq++) await outbox.retain(output(seq)).durable;
+  const snapshot = outbox.cleanupSnapshot();
+  const clearing = outbox.discardLiveReports('all', snapshot.revision, 'account:alice', () => {}, () => false, new AbortController().signal);
+  const afterConfirmation = outbox.retain(output(10)).key;
+  await outbox.flush();
+  const result = await clearing;
+  assert.equal(result.outcome, 'discarded');
+  assert.equal(result.discarded, 10);
+  assert.deepEqual(outbox.pending().map(report => report.key), [afterConfirmation]);
 });
 
 test('failed streams cannot monopolize the next bounded replay window', async t => {

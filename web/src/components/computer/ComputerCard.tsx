@@ -1,6 +1,7 @@
 "use client";
 
 import type { TFunction } from "i18next";
+import type { ReactNode } from "react";
 import { Trans } from "react-i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
 import { computerId } from "../../lib/createAgent";
@@ -13,6 +14,7 @@ import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
 import { ClientOutdatedBadge, hasClientUpdate } from "./ClientOutdatedBadge";
 import { ComputerConnectionNotice } from "./ComputerConnectionNotice";
+import { ComputerReportCleanup } from "./ComputerReportCleanup";
 import { computerConnection, connectionNeedsNotice, type ComputerConnection } from "../../lib/computerConnection";
 import { HostOsBadge } from "./HostOsBadge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +65,7 @@ import {
 export function ComputerCard({
   node,
   connection = computerConnection(node),
+  reportActions,
   onRename,
   onManageExecutors,
   onShowToken,
@@ -73,6 +76,7 @@ export function ComputerCard({
   node: ControlPanelDaemonNodeRecord;
   /** The computer's connection reading; liveness alone when not supplied. */
   connection?: ComputerConnection;
+  reportActions?: ReactNode;
   onRename: (node: ControlPanelDaemonNodeRecord) => void;
   onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
   onShowToken: (node: ControlPanelDaemonNodeRecord) => void;
@@ -200,6 +204,7 @@ export function ComputerCard({
       {connectionNeedsNotice(connection) ? (
         <ComputerConnectionNotice node={node} connection={connection} t={t} />
       ) : null}
+      {reportActions}
 
       {/* Active work only appears while there is some: an idle machine says so
           through its presence pill, not through an empty section. */}
@@ -312,6 +317,13 @@ function RuntimeRow({
  * computer's client last reported about its own transport. Kept apart so the
  * card itself stays a pure rendering of what it is given.
  */
-export function LiveComputerCard(props: Omit<Parameters<typeof ComputerCard>[0], "connection">) {
-  return <ComputerCard {...props} connection={computerConnection(props.node, props.node.transport)} />;
+export function LiveComputerCard(props: Omit<Parameters<typeof ComputerCard>[0], "connection" | "reportActions">) {
+  const { node, t } = props;
+  const connection = computerConnection(node, node.transport);
+  return <ComputerCard {...props} connection={connection} reportActions={(
+    <ComputerReportCleanup key={node.id} nodeId={node.id} name={computerName(node) ?? t("computer.unnamed")}
+      pending={connection.pendingReports} quarantined={connection.quarantinedReports}
+      available={isNodeOnline(node) && node.dispatchable !== false}
+      supported={Boolean(node.capabilities?.includes("report-cleanup"))} />
+  )} />;
 }

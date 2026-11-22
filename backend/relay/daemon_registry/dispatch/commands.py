@@ -6,6 +6,7 @@ A mixin of ``DaemonNodeRegistry``: it shares the registry's state and locks
 
 from __future__ import annotations
 
+import time
 from typing import Any
 from loguru import logger
 from ...core.permission_requests import (
@@ -23,9 +24,11 @@ from ...persistence.events import relay_event
 from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_PROJECT_LINKS,
     DAEMON_CAPABILITY_PROJECT_WORKSPACE_DELETE,
+    DAEMON_CAPABILITY_REPORT_CLEANUP,
     has_capability,
 )
 from ...core.workspace_capabilities import required_workspace_capabilities
+from ...core.report_cleanup import REPORT_CLEANUP
 from .. import config
 from ..records import (
     daemon_command_payload,
@@ -548,6 +551,13 @@ class CommandQueueMixin(RegistryState):
     ) -> bool:
         """Whether a leased command may go to the daemon; settles it otherwise."""
         command = record["command"]
+        if command["type"] == REPORT_CLEANUP:
+            if (not sandbox or command["actorUserId"] != sandbox.get("userId")
+                    or not has_capability(sandbox, DAEMON_CAPABILITY_REPORT_CLEANUP)
+                    or command["expiresAt"] <= int(time.time() * 1000)):
+                self.daemon_store.retire_command(command["id"], "Report cleanup authorization expired or unavailable.")
+                return False
+            return True
         missing_capability = missing_workspace_capability(command, sandbox)
         if not self._workspace_command_deliverable(
             sandbox_id, sandbox, command, missing_capability

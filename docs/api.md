@@ -1089,6 +1089,19 @@ for signed-in owners whose Computer has reported diagnostics. The browser view
 carries observation timestamps and liveness flags, so idle age counters do
 not invalidate its ETag.
 
+An owner can `POST /api/v1/daemon-nodes/{id}/report-cleanup` with
+`{action: "preview"}` to request live counts from a Computer advertising
+`report-cleanup`. It returns HTTP 202 with `{commandId}`. Poll
+`GET /api/v1/daemon-nodes/{id}/report-cleanup/{commandId}` for its status and
+result. A `ready` result includes the retained `pending` count, the
+`quarantined` subset and an opaque `revision`. To discard, post
+`{action: "discard", scope, revision, acknowledgeOutputLoss: true}`, where
+`scope` is `"quarantined"` or `"all"`. Cleanup checks the revision against the
+live queue before touching reports. A `discarded` result includes the number
+discarded and the remaining counts. If the queue changed, request a new
+preview before confirming again. Pending requests expire if they cannot start
+within 30 seconds.
+
 Managed-node retry creates an attempt with `replaceActive: true`; draining
 patches `desiredState` to `stopped`. `tasks/claim-next` is retired and has no v1
 operation.

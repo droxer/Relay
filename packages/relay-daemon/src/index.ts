@@ -25,6 +25,7 @@ import { DaemonLogWriter, type DaemonLogWriterOptions } from "./daemon-log-write
 import { AdmissionLedger } from "./admission-ledger.js";
 import { liveRuns } from "./live-runs.js";
 import { acquireDaemonStateLock } from "./daemon-state-lock.js";
+import { brandForBackend } from "./control.js";
 import { ExecutionDeadlineError, withExecutionDeadline } from "./execution-deadline.js";
 import { syncDirectory } from "./sync-directory.js";
 import { retryAfterMs } from "./transport-retry.js";
@@ -74,6 +75,7 @@ import type {
   DaemonNodeRegistrationResponse,
   DaemonNodeRunCommand,
   DaemonNodeSandboxMode,
+  ReportCleanupResult,
   AgentName,
 } from "relay-core";
 import {
@@ -1381,6 +1383,28 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
             await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
               event, token, runtimeSignal);
           }, { lease: { commandId: command.id, leaseId: command.leaseId } }) || pollMadeProgress;
+        } else if (command.type === "reports.cleanup") {
+          const key = JSON.stringify([command.id, command.leaseId]);
+          pollMadeProgress = commandTasks.submit(key, async () => {
+            let result: ReportCleanupResult;
+            if (Date.now() >= command.expiresAt) {
+              result = { ...terminalOutbox.cleanupSnapshot(), outcome: "expired" };
+            } else if (command.action === "preview") {
+              result = { ...terminalOutbox.cleanupSnapshot(), outcome: "ready" };
+            } else {
+              try {
+                result = await terminalOutbox.discardLiveReports(command.scope, command.revision, `account:${command.actorUserId}`,
+                  id => admittedExecutions.add(id, { syncExisting: true }), id => supervisor.has(id), runtimeSignal);
+              } catch (error) {
+                logger.warn("report cleanup interrupted", { sandboxId, commandId: command.id, error: transportErrorDetail(error) });
+                result = { ...terminalOutbox.cleanupSnapshot(), outcome: "failed" };
+              }
+              diagnosticsSchedule.refresh();
+              protectStorage();
+            }
+            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
+              { type: "reports.cleanup-result", commandId: command.id, leaseId: command.leaseId, ...result }, token, runtimeSignal);
+          }, { lease: { commandId: command.id, leaseId: command.leaseId } }) || pollMadeProgress;
         } else {
           const key = JSON.stringify([command.id, command.leaseId ?? null]);
           const lane = command.workspaceSubpath
@@ -1469,7 +1493,11 @@ export async function runRelayDaemonDoctor(options: DaemonRuntimeOptions = {}): 
   if (existsSync(join(stateDir, 'transport-diagnostics.json'))) {
     try {
       const state = JSON.parse(readFileSync(join(stateDir, 'transport-diagnostics.json'), 'utf8'));
-      add('transport', state.state === 'healthy' && state.causes?.length === 0 && Date.now() - state.observedAt < 10_000, `State: ${state.state}; pending reports: ${state.pending}; quarantined: ${state.quarantined}. Diagnostics: ${join(stateDir, 'transport-diagnostics.json')}`);
+      const help = sandboxId && (state.pending > 0 || state.quarantined > 0)
+        ? ` For an installed Computer, run "${brandForBackend(backendUrl).command} reports --computer ${sandboxId}" to review and manage reports.`
+        : '';
+      add('transport', state.state === 'healthy' && state.causes?.length === 0 && Date.now() - state.observedAt < 10_000,
+        `State: ${state.state}; pending reports: ${state.pending}; quarantined: ${state.quarantined}. Diagnostics: ${join(stateDir, 'transport-diagnostics.json')}.${help}`);
     } catch { add('transport', false, 'Transport diagnostics are unreadable; inspect the private state directory.'); }
   }
   if (sandboxMode === "none" && existsSync(join(stateDir,"mcp-status.json"))) {

@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { open, rename } from 'node:fs/promises';
+import { setImmediate as yieldToDaemon } from 'node:timers/promises';
+import type { ReportCleanupResult, ReportCleanupScope, ReportCleanupSnapshot } from 'relay-core';
 import { ReportOrder } from './report-order.js';
 import { retryAfterMs } from './transport-retry.js';
 import { syncDirectory, syncDirectoryAsync } from './sync-directory.js';
@@ -70,11 +72,13 @@ function readRejection(data: string): ReportRejection {
   } catch { return { status: 409, detail: 'Backend rejection reason was not recorded.' }; }
 }
 
-/** Private, write-ahead report storage. Only verified acceptance removes evidence. */
+/** Private, write-ahead report storage with audited operator intervention. */
 export class TerminalOutbox {
   private readonly order = new ReportOrder();
   private readonly index = new Map<string, RecordIndex>();
   private readonly rejected = new Map<string, ReportRejection>();
+  private cleanupRevision?: string;
+  private discarding?: Set<string>;
   private readonly corrupt = new Set<string>();
   private strictAcknowledgements = false;
   private replaying = false;
@@ -229,6 +233,7 @@ export class TerminalOutbox {
       if (synchronous) this.write(join(this.directory, `${key}.json`), data);
       this.bytes += bytes;
       this.index.set(key, { owner: owner(event), sequence: sequence(event), terminal: !output, bytes });
+      this.cleanupRevision = undefined;
       this.order.add(key, this.index.get(key)!);
       if (output) this.countOutput(owner(event), 1);
       if (!synchronous) {
@@ -276,10 +281,13 @@ export class TerminalOutbox {
     if (!record.terminal) this.countOutput(record.owner, -1);
     this.order.remove(key, record);
     this.index.delete(key);
+    this.cleanupRevision = undefined;
     this.retryAt.delete(key);
     this.acceptedTerminalsAwaitingCleanup.delete(key);
     const rejection = join(this.directory, `${key}.rejected`);
-    if (existsSync(rejection)) { this.bytes -= statSync(rejection).size; rmSync(rejection); syncDirectory(this.directory); }
+    const wasRejected = existsSync(rejection);
+    if (wasRejected) { this.bytes -= statSync(rejection).size; rmSync(rejection); }
+    if (wasRejected || !delivered) syncDirectory(this.directory);
     this.rejected.delete(key);
     if (!record.terminal) {
       const commandId = String(JSON.parse(record.owner)[0]);
@@ -316,10 +324,71 @@ export class TerminalOutbox {
     rmSync(path);
     syncDirectory(this.directory);
     this.rejected.delete(key);
+    this.cleanupRevision = undefined;
   }
-  discardQuarantined(key: string, actor: string, acknowledgeLoss: boolean): void {
+  cleanupSnapshot(): ReportCleanupSnapshot {
+    return { revision: this.cleanupRevision ??= randomUUID(), pending: this.index.size, quarantined: this.rejected.size };
+  }
+
+  async discardLiveReports(
+    scope: ReportCleanupScope,
+    revision: string,
+    actor: string,
+    preserveFence: (commandId: string) => void,
+    isExecuting: (commandId: string) => boolean,
+    signal: AbortSignal,
+  ): Promise<ReportCleanupResult> {
+    const snapshot = this.cleanupSnapshot();
+    if (revision !== snapshot.revision) return { ...snapshot, outcome: 'changed' };
+    if (this.discarding || (scope === 'all' && this.replaying)) return { ...snapshot, outcome: 'busy' };
+    const selected = new Set((scope === 'quarantined' ? this.rejected : this.index).keys());
+    for (const key of selected) {
+      const commandId = JSON.parse(this.index.get(key)!.owner)[0] as string;
+      if (this.writes.has(key) || this.deliveries.has(key) || this.acceptedTerminalsAwaitingCleanup.has(key) || isExecuting(commandId)) {
+        return { ...snapshot, outcome: 'busy' };
+      }
+    }
+    // Freeze the confirmed identities. Capture can continue while disk flushes
+    // yield to heartbeats and other work, and newer reports stay in the queue.
+    this.discarding = selected;
+    const fenced = new Set<string>();
+    let discarded = 0;
+    try {
+      for (const key of selected) {
+        signal.throwIfAborted();
+        this.discardStoredReport(key, actor, preserveFence, fenced);
+        discarded++;
+        if (discarded % 8 === 0) await yieldToDaemon();
+      }
+      return { ...this.cleanupSnapshot(), outcome: 'discarded', discarded };
+    } finally { this.discarding = undefined; }
+  }
+
+  discardReports(
+    selection: { report: string } | 'all' | 'quarantined',
+    actor: string,
+    acknowledgeLoss: boolean,
+    preserveFence: (commandId: string) => void,
+  ): number {
     if (!acknowledgeLoss) throw new Error('Explicitly acknowledge output loss before discarding a report.');
-    if (!this.rejected.has(key)) throw new Error('Report is not quarantined.');
+    if (typeof selection === 'object' && !this.index.has(selection.report)) throw new Error('Report is not retained.');
+    const keys = typeof selection === 'object' ? [selection.report]
+      : selection === 'quarantined' ? this.rejected.keys() : this.index.keys();
+    const fenced = new Set<string>();
+    let discarded = 0;
+    for (const key of keys) {
+      this.discardStoredReport(key, actor, preserveFence, fenced);
+      discarded++;
+    }
+    return discarded;
+  }
+  private discardStoredReport(key: string, actor: string, preserveFence: (commandId: string) => void, fenced: Set<string>): void {
+    const commandId = JSON.parse(this.index.get(key)!.owner)[0] as string;
+    if (!fenced.has(commandId)) {
+      // Older runs can depend on the retained report to restore their fence at startup.
+      preserveFence(commandId);
+      fenced.add(commandId);
+    }
     this.audit('discard-with-output-loss', key, actor);
     this.acknowledge(key, false);
   }
@@ -330,12 +399,14 @@ export class TerminalOutbox {
     this.write(join(this.directory, `${key}.rejected`), data);
     this.bytes += Buffer.byteLength(data);
     this.rejected.set(key, rejection);
+    this.cleanupRevision = undefined;
   }
   private blocked(record: TerminalRecord): boolean {
     const current = this.index.get(record.key);
     return !!current && !this.order.ready(record.key, current);
   }
   private async deliver(send: typeof fetch, input: Parameters<typeof fetch>[0], init: RequestInit, record: TerminalRecord): Promise<Response> {
+    if (this.discarding?.has(record.key)) return new Response('Report cleanup in progress.', { status: 503 });
     // Let duplicate callers retry under their own deadline rather than wait
     // on a request whose signal may outlive theirs during shutdown.
     if (this.deliveries.has(record.key)) return new Response('Report delivery already in progress.', { status: 503 });
@@ -506,7 +577,7 @@ export class TerminalOutbox {
   }
   async replay(send: typeof fetch, eventUrl: string, token: string, signal?: AbortSignal): Promise<void> {
     const paused = Date.now() < this.replayAfter;
-    if (this.replaying || signal?.aborted || (paused && this.acceptedTerminalsAwaitingCleanup.size === 0)) return;
+    if (this.discarding || this.replaying || signal?.aborted || (paused && this.acceptedTerminalsAwaitingCleanup.size === 0)) return;
     this.replaying = true;
     try {
       // Terminal evidence goes first. Round-robin streams prevent one backlog

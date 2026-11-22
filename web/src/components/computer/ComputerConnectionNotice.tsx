@@ -36,6 +36,7 @@ export function ComputerConnectionNotice({
   t: TFunction;
 }) {
   const { title, body } = noticeKey(connection, Boolean(node.managedNodeId));
+  const webCleanup = node.capabilities?.includes("report-cleanup");
   const Icon = connection.tone === "bad" ? StatusError : connection.tone === "warn" ? StatusWarn : StatusInfo;
   return (
     <div className="computer-card-connection" data-tone={connection.tone} role="status">
@@ -43,8 +44,9 @@ export function ComputerConnectionNotice({
       <div className="computer-card-connection-copy">
         <p className="computer-card-connection-title">{t(title)}</p>
         <p className="computer-card-connection-body">
-          <Trans i18nKey={body} t={t} components={{ cmd: <code className="code" /> }} />
-          {connection.pendingReports > 0 ? (
+          <Trans i18nKey={webCleanup && connection.issue === "quarantine" ? "computer.connection_quarantine_web_body" : body}
+            t={t} components={{ cmd: <code className="code" /> }} />
+          {!webCleanup && connection.pendingReports > 0 ? (
             <>
               {" "}
               <span className="computer-card-connection-count tnum">

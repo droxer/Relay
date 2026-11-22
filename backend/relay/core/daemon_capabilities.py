@@ -64,6 +64,7 @@ DAEMON_CAPABILITY_RELAY_THREAD_RECORDS = "relay-thread-records"
 
 DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP = "native-runtime-startup"
 DAEMON_CAPABILITY_DURABLE_REPORTS = "durable-reports"
+DAEMON_CAPABILITY_REPORT_CLEANUP = "report-cleanup"
 # Wait for backend output receipts before completion, with a 60s default drain
 # budget; keep unacknowledged output in the durable outbox for late replay.
 DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK = "durable-output-ack"
@@ -124,6 +125,7 @@ DAEMON_RECOGNIZED_CAPABILITIES = DAEMON_NODE_CAPABILITIES | {
     DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS,
     DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP,
     DAEMON_CAPABILITY_LIVE_MESSAGES,
+    DAEMON_CAPABILITY_REPORT_CLEANUP,
 }
 
 

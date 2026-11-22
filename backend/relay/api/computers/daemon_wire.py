@@ -17,6 +17,7 @@ from ...core.computer_identity import computer_id
 from ...computer.access import actor_may_manage_computer
 from ...core.models import DaemonNodeRegistration
 from ...core.repeat_log import RepeatedFailureLog, RepeatGate
+from ...core.report_cleanup import REPORT_CLEANUP_RESULT, report_cleanup_result
 from ...daemon_registry.runs.reports import ReportPredecessorMissing
 from ...persistence.daemon.reports import ReportReceiptConflict
 from ...daemon_registry.records import (
@@ -34,7 +35,7 @@ from ..actors import (
     request_actor_or_none,
 )
 from ..bodies import JsonBodyDep, json_body
-from ..deps import AppContextDep
+from ..deps import AppContext, AppContextDep
 from ..projects.links import registration_project_links
 from .daemon_events import daemon_node_event
 from ...collaboration.queue import ThreadQueueDispatcher
@@ -517,8 +518,18 @@ async def daemon_events(
     sandbox_id: str, request: Request, response: Response, ctx: AppContextDep
 ) -> dict[str, bool]:
     try:
-        event = daemon_node_event(await json_body(request))
-        if event["type"] == "run.completed":
+        body = await json_body(request)
+        cleanup = None
+        if body.get("type") == REPORT_CLEANUP_RESULT:
+            event = {}
+            command_id, lease_id = body.get("commandId"), body.get("leaseId")
+            if (not isinstance(command_id, str) or not 0 < len(command_id) <= 128
+                    or not isinstance(lease_id, str) or not 0 < len(lease_id) <= 128):
+                raise ValueError("Report cleanup result requires a command and lease.")
+            cleanup = (command_id, lease_id, report_cleanup_result(body))
+        else:
+            event = daemon_node_event(body)
+        if event.get("type") == "run.completed":
             request.state.run_completed_count = 1
             request.state.artifact_count = len(event.get("generatedFiles") or [])
             request.state.run_id = event.get("runId")
@@ -530,6 +541,8 @@ async def daemon_events(
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     try:
+        if cleanup is not None:
+            return await settle_report_cleanup(request, ctx, sandbox_id, *cleanup)
         if event.get("type") == "run.steered":
             # An answer to its own `run.steer` command, not a run event.
             await run_in_threadpool(ctx.registry.assert_node_event_authorized, sandbox_id, bearer_token(request))
@@ -617,6 +630,15 @@ async def daemon_events(
         if transient:
             raise HTTPException(503, "Event processing is temporarily unavailable.") from error
         raise HTTPException(500, "Event processing failed.") from error
+
+
+async def settle_report_cleanup(
+    request: Request, ctx: AppContext, sandbox_id: str, command_id: str, lease_id: str, result: dict[str, Any]
+) -> dict[str, bool]:
+    await run_in_threadpool(ctx.registry.assert_node_event_authorized, sandbox_id, bearer_token(request))
+    if not await run_in_threadpool(ctx.daemon_store.complete_report_cleanup, sandbox_id, command_id, lease_id, result):
+        raise CommandEventMismatchError("Report cleanup result does not match an active command lease.")
+    return {"ok": True}
 
 
 def is_transient_store_fault(error: BaseException) -> bool:

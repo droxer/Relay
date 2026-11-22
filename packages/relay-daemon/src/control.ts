@@ -1,5 +1,7 @@
 /** `relay` — start, stop and inspect the background services the computer installer created. */
 import { TerminalOutbox } from './terminal-outbox.js';
+import { AdmissionLedger } from './admission-ledger.js';
+import { acquireDaemonStateLock } from './daemon-state-lock.js';
 import { RELAY_CLIENT_VERSION } from './client-version.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
@@ -56,8 +58,8 @@ Commands:
   status    Show whether ${product} is running.
   reports   Inspect pending and quarantined reports.
   retry-report --report <id>   Retry a quarantined report (daemon stopped).
-  discard-report --report <id> --acknowledge-output-loss
-            Record deliberate report loss (daemon stopped).
+  discard-report (--report <id> | --all-quarantined | --all) --acknowledge-output-loss
+            Permanently discard retained reports and record the loss (daemon stopped).
   version   Show the installed ${product} client version.
   mcp       Serve Relay MCP over stdio: --config <private-config.json>.
   logs      Show recent ${product} output. Add --follow to keep streaming.
@@ -125,7 +127,15 @@ function serviceBrand(platform: string, service: InstalledService): RelayBrand {
   }
 }
 
-interface ControlArgs { command: string; computer?: string; follow: boolean; force?: boolean; report?: string; acknowledgeLoss?: boolean }
+interface ControlArgs {
+  command: string;
+  computer?: string;
+  follow: boolean;
+  force?: boolean;
+  report?: string;
+  discardScope?: 'all' | 'quarantined';
+  acknowledgeLoss?: boolean;
+}
 
 export function parseControlArgs(args: string[]): ControlArgs {
   let command = '';
@@ -133,6 +143,7 @@ export function parseControlArgs(args: string[]): ControlArgs {
   let follow = false;
   let force = false;
   let report: string | undefined;
+  let discardScope: ControlArgs['discardScope'];
   let acknowledgeLoss = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
@@ -140,7 +151,13 @@ export function parseControlArgs(args: string[]): ControlArgs {
     if (arg === '--help' || arg === '-h' || arg === 'help') return { command: 'help', follow };
     if (arg === '--follow' || arg === '-f') { follow = true; continue; }
     if (arg === '--acknowledge-output-loss') { acknowledgeLoss = true; continue; }
+    if (arg === '--all' || arg === '--all-quarantined') {
+      if (discardScope) throw new Error('Choose exactly one report selection.');
+      discardScope = arg === '--all' ? 'all' : 'quarantined';
+      continue;
+    }
     if (arg === '--report') {
+      if (report) throw new Error('Choose exactly one report selection.');
       report = args[++i];
       if (!report || !/^[0-9a-f]{64}$/.test(report)) throw new Error('--report requires a report identity from relay reports.');
       continue;
@@ -155,7 +172,9 @@ export function parseControlArgs(args: string[]): ControlArgs {
     if (arg.startsWith('-') || command) throw new Error(`Unknown argument: ${arg}`);
     command = arg;
   }
-  return { command: command || 'help', follow, ...(computer ? { computer } : {}), ...(force ? { force } : {}), ...(report ? { report } : {}), ...(acknowledgeLoss ? { acknowledgeLoss } : {}) };
+  if (discardScope && command !== 'discard-report') throw new Error('--all and --all-quarantined are only for discard-report.');
+  return { command: command || 'help', follow, ...(computer ? { computer } : {}), ...(force ? { force } : {}),
+    ...(report ? { report } : {}), ...(discardScope ? { discardScope } : {}), ...(acknowledgeLoss ? { acknowledgeLoss } : {}) };
 }
 
 /** `launchctl print` exits 113 once launchd no longer knows the label. */
@@ -259,6 +278,7 @@ function applyCommand(deps: ControlDeps, command: string, service: InstalledServ
       try {
         const snapshot = JSON.parse(readFileSync(diagnostics, 'utf8'));
         reports = ` Transport: ${snapshot.state}; reports: ${snapshot.pending} pending, ${snapshot.quarantined} quarantined. Diagnostics: ${diagnostics}`;
+        if (snapshot.pending > 0 || snapshot.quarantined > 0) reports += ` Run "${cli} reports --computer ${service.id}" to review and manage reports.`;
       } catch { reports = ' Transport diagnostics unreadable; inspect the private daemon state.'; }
     }
     return { ok: true, message: `${product} is ${state.detail}.${reports}`, ...(state.running ? {} : { tone: 'warn' as const }) };
@@ -313,8 +333,44 @@ function styledHelp(text: string, style: TerminalStyle): string {
     .replace(/^ {2}(\S+(?: <id>)?)(?= {2})/gm, (_match, name: string) => `  ${style.command(name)}`);
 }
 
+async function modifyReports(deps: ControlDeps, options: ControlArgs, service: InstalledService, stateDir: string): Promise<number> {
+  const cli = (deps.brand ?? RELAY_BRAND).command;
+  if (options.command === 'retry-report' && !options.report) throw new Error('Choose the exact report with --report <id>.');
+  if (options.command === 'discard-report') {
+    if (Boolean(options.report) === Boolean(options.discardScope)) {
+      throw new Error('Choose exactly one of --report <id>, --all-quarantined or --all.');
+    }
+    if (!options.acknowledgeLoss) {
+      throw new Error('Discarding reports can permanently lose undelivered output or run results. Add --acknowledge-output-loss to confirm.');
+    }
+  }
+  if (serviceState(deps, service).running) {
+    throw new Error(`Stop the daemon with "${cli} stop --computer ${service.id}" before modifying retained reports.`);
+  }
+  const release = await acquireDaemonStateLock(stateDir);
+  try {
+    const outbox = new TerminalOutbox(join(stateDir, 'terminal-events'));
+    const actor = `local-uid:${deps.uid}`;
+    if (options.command === 'retry-report') {
+      outbox.retryQuarantined(options.report!, actor);
+      deps.log('Report retry recorded.');
+    } else {
+      const ledger = new AdmissionLedger(join(stateDir, 'admissions'));
+      const discarded = outbox.discardReports(
+        options.discardScope ?? { report: options.report! }, actor, options.acknowledgeLoss === true,
+        commandId => ledger.add(commandId, { syncExisting: true }),
+      );
+      const { pending, quarantined } = outbox.status();
+      const result = discarded ? `Discarded ${discarded} report(s).` : 'No reports matched.';
+      deps.log(`${result} ${pending} retained, ${quarantined} quarantined.`);
+    }
+    deps.log(`Run "${cli} start --computer ${service.id}" to resume delivery and refresh diagnostics.`);
+    return 0;
+  } finally { release(); }
+}
+
 /** Runs one control command and returns the process exit code. */
-export function runControl(args: string[], deps: ControlDeps): number {
+export function runControl(args: string[], deps: ControlDeps): number | Promise<number> {
   const options = parseControlArgs(args);
   const brand = deps.brand ?? RELAY_BRAND;
   if (options.command === 'version') { deps.log(`${brand.command} ${RELAY_CLIENT_VERSION}`); return 0; }
@@ -324,24 +380,28 @@ export function runControl(args: string[], deps: ControlDeps): number {
   if (['reports', 'retry-report', 'discard-report'].includes(options.command)) {
     if (services.length !== 1) throw new Error('Choose one Computer with --computer <id>.');
     const service = services[0]!;
-    if (options.command !== 'reports' && serviceState(deps, service).running) throw new Error('Stop the daemon before modifying retained reports; this prevents concurrent capture or replay.');
-    const directory = join(deps.home, '.relay', 'daemon-nodes', service.id, 'terminal-events');
-    const outbox = new TerminalOutbox(directory);
-    if (options.command === 'reports') {
-      const status = outbox.status();
-      deps.log(`Reports: ${status.pending} pending, ${status.quarantined} quarantined, ${status.bytes} bytes retained.`);
-      for (const report of outbox.summaries()) {
-        deps.log(`${report.id}  ${report.commandId}  ${report.status}`);
-        if (report.rejection) {
-          deps.log(`  Original rejection: ${report.rejection.detail}${report.rejection.at ? ` (${report.rejection.at})` : ''}`);
-          deps.log(`  After fixing the rejection: stop this Computer, then ${brand.command} retry-report --computer ${service.id} --report ${report.id}, then start it.`);
-        }
+    const stateDir = join(deps.home, '.relay', 'daemon-nodes', service.id);
+    if (options.command !== 'reports') return modifyReports(deps, options, service, stateDir);
+    const outbox = new TerminalOutbox(join(stateDir, 'terminal-events'));
+    const { pending, quarantined, bytes } = outbox.status();
+    const summaries = outbox.summaries();
+    const computer = `--computer ${service.id}`;
+    deps.log(`Reports: ${pending} retained, including ${quarantined} quarantined (${bytes} bytes on disk).`);
+    for (const report of summaries) {
+      deps.log(`${report.id}  ${report.commandId}  ${report.status}`);
+      if (report.rejection) {
+        deps.log(`  Original rejection: ${report.rejection.detail}${report.rejection.at ? ` (${report.rejection.at})` : ''}`);
+        deps.log(`  After fixing the rejection: stop this Computer, then ${brand.command} retry-report ${computer} --report ${report.id}, then start it.`);
       }
-    } else {
-      if (!options.report) throw new Error('Choose the exact report with --report <id>.');
-      if (options.command === 'retry-report') outbox.retryQuarantined(options.report, `local-uid:${deps.uid}`);
-      else outbox.discardQuarantined(options.report, `local-uid:${deps.uid}`, options.acknowledgeLoss === true);
-      deps.log('Report intervention recorded. Start the daemon to reconcile delivery and diagnostics.');
+    }
+    if (summaries.length < pending) deps.log(`Showing ${summaries.length} of ${pending} retained reports.`);
+    if (pending) {
+      const discard = `${brand.command} discard-report ${computer}`;
+      const confirm = '--acknowledge-output-loss';
+      deps.log(`To permanently discard undelivered reports, first run "${brand.command} stop ${computer}".`);
+      deps.log(`  One report: ${discard} --report <id> ${confirm}`);
+      if (quarantined) deps.log(`  All quarantined reports: ${discard} --all-quarantined ${confirm}`);
+      deps.log(`  All retained reports (including pending): ${discard} --all ${confirm}`);
     }
     return 0;
   }
@@ -382,7 +442,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
   try {
     if (process.argv[2] === "mcp") {
       await (await import("./relay-mcp.js")).runMcp(process.argv.slice(3));
-    } else process.exitCode = runControl(process.argv.slice(2), systemControlDeps());
+    } else process.exitCode = await runControl(process.argv.slice(2), systemControlDeps());
   } catch (error) {
     console.error(err.error(error instanceof Error ? error.message : String(error)));
     process.exitCode = 1;

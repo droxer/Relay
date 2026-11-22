@@ -459,12 +459,30 @@ poll/re-registration failure also drains before returning its error. Pending
 reports remain on disk for the next start. Cancelling a retry during shutdown
 does not change an already durable terminal outcome.
 
+The **Reports** section on the Computers page shows the retained queue and its
+quarantined count. On a connected Computer with a current client, its owner can
+clear the quarantined reports or the entire retained queue. The confirmation
+uses a live count from that Computer. If the queue changes before cleanup starts,
+review the new count and confirm again. Discarded reports are audited locally.
+
 `relay status`, `relay doctor`, and `relay reports` expose local diagnostics.
-Stop the daemon before `relay retry-report --report <id>` or
-`relay discard-report --report <id> --acknowledge-output-loss`; both record the
-local operator in a private audit record. Discard is deliberate loss and never
-counts as acceptance. Back up the private daemon state when moving a Computer;
-deleting its report directory destroys its only unaccepted evidence.
+`relay reports --computer <id>` inspects the retained queue on the installed
+Computer. The retained total includes quarantined reports. Stop the daemon
+before modifying reports, then use the corresponding command for that Computer.
+
+- After resolving a rejection, use `relay retry-report --report <id>`.
+- To discard one pending or quarantined report, use
+  `relay discard-report --report <id> --acknowledge-output-loss`.
+- To discard all quarantined reports, use
+  `relay discard-report --all-quarantined --acknowledge-output-loss`.
+- To discard all pending and quarantined reports, use
+  `relay discard-report --all --acknowledge-output-loss`.
+
+Add `--computer <id>` when several Computers are installed. Each retry or
+discard records the local operator and report identity in a private audit
+record. Discard can permanently lose undelivered output or run results. Start
+the daemon again to resume delivery of retained reports and refresh transport
+diagnostics. Back up the private daemon state when moving a Computer.
 
 A stop acknowledgement for an already completed or failed run settles the stop
 without changing the run's outcome. Retention keeps a target command while its

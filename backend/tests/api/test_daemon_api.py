@@ -4688,6 +4688,46 @@ def test_runtime_refresh_is_owned_capability_gated_and_acknowledged(monkeypatch)
         assert client.get(endpoint + f"/{command_id}").status_code == 403
 
 
+def test_report_cleanup_is_owner_only_and_result_requires_the_current_lease(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        client = TestClient(create_app(root))
+        _bootstrap_admin(client)
+        _enroll_user(client, "alice")
+        enrolled = client.post("/api/v1/daemon-node-enrollments/local", json={"workspacePath": "/Users/alice/project"}).json()
+        node_id, token = enrolled["node"]["id"], enrolled["nodeToken"]
+        wire = f"/api/v1/daemon-nodes/{node_id}"
+        endpoint = f"{wire}/report-cleanup"
+        headers = {"Authorization": f"Bearer {token}"}
+        assert client.post(endpoint, json={"action": "preview"}).status_code == 409
+        registration = {"sandboxId": node_id, "token": token, "protocolVersion": 2,
+                        "supportedAgents": ["codex"], "capabilities": ["durable-reports", "report-cleanup"]}
+        assert client.post("/api/v1/daemon-node-registrations", json=registration).status_code == 200
+        revision = "00000000-0000-4000-8000-000000000001"
+        discard = {"action": "discard", "scope": "quarantined", "revision": revision}
+        assert client.post(endpoint, json=discard).status_code == 400
+        discard["acknowledgeOutputLoss"] = True
+        started = client.post(endpoint, json=discard)
+        assert started.status_code == 202
+        command_id = started.json()["commandId"]
+        command = next(c for c in client.get(f"{wire}/commands", headers=headers).json()["commands"] if c["id"] == command_id)
+        assert command["type"] == "reports.cleanup"
+        assert command["actorUserId"] == ALICE
+        assert command["scope"] == "quarantined"
+        result = {"type": "reports.cleanup-result", "commandId": command_id, "leaseId": "old-lease",
+                  "outcome": "discarded", "revision": revision, "pending": 109, "quarantined": 0, "discarded": 30}
+        assert client.post(f"{wire}/events", json=result, headers=headers).status_code == 409
+        result["leaseId"] = command["leaseId"]
+        assert client.post(f"{wire}/events", json=result, headers=headers).status_code == 200
+        assert client.post(f"{wire}/events", json=result, headers=headers).status_code == 200
+        status = client.get(f"{endpoint}/{command_id}").json()
+        assert status == {"status": "completed", "result": {k: v for k, v in result.items()
+                          if k not in ("type", "commandId", "leaseId")}}
+        _enroll_user(client, "bob")
+        assert client.post(endpoint, json=discard).status_code == 403
+        assert client.get(f"{endpoint}/{command_id}").status_code == 403
+
+
 def test_device_authorization_requires_browser_approval_and_single_use_redemption(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
