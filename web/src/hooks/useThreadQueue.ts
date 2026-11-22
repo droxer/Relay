@@ -7,7 +7,21 @@ import { apiJson } from "../api-client/client";
 import { THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress } from "../lib/threadQueue";
 import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
 
-type QueueState = { messages: QueuedMessage[]; paused: boolean; sending?: string; error?: string; removed?: { message: QueuedMessage; beforeId: string | null; removedAt?: string } };
+type QueueState = {
+  messages: QueuedMessage[];
+  paused: boolean;
+  sending?: string;
+  error?: string;
+  removed?: { message: QueuedMessage; beforeId: string | null; removedAt?: string };
+  /** Handed to the running agent; its computer has until `until` to say it took it. */
+  live?: { id: string; until: string };
+};
+
+/** The message on its way out: claimed for a new turn, or handed to the live run and not yet answered. */
+function outgoingMessageId(state: QueueState, now = Date.now()): string | undefined {
+  if (state.sending) return state.sending;
+  return state.live && Date.parse(state.live.until) > now ? state.live.id : undefined;
+}
 type QueueChange = {
   queueKey: string;
   threadId: string;
@@ -63,7 +77,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     // interval is for a message that can dispatch, not just a running Agent.
     refetchInterval: ({ state }) => {
       if (pending) return false;
-      if (state.data?.messages?.length || state.data?.sending) return ACTIVE_QUEUE_POLL_MS;
+      if (state.data?.messages?.length || state.data?.sending || state.data?.live) return ACTIVE_QUEUE_POLL_MS;
       return running ? EMPTY_RUNNING_QUEUE_POLL_MS : IDLE_QUEUE_POLL_MS;
     },
     refetchOnWindowFocus: !pending,
@@ -135,7 +149,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   }, [change, running, client]);
   return { messages: state.messages, enqueue, steer, edit, remove,
     removedAt: state.removed?.removedAt, undoRemove,
-    pending, paused: state.paused, sending: state.sending, waiting: awaitsPerson && !running,
+    pending, paused: state.paused, sending: outgoingMessageId(state), waiting: awaitsPerson && !running,
     error: error ? t(error) : state.error ? t("queue.errors.dispatch") : query.isError ? t("queue.errors.unavailable") : null,
     resume: () => { void change("resume"); } };
 }

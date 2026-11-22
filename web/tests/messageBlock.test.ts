@@ -96,6 +96,23 @@ describe("ProjectMessagesAccumulator", () => {
     assert.equal(projected[1]?.kind === "agent" ? projected[1].stdout : "", "out-1out-2");
     assert.equal(projected[1]?.kind === "agent" ? projected[1].stderr : "", "err-1");
   });
+
+  it("shows a message sent into a running turn as the person's, marked live", () => {
+    const projected = new ProjectMessagesAccumulator().update(session([
+      { id: "ev_out", type: "agent.output", sessionId: "ses_1", timestamp, runId: "run_1", agent: "codex", stream: "stdout", text: "Working." },
+      {
+        id: "live_q1", type: "user.live_message", sessionId: "ses_1", timestamp,
+        text: "Use the staging database.", runId: "run_1", agent: "codex", delivery: "steer",
+      },
+    ]), t);
+
+    const live = projected.at(-1);
+    assert.equal(live?.kind, "user");
+    assert.equal(live?.kind === "user" ? live.text : "", "Use the staging database.");
+    assert.equal(live?.kind === "user" ? live.live : undefined, true);
+    // The run keeps its one block; the live message does not open a new turn.
+    assert.equal(projected.filter((message) => message.kind === "agent").length, 1);
+  });
 });
 
 describe("memoized transcript messages", () => {

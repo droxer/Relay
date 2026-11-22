@@ -15,11 +15,22 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { CodexExecEventTranslator, type ExecEvent } from "./codex-exec-events.js";
 import type { PermissionAnswers, PermissionQuestionItem } from "relay-core";
-import { askBroker, NATIVE_RUNTIME_STARTUP_TIMEOUT_MS, runtimeEnv, type PermissionAnswer, type PermissionQuestion } from "./protocol.js";
+import {
+  askBroker,
+  listenForLiveMessages,
+  NATIVE_RUNTIME_STARTUP_TIMEOUT_MS,
+  runtimeEnv,
+  type LiveMessageHandler,
+  type LiveMessageListener,
+  type PermissionAnswer,
+  type PermissionQuestion,
+} from "./protocol.js";
 
 type Json = Record<string, unknown>;
 /** Asks about one request; `signal` fires once the turn is over and nobody can act on the answer. */
 type Ask = (question: PermissionQuestion, signal?: AbortSignal) => Promise<PermissionAnswer>;
+/** Starts listening for a person's live messages; undefined when the run has no broker. */
+type Listen = (handler: LiveMessageHandler) => LiveMessageListener | undefined;
 
 export interface CodexAdapterOptions {
   config: string[];
@@ -133,7 +144,14 @@ class RpcPeer {
  */
 export async function runCodexTurn(
   options: CodexAdapterOptions,
-  io: { codexBin?: string; emit(event: ExecEvent): void; ask?: Ask; signal?: AbortSignal; startupTimeoutMs?: number },
+  io: {
+    codexBin?: string;
+    emit(event: ExecEvent): void;
+    ask?: Ask;
+    signal?: AbortSignal;
+    startupTimeoutMs?: number;
+    listen?: Listen;
+  },
 ): Promise<number> {
   if (io.signal?.aborted) return 130;
   const ask = io.ask ?? ((question: PermissionQuestion, signal?: AbortSignal) => askBroker(question, process.env, signal));
@@ -164,6 +182,8 @@ export async function runCodexTurn(
   };
   // Only this run's thread finishes the run; a sub-agent's turn does not.
   let threadId: string | undefined;
+  // The turn a live message steers; `turn/steer` refuses any other.
+  let activeTurnId: string | undefined;
   const ownsThread = (params: Json): boolean => threadId !== undefined && params.threadId === threadId;
   const startup = setTimeout(() => {
     io.emit({ type: "error", message: "Starting Codex timed out before the turn began." });
@@ -171,9 +191,12 @@ export async function runCodexTurn(
   }, io.startupTimeoutMs ?? NATIVE_RUNTIME_STARTUP_TIMEOUT_MS);
   let turnStarted = false;
   const markTurnStarted = (turnId: string): void => {
+    if (turnId && !activeTurnId) {
+      activeTurnId = turnId;
+      translator.turnStarted(turnId);
+    }
     if (turnStarted) return;
     turnStarted = true;
-    translator.turnStarted(turnId);
     clearTimeout(startup);
     io.emit({ type: "turn.started" });
   };
@@ -187,6 +210,7 @@ export async function runCodexTurn(
       if (method === "item/started" || method === "item/completed") rememberFileChange(record(params.item), fileChanges);
       emitAll(translator.notification(method, params));
       if (method === "turn/completed" && ownsThread(params)) {
+        activeTurnId = undefined;
         settle(record(params.turn).status === "completed" ? 0 : 1);
       }
     },
@@ -208,6 +232,16 @@ export async function runCodexTurn(
   });
   const onAbort = (): void => settle(130);
   io.signal?.addEventListener("abort", onAbort, { once: true });
+  // A person's message joins the turn in progress at its next step.
+  const listener = (io.listen ?? listenForLiveMessages)(async (message) => {
+    if (settled || !threadId || !activeTurnId) throw new Error("Codex has no turn in progress to take the message.");
+    await peer.request("turn/steer", {
+      threadId,
+      expectedTurnId: activeTurnId,
+      input: [{ type: "text", text: message.text, text_elements: [] }],
+    });
+    return "steer";
+  });
 
   void (async () => {
     try {
@@ -246,6 +280,7 @@ export async function runCodexTurn(
   } finally {
     clearTimeout(startup);
     io.signal?.removeEventListener("abort", onAbort);
+    listener?.close();
     asks.abort();
     peer.failAll(new Error("The Codex turn ended."));
     child.stdin.end();

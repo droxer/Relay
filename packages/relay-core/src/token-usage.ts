@@ -94,12 +94,14 @@ function buildTokenUsage(
 }
 
 export function extractTokenUsageFromJsonl(text: string, source?: string): TokenUsage | undefined {
-  const values: TokenUsage[] = [];
+  let values: TokenUsage[] = [];
   // Claude repeats one API message's usage on every content-block event, all
   // sharing message.id. Without a terminal result (crash, kill) the per-message
   // usage is all there is, so keep one entry per message.
-  const claudeMessages = new Map<string, TokenUsage>();
-  let terminalClaudeUsage: TokenUsage | undefined;
+  // A result's usage covers its own turn only, so a run that took a live
+  // message (stream-json input) reports one result per turn: sum them.
+  let claudeMessages = new Map<string, TokenUsage>();
+  const claudeResults: TokenUsage[] = [];
   for (const line of text.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -111,7 +113,14 @@ export function extractTokenUsageFromJsonl(text: string, source?: string): Token
     }
     const eventRecord = asRecord(event);
     if (source === "claude" && eventRecord?.type === "result") {
-      terminalClaudeUsage = normalizeTokenUsage(eventRecord.usage, source) ?? terminalClaudeUsage;
+      const turn = normalizeTokenUsage(eventRecord.usage, source);
+      if (turn) {
+        claudeResults.push(turn);
+        // The result already counts this turn's messages.
+        claudeMessages = new Map();
+        values = [];
+        continue;
+      }
     }
     if (source === "pi" && eventRecord?.type !== "message_end") continue;
     const usage = usageFromEvent(event, source);
@@ -120,8 +129,9 @@ export function extractTokenUsageFromJsonl(text: string, source?: string): Token
     if (typeof messageId === "string" && messageId) claudeMessages.set(messageId, usage);
     else values.push(usage);
   }
-  if (terminalClaudeUsage) return terminalClaudeUsage;
-  const merged = mergeTokenUsage([...values, ...claudeMessages.values()]);
+  if (claudeResults.length === 1 && claudeMessages.size === 0 && values.length === 0) return claudeResults[0];
+  // Messages after the last result belong to a turn cut off before its result.
+  const merged = mergeTokenUsage([...claudeResults, ...values, ...claudeMessages.values()]);
   return merged ? { ...merged, ...(source ? { source } : {}) } : undefined;
 }
 

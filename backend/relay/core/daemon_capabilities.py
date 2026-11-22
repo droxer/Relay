@@ -113,10 +113,17 @@ DAEMON_NODE_CAPABILITIES = frozenset(
     }
 )
 
-# The backend can still serve the combined listing through ordinary commands.
+# The daemon answers `run.steer` by handing a message to a live run through its
+# runtime adapter. Optional: without it, the backend stops the run and sends the
+# message next, so a computer lacking it is not outdated.
+DAEMON_CAPABILITY_LIVE_MESSAGES = "live-messages"
+
+# The backend can still serve the combined listing through ordinary commands,
+# and stop-and-send stands in for live messages.
 DAEMON_RECOGNIZED_CAPABILITIES = DAEMON_NODE_CAPABILITIES | {
     DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS,
     DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP,
+    DAEMON_CAPABILITY_LIVE_MESSAGES,
 }
 
 

@@ -1729,6 +1729,27 @@ describe("token usage accounting", () => {
     assert.deepEqual(usage, { input: 3, output: 3, cache: 100, cacheRead: 0, cacheWrite: 100, total: 106, source: "claude" });
   });
 
+  it("sums Claude's per-turn results when a live message added a second turn", () => {
+    const assistant = (id: string, output: number) => JSON.stringify({
+      type: "assistant",
+      message: { id, usage: { input_tokens: 2, output_tokens: output, cache_read_input_tokens: 10 } },
+    });
+    const result = (output: number, cacheRead: number) => JSON.stringify({
+      type: "result",
+      usage: { input_tokens: 2, output_tokens: output, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 0 },
+    });
+    const usage = extractTokenUsageFromJsonl([
+      assistant("msg_1", 1497), result(1497, 649),
+      assistant("msg_2", 6), result(6, 55551),
+      // A third turn cut off before its result still counts its message.
+      assistant("msg_3", 4),
+    ].join("\n"), "claude");
+
+    assert.deepEqual(usage, {
+      input: 6, output: 1507, cache: 56210, cacheRead: 56210, cacheWrite: 0, total: 57723, source: "claude",
+    });
+  });
+
   it("counts each Claude message once when the run ends without a result event", () => {
     const blockEvent = (id: string, output: number) => JSON.stringify({
       type: "assistant",

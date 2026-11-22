@@ -116,6 +116,40 @@ test("every runtime declares a permission prompt adapter", () => {
   assert.deepEqual(getAgent("pi").permissionPrompts, { kind: "adapter", adapter: "pi-extension" });
 });
 
+const liveLaunch = { ...launch, liveLauncher: { command: "/usr/local/bin/node", args: ["/opt/relay/dist/permission-adapters/claude-stream.js"] } };
+
+test("a Claude run that can take live messages starts through the launcher with stream-json input", () => withEnv(LOCAL, () => {
+  const command = buildClaudeCommand({ ...initialAgentState("task"), permission_prompt: liveLaunch }, "/work/space");
+  // The launcher reads the broker's address; Claude itself gets it only in its MCP config.
+  assert.match(command, /export RELAY_PERMISSION_FILE=\/tmp\/relay-perm-x\/broker\.json && /);
+  assert.match(command, /\/usr\/local\/bin\/node \/opt\/relay\/dist\/permission-adapters\/claude-stream\.js --prompt '[^]*' -- claude -p /);
+  assert.match(command, /--input-format stream-json/);
+  assert.equal(shellWordAfter(command, "--permission-prompt-tool"), "mcp__relay__approve");
+  assert.match(command, /< \/dev\/null$/);
+}));
+
+test("an image run hands its prepared message file to the launcher", () => withEnv(LOCAL, () => {
+  const command = buildClaudeCommand({
+    ...initialAgentState("task"),
+    permission_prompt: liveLaunch,
+    input_images: [{ path: "/work/space/.relay/img.png", mediaType: "image/png" }],
+  }, "/work/space");
+  assert.match(command, /claude-stream\.js --input-file \/work\/space\/\.relay\/img\.png\.message\.json -- claude -p /);
+  assert.equal(command.match(/--input-format stream-json/g)?.length, 1);
+}));
+
+test("Claude without a live launcher keeps its plain command", () => withEnv(LOCAL, () => {
+  const command = buildClaudeCommand(prompted, "/work/space");
+  assert.doesNotMatch(command, /claude-stream|--input-format/);
+}));
+
+test("every runtime declares how a live message reaches it", () => {
+  assert.deepEqual(getAgent("claude").liveMessages, { kind: "adapter", delivery: "follow-up" });
+  assert.deepEqual(getAgent("codex").liveMessages, { kind: "adapter", delivery: "steer" });
+  assert.deepEqual(getAgent("pi").liveMessages, { kind: "adapter", delivery: "steer" });
+  assert.deepEqual(getAgent("opencode").liveMessages, { kind: "adapter", delivery: "interrupt" });
+});
+
 /** The `--allowedTools` rules up to the next flag. */
 function allowedToolRules(command: string): string[] {
   const start = command.indexOf("--allowedTools ");

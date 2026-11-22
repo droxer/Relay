@@ -37,6 +37,8 @@ from ..bodies import JsonBodyDep, json_body
 from ..deps import AppContextDep
 from ..projects.links import registration_project_links
 from .daemon_events import daemon_node_event
+from ...collaboration.queue import ThreadQueueDispatcher
+from ..threads.live_messages import settle_live_message
 
 router = APIRouter()
 
@@ -526,6 +528,12 @@ async def daemon_events(
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
     try:
+        if event.get("type") == "run.steered":
+            # An answer to its own `run.steer` command, not a run event.
+            await run_in_threadpool(ctx.registry.assert_node_event_authorized, sandbox_id, bearer_token(request))
+            if await run_in_threadpool(settle_live_message, ctx, sandbox_id, event):
+                ThreadQueueDispatcher(ctx).follow_requested_send(event["sessionId"])
+            return {"ok": True}
         if event.get("type") in WORKSPACE_EVENT_TYPES:
             await run_in_threadpool(ctx.registry.assert_node_event_authorized, sandbox_id, bearer_token(request))
             await run_in_threadpool(

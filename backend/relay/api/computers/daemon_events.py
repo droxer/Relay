@@ -237,6 +237,32 @@ def _run_permission_withdrawn(value: dict[str, Any], envelope: EventFields) -> E
     return {"requestId": request_id, "reason": reason or "The run stopped waiting for an answer."}
 
 
+LIVE_MESSAGE_OUTCOMES = frozenset({"delivered", "unavailable", "failed"})
+LIVE_MESSAGE_DELIVERIES = frozenset({"steer", "follow-up", "interrupt"})
+LIVE_MESSAGE_REASON_MAX_CHARS = 500
+
+
+def _run_steered(value: dict[str, Any], envelope: EventFields) -> EventFields:
+    """What became of a person's live message. The command it answers names
+    the message; the event only says how it went."""
+    target = string_field(value, "targetCommandId")
+    message_id = string_field(value, "messageId")
+    outcome = value.get("outcome")
+    if not target or not message_id or outcome not in LIVE_MESSAGE_OUTCOMES:
+        raise ValueError("invalid daemon run.steered event.")
+    delivery = value.get("delivery")
+    if outcome == "delivered" and delivery not in LIVE_MESSAGE_DELIVERIES:
+        raise ValueError("a delivered live message must say how the runtime took it.")
+    reason = string_field(value, "reason")[:LIVE_MESSAGE_REASON_MAX_CHARS]
+    return {
+        "targetCommandId": target,
+        "messageId": message_id,
+        "outcome": outcome,
+        **({"delivery": delivery} if outcome == "delivered" else {}),
+        **({"reason": reason} if reason else {}),
+    }
+
+
 def _is_output_entry(entry: Any) -> bool:
     return (
         isinstance(entry, dict)
@@ -433,6 +459,7 @@ RUN_PARSERS: dict[str, RunParser] = {
     "run.workspace": _run_workspace,
     "run.permission_requested": _run_permission_requested,
     "run.permission_withdrawn": _run_permission_withdrawn,
+    "run.steered": _run_steered,
     "run.output": _run_output,
     "run.output.batch": _run_output_batch,
     "run.collaboration": _run_collaboration,

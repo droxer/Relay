@@ -36,6 +36,7 @@ import { startNativeMcpBridge } from "./relay-mcp-native.js";
 import { createProjectManagerBridge, managerWorkspaceTool } from "./project-manager.js";
 import { materializeSkills, runSkillDelivery } from "./agent-skills.js";
 import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
+import { liveRuns } from "./live-runs.js";
 import { permissionAdapterLaunch } from "./permission-adapters/index.js";
 import type { DaemonLogFields, DaemonLogger, DaemonExecutionEnvironment, WorkspaceExecution } from './index.js';
 import { commandLogFields, commandLeaseEventFields, runCancelledEvent } from './run-events.js';
@@ -181,9 +182,12 @@ export async function executeCommand(
       });
       throw new Error(`Relay could not start the permission prompt for this run: ${message}`);
     }
+    // The same broker carries a person's live messages to the adapter.
+    const unregister = liveRuns.register(command.id, broker.liveMessages);
     try {
       return await run({ ...runState, permission_prompt: permissionAdapterLaunch(support.adapter, broker) });
     } finally {
+      unregister();
       await broker.close();
     }
   }

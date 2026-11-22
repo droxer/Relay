@@ -6,6 +6,7 @@ from typing import Any, Protocol, cast
 from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
 
+from ...collaboration.live_queue import send_live_message
 from ...collaboration.queue import change_queue, stop_and_send
 from ...core.computer_identity import computer_id as resolve_computer_id
 from ...execution.session_deletion import delete_thread
@@ -343,6 +344,10 @@ def steer_thread_queue(
     assert_workflow_owner_session(request, ctx, session)
     session_id = session["id"]
     with ctx.registry.dispatch_lock:
+        # A run that can take the message keeps going; any other stops first.
+        live = send_live_message(ctx, session, message_id)
+        if live is not None:
+            return live
         return stop_and_send(
             ctx.session_store, session_id, message_id,
             lambda: _cancel_thread_execution(ctx, session_id, actor, "Send queued message first."),
