@@ -5,6 +5,8 @@ export class DiagnosticsSchedule {
   private warnedAt = -Infinity;
   private last?: { at: number; health: string };
 
+  refresh(): void { this.last = undefined; }
+
   private health(snapshot: Record<string, unknown>): string {
     return JSON.stringify([snapshot.state, snapshot.causes, snapshot.incident, snapshot.recovered,
       Boolean(snapshot.quarantined), Boolean(snapshot.corrupt), snapshot.persistenceFault, snapshot.quotaExceeded, snapshot.verified]);

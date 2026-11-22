@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -15,8 +16,9 @@ from ...computer.node_agents import (
     remove_node_agents,
 )
 from ...core.computer_identity import computer_id
-from ...core.daemon_capabilities import DAEMON_CAPABILITY_DURABLE_REPORTS, DAEMON_CAPABILITY_RUNTIME_REFRESH, has_capability
+from ...core.daemon_capabilities import DAEMON_CAPABILITY_DURABLE_REPORTS, DAEMON_CAPABILITY_REPORT_CLEANUP, DAEMON_CAPABILITY_RUNTIME_REFRESH, has_capability
 from ...core.ids import new_database_id
+from ...core.report_cleanup import REPORT_CLEANUP, REPORT_CLEANUP_SCOPES, REPORT_CLEANUP_TIMEOUT_MS, report_queue_revision
 from ...daemon_registry.records import public_sandbox_record
 from ..actors import (
     actor_can_access_sandbox,
@@ -173,6 +175,60 @@ def runtime_refresh_status(sandbox_id: str, command_id: str, request: Request, c
     if not command or command["nodeId"] != sandbox_id or command["command"]["type"] != "runtime.refresh":
         raise HTTPException(404, "Refresh request not found.")
     return {"status": command["status"]}
+
+
+def _report_cleanup_node(request: Request, ctx: AppContextDep, sandbox_id: str) -> dict[str, Any]:
+    actor = request_actor(request, ctx.auth_store)
+    if not actor.get("account"):
+        raise HTTPException(401, "Authentication required.")
+    node = ctx.registry.get(sandbox_id)
+    if not node or node.get("status") == "deleted":
+        raise HTTPException(404, "Computer not found.")
+    if node.get("userId") != actor["userId"]:
+        raise HTTPException(403, "Only the owner can manage this Computer's reports.")
+    return node
+
+
+@router.post("/daemon-nodes/{sandbox_id}/report-cleanup", status_code=202)
+def request_report_cleanup(sandbox_id: str, request: Request, ctx: AppContextDep, body: JsonBodyDep) -> dict[str, Any]:
+    node = _report_cleanup_node(request, ctx, sandbox_id)
+    if not has_capability(node, DAEMON_CAPABILITY_REPORT_CLEANUP):
+        raise HTTPException(409, "Update Relay Computer to manage reports from the web.")
+    if not ctx.registry.is_dispatchable(sandbox_id):
+        raise HTTPException(409, "Connect this Computer before managing reports.")
+    action = body.get("action")
+    command = {
+        "id": new_database_id(), "type": REPORT_CLEANUP, "action": action,
+        "actorUserId": node["userId"], "expiresAt": int(time.time() * 1000) + REPORT_CLEANUP_TIMEOUT_MS,
+    }
+    if action == "discard":
+        scope = body.get("scope")
+        if scope not in REPORT_CLEANUP_SCOPES or body.get("acknowledgeOutputLoss") is not True:
+            raise HTTPException(400, "Choose the reports to discard and acknowledge output loss.")
+        try:
+            command.update(scope=scope, revision=report_queue_revision(body.get("revision")))
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+    elif action != "preview":
+        raise HTTPException(400, "Choose a report cleanup action.")
+    try:
+        ctx.registry.enqueue(sandbox_id, command)
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+    return {"commandId": command["id"]}
+
+
+@router.get("/daemon-nodes/{sandbox_id}/report-cleanup/{command_id}")
+def report_cleanup_status(
+    sandbox_id: str, command_id: str, request: Request, response: Response, ctx: AppContextDep,
+) -> dict[str, Any]:
+    node = _report_cleanup_node(request, ctx, sandbox_id)
+    command = ctx.daemon_store.get_command(command_id)
+    if not command or command["nodeId"] != sandbox_id or command["command"]["type"] != REPORT_CLEANUP or command["command"]["actorUserId"] != node["userId"]:
+        raise HTTPException(404, "Report cleanup request not found.")
+    result = command["command"].get("_cleanupResult")
+    response.headers["Cache-Control"] = "no-store"
+    return {"status": command["status"], **({"result": result} if result else {})}
 
 
 @router.delete("/daemon-nodes/{sandbox_id}", status_code=204)

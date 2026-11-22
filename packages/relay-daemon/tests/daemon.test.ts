@@ -3175,6 +3175,55 @@ test("relay daemon reports a cancel for a run it never received as cancelled", a
   }]);
 });
 
+test("Computer completes a browser report cleanup on its leased command", async t => {
+  const stateDir = mkdtempSync(join(tmpdir(), "relay-web-cleanup-"));
+  t.after(() => rmSync(stateDir, { recursive: true, force: true }));
+  const directory = join(stateDir, "terminal-events");
+  const outbox = new TerminalOutbox(directory);
+  const retained = { type: "run.cancelled", commandId: "retained", sessionId: "ses", runId: "run", agent: "codex" };
+  await outbox.wrapFetch(async () => new Response("Rejected", { status: 409 }))("http://relay.test/events", {
+    method: "POST", body: JSON.stringify(retained),
+  });
+  const stop = new AbortController();
+  const wireResults: Record<string, unknown>[] = [];
+  const requested = new Set<string>();
+  await runRelayDaemon({
+    backendUrl: "http://relay.test", sandboxId: "browser-cleanup", userId: "alice", token: "node_token",
+    stateDir, workspacePath: process.cwd(), logger: testLogger(), environment: fakeEnvironment(),
+    pollIntervalMs: 5, signal: AbortSignal.any([stop.signal, AbortSignal.timeout(5000)]),
+    fetchFn: async (url, init) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/api") return jsonResponse({ name: "Relay backend" });
+      if (path.endsWith("/daemon-node-registrations") || path.endsWith("/heartbeat")) return jsonResponse({});
+      if (path.endsWith("/commands")) {
+        const action = wireResults.length > 0 ? "discard" : "preview";
+        if (requested.has(action)) return jsonResponse({ commands: [] });
+        requested.add(action);
+        return jsonResponse({ commands: [{
+          id: action, type: "reports.cleanup", action, leaseId: `lease-${action}`,
+          expiresAt: Date.now() + 5000, actorUserId: "alice",
+          ...(action === "discard" ? { scope: "quarantined", revision: wireResults[0]?.revision } : {}),
+        }] });
+      }
+      if (path.endsWith("/events")) {
+        const result = await jsonBody<Record<string, unknown>>(init);
+        if (result.type === "reports.cleanup-result") {
+          wireResults.push(result);
+          if (result.commandId === "discard") stop.abort();
+          return jsonResponse({});
+        }
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+  assert.deepEqual(wireResults.map(result => [result.commandId, result.leaseId, result.outcome, result.pending, result.quarantined]), [
+    ["preview", "lease-preview", "ready", 1, 1],
+    ["discard", "lease-discard", "discarded", 0, 0],
+  ]);
+  assert.equal(wireResults[1]?.discarded, 1);
+  assert.equal(new TerminalOutbox(directory).status().pending, 0);
+});
+
 test('quarantined cancellation redelivery stays quiet while the daemon continues polling', async () => {
   const stop = new AbortController();
   const deadline = setTimeout(() => stop.abort(), 1500);
@@ -5641,6 +5690,23 @@ test("doctor authenticates without registering or persisting credentials", async
     assert.equal(report.ok, true);
     assert.deepEqual(requests, ["GET /api", "GET /api/v1/daemon-nodes/sbx_test/auth-check"]);
     assert.equal(existsSync(join(root, "state", "credentials")), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("doctor points to the installed Computer's report controls", async () => {
+  const root = mkdtempSync(join(tmpdir(), "relay-doctor-reports-"));
+  try {
+    writeFileSync(join(root, "transport-diagnostics.json"), JSON.stringify({
+      state: "healthy", causes: ["quarantine"], observedAt: Date.now(), pending: 139, quarantined: 30,
+    }));
+    const report = await runRelayDaemonDoctor({
+      sandboxId: "sbx_test", userId: "alice", workspacePath: root, stateDir: root,
+      token: "test-token", logger: testLogger(), environment: fakeEnvironment(), backendUrl: "http://127.0.0.1:8790",
+      fetchFn: async () => jsonResponse({ authenticated: true }),
+    });
+    const transport = report.checks.find(check => check.name === "transport");
+    assert.match(transport?.detail ?? "", /pending reports: 139; quarantined: 30/);
+    assert.match(transport?.detail ?? "", /relay-dev reports --computer sbx_test/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

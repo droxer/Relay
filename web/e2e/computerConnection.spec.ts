@@ -1,5 +1,81 @@
 import { test, expect } from "@playwright/test";
 
+test("computer owners preview and confirm report cleanup in the browser", async ({ page }, testInfo) => {
+  const revision = "00000000-0000-4000-8000-000000000001";
+  let pending = 139;
+  let quarantined = 30;
+  let changeBeforeDiscard = false;
+  const discards: unknown[] = [];
+  const results = new Map<string, object>();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let body: unknown = { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [] };
+    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", theme: "light", language: "en" } };
+    if (path.endsWith("/daemon-nodes")) body = { nodes: [{
+      id: "report-node", displayName: "Office Mac", userId: "alice", online: true, stale: false, dispatchable: true,
+      status: "ready", agents: {}, activeRuns: [], capabilities: ["durable-reports", "report-cleanup"],
+      transport: { state: "healthy", causes: quarantined ? ["quarantine"] : [], pending, quarantined },
+    }] };
+    if (path.endsWith("/report-cleanup")) {
+      const input = route.request().postDataJSON();
+      const commandId = String(results.size + 1);
+      let outcome = "ready";
+      let discarded: number | undefined;
+      if (input.action === "discard") {
+        discards.push(input);
+        if (changeBeforeDiscard) {
+          pending++;
+          outcome = "changed";
+        } else {
+          discarded = input.scope === "quarantined" ? quarantined : pending;
+          pending -= discarded;
+          quarantined = 0;
+          outcome = "discarded";
+        }
+      }
+      results.set(commandId, { status: "completed", result: { outcome, pending, quarantined, revision, discarded } });
+      return route.fulfill({ status: 202, json: { commandId } });
+    }
+    const match = /\/report-cleanup\/(\d+)$/.exec(path);
+    if (match) body = results.get(match[1]!);
+    await route.fulfill({ json: body });
+  });
+  await page.goto("/computers");
+  await expect(page.getByText("139 retained · 30 quarantined")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("report-cleanup-desktop.png") });
+  await page.setViewportSize({ width: 375, height: 812 });
+  const card = page.locator(".computer-card");
+  const quarantinedAction = card.getByRole("button", { name: "Clear quarantined", exact: true });
+  await quarantinedAction.click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText("30 quarantined reports");
+  await page.screenshot({ path: testInfo.outputPath("report-cleanup-confirmation.png") });
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(discards).toEqual([]);
+  await quarantinedAction.click();
+  await dialog.getByRole("button", { name: "Clear quarantined", exact: true }).click();
+  await expect(page.getByText("109 retained · 0 quarantined")).toBeVisible();
+  await expect(page.getByText("30 reports discarded.")).toBeVisible();
+  expect(discards).toEqual([{ action: "discard", scope: "quarantined", revision, acknowledgeOutputLoss: true }]);
+
+  changeBeforeDiscard = true;
+  await card.getByRole("button", { name: "Clear all reports", exact: true }).click();
+  await expect(dialog).toContainText("109 retained reports");
+  await dialog.getByRole("button", { name: "Clear all reports", exact: true }).click();
+  await expect(page.getByText("The report queue changed. Review the counts and try again.")).toBeVisible();
+  await expect(page.getByText("110 retained · 0 quarantined")).toBeVisible();
+  expect(discards).toHaveLength(2);
+
+  changeBeforeDiscard = false;
+  await card.getByRole("button", { name: "Clear all reports", exact: true }).click();
+  await expect(dialog).toContainText("110 retained reports");
+  await dialog.getByRole("button", { name: "Clear all reports", exact: true }).click();
+  await expect(page.getByText("0 retained · 0 quarantined")).toBeVisible();
+  await expect(page.getByText("110 reports discarded.")).toBeVisible();
+});
+
 test("reads only the owner's inventory without writing sandbox credentials on opening Computers", async ({ page }) => {
   let adoptions = 0;
   let adminReads = 0;

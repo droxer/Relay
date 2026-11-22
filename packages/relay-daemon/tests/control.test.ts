@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { serviceDefinition } from '../src/install.js';
 import { TerminalOutbox } from '../src/terminal-outbox.js';
+import { AdmissionLedger } from '../src/admission-ledger.js';
+import { acquireDaemonStateLock } from '../src/daemon-state-lock.js';
 import { installedServices, parseControlArgs, RELAY_DEV_BRAND, runControl, type CommandResult, type ControlDeps } from '../src/control.js';
 
 type Responder = (command: string, args: string[]) => CommandResult;
@@ -37,6 +39,82 @@ describe('relay control CLI', () => {
       assert.match(lines.join('\n'), /Report ownership mismatch/);
       assert.ok(lines.some(line => line.includes(`retry-report --computer node-1 --report ${report.id}`)));
       assert.match(lines.join('\n'), /stop this Computer/);
+      assert.match(lines.join('\n'), /discard-report --computer node-1 --all-quarantined --acknowledge-output-loss/);
+    } finally { cleanup(); }
+  });
+
+  it('discards only the selected reports, audits each identity, and preserves execution fences', async () => {
+    const { home, deps, lines, cleanup } = fixture('darwin', ['node-1', 'node-2'], () => ({ status: 113, stdout: '' }));
+    try {
+      const stateDir = join(home, '.relay', 'daemon-nodes', 'node-1');
+      const directory = join(stateDir, 'terminal-events');
+      const outbox = new TerminalOutbox(directory);
+      const pending = outbox.retain({ type: 'run.completed', commandId: 'pending' }).key;
+      const quarantined = outbox.retain({ type: 'run.cancelled', commandId: 'quarantined' }).key;
+      const other = new TerminalOutbox(join(home, '.relay', 'daemon-nodes', 'node-2', 'terminal-events'));
+      other.retain({ type: 'run.completed', commandId: 'other' });
+      await outbox.wrapFetch(async () => new Response('Conflict', { status: 409 }))('http://backend/events', {
+        method: 'POST', body: JSON.stringify({ type: 'run.cancelled', commandId: 'quarantined' }),
+      });
+      const discard = async (...args: string[]) => runControl(['discard-report', ...args], deps);
+      const target = ['--computer', 'node-1'];
+      const confirm = '--acknowledge-output-loss';
+      await assert.rejects(discard('--all', confirm), /Choose one Computer/);
+      await assert.rejects(discard(...target, '--all'), /acknowledge-output-loss/);
+      await assert.rejects(discard(...target, '--all', '--report', pending, confirm), /Choose exactly one/);
+      await assert.rejects(discard(...target, '--report', '0'.repeat(64), confirm), /Report is not retained/);
+      assert.equal(new TerminalOutbox(directory).status().pending, 2);
+      assert.ok(readdirSync(directory).every(name => !name.endsWith('.audit')));
+
+      assert.equal(await discard(...target, '--all-quarantined', confirm), 0);
+      assert.deepEqual(new TerminalOutbox(directory).pending().map(report => report.key), [pending]);
+      assert.match(lines.join('\n'), /Discarded 1 report.*1 retained, 0 quarantined/);
+
+      assert.equal(await discard(...target, '--report', pending, confirm), 0);
+      assert.equal(await discard(...target, '--all', confirm), 0);
+      assert.match(lines.join('\n'), /No reports matched/);
+      assert.equal(new TerminalOutbox(directory).status().pending, 0);
+      assert.equal(new TerminalOutbox(join(home, '.relay', 'daemon-nodes', 'node-2', 'terminal-events')).status().pending, 1);
+      const audit = readdirSync(directory).filter(name => name.endsWith('.audit')).map(name =>
+        JSON.parse(readFileSync(join(directory, name), 'utf8')));
+      assert.deepEqual(audit.map(entry => entry.reportId).sort(), [pending, quarantined].sort());
+      assert.ok(audit.every(entry => entry.action === 'discard-with-output-loss' && entry.actor === 'local-uid:501'));
+      const ledger = new AdmissionLedger(join(stateDir, 'admissions'));
+      assert.ok(ledger.has('pending'));
+      assert.ok(ledger.has('quarantined'));
+    } finally { cleanup(); }
+  });
+
+  it('blocks cleanup while another process owns the daemon state', async () => {
+    const { home, deps, cleanup } = fixture('darwin', ['node-1'], () => ({ status: 113, stdout: '' }));
+    const stateDir = join(home, '.relay', 'daemon-nodes', 'node-1');
+    const directory = join(stateDir, 'terminal-events');
+    const outbox = new TerminalOutbox(directory);
+    outbox.retain({ type: 'run.completed', commandId: 'pending' });
+    const release = await acquireDaemonStateLock(stateDir);
+    try {
+      await assert.rejects(async () => runControl(['discard-report', '--all', '--acknowledge-output-loss'], deps),
+        /already using this daemon state directory/);
+      assert.equal(new TerminalOutbox(directory).status().pending, 1);
+    } finally { release(); cleanup(); }
+  });
+
+  it('clears the full queue beyond the report listing limit', async () => {
+    const { home, deps, lines, cleanup } = fixture('darwin', ['node-1'], () => ({ status: 113, stdout: '' }));
+    try {
+      const directory = join(home, '.relay', 'daemon-nodes', 'node-1', 'terminal-events');
+      const outbox = new TerminalOutbox(directory);
+      for (let sequence = 0; sequence < 201; sequence++) {
+        await outbox.retain({ type: 'run.output', commandId: 'cmd', sequence }).durable;
+      }
+      const terminal = { type: 'run.cancelled', commandId: 'cmd' };
+      await outbox.wrapFetch(async () => new Response('Conflict', { status: 409 }))('http://backend/events', {
+        method: 'POST', body: JSON.stringify(terminal),
+      });
+      assert.equal(await runControl(['discard-report', '--all', '--acknowledge-output-loss'], deps), 0);
+      assert.match(lines.join('\n'), /Discarded 202 report.*0 retained, 0 quarantined/);
+      assert.equal(new TerminalOutbox(directory).status().pending, 0);
+      assert.equal(readdirSync(directory).filter(name => name.endsWith('.audit')).length, 202);
     } finally { cleanup(); }
   });
 

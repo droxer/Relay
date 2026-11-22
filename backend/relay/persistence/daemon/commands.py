@@ -17,6 +17,7 @@ from sqlalchemy import (
     update,
 )
 from ...core.ids import new_relay_id
+from ...core.report_cleanup import REPORT_CLEANUP
 from ..db_time import parse_db_time, require_db_time
 from ..events import daemon_event
 from ...core.ids import now_iso
@@ -257,6 +258,38 @@ class CommandQueueRows(DaemonStoreState):
                     "daemon.command.runtime-refreshed",
                     {"nodeId": node_id, "commandId": acknowledgement["commandId"]},
                 ))
+
+    def complete_report_cleanup(
+        self, node_id: str, command_id: str, lease_id: str, result: dict[str, Any]
+    ) -> bool:
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(
+                select(self.commands)
+                .where(
+                    self.commands.c.id == command_id,
+                    self.commands.c.node_id == node_id,
+                    self.commands.c.type == REPORT_CLEANUP,
+                    self.commands.c.lease_id == lease_id,
+                )
+                .with_for_update()
+            ).mappings().first()
+            if row is None:
+                return False
+            command = row["command"]
+            if row["status"] == "completed":
+                return command.get("_cleanupResult") == result
+            if row["status"] != "dispatched":
+                return False
+            if result["outcome"] in ("ready", "discarded") and (
+                (command["action"] == "preview") != (result["outcome"] == "ready")
+            ):
+                return False
+            now = require_db_time(now_iso())
+            conn.execute(update(self.commands).where(self.commands.c.id == command_id).values(
+                command={**command, "_cleanupResult": result},
+                status="completed", updated_at=now, completed_at=now,
+            ))
+        return True
 
     def discard_staged_command(self, command_id: str) -> None:
         with store_transaction(self.engine) as conn:

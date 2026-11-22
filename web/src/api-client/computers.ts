@@ -7,6 +7,7 @@ import type {
   DaemonNodesResponse,
   SandboxesResponse,
 } from "../types.ts";
+import type { ReportCleanupResult, ReportCleanupScope } from "relay-core";
 import { apiJson } from "./client.ts";
 
 export function listSandboxes(token?: string, signal?: AbortSignal): Promise<SandboxesResponse> {
@@ -75,6 +76,28 @@ export function requestRuntimeRefresh(nodeId: string): Promise<{ commandId: stri
 
 export function getRuntimeRefresh(nodeId: string, commandId: string): Promise<{ status: string }> {
   return apiJson(`/daemon-nodes/${encodeURIComponent(nodeId)}/runtime-refresh/${encodeURIComponent(commandId)}`);
+}
+
+type ReportCleanupInput = { action: "preview" } | {
+  action: "discard";
+  scope: ReportCleanupScope;
+  revision: string;
+  acknowledgeOutputLoss: true;
+};
+
+export async function requestReportCleanup(nodeId: string, body: ReportCleanupInput, callerSignal: AbortSignal): Promise<ReportCleanupResult> {
+  const signal = AbortSignal.any([callerSignal, AbortSignal.timeout(40_000)]);
+  const path = `/daemon-nodes/${encodeURIComponent(nodeId)}/report-cleanup`;
+  const { commandId } = await apiJson<{ commandId: string }>(path, { method: "POST", body, signal });
+  while (!signal.aborted) {
+    const { status, result } = await apiJson<{ status: string; result?: ReportCleanupResult }>(
+      `${path}/${encodeURIComponent(commandId)}`, { signal },
+    );
+    if (status === "completed" && result) return result;
+    if (status !== "queued" && status !== "dispatched") break;
+    await new Promise<void>(resolve => setTimeout(resolve, 750));
+  }
+  throw new Error("The Computer did not confirm the report cleanup request.");
 }
 
 export interface ComputerAuthorizationDetails { displayName: string; workspacePath: string; status: string }
