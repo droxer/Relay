@@ -362,7 +362,7 @@ export function ThreadsView({
   const eventStart = activeSession?.eventStart ?? 0;
   const hasEarlierMessages = eventStart > 0;
   const { start: transcriptStart, sentinelRef, pinOldest } = useTranscriptWindow(
-    activeSessionId, displayMessages.length, eventStart,
+    activeSessionId, displayMessages.length, eventStart, Boolean(activeSession?.events.length),
     transcriptVisible && hasEarlierMessages && !earlierFailed ? loadEarlier : undefined,
   );
   // A thread is about to render markdown: start the pipeline download now so

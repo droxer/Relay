@@ -20,11 +20,8 @@ export function nextTranscriptWindow(visible: number, total: number): number {
 /** The mounted count after the transcript changes length.
  *
  *  Appended messages extend the window rather than pushing a turn out of the
- *  top, which would shift what the reader is looking at. A jump of more than a
- *  page is a thread hydrating from its summary, so it opens on the newest page
- *  like any first load. */
+ *  top, which would shift what the reader is looking at. */
 export function transcriptVisibleAfter(previousTotal: number, visible: number, total: number): number {
   const grew = total - previousTotal;
-  if (grew > TRANSCRIPT_PAGE_SIZE) return Math.min(total, TRANSCRIPT_PAGE_SIZE);
   return Math.min(total, visible + Math.max(0, grew));
 }

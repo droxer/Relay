@@ -121,11 +121,8 @@ describe("transcript window", () => {
     assert.equal(transcriptVisibleAfter(150, TRANSCRIPT_PAGE_SIZE, 151), TRANSCRIPT_PAGE_SIZE + 1);
   });
 
-  // A thread opens from its summary (no events) and hydrates to the full
-  // history in one step; that is a first load, not 300 new messages.
-  it("treats a jump of more than a page as a first load", () => {
-    assert.equal(transcriptVisibleAfter(0, TRANSCRIPT_PAGE_SIZE, 300), TRANSCRIPT_PAGE_SIZE);
-    assert.equal(transcriptVisibleAfter(1, 1, 300), TRANSCRIPT_PAGE_SIZE);
+  it("keeps mounted turns when an append fills more than one page", () => {
+    assert.equal(transcriptVisibleAfter(100, TRANSCRIPT_PAGE_SIZE, 300), 240);
   });
 
   it("follows a shrinking transcript", () => {

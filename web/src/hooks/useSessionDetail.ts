@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RelaySession } from "../types";
-import { mergeSessionSnapshotIntoSessions, observedSessionEventCount, sessionTrailsSummary, summaryEventCountOf } from "../lib/sessionPollMerge";
+import { mergeSessionSnapshotIntoSessions, observedSessionEventCount, SESSIONS_QUERY_KEY, sessionTrailsSummary, summaryEventCountOf } from "../lib/sessionPollMerge";
 import { isSessionStreamConnected } from "../lib/sessionStreamStatus";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 import { isTerminalSessionStatus } from "../lib/sessionEventStream";
 import { readSessionDetails, removeSessionDetail, writeSessionDetail } from "../lib/sessionDetailCache";
 import { workflowSnapshotDue } from "../lib/workflowRuns";
-import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
+import { fetchSessionSnapshot, reconcileSessionSnapshot } from "../lib/sessionSnapshotQuery";
 import { cacheThreadQueue, EMPTY_THREAD_QUEUE } from "../lib/threadQueue";
-
-const SESSIONS_KEY = ["relay", "sessions"] as const;
 
 /**
  * Hydrate only the selected thread. Reuse account-scoped browser and memory
@@ -45,7 +43,7 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
     const hydrationKey = ["relay", "session-hydration", sessionId] as const;
     type Hydration = { status: RelaySession["status"]; hydratedAt: number };
     let initial = queryClient.getQueryData<Hydration>(hydrationKey);
-    let current = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)?.find(s => s.id === sessionId);
+    let current = queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.find(s => s.id === sessionId);
     const primeQueue = (snapshot: RelaySession) => {
       if (snapshot.transcriptRevision) {
         cacheThreadQueue(queryClient, sessionId, {
@@ -58,12 +56,14 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
       // A fresh list observation takes precedence over an older stored detail.
       if (saved && (!current || (saved.snapshot.updatedAt >= current.updatedAt
         && observedSessionEventCount(saved.snapshot) >= (summaryEventCountOf(current) ?? 0)))) {
-        queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, rows =>
+        current = queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, rows =>
           mergeSessionSnapshotIntoSessions(rows ?? [], current && summaryEventCountOf(current) !== undefined
-            ? { ...saved.snapshot, execution: current.execution } : saved.snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
-        initial = { status: saved.snapshot.status, hydratedAt: saved.hydratedAt };
-        queryClient.setQueryData(hydrationKey, initial);
-        current = saved.snapshot;
+            ? { ...saved.snapshot, execution: current.execution } : saved.snapshot, applySessionEventUnchecked, applySessionEventsUnchecked))
+          ?.find(s => s.id === sessionId);
+        if (current && observedSessionEventCount(current) >= observedSessionEventCount(saved.snapshot)) {
+          initial = { status: current.status, hydratedAt: saved.hydratedAt };
+          queryClient.setQueryData(hydrationKey, initial);
+        }
       }
     }
     // Metadata alone is insufficient if the list evicted the actual detail.
@@ -72,17 +72,14 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
     let hydratedStatus = forceRetry.current ? undefined : initial?.status;
     forceRetry.current = false;
     setReadySessionId(hydratedStatus === undefined ? undefined : sessionId);
-    let refetchedForCount: number | undefined;
     let pending = false;
     let hydratedAt = initial?.hydratedAt ?? 0;
     let denied = false;
     const hydrate = async () => {
       if (pending || denied || controller.signal.aborted) return;
-      const cached = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)?.find(s => s.id === sessionId);
-      const summaryCount = summaryEventCountOf(cached);
+      const cached = queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.find(s => s.id === sessionId);
       const trails = sessionTrailsSummary(cached)
-        && !isSessionStreamConnected()
-        && summaryCount !== refetchedForCount;
+        && !isSessionStreamConnected();
       // An older thread may be outside the summary poll's first page. When
       // SSE is down it has no other change signal, so reconcile it directly.
       const fallbackDue = !isSessionStreamConnected()
@@ -102,16 +99,16 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
       pending = true;
       try {
         const snapshot = await fetchSessionSnapshot(queryClient, sessionId);
-        if (controller.signal.aborted) return;
-        hydratedStatus = snapshot.status;
+        const merged = await reconcileSessionSnapshot(queryClient, snapshot, controller.signal);
+        // A shared request may have started before the list saw newer events.
+        // Keep the fallback eligible until the cache has caught up.
+        if (controller.signal.aborted || !merged || sessionTrailsSummary(merged)) return;
+        hydratedStatus = merged.status;
         hydratedAt = Date.now();
         primeQueue(snapshot);
-        queryClient.setQueryData(hydrationKey, { status: snapshot.status, hydratedAt });
+        queryClient.setQueryData(hydrationKey, { status: hydratedStatus, hydratedAt });
         setFailure(null);
         setReadySessionId(sessionId);
-        refetchedForCount = summaryCount;
-        queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, current =>
-          mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
       } catch (error) {
         if (controller.signal.aborted) return;
         denied = error instanceof Error && "status" in error && [401, 403, 404].includes(Number(error.status));
@@ -129,7 +126,7 @@ export function useSessionDetail(sessionId: string | undefined, enabled: boolean
     };
     const persist = () => {
       if (!ownerId || hydratedStatus === undefined || denied) return;
-      const snapshot = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)?.find(s => s.id === sessionId);
+      const snapshot = queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.find(s => s.id === sessionId);
       if (snapshot) writeSessionDetail(ownerId, { snapshot, hydratedAt });
     };
     void hydrate().then(persist);

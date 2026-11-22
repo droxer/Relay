@@ -45,8 +45,6 @@ import { useDialogs } from "../components/ui/DialogProvider";
 import { teamRecordKey, TEAMS_QUERY_KEY } from "./useTeams";
 import { TEAM_WORKFLOW_CHOICES_KEY } from "./useProjectWorkflows";
 import { TASK_RECORD_QUERY_KEY } from "./useTaskRecord";
-import { mergeSessionSnapshotIntoSessions } from "../lib/sessionPollMerge";
-import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
 import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects, projectDirectoryEntry, projectIndexRow } from "../lib/projectDirectory";
@@ -56,7 +54,7 @@ import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteError
 import { threadLabel } from "../lib/threads";
 import { THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
 import { taskWorkflowSessionQueryKey } from "../lib/workflowRuns";
-import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
+import { fetchSessionSnapshot, reconcileSessionSnapshot } from "../lib/sessionSnapshotQuery";
 
 type TokenArg = { token?: string };
 
@@ -105,13 +103,9 @@ export function useRelayMutations() {
   // else lives under "teams", so `exact` here would match no query at all.
   const invalidateTeams = () => queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
   const cacheSession = (session: RelaySession) => {
-    queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
-      mergeSessionSnapshotIntoSessions(
-        current ?? [],
-        session,
-        applySessionEventUnchecked,
-        applySessionEventsUnchecked,
-      ));
+    // A compact response can need history reads after the write has succeeded.
+    // The detail or stream will retry if those reads fail.
+    void reconcileSessionSnapshot(queryClient, session).catch(() => undefined);
   };
   const cacheTask = (task: RelayTask) => {
     const summary = taskSummaryFromTask(task);

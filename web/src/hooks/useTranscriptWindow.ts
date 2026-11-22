@@ -6,7 +6,13 @@ import {
   transcriptWindowStart,
 } from "../lib/transcriptWindow";
 
-type WindowState = { sessionId: string | undefined; total: number; visible: number; eventStart: number };
+type WindowState = {
+  sessionId: string | undefined;
+  total: number;
+  visible: number;
+  eventStart: number;
+  hasEvents: boolean;
+};
 
 const SETTLED_FRAMES = 2;
 const MAX_SETTLE_FRAMES = 30;
@@ -32,24 +38,25 @@ function readingAnchor(sentinel: HTMLDivElement | null): Element | null {
 export function useTranscriptWindow(
   sessionId: string | undefined,
   total: number,
-  eventStart = 0,
+  eventStart: number,
+  hasEvents: boolean,
   loadEarlier?: (beforeInsert: () => void) => Promise<void>,
 ): {
   start: number;
   sentinelRef: (node: HTMLDivElement | null) => void;
   pinOldest: () => void;
 } {
-  const [state, setState] = useState<WindowState>({ sessionId, total, visible: TRANSCRIPT_PAGE_SIZE, eventStart });
+  const [state, setState] = useState<WindowState>({ sessionId, total, visible: TRANSCRIPT_PAGE_SIZE, eventStart, hasEvents });
 
   // Derived from props during render, not in an effect: an effect would
   // mount the whole transcript for one frame before cutting it back.
   let current = state;
-  if (state.sessionId !== sessionId) {
-    current = { sessionId, total, visible: TRANSCRIPT_PAGE_SIZE, eventStart };
+  if (state.sessionId !== sessionId || state.hasEvents !== hasEvents) {
+    current = { sessionId, total, visible: TRANSCRIPT_PAGE_SIZE, eventStart, hasEvents };
   } else if (state.total !== total || state.eventStart !== eventStart) {
     const visible = eventStart < state.eventStart
       ? total : transcriptVisibleAfter(state.total, state.visible, total);
-    current = { sessionId, total, visible, eventStart };
+    current = { sessionId, total, visible, eventStart, hasEvents };
   }
   if (current !== state) setState(current);
 
