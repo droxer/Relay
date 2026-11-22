@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RelayApiError } from "../api";
-import { mergeSessionSnapshotIntoSessions } from "../lib/sessionPollMerge";
+import { mergeSessionSnapshotIntoSessions, observedSessionEventCount } from "../lib/sessionPollMerge";
 import type { RelaySession } from "../types";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { mergeSessionEventsIntoSessions, SessionEventIdIndex } from "../lib/sessionEventMerge";
@@ -9,6 +9,7 @@ import { isTerminalSessionStatus, lastSessionEventId, sessionEventsUrl } from ".
 import { browserFrameSchedulerHost, createFrameScheduler } from "../lib/frameScheduler";
 import { setSessionStreamConnected } from "../lib/sessionStreamStatus";
 import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
+import { cacheThreadQueue, EMPTY_THREAD_QUEUE } from "../lib/threadQueue";
 
 const SESSIONS_KEY = ["relay", "sessions"] as const;
 
@@ -62,7 +63,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       if (pending.length === 0) return;
       const events = pending;
       pending = [];
-      queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, (sessions) => {
+      const sessions = queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, (sessions) => {
         const result = mergeSessionEventsIntoSessions(
           sessions,
           sessionId,
@@ -73,6 +74,12 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
         );
         return result.sessions;
       });
+      if (events.some(event => event.type === "session.queue")) {
+        const session = sessions?.find(item => item.id === sessionId);
+        if (session?.messageQueue) cacheThreadQueue(queryClient, sessionId, {
+          ...session.messageQueue, eventCount: observedSessionEventCount(session),
+        });
+      }
       for (const event of events) queued.delete(event.id);
     };
 
@@ -82,7 +89,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       // settles or the reader leaves before the browser paints.
       scheduler.cancel();
       flush();
-      setSessionStreamConnected(false);
+      setSessionStreamConnected(false, sessionId);
     };
 
     const enqueue = (events: RelayEvent[]) => {
@@ -146,6 +153,9 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       // distinguish a temporary outage from revoked access or a deleted thread.
       void fetchSessionSnapshot(queryClient, sessionId, { reuseRecent: true }).then(snapshot => {
         if (controller.signal.aborted) return;
+        if (snapshot.transcriptRevision) cacheThreadQueue(queryClient, sessionId, {
+          ...(snapshot.messageQueue ?? EMPTY_THREAD_QUEUE), eventCount: observedSessionEventCount(snapshot),
+        });
         queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, current =>
           mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
       }).catch(error => {
@@ -157,7 +167,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
     source.onopen = () => {
       clearTimeout(stableTimer);
       stableTimer = setTimeout(() => { retryDelay.current.milliseconds = FIRST_RETRY_MS; }, STABLE_STREAM_MS);
-      setSessionStreamConnected(true);
+      setSessionStreamConnected(true, sessionId);
     };
 
     return () => {

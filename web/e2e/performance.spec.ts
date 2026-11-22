@@ -173,7 +173,7 @@ test("Agent Activity polls the head and loads older Threads only on request", as
     const { pathname, searchParams } = new URL(request.url());
     if (pathname.endsWith("/workspace/brief")) {
       const cursor = searchParams.get("threadCursor");
-      const validator = await request.headerValue("if-none-match");
+      const validator = searchParams.get("relayRevision");
       requests.push({ limit: searchParams.get("threadLimit"), cursor, validator });
       if (validator === etag) return route.fulfill({ status: 304, headers: { etag } });
       if (cursor) return route.fulfill({ json: { sessions: [older], nextThreadCursor: null } });
@@ -569,7 +569,7 @@ test("identical polls do not re-render the app or the thread rail", async ({ pag
   });
   const etag = 'W/"thread-list"';
   await page.route("**/api/v1/threads?*", async (route) => {
-    if (route.request().headers()["if-none-match"] === etag) {
+    if (new URL(route.request().url()).searchParams.get("relayRevision") === etag) {
       revalidations++;
       await route.fulfill({ status: 304, headers: { ETag: etag } });
       return;

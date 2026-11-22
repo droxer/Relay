@@ -14,29 +14,29 @@ test('healthy diagnostics ignore volatile timestamps and refresh every thirty se
   assert.equal(schedule.due(healthy, 30_000), true);
 });
 
-test('activity is coalesced while health transitions report immediately', () => {
+test('healthy activity refreshes at thirty seconds while health transitions report immediately', () => {
   const schedule = new DiagnosticsSchedule();
   schedule.sent(healthy, 0);
   const busy = { ...healthy, pending: 1, runs: ['run'] };
   assert.equal(schedule.due(busy, 1000), false);
-  assert.equal(schedule.due(busy, 5000), true);
-  schedule.sent(busy, 5000);
+  assert.equal(schedule.due(busy, 5000), false);
+  assert.equal(schedule.due(busy, 30_000), true);
+  schedule.sent(busy, 30_000);
   const failed = { ...busy, state: 'retrying', causes: ['communication'], incident: 'incident' };
-  assert.equal(schedule.due(failed, 5001), true);
-  schedule.sent(failed, 5001);
-  assert.equal(schedule.due(failed, 10000), false);
-  assert.equal(schedule.due(failed, 10001), true);
-  // A failed POST must not advance the schedule; the next sample retries.
-  assert.equal(schedule.due(failed, 11000), true);
+  assert.equal(schedule.due(failed, 30_001), true);
+  schedule.sent(failed, 30_001);
+  assert.equal(schedule.due(failed, 35_000), false);
+  assert.equal(schedule.due(failed, 35_001), false);
+  assert.equal(schedule.due(failed, 60_001), true);
   const recovering = { ...healthy, incident: 'incident' };
-  assert.equal(schedule.due(recovering, 11000), true);
-  schedule.sent(recovering, 11000);
-  assert.equal(schedule.due(recovering, 16000), true);
+  assert.equal(schedule.due(recovering, 36_000), true);
+  schedule.sent(recovering, 36_000);
+  assert.equal(schedule.due(recovering, 41_000), true);
   const recovered = { ...recovering, recovered: true };
-  assert.equal(schedule.due(recovered, 16000), true);
-  schedule.sent(recovered, 16000);
-  assert.equal(schedule.due(recovered, 21000), false);
-  assert.equal(schedule.due(recovered, 46000), true);
+  assert.equal(schedule.due(recovered, 41_000), true);
+  schedule.sent(recovered, 41_000);
+  assert.equal(schedule.due(recovered, 46_000), false);
+  assert.equal(schedule.due(recovered, 71_000), true);
 });
 
 test('failures back off independently of health changes and throttle warnings', () => {
@@ -52,4 +52,14 @@ test('failures back off independently of health changes and throttle warnings', 
   schedule.sent(healthy, 65_001);
   assert.equal(schedule.due(healthy, 95_001), true);
   assert.equal(schedule.failed(95_001), true);
+});
+
+test('the first quarantine reports immediately while subsequent counts are coalesced', () => {
+  const schedule = new DiagnosticsSchedule();
+  schedule.sent(healthy, 0);
+  const quarantined = { ...healthy, quarantined: 1 };
+  assert.equal(schedule.due(quarantined, 1), true);
+  schedule.sent(quarantined, 1);
+  assert.equal(schedule.due({ ...quarantined, quarantined: 2 }, 2), false);
+  assert.equal(schedule.due({ ...quarantined, quarantined: 2 }, 30_001), true);
 });

@@ -1,9 +1,12 @@
 import { apiJson } from "./client";
-import type { AppliedManagerProposal, ApplyManagerInput, ProjectManagerResponse } from "../domain-types/project-manager";
+import type { AppliedManagerProposal, ApplyManagerInput, ManagerProposal, ProjectManagerResponse } from "../domain-types/project-manager";
 
 const path = (id: string) => `/projects/${encodeURIComponent(id)}/manager`;
 export function getProjectManager(id: string, signal?: AbortSignal): Promise<ProjectManagerResponse> {
   return apiJson(path(id), { signal });
+}
+export function listThreadProposals(projectId: string, threadId: string, signal?: AbortSignal): Promise<{ proposals: ManagerProposal[] }> {
+  return apiJson(`${path(projectId)}/proposals?${new URLSearchParams({ threadId })}`, { signal });
 }
 export function setProjectManager(id: string, agentId: string, expectedVersion: number): Promise<ProjectManagerResponse> {
   return apiJson(path(id), { method: "PUT", body: { agentId, expectedVersion } });

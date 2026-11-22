@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import HTTPException, Request, Response
 from starlette.responses import JSONResponse
 
-from ..conditional_get import etag_matches, weak_etag
+from ..conditional_get import etag_matches, request_validator, weak_etag
 from ...persistence.protocols import SessionStore
 
 _WINDOW_LIMIT = 160
@@ -37,19 +37,13 @@ def _events_revision(events: list[dict[str, Any]]) -> str:
     return sha256(JSONResponse(events).body).hexdigest()
 
 
-def transcript_response(request: Request, session: dict[str, Any], *, compact: bool = False) -> Response:
-    events = session["events"]
-    start = session["eventStart"]
-    revision = _events_revision(events)
-    snapshot = {
-        **{key: value for key, value in session.items() if key != "events"},
-        "eventsRevision": revision,
-    }
+def transcript_projection(session: dict[str, Any], *, compact: bool = False) -> dict[str, Any]:
+    snapshot = {key: value for key, value in session.items() if key != "events"}
     if compact:
         # Run briefs are execution inputs. The transcript renders the events
         # and uses these run and assignment records for identity and status.
         snapshot["agentRuns"] = [
-            {key: value for key, value in run.items() if key not in {"brief", "workspaceIdentity"}}
+            {key: value for key, value in run.items() if key not in {"agentLog", "brief", "workspaceIdentity"}}
             for run in session.get("agentRuns", [])
         ]
         snapshot["collaborationRounds"] = [
@@ -59,13 +53,38 @@ def transcript_response(request: Request, session: dict[str, Any], *, compact: b
             ]}
             for round_ in session.get("collaborationRounds", [])
         ]
+    return snapshot
+
+
+def compact_message_snapshot(session: dict[str, Any]) -> dict[str, Any]:
+    events = session["events"]
+    start = len(events)
+    budget = _COMPACT_WINDOW_BYTES
+    for event in reversed(events[-_WINDOW_LIMIT:]):
+        budget -= len(JSONResponse(event).body)
+        if budget < 0 and start < len(events):
+            break
+        start -= 1
+    tail = {**session, "eventStart": start, "eventCount": len(events), "events": events[start:]}
+    # A message response is merged into the live view, not used as the next
+    # snapshot validator. Older transcript pages remain reachable by sequence.
+    return {**transcript_projection(tail, compact=True), "events": tail["events"]}
+
+
+def transcript_response(request: Request, session: dict[str, Any], *, compact: bool = False) -> Response:
+    events = session["events"]
+    start = session["eventStart"]
+    revision = _events_revision(events)
+    snapshot = {**transcript_projection(session, compact=compact), "eventsRevision": revision}
     etag = weak_etag(bytes(JSONResponse(snapshot).body))
     headers = {"ETag": etag.decode("ascii"), "Cache-Control": "no-store"}
-    if etag_matches(request.headers.get("if-none-match", "").encode("latin-1"), etag):
+    if etag_matches(request_validator(request), etag):
         return Response(status_code=304, headers=headers)
 
     offset = 0
-    known = _KNOWN_EVENTS.fullmatch(request.headers.get("x-relay-thread-events", ""))
+    known = _KNOWN_EVENTS.fullmatch(
+        request.headers.get("x-relay-thread-events") or request.query_params.get("relayEvents", "")
+    )
     if known:
         known_start, count, expected_revision = int(known[1]), int(known[2]), known[3]
         if start == known_start and 0 < count <= len(events):

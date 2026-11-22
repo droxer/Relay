@@ -7,11 +7,15 @@ A mixin of ``DatabaseSessionStore``; it shares the store's engine and tables
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from functools import partial
 from typing import Any
 from sqlalchemy import (
+    Text,
     and_,
+    cast,
     literal_column,
     or_,
     select,
@@ -21,6 +25,7 @@ from ..db_time import format_db_time
 from ..engine import store_transaction
 from .. import sql
 from ..tables.sessions import agent_runs
+from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES, run_requests, runs as daemon_runs
 from .rows import (
     _artifact_field_sql,
     _canonical_database_session_id,
@@ -35,6 +40,73 @@ _POSITION_COLUMN = "_positionUpdatedAt"
 
 
 class SessionReadRows(SessionStoreState):
+    def project_thread_id(self, thread_id: str, project_id: str, owner_user_id: str) -> str | None:
+        try:
+            session_id = _canonical_database_session_id(thread_id)
+        except KeyError:
+            return None
+        sessions = self.sessions
+        with store_transaction(self.engine) as conn:
+            found = conn.scalar(select(sessions.c.id).where(
+                sessions.c.id == session_id,
+                sessions.c.project_id == project_id,
+                sessions.c.owner_user_id == owner_user_id,
+            ))
+        return str(found) if found is not None else None
+
+    @contextmanager
+    def summary_read_scope(self) -> Iterator[None]:
+        with store_transaction(self.engine) as conn:
+            if conn.dialect.name == "postgresql":
+                conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            yield
+
+    def summary_page_stamp(
+        self, *, owner_user_id: str, limit: int, before: SummaryPosition | None,
+    ) -> tuple[list[str], list[Any]] | None:
+        """Read page identity without expanding its JSON or the execution projection.
+
+        When execution can change with wall time, or affinity requires a legacy
+        lookup, the caller must validate the fully assembled response instead.
+        """
+        sessions = self.sessions
+        snapshot = sessions.c.snapshot
+        live_request = select(run_requests.c.id).where(
+            run_requests.c.session_id == sessions.c.id,
+            run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+        ).exists()
+        live_run = select(daemon_runs.c.id).where(
+            daemon_runs.c.session_id == sessions.c.id, daemon_runs.c.status == "running",
+        ).exists()
+        legacy_affinity = and_(
+            snapshot["daemonNodeId"].as_string().is_not(None),
+            snapshot["computerId"].as_string().is_(None),
+            snapshot["managedNodeId"].as_string().is_(None),
+        )
+        revision = (cast(literal_column("sessions.xmin"), Text)
+                    if self.engine.dialect.name == "postgresql" else snapshot)
+        statement = select(
+            sessions.c.id, sessions.c.updated_at, sessions.c.version, revision,
+            or_(live_request, live_run, legacy_affinity),
+        ).where(sessions.c.owner_user_id == owner_user_id)
+        statement = self._summary_page_scope(statement, before).limit(limit + 1)
+        with store_transaction(self.engine) as conn:
+            records = conn.execute(statement).all()
+        page = records[:limit]
+        if any(row[-1] for row in page):
+            return None
+        ids = [str(row[0]) for row in page]
+        return ids, [[tuple(row[:-1]) for row in page], len(records) > limit]
+
+    def _summary_page_scope(self, statement: Any, before: SummaryPosition | None) -> Any:
+        position = self.sessions.c.updated_at
+        thread_id = self.sessions.c.id
+        if before is not None:
+            statement = statement.where(or_(
+                position < before[0], and_(position == before[0], thread_id < before[1]),
+            ))
+        return statement.order_by(position.desc(), thread_id.desc())
+
     def queue_receipt(self, thread_id: str, message_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             return conn.scalar(select(self.events.c.payload).where(
@@ -243,25 +315,14 @@ class SessionReadRows(SessionStoreState):
             literal_column(
                 f"(SELECT COUNT(DISTINCT COALESCE(NULLIF({value('workspaceRelativePath')}, ''), NULLIF({value('path')}, ''), {value('id')})) FROM {elements}({artifacts}) a WHERE {value('kind')} = 'workspace_file')"
             ).label("artifactCount"),
-        ).order_by(self.sessions.c.updated_at.desc(), self.sessions.c.id.desc())
+        )
         if owner_user_id is not None:
             statement = statement.where(
                 self.sessions.c.owner_user_id == owner_user_id
             )
-        if before is not None:
-            updated_at, session_id = before
-            statement = statement.where(
-                or_(
-                    self.sessions.c.updated_at < updated_at,
-                    and_(
-                        self.sessions.c.updated_at == updated_at,
-                        self.sessions.c.id < session_id,
-                    ),
-                )
-            )
         page_size = max(1, limit)
         # One extra row says whether another page exists without a COUNT.
-        statement = statement.limit(page_size + 1)
+        statement = self._summary_page_scope(statement, before).limit(page_size + 1)
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         page = rows[:page_size]

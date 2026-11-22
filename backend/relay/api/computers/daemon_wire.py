@@ -400,6 +400,8 @@ async def daemon_commands(
             "Daemon node commands polled",
             sandbox_id=sandbox_id,
             command_count=len(commands),
+            wait_seconds=wait_seconds,
+            elapsed_ms=round((time.monotonic() - poll_started_at) * 1000),
         )
         # Return explicit lease evidence from this poll as well as heartbeats.
         # A successful empty poll alone is not proof of command ownership.

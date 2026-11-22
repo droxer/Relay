@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getProjectManager } from "../api-client/project-manager";
+import { getProjectManager, listThreadProposals } from "../api-client/project-manager";
 import type { AppliedManagerProposal } from "../domain-types/project-manager";
 import type { RelaySession, RelayTaskListItem } from "../types";
 import { HOME_TASKS_QUERY_KEY, ISSUES_PAGE_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY, THREAD_TASKS_QUERY_KEY } from "../hooks/useRelayData";
@@ -9,7 +9,7 @@ import { TASK_RECORD_QUERY_KEY } from "../hooks/useTaskRecord";
 import { ManagerProposalCard } from "./ManagerProposalCard";
 
 /** How often a live run's staged proposals are checked for. */
-const LIVE_PROPOSAL_POLL_MS = 2000;
+const LIVE_PROPOSAL_POLL_MS = 5_000;
 
 /** Task proposals belong in the Agent's normal conversation, beside its work.
  *  Only a running turn can stage one, and the owner's own apply or dismiss
@@ -19,8 +19,16 @@ export function ProjectManagerProposals({projectId,threadId,readOnly,running}: {
   projectId:string;threadId:string;readOnly:boolean;running:boolean;
 }) {
   const client=useQueryClient();
-  const query=useQuery({queryKey:["project-manager",projectId],queryFn:({signal})=>getProjectManager(projectId,signal),
+  const proposalKey = ["project-manager", projectId, "thread-proposals", threadId] as const;
+  const query=useQuery({queryKey:proposalKey,queryFn:({signal})=>listThreadProposals(projectId,threadId,signal),
     refetchInterval:running?LIVE_PROPOSAL_POLL_MS:false});
+  const proposals = query.data?.proposals ?? [];
+  const { data: manager } = useQuery({
+    queryKey: ["project-manager", projectId],
+    queryFn: ({ signal }) => getProjectManager(projectId, signal),
+    enabled: proposals.some(proposal => proposal.state === "pending"),
+    staleTime: 60_000,
+  });
   const wasRunning=useRef(running);
   const {refetch}=query;
   useEffect(()=>{
@@ -28,6 +36,7 @@ export function ProjectManagerProposals({projectId,threadId,readOnly,running}: {
     wasRunning.current=running;
   },[running,refetch]);
   const refresh = (applied?: AppliedManagerProposal) => {
+    void client.invalidateQueries({ queryKey: proposalKey, exact: true });
     void client.invalidateQueries({ queryKey: ["project-manager", projectId], exact: true });
     if (!applied) return;
     const changed = new Set(applied.tasks.map(task => task.id));
@@ -55,8 +64,8 @@ export function ProjectManagerProposals({projectId,threadId,readOnly,running}: {
       void client.invalidateQueries({ queryKey: ["account", "tags"] });
     }
   };
-  return <>{(query.data?.proposals??[]).filter(proposal=>proposal.threadId===threadId).map(proposal=><ManagerProposalCard
+  return <>{proposals.map(proposal=><ManagerProposalCard
     key={`${proposal.id}:${proposal.revision}`} projectId={projectId} proposal={proposal} disabled={readOnly}
-    agents={query.data?.manager?.candidates} teams={query.data?.teams} onChanged={refresh}
+    agents={manager?.manager?.candidates} teams={manager?.teams} onChanged={refresh}
   />)}</>;
 }

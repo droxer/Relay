@@ -7,14 +7,22 @@
  * in unrelated hooks without threading a value through App.
  */
 let connected = false;
+let connectedThread: string | undefined;
 const listeners = new Set<() => void>();
 
 export function isSessionStreamConnected(): boolean {
   return connected;
 }
 
-export function setSessionStreamConnected(next: boolean): void {
-  if (connected === next) return;
+export function isThreadStreamConnected(threadId: string | undefined): boolean {
+  return connected && !!threadId && connectedThread === threadId;
+}
+
+export function setSessionStreamConnected(next: boolean, threadId?: string): void {
+  if (!next && threadId && threadId !== connectedThread) return;
+  const nextThread = next ? threadId : undefined;
+  if (connected === next && connectedThread === nextThread) return;
+  connectedThread = nextThread;
   connected = next;
   for (const listener of listeners) listener();
 }

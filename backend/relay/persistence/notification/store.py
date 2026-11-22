@@ -17,10 +17,13 @@ file-store handle) must never fail that write.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import datetime, UTC
+from hashlib import sha256
+from json import dumps
 from typing import Any
 
-from sqlalchemy import and_, delete, func, insert, select, update
+from sqlalchemy import Text, and_, cast, delete, func, insert, literal_column, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -126,13 +129,42 @@ class DatabaseNotificationStore:
         limit = max(1, min(limit, MAX_LIST_LIMIT))
         with store_transaction(self.engine) as conn:
             visible = self._visible(user_id, self._muted_kinds(conn, user_id))
-            rows = conn.execute(
-                select(notifications).where(visible)
-                .order_by(notifications.c.created_at.desc(), notifications.c.id.desc())
-                .limit(limit)
-            ).mappings().all()
+            rows = self._recent_notices(conn, select(notifications), visible, limit)
             unread = self._count_unread(conn, visible)
         return {"notifications": [_public(row) for row in rows], "unreadCount": unread}
+
+    def read_versioned_inbox(
+        self, user_id: str, limit: int, matches: Callable[[bytes], bool],
+    ) -> tuple[bytes, dict[str, Any] | None]:
+        """Check only the visible rows' revisions before fetching their payloads."""
+        with store_transaction(self.engine) as conn:
+            postgres = conn.dialect.name == "postgresql"
+            if postgres:
+                # Revision, count and payload must describe the same committed inbox.
+                conn.exec_driver_sql("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            visible = self._visible(user_id, self._muted_kinds(conn, user_id))
+            unread = self._count_unread(conn, visible)
+            projection = (
+                select(notifications.c.id, cast(literal_column("notifications.xmin"), Text).label("revision"))
+                if postgres else select(notifications)
+            )
+            rows = self._recent_notices(conn, projection, visible, limit)
+            signature = dumps(
+                ["inbox-v1", user_id, limit, unread, [dict(row) for row in rows]],
+                default=str, sort_keys=True,
+            )
+            etag = ('W/"' + sha256(signature.encode()).hexdigest()[:32] + '"').encode("ascii")
+            if matches(etag):
+                return etag, None
+            if postgres:
+                rows = self._recent_notices(conn, select(notifications), visible, limit)
+        return etag, {"notifications": [_public(row) for row in rows], "unreadCount": unread}
+
+    @staticmethod
+    def _recent_notices(conn: Any, projection: Any, visible: Any, limit: int) -> Any:
+        return conn.execute(projection.where(visible).order_by(
+            notifications.c.created_at.desc(), notifications.c.id.desc(),
+        ).limit(limit)).mappings().all()
 
     def count_unread(self, user_id: str) -> int:
         with store_transaction(self.engine) as conn:

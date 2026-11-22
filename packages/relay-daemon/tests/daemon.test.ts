@@ -2106,7 +2106,7 @@ test("relay daemon completes a run whose output the backend keeps failing, and s
   assert.ok(warnings.some((warning) => /output delivery stalled/.test(warning.message)));
 });
 
-async function checkOutputBatching(t: TestContext, forceReplay: boolean): Promise<void> {
+async function checkOutputBatching(t: TestContext, failFirstBatch: boolean): Promise<void> {
   const previousDrain = process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS;
   process.env.RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS = "5000";
   t.after(() => restoreEnv("RELAY_DAEMON_OUTPUT_DRAIN_TIMEOUT_MS", previousDrain));
@@ -2119,11 +2119,10 @@ async function checkOutputBatching(t: TestContext, forceReplay: boolean): Promis
   let commandServed = false;
   let terminalType = "";
   let registration: DaemonNodeRegistration | undefined;
-  const awaitingReplay = new Map<number, () => void>();
-  t.after(() => {
-    stop.abort();
-    for (const release of awaitingReplay.values()) release();
-  });
+  let holdFirstBatch = failFirstBatch;
+  const inFlight = new Set<number>();
+  let concurrentDuplicate = false;
+  t.after(() => stop.abort());
   const outputBatches: Array<{
     type: "run.output.batch";
     entries: Array<{ stream: "stdout" | "stderr"; text: string; sequence: number }>;
@@ -2170,17 +2169,16 @@ async function checkOutputBatching(t: TestContext, forceReplay: boolean): Promis
         const event = await jsonBody<DaemonNodeEvent | typeof outputBatches[number]>(init);
         if (event.type === "run.output.batch") {
           outputBatches.push(event);
-          if (forceReplay) {
-            // Hold acceptance until durable replay sends this same batch too.
-            // Every batch is observed twice, independent of disk/runner speed.
-            const sequence = event.entries[0].sequence;
-            const release = awaitingReplay.get(sequence);
-            if (release) {
-              awaitingReplay.delete(sequence);
-              release();
-            } else {
-              await new Promise<void>(resolve => awaitingReplay.set(sequence, resolve));
-            }
+          const sequence = event.entries[0].sequence;
+          if (inFlight.has(sequence)) concurrentDuplicate = true;
+          if (holdFirstBatch) {
+            holdFirstBatch = false;
+            inFlight.add(sequence);
+            // Allow replay ticks to run while the first send is in progress,
+            // then return a transient failure so the retained batch is retried.
+            await sleep(150);
+            inFlight.delete(sequence);
+            return jsonResponse({ detail: "Temporary outage." }, 503);
           }
         }
         if (event.type === "run.failed" || event.type === "run.completed") {
@@ -2195,8 +2193,8 @@ async function checkOutputBatching(t: TestContext, forceReplay: boolean): Promis
 
   assert.equal(terminalType, "run.completed");
   assert.equal(registration?.protocolVersion, 2);
-  // Live delivery can race durable replay. Count distinct batches rather than
-  // delivery attempts, and require retries of one identity to carry identical output.
+  // A report can have multiple attempts. Each must carry identical output.
+  assert.equal(concurrentDuplicate, false, "live delivery and replay share a single in-flight attempt");
   const batchesBySequence = new Map<number, typeof outputBatches[number]>();
   for (const batch of outputBatches) {
     const sequence = batch.entries[0].sequence;
@@ -2205,7 +2203,7 @@ async function checkOutputBatching(t: TestContext, forceReplay: boolean): Promis
     else batchesBySequence.set(sequence, batch);
   }
   assert.ok(batchesBySequence.size < 64, `expected bounded output batches, received ${batchesBySequence.size}`);
-  if (forceReplay) assert.ok(outputBatches.length > batchesBySequence.size, "expected replayed batches");
+  if (failFirstBatch) assert.ok(outputBatches.length > batchesBySequence.size, "expected the failed batch to be retried");
   // Verify the consumer's sequence-deduplicated stream.
   const entries = [...new Map(outputBatches.flatMap((event) => event.entries).map(entry => [entry.sequence, entry])).values()];
   assert.equal(entries.map((entry) => entry.text).join(""), rawChunks.join(""));
@@ -2225,9 +2223,9 @@ async function checkOutputBatching(t: TestContext, forceReplay: boolean): Promis
   assert.match(entries.at(-1)?.text ?? "", /^299:/);
 }
 
-for (const forceReplay of [false, true]) {
-  test(`relay daemon batches large alternating output without losing order (${forceReplay ? "replay races" : "live delivery"})`, { timeout: 15_000 }, async (t) => {
-    await checkOutputBatching(t, forceReplay);
+for (const failFirstBatch of [false, true]) {
+  test(`relay daemon batches large alternating output without losing order (${failFirstBatch ? "retry after failure" : "live delivery"})`, { timeout: 15_000 }, async (t) => {
+    await checkOutputBatching(t, failFirstBatch);
   });
 }
 
@@ -4096,7 +4094,9 @@ test("discoverAgentInventory aborts a hung inventory probe at its deadline", asy
       }, { once: true });
     });
 
-  assert.deepEqual(await discoverAgentInventory(hanging, undefined, 5), {});
+  // Keep the loop alive like a real child process while the unref'ed deadline runs.
+  const [inventory] = await Promise.all([discoverAgentInventory(hanging, undefined, 5), sleep(10)]);
+  assert.deepEqual(inventory, {});
   assert.equal(aborted, true);
 });
 

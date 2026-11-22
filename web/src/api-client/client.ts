@@ -91,17 +91,25 @@ export async function apiJson<T>(
 
 export type PrivateResponseCache<T> = { etag?: string; data?: T };
 
+/** Use a simple credentialed GET even when Web and API have different origins. */
+export function revisionPath(path: string, etag?: string, events?: string): string {
+  if (!etag && !events) return path;
+  const params = new URLSearchParams();
+  if (etag) params.set("relayRevision", etag);
+  if (events) params.set("relayEvents", events);
+  return `${path}${path.includes("?") ? "&" : "?"}${params}`;
+}
+
 /** Revalidate an Account's in-memory copy without the browser's HTTP cache. */
 export async function privateConditionalJson<T>(
   path: string, signal?: AbortSignal, responseCache?: PrivateResponseCache<T>, guard?: ResponseGuard<T>,
 ): Promise<T> {
   if (!responseCache) return apiJson(path, { signal, guard });
   const cached = responseCache.data;
-  const response = await fetchWithSession(relayApiEndpoint(path), {
+  const response = await fetchWithSession(relayApiEndpoint(revisionPath(path, cached !== undefined ? responseCache.etag : undefined)), {
     signal,
     credentials: "include",
     cache: "no-store",
-    headers: cached !== undefined && responseCache.etag ? { "If-None-Match": responseCache.etag } : {},
   });
   if (response.status === 304 && cached !== undefined) return cached;
   const data = await readApiResponse<T>(response, `GET ${path}`, guard);

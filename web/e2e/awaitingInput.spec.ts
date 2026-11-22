@@ -131,7 +131,7 @@ test("a gate stop offers the agent's own next steps below the response with a fr
   await expect(prompt.locator(".next-steps-item")).toHaveText(steps);
   await prompt.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
   await prompt.screenshot({ path: testInfo.outputPath("awaiting-check.png") });
-  const message = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith(`/threads/${session.id}/messages`));
+  const message = page.waitForRequest((request) => request.method() === "POST" && new URL(request.url()).pathname.endsWith(`/threads/${session.id}/messages`));
   await prompt.getByRole("button", { name: steps[0], exact: true }).click();
   expect((await message).postDataJSON().questionId).toBe("wait-1");
   await expect.poll(() => sent).toEqual([steps[0]]);
@@ -159,7 +159,7 @@ for (const kind of ["check", "budget"] as const) {
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
     await page.screenshot({ path: testInfo.outputPath(`recovery-follow-up-${kind}-mobile.png`) });
-    const message = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith(`/threads/${session.id}/messages`));
+    const message = page.waitForRequest((request) => request.method() === "POST" && new URL(request.url()).pathname.endsWith(`/threads/${session.id}/messages`));
     await page.locator(".composer-input-wrap textarea").fill("Continue with staging only.");
     await page.getByRole("button", { name: "Send", exact: true }).click();
     expect((await message).postDataJSON().questionId).toBe("wait-1");

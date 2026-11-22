@@ -90,7 +90,7 @@ test("a pending send stays in its Thread across selection and browser history", 
   await expect(page.locator(".msg-user").filter({ hasText: "Only for billing" })).toHaveCount(1);
   await page.goForward();
   await expect(page).toHaveURL(/\/threads\/other$/);
-  const response = page.waitForResponse(response => response.url().endsWith("/threads/resume/messages"));
+  const response = page.waitForResponse(response => new URL(response.url()).pathname.endsWith("/threads/resume/messages"));
   release();
   await response;
   await expect(page.locator("textarea")).toHaveValue("Keep this other draft");

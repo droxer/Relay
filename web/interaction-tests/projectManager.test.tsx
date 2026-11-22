@@ -19,8 +19,8 @@ vi.mock('@/components/ui/dropdown-menu',()=>({
  DropdownMenuContent:({children}:any)=>createElement('div',{role:'menu'},children),
  DropdownMenuItem:({children,onClick}:any)=>createElement('div',{role:'menuitem',onClick},children),
 }));
-const api=vi.hoisted(()=>({get:vi.fn(),apply:vi.fn(),dismiss:vi.fn(),open:vi.fn()}));
-vi.mock('../src/api-client/project-manager',()=>({getProjectManager:api.get,applyManagerProposal:api.apply,dismissManagerProposal:api.dismiss,openProjectLeadConversation:api.open}));
+const api=vi.hoisted(()=>({get:vi.fn(),proposals:vi.fn(),apply:vi.fn(),dismiss:vi.fn(),open:vi.fn()}));
+vi.mock('../src/api-client/project-manager',()=>({getProjectManager:api.get,listThreadProposals:api.proposals,applyManagerProposal:api.apply,dismissManagerProposal:api.dismiss,openProjectLeadConversation:api.open}));
 const announce=vi.hoisted(()=>vi.fn());
 vi.mock('@/components/ui/DialogProvider',async(original)=>({...await original<typeof import('@/components/ui/DialogProvider')>(),useDialogs:()=>({announce})}));
 const nav=vi.hoisted(()=>vi.fn(async()=>{}));
@@ -30,7 +30,7 @@ const proposal={id:'proposal',projectId:'p',threadId:'thread',agentId:'a',runId:
  {id:'1',kind:'update' as const,taskId:'task',title:'Build login',fields:{priority:'high'},before:{priority:'normal'},after:[],afterTaskIds:[]},
 ]};
 const wrap=(ui:React.ReactNode)=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}>{ui}</QueryClientProvider>);
-beforeEach(()=>{vi.clearAllMocks();api.get.mockResolvedValue({project:{id:'p',version:1},manager:{agentId:'a',agentName:'Ada',threadId:null,reason:null,toolsAvailable:true,candidates:[{id:'a',displayName:'Ada'}]},proposals:[]});api.apply.mockResolvedValue({proposal:{...proposal,state:'applied'},tasks:[]});});
+beforeEach(()=>{vi.clearAllMocks();api.proposals.mockResolvedValue({proposals:[]});api.get.mockResolvedValue({project:{id:'p',version:1},manager:{agentId:'a',agentName:'Ada',threadId:null,reason:null,toolsAvailable:true,candidates:[{id:'a',displayName:'Ada'}]},proposals:[]});api.apply.mockResolvedValue({proposal:{...proposal,state:'applied'},tasks:[]});});
 
 const ada={id:'a',displayName:'Ada',executorKind:'codex',enabled:true,availability:'ready',placements:[]} as any;
 const managed=(member:Record<string,unknown>={})=>({id:'p',version:1,leadAgentId:'a',members:[{agentId:'a',role:'reviewer',responsibilities:'Review',enabled:true,projectManager:true,...member}]}) as any;
@@ -100,14 +100,14 @@ it.each(["apply", "dismiss"] as const)("limits cache invalidation after a propos
   notifications: ["relay", "notifications", "u"], changed: ["task-record", "task"], other: ["task-record", "other"],
  };
  for (const key of Object.values(keys)) client.setQueryData(key, {projectId: key === keys.changed ? "p" : "other"});
- api.get.mockResolvedValue({proposals: [proposal]});
+ api.proposals.mockResolvedValue({proposals: [proposal]});
  api.apply.mockResolvedValue({tasks: [{id: "task"}]});
  api.dismiss.mockResolvedValue({});
  const view = render(<ProjectManagerProposals projectId="p" threadId="thread" readOnly={false} running={false} />,
   {wrapper: hookWrapper(client)});
  try {
   fireEvent.click(await screen.findByRole("button", {name: `project_manager.${action}`}));
-  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(api.proposals).toHaveBeenCalledTimes(2));
   const invalidated = Object.entries(keys).filter(([, key]) => client.getQueryState(key)?.isInvalidated).map(([name]) => name);
   expect(invalidated).toEqual(action === "apply" ? ["tasks", "projectTasks", "dashboard", "issues", "board", "thread", "home", "changed"] : []);
  } finally {
@@ -209,19 +209,20 @@ it('polls for staged proposals only while the thread runs, and reads once when i
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
   const ui=(running:boolean)=><QueryClientProvider client={client}><ProjectManagerProposals projectId="p" threadId="thread" readOnly={false} running={running} /></QueryClientProvider>;
   const view=render(ui(false));
-  await waitFor(()=>expect(api.get).toHaveBeenCalledTimes(1));
+  await waitFor(()=>expect(api.proposals).toHaveBeenCalledTimes(1));
   await vi.advanceTimersByTimeAsync(10000);
-  expect(api.get).toHaveBeenCalledTimes(1);
+  expect(api.proposals).toHaveBeenCalledTimes(1);
   view.rerender(ui(true));
-  await vi.advanceTimersByTimeAsync(4500);
-  const whileRunning=api.get.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(10500);
+  expect(api.get).not.toHaveBeenCalled();
+  const whileRunning=api.proposals.mock.calls.length;
   expect(whileRunning).toBeGreaterThan(1);
-  api.get.mockResolvedValue({project:{id:'p',version:1},manager:{agentId:'a',agentName:'Ada',threadId:'thread',reason:null,toolsAvailable:true,candidates:[]},proposals:[proposal]});
+  api.proposals.mockResolvedValue({project:{id:'p',version:1},manager:{agentId:'a',agentName:'Ada',threadId:'thread',reason:null,toolsAvailable:true,candidates:[]},proposals:[proposal]});
   view.rerender(ui(false));
   expect(await screen.findByRole('region',{name:'project_manager.changes'})).toBeTruthy();
-  const afterEnd=api.get.mock.calls.length;
+  const afterEnd=api.proposals.mock.calls.length;
   await vi.advanceTimersByTimeAsync(10000);
-  expect(api.get).toHaveBeenCalledTimes(afterEnd);
+  expect(api.proposals).toHaveBeenCalledTimes(afterEnd);
  }finally{vi.useRealTimers();}
 });
 
@@ -243,11 +244,11 @@ it.each(['applied','dismissed','superseded','expired'] as const)('shows a %s pro
 it('shrinks a proposal to its outcome once it is applied',async()=>{
  const {ProjectManagerProposals}=await import('../src/components/ProjectManagerProposals');
  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
- api.get.mockResolvedValue({proposals:[proposal]});
+ api.proposals.mockResolvedValue({proposals:[proposal]});
  render(<QueryClientProvider client={client}><ProjectManagerProposals projectId="p" threadId="thread" readOnly={false} running={false} /></QueryClientProvider>);
  await screen.findByRole('region',{name:'project_manager.changes'});
  expect(screen.getAllByRole('group').length).toBeGreaterThan(0);
- api.get.mockResolvedValue({proposals:[{...proposal,state:'applied'}]});
+ api.proposals.mockResolvedValue({proposals:[{...proposal,state:'applied'}]});
  await act(async()=>{await client.invalidateQueries({queryKey:['project-manager','p']});});
  await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('project_manager.proposal_applied'));
  expect(screen.queryByRole('group')).toBeNull();

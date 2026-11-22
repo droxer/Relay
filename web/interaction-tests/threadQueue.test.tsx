@@ -4,11 +4,14 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { useThreadQueue } from "../src/hooks/useThreadQueue";
 import { apiJson } from "../src/api-client/client";
+import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
+import { THREAD_QUEUE_QUERY_KEY } from "../src/lib/threadQueue";
 
 vi.mock("../src/api-client/client", () => ({ apiJson: vi.fn() }));
 vi.mock("../src/api-client/sessions", () => ({ cancelRun: vi.fn(async () => ({})) }));
 let saved: { messages: { id: string; text: string }[]; paused: boolean };
 beforeEach(() => {
+  setSessionStreamConnected(false);
   saved = { messages: [], paused: false };
   sessionStorage.clear();
   vi.mocked(apiJson).mockImplementation(async (_path, options: any) => {
@@ -20,6 +23,31 @@ beforeEach(() => {
     }
     return structuredClone(saved) as any;
   });
+});
+it("renders pushed queue changes without polling the connected thread", async () => {
+  vi.useFakeTimers();
+  vi.mocked(apiJson).mockClear();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = [...THREAD_QUEUE_QUERY_KEY, "thread"];
+  client.setQueryData(key, { messages: [], paused: false });
+  setSessionStreamConnected(true, "thread");
+  const hook = open("owner:thread", true, client);
+  try {
+    await act(() => vi.advanceTimersByTimeAsync(7_000));
+    expect(apiJson).not.toHaveBeenCalled();
+    act(() => { client.setQueryData(key, { messages: [{ id: "other", text: "From another tab" }], paused: false }); });
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(hook.result.current.messages.map(message => message.id)).toEqual(["other"]);
+    act(() => setSessionStreamConnected(false, "thread"));
+    await act(() => vi.advanceTimersByTimeAsync(1_010));
+    expect(apiJson).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.messages).toEqual([]);
+  } finally {
+    hook.unmount();
+    client.clear();
+    setSessionStreamConnected(false);
+    vi.useRealTimers();
+  }
 });
 function open(
   queueKey = "owner:thread",
@@ -132,7 +160,7 @@ it("requests Stop & send next in one action and localizes failures", async () =>
   await waitFor(() => expect(apiJson).toHaveBeenCalled());
   const { cancelRun } = await import("../src/api-client/sessions");
   await act(async () => { await hook.result.current.steer("q1"); });
-  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue?view=versioned", expect.objectContaining({
     body: expect.objectContaining({ action: "steer", id: "q1" }),
   }));
   expect(cancelRun).not.toHaveBeenCalled();
@@ -160,7 +188,7 @@ it("promotes a message without requesting Stop when the thread is idle", async (
   const hook = open("owner:thread", false);
   await waitFor(() => expect(apiJson).toHaveBeenCalled());
   await act(async () => { await hook.result.current.steer("q1"); });
-  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue?view=versioned", expect.objectContaining({
     body: expect.objectContaining({ action: "promote", id: "q1" }),
   }));
 });
@@ -171,9 +199,9 @@ it("offers persisted undo and resumes through the same server queue", async () =
   const hook = open();
   await waitFor(() => expect(hook.result.current.removedAt).toBe(removedAt));
   await act(async () => { hook.result.current.undoRemove(); });
-  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({ body: expect.objectContaining({ action: "undo_remove", id: "old" }) }));
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue?view=versioned", expect.objectContaining({ body: expect.objectContaining({ action: "undo_remove", id: "old" }) }));
   await act(async () => { hook.result.current.resume(); });
-  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue", expect.objectContaining({ body: expect.objectContaining({ action: "resume" }) }));
+  expect(apiJson).toHaveBeenCalledWith("/threads/thread/queue?view=versioned", expect.objectContaining({ body: expect.objectContaining({ action: "resume" }) }));
 });
 
 it("localizes failed loading without exposing server details", async () => {

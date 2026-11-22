@@ -58,7 +58,8 @@ test("cancelling the workspace owner is independent of another waiter's notifica
   }
 });
 
-test("one terminal transport failure does not starve another recoverable result", async () => {
+test("one terminal transport failure does not starve another recoverable result", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   const root = mkdtempSync(join(tmpdir(), "relay-replay-review-"));
   try {
     const outbox = new TerminalOutbox(root);
@@ -75,6 +76,8 @@ test("one terminal transport failure does not starve another recoverable result"
     };
     for (let i = 0; i < 4; i++) await outbox.replay(send, "http://backend.invalid/events", "test-token");
     const retainedBeforeRecovery = outbox.pending().length;
+    assert.equal(attempts.filter(id => id === first.event.commandId).length, 1);
+    t.mock.timers.tick(1000);
     await outbox.replay(async () => new Response("{}", { status: 200 }), "http://backend.invalid/events", "test-token");
     assert.equal(outbox.pending().length, 0, "control: both records deliver when the first request recovers");
     assert.ok(attempts.includes(String(second.event.commandId)),

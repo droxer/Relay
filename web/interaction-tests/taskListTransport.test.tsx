@@ -13,13 +13,16 @@ it("reuses parsed task rows on 304 and replaces them after a change", async () =
   const first = await listTasks(undefined, cache);
   expect(await listTasks(undefined, cache)).toBe(first);
   expect(read).not.toHaveBeenCalled();
-  expect(fetcher.mock.calls[1][1]).toMatchObject({ cache: "no-store", headers: { "If-None-Match": 'W/"first"' } });
+  const [url, request] = fetcher.mock.calls[1];
+  expect(new URL(url, "http://relay.local").searchParams.get("relayRevision")).toBe('W/"first"');
+  expect(request).toMatchObject({ cache: "no-store" });
+  expect(new Headers(request.headers).has("If-None-Match")).toBe(false);
   expect((await listTasks(undefined, cache)).tasks).toEqual([]);
 });
 it("does not share task responses across personal caches", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ tasks: [] }))));
   await listTasks(undefined, {});
-  expect(vi.mocked(fetch).mock.calls[0][1]?.headers).not.toHaveProperty("If-None-Match");
+  expect(new URL(String(vi.mocked(fetch).mock.calls[0][0]), "http://relay.local").searchParams.has("relayRevision")).toBe(false);
 });
 
 it("keeps the last valid response when a request fails or returns malformed rows", async () => {

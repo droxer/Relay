@@ -1,21 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ComposerHandle } from "../components/composer/Composer";
 import { clearComposerDraft, restoreComposerDraft } from "./useComposer";
 import { apiJson } from "../api-client/client";
-import { THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress } from "../lib/threadQueue";
+import { cacheThreadQueue, EMPTY_THREAD_QUEUE, newestQueue, THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress, type QueueState } from "../lib/threadQueue";
+import { isThreadStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
-
-type QueueState = {
-  messages: QueuedMessage[];
-  paused: boolean;
-  sending?: string;
-  error?: string;
-  removed?: { message: QueuedMessage; beforeId: string | null; removedAt?: string };
-  /** Handed to the running agent; its computer has until `until` to say it took it. */
-  live?: { id: string; until: string };
-};
 
 /** The message on its way out: claimed for a new turn, or handed to the live run and not yet answered. */
 function outgoingMessageId(state: QueueState, now = Date.now()): string | undefined {
@@ -30,7 +21,6 @@ type QueueChange = {
   text?: string;
   address?: QueueAddress;
 };
-const EMPTY: QueueState = { messages: [], paused: false };
 const ACTIVE_QUEUE_POLL_MS = 1_000;
 const EMPTY_RUNNING_QUEUE_POLL_MS = 5_000;
 const IDLE_QUEUE_POLL_MS = 30_000;
@@ -45,6 +35,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
 }) {
   const { t } = useTranslation();
   const client = useQueryClient();
+  const streamConnected = useSyncExternalStore(subscribeSessionStream, () => isThreadStreamConnected(threadId), () => false);
   const [errorState, setErrorState] = useState<{ key: string; message: string | null } | null>(null);
   const error = errorState?.key === queueKey ? errorState.message : null;
   const setError = useCallback((message: string | null) => setErrorState({ key: queueKey, message }), [queueKey]);
@@ -55,7 +46,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const { mutateAsync: mutateQueue } = useMutation({
     mutationKey,
     mutationFn: ({ threadId, action, id, text, address }: QueueChange) => apiJson<QueueState>(
-      `/threads/${encodeURIComponent(threadId)}/queue`,
+      `/threads/${encodeURIComponent(threadId)}/queue?view=versioned`,
       { method: "POST", body: { action, id, text, ...address } },
     ),
     onSuccess: async (updated, { threadId, queueKey, action, text }) => {
@@ -63,26 +54,28 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
       // A GET started before this write can still carry a pre-mutation queue.
       // Publish the receipt immediately. Later polls reconcile other writers.
       await client.cancelQueries({ queryKey, exact: true });
-      client.setQueryData(queryKey, updated);
+      cacheThreadQueue(client, threadId, updated);
       if (action === "enqueue" && text !== undefined) clearComposerDraft(queueKey, text);
     },
   });
-  const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue`;
+  const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue?view=versioned`;
   const query = useQuery({
     queryKey: key,
     queryFn: ({ signal }) => apiJson<QueueState>(path, { signal }),
-    enabled: !!threadId,
+    enabled: ({ state }) => !!threadId && (!streamConnected || state.data === undefined),
     staleTime: ACTIVE_QUEUE_POLL_MS,
+    structuralSharing: (previous, next) => newestQueue(previous as QueueState | undefined, next as QueueState),
     // Own actions write the acknowledged state into the cache. The shorter
     // interval is for a message that can dispatch, not just a running Agent.
     refetchInterval: ({ state }) => {
-      if (pending) return false;
+      if (pending || streamConnected) return false;
+      if (state.data?.paused && !state.data.sending && !state.data.live) return IDLE_QUEUE_POLL_MS;
       if (state.data?.messages?.length || state.data?.sending || state.data?.live) return ACTIVE_QUEUE_POLL_MS;
       return running ? EMPTY_RUNNING_QUEUE_POLL_MS : IDLE_QUEUE_POLL_MS;
     },
     refetchOnWindowFocus: !pending,
   });
-  const state = query.data?.messages ? query.data : EMPTY;
+  const state = query.data?.messages ? query.data : EMPTY_THREAD_QUEUE;
   const activeKey = useRef(queueKey);
   useLayoutEffect(() => { activeKey.current = queueKey; }, [queueKey]);
   const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress) => {
