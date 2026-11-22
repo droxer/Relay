@@ -30,10 +30,8 @@ function readingAnchor(sentinel: HTMLDivElement | null): Element | null {
  * Which slice of a transcript is mounted: the newest page on open, one more
  * page each time a sentinel above the oldest mounted turn nears the top of the
  * scroller. Growing inserts content ABOVE the reader, so the turn they were
- * reading is pinned: its offset is restored before the new turns paint, and
- * again on the frames after, while the inserted turns trade their
- * `content-visibility` placeholder height for their real one. A single
- * restore left the reader shoved down by however much those heights grew.
+ * reading is pinned before the new turns paint and while the inserted turns
+ * trade their `content-visibility` placeholder height for their real one.
  */
 export function useTranscriptWindow(
   sessionId: string | undefined,
@@ -85,24 +83,32 @@ export function useTranscriptWindow(
       return drift;
     };
     restore();
+    // Offscreen messages can change height after an animation frame callback.
+    // Restore at layout time too, before the changed height can paint.
+    let still = 0;
+    const content = element.firstElementChild;
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+      if (restore() !== 0) still = 0;
+    });
+    if (content) observer?.observe(content);
     // Heights settle over the next frames; keep the turn pinned until two
     // frames in a row hold still, or the budget runs out.
     let frame = 0;
-    let still = 0;
     let handle = requestAnimationFrame(function settle() {
       still = restore() === 0 ? still + 1 : 0;
       frame += 1;
       if (still < SETTLED_FRAMES && frame < MAX_SETTLE_FRAMES) handle = requestAnimationFrame(settle);
+      else release();
     });
     // A scroll the reader makes meanwhile is theirs: stop correcting.
-    const release = () => cancelAnimationFrame(handle);
-    element.addEventListener("wheel", release, { once: true, passive: true });
-    element.addEventListener("touchstart", release, { once: true, passive: true });
-    return () => {
-      release();
-      element.removeEventListener("wheel", release);
-      element.removeEventListener("touchstart", release);
+    const scrollInputs = ["wheel", "touchstart", "pointerdown", "keydown"];
+    const release = () => {
+      cancelAnimationFrame(handle);
+      observer?.disconnect();
+      for (const input of scrollInputs) element.removeEventListener(input, release);
     };
+    for (const input of scrollInputs) element.addEventListener(input, release, { once: true, passive: true });
+    return release;
   }, [current.visible, current.eventStart]);
 
   const start = transcriptWindowStart(current.total, current.visible);

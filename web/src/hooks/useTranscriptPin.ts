@@ -38,16 +38,28 @@ export function useTranscriptPin(
     setElement(node);
   }, []);
   const atBottom = useRef(true);
+  const lastPinnedTop = useRef<number | undefined>(undefined);
 
   const onScroll = useCallback(() => {
     const el = elementRef.current;
-    if (el) atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < BOTTOM_EPSILON;
+    if (!el) return;
+    const top = el.scrollTop;
+    // More output can arrive before the scroll event from our last pin.
+    // That event must not turn off following just because the bottom moved.
+    if (atBottom.current && top === lastPinnedTop.current) return;
+    lastPinnedTop.current = undefined;
+    atBottom.current = el.scrollHeight - top - el.clientHeight < BOTTOM_EPSILON;
   }, []);
 
   const pinToBottom = useCallback(() => {
     atBottom.current = true;
     const el = elementRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) {
+      const previousTop = el.scrollTop;
+      el.scrollTop = el.scrollHeight;
+      const top = el.scrollTop;
+      if (top !== previousTop) lastPinnedTop.current = top;
+    }
   }, []);
 
   useEffect(() => { atBottom.current = true; }, [sessionId]);
@@ -55,28 +67,19 @@ export function useTranscriptPin(
   // The DOM node is written through the ref; `element` (its state twin) is in
   // the deps only so attaching a node re-runs the pin.
   useEffect(() => {
-    const el = elementRef.current;
-    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
-  }, [element, messageCount, sessionId]);
+    if (atBottom.current) pinToBottom();
+  }, [element, messageCount, pinToBottom, sessionId]);
 
   useEffect(() => {
     const el = element;
     const content = el?.firstElementChild;
     if (!el || !content || typeof ResizeObserver === "undefined") return;
-    let frame: number | undefined;
     const observer = new ResizeObserver(() => {
-      if (!atBottom.current || frame !== undefined) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = undefined;
-        if (atBottom.current) el.scrollTop = el.scrollHeight;
-      });
+      if (atBottom.current) pinToBottom();
     });
     observer.observe(content);
-    return () => {
-      observer.disconnect();
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-    };
-  }, [element]);
+    return () => observer.disconnect();
+  }, [element, pinToBottom]);
 
   return { ref, onScroll, pinToBottom };
 }

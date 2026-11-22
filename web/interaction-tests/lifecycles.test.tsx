@@ -40,23 +40,24 @@ it("rebinds transcript observation when the same session's DOM remounts", () => 
 it("follows growing output only while the reader is pinned", () => {
   let resize!: () => void;
   vi.stubGlobal("ResizeObserver", class { constructor(callback: () => void) { resize = callback; } observe() {} disconnect() {} });
-  vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { callback(0); return 1; });
   function Harness() {
     const pin = useTranscriptPin(1, "session");
     return <><button onClick={pin.pinToBottom}>Pin</button><div data-testid="transcript" ref={pin.ref} onScroll={pin.onScroll}><div /></div></>;
   }
   render(<Harness />);
   const node = screen.getByTestId("transcript");
-  Object.defineProperties(node, { scrollHeight: { value: 500 }, clientHeight: { value: 100 } });
+  let height = 500;
+  Object.defineProperties(node, { scrollHeight: { get: () => height }, clientHeight: { value: 100 } });
   node.scrollTop = 0;
-  // A reader's input ends the opening-layout grace period before scrolling.
-  fireEvent.wheel(node, { deltaY: -100 });
   fireEvent.scroll(node);
   act(() => resize());
   expect(node.scrollTop).toBe(0);
   fireEvent.click(screen.getByText("Pin"));
   expect(node.scrollTop).toBe(500);
+  // Output grows before the event from the programmatic pin is delivered.
+  height = 800;
+  fireEvent.scroll(node);
   act(() => resize());
-  expect(node.scrollTop).toBe(500);
+  expect(node.scrollTop).toBe(800);
   vi.unstubAllGlobals();
 });
