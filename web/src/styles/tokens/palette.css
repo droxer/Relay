@@ -6,6 +6,8 @@
    Breakpoints (reference — custom properties can't drive @media, so this
    list is the only registry there is; keep it honest when you add a query).
 
+     360px   composer footer — minimum width for targets to share one row
+             with Stop or Send while keeping the agent or team name readable
      420px   CONTAINER tier — narrow GitHub-import drawer fields and touch
              avatar pickers; fewer columns keep controls within their pane
      480px   narrow phone — backlog card grid, login stack; also a CONTAINER
