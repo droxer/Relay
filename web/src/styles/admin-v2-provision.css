@@ -459,7 +459,7 @@
    shorthand above resets — the same compound .adm-assign-node-id.code needs. */
 .adm-cred-value.code {
   font-family: var(--font-mono);
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: var(--type-code-track);
 }
 

@@ -6,7 +6,6 @@
   background: var(--surface-0);
   color: var(--ink-1);
   font-family: var(--font-sans);
-  font-optical-sizing: auto;
   /* Weight is never faked (Space Mono ships Regular only, so code stays 400),
      but slant is: Space Grotesk and Space Mono ship no italic, and with style
      synthesis off every `font-style: italic` — markdown emphasis, quotes,
