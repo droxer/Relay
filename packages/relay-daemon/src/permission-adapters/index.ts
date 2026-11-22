@@ -16,9 +16,15 @@ export function permissionAdapterScript(adapter: PermissionPromptAdapter): strin
   return fileURLToPath(new URL(ADAPTER_SCRIPTS[adapter], import.meta.url));
 }
 
+/** Claude reads its prompt once; this launcher holds its input open for live messages. */
+const CLAUDE_LIVE_LAUNCHER = "./claude-stream.js";
+
 export function permissionAdapterLaunch(
   adapter: PermissionPromptAdapter,
   broker: { readonly env: Record<string, string> },
 ): PermissionPromptLaunch {
-  return { adapter, command: process.execPath, args: [permissionAdapterScript(adapter)], env: { ...broker.env } };
+  const launch = { adapter, command: process.execPath, args: [permissionAdapterScript(adapter)], env: { ...broker.env } };
+  return adapter === "claude-mcp"
+    ? { ...launch, liveLauncher: { command: process.execPath, args: [fileURLToPath(new URL(CLAUDE_LIVE_LAUNCHER, import.meta.url))] } }
+    : launch;
 }

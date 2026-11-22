@@ -529,6 +529,19 @@ export type RelayEvent =
       actorUserId?: string;
     }
   | {
+      /** What the person told a run while it worked; it reached the run without stopping it. Not a new turn. */
+      id: string;
+      type: "user.live_message";
+      sessionId: string;
+      timestamp: string;
+      text: string;
+      runId: string;
+      agent: AgentName;
+      delivery: import("./agents.js").LiveMessageDelivery;
+      logicalAgentId?: string;
+      actorUserId?: string;
+    }
+  | {
       id: string;
       type: "session.status";
       sessionId: string;

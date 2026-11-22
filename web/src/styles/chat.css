@@ -751,6 +751,16 @@
   align-self: center;
 }
 
+/* "Sent while it worked": a word to a running turn, not a new one. Meta ink
+   and size, like the time beneath it, so the bubble itself stays the voice. */
+.msg-user > .msg-user-note {
+  margin: 0;
+  padding-inline-end: var(--sp-1);
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
 .msg-user > .msg-time {
   padding-inline-end: var(--sp-1);
   opacity: 0;

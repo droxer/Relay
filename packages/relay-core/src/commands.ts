@@ -120,6 +120,8 @@ function buildClaudeInvocation(
   if (model) argv.push("--model", model);
   const resume = resumeId(state);
   if (resume) argv.push("--resume", resume);
+  const live = permissionPromptLaunch(state, "claude-mcp");
+  if (live?.liveLauncher) return buildLiveClaudeInvocation(prompt, argv, state, live, live.liveLauncher, workspacePath);
   if (state.input_images?.length) {
     const target = `${state.input_images[0]!.path}.message.json`;
     argv.push("--input-format", "stream-json");
@@ -128,6 +130,36 @@ function buildClaudeInvocation(
   }
   argv.push(prompt);
   return runAsAgent(withSkillEnv(shellCommand(argv), state, "CLAUDE_CONFIG_DIR"), workspacePath);
+}
+
+/**
+ * A run that can take a person's live message: Claude reads stream-json
+ * input through the launcher, which writes the prompt (or the prepared image
+ * message) first and holds input open until every message has its result.
+ * The launcher reads the broker's address from its environment and keeps it
+ * from Claude's.
+ */
+function buildLiveClaudeInvocation(
+  prompt: string,
+  claudeArgv: string[],
+  state: AgentState,
+  launch: PermissionPromptLaunch,
+  launcher: NonNullable<PermissionPromptLaunch["liveLauncher"]>,
+  workspacePath?: string,
+): string {
+  const argv = [...claudeArgv, "--input-format", "stream-json"];
+  const run = (input: string[], prepare: string[] = []): string => runAsAgent(
+    withSkillEnv(
+      chainCommands([...prepare, ...envExports(launch.env), shellCommand([launcher.command, ...launcher.args, ...input, "--", ...argv])]),
+      state,
+      "CLAUDE_CONFIG_DIR",
+    ),
+    workspacePath,
+  );
+  if (!state.input_images?.length) return run(["--prompt", prompt]);
+  const target = `${state.input_images[0]!.path}.message.json`;
+  const prepare = shellCommand(["node", "-e", CLAUDE_IMAGE_INPUT_SCRIPT, JSON.stringify({ prompt, images: state.input_images, target })]);
+  return run(["--input-file", target], [prepare]);
 }
 
 /** Claude's full name for the `approve` tool of the MCP server named "relay". */

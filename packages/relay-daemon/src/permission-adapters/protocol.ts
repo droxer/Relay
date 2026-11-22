@@ -11,7 +11,7 @@
 // rides on command lines and in process environments, never the secret.
 import { readFileSync } from "node:fs";
 import { connect } from "node:net";
-import type { PermissionAnswers, PermissionQuestionItem } from "relay-core";
+import type { LiveMessageDelivery, PermissionAnswers, PermissionQuestionItem } from "relay-core";
 
 export type PermissionQuestionKind = "command" | "file_change" | "tool" | "question";
 
@@ -157,4 +157,72 @@ export function parseAnswers(value: unknown): PermissionAnswers | undefined {
 
 function deny(message: string): PermissionAnswer {
   return { behavior: "deny", message };
+}
+
+// Live messages: the reverse direction on the same broker. An adapter that
+// can hand a person's message to its running runtime opens one long-lived
+// connection with `{secret, kind: "listen"}`; the broker then writes one
+// `{id, text}` line per message, and the adapter answers each with
+// `{id, delivery}` once the runtime took it or `{id, error}` when it did not.
+
+/** One message a person sent into this live run. */
+export interface LiveMessage {
+  id: string;
+  text: string;
+}
+
+/** Hands a message to the runtime and says how it was taken; throws when the runtime refused it. */
+export type LiveMessageHandler = (message: LiveMessage) => Promise<LiveMessageDelivery>;
+
+export interface LiveMessageListener {
+  close(): void;
+}
+
+/**
+ * Listens for live messages on the broker named by RELAY_PERMISSION_FILE, or
+ * returns undefined when there is none. Never throws: a run that cannot listen
+ * still runs, and the daemon answers its messages `unavailable`.
+ */
+export function listenForLiveMessages(
+  handler: LiveMessageHandler,
+  env: NodeJS.ProcessEnv = process.env,
+): LiveMessageListener | undefined {
+  const address = brokerAddress(env);
+  if (!address) return undefined;
+  const socket = connect(address.socket);
+  // The listener must never hold an adapter's process open on its own.
+  socket.unref();
+  socket.setEncoding("utf8");
+  socket.on("error", () => socket.destroy());
+  socket.on("connect", () => socket.write(`${JSON.stringify({ secret: address.secret, kind: "listen" })}\n`));
+  let buffer = "";
+  socket.on("data", (chunk: string) => {
+    buffer += chunk;
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      const message = parseLiveMessage(line);
+      if (!message) continue;
+      const reply = (fields: Record<string, unknown>): void => {
+        if (!socket.destroyed) socket.write(`${JSON.stringify({ id: message.id, ...fields })}\n`);
+      };
+      handler(message).then(
+        (delivery) => reply({ delivery }),
+        (error: unknown) => reply({ error: error instanceof Error ? error.message : String(error) }),
+      );
+    }
+  });
+  return { close: () => socket.destroy() };
+}
+
+function parseLiveMessage(line: string): LiveMessage | undefined {
+  try {
+    const parsed = JSON.parse(line) as Partial<LiveMessage>;
+    return typeof parsed.id === "string" && parsed.id && typeof parsed.text === "string" && parsed.text
+      ? { id: parsed.id, text: parsed.text }
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }

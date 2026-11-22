@@ -23,6 +23,7 @@ import { RunSupervisor } from './run-supervisor.js';
 import { resourceLimit, parseRuntimeLimits, type RuntimeLimits, type AdmissionWaitReason } from "./run-admission.js";
 import { DaemonLogWriter, type DaemonLogWriterOptions } from "./daemon-log-writer.js";
 import { AdmissionLedger } from "./admission-ledger.js";
+import { liveRuns } from "./live-runs.js";
 import { acquireDaemonStateLock } from "./daemon-state-lock.js";
 import { ExecutionDeadlineError, withExecutionDeadline } from "./execution-deadline.js";
 import { syncDirectory } from "./sync-directory.js";
@@ -1363,6 +1364,23 @@ async function runDaemonWithState(options: DaemonRuntimeOptions, input: {
               reason: command.reason || "Run was not executing on this computer.",
             }, "cancel acknowledgement capture failed", { sandboxId, commandId: command.commandId }) || pollMadeProgress;
           }
+        } else if (command.type === "run.steer") {
+          // Hand a person's message to the live run through its adapter, and
+          // say what became of it; `unavailable` lets the backend stop and resend.
+          const key = JSON.stringify([command.id, command.leaseId ?? null]);
+          logger.info("live message received", {
+            sandboxId, commandId: command.id, targetCommandId: command.commandId,
+            sessionId: command.sessionId, runId: command.runId, agent: command.agent,
+          });
+          pollMadeProgress = commandTasks.submit(key, async () => {
+            const event = await liveRuns.steer(command);
+            logger.info("live message answered", {
+              sandboxId, commandId: command.id, targetCommandId: command.commandId,
+              outcome: event.outcome, ...(event.delivery ? { delivery: event.delivery } : {}),
+            });
+            await postJsonWithRetry(fetchFn, relayApiUrl(backendUrl, `/daemon-nodes/${encodeURIComponent(sandboxId)}/events`),
+              event, token, runtimeSignal);
+          }, { lease: { commandId: command.id, leaseId: command.leaseId } }) || pollMadeProgress;
         } else {
           const key = JSON.stringify([command.id, command.leaseId ?? null]);
           const lane = command.workspaceSubpath

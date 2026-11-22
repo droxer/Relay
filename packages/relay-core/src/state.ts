@@ -156,6 +156,12 @@ export interface PermissionPromptLaunch {
   command: string;
   args: string[];
   env: Record<string, string>;
+  /**
+   * For a runtime whose CLI reads its prompt once (Claude): the launcher that
+   * runs the CLI with its input held open, so a person's live message can
+   * reach the run (`command args… -- <cli argv>`). Absent, the run takes none.
+   */
+  liveLauncher?: { command: string; args: string[] };
 }
 
 export interface AgentRunOptions {

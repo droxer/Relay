@@ -1,4 +1,5 @@
 import type { AgentName, AgentState } from "./state.js";
+import type { LiveMessageDelivery } from "./agents.js";
 import type { TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 import type { AgentRole, WorkspaceLayout } from "./session-store.js";
@@ -79,7 +80,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "durable-output-ack" | "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "workspace-list-thread-records" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope";
+export type DaemonNodeCapability = "durable-output-ack" | "durable-reports" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "workspace-list-thread-records" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope" | "live-messages";
 /** Waits for backend output receipts with a 60s default drain budget and durable replay. */
 export const DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK: DaemonNodeCapability = "durable-output-ack";
 export const DAEMON_CAPABILITY_DURABLE_REPORTS: DaemonNodeCapability = "durable-reports";
@@ -148,6 +149,13 @@ export const DAEMON_CAPABILITY_WORKFLOW_RESULTS: DaemonNodeCapability = "workflo
 export const DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT: DaemonNodeCapability = "execution-journal-report";
 /** Terminal events carry `runtimeSessionId`, and `AgentState.resume_session_id` resumes it. */
 export const DAEMON_CAPABILITY_AGENT_RESUME: DaemonNodeCapability = "agent-resume";
+/**
+ * The daemon understands `run.steer`: it hands a message to a live run through
+ * the run's runtime adapter and answers `run.steered`. A run without such a
+ * channel (BoxLite, trusted, or no adapter) answers `unavailable`, and the
+ * backend falls back to stopping the run and sending the message next.
+ */
+export const DAEMON_CAPABILITY_LIVE_MESSAGES: DaemonNodeCapability = "live-messages";
 /**
  * The daemon reads the proposal a project setup round leaves at
  * `.relay/project-setup-<runId>.json` and reports it as `projectSetup`; the backend
@@ -431,6 +439,25 @@ export interface DaemonNodeCancelCommand {
   reason: string;
 }
 
+/** Hands one message to a live run without stopping it. `commandId` names the run's start command. */
+export interface DaemonNodeSteerCommand {
+  id: string;
+  type: "run.steer";
+  leaseId?: string;
+  leaseExpiresAt?: string;
+  attempt?: number;
+  commandId: string;
+  sessionId: string;
+  runId: string;
+  agent: AgentName;
+  /** The person's message id, echoed on `run.steered` so a retry stays one delivery. */
+  messageId: string;
+  text: string;
+}
+
+/** Most of a live message the daemon forwards to a runtime; mirrors the backend queue's limit. */
+export const LIVE_MESSAGE_TEXT_LIMIT = 100_000;
+
 export interface DaemonWorkspaceEntry {
   name: string;
   path: string;
@@ -498,7 +525,7 @@ export type DaemonWorkspaceErrorCode =
   | "io-error"
   | Exclude<DaemonProjectLinkErrorCode, "invalid-path" | "not-found">;
 
-export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand | DaemonWorkspaceDeleteCommand | DaemonProjectLinkCommand;
+export type DaemonNodeCommand = { id: string; type: "runtime.refresh"; leaseId: string } | DaemonNodeRunCommand | DaemonNodeCancelCommand | DaemonNodeSteerCommand | DaemonWorkspaceListCommand | DaemonWorkspaceReadCommand | DaemonWorkspaceDeleteCommand | DaemonProjectLinkCommand;
 
 /** Longest tool input, in characters, a permission request carries. */
 export const PERMISSION_INPUT_LIMIT = 4000;
@@ -680,6 +707,26 @@ export type DaemonNodeEvent =
       generatedFiles?: DaemonGeneratedFile[];
       /** The runtime CLI's own conversation id, for a later resume. */
       runtimeSessionId?: string;
+    }
+  | {
+      /**
+       * What became of a `run.steer`. `delivered` names how the runtime took it;
+       * `unavailable` means the run has no live channel (or already ended) and
+       * the message was not handed over; `failed` means the runtime refused it.
+       */
+      type: "run.steered";
+      /** The `run.steer` command's own id. */
+      commandId: string;
+      leaseId?: string;
+      /** The run the message was for. */
+      targetCommandId: string;
+      sessionId: string;
+      runId: string;
+      agent: AgentName;
+      messageId: string;
+      outcome: "delivered" | "unavailable" | "failed";
+      delivery?: LiveMessageDelivery;
+      reason?: string;
     }
   | {
       type: "run.cancelled";

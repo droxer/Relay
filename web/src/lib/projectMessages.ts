@@ -28,6 +28,8 @@ export type DerivedMessage =
       id: string;
       timestamp: string;
       text: string;
+      /** Sent into a running turn (`user.live_message`) rather than opening a new one. */
+      live?: boolean;
     }
   | {
       kind: "agent";
@@ -392,6 +394,10 @@ export class ProjectMessagesAccumulator {
         return false;
       case "user.message":
         this.out.push({ kind: "user", id: event.id, timestamp: event.timestamp, text: event.text, ...(event.attachments?.length ? { attachments: event.attachments } : {}) });
+        return true;
+      case "user.live_message":
+        // Said to a run while it worked: the person's words, marked as reaching that run live.
+        this.out.push({ kind: "user", id: event.id, timestamp: event.timestamp, text: event.text, live: true });
         return true;
       case "agent.started": {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);

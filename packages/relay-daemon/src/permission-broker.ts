@@ -27,6 +27,7 @@ import {
   getAgent,
 } from "relay-core";
 import { BROKER_FILE_ENV, parseAnswers, type PermissionAnswer, type PermissionQuestion } from "./permission-adapters/protocol.js";
+import { isListenRequest, LiveMessageChannel } from "./live-message-channel.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 1_500;
 const POLL_REQUEST_TIMEOUT_MS = 30_000;
@@ -75,6 +76,8 @@ export interface PermissionBroker {
   readonly socketPath: string;
   /** The 0700 directory holding the socket and the address file. */
   readonly privateDir: string;
+  /** Messages a person sends into the live run, carried to the adapter that listens here. */
+  readonly liveMessages: LiveMessageChannel;
   close(): Promise<void>;
 }
 
@@ -96,10 +99,11 @@ export async function startPermissionBroker(options: PermissionBrokerOptions): P
   const closing = new AbortController();
   const brokerSignal = options.signal ? AbortSignal.any([options.signal, closing.signal]) : closing.signal;
   const sockets = new Set<Socket>();
+  const liveMessages = new LiveMessageChannel();
   const server = createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
-    serveConnection(socket, secret, options, brokerSignal);
+    serveConnection(socket, secret, options, brokerSignal, liveMessages);
   });
   try {
     writeFileSync(addressFile, JSON.stringify({ socket: socketPath, secret }), { mode: 0o600 });
@@ -113,9 +117,11 @@ export async function startPermissionBroker(options: PermissionBrokerOptions): P
     socketPath,
     privateDir,
     env: { [BROKER_FILE_ENV]: addressFile },
+    liveMessages,
     close: () => {
       closed ??= (async () => {
         closing.abort("The run ended before a person answered.");
+        liveMessages.close();
         const stopped = new Promise<void>((resolve) => server.close(() => resolve()));
         // Open questions answer deny on abort; give them a tick to flush.
         await new Promise((resolve) => setImmediate(resolve));
@@ -148,8 +154,18 @@ function listen(server: Server, socketPath: string): Promise<void> {
   });
 }
 
-/** One connection carries one question and gets one answer. */
-function serveConnection(socket: Socket, secret: string, options: PermissionBrokerOptions, brokerSignal: AbortSignal): void {
+/**
+ * One connection carries one question and gets one answer, except a
+ * `{secret, kind: "listen"}` connection, which the run's live-message channel
+ * takes over for the rest of the run.
+ */
+function serveConnection(
+  socket: Socket,
+  secret: string,
+  options: PermissionBrokerOptions,
+  brokerSignal: AbortSignal,
+  liveMessages: LiveMessageChannel,
+): void {
   const hungUp = new AbortController();
   const signal = AbortSignal.any([brokerSignal, hungUp.signal]);
   let buffer = "";
@@ -171,7 +187,13 @@ function serveConnection(socket: Socket, secret: string, options: PermissionBrok
     const newline = buffer.indexOf("\n");
     if (newline < 0) return;
     asked = true;
-    const request = parseRequest(buffer.slice(0, newline), secret);
+    const first = buffer.slice(0, newline);
+    if (listensWithSecret(first, secret)) {
+      answered = true;
+      liveMessages.attach(socket, buffer.slice(newline + 1));
+      return;
+    }
+    const request = parseRequest(first, secret);
     if (!request) return reply(deny("The permission request was not from this run."));
     void askPerson(request, options, signal).then(reply, (error: unknown) => {
       options.logger?.warn("permission request failed", { ...scopeFields(options.command), error: errorMessage(error) });
@@ -198,6 +220,17 @@ function parseRequest(line: string, secret: string): PermissionQuestion | undefi
     ...(typeof parsed.reason === "string" && parsed.reason ? { reason: parsed.reason } : {}),
     ...(questions ? { questions } : {}),
   };
+}
+
+/** A listen request carries the run's secret like any question; anything else is not this run's adapter. */
+function listensWithSecret(line: string, secret: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return false;
+  }
+  return isListenRequest(parsed) && secretMatches((parsed as Record<string, unknown>).secret, secret);
 }
 
 function isQuestionKind(value: unknown): value is PermissionQuestion["kind"] {
