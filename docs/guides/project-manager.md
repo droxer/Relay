@@ -33,10 +33,11 @@ Each message goes to whoever it addresses. After a handover, new discussions
 start with the new lead and earlier Threads retain their history. The former
 holder can still be addressed as an ordinary Agent.
 
-The role reads fresh Project records, explains progress and the backlog, and
-manages Project Tasks and Automations through Relay MCP. It may also stage batch
-Task changes. For a proposal, the owner reviews it in the Thread, edits individual
-fields, selects operations, and applies or dismisses it. Proposal-created Tasks enter backlog.
+The role reads fresh Project records, explains progress and the backlog, manages
+Project Tasks and Automations, and saves reusable Project Workflows through Relay
+MCP. It may also stage batch Task changes. The owner reviews a proposal in the
+Thread, edits individual fields, selects operations, and applies or dismisses it.
+Proposal-created Tasks enter backlog.
 Apply uses normal domain validation, revision checks, idempotency and an atomic
 transaction. It cannot silently start work, accept an outcome or reconcile a run.
 
@@ -225,6 +226,11 @@ adapters over the same Python operations for older clients and workspace helpers
 - `relay_list_automations`, `relay_get_automation`, `relay_create_automation`,
   `relay_update_automation`, `relay_delete_automation`: Automation records,
   schedules/triggers, assignment, pause/resume and deletion.
+- `relay_create_workflow` saves a reusable Workflow in the Project of the current
+  Lead run. Pass `projectId`, `name`, `workflowSteps` in execution order, and
+  optionally `enabled` (defaults to `true`). Each step takes `id`, `name`,
+  `agentId`, `instructions`, `acceptanceCriteria`, and optional `requiresApproval`.
+  The tool returns the saved definition for use in Project → Workflows.
 - `relay_project_activity`, `relay_project_threads`, `relay_get_thread`: scoped
   activity and conversation history with bounded coverage.
 - `relay_propose_task_changes`: stage create, update and prerequisite operations
