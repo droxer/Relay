@@ -95,7 +95,7 @@ function routine(extra: Partial<RoutineTaskFormState>): RoutineTaskFormState {
 }
 
 const kindField = () => screen.getByText("automation.trigger_kind").closest("[data-slot='field']") as HTMLElement;
-const kindOptions = () => within(kindField()).getAllByRole("option").map((option) => option.textContent);
+const kindOptions = () => within(kindField()).getAllByRole("radio").map((option) => option.textContent);
 const schedule = () => screen.getByRole("group", { name: "routine.schedule" });
 const enabledSwitch = () => within(schedule()).getByRole("switch", { name: "routine.enabled" });
 const enabledHint = () => document.getElementById(enabledSwitch().getAttribute("aria-describedby")!);
@@ -129,7 +129,7 @@ it("checks a schedule locally before asking the server", () => {
 
 it("keeps the time when the preset changes, and requires a day for a weekly schedule", () => {
   render(<Form initial={routine({ routineTriggers: [{ kind: "schedule", schedule: { timezone: "UTC", repeat: { every: "day", at: "07:45" } } }] })} />);
-  fireEvent.click(screen.getByRole("option", { name: "automation.presets.week" }));
+  fireEvent.click(screen.getByRole("radio", { name: "automation.presets.week" }));
   const [trigger] = latest().routineTriggers;
   expect(trigger.kind === "schedule" && trigger.schedule.repeat).toEqual({ every: "week", at: "07:45", days: [1] });
   fireEvent.click(screen.getByRole("button", { name: "automation.weekdays.1" }));
@@ -138,7 +138,7 @@ it("keeps the time when the preset changes, and requires a day for a weekly sche
 
 it("offers Run now only, and saves it as no triggers", () => {
   render(<Form initial={emptyRoutineForm(user)} />);
-  fireEvent.click(within(kindField()).getByRole("option", { name: "automation.kinds.none" }));
+  fireEvent.click(within(kindField()).getByRole("radio", { name: "automation.kinds.none" }));
   expect(latest().routineTriggers).toEqual([]);
   expect(screen.getByText("automation.manual_hint")).toBeTruthy();
   expect(screen.queryByText("automation.repeat")).toBeNull();

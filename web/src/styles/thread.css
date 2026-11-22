@@ -570,9 +570,3 @@
 .conversation-group-count {
   color: var(--ink-4);
 }
-
-.project-origin-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-5);
-}
