@@ -16,6 +16,7 @@ test('all runtime commands receive the same live project lead tool contract', ()
   assert.match(prompt,/EVERY turn read fresh project data/);
   assert.match(prompt,/owner reviews and applies/);
   assert.match(prompt,/taskId,fields/);
+  assert.match(prompt,/relay_create_workflow.*projectId.*workflowSteps/);
   for(const kind of AGENT_NAMES) {
     const command=getAgent(kind).buildCommand(withPermissionAdapter(kind,state));
     assert.match(command,/Relay project lead/);
@@ -43,7 +44,7 @@ test('a roster member gets the read-only project contract, never the propose too
   assert.match(prompt,/Relay project records/);
   assert.match(prompt,/relay_list_tasks/);
   assert.match(prompt,/you cannot change its work/);
-  assert.doesNotMatch(prompt,/relay_propose_task_changes|Relay project lead/);
+  assert.doesNotMatch(prompt,/relay_propose_task_changes|relay_create_workflow|Relay project lead/);
 });
 
 test('every runtime gets standalone Task and Automation tools independently of Project access', () => {

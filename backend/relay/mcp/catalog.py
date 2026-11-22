@@ -22,6 +22,7 @@ TOOL_OPERATIONS = {
     "relay_create_automation": "create_automation",
     "relay_update_automation": "update_automation",
     "relay_delete_automation": "delete_automation",
+    "relay_create_workflow": "create_workflow",
 }
 _DESCRIPTIONS = {
     "projects": "List Projects this token can access.",
@@ -38,6 +39,39 @@ _DESCRIPTIONS = {
 }
 _TEXT = {"type": "string"}
 _NULLABLE_TEXT = {"type": ["string", "null"]}
+_RESOURCE_ID = {"type": "string", "minLength": 1, "maxLength": 128}
+_WORKFLOW_REQUIREMENTS = {
+    "type": "array", "minItems": 1, "maxItems": 32,
+    "items": {"type": "string", "minLength": 1, "maxLength": 2000},
+}
+CREATE_WORKFLOW_INPUT = {
+    "type": "object",
+    "required": ["projectId", "name", "workflowSteps"],
+    "additionalProperties": False,
+    "properties": {
+        "projectId": _RESOURCE_ID,
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "enabled": {"type": "boolean", "default": True},
+        "workflowSteps": {
+            "type": "array", "minItems": 1, "maxItems": 64,
+            "items": {
+                "type": "object",
+                "required": ["id", "name", "agentId", "instructions", "acceptanceCriteria"],
+                "additionalProperties": False,
+                "properties": {
+                    "id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9_-]+$"},
+                    "name": {"type": "string", "minLength": 1, "maxLength": 200},
+                    "agentId": _RESOURCE_ID,
+                    "instructions": {"type": "string", "minLength": 1, "maxLength": 8000},
+                    "acceptanceCriteria": _WORKFLOW_REQUIREMENTS,
+                    "requiresApproval": {"type": "boolean", "default": False},
+                    "expectedOutputs": _WORKFLOW_REQUIREMENTS,
+                    "kind": {"enum": ["work", "deployment"]},
+                },
+            },
+        },
+    },
+}
 WORK_FIELDS = {
     "title": {"type": "string", "minLength": 1, "maxLength": 200},
     "description": {"type": "string", "maxLength": 20000},
@@ -133,17 +167,28 @@ _INPUTS = {
 
 
 def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
-    """The tools a grant can call; a read-only grant never sees ``propose``."""
+    """Hide Project Lead-only tools from grants without Project write access."""
     tools = []
     properties: dict[str, Any]
     for name, operation in TOOL_OPERATIONS.items():
-        if operation == "propose" and not may_manage:
+        if operation in ("propose", "create_workflow") and not may_manage:
+            continue
+        if operation == "create_workflow":
+            tools.append(Tool(
+                name=name,
+                description=(
+                    "Save a reusable Workflow with ordered steps in the current Project for later runs. "
+                    "Only its Lead can create it. Each step needs an enabled Project Agent placed on the Project's Computer."
+                ),
+                inputSchema=CREATE_WORKFLOW_INPUT,
+                annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            ))
             continue
         if operation.startswith(("create_", "update_", "delete_")):
             kind = operation.split("_", 1)[1]
             verb = operation.split("_", 1)[0]
             id_key = f"{kind}Id"
-            properties = {"projectId": {"type": "string", "minLength": 1, "maxLength": 128}}
+            properties = {"projectId": _RESOURCE_ID}
             required = []
             if verb != "create":
                 properties[id_key] = _TEXT
@@ -166,7 +211,7 @@ def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
             {}
             if operation == "projects"
             else {
-                "projectId": {"type": "string", "minLength": 1, "maxLength": 128},
+                "projectId": _RESOURCE_ID,
                 "taskId": _TEXT,
                 "automationId": _TEXT,
                 "threadId": _TEXT,
