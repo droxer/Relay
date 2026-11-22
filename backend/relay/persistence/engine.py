@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from threading import RLock, local
 from typing import Any
 
+from psycopg.conninfo import make_conninfo
 from sqlalchemy import create_engine, text
 from sqlalchemy import event as sa_event
 from sqlalchemy.engine import make_url
@@ -16,6 +17,15 @@ from . import schema
 
 _ENGINES: dict[str, Any] = {}
 _ENGINE_LOCK = RLock()
+
+
+def postgres_conninfo(database_url: str, *, purpose: str) -> str:
+    url = make_url(database_url)
+    if url.get_backend_name() != "postgresql":
+        raise ValueError(f"{purpose} requires a PostgreSQL database.")
+    options = url.translate_connect_args(username="user", database="dbname")
+    options.update(url.query)
+    return make_conninfo(**options)
 
 
 def _positive_env_number(name: str, default: str, cast: Any) -> Any:

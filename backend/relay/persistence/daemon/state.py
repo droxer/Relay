@@ -17,6 +17,7 @@ class DaemonStoreState:
     engine: Any
     _command_changes: Any
     _workspace_changes: Any
+    _thread_queue_changes: Any
 
     if TYPE_CHECKING:
         # Methods one mixin calls on another, declared so each type-checks alone.

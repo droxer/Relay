@@ -451,6 +451,19 @@ export function ThreadsView({
         now: queueClock,
       })
     : null;
+  const executionPhase = activeSession?.execution?.phase;
+  let lastTurnMessage: DerivedMessage | undefined;
+  for (let index = displayMessages.length - 1; index >= 0; index -= 1) {
+    const message = displayMessages[index];
+    if (message.kind === "agent" || (message.kind === "user" && !message.live)) {
+      lastTurnMessage = message;
+      break;
+    }
+  }
+  const showRunStarting = running && (
+    executionPhase === "queued" || Boolean(pendingUserMessage)
+    || ((!executionPhase || executionPhase === "running") && lastTurnMessage?.kind !== "agent")
+  );
   // The task's own next move — accept a result, lift a block — offered in the
   // chip's popover and, while nothing else is asking, docked on the composer.
   const actionTask = lifecycle.task?.current && taskNeedsAction(lifecycle.task.status) ? lifecycle.task : undefined;
@@ -760,7 +773,7 @@ export function ThreadsView({
                     node={activeRuntimeNode}
                     onCancel={!activeSession?.deletionRequestedAt && !projectReadOnly ? onCancelRun : undefined}
                   />
-                ) : running && !displayMessages.some((message) => message.kind === "agent")
+                ) : showRunStarting
                   ? <RunStartingCue node={activeRuntimeNode} />
                   : null}
                 <HandoffStatus session={activeSession} />

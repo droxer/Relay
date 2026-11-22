@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.engine import make_url
 
 from issue_projects import routine_run_with_session
 
@@ -183,15 +182,19 @@ def test_sandbox_provision_checks_existing_owner(review_app, review_client):
 
 
 def test_notification_bridge_preserves_password():
+    from psycopg.conninfo import conninfo_to_dict
+
     engine = create_engine(
-        "postgresql+psycopg://review:dummy%40password@localhost/review"
+        "postgresql+psycopg://review:dummy%40password@localhost/review?options=-c+search_path%3Dreview"
     )
     try:
         bridge = database_notification_bridge(
             SimpleNamespace(engine=engine), KeyedEventNotifier()
         )
         assert bridge is not None
-        assert make_url(bridge.database_url).password == "dummy@password"
+        options = conninfo_to_dict(bridge.conninfo)
+        assert options["password"] == "dummy@password"
+        assert options["options"] == "-c search_path=review"
     finally:
         engine.dispose()
 

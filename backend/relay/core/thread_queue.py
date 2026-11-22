@@ -3,6 +3,9 @@
 from typing import Any
 
 
+THREAD_QUEUE_READY_PREFIX = "thread-queue:"
+
+
 def queue_can_continue(session: dict[str, Any]) -> bool:
     queue = session.get("messageQueue") or {}
     if (

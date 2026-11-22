@@ -58,6 +58,7 @@ class DatabaseDaemonStore(
         self.engine = shared_engine(database_url)
         self._command_changes = ChangeListener("Daemon command")
         self._workspace_changes = ChangeListener("Workspace response")
+        self._thread_queue_changes = ChangeListener("Thread queue")
         if create_schema:
             create_all_tables(self.engine)
 
@@ -76,6 +77,11 @@ class DatabaseDaemonStore(
 
     def _notify_workspace(self, command_id: str) -> None:
         self._workspace_changes.fire(command_id)
+
+    def set_thread_queue_listener(
+        self, listener: Callable[[str], None], *, database_channel: str
+    ) -> None:
+        self._thread_queue_changes.attach(listener, database_channel)
 
 
 
