@@ -11,6 +11,8 @@ from relay.daemon_registry import config
 def connection(tmp_path, monkeypatch):
     h = DaemonE2E(tmp_path, monkeypatch, daemon_options={
         "commandPollWaitMs": 1000, "commandLeaseSeconds": 3, "unreachableGraceMs": 10000,
+        # Give the real HTTP cancellation report time to drain under CI load.
+        "shutdownGraceMs": 5000,
     })
     try:
         h.setup()

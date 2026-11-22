@@ -17,7 +17,7 @@ from ...core.ids import now_iso
 from ...core.models import (
     AGENT_NAMES,
 )
-from ...core.daemon_records import infer_node_location, NODE_POLL_DRAINED_AT
+from ...core.daemon_records import infer_node_location, node_finished_draining, NODE_POLL_DRAINED_AT
 from ...core.daemon_capabilities import (
     client_outdated,
 )
@@ -84,7 +84,7 @@ def merge_node_observation(
         refreshed["status"] = persisted["status"] if persisted.get("retiredAt") else "stopped"
         refreshed["agents"] = current.get("agents", refreshed.get("agents"))
         return refreshed
-    if not persisted.get("retiredAt") and (
+    if not node_finished_draining(persisted) and (
         (iso_epoch_ms(current.get("lastSeenAt")) or 0) >= (iso_epoch_ms(persisted.get("lastSeenAt")) or 0)
     ):
         refreshed["status"] = current.get("status", persisted.get("status"))
@@ -152,13 +152,16 @@ class NodeLivenessMixin(RegistryState):
                 {**sandbox, **next_patch},
                 self.daemon_store.list_active_runs(sandbox_id),
             )
-        status = next_patch.get("status", sandbox.get("status"))
         updated = {**sandbox, **next_patch, "updatedAt": now_iso()}
         if "lastError" in patch and patch["lastError"] is None:
             updated.pop("lastError", None)
+        persisted = self.daemon_store.mark_node_seen(
+            sandbox_id, patch, polled=False if patch.get("status") == "stopped" else None,
+        )
+        if persisted and node_finished_draining(persisted):
+            updated = merge_node_observation(updated, persisted)
         self.sandboxes[sandbox_id] = updated
-        self.daemon_store.mark_node_seen(sandbox_id, patch)
-        logger.debug("Daemon node status updated", sandbox_id=sandbox_id, status=status)
+        logger.debug("Daemon node status updated", sandbox_id=sandbox_id, status=updated.get("status"))
 
     def monitor_nodes(self) -> list[dict[str, Any]]:
         self._refresh_persisted_liveness()
@@ -458,10 +461,10 @@ class NodeLivenessMixin(RegistryState):
             sandbox = self.sandboxes.get(sandbox_id)
             if not sandbox:
                 return
-            revived = not sandbox.get("retiredAt") and sandbox["status"] in (
-                "stopped",
-                "provisioning",
-                "failed",
+            revived = (
+                not sandbox.get("retiredAt")
+                and not node_finished_draining(sandbox)
+                and sandbox["status"] in ("stopped", "provisioning", "failed")
             )
             patch = {"status": "ready", "lastError": None} if revived else {}
             now = now_iso()

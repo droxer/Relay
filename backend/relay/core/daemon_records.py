@@ -62,6 +62,11 @@ TERMINAL_CLAIM_EXPIRES_STATE_KEY = "_relay_terminal_claim_expires_at"
 NODE_POLL_DRAINED_AT = "1970-01-01T00:00:00.000Z"
 
 
+def node_finished_draining(node: dict[str, Any]) -> bool:
+    """An explicit stop notice fences the node until its next registration."""
+    return node.get("status") == "stopped" and node.get("lastPollAt") == NODE_POLL_DRAINED_AT
+
+
 def infer_node_location(node: dict[str, Any]) -> str | None:
     """Infer location only from explicit or managed control-plane state."""
     explicit = node.get("nodeLocation")

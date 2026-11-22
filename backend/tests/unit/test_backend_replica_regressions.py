@@ -48,6 +48,30 @@ def test_warm_replica_never_delivers_work_after_drain(replicas):
     assert len(second.take_commands("node", "token")) == 1
 
 
+@pytest.mark.parametrize("draining_first", [False, True])
+def test_late_run_reports_do_not_revive_a_stopped_daemon(replicas, draining_first):
+    sessions, daemon, first, second, payload = replicas
+    session, command = start(first)
+    if draining_first:
+        first.heartbeat("node", "token", state="draining")
+    first.heartbeat("node", "token", state="stopped")
+
+    event = dict(commandId=command["id"], sessionId=session["id"], runId=command["runId"],
+                 agent="codex", leaseId=command["leaseId"])
+    second.handle_event("node", dict(type="run.output", stream="stdout", sequence=0, text="late", **event), "token")
+    assert daemon.get_node("node")["status"] == "stopped"
+
+    second.handle_event("node", dict(type="run.cancelled", reason="Daemon stopped.", **event), "token")
+    assert sessions.get_session(session["id"])["status"] == "cancelled"
+    assert second.get("node")["status"] == "stopped"
+    assert daemon.get_node("node")["status"] == "stopped"
+    assert second.take_commands("node", "token") == []
+    assert not second.is_dispatchable("node")
+
+    first.register(payload, "ui")
+    assert second.is_dispatchable("node")
+
+
 @pytest.mark.parametrize("field,value", [
     ("disabledAgents", ["codex"]), ("agentRoleDefaults", {"codex": "reviewer"}),
     ("agentRoleOverrides", {"codex": "planner"}),
