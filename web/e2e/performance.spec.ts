@@ -193,7 +193,7 @@ test("Agent Activity polls the head and loads older Threads only on request", as
   await expect(detail.getByRole("button", { name: older.title })).toHaveCount(0);
   expect(requests).toEqual([{ limit: "20", cursor: null, validator: null }]);
 
-  await detail.getByRole("button", { name: "Load older threads" }).click();
+  await detail.getByRole("button", { name: "Load older activities" }).click();
   await expect(detail.getByRole("button", { name: older.title })).toBeVisible();
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 250));
   await page.clock.runFor(16_000);
