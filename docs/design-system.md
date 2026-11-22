@@ -40,9 +40,10 @@ records historical inspiration, not an alternative component specification.
   6px (`--r-2`), containers 10px (`--r-3`). Ordinary content
   stays flat. Floating chrome uses the shared hairline plus soft shadow.
   Full radii remain reserved for circles and capsules.
-- **Keep the existing type and interaction system.** The platform UI sans
-  serves English and Chinese; JetBrains Mono is technical text only. Weight
-  tiers remain 400/500/700. Spacing, control heights, touch targets, motion,
+- **Keep the existing type and interaction system.** Space Grotesk serves
+  every interface role, with Simplified or Traditional Chinese faces chosen by
+  `<html lang>`; Space Mono is technical text only. Weight tiers are
+  400/500/600. Spacing, control heights, touch targets, motion,
   workflows and layout are unchanged by this palette refinement.
 
 Review both themes when changing tokens. The concept preview's C variant
@@ -84,11 +85,11 @@ Tailwind `@theme` machinery:
    The `text-*` utilities map one name per rung: `text-xs` → `--fs-1`
    (12px), `text-sm` → `--fs-2` (14px), `text-dense` → `--fs-3`,
    `text-base` → `--fs-4`, `text-lg` → `--fs-heading` (16px), `text-xl` →
-   `--fs-title` (16px), `text-2xl` → `--fs-5` (22px), `text-3xl`/`4xl` →
+   `--fs-title` (16px), `text-2xl` → `--fs-5` (24px), `text-3xl`/`4xl` →
    `--fs-6` (28px). `--fs-3` and `--fs-4` are both 14px today (the compact
    reading size), so `text-base` is 14px, not Tailwind's 16px. `text-dense`
    is the one Relay-only name, for the dense-prose rung Tailwind has no word
-   for. Weight utilities clamp onto the three rungs (`font-semibold` → 700).
+   for. Weight utilities clamp onto the three rungs (`font-semibold` and `font-bold` → 600).
 
    The file has two halves with different rules. The **additive** colour
    aliases exist only if a component asks for them — Tailwind ships no default
@@ -294,16 +295,34 @@ liveness surface changes.
 
 ## Typography
 
-**One sans** carries every role — `--font-sans` and `--font-display` are the
-same family, and the display tier is a size and weight decision, not a face
-decision. **JetBrains Mono** (`--font-mono`) carries technical text only.
+**One sans** carries every role. **Space Grotesk** (`--font-sans`, variable
+300–700) sets titles, navigation, buttons and conversation text;
+`--font-display` is the same stack, so the display tier is a size and weight
+decision, not a face decision. **Space Mono** Regular (`--font-mono`) carries
+code, commands and logs. Both are vendored as Latin-subset WOFF2 under
+`web/src/app/fonts/` with their `OFL-*.txt` licences and load through
+`next/font/local` with `font-display: swap`.
 
-`--font-sans` is a system stack, in this order: `-apple-system,
-BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial`,
-then the Simplified Chinese faces (`"PingFang SC"`, `"Microsoft YaHei UI"`,
-`"Microsoft YaHei"`, `"Noto Sans CJK SC"`, `"Noto Sans SC"`), `sans-serif`, and
-the color-emoji faces. No sans font is downloaded, so reading text never swaps
-after first paint and the build needs no font package.
+`--font-sans` is `Space Grotesk, Arial, "Helvetica Neue"`, then `--font-cjk`,
+then the system faces (`system-ui, -apple-system, … sans-serif`) and the
+color-emoji faces. `--font-mono` is `Space Mono, ui-monospace, "SF Mono",
+Menlo, Consolas, …`, then `--font-cjk`, then `monospace`. `--font-cjk` is the
+Simplified set by default (`"PingFang SC"`, `"Hiragino Sans GB"`,
+`"Microsoft YaHei UI"`, `"Microsoft YaHei"`, `"Noto Sans SC"`) and the
+Traditional set under `html:lang(zh-TW)`, `zh-Hant` and `zh-HK`
+(`"PingFang TC"`, `"Microsoft JhengHei UI"`, `"Microsoft JhengHei"`,
+`"Noto Sans TC"`). The language switch keeps `<html lang>` current, so Han
+takes the right regional forms. Times, token counts and table figures stay in
+the interface face with tabular numerals (`.tnum`, `tabular-nums`).
+
+| Use | Size / line | Weight |
+|---|---|---|
+| Page title | 24 / 32 | 600 |
+| Panel title, task detail title | 16 / 24 | 600 |
+| Agent conversation | 16 / 26 | 400 |
+| Navigation, task lists, tables, forms | 14 / 22 | 400 text, 500 labels and buttons |
+| Timestamps, status meta | 12 / 18 | 400 |
+| Code, commands, logs | 13 / 20 | 400 |
 
 The display face is chosen by **content origin, not by size**: a fixed UI noun
 (Threads, Backlog, a drawer title) takes the display tier, while
@@ -314,26 +333,27 @@ introduces visual rest.
 | Role | Spec | Paired track | Use |
 |---|---|---|---|
 | `--type-display` | 500 28/1.17 | `--track-display` (−0.03em) | hero headline (login), admin metric values |
-| `--type-page` | 500 22/1.25 | `--track-display` (−0.03em) | page h1 — one rung above the 16px h2 |
-| `--type-title` | 500 16/1.25 | `--track-title` (−0.02em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
-| `--type-heading` | 700 16/1.43 | `--track-0` | section heads, list labels |
-| `--type-title-content` | 400 16/1.25 | `--track-title` (−0.02em) | titles whose text comes from a user or agent |
-| `--type-body` | 400 14/1.5 | `--track-body` (0) | prose, message bodies, inputs |
-| `--type-name` | 500 14/1.5 | `--track-body` (0) | the identity of the thing a row or card is about — leads by `--ink-1` against `--ink-3` meta, not by weight |
-| `--type-body-sm` | 400 12/1.5 | `--track-body-sm` (0) | supporting text, captions |
-| `--type-label` | 500 14/1.43 | `--track-body-sm` (0) | chrome labels, nav, metadata |
-| `--type-label-strong` | 700 14/1.43 | `--track-body-sm` (0) | bold chrome (scarce emphasis) |
-| `--type-micro` | 500 12/1.5 | `--track-0` | structural group labels (lane, band, field) in **sentence case** — separated from `--type-label` by dimmer ink and line box, not weight or case |
-| `--type-meta` | 500 12/1.5 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
-| `--type-number` | 500 22/1.25 | `--track-display` (−0.03em) | metrics |
-| `--type-code` | 400 14/1.43 | `--track-0` | commands, logs, IDs |
+| `--type-page` | 600 24/32 | `--track-display` (−0.03em) | page h1 — one rung above the 16px h2 |
+| `--type-title` | 600 16/24 | `--track-title` (−0.02em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
+| `--type-heading` | 600 16/24 | `--track-0` | section heads, list labels |
+| `--type-title-content` | 600 16/24 | `--track-title` (−0.02em) | titles whose text comes from a user or agent |
+| `--type-body` | 400 14/22 | `--track-body` (0) | prose, message bodies, inputs |
+| `--type-name` | 500 14/22 | `--track-body` (0) | the identity of the thing a row or card is about — leads by `--ink-1` against `--ink-3` meta, not by weight |
+| `--type-body-sm` | 400 14/22 | `--track-body-sm` (0) | supporting text, captions |
+| `--type-label` | 500 14/22 | `--track-body-sm` (0) | chrome labels, nav, metadata |
+| `--type-label-strong` | 600 14/22 | `--track-body-sm` (0) | bold chrome (scarce emphasis) |
+| `--type-micro` | 500 12/18 | `--track-0` | structural group labels (lane, band, field) in **sentence case** — separated from `--type-label` by dimmer ink and line box, not weight or case |
+| `--type-meta` | 400 12/18 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
+| `--type-number` | 500 24/1.25 | `--track-display` (−0.03em) | metrics |
+| `--type-code` | 400 13/20 | `--track-0` | commands, logs, IDs |
 
 **Heading ladders.** Chrome headings map one size per level: page h1 =
-`--type-page` (22/500); every fixed-noun h2 — list rails (thread list,
+`--type-page` (24/32, 600); every fixed-noun h2 — list rails (thread list,
 rosters, `.sec-rail`), section headers, drawers, dialogs — = `--type-title`
-(16/500); section head h3 = `--type-heading` (16/700). Record titles
-(user/agent-authored) take `--type-title-content` (16/400). Content headings
-(`.md-body`, `.doc-prose`) use the reading hierarchy: h1/h2 16/700, h3 14/700, h4/h5 14/500,
+(16/24, 600); section head h3 = `--type-heading` (16/24, 600). Record titles
+(user/agent-authored) take `--type-title-content` (16/24, 600, in the sans
+stack). Content headings
+(`.md-body`, `.doc-prose`) use the reading hierarchy: h1/h2 16/600, h3 14/600, h4/h5 14/500,
 and h6 14/500 italic. Weight and emphasis distinguish the shared sizes.
 
 **Every role ships a paired `--type-<role>-track`.** The `font:` shorthand
@@ -359,16 +379,15 @@ translated copy (`typographyTokens.test.ts` pins that). Under
 `html:lang(zh-CN)` every track is 0. The tokens stay explicit so a
 role's tracking is decided in `roles.css`, once.
 
-**No stylistic set is switched on.** System faces assign `ss01`/`ss02`
-differently (on San Francisco they redraw the 6, 9 and 4), so
-`--font-features` is default kerning only (the vendored mono carries neither
-set, so code is unaffected). It stays a token because
+**No stylistic set is switched on.** Faces assign `ss01`/`ss02`
+differently (Space Grotesk's redraw single letters; on San Francisco they
+redraw the 6, 9 and 4), so `--font-features` is default kerning only. It stays a token because
 `font-feature-settings` replaces rather than adds: a rule that wants tabular
 figures writes `var(--font-features), "tnum" 1`.
 
-**There is no 800 role.** The system faces support it, but Relay deliberately exposes
-only the 400/500/700 product ladder. The heaviest product weight already belongs
-to the small emphasis tiers, while display tiers sit at 500.
+**There is no 700 or 800 role.** Space Grotesk supports 700, but Relay
+deliberately exposes only the 400/500/600 product ladder: 600 is titles,
+headings and emphasis, 500 labels, controls and the display tier, 400 reading.
 
 The size ladder is **12 / 14 / 15 / 16 / 17 / 22 / 28px** at the browser's
 default font size: `--fs-1` 12, `--fs-2` = `--fs-3` = `--fs-4` 14 (chrome,
@@ -407,11 +426,11 @@ generated from `zh-CN` (OpenCC `cn`→`twp`) and kept key-for-key equal by
 `web/tests/zhTwCatalogue.test.ts`; the landing screenshots reuse the `-zh-CN`
 cuts until Traditional ones are shot.
 
-JetBrains Mono is vendored as a **latin** variable subset
-(`web/src/app/fonts/JetBrainsMono-Variable.woff2` with its OFL licence, wght
-100–800), loaded by `app/layout.tsx` as `--font-app-mono`. Technical CJK
-glyphs fall through to the system and Noto Mono CJK faces named in the mono
-stacks.
+Space Grotesk (`SpaceGrotesk-Variable-Latin.woff2`, wght 300–700) and Space
+Mono Regular (`SpaceMono-Regular-Latin.woff2`) are vendored as **latin**
+subsets under `web/src/app/fonts/` with their OFL licences, loaded by
+`app/layout.tsx` as `--font-app-sans` and `--font-app-mono`. Han glyphs fall
+through to `--font-cjk`, which follows `<html lang>`.
 
 ## Geometry, elevation, motion
 
@@ -635,8 +654,8 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
   eyebrows, and kickers are sentence case (Han has no case to transform).
 - Don't hand-pick a duration, delay, or `z-index` app layer; local `z-index:
   1/2/3` between siblings is the only literal allowed.
-- Don't declare `font-weight: 800` — the Relay product ladder deliberately
-  stops at 700 even though the system faces expose heavier weights.
+- Don't declare `font-weight: 700` or `800` — the Relay product ladder
+  deliberately stops at 600 even though Space Grotesk exposes 700.
 
 ## Shell dimensions
 
@@ -847,7 +866,7 @@ explains it is in parentheses.
 4. **Status.** Status tones as text, dots, and borders; fills only in the
    documented exceptions. `--info` for neutral notices. (Colors)
 5. **Type.** Text set with a `--type-*` role and its paired `-track`, or a
-   `--fs-*` rung — no literal font sizes; weights only 400/500/700.
+   `--fs-*` rung — no literal font sizes; weights only 400/500/600.
    (Typography)
 6. **Case.** No `text-transform: uppercase` on translated copy. (Typography)
 7. **Radius.** `--r-1` micro, `--r-2` controls, `--r-3` containers;

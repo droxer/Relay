@@ -18,11 +18,9 @@
 .hljs-doctag,
 .hljs-meta .hljs-keyword {
   color: var(--code-keyword);
-  /* 700, the system's emphasis weight. These three rules were the only
-     600s in the stylesheets — a weight the type roles do not contain, so
-     the variable face rendered a step that appears nowhere else in the
-     product. See roles.css: hierarchy runs 400 / 500 / 700. */
-  font-weight: 700;
+  /* 600, the system's emphasis weight (700 before 2026-11-22). These
+     three rules once sat on a weight the type roles did not contain. See roles.css: hierarchy runs 400 / 500 / 600. */
+  font-weight: 600;
 }
 
 /* Strings and string-like literals. */
@@ -57,7 +55,7 @@
 .hljs-selector-id,
 .hljs-selector-class {
   color: var(--code-declaration);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* Attributes, properties, and the variables they hang off. */
@@ -100,5 +98,5 @@
 }
 
 .hljs-strong {
-  font-weight: 700;
+  font-weight: 600;
 }

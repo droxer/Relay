@@ -98,7 +98,7 @@ html {
   background: var(--action);
   color: var(--on-action);
   font-size: var(--fs-3);
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
   transition: transform var(--t-fast) var(--ease);
 }
@@ -296,7 +296,9 @@ button[data-danger]:focus-visible,
   font-family: var(--font-mono);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  /* Space Mono ships Regular only, and font-synthesis is off, so code is 400
+     everywhere (Relay type table, 2026-11-22). */
+  font-weight: 400;
   /* A monospace face is chosen for its fixed advance — tightening it is
      self-defeating, and these are strings an operator may need to compare
      character by character. */

@@ -806,7 +806,7 @@
 .adm-runtime-stats tbody th { font-weight: 500; }
 .adm-runtime-stats tbody tr:last-child > * { border-bottom: none; }
 .adm-runtime-note { display: block; margin-top: var(--sp-1); font: var(--type-meta); color: var(--ink-3); }
-.adm-runtime-fault { color: var(--err); font-weight: 700; }
+.adm-runtime-fault { color: var(--err); font-weight: 600; }
 
 .adm-runtime-stats--inventory th:first-child { width: 34%; }
 .adm-runtime-stats--inventory th,

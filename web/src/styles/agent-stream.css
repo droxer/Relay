@@ -115,9 +115,9 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code-transcript);
-  /* 500 is the .code utility's weight (tokens/base.css), copied verbatim
+  /* 400 is the .code utility's weight (tokens/base.css), copied verbatim
      with the rest of its body — see the note above. */
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* Reasoning tier — a disclosure, one step quieter than the answer so it reads
@@ -338,6 +338,7 @@
 
 .agent-command {
   font-size: var(--fs-code-transcript);
+  line-height: var(--leading-code);
 }
 
 /* Consecutive tool/command lines pull tight against the stream's default gap

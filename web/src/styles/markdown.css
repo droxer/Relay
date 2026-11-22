@@ -60,9 +60,9 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--type-code-track);
   font-size: var(--fs-code);
-  /* 500 is the .code utility's weight (tokens/base.css), copied verbatim
+  /* 400 is the .code utility's weight (tokens/base.css), copied verbatim
      with the rest of its body — see the note above. */
-  font-weight: 500;
+  font-weight: 400;
   /* A chip that wraps at a narrow width (`rowcount == 1` on a phone) gets its
      padding and corners on each line, instead of two half-chips. */
   box-decoration-break: clone;
@@ -78,7 +78,7 @@
 }
 
 .md-body strong {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .md-body em {
@@ -107,7 +107,7 @@
 .md-body h6 {
   color: var(--ink-1);
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   line-height: var(--leading-snug);
   letter-spacing: var(--track-0);
 }
@@ -122,10 +122,10 @@
 }
 
 /* Six content levels, one compact ladder: 16/16/14/14/14/14, every level at
-   700. The ladder stays at the 16px thread title so a content heading never
-   rivals chrome, and the weight ladder has no 600, so levels that share a
+   600. The ladder stays at the 16px thread title so a content heading never
+   rivals chrome, and the weight ladder has no 700, so levels that share a
    size split by ink (and h1 by a soft rule) instead. A 500 heading read
-   weaker than the 700 `**bold**` in the paragraph under it.
+   weaker than the 600 `**bold**` in the paragraph under it.
      h1 16 ink-1 + rule · h2 16 ink-1
      h3 14 ink-1 · h4 14 ink-2 · h5/h6 14 ink-3 */
 .md-body h1 {
@@ -300,7 +300,7 @@ html:lang(zh-TW) .md-body blockquote {
 
 .md-body thead th {
   color: var(--ink-3);
-  font-weight: 700;
+  font-weight: 600;
   border-bottom-color: var(--line-1);
 }
 
@@ -318,7 +318,7 @@ html:lang(zh-TW) .md-body blockquote {
   background: var(--surface-2);
   color: var(--ink-1);
   font-size: var(--fs-code);
-  line-height: var(--leading-loose);
+  line-height: var(--leading-code);
   white-space: pre;
   overflow-x: auto;
 }
@@ -568,7 +568,7 @@ html:lang(zh-TW) .md-body blockquote {
 .doc-prose h1 { font-size: var(--fs-6); }
 .doc-prose h2 { font-size: var(--fs-5); }
 .doc-prose h3 { font-size: var(--fs-document-subheading); }
-.doc-prose h4 { font-size: var(--fs-document); font-weight: 700; }
+.doc-prose h4 { font-size: var(--fs-document); font-weight: 600; }
 .doc-prose h5 { font-size: var(--fs-document); font-weight: 500; }
 .doc-prose h6 { font-size: var(--fs-document); font-weight: 500; font-style: italic; }
 

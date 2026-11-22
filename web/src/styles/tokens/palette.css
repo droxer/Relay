@@ -635,9 +635,12 @@
 
   /* Type sizes — rem so browser font-size preference scales the UI
      (root pinned to 87.5% in base.css; 1rem = 14px at the default). */
-  /* Compact application typography (2026-10-02): 12px utility text, ONE 14px
-     reading size, 16px section headings and titles, 22px page titles and
-     numerals, 28px display. The ladder is 12/14/16/22/28.
+  /* Compact application typography (2026-10-02; sizes and line boxes re-cut
+     for Space Grotesk 2026-11-22): 12/18 timestamps and status meta, ONE
+     14/22 reading size for navigation, lists, tables and forms, 16/24 panel
+     and record titles, 16/26 agent conversation, 24/32 page titles and
+     numerals, 28px display; code, commands and logs read 13/20 in the mono.
+     The ladder is 12/14/16/24/28.
 
      There is one reading rung, not three. --fs-3 and --fs-4 survive only as
      names for the jobs call sites already ask for (dense prose, body copy),
@@ -647,7 +650,7 @@
      reading size ever splits again, give --fs-3/--fs-4 their own values
      here AND restore the compact step (dimensionScales.test.ts pins both). */
   --fs-1: 0.8571rem; /* 12px — caption: badges, legal microcopy, compact metadata */
-  --fs-2: 1rem;      /* 14px — reading text and transcript */
+  --fs-2: 1rem;      /* 14px — reading text: lists, tables, forms, navigation */
   --fs-3: var(--fs-2); /* dense prose — the reading rung */
   --fs-4: var(--fs-2); /* body copy — the reading rung */
   /* Code is NOT a rung of the sans ladder: the mono face is sized to its own
@@ -655,7 +658,7 @@
      reading rungs around it move. Every surface that shows code — fenced and
      inline markdown code, diffs, plain artifacts, the file viewer — reads this
      token, so they cannot drift apart again. */
-  --fs-code: 1rem;   /* 14px — code, diffs, file contents */
+  --fs-code: 0.9286rem; /* 13px — code, commands, logs, diffs, file contents */
   /* Standalone documents have a larger reading scale than chat turns. */
   --fs-document: var(--fs-title); /* 16px */
   --fs-document-subheading: 1.2857rem; /* 18px */
@@ -668,20 +671,22 @@
      in-message heading ladder, and the composer draft read from these two
      tokens, so the size stays one decision. Document previews (.doc-prose)
      keep --fs-document and --leading-prose. */
-  --fs-transcript: var(--fs-2);              /* 14px */
-  --leading-transcript: var(--leading-loose); /* 1.65 */
-  /* Code set inside that 14px transcript. JetBrains Mono's taller x-height
-     reads a size up from the sans at the same px, so at --fs-code the chips
-     and command lines outweighed the prose they sit in. Transcript code takes
-     one mono step down; the file viewer, diffs, and document previews keep
-     --fs-code. */
-  /* A MONO step, not a sans rung: nothing in the sans ladder reads it, and
+  /* 2026-11-22: the conversation is the one surface read at length, so it
+     takes the 16px title size on a 26px line (16/26) while lists and forms
+     stay on the 14px rung. */
+  --fs-transcript: var(--fs-title);          /* 16px */
+  --leading-transcript: 1.625;               /* 26px at 16px */
+  /* Code set inside the transcript. A monospace face reads a size up from
+     the sans at the same px, so code sits on the 13px mono size everywhere —
+     transcript chips and command lines as well as the file viewer, diffs and
+     document previews. The token stays so the transcript can step apart again
+     without touching the other code surfaces. A MONO size, not a sans rung:
      the sans ladder deliberately has no 13px. */
-  --fs-code-transcript: 0.9286rem;           /* 13px */
+  --fs-code-transcript: var(--fs-code);      /* 13px */
   --fs-title: 1.1429rem;   /* 16px — section, pane, drawer, and dialog titles */
   --fs-heading: var(--fs-title);
   --fs-title-lg: var(--fs-title);
-  --fs-5: 1.5714rem; /* 22px — KPI numerals, subsection headlines */
+  --fs-5: 1.7143rem; /* 24px — page titles, KPI numerals */
   --fs-6: 2rem;      /* 28px — display: section-opener display */
   /* Hero display — the one place a headline owns the viewport (login, empty
      section openers). A clamp, not a rung: it tracks the viewport between the
@@ -704,7 +709,13 @@
      literal inside roles.css, which is why the scale above looked complete
      while 11 of 12 roles bypassed it. */
   --leading-caps: 1.5;
-  --leading-normal: 1.5;
+  /* 22px on the 14px reading rung (14/22). */
+  --leading-normal: 1.5714;
+  /* Fixed line boxes for the title, page and code tiers: 16/24, 24/32 and
+     13/20 (2026-11-22). */
+  --leading-title: 1.5;
+  --leading-page: 1.3333;
+  --leading-code: 1.5385;
   --leading-loose: 1.65;
   /* Long-form prose in document previews (.doc-prose). One step above loose
      because a document is long mixed-script paragraphs that are read, not
@@ -740,35 +751,27 @@
      sentence case since 2026-10-09 and set solid. */
   --track-caps: 0.03em;
 
-  /* Families — three vendored faces, each injected by app/layout.tsx as a
-     --font-app-* variable and subset to Latin (2026-11-21):
-     - Inter (--font-app-sans) carries reading and control text. Relay is for
-       everyone who hands work to agents, not only developers, so the reading
-       face is the clearest neutral one rather than a developer-coded grotesk.
-       Its optical-size axis follows font-size (font-optical-sizing: auto).
-     - Bricolage Grotesque (--font-app-display) carries the display roles only
-       — titles, page names, numbers, the landing hero — and is where Relay's
-       typographic voice lives. Hierarchy below the display tier still rides
-       the 400/500/700 ladder inside Inter.
-     - JetBrains Mono (--font-app-mono) remains technical text only and is
-       sized to its own metrics.
-     Behind each vendored face the platform UI faces follow (San Francisco,
-     Segoe UI, Roboto, Noto Sans), so a glyph outside the Latin subset — or a
-     failed font load — still lands on a native face, and the stack stays one
-     list for English and Chinese alike. */
-  /* Transcript content is multilingual even when the UI language is English.
-     The Simplified Chinese faces sit behind the Latin ones so agent-authored
-     Han never depends on a browser's last-resort substitution (which, under
-     lang="en", may pick a Japanese or Traditional face). */
-  --font-sans: var(--font-app-sans), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-display: var(--font-app-display), "Bricolage Grotesque", var(--font-sans);
-  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "PingFang TC", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans SC", "Noto Sans TC", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  /* Families — two vendored faces, each injected by app/layout.tsx as a
+     --font-app-* variable and subset to Latin (2026-11-22):
+     - Space Grotesk (--font-app-sans) carries every interface role: titles,
+       navigation, buttons, conversation text. --font-display is the same
+       stack, kept as a token so display roles stay addressable.
+     - Space Mono (--font-app-mono, Regular only) is code, commands and logs.
+     Han falls through --font-cjk, which follows <html lang>: Simplified
+     Chinese faces by default (agent-authored Han under lang="en" never
+     depends on a browser's last-resort substitution), Traditional faces under
+     zh-TW / zh-Hant / zh-HK (override below). Times, token counts and table
+     figures stay in the interface face with tabular numerals (.tabular-nums). */
+  --font-cjk: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC";
+  --font-sans: var(--font-app-sans), "Space Grotesk", Arial, "Helvetica Neue", var(--font-cjk), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-display: var(--font-sans);
+  --font-mono: var(--font-app-mono), "Space Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", var(--font-cjk), monospace;
 
   /* OpenType — the base feature recipe every face starts from. It is shared by
-     Inter, Bricolage Grotesque, JetBrains Mono and the platform fallbacks, and
-     each face assigns its stylistic sets and character variants differently
-     (Inter's cv05 tails the l, the mono's character variants mean other
-     things, and on San Francisco ss01/ss02 redraw the 6, 9 and 4), so none is
+     Space Grotesk, Space Mono and the platform fallbacks, and each face
+     assigns its stylistic sets and character variants differently (Space
+     Grotesk's ss01-ss04 redraw single letters, and on San Francisco
+     ss01/ss02 redraw the 6, 9 and 4), so none is
      switched on: the recipe is the default kerning only. It
      stays a token because `font-feature-settings` REPLACES rather than
      adds — rules that want tabular figures lead with this and append "tnum". */
@@ -908,13 +911,12 @@ html[data-theme="light"] {
   --scrim: rgba(23, 35, 44, 0.24);
 }
 
-/* CJK — the sans stack is NOT restated here: Chinese uses the same system
-   stack as English, with Latin set in the platform UI face and Han falling
-   through to its Simplified Chinese companion. Technical text keeps the mono
-   with Simplified Chinese glyph fallback. */
+/* CJK — the sans and mono stacks are NOT restated here: both end in
+   var(--font-cjk), so Chinese uses the same stacks as English with Han
+   falling through to the Simplified faces (Traditional under the override
+   below). */
 html:lang(zh-CN),
 html:lang(zh-TW) {
-  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang SC", "Microsoft YaHei", "Noto Sans Mono CJK SC", "Noto Sans SC", monospace;
   /* Han glyphs are square and must never be tightened. The root tracks are
      solid today; they stay pinned here so a future Latin tightening cannot
      reach Chinese. */
@@ -938,21 +940,20 @@ html:lang(zh-TW) {
   /* One rung below root's --sp-4. 8px was the old value and it was too tight for the two-line rows this
      scope actually wraps — every rail that used it overrode it back. */
   --sp-row: var(--sp-3);
-  /* Compact keeps the one 14px reading size (palette.css has no rung below
-     it that reads as body) and tightens only the LINE BOX: the body and name
-     roles are restated locally so the snug leading applies in this scope.
-     --type-body-sm already sits on the one reading size with the body
-     leading, so compact leaves it alone. */
-  --type-body: 400 var(--fs-4)/var(--leading-snug) var(--font-sans);
-  --type-name: 500 var(--fs-4)/var(--leading-snug) var(--font-sans);
+  /* Compact keeps the one 14px reading size AND its 14/22 line box
+     (2026-11-22): task lists and tables read on the same rhythm as every
+     other list, so body and name are not restated here. Density comes from
+     row padding and tile height only. */
   /* Compact grids use shorter cards with the same text clamps. */
   --card-h-tile: 116px;
 }
 
 /* Traditional Chinese reaches for the TC faces first, so a Han glyph shared
    with Simplified takes its Traditional form in agent-authored text. */
-html:lang(zh-TW) {
-  --font-mono: var(--font-app-mono), "JetBrains Mono", "PingFang TC", "Microsoft JhengHei", "Noto Sans Mono CJK TC", "Noto Sans TC", monospace;
+html:lang(zh-TW),
+html:lang(zh-Hant),
+html:lang(zh-HK) {
+  --font-cjk: "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans TC", "Noto Sans CJK TC";
 }
 
 /* CJK reading roles are looser; the compact scope must restate them too or a

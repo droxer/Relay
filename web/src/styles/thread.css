@@ -339,7 +339,7 @@
    narrow rail. */
 .conversation-status {
   flex: none;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* Live states read in their own colour so a rail of muted meta lines still

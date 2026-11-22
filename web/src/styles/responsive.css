@@ -442,7 +442,9 @@
     white-space: normal;
     overflow-wrap: anywhere;
     font-size: var(--fs-title);
-    line-height: var(--leading-normal);
+    /* 16/24 — the title pairing; the 14/22 reading leading would set this
+       16px name on a 25px line and push a two-line clamp past 48px. */
+    line-height: var(--leading-title);
   }
 
   .project-folder-meta,
