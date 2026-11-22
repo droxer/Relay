@@ -210,8 +210,10 @@ from its installed `relay-daemon/package.json`; registration responses and
 Computer records return it. Each registration replaces the value; a legacy
 daemon that omits it clears any previous value. Existing rows remain unknown
 until registration after migration `20261106_0120`. `clientOutdated` and dispatch
-compatibility continue to use capabilities, rather than release ordering.
-The computer bundle's `capabilities.json` includes the same `clientVersion`.
+compatibility use capabilities. `clientUpdateAvailable` is true when a personal
+Computer reports an older release than the installer bundle's `capabilities.json`.
+Relay sends at most one `client_outdated` notification per newer release and
+includes the target as `availableVersion` in the notification data.
 
 Daemon registration proves execution-plane authority only. An unauthenticated
 daemon cannot set or replace a browser UI credential through its bearer header.

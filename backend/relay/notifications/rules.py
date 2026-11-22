@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from ..core.computer_identity import computer_id
+
 TASK_COMPLETED = "task_completed"
 APPROVAL_REQUESTED = "approval_requested"
 COMPUTER_STATUS = "computer_status"
@@ -128,10 +130,14 @@ def computer_status_rows(
 
 
 def client_outdated_rows(
-    node: dict[str, Any], recipients: list[str], missing: list[str],
+    node: dict[str, Any], recipients: list[str], missing: list[str], *, available_version: str | None = None,
 ) -> list[dict[str, Any]]:
     data = {"nodeId": node["id"], "computerName": computer_name(node), "missingCapabilities": missing}
-    return [{"user_id": user_id, "kind": CLIENT_OUTDATED, "data": data} for user_id in recipients]
+    release = {}
+    if available_version is not None:
+        data["availableVersion"] = available_version
+        release = {"dedupeKey": f"{computer_id(node)}:{available_version.split('+', 1)[0]}"}
+    return [{"user_id": user_id, "kind": CLIENT_OUTDATED, "data": data, **release} for user_id in recipients]
 
 
 def permission_request_rows(session: dict[str, Any], request: dict[str, Any]) -> list[dict[str, Any]]:

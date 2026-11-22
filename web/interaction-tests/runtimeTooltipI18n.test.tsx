@@ -1,5 +1,6 @@
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, screen, within } from "@testing-library/react";
 import { createInstance } from "i18next";
+import { I18nextProvider } from "react-i18next";
 import { expect, it, vi } from "vitest";
 import en from "../src/i18n/locales/en/translation.json";
 import cn from "../src/i18n/locales/zh-CN/translation.json";
@@ -9,6 +10,8 @@ import { NodeRuntimeMarks } from "../src/components/admin/NodeRuntimeMarks";
 import { ManageAgentRow } from "../src/components/admin/ManageAgentRow";
 import type { ControlPanelDaemonNodeRecord } from "../src/types";
 
+vi.mock("react-i18next", async (load) => load());
+
 const raw = "Codex check failed (exit code 1).\nOriginal CLI output: /usr/bin/codex — user@example.com";
 const resources = { en: { translation: en }, "zh-CN": { translation: cn }, "zh-TW": { translation: tw } };
 const makeNode = (status: string) => ({
@@ -16,6 +19,25 @@ const makeNode = (status: string) => ({
   nodeLocation: "user-device", sandboxMode: "none", agents: { codex: status },
   agentDetails: { codex: { detail: raw, version: "1.2.3" } },
 }) as unknown as ControlPanelDaemonNodeRecord;
+
+it("shows the published update and command until the Computer upgrades", async () => {
+  const i18n = createInstance();
+  await i18n.init({ lng: "en", resources });
+  const props = {
+    t: i18n.getFixedT("en"),
+    onRename: vi.fn(), onManageExecutors: vi.fn(), onShowToken: vi.fn(), onDisconnect: vi.fn(),
+  };
+  const node = { ...makeNode("ready"), clientOutdated: false, clientUpdateAvailable: true };
+  const view = render(<ComputerCard {...props} node={node} />, {
+    wrapper: ({ children }) => <I18nextProvider i18n={i18n}>{children}</I18nextProvider>,
+  });
+  const card = within(screen.getByRole("article"));
+  expect(card.getByText("Update available")).toBeTruthy();
+  expect(card.getByText("relay update")).toBeTruthy();
+  view.rerender(<ComputerCard {...props} node={{ ...node, clientUpdateAvailable: false }} />);
+  expect(card.queryByText("Update available")).toBeNull();
+  expect(card.queryByText("relay update")).toBeNull();
+});
 
 it.each(["en", "zh-CN", "zh-TW"])("localizes runtime hover text in %s and preserves original diagnostics separately", async (lng) => {
   const i18n = createInstance();

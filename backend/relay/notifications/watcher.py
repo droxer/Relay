@@ -16,6 +16,8 @@ since a deploy that makes existing computers outdated is exactly the news.
 The outdated state records which capabilities were missing and only grows or
 clears when the computer itself advertises them, so during a rolling deploy a
 replica that knows fewer capabilities cannot flip it back and forth.
+The personal Computer's release state separately records the highest version
+announced, surviving a rollback and a subsequent redeploy.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, UTC
 from typing import Any
 from types import SimpleNamespace
@@ -30,15 +33,17 @@ import uuid
 
 from loguru import logger
 
-from ..core.daemon_capabilities import missing_capabilities
+from ..core.daemon_capabilities import DAEMON_NODE_CAPABILITIES, missing_capabilities
+from ..core.client_version import client_update_available, client_version_key
 from ..core.computer_identity import computer_id
 from ..core.timestamps import iso_epoch_ms
 from ..computer.transport import record_transport
-from ..core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
+from ..persistence.notification.store import WatchTransition
 from .rules import client_outdated_rows, computer_status_rows
 
 ONLINE_PREFIX = "computer-online:"
 OUTDATED_PREFIX = "client-outdated:"
+RELEASE_PREFIX = "client-release:"
 OUTDATED_STATE = "outdated:"
 CURRENT_STATE = "current"
 RETENTION = timedelta(days=90)
@@ -75,6 +80,7 @@ class ComputerNotificationWatcher:
         offline_confirm_seconds: float = OFFLINE_CONFIRM_SECONDS,
         known_capabilities: frozenset[str] = DAEMON_NODE_CAPABILITIES,
         clock: Any = time.monotonic,
+        bundled_client_version: Callable[[], str | None] | None = None,
     ) -> None:
         self.registry = registry
         self.auth_store = auth_store
@@ -83,6 +89,7 @@ class ComputerNotificationWatcher:
         self.offline_confirm_seconds = offline_confirm_seconds
         self.known_capabilities = known_capabilities
         self.clock = clock
+        self.bundled_client_version = bundled_client_version
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
         self._last_prune = 0.0
@@ -103,13 +110,17 @@ class ComputerNotificationWatcher:
         nodes = [node for node in self.registry.monitor_nodes() if node.get("lastSeenAt")]
         online_states = self.store.watch_states(ONLINE_PREFIX)
         outdated_states = self.store.watch_states(OUTDATED_PREFIX)
+        release_states = self.store.watch_states(RELEASE_PREFIX) if self.bundled_client_version else {}
+        release = self.bundled_client_version() if nodes and self.bundled_client_version else None
         for node in nodes:
             try:
                 if 'durable-reports' in (node.get('capabilities') or []) and hasattr(self.registry, 'daemon_store'):
                     self._observe_transport(node)
                 else:
                     self._observe_online(node, online_states.get(ONLINE_PREFIX + node["id"]))
-                self._observe_client(node, outdated_states.get(OUTDATED_PREFIX + node["id"]))
+                release_subject = RELEASE_PREFIX + computer_id(node)
+                self._observe_client(node, outdated_states.get(OUTDATED_PREFIX + node["id"]), release,
+                                     release_subject, release_states.get(release_subject))
             except Exception:  # noqa: BLE001 - watch loop supervisor: one bad node or tick must not stop the watcher
                 logger.exception("Computer notification check failed", node_id=node.get("id"))
         present = {node["id"] for node in nodes}
@@ -117,7 +128,8 @@ class ComputerNotificationWatcher:
             node_id: since for node_id, since in self._offline_since.items() if node_id in present
         }
         live = {prefix + node_id for node_id in present for prefix in (ONLINE_PREFIX, OUTDATED_PREFIX)}
-        self.store.forget_watch_states(sorted((set(online_states) | set(outdated_states)) - live))
+        live.update(RELEASE_PREFIX + computer_id(node) for node in nodes)
+        self.store.forget_watch_states(sorted((online_states.keys() | outdated_states.keys() | release_states.keys()) - live))
         self._prune()
 
     def _observe_transport(self, node: dict[str, Any]) -> None:
@@ -148,22 +160,43 @@ class ComputerNotificationWatcher:
         if self.store.claim_transition(ONLINE_PREFIX + node["id"], previous, current, rows) and rows:
             logger.info("Computer status notification", node_id=node["id"], status=current)
 
-    def _observe_client(self, node: dict[str, Any], previous: str | None) -> None:
+    def _observe_client(
+        self, node: dict[str, Any], previous: str | None, release: str | None,
+        release_subject: str, previous_release: str | None,
+    ) -> None:
+        transitions: list[WatchTransition] = []
+        notify = False
         missing = set(missing_capabilities(node, self.known_capabilities))
         recorded = recorded_missing(previous)
+        capability_key = OUTDATED_PREFIX + node["id"]
         if missing:
-            if recorded is not None and missing <= recorded:
-                return  # Already announced; a lagging replica may see less.
-            state = outdated_state(missing | (recorded or set()))
-            rows = client_outdated_rows(node, self.recipients(node), sorted(recorded_missing(state) or ()))
-        else:
-            if previous == CURRENT_STATE:
-                return
-            if recorded and not recorded <= set(node.get("capabilities") or []):
-                return  # This replica does not know what the computer lacks.
-            state, rows = CURRENT_STATE, []
-        if self.store.claim_transition(OUTDATED_PREFIX + node["id"], previous, state, rows) and rows:
-            logger.info("Outdated client notification", node_id=node["id"], state=state)
+            combined = missing | (recorded or set())
+            if combined != recorded:
+                transitions.append((capability_key, previous, outdated_state(combined)))
+                missing = combined
+                notify = True
+        elif previous != CURRENT_STATE and (recorded or set()) <= set(node.get("capabilities") or []):
+            transitions.append((capability_key, previous, CURRENT_STATE))
+
+        available_version = None
+        if release is not None:
+            release_key = client_version_key(release)
+            announced_key = client_version_key(previous_release)
+            if (
+                release_key is not None
+                and (announced_key is None or announced_key < release_key)
+                and client_update_available(node, release_key)
+            ):
+                transitions.append((release_subject, previous_release, release))
+                available_version = release
+                notify = True
+
+        if transitions:
+            rows = client_outdated_rows(
+                node, self.recipients(node), sorted(missing), available_version=available_version,
+            ) if notify else []
+            if self.store.claim_transitions(transitions, rows) and rows:
+                logger.info("Outdated client notification", node_id=node["id"], available_version=available_version)
 
     def _prune(self) -> None:
         now = time.monotonic()

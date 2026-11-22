@@ -6,6 +6,7 @@ import json
 import re
 import shlex
 import tarfile
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from loguru import logger
 
 from ...core.deploy_config import public_web_url
 from ...core.daemon_capabilities import DAEMON_NODE_CAPABILITIES
+from ...core.client_version import client_version_key
 from .node_install import backend_base_url
 from ..deps import app_context
 
@@ -75,20 +77,42 @@ def bundle_path(configured: Path | None) -> Path:
     return configured or ASSETS / "daemon.tar.gz"
 
 
-def bundle_missing_capabilities(path: Path) -> list[str] | None:
-    """Capabilities this backend requires that the bundled daemon lacks.
-
-    Every computer installed or updated from a bundle missing one reads as
-    outdated forever, so the backend checks at startup. ``None`` means the
-    bundle records no manifest (built before it did) and cannot be checked.
-    """
+def _bundle_manifest(path: Path) -> dict[str, Any] | None:
     try:
         with tarfile.open(path, "r:gz") as archive:
             member = archive.extractfile(BUNDLE_MANIFEST)
             manifest = json.load(member) if member else None
     except KeyError:
         return None
-    advertised = set((manifest if isinstance(manifest, dict) else {}).get("capabilities") or [])
+    return manifest if isinstance(manifest, dict) else None
+
+
+@lru_cache(maxsize=8)
+def _read_bundle_version(path: Path, _signature: tuple[int, int, int, int, int]) -> str | None:
+    try:
+        manifest = _bundle_manifest(path)
+    except (OSError, tarfile.TarError, ValueError, EOFError):
+        return None
+    version = manifest.get("clientVersion") if manifest else None
+    return version if isinstance(version, str) and client_version_key(version) is not None else None
+
+
+def bundle_client_version(path: Path) -> str | None:
+    """Read the served release, reopening its archive only when the file changes."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return _read_bundle_version(path, (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
+
+
+def bundle_missing_capabilities(path: Path) -> list[str] | None:
+    """Capabilities this backend requires that the bundled daemon lacks."""
+    manifest = _bundle_manifest(path)
+    if manifest is None:
+        return None
+    capabilities = manifest.get("capabilities")
+    advertised = {cap for cap in capabilities if isinstance(cap, str)} if isinstance(capabilities, list) else set()
     return sorted(DAEMON_NODE_CAPABILITIES - advertised)
 
 
@@ -100,7 +124,7 @@ def warn_if_bundle_stale(configured: Path | None) -> None:
     # The log format prints only the message, so the details go in it.
     try:
         missing = bundle_missing_capabilities(path)
-    except (OSError, tarfile.TarError, ValueError) as error:
+    except (OSError, tarfile.TarError, ValueError, EOFError) as error:
         logger.warning("Computer installer bundle {} is unreadable: {}", path, error)
         return
     if missing is None:

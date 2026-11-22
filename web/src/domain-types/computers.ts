@@ -5,6 +5,7 @@ import type { ComputerTransportSnapshot } from "../lib/computerConnection.ts";
 declare module "relay-core" {
   interface DaemonNodeMonitorRecord {
     clientOutdated?: boolean;
+    clientUpdateAvailable?: boolean;
     transport?: ComputerTransportSnapshot;
   }
   interface ControlPanelDaemonNodeRecord {

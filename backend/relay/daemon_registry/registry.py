@@ -79,6 +79,7 @@ class DaemonNodeRegistry(
         project_store: Any = None,
         notification_store: Any = None,
         liveness_timeout_ms: int = config.DAEMON_NODE_LIVENESS_TIMEOUT_MS,
+        bundled_client_version: Callable[[], str | None] | None = None,
     ):
         self.store = store
         self.daemon_store = daemon_store
@@ -89,6 +90,7 @@ class DaemonNodeRegistry(
         # (tests, tools) notifies nobody.
         self.notification_store = notification_store
         self.liveness_timeout_ms = liveness_timeout_ms
+        self.bundled_client_version = bundled_client_version
         self.sandboxes: dict[str, dict[str, Any]] = {}
         self.active_commands: dict[str, dict[str, Any]] = {}
         self.outputs: dict[str, list[str]] = {}

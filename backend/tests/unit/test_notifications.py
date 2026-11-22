@@ -17,6 +17,7 @@ from relay.notifications.rules import (
     task_recipients,
 )
 from relay.notifications.watcher import ComputerNotificationWatcher
+from relay.persistence.engine import store_transaction
 from relay.persistence.notification.store import DatabaseNotificationStore
 from relay.persistence.task.store import DatabaseTaskStore
 from datetime import UTC
@@ -245,6 +246,20 @@ def test_a_transition_is_claimed_once(tmp_path: Path) -> None:
     assert not store.claim_transition("computer-online:n", None, "online", [row])
     assert store.claim_transition("computer-online:n", "online", "offline", [row])
     assert not store.claim_transition("computer-online:n", "online", "offline", [row])
+    assert store.list_for_user("u-1")["unreadCount"] == 1
+
+
+def test_joint_watch_claim_rolls_back_if_only_one_state_can_advance(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    row = {"user_id": "u-1", "kind": CLIENT_OUTDATED, "data": {"nodeId": "n"}}
+
+    assert store.claim_transition("client-release:n", None, "1.1.0", [row])
+    with store_transaction(store.engine):
+        assert not store.claim_transitions([
+            ("client-outdated:n", None, "outdated:image-attachments"),
+            ("client-release:n", None, "1.1.0"),
+        ], [row])
+    assert store.watch_states("client-outdated:") == {}
     assert store.list_for_user("u-1")["unreadCount"] == 1
 
 

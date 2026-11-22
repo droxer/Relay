@@ -23,8 +23,7 @@ from hashlib import sha256
 from json import dumps
 from typing import Any
 
-from sqlalchemy import Text, and_, cast, delete, func, insert, literal_column, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import Text, and_, cast, delete, func, literal_column, select, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
@@ -35,9 +34,10 @@ from ..tables.notifications import notifications, notification_watch_state, noti
 # The inbox shows recent notices; older ones are pruned by the watcher.
 MAX_LIST_LIMIT = 100
 
+type WatchTransition = tuple[str, str | None, str]
 
-
-
+class _WatchStateChanged(Exception):
+    """Another watcher won a claim, so roll back any other claims in this transaction."""
 
 def insert_notification_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
     """Insert notices; a dedupeKey identifies one notice per recipient/kind.
@@ -240,36 +240,35 @@ class DatabaseNotificationStore:
         """Move ``subject_key`` from ``previous`` (None: never observed) to
         ``state`` and insert ``rows`` in the same transaction. Returns False,
         writing nothing, when another writer moved it first."""
-        try:
-            return self._claim_transition(subject_key, previous, state, rows)
-        except IntegrityError:
-            return False  # Another replica recorded the first sighting.
+        return self.claim_transitions([(subject_key, previous, state)], rows)
 
-    def _claim_transition(
-        self, subject_key: str, previous: str | None, state: str, rows: list[dict[str, Any]],
-    ) -> bool:
+    def claim_transitions(self, transitions: list[WatchTransition], rows: list[dict[str, Any]]) -> bool:
+        """Claim all the observations behind a single notice, or none."""
         now = datetime.now(UTC)
-        with store_transaction(self.engine) as conn:
-            if previous is None:
-                exists = conn.execute(
-                    select(notification_watch_state.c.subject_key)
-                    .where(notification_watch_state.c.subject_key == subject_key)
-                ).first()
-                if exists:
-                    return False
-                conn.execute(insert(notification_watch_state).values(
-                    subject_key=subject_key, state=state, updated_at=now,
-                ))
-            else:
-                won = conn.execute(
-                    update(notification_watch_state)
-                    .where(notification_watch_state.c.subject_key == subject_key,
-                           notification_watch_state.c.state == previous)
-                    .values(state=state, updated_at=now)
-                ).rowcount == 1
-                if not won:
-                    return False
-            insert_notification_rows(conn, rows)
+        try:
+            with store_transaction(self.engine) as conn, conn.begin_nested():
+                for subject_key, previous, state in sorted(transitions):
+                    if previous is None:
+                        dialect_insert = postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
+                        result = conn.execute(
+                            dialect_insert(notification_watch_state)
+                            .values(subject_key=subject_key, state=state, updated_at=now)
+                            .on_conflict_do_nothing(index_elements=[notification_watch_state.c.subject_key])
+                            .returning(notification_watch_state.c.subject_key)
+                        )
+                    else:
+                        result = conn.execute(
+                            update(notification_watch_state)
+                            .where(notification_watch_state.c.subject_key == subject_key,
+                                   notification_watch_state.c.state == previous)
+                            .values(state=state, updated_at=now)
+                            .returning(notification_watch_state.c.subject_key)
+                        )
+                    if result.scalar_one_or_none() is None:
+                        raise _WatchStateChanged
+                insert_notification_rows(conn, rows)
+        except _WatchStateChanged:
+            return False
         return True
 
     def forget_watch_states(self, keys: list[str]) -> None:

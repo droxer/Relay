@@ -53,6 +53,11 @@ it("keeps upload enabled for a current client or an older backend without the ou
   expect((screen.getByRole("button", { name: "composer.attach_image" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
+it("keeps upload enabled when a compatible Computer has a newer client available", () => {
+  setup({ activeRuntimeNode: { ...node(false), clientUpdateAvailable: true } });
+  expect(screen.getByRole("button", { name: "composer.attach_image" })).toHaveProperty("disabled", false);
+});
+
 it("blocks an image draft after switching to an outdated Computer and enables it after updating", async () => {
   vi.stubGlobal("URL", { createObjectURL: () => "blob:preview", revokeObjectURL: vi.fn() });
   vi.mocked(uploadThreadImage).mockResolvedValue({ id: "image-1", mediaType: "image/png", bytes: 3, sha256: "a".repeat(64) });
