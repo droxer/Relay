@@ -81,7 +81,14 @@ export async function executeCommand(
   // Validate before any receiver
   // preparation, cleanup, or agent execution can change the inherited files.
   const validation = validateHandoffWorkspace(threadWorkspace.hostPath, command);
-  if (validation) state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
+  if (validation) {
+    state.prior_conversation = [state.prior_conversation, validation].filter(Boolean).join("\n\n");
+    // A continued conversation reads the catch-up text instead, so the
+    // validation result must reach it too.
+    if (state.resume_mode === "continue") {
+      state.resume_prior_conversation = [state.resume_prior_conversation, validation].filter(Boolean).join("\n\n");
+    }
+  }
   // The backend names the deliverables directory; a command from an older
   // backend carries none and keeps `artifacts/`. Null is a project: its
   // directory is the deliverable location, so no `artifacts/` is created.

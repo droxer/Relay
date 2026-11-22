@@ -240,3 +240,73 @@ def compute_conversation_history(
         [block for _, _, block in items], max_blocks, max_chars, progress_file
     )
     return _HISTORY_HEADER + "\n\n" + "\n\n".join(blocks)
+
+
+_SINCE_HEADER = "[Since your last turn in this thread]"
+
+
+def _handoff_items(session: dict[str, Any]) -> list[tuple[tuple[str, int], str, str]]:
+    items: list[tuple[tuple[str, int], str, str]] = []
+    for index, event in enumerate(session.get("events", [])):
+        if event.get("type") != "human.decision":
+            continue
+        decision = event.get("decision") or {}
+        note = decision.get("note")
+        if decision.get("kind") != "handoff" or not isinstance(note, str) or not note.strip():
+            continue
+        target = decision.get("targetAgent") or "agent"
+        if decision.get("targetAgentId"):
+            target += f" ({decision['targetAgentId']})"
+        marker = (event.get("timestamp") or "", index)
+        items.append((marker, "handoff", f"[Historical handoff to @{target}]\n{note.strip()}"))
+    return items
+
+
+def compute_conversation_since(
+    session: dict[str, Any],
+    store: ArtifactReader,
+    since: tuple[str, int],
+    *,
+    max_blocks: int = _DEFAULT_MAX_HISTORY_BLOCKS,
+    max_chars: int = _DEFAULT_MAX_HISTORY_CHARS,
+    progress_file: str | None = None,
+) -> str | None:
+    """What an agent resuming its own runtime conversation has not seen.
+
+    That conversation already holds everything up to ``since`` — the marker of
+    the agent's last run finishing — so this is only what came after: people's
+    turns, other agents' runs (those of the current turn too, which a fresh run
+    reads in the agent bridge), questions, handoffs, and live messages. The
+    current user turn stays out; the prompt appends it last, as it always does.
+    """
+    latest_user = latest_user_turn_marker(session)
+
+    def after(marker: tuple[str, int]) -> bool:
+        return marker > since
+
+    def before_current_turn(marker: tuple[str, int]) -> bool:
+        return not latest_user or marker < latest_user
+
+    items: list[tuple[tuple[str, int], str, str]] = [
+        (marker, "user", f"[User]\n{text}")
+        for marker, text in _user_turns(session)
+        if after(marker) and before_current_turn(marker)
+    ]
+    for marker, run, agent_text in _agent_turns(session, store):
+        if not after(marker):
+            continue
+        agent = run.get("agent", "agent")
+        items.append((marker, "agent", f"[Assistant @{agent}{run_continuity_suffix(run)}]\n{agent_text or '<no output>'}"))
+    items.extend(
+        item
+        for item in [*_handoff_items(session), *_questions_asked(session)]
+        if after(item[0]) and before_current_turn(item[0])
+    )
+    items.extend(item for item in _live_messages(session) if after(item[0]))
+    if not items:
+        return None
+    items.sort(key=lambda item: item[0])
+    blocks = _cap_history_blocks(
+        [block for _, _, block in items], max_blocks, max_chars, progress_file
+    )
+    return _SINCE_HEADER + "\n\n" + "\n\n".join(blocks)

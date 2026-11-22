@@ -309,7 +309,13 @@ class SessionReadRows(SessionStoreState):
             self.sessions.c.version,
             self.sessions.c.updated_at.label(_POSITION_COLUMN),
             *(self.sessions.c.snapshot[field].label(field) for field in fields),
-            self.sessions.c.snapshot["workflowRuns"][0]["status"].as_string().label("workflowStatus"),
+            # The newest run is the live one; a Task's workflow started again
+            # appends its run to the same thread.
+            literal_column(
+                "sessions.snapshot->'workflowRuns'->-1->>'status'"
+                if pg
+                else "json_extract(sessions.snapshot, '$.workflowRuns[#-1].status')"
+            ).label("workflowStatus"),
             literal_column(f"COALESCE({array_length}({runs}), 0)").label("runCount"),
             literal_column(
                 f"EXISTS (SELECT 1 FROM {elements}({runs}) a WHERE {value('status')} = 'running')"

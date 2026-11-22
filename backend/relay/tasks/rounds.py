@@ -40,7 +40,7 @@ def rounds_used(task: dict[str, Any]) -> int:
 def awaits_continuation(task: dict[str, Any]) -> bool:
     """True when the task's last round asked for another one."""
     result = task.get("lastRoundResult")
-    return isinstance(result, dict) and result.get("status") == CONTINUE_STATUS
+    return isinstance(result, dict) and result.get("status") == CONTINUE_STATUS and not result.get("consumed")
 
 
 def continuation_session_id(task: dict[str, Any]) -> str | None:

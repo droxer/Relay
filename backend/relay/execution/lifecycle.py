@@ -13,6 +13,8 @@ from typing import Any
 
 from loguru import logger
 
+from ..collaboration.workflow_events import current_workflow_run
+
 from ..daemon_registry.dispatch.workflow_admission import workflow_binding, workflow_request_state
 from ..daemon_registry.dispatch.workflow_tasks import sync_workflow_task
 from ..daemon_registry.runs.run_cursor import CLEARED_RUN_CURSOR
@@ -63,7 +65,7 @@ def _queue_wait_confirmed(queued_at: object, now: datetime) -> bool:
 
 def _parked_workflow_reason(session: dict[str, Any]) -> str | None:
     runs = session.get("workflowRuns") or []
-    status = session.get("workflowStatus") or (runs[0].get("status") if runs else None)
+    status = session.get("workflowStatus") or (runs[-1].get("status") if runs else None)
     if status == "blocked":
         return "workflow_blocked"
     if status in ("awaiting_approval", "awaiting_input"):
@@ -362,7 +364,7 @@ class ExecutionLifecycleService:
         ):
             # Preserve the workflow for an explicit retry after the human's
             # recorded assertion. Reconciliation itself never re-admits work.
-            run = session["workflowRuns"][0]
+            run = current_workflow_run(session)
             binding = workflow_binding(run)
             session = self.registry.store.append_event(session_id, relay_event(
                 "workflow.interrupted", session_id,
@@ -372,7 +374,7 @@ class ExecutionLifecycleService:
             ))
             self.registry.daemon_store.update_run_request(request["id"], {
                 "status": "prepared", **CLEARED_RUN_CURSOR,
-                "state": workflow_request_state(session["workflowRuns"][0], request),
+                "state": workflow_request_state(current_workflow_run(session), request),
             })
             sync_workflow_task(self.registry, request, session)
             return self.status(session)

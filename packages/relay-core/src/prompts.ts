@@ -1,6 +1,12 @@
 import { handoffCheckpointFile, legacyHandoffFile } from "./handoff-files.js";
 import { NEXT_STEPS_MAX, NEXT_STEP_MAX_CHARS } from "./next-steps.js";
 import type { AgentState, ProjectSetupBrief } from "./state.js";
+import { isResumableSessionId } from "./runtime-session.js";
+
+/** This run is the agent's next turn inside its own earlier runtime conversation. */
+export function continuesConversation(state: AgentState): boolean {
+  return state.resume_mode === "continue" && isResumableSessionId(state.resume_session_id);
+}
 
 // The title an agent reads for its role id; ids stay the stored wire values.
 // Mirrors the web `roles.*` labels.
@@ -283,8 +289,14 @@ function promptPreludes(state: AgentState): string[] {
       ].join("\n"));
     }
   }
-  if (state.prior_conversation) preludes.push(state.prior_conversation);
-  if (state.prior_agent_bridge) preludes.push(state.prior_agent_bridge);
+  if (continuesConversation(state)) {
+    // The resumed conversation already holds everything up to this agent's
+    // last turn; repeating it would hand the agent its own history twice.
+    if (state.resume_prior_conversation) preludes.push(state.resume_prior_conversation);
+  } else {
+    if (state.prior_conversation) preludes.push(state.prior_conversation);
+    if (state.prior_agent_bridge) preludes.push(state.prior_agent_bridge);
+  }
   if (state.prior_handoff_note) preludes.push(state.prior_handoff_note);
   return preludes;
 }

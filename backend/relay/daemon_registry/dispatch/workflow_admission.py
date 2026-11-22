@@ -97,15 +97,17 @@ class WorkflowAdmissionMixin(RegistryState):
                 "completed", "failed", "cancelled",
             ):
                 raise ValueError("workflow_session_closed")
+            # A thread may hold earlier, settled runs of the same Task; only the
+            # newest is the one being admitted.
             runs = session.get("workflowRuns") or []
-            if len(runs) != 1 or session.get("activeWorkflowRunId") != runs[0]["workflowRunId"]:
+            if not runs or session.get("activeWorkflowRunId") != runs[-1]["workflowRunId"]:
                 raise ValueError("workflow_run_mismatch")
-            run = runs[0]
+            run = runs[-1]
             index = run["currentIndex"]
             request = self.daemon_store.get_run_request(workflow_request_id(run))
             if not request or request["sessionId"] != session_id or request["assignments"] != run["assignments"]:
                 raise ValueError("workflow_request_mismatch")
-            if request.get("nodeId") != run["assignments"][index].get("daemonNodeId") or request.get("taskGoal") != session.get("taskGoal") :
+            if request.get("nodeId") != run["assignments"][index].get("daemonNodeId") or request.get("taskGoal") != run.get("taskGoal", session.get("taskGoal")):
                 raise ValueError("workflow_request_mismatch")
             if request.get("taskId") and self.task_store:
                 task_scope.enter_context(self.task_store.task_write_scope(request["taskId"]))

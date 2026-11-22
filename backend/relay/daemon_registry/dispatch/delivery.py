@@ -23,11 +23,14 @@ from ...sessions.controller import SessionController
 from ...tasks.execution import request_execution_owner
 from ...tasks.workspace import task_workspace_subpath
 from ...core.daemon_capabilities import (
+    DAEMON_CAPABILITY_AGENT_CONTINUE,
+    DAEMON_CAPABILITY_AGENT_RESUME,
     DAEMON_CAPABILITY_ROUND_RESULT,
     has_capability,
 )
-from ...sessions.conversation import compute_conversation_history
-from ...sessions.bridge import compute_prior_agent_bridge
+from ...sessions.conversation import compute_conversation_history, compute_conversation_since
+from ...sessions.bridge import compute_prior_agent_bridge, run_marker
+from ..records import continuable_run
 from ...sessions.handoff import compute_prior_handoff_note
 from ...sessions.handoff_files import handoff_file
 from ..scheduling import (
@@ -298,6 +301,10 @@ class AssignmentDeliveryMixin(RegistryState):
             )
         request_state = run_request["state"] or {}
         state = _agent_identity_state(state, assignment, sandbox, session_snapshot)
+        if not context:
+            state = self._continued_conversation_state(
+                state, assignment, sandbox, session_snapshot
+            )
         state = _project_state(state, manifest, assignment, assignments, sandbox, run_id)
         state = _work_item_state(state, assignment)
         state = _work_protocol_state(state, sandbox, request_state, assignments, index)
@@ -459,6 +466,46 @@ class AssignmentDeliveryMixin(RegistryState):
         if handoff_note:
             next_state["prior_handoff_note"] = handoff_note
         return next_state
+
+    def _continued_conversation_state(
+        self,
+        state: dict[str, Any],
+        assignment: dict[str, Any],
+        sandbox: dict[str, Any],
+        session_snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Let the agent's next turn in this thread continue its own conversation.
+
+        A follow-up message, a task's next round, and an automation's next
+        round all land here. The runtime then keeps everything the agent
+        thought and did, and reads only what happened since its last turn.
+        The full transcript stays in the state too: a conversation the runtime
+        can no longer find makes the daemon start fresh, and that run needs it.
+        An explicit retry already resumes as `interrupted`; a handoff context
+        carries its own transcript, so neither is touched.
+        """
+        if state.get("resume_session_id"):
+            return state
+        if not (
+            has_capability(sandbox, DAEMON_CAPABILITY_AGENT_RESUME)
+            and has_capability(sandbox, DAEMON_CAPABILITY_AGENT_CONTINUE)
+        ):
+            return state
+        run = continuable_run(session_snapshot, assignment)
+        if run is None:
+            return state
+        since = compute_conversation_since(
+            session_snapshot,
+            self.store,
+            run_marker(session_snapshot, run),
+            progress_file=state.get("progress_file"),
+        )
+        return {
+            **state,
+            "resume_session_id": run["runtimeSessionId"],
+            "resume_mode": "continue",
+            **({"resume_prior_conversation": since} if since else {}),
+        }
 
     def _with_skill_bundle(
         self, command: dict[str, Any], sandbox: dict[str, Any], project_id: str | None

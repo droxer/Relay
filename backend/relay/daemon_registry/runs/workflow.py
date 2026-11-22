@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import ExitStack
 from typing import Any
 
+from ...collaboration.workflow_events import current_workflow_run
 from ...persistence.events import relay_event
 from ...persistence.engine import store_transaction
 from ...persistence.resource_lock import resource_transaction
@@ -27,7 +28,7 @@ class WorkflowProgressionMixin(RegistryState):
             if session.get("status") in ("cancelled", "failed", "completed") or session.get("deletionRequestedAt"):
                 # The caller's terminal-session branch owns these cases.
                 raise ValueError("workflow_session_closed")
-            run = session["workflowRuns"][0]
+            run = current_workflow_run(session)
             if request["assignments"] != run["assignments"] or request["currentIndex"] != run["currentIndex"] or (
                 request["currentRunId"] != event["runId"] or request["currentCommandId"] != event["commandId"]
                 or request["state"].get("_relay_workflow_admission") != workflow_binding(run)
@@ -46,14 +47,14 @@ class WorkflowProgressionMixin(RegistryState):
             payload = {**workflow_binding(run), "expectedRevision": run["revision"], "terminalEvent": event}
             payload.pop("revision")
             session = self.store.append_event(sid, relay_event("workflow.step_finished", sid, payload))
-            run = session["workflowRuns"][0]
+            run = current_workflow_run(session)
             owner_stopped = request["state"].get("_relay_stop_actor_user_id") == session.get("ownerUserId")
             status = "cancelled" if owner_stopped else "completed" if run["status"] == "completed" else "prepared"
             if owner_stopped:
                 session = self.store.append_event(sid, relay_event("session.status", sid, {
                     "status": "cancelled", "phase": "cancelled", "actorUserId": session["ownerUserId"],
                 }))
-                run = session["workflowRuns"][0]
+                run = current_workflow_run(session)
             self.daemon_store.update_run_request_if_claimed(
                 request["id"], TERMINAL_CLAIM_ID_STATE_KEY, claim,
                 {"status": status, "currentIndex": run["currentIndex"], **CLEARED_RUN_CURSOR,
@@ -92,7 +93,7 @@ class WorkflowProgressionMixin(RegistryState):
                     self._settle_prepared_request_for_missing_session(recovery_request_id)
                     return
                 session = self.store.get_session(sid)
-                run = session["workflowRuns"][0]
+                run = current_workflow_run(session)
                 request = self.daemon_store.get_run_request(workflow_request_id(run))
                 if run["status"] != "ready" or session["status"] in ("completed", "failed", "cancelled") or not request or request.get("currentCommandId"):
                     return
@@ -102,6 +103,6 @@ class WorkflowProgressionMixin(RegistryState):
                     "expectedRevision": run["revision"], "reason": str(error),
                 }))
                 self.daemon_store.update_run_request(request["id"], {
-                    "state": workflow_request_state(session["workflowRuns"][0], request),
+                    "state": workflow_request_state(current_workflow_run(session), request),
                 })
                 sync_workflow_task(self, request, session)

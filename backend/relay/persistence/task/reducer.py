@@ -230,6 +230,11 @@ def _apply_task_session_unlinked(task: dict[str, Any], event: dict[str, Any]) ->
         for session_id in task["linkedSessionIds"]
         if session_id != event["sessionId"]
     ]
+    # A round cannot continue in a deleted thread. Dropping the pointer turns
+    # the pending continuation into a wait for a person, never a dispatch
+    # into a thread that is gone.
+    if task.get("continuationSessionId") == event["sessionId"]:
+        task.pop("continuationSessionId", None)
 
 
 def _apply_task_activity(task: dict[str, Any], event: dict[str, Any]) -> None:

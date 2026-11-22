@@ -119,12 +119,19 @@ DAEMON_NODE_CAPABILITIES = frozenset(
 # message next, so a computer lacking it is not outdated.
 DAEMON_CAPABILITY_LIVE_MESSAGES = "live-messages"
 
+# The daemon honours `resume_mode: "continue"`: an agent's next turn in a thread
+# resumes its own runtime conversation and reads only what happened since.
+# Optional: without it the full transcript is replayed into a fresh one.
+DAEMON_CAPABILITY_AGENT_CONTINUE = "agent-continue"
+
 # The backend can still serve the combined listing through ordinary commands,
-# and stop-and-send stands in for live messages.
+# stop-and-send stands in for live messages, and a transcript replay stands in
+# for a continued conversation.
 DAEMON_RECOGNIZED_CAPABILITIES = DAEMON_NODE_CAPABILITIES | {
     DAEMON_CAPABILITY_WORKSPACE_LIST_THREAD_RECORDS,
     DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP,
     DAEMON_CAPABILITY_LIVE_MESSAGES,
+    DAEMON_CAPABILITY_AGENT_CONTINUE,
     DAEMON_CAPABILITY_REPORT_CLEANUP,
 }
 

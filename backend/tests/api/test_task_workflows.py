@@ -132,6 +132,58 @@ def test_task_workflow_gate_retry_and_completion_keep_one_execution(monkeypatch)
         assert take(registry, node) == []
 
 
+def _run_to_review(app, client, node, sid):
+    registry = app.state.registry
+    design, = take(registry, node)
+    finish(registry, node, design, {"Design": "design ready"})
+    session = app.state.session_store.get_session(sid)
+    response = client.post(f"/api/v1/threads/{sid}/workflow-decisions", json=decision(session, "approve"))
+    assert response.status_code == 200, response.text
+    deploy, = take(registry, node)
+    finish(registry, node, deploy, {"URL": "https://example.test"})
+
+
+def test_a_task_started_again_continues_in_its_own_workflow_thread(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
+        task, _ = task_workflow(client, project, payload)
+        sid = start_task(client, task)["id"]
+        _run_to_review(app, client, node, sid)
+        assert app.state.session_store.get_session(sid)["status"] == "completed"
+
+        reopened = client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "assigned"})
+        assert reopened.status_code == 200, reopened.text
+        again = start_task(client, task)
+
+        # Same thread, a second frozen run, reopened for the work.
+        assert again["id"] == sid
+        session = app.state.session_store.get_session(sid)
+        assert session["status"] == "running"
+        first, second = session["workflowRuns"]
+        assert first["status"] == "completed"
+        assert session["activeWorkflowRunId"] == second["workflowRunId"] != first["workflowRunId"]
+        assert app.state.task_store.get_task(task["id"])["linkedSessionIds"] == [sid]
+
+        _run_to_review(app, client, node, sid)
+        assert app.state.task_store.get_task(task["id"])["status"] == "review"
+        assert [run["status"] for run in app.state.session_store.get_session(sid)["workflowRuns"]] == [
+            "completed", "completed",
+        ]
+
+
+def test_a_deleted_workflow_thread_is_not_continued(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
+        task, _ = task_workflow(client, project, payload)
+        sid = start_task(client, task)["id"]
+        _run_to_review(app, client, node, sid)
+        assert client.delete(f"/api/v1/threads/{sid}").status_code in (200, 202, 204)
+
+        assert client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "assigned"}).status_code == 200
+        again = start_task(client, task)
+
+        assert again["id"] != sid
+        assert len(app.state.session_store.get_session(again["id"])["workflowRuns"]) == 1
+
+
 @pytest.mark.parametrize("scope", ["standalone", "foreign"])
 def test_workflow_task_assignment_requires_matching_project(monkeypatch, scope):
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):

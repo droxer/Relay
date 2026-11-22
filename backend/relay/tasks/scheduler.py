@@ -557,7 +557,7 @@ class TaskScheduler:
         # Read before the round record clears it: the thread the work was in
         # is where a person answers, and the message is what they answer.
         session_id = continuation_session_id(task)
-        self.task_store.record_round(task["id"], clear_continuation=True)
+        self.task_store.record_round(task["id"], clear_continuation=True, round_result={**(task.get("lastRoundResult") or {}), "consumed": True})  # a person's restart is a fresh start
         # A spent budget is its own kind of wait, so a surface can offer to
         # continue rather than quote it as an agent's question.
         kind: WaitKind = "budget" if code == "round_budget_exhausted" else "check"

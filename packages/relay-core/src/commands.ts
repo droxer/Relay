@@ -22,8 +22,12 @@ function resumeId(state: AgentState): string | undefined {
 const RESUME_NOTE = "[Resumed run] Your previous run of this task was interrupted before it finished. "
   + "This conversation is that run. Check what you already completed and continue from there; do not start over.\n\n";
 
+const CONTINUE_NOTE = "[Continued conversation] This conversation is your earlier work in this thread. "
+  + "Anything that happened since your last turn follows; build on what you already did rather than starting over.\n\n";
+
 function withResumeNote(prompt: string, state: AgentState): string {
-  return resumeId(state) ? RESUME_NOTE + prompt : prompt;
+  if (!resumeId(state)) return prompt;
+  return (state.resume_mode === "continue" ? CONTINUE_NOTE : RESUME_NOTE) + prompt;
 }
 
 export function buildCodexCommand(state: AgentState, workspacePath?: string): string {
