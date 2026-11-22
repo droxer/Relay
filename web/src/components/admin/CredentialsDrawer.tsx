@@ -11,6 +11,7 @@ import { NodeProfileBadges } from "./NodeProfileBadges";
 import { resolveNodeCredentials, type StoredNodeToken } from "./helpers";
 import { canUseLocalControlPanel } from "../../lib/controlPanel";
 import { useCopyFeedback } from "@/hooks/useCopyFeedback";
+import { nodeDeleteConfirm } from "@/hooks/useNodeDelete";
 import { Alert } from "@/components/ui/alert";
 
 interface CredentialsDrawerProps {
@@ -59,12 +60,7 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, userHandle
 
   async function handleDelete() {
     if (!node || !onDelete) return;
-    const ok = await confirm({
-      title: t("admin.v2.delete_confirm", { id: node.id }),
-      message: t("admin.v2.delete_message"),
-      confirmLabel: t("admin.v2.delete_action"),
-      tone: "danger",
-    });
+    const ok = await confirm(nodeDeleteConfirm(node, t));
     if (!ok) return;
     await runAction("delete", () => onDelete(node));
   }

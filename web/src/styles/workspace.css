@@ -218,9 +218,10 @@
   overflow-wrap: anywhere;
 }
 
+/* Quiet ink alone marks the empty value: Space Grotesk has no italic, and a
+   synthesized slant in UI chrome reads as a rendering fault, not a state. */
 .record-band-value--empty {
   color: var(--ink-4);
-  font-style: italic;
 }
 
 .record-band-inline {

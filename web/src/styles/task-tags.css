@@ -365,9 +365,14 @@
   background: var(--control-fill-hover);
 }
 
+/* Disabled reads as quiet ink on no fill, not only as a fade: an offer
+   that cannot be taken must still say so in forced colours and to a reader
+   who cannot judge a 40% dim against the surface. */
 .tag-offer:disabled {
   cursor: default;
-  opacity: var(--opacity-disabled);
+  color: var(--ink-4);
+  background: transparent;
+  border-style: dashed;
 }
 
 /* A finger needs 44px: the chip keeps its drawn height and the ::after

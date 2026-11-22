@@ -3,8 +3,13 @@
 // became "1K". Group below 100k, compact above.
 export const COMPACT_THRESHOLD = 100_000;
 
-/** The dashboard's one number voice: grouped below 100k, compact above. */
+/** Read where a value is missing rather than printing "NaN" on a KPI tile. */
+export const MISSING_VALUE = "—";
+
+/** The dashboard's one number voice: grouped below 100k, compact above. A
+ *  payload that is not a finite number reads as missing. */
 export function formatCompact(value: number, locale: string): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return MISSING_VALUE;
   return value < COMPACT_THRESHOLD
     ? new Intl.NumberFormat(locale).format(value)
     : new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(value);
