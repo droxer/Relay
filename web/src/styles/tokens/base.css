@@ -7,7 +7,13 @@
   color: var(--ink-1);
   font-family: var(--font-sans);
   font-optical-sizing: auto;
-  font-synthesis: none;
+  /* Weight is never faked (Space Mono ships Regular only, so code stays 400),
+     but slant is: Space Grotesk and Space Mono ship no italic, and with style
+     synthesis off every `font-style: italic` — markdown emphasis, quotes,
+     code comments — rendered upright and read as plain text. */
+  font-synthesis-weight: none;
+  font-synthesis-small-caps: none;
+  font-synthesis-style: auto;
   /* The base feature recipe, declared once at the root. It switches on no
      stylistic set — system faces disagree about what each set means — but it
      stays a token so rules that add "tnum" can restate it (see .tnum below). */
@@ -296,7 +302,7 @@ button[data-danger]:focus-visible,
   font-family: var(--font-mono);
   font-feature-settings: var(--font-features), "tnum" 1;
   font-variant-numeric: tabular-nums;
-  /* Space Mono ships Regular only, and font-synthesis is off, so code is 400
+  /* Space Mono ships Regular only, and weight synthesis is off, so code is 400
      everywhere (Relay type table, 2026-11-22). */
   font-weight: 400;
   /* A monospace face is chosen for its fixed advance — tightening it is

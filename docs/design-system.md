@@ -85,7 +85,7 @@ Tailwind `@theme` machinery:
    The `text-*` utilities map one name per rung: `text-xs` → `--fs-1`
    (12px), `text-sm` → `--fs-2` (14px), `text-dense` → `--fs-3`,
    `text-base` → `--fs-4`, `text-lg` → `--fs-heading` (16px), `text-xl` →
-   `--fs-title` (16px), `text-2xl` → `--fs-5` (24px), `text-3xl`/`4xl` →
+   `--fs-title` (16px), `text-2xl` → `--fs-5` (22px), `text-3xl`/`4xl` →
    `--fs-6` (28px). `--fs-3` and `--fs-4` are both 14px today (the compact
    reading size), so `text-base` is 14px, not Tailwind's 16px. `text-dense`
    is the one Relay-only name, for the dense-prose rung Tailwind has no word
@@ -333,7 +333,7 @@ introduces visual rest.
 | Role | Spec | Paired track | Use |
 |---|---|---|---|
 | `--type-display` | 500 28/1.17 | `--track-display` (−0.03em) | hero headline (login), admin metric values |
-| `--type-page` | 600 24/32 | `--track-display` (−0.03em) | page h1 — one rung above the 16px h2 |
+| `--type-page` | 600 22/30 | `--track-display` (−0.03em) | page h1 — one rung above the 16px h2 |
 | `--type-title` | 600 16/24 | `--track-title` (−0.02em) | fixed-noun h2: rail titles, section headers, drawer and dialog titles |
 | `--type-heading` | 600 16/24 | `--track-0` | section heads, list labels |
 | `--type-title-content` | 600 16/24 | `--track-title` (−0.02em) | titles whose text comes from a user or agent |
@@ -344,11 +344,11 @@ introduces visual rest.
 | `--type-label-strong` | 600 14/22 | `--track-body-sm` (0) | bold chrome (scarce emphasis) |
 | `--type-micro` | 500 12/18 | `--track-0` | structural group labels (lane, band, field) in **sentence case** — separated from `--type-label` by dimmer ink and line box, not weight or case |
 | `--type-meta` | 400 12/18 | `--track-body-sm` (0) | sentence-case row meta, eyebrows, kickers |
-| `--type-number` | 500 24/1.25 | `--track-display` (−0.03em) | metrics |
+| `--type-number` | 500 22/1.25 | `--track-display` (−0.03em) | metrics |
 | `--type-code` | 400 13/20 | `--track-0` | commands, logs, IDs |
 
 **Heading ladders.** Chrome headings map one size per level: page h1 =
-`--type-page` (24/32, 600); every fixed-noun h2 — list rails (thread list,
+`--type-page` (22/30, 600); every fixed-noun h2 — list rails (thread list,
 rosters, `.sec-rail`), section headers, drawers, dialogs — = `--type-title`
 (16/24, 600); section head h3 = `--type-heading` (16/24, 600). Record titles
 (user/agent-authored) take `--type-title-content` (16/24, 600, in the sans
@@ -385,22 +385,30 @@ redraw the 6, 9 and 4), so `--font-features` is default kerning only. It stays a
 `font-feature-settings` replaces rather than adds: a rule that wants tabular
 figures writes `var(--font-features), "tnum" 1`.
 
+**Italic is synthesized, weight never is.** Space Grotesk and Space Mono
+ship no italic, so the root sets `font-synthesis-weight: none` but leaves
+`font-synthesis-style: auto`: emphasis, blockquotes, and code comments slant,
+while code stays at Space Mono's one shipped weight (400). A blanket
+`font-synthesis: none` renders every italic upright.
+
 **There is no 700 or 800 role.** Space Grotesk supports 700, but Relay
 deliberately exposes only the 400/500/600 product ladder: 600 is titles,
 headings and emphasis, 500 labels, controls and the display tier, 400 reading.
 
-The size ladder is **12 / 14 / 15 / 16 / 17 / 22 / 28px** at the browser's
+The size ladder is **12 / 14 / 16 / 22 / 28px** at the browser's
 default font size: `--fs-1` 12, `--fs-2` = `--fs-3` = `--fs-4` 14 (chrome,
 dense prose, and body share the compact reading size; they stay three tokens
-so a rung can move alone), `--fs-heading` 15, `--fs-title` 16,
-`--fs-title-lg` 17, `--fs-5` 22, `--fs-6` 28. There is no 19px rung. All
+so a rung can move alone), `--fs-title` = `--fs-heading` = `--fs-title-lg`
+16 (titles and headings differ by weight and track, not size), `--fs-5` 22
+(page titles and metrics — 24px shouted at 600 in Space Grotesk), `--fs-6`
+28. Documents add an 18px subheading (`--fs-document-subheading`). All
 sizes use rem; the root is 87.5% (14px by default), so user font preferences
 scale type, and `typographyTokens.test.ts` pins every rung's pixel value. The
 hero size (`--fs-hero`) clamps between 22 and 36px and never joins the ladder.
 The transcript reads `--fs-transcript` (= `--fs-2`, 14px) at
-`--leading-transcript` (1.65). Code is not a rung of that ladder: code
-surfaces read `--fs-code` (14px monospace), and code inside the transcript
-steps down to `--fs-code-transcript` (13px), so the sans rungs can move
+`--leading-transcript` (14/23). Code is not a rung of that ladder: code
+surfaces read `--fs-code` (13px monospace), and code inside the transcript
+reads `--fs-code-transcript` (also 13px, its own token so it can step apart), so the sans rungs can move
 without dragging the code face with them.
 
 **`--track-display` must be applied to every display-tier rule** — via the
