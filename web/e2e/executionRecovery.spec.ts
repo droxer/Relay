@@ -181,6 +181,53 @@ for (const reason of ["execution_lost", "execution_interrupted"]) {
   }
 }
 
+for (const live of [false, true]) {
+  test(live ? "a live message does not announce another run"
+    : "a follow-up shows its starting status after an earlier agent reply", async ({ page }) => {
+    const session = {
+      ...sessionFor("awaiting_dispatch"),
+      status: "running",
+      execution: { ...executionFor("awaiting_dispatch"), phase: live ? "running" : "queued",
+        computerOnline: true, queueWaitConfirmed: false, queuedAt: now },
+      events: [
+        { id: "ev_start", type: "agent.started", sessionId: "recovery-thread", timestamp: now,
+          runId: "run_first", agent: "codex", role: "implementer" },
+        { id: "ev_done", type: "agent.completed", sessionId: "recovery-thread", timestamp: now,
+          runId: "run_first", agent: "codex", status: "completed", exitCode: 0, agentLog: "Earlier reply" },
+        ...(live ? [
+          { id: "ev_running", type: "agent.started", sessionId: "recovery-thread", timestamp: now,
+            runId: "run_live", agent: "codex", role: "implementer" },
+          { id: "ev_follow_up", type: "user.live_message", sessionId: "recovery-thread", timestamp: now,
+            runId: "run_live", agent: "codex", delivery: "steer", text: "Second message" },
+        ] : [
+          { id: "ev_follow_up", type: "user.message", sessionId: "recovery-thread", timestamp: now, text: "Second message" },
+        ]),
+      ],
+    };
+    await page.route("**/api/**", async route => {
+      const path = new URL(route.request().url()).pathname;
+      if (path.endsWith("/events")) {
+        await route.fulfill({ contentType: "text/event-stream", body: "" });
+        return;
+      }
+      let body: unknown = { sessions: [session], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] };
+      if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "review-user", userId: "review-user", username: "review", role: "user", theme: "light", language: "en" } };
+      if (path.endsWith("/threads/recovery-thread")) body = session;
+      await route.fulfill({ json: body });
+    });
+    await page.goto("/threads/recovery-thread");
+    const transcript = page.getByRole("log");
+    await expect(transcript).toContainText("Earlier reply");
+    await expect(transcript).toContainText("Second message");
+    const starting = transcript.getByRole("status").filter({ hasText: "Starting the run." });
+    if (live) {
+      await expect(starting).toHaveCount(0);
+    } else {
+      await expect(starting).toBeVisible();
+    }
+  });
+}
+
 test("a completed turn whose live output had gaps says so", async ({ page }) => {
   const session = {
     ...sessionFor("finalization_failed"), status: "completed", execution: { ...executionFor("finalization_failed"), phase: "terminal", blockingReason: null, canDelete: true },

@@ -545,6 +545,9 @@ class DaemonStore(Protocol):
     def set_workspace_listener(
         self, listener: Callable[[str], None], *, database_channel: str | None = None
     ) -> None: ...
+    def set_thread_queue_listener(
+        self, listener: Callable[[str], None], *, database_channel: str
+    ) -> None: ...
     def request_run_stop(
         self, request_id: str, command_id: str, reason: str,
         *, actor_user_id: str | None = None,

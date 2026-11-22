@@ -45,10 +45,12 @@ shared API fixture; the real server boundary is covered by the Python tests.
 
 ## Operational limits
 
-Advancement follows the task scheduler interval (10 seconds by default) and
-requires that scheduler to be enabled. Interrupted dispatch claims retry after
-five minutes using the same admission key. Automatic work waits for a human
-question to be answered; a failed admission requires Resume or a chosen message.
+After the backend commits the release of an execution reservation, it wakes
+that Thread's queue. The scheduler scans every 10 seconds by default to recover
+missed notifications. Both paths require the scheduler to be enabled.
+Interrupted dispatch claims retry after five minutes using the same admission
+key. Automatic work waits for a human answer. A failed admission requires
+**Resume** or a chosen message.
 The queue remains text-only, with 20 entries of at most 100,000 characters each.
 Editing intentionally returns text to a local composer draft. Queue reads poll
 once per second while the thread is visible and refresh on window focus.

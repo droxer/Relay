@@ -11,6 +11,7 @@ import asyncio
 import math
 import os
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -18,11 +19,10 @@ import procrastinate
 from procrastinate.app import WorkerOptions
 from loguru import logger
 from procrastinate.jobs import Status
-from psycopg.conninfo import make_conninfo
-from sqlalchemy.engine import make_url
 
 from . import app as app_module
 from .core.storage_config import database_url_from_env
+from .persistence.engine import postgres_conninfo
 
 CONTROL_QUEUE = "relay_control"
 CONTROL_TASKS = frozenset({
@@ -40,12 +40,7 @@ def background_mode_from_env() -> str:
 
 def worker_conninfo() -> str:
     """Translate SQLAlchemy's URL without losing escaped secrets or options."""
-    url = make_url(database_url_from_env(setting="relay worker"))
-    if url.get_backend_name() != "postgresql":
-        raise ValueError("The background worker requires a PostgreSQL database.")
-    options = url.translate_connect_args(username="user", database="dbname")
-    options.update(url.query)
-    return make_conninfo(**options)
+    return postgres_conninfo(database_url_from_env(setting="relay worker"), purpose="The background worker")
 
 
 def interval_cron(seconds: float) -> str:
@@ -186,13 +181,16 @@ async def run_worker(root_dir: str | None = None) -> None:
     worker_conninfo()
     create_app = app_module.create_app
     api = create_app(root_dir, background_mode="external") if root_dir else create_app(background_mode="external")
-    worker = create_worker_app(BackgroundServices.from_state(api.state))
+    services = BackgroundServices.from_state(api.state)
+    worker = create_worker_app(services)
     async with worker.open_async():
         if not await worker.check_connection_async():
             raise RuntimeError("Procrastinate schema is missing; run relay worker-schema first.")
-        # Keep PostgreSQL notification bridging alive, but start no local
-        # scheduling loops. This process binds no HTTP socket.
-        async with api.router.lifespan_context(api):
+        # Periodic checks run through Procrastinate. Queue hints come through
+        # PostgreSQL and share the same durable claim as the scheduler sweep.
+        thread_queue = getattr(services.scheduler, "thread_queue", None)
+        queue_wakeups = thread_queue.wakeups() if thread_queue else nullcontext()
+        async with api.router.lifespan_context(api), queue_wakeups:
             await worker.run_worker_async()
 
 

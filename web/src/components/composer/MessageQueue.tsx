@@ -33,10 +33,15 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
     return () => clearTimeout(timer);
   }, [removedAt, deadline]);
   if (messages.length === 0 && !error && !undoAvailable) return null;
+  const status = sending ? "queue.sending"
+    : paused ? "queue.paused"
+    : waiting ? "queue.waiting"
+    : running ? "queue.saved"
+    : "queue.ready";
   return (
     <section className="message-queue" aria-label={t("queue.title", { count: messages.length })}>
       {messages.length > 0 ? <div className="message-queue-status" role="status">
-        <span>{t(sending ? "queue.sending" : paused ? "queue.paused" : waiting ? "queue.waiting" : "queue.saved", { count: messages.length })}</span>
+        <span>{t(status, { count: messages.length })}</span>
         {paused ? <Button type="button" size="xs" variant="ghost" disabled={pending} onClick={onResume}>{t("queue.resume")}</Button> : null}
       </div> : null}
       {error ? <p className="message-queue-error" role="alert">{error}</p> : null}

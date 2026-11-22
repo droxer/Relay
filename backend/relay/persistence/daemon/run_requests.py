@@ -7,6 +7,7 @@ A mixin of ``DatabaseDaemonStore``; it shares the store's engine and tables
 from __future__ import annotations
 
 from datetime import timedelta
+from functools import partial
 from typing import Any
 from sqlalchemy import (
     insert,
@@ -18,7 +19,8 @@ from sqlalchemy.exc import IntegrityError
 from ..db_time import require_db_time
 from ..events import daemon_event
 from ...core.ids import new_database_id, now_iso
-from ..engine import store_transaction
+from ..engine import after_store_commit, publish_database_notification, store_transaction
+from ...core.thread_queue import THREAD_QUEUE_READY_PREFIX
 from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
 from .rules import _assert_node_run_request_capacity
 from ...core.daemon_records import (
@@ -45,6 +47,24 @@ from ..tables.sessions import sessions
 
 
 class RunRequestRows(DaemonStoreState):
+    def _notify_thread_queue_after_release(
+        self, conn: Any, current: dict[str, Any], updated: dict[str, Any]
+    ) -> None:
+        channel = self._thread_queue_changes.database_channel
+        if (not channel or current["status"] not in ACTIVE_RUN_REQUEST_STATUSES
+                or updated["status"] not in TERMINAL_DAEMON_STATUSES):
+            return
+        snapshot = sessions.c.snapshot
+        queued = conn.scalar(select(sessions.c.id).where(
+            sessions.c.id == current["sessionId"],
+            snapshot["messageQueue"]["messages"][0]["id"].as_string().is_not(None),
+            snapshot["messageQueue"]["paused"].as_boolean().is_(False),
+        ))
+        if queued:
+            key = f"{THREAD_QUEUE_READY_PREFIX}{queued}"
+            publish_database_notification(conn, self.engine, channel, key)
+            after_store_commit(self.engine, partial(self._thread_queue_changes.fire, key))
+
     def create_run_request(self, request: dict[str, Any]) -> dict[str, Any]:
         now = now_iso()
         record = {
@@ -449,6 +469,7 @@ class RunRequestRows(DaemonStoreState):
                     },
                 ),
             )
+            self._notify_thread_queue_after_release(conn, current, updated)
         return updated
 
     def update_run_request_if_status(
@@ -506,6 +527,7 @@ class RunRequestRows(DaemonStoreState):
                     },
                 ),
             )
+            self._notify_thread_queue_after_release(conn, current, updated)
         return updated
 
     def mark_run_request_state(self, request_id: str, key: str) -> dict[str, Any] | None:
@@ -594,4 +616,5 @@ class RunRequestRows(DaemonStoreState):
                     },
                 ),
             )
+            self._notify_thread_queue_after_release(conn, current, updated)
         return updated

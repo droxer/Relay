@@ -1,6 +1,9 @@
 """Queues survive independent clients and are advanced without a browser."""
 
+from contextlib import ExitStack
 from datetime import UTC, datetime
+from threading import Event
+from time import monotonic, sleep
 
 import pytest
 from fastapi.testclient import TestClient
@@ -152,6 +155,76 @@ def test_queue_dispatches_real_round_and_retains_mention_target(monkeypatch):
         manifest = result["collaborationRounds"][-1]
         assert [a["agentId"] for a in manifest["assignments"]] == [reviewer["id"]]
         assert app.state.registry.daemon_store.active_run_request_for_session_any_node(tid)
+
+
+@pytest.mark.parametrize("background_mode", ["embedded", "external"])
+def test_run_exit_wakes_the_queue_between_scheduler_ticks(monkeypatch, tmp_path, background_mode):
+    from postgres_backend import postgres_backend_requested
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+
+    if background_mode == "external" and not postgres_backend_requested():
+        pytest.skip("the independent worker receives the wakeup through PostgreSQL")
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "1")
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_INTERVAL_SECONDS", "60")
+    monkeypatch.setenv("RELAY_BACKGROUND_MODE", background_mode)
+    with _world(monkeypatch) as (app, client, node, _):
+        agent = _agent(app, node, "Solo", "codex")
+        _sync(app, node)
+        tid = _thread(app, node, agent)["id"]
+        path = f"/api/v1/threads/{tid}"
+        token = "token_node_here"
+        registry = app.state.registry
+        registry.take_commands(node["id"], token)
+        assert client.post(f"{path}/messages", json={"text": "First turn"}).status_code == 202
+        [first] = registry.take_commands(node["id"], token)
+        assert client.post(f"{path}/queue", json={
+            "action": "enqueue", "id": "q_next", "text": "Second turn",
+        }).status_code == 200
+        scheduler = app.state.task_scheduler
+        original_tick = scheduler.tick
+        first_tick = Event()
+
+        async def tick():
+            await original_tick()
+            first_tick.set()
+
+        monkeypatch.setattr(scheduler, "tick", tick)
+        with ExitStack() as stack:
+            stack.enter_context(client)
+            if background_mode == "embedded":
+                assert first_tick.wait(5)
+            else:
+                worker = create_app(tmp_path, background_mode="external")
+                worker_client = stack.enter_context(TestClient(worker))
+                dispatcher = worker.state.task_scheduler.thread_queue
+                stack.enter_context(worker_client.portal.wrap_async_context_manager(dispatcher.wakeups()))
+                bridge = worker.state.context.notification_bridge
+                deadline = monotonic() + 5
+                while not bridge.stats()["connected"] and monotonic() < deadline:
+                    sleep(0.05)
+                assert bridge.stats()["connected"]
+            assert registry.take_commands(node["id"], token) == []
+            completed = client.post(f"/api/v1/daemon-nodes/{node['id']}/events", headers={
+                "Authorization": f"Bearer {token}",
+            }, json={
+                "type": "run.completed", "commandId": first["id"], "runId": first["runId"],
+                "sessionId": tid, "agent": first["agent"], "exitCode": 0,
+                "roundResult": {"status": "done", "work": {"status": "done", "evidence": ["Replied"]}},
+            })
+            assert completed.status_code == 200, completed.text
+            deadline = monotonic() + 3
+            while monotonic() < deadline:
+                if client.get(f"{path}/queue").json()["messages"] == []:
+                    break
+                sleep(0.05)
+            assert client.get(f"{path}/queue").json()["messages"] == []
+            [second] = registry.take_commands(node["id"], token)
+            assert second["sessionId"] == tid
+            assert second["runId"] != first["runId"]
+            thread = app.state.session_store.get_session(tid)
+            assert [event["text"] for event in thread["events"] if event["type"] == "user.message"] == [
+                "First turn", "Second turn",
+            ]
 
 
 def test_queue_rejects_non_owner_and_invalid_payloads(tmp_path, monkeypatch):

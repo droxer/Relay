@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
 from dataclasses import fields
 from typing import Any, cast
@@ -135,6 +135,7 @@ from .bootstrap.stores import (
     build_stores,
 )
 from .collaboration.queue import ThreadQueueDispatcher
+from .core.thread_queue import THREAD_QUEUE_READY_PREFIX
 from .bootstrap.runtime import rate_limiter, task_scheduler_from_env
 
 load_backend_env()
@@ -167,7 +168,16 @@ def create_app(
         password_reset_store_for(stores.auth), mailer, config=password_reset_config_from_env()
     )
     notifier = KeyedEventNotifier()
-    notification_bridge = database_notification_bridge(stores.sessions, notifier)
+    thread_queue: ThreadQueueDispatcher | None = None
+
+    def publish_change(key: str) -> None:
+        if key.startswith(THREAD_QUEUE_READY_PREFIX):
+            if thread_queue is not None:
+                thread_queue.wake(key.removeprefix(THREAD_QUEUE_READY_PREFIX))
+        else:
+            notifier.publish(key)
+
+    notification_bridge = database_notification_bridge(stores.sessions, notifier, publish=publish_change)
     _publish_store_changes(stores, notifier)
     if settings.startup_repairs_enabled:
         requeue_capacity_waits(task_store=stores.tasks)
@@ -245,7 +255,8 @@ def create_app(
         for service in services:
             service.start()
         try:
-            async with mcp_http.run():
+            queue_wakeups = thread_queue.wakeups() if mode == "embedded" and thread_queue else nullcontext()
+            async with queue_wakeups, mcp_http.run():
                 yield
         finally:
             logger.info("Relay backend graceful shutdown started", pid=os.getpid(),
@@ -281,7 +292,11 @@ def create_app(
         artifact_indexer=artifact_indexer,
     )
     if scheduler is not None:
-        scheduler.thread_queue = ThreadQueueDispatcher(app.state.context)
+        thread_queue = ThreadQueueDispatcher(app.state.context)
+        scheduler.thread_queue = thread_queue
+        stores.daemon.set_thread_queue_listener(
+            publish_change, database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
+        )
     mcp_http = RelayMcpHttp(app.state.context)
     # Exact transport route precedes the web catch-all without swallowing the
     # existing /mcp/tokens and compatibility JSON routes.

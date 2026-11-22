@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -155,20 +156,62 @@ class ThreadQueueDispatcher:
     def __init__(self, ctx: Any):
         self.ctx = ctx
         self._cursor: str | None = None
+        self._wake: Callable[[str], None] | None = None
+
+    def wake(self, thread_id: str) -> None:
+        wake = self._wake
+        if wake is not None:
+            wake(thread_id)
+
+    @asynccontextmanager
+    async def wakeups(self) -> AsyncIterator[None]:
+        loop = asyncio.get_running_loop()
+        ready = asyncio.Event()
+        pending: dict[str, None] = {}
+        stopping = False
+
+        def enqueue(thread_id: str) -> None:
+            # Hints are coalesced and bounded. The periodic sweep covers overflow.
+            if not stopping and len(pending) < 100:
+                pending[thread_id] = None
+                ready.set()
+
+        def schedule(thread_id: str) -> None:
+            loop.call_soon_threadsafe(enqueue, thread_id)
+
+        async def drain() -> None:
+            while not stopping:
+                await ready.wait()
+                ready.clear()
+                while pending and not stopping:
+                    thread_id = next(iter(pending))
+                    pending.pop(thread_id)
+                    await self._dispatch_safely(thread_id)
+
+        self._wake = schedule
+        worker = asyncio.create_task(drain(), name="relay-thread-queue")
+        try:
+            yield
+        finally:
+            self._wake = None
+            stopping = True
+            ready.set()
+            # Let an in-flight claim finish before closing its stores.
+            await worker
 
     async def tick(self) -> None:
         candidates = await asyncio.to_thread(self.ctx.session_store.queued_thread_ids, after=self._cursor)
-        if not candidates:
-            self._cursor = None
-            return
         for thread_id in candidates:
             self._cursor = thread_id
-            try:
-                await self.dispatch(thread_id)
-            except Exception:  # noqa: BLE001 - isolate one damaged thread from the scheduler
-                logger.exception("Thread queue dispatch failed", thread_id=thread_id)
+            await self._dispatch_safely(thread_id)
         if len(candidates) < 100:
             self._cursor = None
+
+    async def _dispatch_safely(self, thread_id: str) -> None:
+        try:
+            await self.dispatch(thread_id)
+        except Exception:  # noqa: BLE001 - isolate one damaged thread from the scheduler
+            logger.exception("Thread queue dispatch failed", thread_id=thread_id)
 
     def follow_requested_send(self, thread_id: str) -> None:
         """Start (once per thread in this process) following a steered message."""

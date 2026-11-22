@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from threading import Lock
 from typing import Any
@@ -12,7 +12,8 @@ from typing import Any
 import psycopg
 from loguru import logger
 from psycopg import sql
-from sqlalchemy.engine import make_url
+
+from ..persistence.engine import postgres_conninfo
 
 CONTROL_PLANE_NOTIFICATION_CHANNEL = "relay_control_plane"
 
@@ -171,12 +172,10 @@ class PostgresNotificationBridge:
         notifier: KeyedEventNotifier,
         *,
         channel: str = CONTROL_PLANE_NOTIFICATION_CHANNEL,
+        publish: Callable[[str], None] | None = None,
     ) -> None:
-        url = make_url(database_url)
-        self.database_url = url.set(drivername="postgresql").render_as_string(
-            hide_password=False
-        )
-        self.notifier = notifier
+        self.conninfo = postgres_conninfo(database_url, purpose="The notification bridge")
+        self._publish = publish if publish is not None else notifier.publish
         self.channel = channel
         self._task: asyncio.Task[None] | None = None
         self._connected = False
@@ -213,7 +212,7 @@ class PostgresNotificationBridge:
         while True:
             try:
                 connection = await psycopg.AsyncConnection.connect(
-                    self.database_url, autocommit=True
+                    self.conninfo, autocommit=True
                 )
                 async with connection:
                     await connection.execute(
@@ -224,7 +223,7 @@ class PostgresNotificationBridge:
                     while True:
                         async for notification in connection.notifies(timeout=30):
                             self._notifications += 1
-                            self.notifier.publish(notification.payload)
+                            self._publish(notification.payload)
             except asyncio.CancelledError:
                 self._connected = False
                 raise
@@ -241,11 +240,11 @@ class PostgresNotificationBridge:
 
 
 def database_notification_bridge(
-    store: Any, notifier: KeyedEventNotifier
+    store: Any, notifier: KeyedEventNotifier, *, publish: Callable[[str], None] | None = None,
 ) -> PostgresNotificationBridge | None:
     engine = getattr(store, "engine", None)
     if engine is None or engine.dialect.name != "postgresql":
         return None
     return PostgresNotificationBridge(
-        engine.url.render_as_string(hide_password=False), notifier
+        engine.url.render_as_string(hide_password=False), notifier, publish=publish,
     )
