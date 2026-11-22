@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ..core.computer_identity import computer_id
+from ..core.daemon_records import ThreadRunActiveError
 from ..core.model_policy import policy_model
 from ..core.node_readiness import is_live_node
 from ..computer.access import is_personal_computer
@@ -29,6 +30,8 @@ def dispatch_reason_code(code: str) -> str:
 def dispatch_failure_code(error: Exception) -> str:
     if isinstance(error, AgentRoutingError):
         return dispatch_reason_code(error.code)
+    if isinstance(error, ThreadRunActiveError):
+        return "capacity_exhausted"
     if isinstance(error, PermissionError):
         return "agent_forbidden"
     message = str(error)

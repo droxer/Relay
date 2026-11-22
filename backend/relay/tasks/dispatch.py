@@ -12,7 +12,7 @@ from ..core.ids import new_database_id
 from ..core.workflow_selection import selected_workflow_id, predefined_style
 from .workflow import dispatch_task_workflow
 from ..core.models import AgentName
-from ..core.daemon_records import ComputerRunCapacityError
+from ..core.daemon_records import ComputerRunCapacityError, ThreadRunActiveError
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
 from .claims import dispatch_claim_active
@@ -652,7 +652,7 @@ class TaskDispatcher:
 
     def _dispatch_error_result(self, error: Exception) -> DispatchResult:
         code = dispatch_failure_code(error)
-        waiting_for_computer = isinstance(error, ComputerRunCapacityError)
+        waiting_for_computer = isinstance(error, (ComputerRunCapacityError, ThreadRunActiveError))
         released = bool(self.claim_id and code != "dispatch_failed")
         if released and self.claim_id:
             self.ctx.task_store.release_dispatch_claim(self.task["id"], self.claim_id)

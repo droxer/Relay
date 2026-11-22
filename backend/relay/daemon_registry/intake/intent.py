@@ -105,6 +105,17 @@ class RunIntentMixin(NodeBackendState):
         if images:
             self.registry.store.bind_attachments([image["id"] for image in images], session_id, actor_user_id or "")
         current_session = self.registry.store.get_session(session_id)
+        continues_task = (
+            existing_session is not None
+            and manifest is not None
+            and manifest.get("source") == "task"
+        )
+        dispatch_task_goal = request["taskGoal"]
+        if continues_task:
+            # Task dispatch can resume a Thread without a new human turn.
+            dispatch_task_goal = latest_user_turn_text(
+                current_session, fallback_goal=dispatch_task_goal,
+            ) or dispatch_task_goal
         if round_id and any(
             event.get("type") == "collaboration.round.started"
             and (event.get("manifest") or {}).get("roundId") == round_id
@@ -113,14 +124,13 @@ class RunIntentMixin(NodeBackendState):
             return (
                 latest_user_turn_text(current_session)
                 if request.get("decision")
-                else request["taskGoal"]
+                else dispatch_task_goal
             )
         decision = (
             request.get("decision")
             if isinstance(request.get("decision"), dict)
             else None
         )
-        dispatch_task_goal = request["taskGoal"]
         decision_kind = decision.get("kind") if decision else None
         prior_decision_kind = (
             _latest_decision_kind_after_latest_user(existing_session)
@@ -133,7 +143,9 @@ class RunIntentMixin(NodeBackendState):
             and existing_session is not None
             and request["taskGoal"] == existing_session.get("taskGoal")
         )
-        if existing_session and is_decision_dispatch:
+        if continues_task:
+            controller.continue_session(session_id)
+        elif existing_session and is_decision_dispatch:
             dispatch_task_goal = latest_user_turn_text(existing_session) or request["taskGoal"]
         elif existing_session and request.get("_resumedPreparedNewThread") is not True:
             stable_event_id = request.get("_admissionId") or round_id

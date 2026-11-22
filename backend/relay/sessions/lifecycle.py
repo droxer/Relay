@@ -115,7 +115,7 @@ class SessionLifecycleMixin(SessionControllerState):
         return session
 
     def continue_session(self, session_id: str) -> dict[str, Any]:
-        """Reopen a terminal thread because a new user contribution was accepted."""
+        """Reopen a terminal Thread for another round."""
         current = self.store.get_session(session_id)
         if current.get("status") not in ("completed", "failed", "cancelled"):
             return current

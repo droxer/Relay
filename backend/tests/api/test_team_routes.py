@@ -3036,7 +3036,7 @@ def test_task_recovery_preserves_round_verdict(
     assert store.get_task(task["id"]) == updated
 
 
-def _waiting_task_thread(recovery_team_thread):
+def _waiting_task_thread(recovery_team_thread, *, automation=False):
     from relay.sessions.controller import SessionController
 
     client, _team_controller, _team_session, _team, reviewer = recovery_team_thread
@@ -3063,7 +3063,18 @@ def _waiting_task_thread(recovery_team_thread):
         }
     )
     store = client.app.state.task_store
-    task = store.create_task({"title": "Rotate keys", "ownerUserId": ALICE})
+    fields = {"title": "Rotate keys", "ownerUserId": ALICE}
+    if automation:
+        routine = store.create_task({
+            **fields, "isRoutine": True, "routineState": "active", "assignedAgent": "codex",
+        })
+        task = store.create_triggered_occurrence(
+            routine["id"], run_date="2026-10-13", trigger_kind="schedule", depth=0,
+            context="",
+        )
+        assert task and task["sourceRoutineId"] == routine["id"]
+    else:
+        task = store.create_task(fields)
     store.link_session(task["id"], session["id"])
     controller.record_collaboration_round_started(
         session["id"],
@@ -3235,16 +3246,16 @@ def test_an_answer_cannot_be_a_discussion(recovery_team_thread):
     "verdict,expected",
     [("done", "review"), ("continue", "assigned"), ("blocked", "waiting_for_human")],
 )
+@pytest.mark.parametrize("automation", [False, True], ids=["task", "automation"])
 def test_replying_to_a_waiting_task_resumes_it(
-    recovery_team_thread, verdict, expected
+    recovery_team_thread, verdict, expected, automation,
 ):
-    client, session, store, task = _waiting_task_thread(recovery_team_thread)
+    client, session, store, task = _waiting_task_thread(recovery_team_thread, automation=automation)
     registry = client.app.state.registry
 
-    response = client.post(
-        f"/api/v1/threads/{session['id']}/messages",
-        json={"text": "Use the ops vault.", "idempotencyKey": "answer-1"},
-    )
+    path = f"/api/v1/threads/{session['id']}/messages"
+    answer = {"text": "Use the ops vault.", "idempotencyKey": "answer-1"}
+    response = client.post(path, json=answer)
 
     assert response.status_code == 202, response.text
     assert response.json()["collaborationRounds"][-1]["workScope"] == {
@@ -3255,9 +3266,16 @@ def test_replying_to_a_waiting_task_resumes_it(
     # Queued until the daemon reports the agent running — never still waiting.
     assert resumed["status"] in ("assigned", "running")
     assert "waitingReason" not in resumed
+    retry = client.post(path, json=answer)
+    assert retry.status_code == 202, retry.text
+    transcript = client.app.state.session_store.get_session(session["id"])
+    assert [event["text"] for event in transcript["events"] if event["type"] == "user.message"] == [
+        answer["text"],
+    ]
     # A team round runs its turns in sequence; answer each as it is queued.
     while commands := registry.take_commands("test_node_alice", "node_token"):
         command = commands[0]
+        assert command["state"]["task_goal"] == answer["text"]
         registry.handle_event(
             "test_node_alice",
             {

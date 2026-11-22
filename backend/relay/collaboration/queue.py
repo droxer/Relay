@@ -302,7 +302,7 @@ class ThreadQueueDispatcher:
                 {"userId": claim["owner"], "isAdmin": False},
             )
         except CollaborationError as exc:
-            error = str(exc)
+            error = exc
         paused = await asyncio.to_thread(self._finish, thread_id, message["id"], error)
         # Stop can arrive after our claim but before admission creates a run
         # for the cancellation route to find. Close that gap after admission.
@@ -315,7 +315,7 @@ class ThreadQueueDispatcher:
                 actor_user_id=claim["owner"],
             )
 
-    def _finish(self, thread_id: str, message_id: str, error: str | None) -> bool:
+    def _finish(self, thread_id: str, message_id: str, error: CollaborationError | None) -> bool:
         store = self.ctx.session_store
         with store.mutation_scope(thread_id):
             state = queue_state(store.get_session_header(thread_id))
@@ -323,13 +323,14 @@ class ThreadQueueDispatcher:
                 return False
             state.pop("sending", None)
             state.pop("leaseUntil", None)
-            state.pop("sendRequested", None)
-            if error:
-                state.update(paused=True, error=error)
-            else:
-                state["messages"] = [m for m in state["messages"] if m["id"] != message_id]
-                state.pop("error", None)
-            store.append_event(
-                thread_id, relay_event("session.queue", thread_id, {"queue": state}), hydrate_events=False
-            )
+            # Another round can acquire the Thread after the queue's claim.
+            # Keep the original message (and any explicit send) for the next exit.
+            if error is None or error.code != "thread_run_active":
+                state.pop("sendRequested", None)
+                if error is not None:
+                    state.update(paused=True, error=str(error))
+                else:
+                    state["messages"] = [m for m in state["messages"] if m["id"] != message_id]
+                    state.pop("error", None)
+            _save_queue(store, thread_id, state)
             return bool(state["paused"])
