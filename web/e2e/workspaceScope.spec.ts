@@ -244,6 +244,7 @@ test("Computer Tasks and Automations keep their files and Project work stays in 
 });
 
 test("global Tasks and Automations open Project records in place", async ({ page, context }) => {
+  await page.setViewportSize({ width: 1100, height: 800 });
   const { node, agent } = await setup(page, context);
   const p = await project(context.request, node, agent.id, "Global record routing");
   const records = [
@@ -255,7 +256,9 @@ test("global Tasks and Automations open Project records in place", async ({ page
     for (const record of records) {
       const collection = record.isRoutine ? "automations" : "tasks";
       await page.goto(`/${collection}`);
-      await page.getByRole("link", { name: record.title, exact: true }).click();
+      const titleLink = page.getByRole("link", { name: record.title, exact: true });
+      await expect(titleLink).toBeVisible();
+      await titleLink.click();
       await expect(page).toHaveURL(url => url.pathname === `/${collection}/${record.id}`);
       const detail = page.getByRole("dialog", { name: record.title, exact: true });
       await expect(detail).toBeVisible();
