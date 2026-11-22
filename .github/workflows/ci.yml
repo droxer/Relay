@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       python: ${{ steps.filter.outputs.python }}
+      typescript: ${{ steps.filter.outputs.typescript }}
       web: ${{ steps.filter.outputs.web }}
     steps:
       - uses: actions/checkout@v7
@@ -33,6 +34,8 @@ jobs:
       - name: Select affected suites
         id: filter
         run: python3 .github/scripts/ci_changes.py
+      - name: Test suite selection
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 
   lint:
     name: Pre-commit checks
@@ -62,6 +65,7 @@ jobs:
 
   typescript-tests:
     needs: changes
+    if: needs.changes.outputs.typescript == 'true' || needs.changes.outputs.web == 'true'
     name: TypeScript and web tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -76,6 +80,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Test vendored dependency fixes
+        if: needs.changes.outputs.typescript == 'true'
         run: npm run test:security-dependencies
       - name: Build packages and compile tests
         run: |
@@ -85,6 +90,7 @@ jobs:
           node tools/build-computer.mjs
           npx tsc -p packages/tsconfig.json
       - name: Test TypeScript packages
+        if: needs.changes.outputs.typescript == 'true'
         run: node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js
       - name: Build and test web
         if: needs.changes.outputs.web == 'true'
