@@ -3,7 +3,7 @@ import { useQueries, useQueryClient, type Query, type UseQueryResult } from "@ta
 import { listDaemonNodes, listSessionSummaries, listTasks } from "../api";
 import type { DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskSummary, SessionSummary, TasksResponse } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
-import { appendOlderSessionPage, mergeSessionHeadPage, THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
+import { appendOlderSessionPage, mergeSessionHeadPage, SESSIONS_QUERY_KEY, THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
 import { shareSessions } from "../lib/sessionEvents";
 import { isSessionStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
@@ -16,8 +16,8 @@ export const RELAY_QUERY_KEY = ["relay"] as const;
 const RELAY_KEY = RELAY_QUERY_KEY;
 export const NODES_QUERY_KEY = ["relay", "daemon-nodes"] as const;
 const NODES_KEY = NODES_QUERY_KEY;
-const SESSIONS_KEY = ["relay", "sessions"] as const;
-export const SESSIONS_QUERY_KEY = SESSIONS_KEY;
+const SESSIONS_KEY = SESSIONS_QUERY_KEY;
+export { SESSIONS_QUERY_KEY };
 const SESSION_PAGES_KEY = ["relay", "session-pages"] as const;
 type SessionPages = { headCursor: string | null; olderCursor?: string | null; homeTaskNeedsYou?: number | null };
 // A poll hands its page to structuralSharing, where the merge reads the

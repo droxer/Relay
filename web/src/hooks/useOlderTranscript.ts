@@ -1,8 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { readOlderTranscript } from "../api-client/sessions";
 import type { RelaySession } from "../types";
-import { SESSIONS_QUERY_KEY } from "./useRelayData";
+import { SESSIONS_QUERY_KEY } from "../lib/sessionPollMerge";
+import { fetchTranscriptPage } from "../lib/sessionSnapshotQuery";
 
 export function useOlderTranscript(sessionId: string | undefined) {
   const client = useQueryClient();
@@ -25,13 +25,7 @@ export function useOlderTranscript(sessionId: string | undefined) {
     setPendingId(sessionId);
     setFailedId(undefined);
     try {
-      const page = await client.fetchQuery({
-        queryKey: ["transcript-history", sessionId, before],
-        queryFn: ({ signal }) => readOlderTranscript(sessionId, before, signal),
-        staleTime: 60_000,
-        gcTime: 2 * 60_000,
-        retry: false,
-      });
+      const page = await fetchTranscriptPage(client, sessionId, before);
       if (active.current !== sessionId || getSession()?.eventStart !== before) return;
       beforeInsert();
       client.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, rows => rows?.map(row =>

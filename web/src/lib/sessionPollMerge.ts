@@ -3,6 +3,8 @@ import { omit } from "./omit.ts";
 
 type RelayEvent = RelaySession["events"][number];
 
+export const SESSIONS_QUERY_KEY = ["relay", "sessions"] as const;
+
 /**
  * A session as the summary poll leaves it. `summaryEventCount` is the event
  * count the last summary reported: the summary carries status but not the
@@ -130,7 +132,7 @@ export function mergeSessionSnapshotIntoSessions(
   if (snapshot.eventStart !== undefined) {
     const previousStart = existing.eventStart ?? 0;
     const previousEnd = observedSessionEventCount(existing);
-    if (previousStart > snapshotEnd) return current;
+    if (previousStart > snapshotEnd || (existing.events.length > 0 && previousEnd < snapshot.eventStart)) return current;
     if (previousStart < snapshot.eventStart && previousEnd >= snapshot.eventStart) {
       prefix = existing.events.slice(0, snapshot.eventStart - previousStart);
     }

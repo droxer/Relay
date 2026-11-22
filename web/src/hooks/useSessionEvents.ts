@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RelayApiError } from "../api";
-import { mergeSessionSnapshotIntoSessions, observedSessionEventCount } from "../lib/sessionPollMerge";
+import { observedSessionEventCount, SESSIONS_QUERY_KEY, sessionTrailsSummary } from "../lib/sessionPollMerge";
 import type { RelaySession } from "../types";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "../lib/sessionEvents";
 import { mergeSessionEventsIntoSessions, SessionEventIdIndex } from "../lib/sessionEventMerge";
 import { isTerminalSessionStatus, lastSessionEventId, sessionEventsUrl } from "../lib/sessionEventStream";
 import { browserFrameSchedulerHost, createFrameScheduler } from "../lib/frameScheduler";
 import { setSessionStreamConnected } from "../lib/sessionStreamStatus";
-import { fetchSessionSnapshot } from "../lib/sessionSnapshotQuery";
+import { fetchSessionSnapshot, reconcileSessionSnapshot } from "../lib/sessionSnapshotQuery";
 import { cacheThreadQueue, EMPTY_THREAD_QUEUE } from "../lib/threadQueue";
-
-const SESSIONS_KEY = ["relay", "sessions"] as const;
 
 const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
@@ -43,14 +41,14 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
     const controller = new AbortController();
     const source = new EventSource(sessionEventsUrl(
       sessionId,
-      lastSessionEventId(queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY), sessionId),
+      lastSessionEventId(queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY), sessionId),
     ), {
       withCredentials: true,
     });
 
     // Track ids we've already merged so dedup is O(1) per frame rather than a
     // linear scan of the session's growing event list on every streamed delta.
-    const cached = queryClient.getQueryData<RelaySession[]>(SESSIONS_KEY)
+    const cached = queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)
       ?.find((session) => session.id === sessionId);
     const eventIds = new SessionEventIdIndex(cached?.events ?? []);
     const queued = new Set<string>();
@@ -63,7 +61,7 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       if (pending.length === 0) return;
       const events = pending;
       pending = [];
-      const sessions = queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, (sessions) => {
+      const sessions = queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (sessions) => {
         const result = mergeSessionEventsIntoSessions(
           sessions,
           sessionId,
@@ -151,15 +149,15 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
       reconnectTimer = setTimeout(() => setConnection(value => value + 1), delay);
       // HTTP remains a fallback when SSE itself is unavailable. Also lets us
       // distinguish a temporary outage from revoked access or a deleted thread.
-      void fetchSessionSnapshot(queryClient, sessionId, { reuseRecent: true }).then(snapshot => {
-        if (controller.signal.aborted) return;
-        if (snapshot.transcriptRevision) cacheThreadQueue(queryClient, sessionId, {
-          ...(snapshot.messageQueue ?? EMPTY_THREAD_QUEUE), eventCount: observedSessionEventCount(snapshot),
-        });
-        queryClient.setQueryData<RelaySession[]>(SESSIONS_KEY, current =>
-          mergeSessionSnapshotIntoSessions(current ?? [], snapshot, applySessionEventUnchecked, applySessionEventsUnchecked));
+      void fetchSessionSnapshot(queryClient, sessionId, { reuseRecent: true }).then(async snapshot => {
+        const merged = await reconcileSessionSnapshot(queryClient, snapshot, controller.signal);
+        if (!controller.signal.aborted && merged && !sessionTrailsSummary(merged) && snapshot.transcriptRevision) {
+          cacheThreadQueue(queryClient, sessionId, {
+            ...(snapshot.messageQueue ?? EMPTY_THREAD_QUEUE), eventCount: observedSessionEventCount(snapshot),
+          });
+        }
       }).catch(error => {
-        if (error instanceof RelayApiError && [401, 403, 404].includes(error.status)) {
+        if (!controller.signal.aborted && error instanceof RelayApiError && [401, 403, 404].includes(error.status)) {
           clearTimeout(reconnectTimer);
         }
       });
