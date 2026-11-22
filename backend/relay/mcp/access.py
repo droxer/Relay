@@ -2,7 +2,7 @@
 
 from typing import Any
 from ..core.computer_identity import computer_id
-from ..core.project_roles import command_project_access
+from ..core.project_roles import command_project_access, project_lead_id
 from ..persistence.account.mcp_tokens import DatabaseMcpTokenStore
 from ..persistence.sql import names_no_uuid_row
 from .errors import McpError
@@ -12,31 +12,32 @@ def token_store(ctx: Any) -> DatabaseMcpTokenStore:
     return DatabaseMcpTokenStore(ctx.project_store.engine)
 
 
+def active_command(ctx: Any, command_id: str) -> dict[str, Any]:
+    record = ctx.daemon_store.get_command(command_id)
+    active = (
+        ctx.daemon_store.active_run_request_for_session_any_node(record["command"]["sessionId"])
+        if record else None
+    )
+    if (
+        not record or record["status"] != "dispatched" or not active
+        or active.get("currentCommandId") != command_id or active.get("status") != "running"
+    ):
+        raise McpError(401, "This Relay run has ended.")
+    return record["command"]
+
+
 def authorize(ctx: Any, token: str | None) -> dict[str, Any]:
     grant = token_store(ctx).authenticate(token)
     if not grant or not ctx.auth_store.list_users(user_ids=[grant["ownerUserId"]]):
         raise McpError(401, "Relay MCP token is invalid, revoked, or expired.")
     if grant.get("commandId"):
-        command = ctx.daemon_store.get_command(grant["commandId"])
-        active = (
-            ctx.daemon_store.active_run_request_for_session_any_node(command["command"]["sessionId"])
-            if command
-            else None
-        )
-        if (
-            not command
-            or command["status"] != "dispatched"
-            or not active
-            or active.get("currentCommandId") != grant["commandId"]
-            or active.get("status") != "running"
-        ):
-            raise McpError(401, "This Relay run has ended.")
+        command = active_command(ctx, grant["commandId"])
         # A run token carries its Agent's Project access: the lead may manage
         # Project work, while other roster members only read it.
-        scope = command_project_access(command["command"].get("state", {}), command["command"].get("logicalAgentId"))
-        session = ctx.session_store.get_session_header(command["command"]["sessionId"])
+        scope = command_project_access(command.get("state", {}), command.get("logicalAgentId"))
+        session = ctx.session_store.get_session_header(command["sessionId"])
         project_id = session.get("projectId")
-        execution_scope = command["command"].get("workspaceScope")
+        execution_scope = command.get("workspaceScope")
         if execution_scope and (execution_scope.get("computerId") != grant.get("computerId")
                                 or execution_scope.get("projectId") != project_id):
             raise McpError(403, "Execution workspace scope mismatch.")
@@ -44,7 +45,7 @@ def authorize(ctx: Any, token: str | None) -> dict[str, Any]:
             raise McpError(403, "Project workspace scope mismatch.")
         return {**grant, "workspaceProjectId": project_id, "projectIds": [project_id] if project_id else [],
                 "access": scope[1] if scope else "read",
-                "agentId": command["command"].get("logicalAgentId")}
+                "agentId": command.get("logicalAgentId")}
     if grant.get("computerId") and not any(
         computer_id(node) == grant["computerId"]
         and node.get("userId") == grant["ownerUserId"]
@@ -64,9 +65,7 @@ def may_manage(grant: dict[str, Any]) -> bool:
 def assert_project_manage(grant: dict[str, Any], project: dict[str, Any]) -> None:
     agent_id = grant.get("agentId")
     if not (grant.get("commandId") and may_manage(grant) and agent_id
-            and project.get("leadAgentId") == agent_id
-            and any(m.get("agentId") == agent_id and m.get("enabled", True)
-                    for m in project.get("members") or [])):
+            and project_lead_id(project) == agent_id):
         raise McpError(403, "project_manager_required")
 
 

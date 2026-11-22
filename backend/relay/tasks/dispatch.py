@@ -92,12 +92,13 @@ class TaskDispatcher:
         self.claim_id: str | None = None
 
     async def start(self) -> DispatchResult | None:
-        node, result = await run_in_threadpool(self._prepare)
+        node, result = await run_in_threadpool(self.prepare)
         if node is None:
             return result
-        return await self._dispatch(node)
+        return await self.dispatch_prepared(node)
 
-    def _prepare(self) -> tuple[dict[str, Any] | None, DispatchResult | None]:
+    def prepare(self) -> tuple[dict[str, Any] | None, DispatchResult | None]:
+        """Check and claim work before asynchronous daemon admission."""
         self._prepared_node: dict[str, Any] | None = None
         result = self._prepare_dispatch()
         return self._prepared_node, result
@@ -539,7 +540,7 @@ class TaskDispatcher:
         self.claim_id = (self.task.get("dispatchClaim") or {}).get("id")
         return None
 
-    async def _dispatch(self, node: dict[str, Any]) -> DispatchResult:
+    async def dispatch_prepared(self, node: dict[str, Any]) -> DispatchResult:
         try:
             request = await run_in_threadpool(self._run_request, node)
             session = await self.ctx.backend.run(node["id"], request)

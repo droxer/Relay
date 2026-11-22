@@ -12,7 +12,7 @@ from .access import may_manage
 from .catalog import TOOL_OPERATIONS, WORK_OPERATIONS, tool_definitions
 from .errors import McpError
 from .operations import invoke, list_projects
-from .work import invoke_work
+from .work import invoke_work, start_project_task, stop_project_task
 
 CURRENT_GRANT: ContextVar[dict[str, Any] | None] = ContextVar("relay_mcp_grant", default=None)
 MAX_RESULT_BYTES = 1024 * 1024
@@ -38,6 +38,10 @@ def create_server(ctx: Any) -> StreamableHTTPSessionManager:
                 raise McpError(400, "Unknown Relay MCP tool.")
             if operation == "projects":
                 result = await run_in_threadpool(list_projects, ctx, grant)
+            elif operation == "start_task":
+                result = await start_project_task(ctx, grant, arguments)
+            elif operation == "stop_task":
+                result = await run_in_threadpool(stop_project_task, ctx, grant, arguments)
             elif operation in WORK_OPERATIONS:
                 result = await run_in_threadpool(invoke_work, ctx, grant, operation, arguments)
             else:

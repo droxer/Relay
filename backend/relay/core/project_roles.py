@@ -6,23 +6,31 @@ Execution roles remain independent of project leadership.
 """
 from typing import Any
 
+from .role_charters import role_charter
+
 # Earlier releases stored the responsibility as a member role. It is still
 # accepted on the wire and upgraded wherever a roster is read.
 LEGACY_PROJECT_MANAGER_ROLE = "project_manager"
 LEGACY_MANAGER_FALLBACK_ROLE = "planner"
-PROJECT_MANAGER_RESPONSIBILITIES = (
+_LEGACY_MANAGER_RESPONSIBILITIES = (
     "Keep the Project understandable: explain its goal, progress, backlog and next actions; "
     "read current records, coordinate its Agents, and propose Task changes for the owner."
+)
+PROJECT_MANAGER_RESPONSIBILITIES = (
+    f"{_LEGACY_MANAGER_RESPONSIBILITIES} Supervise Project work. Assign Agents or "
+    "Workflows, monitor progress, and start or stop Task execution through Relay."
 )
 # Fields that earlier releases stored on the Project beside the roster.
 RETIRED_MANAGER_FIELDS = ("managerInitialized",)
 
 
 def upgrade_member(member: dict[str, Any]) -> dict[str, Any]:
-    """Map the legacy ``project_manager`` role onto the flag and a real role."""
-    if member.get("role") != LEGACY_PROJECT_MANAGER_ROLE:
-        return member
-    return {**member, "role": LEGACY_MANAGER_FALLBACK_ROLE, "projectManager": True}
+    """Upgrade the legacy role and replace the old generated member brief."""
+    if member.get("role") == LEGACY_PROJECT_MANAGER_ROLE:
+        member = {**member, "role": LEGACY_MANAGER_FALLBACK_ROLE, "projectManager": True}
+    if member.get("responsibilities") == _LEGACY_MANAGER_RESPONSIBILITIES:
+        member = {**member, "responsibilities": role_charter(member.get("role"))}
+    return member
 
 
 def upgrade_members(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -39,6 +47,27 @@ def project_member_ids(project: dict[str, Any]) -> set[str]:
         for member in project.get("members", [])
         if member.get("enabled", True)
     }
+
+
+def project_lead_id(project: dict[str, Any]) -> str | None:
+    lead_id = project.get("leadAgentId")
+    return lead_id if lead_id and lead_id in project_member_ids(project) else None
+
+
+def with_project_lead_discussion(session: dict[str, Any]) -> dict[str, Any]:
+    # Earlier independent discussions were the only Project Threads created
+    # with neither a goal nor a workspace path. Both fields survive renames.
+    if (
+        not session.get("projectLeadDiscussion")
+        and session.get("projectId")
+        and session.get("workspaceLayout") == "project"
+        and session.get("workspacePath") == ""
+        and session.get("taskGoal") == ""
+        and not session.get("ownerAgentId")
+        and not session.get("teamId")
+    ):
+        return {**session, "projectLeadDiscussion": True}
+    return session
 
 
 def project_manager_id(members: list[dict[str, Any]]) -> str | None:
@@ -73,18 +102,17 @@ def manager_roster(members: list[dict[str, Any]], agent_id: str | None, default_
         else:
             result.append(rest)
     if agent_id and not found:
+        role = default_roles.get(agent_id, LEGACY_MANAGER_FALLBACK_ROLE)
         result.append({
-            "agentId": agent_id, "role": default_roles.get(agent_id, LEGACY_MANAGER_FALLBACK_ROLE),
-            "enabled": True, "projectManager": True, "responsibilities": PROJECT_MANAGER_RESPONSIBILITIES,
+            "agentId": agent_id, "role": role,
+            "enabled": True, "projectManager": True, "responsibilities": role_charter(role),
         })
     return result
 
 
 def manager_run_context(project: dict[str, Any], agent_id: str | None) -> dict[str, Any] | None:
     """Resolve capability from the enabled Project role, independently of a Thread."""
-    holder = project.get("leadAgentId")
-    if not any(m["agentId"] == holder and m.get("enabled", True) for m in project.get("members", [])):
-        return None
+    holder = project_lead_id(project)
     if not holder or agent_id != holder:
         return None
     return {"projectId": project["id"], "agentId": holder, "bindingRevision": project["version"]}

@@ -114,7 +114,7 @@ describe("composer agent selection", () => {
     const app = await readFile(resolve("web/src/hooks/useThreadDispatch.ts"), "utf8");
     assert.match(
       app,
-      /resolveThreadMessageAddress\(\{[\s\S]*?defaultAgentId: projectRoomRound \|\| pendingTeam \|\| roundTeam\.teamId[\s\S]*?: activeLogicalAgentId/,
+      /resolveThreadMessageAddress\(\{[\s\S]*?defaultAgentId: projectDefaultRecipient \|\| pendingTeam \|\| roundTeam\.teamId[\s\S]*?: activeLogicalAgentId/,
     );
     assert.match(app, /addressAgentIds: messageAddress\.addressAgentIds/);
     assert.match(app, /projectId: activeProject\.id/);
@@ -182,12 +182,11 @@ describe("composer agent selection", () => {
     // used to live in.
     const dispatch = await readFile(resolve("web/src/hooks/useThreadDispatch.ts"), "utf8");
 
-    // Room target means "no default agent", which the backend expands to the
-    // whole roster; a picked member routes the round to them alone. An empty
-    // room (no crew, no one in the thread yet) falls back to the picked agent.
+    // Relay expands the default to the Lead role for Lead discussions and to
+    // the whole roster for an ordinary project thread.
     assert.match(
       dispatch,
-      /const projectRoomRound = activeProject\s*\?\s*projectRoomTarget && projectRoomAgentIds\(activeProject, activeSession\)\.length > 0/,
+      /const projectDefaultRecipient = projectRoomTarget && \(\s*\(sessionId && projectLeadDiscussion\)\s*\|\|\s*\(activeProject && projectRoomAgentIds\(activeProject, activeSession\)\.length > 0\)/,
     );
     // The pick itself lives in the composer target store; App only wires the
     // composer's handlers to it (the store's own tests pin the flag values).

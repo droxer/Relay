@@ -1,10 +1,9 @@
-# Project Lead Agent and Relay MCP
+# Project Lead and Relay MCP
 
-The Project Lead is the ordinary Logical Agent selected by `leadAgentId`.
-It coordinates the roster and manages the Project beside its execution role.
-Changing the lead transfers management without changing any Agent's role or
-identity. Only the owner
-assigns it, and it must be an enabled member on the Project's Computer.
+Project Lead is the role that supervises the Project's work and coordinates
+its roster.
+The owner assigns an enabled Project Agent on the Project's Computer using
+`leadAgentId`. That Agent takes on Lead duties alongside its execution role.
 
 The lead is the only source of management authority. Historical
 `managerAgentId` and member `projectManager` fields are derived aliases for
@@ -27,19 +26,20 @@ days, what needs me, next tasks, plan work) that open a new Thread with an
 unsent question drafted in its composer.
 
 Each discussion appears in Threads, where the owner can reopen it and continue
-the conversation. A new discussion starts with the current lead as its first
-participant, and the dashboard opens its composer with that Agent selected.
-Each message goes to whoever it addresses. After a handover, new discussions
-start with the new lead and earlier Threads retain their history. The former
-holder can still be addressed as an ordinary Agent.
+the conversation. A new discussion starts with the current Lead as its first
+participant and selects the Project Lead role in the composer. Relay resolves
+messages addressed to the role against the current assignment when dispatching
+them, including queued follow-ups. After a handover, the next message to the
+role reaches the new Lead in the same Thread, with its conversation history.
+The owner can still select or mention individual Agents.
 
-The role reads fresh Project records, explains progress and the backlog, manages
-Project Tasks and Automations, and saves reusable Project Workflows through Relay
-MCP. It may also stage batch Task changes. The owner reviews a proposal in the
-Thread, edits individual fields, selects operations, and applies or dismisses it.
-Proposal-created Tasks enter backlog.
-Apply uses normal domain validation, revision checks, idempotency and an atomic
-transaction. It cannot silently start work, accept an outcome or reconcile a run.
+The role reads live Project records, updates the backlog, assigns work, reviews
+evidence, starts and stops Task execution, manages Automations, and saves
+reusable Workflows through Relay MCP. The Lead can also stage batch Task changes.
+The owner reviews proposals in the Thread, selects operations, and applies or
+dismisses them. Proposal application uses ordinary validation, revision checks
+and idempotency, and leaves new Tasks in backlog. The owner accepts outcomes
+and reconciles runs.
 
 ## Capability resolution
 
@@ -57,7 +57,8 @@ Every other enabled roster member reads the Project through the same tools.
 Its run carries a `project_reader` scope (`project_reader_context`), so it can
 read the overview, Tasks, Automations, review evidence, activity and Threads, but never
 change Project work: the run token's grant reads `access: "read"`, `tools/list`
-omits `relay_propose_task_changes`, and a propose call answers 403
+omits Lead-only tools including `relay_propose_task_changes`, `relay_start_task`
+and `relay_stop_task`. An unauthorized call answers 403
 `project_manager_required`. Only the holder's `project_manager` scope grants
 `access: "manage"`. An Agent assigned Project work without being on the roster
 gets neither Project read nor management authority. It cannot use standalone
@@ -223,6 +224,14 @@ adapters over the same Python operations for older clients and workspace helpers
 - `relay_list_tasks`, `relay_get_task`, `relay_task_review`: current Task records
   and evidence, including revisions for proposed edits.
 - `relay_create_task`, `relay_update_task`, `relay_delete_task`: direct Task management.
+- `relay_start_task` starts an existing Project Task from the current Lead's run.
+  Use `taskId` and optionally `projectId`. Relay uses the saved assignment and
+  enforces prerequisites, capacity and Workflow approval gates. The result
+  contains the Task, dispatch outcome, and Thread ID when available.
+- `relay_stop_task` requests a stop for a Project Task's active execution.
+  Use `taskId`, optional `projectId` and optional `reason`. Relay keeps the
+  Task and its assignment. `stop_requested` indicates that the daemon still
+  needs to confirm exit. `settled` and `idle` report the other outcomes.
 - `relay_list_automations`, `relay_get_automation`, `relay_create_automation`,
   `relay_update_automation`, `relay_delete_automation`: Automation records,
   schedules/triggers, assignment, pause/resume and deletion.
@@ -240,23 +249,23 @@ adapters over the same Python operations for older clients and workspace helpers
 Work lists and creates accept optional `projectId`; omitting it selects the admitted Project for a Project run and the current
 Computer for a standalone run. Get/update/delete use `taskId` or `automationId`; the stored record's Project
 determines authority even when no `projectId` was supplied. Create/update take
-`fields`; Automation fields include `routineTriggers` and `routineState`
+`fields`. Use `assignedAgentId` or `assignedWorkflowId` to assign Project work.
+Automation fields include `routineTriggers` and `routineState`
 (`active`/`paused`). Lists are bounded to 100 snapshots with a keyset `nextCursor`.
 Standalone Agents may manage only their Computer's standalone work. Enabled Project roster members may read
-Project work; only the admitted Project Lead may write it or stage proposals.
+Project work. The admitted Project Lead may write it, control Task execution
+and stage proposals.
 Local Computer/owner grants never act as the Project Lead. A Project reader cannot use mutation tools to create standalone work. Writes cannot change resource
-ownership or move work between Projects. There is no Apply, acceptance,
-run-start, or reconciliation MCP tool. Browser owner authentication is required
-for Apply. Assigning ready work or activating an Automation may let the scheduler
+ownership or move work between Projects. Proposal application, acceptance and
+execution reconciliation require browser owner authentication. Assigning ready
+work or activating an Automation may let the scheduler
 dispatch it through the ordinary daemon path.
 
-Once a Task or Automation has an `assignedAgentId`, MCP updates cannot replace
-or clear it, or substitute a Team, even for the Project Lead or an owner token.
-Such calls return `task_assignment_approval_required` and apply none of the
-requested fields. Updates that keep the same Agent remain allowed. The owner
-can explicitly edit the assignment in Relay; for Project Tasks, an Agent may
-instead stage a proposal and wait for the owner to Apply it. An unavailable
-assigned Agent remains assigned; dispatch does not select a replacement.
+Replacing or clearing a saved Agent or Workflow assignment requires owner
+approval. MCP updates that attempt it return
+`task_assignment_approval_required`. The owner can edit the assignment in
+Relay. An Agent can also propose changing a Project Task's Agent assignment
+for the owner to apply. An unavailable assigned Agent remains assigned.
 
 ## Verification and rollout
 

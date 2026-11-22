@@ -15,6 +15,8 @@ TOOL_OPERATIONS = {
     "relay_get_thread": "thread",
     "relay_propose_task_changes": "propose",
     "relay_create_task": "create_task",
+    "relay_start_task": "start_task",
+    "relay_stop_task": "stop_task",
     "relay_update_task": "update_task",
     "relay_delete_task": "delete_task",
     "relay_list_automations": "automations",
@@ -40,6 +42,17 @@ _DESCRIPTIONS = {
 _TEXT = {"type": "string"}
 _NULLABLE_TEXT = {"type": ["string", "null"]}
 _RESOURCE_ID = {"type": "string", "minLength": 1, "maxLength": 128}
+_TASK_CONTROL_FIELDS = {"taskId": _RESOURCE_ID, "projectId": _RESOURCE_ID}
+START_TASK_INPUT = {
+    "type": "object",
+    "properties": _TASK_CONTROL_FIELDS,
+    "required": ["taskId"],
+    "additionalProperties": False,
+}
+STOP_TASK_INPUT = {
+    **START_TASK_INPUT,
+    "properties": {**_TASK_CONTROL_FIELDS, "reason": {"type": "string", "maxLength": 2000}},
+}
 _WORKFLOW_REQUIREMENTS = {
     "type": "array", "minItems": 1, "maxItems": 32,
     "items": {"type": "string", "minLength": 1, "maxLength": 2000},
@@ -80,6 +93,7 @@ WORK_FIELDS = {
     "tags": {"type": "array", "maxItems": 50, "items": {"type": "string", "maxLength": 100}},
     "assignedAgentId": _NULLABLE_TEXT,
     "assignedTeamId": _NULLABLE_TEXT,
+    "assignedWorkflowId": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
     "status": {"enum": ["backlog", "assigned", "blocked", "cancelled"]},
     "blockerReason": {"type": "string", "maxLength": 2000},
 }
@@ -171,7 +185,30 @@ def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
     tools = []
     properties: dict[str, Any]
     for name, operation in TOOL_OPERATIONS.items():
-        if operation in ("propose", "create_workflow") and not may_manage:
+        if operation in ("propose", "create_workflow", "start_task", "stop_task") and not may_manage:
+            continue
+        if operation == "start_task":
+            tools.append(Tool(
+                name=name,
+                description=(
+                    "Start an existing Task as the current Project Lead. Relay uses its saved assignment "
+                    "and enforces prerequisites, capacity and Workflow approval gates. "
+                    "Returns the dispatch outcome and the Thread ID when started."
+                ),
+                inputSchema=START_TASK_INPUT,
+                annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            ))
+            continue
+        if operation == "stop_task":
+            tools.append(Tool(
+                name=name,
+                description=(
+                    "Request that an active Project Task execution stop. Only the current Project Lead "
+                    "can request a stop. The Task and its assignment are retained."
+                ),
+                inputSchema=STOP_TASK_INPUT,
+                annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            ))
             continue
         if operation == "create_workflow":
             tools.append(Tool(
@@ -202,7 +239,7 @@ def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
                 required.append("fields")
             tools.append(Tool(
                 name=name,
-                description=f"{verb.title()} {'an Automation' if kind == 'automation' else 'a Task'}. Standalone runs manage work only on their Computer; Project runs stay in their Project and only its Lead may change Project work. An existing assigned Agent cannot be replaced, cleared, or changed to a Team without owner approval in Relay. For Project Tasks, stage a proposal instead. Acceptance and execution recovery remain owner-only.",
+                description=f"{verb.title()} {'an Automation' if kind == 'automation' else 'a Task'}. Standalone runs manage work only on their Computer. The Project Lead manages work in its Project and can assign an Agent or Project Workflow. Changes to a saved Agent or Workflow assignment require owner approval. Acceptance and execution recovery remain owner-only.",
                 inputSchema={"type": "object", "properties": properties, "required": required, "additionalProperties": False},
                 annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=verb == "delete"),
             ))

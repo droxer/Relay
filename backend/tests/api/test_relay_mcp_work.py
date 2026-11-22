@@ -23,12 +23,141 @@ def credential(app, node, command=None):
     return response.json()["token"]
 
 
-def call(client, token, name, **arguments):
-    response = _rpc(client, token, "tools/call", {"name": name, "arguments": arguments})
+def call(client, token, tool_name, **arguments):
+    response = _rpc(client, token, "tools/call", {"name": tool_name, "arguments": arguments})
     assert response.status_code == 200, response.text
     result = response.json()["result"]
     assert not result.get("isError"), result
     return result["structuredContent"]
+
+
+def test_current_lead_can_start_a_project_task_with_its_saved_assignment(managed_env):
+    app, owner, node, project, former, worker = managed_env
+    _join(managed_env, worker)
+    _ready(app, node, max_runs=3)
+    discussion, lead_command = _start(managed_env)
+    lead_token = credential(app, node, lead_command)
+    task = owner.post("/api/v1/tasks", json={
+        "title": "Implement approved plan", "projectId": project["id"], "assignedAgentId": worker["id"],
+    }).json()
+    with TestClient(app) as client:
+        names = {tool["name"] for tool in _rpc(client, lead_token, "tools/list").json()["result"]["tools"]}
+        assert "relay_start_task" in names
+        started = call(client, lead_token, "relay_start_task", taskId=task["id"])
+        assert started["dispatch"]["state"] == "started", started["dispatch"]
+        assert started["task"]["assignedAgentId"] == worker["id"]
+        command = _take_command(app, node)
+        assert command["sessionId"] == started["threadId"] != discussion["threadId"]
+        assert command["logicalAgentId"] == worker["id"]
+        replay = call(client, lead_token, "relay_start_task", taskId=task["id"])
+        assert replay["dispatch"]["code"] == "task_execution_active"
+        assert len(app.state.task_store.get_task(task["id"])["linkedSessionIds"]) == 1
+        worker_token = credential(app, node, command)
+        names = {tool["name"] for tool in _rpc(client, worker_token, "tools/list").json()["result"]["tools"]}
+        assert "relay_start_task" not in names
+        retry_task = owner.post("/api/v1/tasks", json={
+            "title": "Follow-up", "projectId": project["id"], "assignedAgentId": former["id"],
+        }).json()
+        args = {"taskId": retry_task["id"]}
+        assert _rpc(client, worker_token, "tools/call", {
+            "name": "relay_start_task", "arguments": args,
+        }).json()["result"]["isError"]
+        manager_api._assign(owner, project, worker)
+        stale = _rpc(client, lead_token, "tools/call", {"name": "relay_start_task", "arguments": args}).json()["result"]
+        assert stale["isError"]
+        assert stale["content"][0]["text"] == "project_manager_required"
+        _complete(app, node, lead_command, discussion["threadId"])
+        _complete(app, node, command, command["sessionId"])
+        _, next_lead = _start(managed_env, key="new-lead")
+        next_token = credential(app, node, next_lead)
+        assert call(client, next_token, "relay_start_task", **args)["dispatch"]["state"] == "started"
+        assert _take_command(app, node)["logicalAgentId"] == former["id"]
+
+
+def test_lead_task_start_applies_prerequisites_and_project_scope(managed_env):
+    app, owner, node, project, *_ = managed_env
+    _, command = _start(managed_env)
+    lead_token = credential(app, node, command)
+    outside = owner.post("/api/v1/tasks", json={"title": "Outside the project"}).json()
+    blocker = owner.post("/api/v1/tasks", json={"title": "First", "projectId": project["id"]}).json()
+    task = owner.post("/api/v1/tasks", json={"title": "Second", "projectId": project["id"]}).json()
+    app.state.task_store.set_task_prerequisites(task["id"], [blocker["id"]], actor_user_id=node["userId"])
+    with TestClient(app) as client:
+        for token, task_id, expected in (
+            (lead_token, outside["id"], "Project scope mismatch."),
+            (lead_token, task["id"], "task_prerequisites_open"),
+            (credential(app, node), task["id"], "project_manager_required"),
+        ):
+            result = _rpc(client, token, "tools/call", {
+                "name": "relay_start_task", "arguments": {"taskId": task_id},
+            }).json()["result"]
+            assert result["isError"]
+            assert result["content"][0]["text"] == expected
+        assert not app.state.task_store.get_task(task["id"])["linkedSessionIds"]
+
+
+def test_lead_can_plan_delegate_and_stop_project_work(managed_env):
+    app, owner, node, project, _, worker = managed_env
+    _join(managed_env, worker)
+    _ready(app, node, max_runs=3)
+    _, lead_command = _start(managed_env)
+    token = credential(app, node, lead_command)
+    with TestClient(app) as client:
+        task = call(client, token, "relay_create_task", fields={"title": "Prepare release"})["task"]
+        task_id = task["id"]
+        planned = call(client, token, "relay_update_task", taskId=task_id, fields={
+            "priority": "high", "assignedAgentId": worker["id"],
+        })["task"]
+        assert planned["priority"] == "high"
+        assert planned["assignedAgentId"] == worker["id"]
+        started = call(client, token, "relay_start_task", taskId=task_id)
+        assert started["dispatch"]["state"] == "started", started["dispatch"]
+        worker_run = _take_command(app, node)
+        worker_token = credential(app, node, worker_run)
+        assert worker_run["logicalAgentId"] == worker["id"]
+        denied = _rpc(client, worker_token, "tools/call", {
+            "name": "relay_stop_task", "arguments": {"taskId": task_id},
+        }).json()["result"]
+        assert denied["isError"]
+        assert denied["content"][0]["text"] == "project_manager_required"
+        stopped = call(client, token, "relay_stop_task", taskId=task_id, reason="Revisit release scope")
+        assert stopped["threadId"] == worker_run["sessionId"]
+        assert stopped["outcome"] == "stop_requested"
+        assert call(client, token, "relay_stop_task", taskId=task_id)["outcome"] == "stop_requested"
+        stop = _take_command(app, node)
+        assert stop["type"] == "run.cancel"
+        assert stop["commandId"] == worker_run["id"]
+        assert stop["reason"] == "Revisit release scope"
+        current = owner.get(f"/api/v1/tasks/{task_id}").json()
+        assert current["assignedAgentId"] == worker["id"]
+        assert app.state.daemon_store.active_run_request_for_task(task_id)
+
+
+def test_lead_can_assign_and_start_a_workflow_task_without_skipping_approval(managed_env):
+    app, owner, node, project, _, worker = managed_env
+    _join(managed_env, worker)
+    _ready(app, node, max_runs=3)
+    _, lead_command = _start(managed_env)
+    token = credential(app, node, lead_command)
+    with TestClient(app) as client:
+        workflow = call(client, token, "relay_create_workflow", projectId=project["id"], name="Release review", workflowSteps=[{
+            "id": "release", "name": "Release", "agentId": worker["id"], "instructions": "Prepare the release.",
+            "acceptanceCriteria": ["Release notes recorded"], "requiresApproval": True,
+        }])["workflow"]
+        task = call(client, token, "relay_create_task", fields={
+            "title": "Release", "assignedWorkflowId": workflow["id"],
+        })["task"]
+        assert task["assignedWorkflowId"] == workflow["id"]
+        refused = _rpc(client, token, "tools/call", {"name": "relay_update_task", "arguments": {
+            "taskId": task["id"], "fields": {"assignedWorkflowId": None},
+        }}).json()["result"]
+        assert refused["isError"]
+        assert "task_assignment_approval_required" in refused["content"][0]["text"]
+        started = call(client, token, "relay_start_task", taskId=task["id"])
+        assert started["dispatch"]["state"] == "started", started["dispatch"]
+        thread = owner.get(f"/api/v1/threads/{started['threadId']}").json()
+        assert thread["execution"]["blockingReason"] == "workflow_waiting_for_human"
+        assert app.state.registry.take_commands(node["id"], f"token_{node['id']}") == []
 
 
 @pytest.mark.parametrize("automation", [False, True])

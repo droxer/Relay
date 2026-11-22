@@ -6,7 +6,7 @@ type NodeUpdate = string | null | ((previous: string | null) => string | null);
 
 /** The composer's last pick in one started thread, restored when it reopens. */
 export type ThreadPick =
-  | { kind: "agent"; agent: AgentTarget }
+  | { kind: "agent"; agent: AgentTarget; explicitlySelected?: true }
   | { kind: "team"; teamId: string }
   | { kind: "room" };
 
@@ -76,7 +76,7 @@ interface ComposerTargetStore {
   /** Record `pick` (default: the current pick) as `threadId`'s last one. */
   rememberThreadPick: (threadId: string, pick?: ThreadPick) => void;
   /** Re-apply `threadId`'s last pick; a thread with none opens on its room. */
-  restoreThreadPick: (threadId: string) => void;
+  restoreThreadPick: (threadId: string, projectLeadDiscussion?: boolean) => void;
   /** Address `agent` — the agent the thread runs — unless `threadId` has a
    *  saved pick. Not saved: it is the thread's default, not a choice. */
   defaultThreadPick: (threadId: string, agent: AgentTarget) => void;
@@ -112,15 +112,16 @@ export const useComposerTargetStore = create<ComposerTargetStore>((set, get) => 
     const pick: ThreadPick = explicit ?? (pendingThreadTeamId
       ? { kind: "team", teamId: pendingThreadTeamId }
       : !projectRoomTarget && activeLogicalAgentId
-      ? { kind: "agent", agent: { id: activeLogicalAgentId, executorKind: activeAgent } }
+      ? { kind: "agent", agent: { id: activeLogicalAgentId, executorKind: activeAgent }, explicitlySelected: true }
       : { kind: "room" });
     const next = withThreadPick(threadPicks, threadId, pick);
     writeThreadPicks(next);
     set({ threadPicks: next });
   },
-  restoreThreadPick: (threadId) => {
+  restoreThreadPick: (threadId, projectLeadDiscussion = false) => {
     const pick = get().threadPicks[threadId];
-    if (pick?.kind === "agent") {
+    // Older Lead discussions saved the holder as if the person had picked it.
+    if (pick?.kind === "agent" && (!projectLeadDiscussion || pick.explicitlySelected)) {
       get().pickAgent(pick.agent);
     } else if (pick?.kind === "team") {
       set({ pendingThreadTeamId: pick.teamId, projectRoomTarget: true });

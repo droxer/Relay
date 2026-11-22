@@ -187,7 +187,7 @@ export function ProjectWorkspacePage({
 
   /* Archived/disabled projects are read-only rooms — no member management. */
   const membersReadOnly = projectReadOnly(project);
-  const leadDiscussion = useProjectLeadDiscussion({ projectId: project.id, currentUser, agents: managerAgents, onOpenThread });
+  const leadDiscussion = useProjectLeadDiscussion({ projectId: project.id, currentUser, onOpenThread });
   /* Only the owner talks to the lead here (the conversation route is
      owner-scoped), and only while the project can take new work. */
   const canDiscuss = !membersReadOnly

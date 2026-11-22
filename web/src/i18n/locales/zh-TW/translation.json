@@ -3836,7 +3836,7 @@
     "open": "與 Relay 對話",
     "reason_manager_computer_busy": "專案計算機正在忙碌，執行容量釋放後請重試。",
     "resize": "調整專案負責人面板寬度",
-    "unassigned_role": "還沒有智慧體負責此專案。專案負責人會讀取專案記錄，並提出任務變更供你確認後應用。",
+    "unassigned_role": "指派一個智慧體擔任專案負責人，管理任務並協調執行。",
     "assign_role": "分配專案負責人角色",
     "change": "更改",
     "discuss": "發起討論",

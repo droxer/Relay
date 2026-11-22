@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from functools import partial
 from typing import Any
+from ...core.project_roles import with_project_lead_discussion
 from sqlalchemy import (
     Text,
     and_,
@@ -139,7 +140,7 @@ class SessionReadRows(SessionStoreState):
             if not row:
                 raise KeyError(session_id)
             events = self._events_for_session(conn, row["id"])
-        return hydrate_session_logs(row["snapshot"] or {}, events)
+        return hydrate_session_logs(with_project_lead_discussion(row["snapshot"] or {}), events)
 
     def get_session_header(self, session_id: str, *, for_update: bool = False) -> dict[str, Any]:
         """Read snapshot fields without loading the event log.
@@ -162,7 +163,7 @@ class SessionReadRows(SessionStoreState):
         if not row:
             raise KeyError(session_id)
         return {
-            **(row["snapshot"] or {}),
+            **with_project_lead_discussion(row["snapshot"] or {}),
             "eventCount": int(row["version"] or 0),
         }
 
@@ -270,6 +271,7 @@ class SessionReadRows(SessionStoreState):
             "participantAgentIds",
             "teamId",
             "projectId",
+            "projectLeadDiscussion",
             "workspaceLayout",
             "workspaceSubpath",
             "computerId",
@@ -333,10 +335,10 @@ class SessionReadRows(SessionStoreState):
         )
         hidden = {"version", _POSITION_COLUMN}
         return [
-            {
+            with_project_lead_discussion({
                 **{k: v for k, v in row.items() if k not in hidden and v is not None},
                 "eventCount": int(row["version"] or 0),
-            }
+            })
             for row in page
         ], position
 

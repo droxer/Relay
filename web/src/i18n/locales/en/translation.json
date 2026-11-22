@@ -3908,7 +3908,7 @@
     "open": "Talk to Relay",
     "reason_manager_computer_busy": "The project computer is busy. Try again when capacity is available.",
     "resize": "Resize project lead",
-    "unassigned_role": "No agent leads this project yet. The Project Lead reads its records and proposes task changes for you to apply.",
+    "unassigned_role": "Assign an Agent to oversee the project, manage tasks, and coordinate execution.",
     "assign_role": "Assign Project Lead",
     "change": "Change",
     "discuss": "Discuss",

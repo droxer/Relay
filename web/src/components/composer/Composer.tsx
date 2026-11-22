@@ -170,7 +170,8 @@ const ComposerView = forwardRef<ComposerHandle, {
   const targetTeam = projectName ? undefined : teams?.find((team) => team.id === activeTeamId && !team.deletedAt);
   const targetName = addressedName
     ?? targetTeam?.name
-    ?? (roomSelected && projectRoom?.agentIds.length ? t("composer.target_room") : activeAgentDisplayName);
+    ?? (roomSelected && projectRoom?.projectLead ? t("project.roles.project_manager")
+      : roomSelected && projectRoom?.agentIds.length ? t("composer.target_room") : activeAgentDisplayName);
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const mentions = useMentionAutocomplete({
     text: composerText,

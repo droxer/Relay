@@ -294,18 +294,16 @@ persistent workspace and Project Agent roster.
 _Avoid_: Project, room
 
 **Project Lead**:
-The Project Agent selected by `leadAgentId` coordinates the roster and manages
-its Project beside its execution role. Changing the lead transfers both
-responsibilities without changing any Agent's role, identity, or Placement.
-Only the owner assigns the lead, which must be an enabled roster member. It
-reads live Project records, explains progress and priorities, and manages its
-Project Tasks and Automations through Relay MCP. It may also stage batch Task
-proposals for owner review. Other enabled Project Agents have read-only access
-to Project records and work. Agents in a standalone run may manage only standalone Tasks and Automations
-on that run's Computer. Project runs may access only their admitted Project. The lead does not gain acceptance or execution authority.
-The dashboard names it and lets the owner start a new Project Conversation
-with it each time they choose Discuss. Historical `managerAgentId` and member `projectManager`
-wire fields are derived aliases of the lead for client compatibility.
+The role that supervises Project work. Its holder is an enabled Project Agent
+chosen by the owner. The holder coordinates the roster, explains progress and
+priorities, manages Project Tasks and Automations, and can start or stop Task
+execution. The Lead can stage batch Task proposals. The
+owner applies proposals, accepts work and reconciles executions. Other enabled
+Project Agents have read-only access to Project records and work. Project runs
+may access only their admitted Project.
+The dashboard lets the owner start a Project Conversation addressed to the
+Lead role. Follow-up messages addressed to the role reach its current holder
+in the same Thread, with its history.
 _Avoid_: Project Manager, Project Owner, global Agent Role
 
 **Relay MCP**:

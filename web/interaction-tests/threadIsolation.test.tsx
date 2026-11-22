@@ -7,10 +7,29 @@ import type { TFunction } from "i18next";
 import { setup } from "./threadDispatchSetup";
 import { useThreadDispatch } from "../src/hooks/useThreadDispatch";
 import { useThreadTranscript } from "../src/hooks/useThreadTranscript";
+import { useComposerTargetStore } from "../src/lib/composerTargetStore";
 import { useHandoffStore } from "../src/lib/handoffStore";
 import { useRelayStore } from "../src/lib/store";
 import { useThreadSendStore, threadSendKey } from "../src/lib/threadSendStore";
 import type { RelaySession } from "../src/types";
+
+it.each([false, true])("a Lead discussion sends the role default unless an Agent is named (named=%s)", async (named) => {
+  const { deps, accept, dispatch, session } = setup(true);
+  useRelayStore.getState().openSession(session.id);
+  useComposerTargetStore.getState().pickRoom();
+  deps.projectLeadDiscussion = true;
+  deps.threadMentionCandidates = [{ id: "agent-1", displayName: "Codex", eligible: true }];
+  if (named && deps.composerRef.current) {
+    deps.composerRef.current.getText = () => "@Codex check your previous plan";
+  }
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  let sending!: Promise<boolean>;
+  act(() => { sending = result.current.sendMessage(); });
+  expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+  expect(dispatch.mock.calls[0][0].input.addressAgentIds).toEqual(named ? ["agent-1"] : undefined);
+  await act(async () => { accept(session); await sending; });
+});
+
 it("late A response preserves the newer selection B", async () => {
   const { deps, accept, session } = setup(true);
   useRelayStore.getState().openSession(session.id);

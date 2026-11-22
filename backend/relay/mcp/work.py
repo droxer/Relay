@@ -1,25 +1,32 @@
 """Resource-scoped Task and Automation tools using the ordinary domain services."""
 
-from contextlib import nullcontext
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from datetime import date
 from typing import Any
 from urllib.parse import quote, urlencode
 
 from jsonschema import ValidationError, validate
+from starlette.concurrency import run_in_threadpool
 
 from ..automations.model import without_legacy_fields
+from ..collaboration.queue import change_queue
 from ..core.connections import ConnectionError
 from ..persistence.engine import store_transaction
 from ..projects.runtime import project_work_error
 from ..projects.manager_reads import task_revision
 from ..security.actor import Actor
 from ..tasks.creation import TaskCreateRequest, create_task
+from ..tasks.claims import dispatch_claim_active
 from ..tasks.deletion import TaskDeletionError, delete_task
+from ..tasks.dispatch import TaskDispatcher
+from ..tasks.dispatch_outcome import DispatchResult
 from ..tasks.requests import TaskRequestError, TaskRequestReader, parse_routine_fields
 from ..tasks.review import task_review
+from ..tasks.start import INVALID_STATE_DISPATCH, prepare_task_start
 from ..tasks.update import TaskPatchRequest, update_task
-from .access import assert_project_manage, assert_standalone, scoped_project
-from .catalog import TOOL_OPERATIONS, tool_definitions
+from .access import active_command, assert_project_manage, assert_standalone, may_manage, scoped_project
+from .catalog import START_TASK_INPUT, STOP_TASK_INPUT, TOOL_OPERATIONS, tool_definitions
 from .errors import McpError
 
 
@@ -94,6 +101,84 @@ def _public(task: dict[str, Any]) -> dict[str, Any]:
             "coverage": {"totalEvents": len(events), "shownEvents": min(len(events), 50)}}
 
 
+async def start_project_task(ctx: Any, grant: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    try:
+        validate(arguments, START_TASK_INPUT)
+    except ValidationError as error:
+        raise McpError(400, "Invalid Task start arguments.") from error
+    prepared = await run_in_threadpool(_prepare_project_task_start, ctx, grant, arguments)
+    result = prepared if isinstance(prepared, dict) else await prepared[0].dispatch_prepared(prepared[1])
+    session = result["session"]
+    return {"task": _public(result["task"]), "threadId": session["id"] if session else None, "dispatch": result["dispatch"]}
+
+
+@contextmanager
+def _project_task_control(ctx: Any, grant: dict[str, Any], arguments: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    project_id = grant.get("workspaceProjectId")
+    if not project_id or not grant.get("commandId") or not may_manage(grant):
+        raise McpError(403, "project_manager_required")
+    if arguments.get("projectId", project_id) != project_id:
+        raise McpError(403, "Project scope mismatch.")
+    task_id = arguments["taskId"]
+    _record(ctx, grant, task_id, project_id, automation=False, write=True)
+    try:
+        # Serialize the decision with Lead reassignment and Task changes.
+        with ctx.registry.dispatch_lock, ctx.project_store.manager_transaction(project_id, [task_id]):
+            active_command(ctx, grant["commandId"])
+            yield _record(ctx, grant, task_id, project_id, automation=False, write=True)
+    except KeyError as error:
+        if error.args != (project_id,):
+            raise
+        raise McpError(404, "project_not_found") from error
+
+
+def _prepare_project_task_start(
+    ctx: Any, grant: dict[str, Any], arguments: dict[str, Any],
+) -> dict[str, Any] | DispatchResult | tuple[TaskDispatcher, dict[str, Any]]:
+    actor: Actor = {"userId": grant["ownerUserId"], "isAdmin": False}
+    try:
+        with _project_task_control(ctx, grant, arguments) as task:
+            prepared = prepare_task_start(ctx, task, raw_assignments=None, assignments=[], agent_requested=False)
+            if isinstance(prepared, dict):
+                return prepared
+            task, _, assignments = prepared
+            dispatcher = TaskDispatcher(ctx, task, actor, assignments=assignments, record_pending=True, retry_blocked=True)
+            node, result = dispatcher.prepare()
+            if node is not None:
+                return dispatcher, node
+            return result or {"task": task, "session": None, "dispatch": dict(INVALID_STATE_DISPATCH)}
+    except TaskRequestError as error:
+        raise McpError(error.status, str(error.detail)) from error
+
+
+def stop_project_task(ctx: Any, grant: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    try:
+        validate(arguments, STOP_TASK_INPUT)
+    except ValidationError as error:
+        raise McpError(400, "Invalid Task stop arguments.") from error
+    with _project_task_control(ctx, grant, arguments) as task:
+        request = ctx.daemon_store.active_run_request_for_task(task["id"])
+        if request is None:
+            if dispatch_claim_active(task):
+                raise McpError(409, "task_dispatch_in_progress")
+            return {"task": _public(task), "threadId": None, "outcome": "idle"}
+        thread_id = request["sessionId"]
+        session = ctx.session_store.get_session_header(thread_id)
+        if session.get("projectId") != task["projectId"] or session.get("ownerUserId") != task["ownerUserId"]:
+            raise McpError(403, "Task execution scope mismatch.")
+        if not ctx.registry.get(request["nodeId"]):
+            raise McpError(409, "task_run_not_stoppable")
+        reason = arguments.get("reason", "").strip() or "Stopped by the Project Lead."
+        stopped = ctx.backend.cancel_run(request["nodeId"], thread_id, reason, actor_user_id=grant["ownerUserId"])
+        if stopped is None:
+            raise McpError(409, "task_run_not_stoppable")
+        change_queue(ctx.session_store, thread_id, "pause")
+        return {
+            "task": _public(ctx.task_store.get_task(task["id"])), "threadId": thread_id,
+            "outcome": "settled" if stopped.get("status") in ("cancelled", "completed", "failed") else "stop_requested",
+        }
+
+
 def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Never trust a supplied projectId over the stored record's Project."""
     definition = next(tool for tool in tool_definitions() if TOOL_OPERATIONS[tool.name] == operation)
@@ -149,7 +234,9 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
             if "title" in body and not body["title"].strip():
                 raise McpError(400, "title is required.")
             if operation.startswith("create_"):
-                if project is None and grant.get("computerId"):
+                if project is not None:
+                    body["projectId"] = project["id"]
+                elif grant.get("computerId"):
                     body["computerId"] = grant["computerId"]
                 if automation:
                     body["isRoutine"] = True
@@ -167,7 +254,7 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
                 # a Team assignment, which would implicitly clear the Agent).
                 if task.get("assignedAgentId") and (
                     ("assignedAgentId" in body and body["assignedAgentId"] != task["assignedAgentId"])
-                    or body.get("assignedTeamId")
+                    or body.get("assignedTeamId") or body.get("assignedWorkflowId")
                 ):
                     raise McpError(
                         409,
@@ -175,6 +262,11 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
                         "Ask the owner to change the assignment in Relay; for Project Tasks, "
                         "you may stage a proposal for owner approval. No changes were applied.",
                     )
+                if task.get("assignedWorkflowId") and (
+                    ("assignedWorkflowId" in body and body["assignedWorkflowId"] != task["assignedWorkflowId"])
+                    or body.get("assignedAgentId") or body.get("assignedTeamId")
+                ):
+                    raise McpError(409, "task_assignment_approval_required: Ask the owner to change the assigned Workflow in Relay.")
                 task = update_task(ctx, actor, task, TaskPatchRequest(
                     body=body, reader=READER, requested_assignee=None, move_project=None,
                     reload=lambda: _record(ctx, grant, arguments[f"{kind}Id"], project_id, automation=automation, write=True),

@@ -10,40 +10,25 @@ interface ThreadComposerSelectionInput {
   threadDetailsReady?: boolean;
   teamIds: readonly string[];
   /** The agent the open thread runs (`threadOwnAgentId`), once the roster knows it. */
-  roleBindingKey?: string;
+  projectLeadDiscussion?: boolean;
   threadAgent?: { id: string; executorKind: AgentName } | null;
 }
 
 /** Restore automatic thread selection too, and validate only a loaded roster. */
-export function useThreadComposerSelection({ sessionId, composingNew, targetsReady, threadDetailsReady = true, teamIds, threadAgent, roleBindingKey }: ThreadComposerSelectionInput) {
-  const restoredSessionId = useRef<string | undefined>(undefined);
-  const restoredBinding = useRef<string | undefined>(undefined);
+export function useThreadComposerSelection({ sessionId, composingNew, targetsReady, threadDetailsReady = true, teamIds, threadAgent, projectLeadDiscussion = false }: ThreadComposerSelectionInput) {
+  const restoredSelection = useRef<{ sessionId: string | undefined; projectLeadDiscussion: boolean } | undefined>(undefined);
   const defaultedSessionId = useRef<string | undefined>(undefined);
   const pendingTeamId = useComposerTargetStore((s) => s.pendingThreadTeamId);
   const restoreThreadPick = useComposerTargetStore((s) => s.restoreThreadPick);
   const defaultThreadPick = useComposerTargetStore((s) => s.defaultThreadPick);
   useEffect(() => {
     const nextId = composingNew ? undefined : sessionId;
-    if (nextId === restoredSessionId.current) return;
-    restoredSessionId.current = nextId;
+    const previous = restoredSelection.current;
+    if (nextId === previous?.sessionId && projectLeadDiscussion === previous?.projectLeadDiscussion) return;
+    restoredSelection.current = { sessionId: nextId, projectLeadDiscussion };
     defaultedSessionId.current = undefined;
-    if (nextId) restoreThreadPick(nextId);
-  }, [composingNew, restoreThreadPick, sessionId]);
-
-  useEffect(() => {
-    if (composingNew || !sessionId || roleBindingKey === undefined || !targetsReady) return;
-    const key = `${sessionId}:${roleBindingKey}`;
-    if (restoredBinding.current === key) return;
-    restoredBinding.current = key;
-    const state = useComposerTargetStore.getState();
-    if (threadAgent) {
-      state.pickAgent(threadAgent);
-      state.rememberThreadPick(sessionId, {kind:"agent",agent:threadAgent});
-    } else {
-      state.pickRoom();
-      state.rememberThreadPick(sessionId, {kind:"room"});
-    }
-  }, [composingNew, sessionId, roleBindingKey, threadAgent, targetsReady]);
+    if (nextId) restoreThreadPick(nextId, projectLeadDiscussion);
+  }, [composingNew, projectLeadDiscussion, restoreThreadPick, sessionId]);
 
   // A thread started by a task, an automation, or another tab has no saved
   // pick; open it on its own agent, once, so a later run or roster refresh
@@ -51,11 +36,11 @@ export function useThreadComposerSelection({ sessionId, composingNew, targetsRea
   const threadAgentId = threadAgent?.id;
   const threadAgentKind = threadAgent?.executorKind;
   useEffect(() => {
-    if (composingNew || !sessionId || !threadAgentId || !threadAgentKind || !threadDetailsReady) return;
+    if (composingNew || projectLeadDiscussion || !sessionId || !threadAgentId || !threadAgentKind || !threadDetailsReady) return;
     if (defaultedSessionId.current === sessionId) return;
     defaultedSessionId.current = sessionId;
     defaultThreadPick(sessionId, { id: threadAgentId, executorKind: threadAgentKind });
-  }, [composingNew, defaultThreadPick, sessionId, threadAgentId, threadAgentKind, threadDetailsReady]);
+  }, [composingNew, defaultThreadPick, projectLeadDiscussion, sessionId, threadAgentId, threadAgentKind, threadDetailsReady]);
 
   useEffect(() => {
     if (!targetsReady || (!composingNew && !sessionId)) return;

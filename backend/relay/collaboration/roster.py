@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..core.human_waits import QUESTION_ID_PREFIX
-from ..core.project_roles import project_member_ids
+from ..core.project_roles import project_lead_id, project_member_ids
 from ..core.workflow_selection import default_workflow_id, predefined_style
 from ..projects.runtime import (
     ProjectDispatchError,
@@ -112,6 +112,14 @@ class RosterMixin(ConductorState):
             selected_ids = self._asking_outside_agent_ids(
                 project, intent.question_id
             )
+        elif (
+            session and intent.source == "message" and intent.address.get("kind") == "room"
+            and (session.get("projectLeadDiscussion") or session["id"] == project.get("managerThreadId"))
+        ):
+            lead_id = project_lead_id(project)
+            if lead_id is None:
+                raise CollaborationError("manager_unconfigured", "Assign the Project Lead role to an Agent.")
+            selected_ids = [lead_id]
         if intent.project_setup is not None:
             raw_assignments = self._project_setup_assignments(
                 project, selected_ids, project_snapshot
