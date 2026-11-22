@@ -22,7 +22,7 @@ def test_delayed_dispatch_result_cannot_overwrite_completed_task(tmp_path, outco
     dispatcher.agent = "codex"
     dispatcher.claim_id = claimed["dispatchClaim"]["id"]
     dispatcher._run_request = lambda node: {}
-    asyncio.run(dispatcher._dispatch({"id": "node"}))
+    asyncio.run(dispatcher.dispatch_prepared({"id": "node"}))
     final = tasks.get_task(task["id"])
     assert final["status"] == "done"
     assert not final.get("dispatchRetry")

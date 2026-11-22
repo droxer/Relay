@@ -3836,7 +3836,7 @@
     "open": "与 Relay 对话",
     "reason_manager_computer_busy": "项目计算机正在忙碌，执行容量释放后请重试。",
     "resize": "调整项目负责人面板宽度",
-    "unassigned_role": "还没有智能体负责此项目。项目负责人会读取项目记录，并提出任务变更供你确认后应用。",
+    "unassigned_role": "分配一个智能体担任项目负责人，管理任务并协调执行。",
     "assign_role": "分配项目负责人角色",
     "change": "更改",
     "discuss": "发起讨论",

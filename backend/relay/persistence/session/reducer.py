@@ -60,6 +60,8 @@ def materialize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         session["teamId"] = created["teamId"]
     if created.get("projectId"):
         session["projectId"] = created["projectId"]
+    if created.get("projectLeadDiscussion") is True:
+        session["projectLeadDiscussion"] = True
     if created.get("workspaceSubpath"):
         session["workspaceSubpath"] = created["workspaceSubpath"]
     if created.get("daemonNodeId"):

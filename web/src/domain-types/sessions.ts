@@ -32,6 +32,7 @@ export interface SessionSummary {
   participantAgentIds?: string[];
   teamId?: string;
   projectId?: string;
+  projectLeadDiscussion?: RelaySession["projectLeadDiscussion"];
   workspaceLayout?: "node-root" | "thread" | "project" | "task";
   workspaceSubpath?: string;
   computerId?: string;
@@ -92,7 +93,7 @@ export interface ThreadMessageInput {
   style?: CollaborationStyle;
   text: string;
   intent: "accomplish" | "discuss" | "review";
-  /** Agents this message addresses. Empty or absent means the whole room. */
+  /** Agents this message addresses. Empty or absent uses the Thread's default recipient. */
   addressAgentIds?: string[];
   /** A team on the thread's computer that runs this round instead. Exclusive
    *  with `addressAgentIds`; the thread keeps its own team, if it has one. */

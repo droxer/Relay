@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, is_project_manager, project_member_ids
+from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, project_member_ids
 
 from ..collaboration.styles import resolve_collaboration_style
 from ..core.computer_identity import computer_id
@@ -229,7 +229,7 @@ def project_member_assignments(
             "mode": mode,
             "phase": "discussion" if mode == "ask" else _phase(member["role"]),
             "coordinator": member["agentId"] == project["leadAgentId"],
-            "brief": _member_brief(member),
+            "brief": _member_brief(member, lead=member["agentId"] == project["leadAgentId"]),
             "projectSnapshot": project_snapshot,
         }
         for member in members
@@ -345,12 +345,13 @@ def _phase(role: str) -> str:
     return "review" if role == "reviewer" else "execution"
 
 
-def _member_brief(member: dict[str, Any]) -> str:
+def _member_brief(member: dict[str, Any], *, lead: bool) -> str:
     parts = [
         role_charter(member.get("role")),
-        *([f"Project lead: {PROJECT_MANAGER_RESPONSIBILITIES}"] if is_project_manager(member) else []),
-        f"Responsibilities: {member['responsibilities']}.",
+        *([f"Project lead: {PROJECT_MANAGER_RESPONSIBILITIES}"] if lead else []),
     ]
+    if member["responsibilities"] != parts[0]:
+        parts.append(f"Responsibilities: {member['responsibilities']}.")
     if member.get("instructions"):
         parts.append(f"Project instructions: {member['instructions']}")
     return " ".join(parts)

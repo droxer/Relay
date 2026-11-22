@@ -420,6 +420,8 @@ export interface RelaySession {
   workspaceLayout?: WorkspaceLayout;
   /** Stable project identity when several threads share one project workspace. */
   projectId?: string;
+  /** This Project Conversation defaults to the current Project Lead. */
+  projectLeadDiscussion?: true;
   /** Relative directory below the Computer's configured workspace root. */
   workspaceSubpath?: string;
   /** Daemon node selected as this thread's immutable runtime boundary. */
@@ -511,6 +513,7 @@ export type RelayEvent =
       workspacePath: string;
       workspaceLayout?: WorkspaceLayout;
       projectId?: string;
+      projectLeadDiscussion?: true;
       workspaceSubpath?: string;
       computerId?: string;
       daemonNodeId?: string;
@@ -847,6 +850,8 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
     id: created.sessionId,
     workspacePath: created.workspacePath,
     ...(created.workspaceLayout ? { workspaceLayout: created.workspaceLayout } : {}),
+    ...(created.projectId ? { projectId: created.projectId } : {}),
+    ...(created.projectLeadDiscussion ? { projectLeadDiscussion: true } : {}),
     ...(created.daemonNodeId ? { daemonNodeId: created.daemonNodeId } : {}),
     ...(created.managedNodeId ? { managedNodeId: created.managedNodeId } : {}),
     ...(created.ownerUserId ? { ownerUserId: created.ownerUserId } : {}),

@@ -111,7 +111,7 @@ def manager_view(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
 
 
 def create_manager_conversation(ctx: Any, project_id: str) -> dict[str, str]:
-    """Start an independent Project Conversation with the current lead."""
+    """Start a Project Conversation addressed to the Lead role by default."""
     with ctx.project_store.manager_transaction(project_id) as project:
         if code := project_work_error(project):
             raise ManagerError(code)
@@ -121,6 +121,7 @@ def create_manager_conversation(ctx: Any, project_id: str) -> dict[str, str]:
         session = ctx.session_store.create_session({
             "workspacePath": "", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
             "ownerUserId": project["ownerUserId"], "computerId": project["computerId"], "projectId": project["id"],
+            "projectLeadDiscussion": True,
             "title": f"{project['name']} · Project Lead", "taskGoal": "", "participants": ["human"],
         })
         ctx.session_store.append_event(session["id"], relay_event("thread.participants_joined", session["id"], {

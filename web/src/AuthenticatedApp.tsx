@@ -314,12 +314,14 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   }, [assignableComputers, initializingThread, setNewThreadNodeId, threadComputers]);
 
   const composerTeamIds = useMemo(() => composerTeams.map((team) => team.id), [composerTeams]);
+  const projectLeadDiscussion = Boolean(activeSession && (
+    activeSession.projectLeadDiscussion || projects.some(project => project.managerThreadId === activeSession.id)
+  ));
   const threadAgent = useMemo(() => {
-    const manager = projects.find(project => project.managerThreadId === activeSession?.id);
-    const id = manager?.managerAgentId ?? threadOwnAgentId(activeSession);
+    const id = threadOwnAgentId(activeSession);
     const agent = id ? logicalAgents.find((candidate) => candidate.id === id) : undefined;
     return agent ? { id: agent.id, executorKind: agent.executorKind } : null;
-  }, [activeSession, logicalAgents, projects]);
+  }, [activeSession, logicalAgents]);
   useThreadComposerSelection({
     sessionId: activeSession?.id,
     composingNew,
@@ -327,7 +329,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     teamIds: composerTeamIds,
     threadAgent,
     threadDetailsReady: !sessionTrailsSummary(activeSession),
-    roleBindingKey: projects.find(project => project.managerThreadId === activeSession?.id)?.managerAgentId ?? (projects.some(project => project.managerThreadId === activeSession?.id) ? "unassigned" : undefined),
+    projectLeadDiscussion,
   });
 
   const applySessionFromHash = useCallback((sessionId: string) => {
@@ -433,11 +435,14 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const projectRoom = useMemo(
     () => (activeProject
       ? {
-          agentIds: projectRoomAgentIds(activeProject, activeSession),
+          agentIds: projectLeadDiscussion
+            ? activeProject.members.filter(member => member.enabled && member.agentId === activeProject.leadAgentId).map(member => member.agentId)
+            : projectRoomAgentIds(activeProject, activeSession),
           crewAgentIds: activeProject.members.filter((member) => member.enabled).map((member) => member.agentId),
+          projectLead: projectLeadDiscussion,
         }
       : null),
-    [activeProject, activeSession],
+    [activeProject, activeSession, projectLeadDiscussion],
   );
   // The thread names a project whose record has not loaded yet: until it does
   // the composer would read the thread as an ordinary (team) thread and draw
@@ -639,6 +644,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     sendHandoff,
   } = useThreadDispatch({
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
+    projectLeadDiscussion,
     threadRunning, requiresRuntimeSelection, projectDispatchDisabled: dispatchDisabled,
     effectiveSelectableLogicalAgents,
     composerLogicalAgents,

@@ -19,7 +19,7 @@ import {
 
 /** Who manages the Project, as one quiet line above its numbers.
  *  The holder is an ordinary roster member that brings the manager tools to
- *  its own tasks and automations. Discuss opens the Project's one lead Thread
+ *  its own tasks and automations. Discuss opens a Thread addressed to the Lead role
  *  — directly, or with an everyday question waiting in the composer — and
  *  the Agents tab stays the one place the role changes hands. Everything shown
  *  comes from the project and agents the page already has. */

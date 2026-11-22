@@ -21,6 +21,7 @@ const ROOM_VALUE = "room:all";
 export type ProjectRoomOption = {
   agentIds: readonly string[];
   crewAgentIds: readonly string[];
+  projectLead?: boolean;
 };
 
 export function teamSelectValue(teamId: string): string {
@@ -97,7 +98,11 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
   // The roster is the target only while no single member is picked, so the
   // trigger never claims the whole room while a mention narrows the round —
   // nor an empty room, whose sends fall back to the picked agent.
-  const activeRoom = room && roomSelected && !activeTeam && room.agentIds.length > 0 ? room : null;
+  const activeRoom = room && roomSelected && !activeTeam && (room.projectLead || room.agentIds.length > 0) ? room : null;
+  const roomLabel = t(room?.projectLead ? "project.roles.project_manager" : "composer.project_room");
+  const leadName = room?.projectLead
+    ? logicalAgents.find((agent) => agent.id === room.agentIds[0])?.displayName
+    : undefined;
   // A round the whole roster cannot take is still worth offering: the project
   // reports why at dispatch. One member able to work is enough to keep it live;
   // a room with no one in it (a project without a crew, before anyone ran) is not.
@@ -170,9 +175,9 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
           // glyph identifies nothing on its own: agents and teams may drop to
           // a mark on a phone, the room may not.
           <span className="roster-trigger">
-            <RoomMark routable={roomRoutable} label={t("composer.project_room")} />
+            <RoomMark routable={roomRoutable} label={roomLabel} />
             <span className="roster-trigger-name roster-trigger-name--room">
-              {t("composer.project_room")}
+              {roomLabel}
             </span>
           </span>
         ) : activeTeam ? (
@@ -210,7 +215,7 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
               <SelectLabel>{t("composer.project_group")}</SelectLabel>
               <SelectItem
                 value={ROOM_VALUE}
-                label={t("composer.project_room")}
+                label={roomLabel}
                 className="chat-agent-option"
                 disabled={!roomRoutable}
                 data-availability={roomRoutable ? "ready" : "offline"}
@@ -220,10 +225,12 @@ export function AgentSelect({ logicalAgents, activeLogicalAgentId, onLogicalAgen
                     availability slot, which is where every other row states
                     why it cannot take work. */}
                 <span className="roster-option">
-                  <RoomMark routable={roomRoutable} label={t("composer.project_room")} />
+                  <RoomMark routable={roomRoutable} label={roomLabel} />
                   <span className="roster-option-copy">
-                    <span>{t("composer.project_room")}</span>
-                    <span>{t("teams.member_count", { count: room.agentIds.length })}</span>
+                    <span>{roomLabel}</span>
+                    {room.projectLead
+                      ? leadName && <span>{leadName}</span>
+                      : <span>{t("teams.member_count", { count: room.agentIds.length })}</span>}
                   </span>
                 </span>
               </SelectItem>

@@ -79,6 +79,7 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "participantAgentIds": session.get("participantAgentIds") or [],
         "teamId": session.get("teamId"),
         "projectId": session.get("projectId"),
+        **({"projectLeadDiscussion": True} if session.get("projectLeadDiscussion") else {}),
         "workspaceLayout": session.get("workspaceLayout"),
         "workspaceSubpath": session.get("workspaceSubpath"),
         "computerId": session.get("computerId"),

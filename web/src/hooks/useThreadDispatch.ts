@@ -44,6 +44,7 @@ export interface ThreadDispatchDeps {
   /* --- the thread being acted on --------------------------------------- */
   activeSession: RelaySession | undefined;
   activeProject: ProjectListItem | null;
+  projectLeadDiscussion?: boolean;
   activeRun: Parameters<typeof canCancelThreadRun>[0]["activeRun"];
   activeRunOwner: { node?: Parameters<typeof threadCancelNodeId>[0]["node"] } | null | undefined;
   activeRuntimeNode: Parameters<typeof threadCancelNodeId>[0]["node"] | null;
@@ -92,6 +93,7 @@ export interface ThreadDispatchDeps {
 export function useThreadDispatch(deps: ThreadDispatchDeps) {
   const {
     activeSession, activeProject, activeRun, activeRunOwner, activeRuntimeNode,
+    projectLeadDiscussion,
     threadRunning, requiresRuntimeSelection, projectDispatchDisabled,
     effectiveSelectableLogicalAgents,
     composerLogicalAgents = effectiveSelectableLogicalAgents,
@@ -152,13 +154,11 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       : null;
     const goal = raw || "Describe the attached images.";
     let newThreadAgentIds: string[] | undefined;
-    // A project round addresses the whole roster unless the composer (or a
-    // mention) names one agent — the backend expands whichever it is given.
-    // An empty room (a project without a crew, before anyone ran) falls back
-    // to the picked agent rather than sending to no one.
-    const projectRoomRound = activeProject
-      ? projectRoomTarget && projectRoomAgentIds(activeProject, activeSession).length > 0
-      : false;
+    // The backend resolves the Lead role or the room when no Agent is named.
+    const projectDefaultRecipient = projectRoomTarget && (
+      (sessionId && projectLeadDiscussion)
+      || (activeProject && projectRoomAgentIds(activeProject, activeSession).length > 0)
+    );
     // A mention overrides the footer selection. Team messages intentionally
     // default to the room; every single-agent message requires one valid
     // footer selection and never fails open to the room.
@@ -166,7 +166,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       text: raw,
       literal,
       candidates: threadMentionCandidates,
-      defaultAgentId: projectRoomRound || pendingTeam || roundTeam.teamId
+      defaultAgentId: projectDefaultRecipient || pendingTeam || roundTeam.teamId
         ? undefined
         : activeLogicalAgentId,
     });

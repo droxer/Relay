@@ -11,7 +11,7 @@ from test_project_setup_api import _take_command, _complete
 setup_env = setup_api.setup_env
 
 
-def _ready(app, node, *, tools=True, setup=False, reader=True):
+def _ready(app, node, *, tools=True, setup=False, reader=True, max_runs=None):
     app.state.registry.register({
         "sandboxId": node["id"], "userId": node["userId"],
         "token": f"token_{node['id']}", "protocolVersion": 1,
@@ -21,6 +21,7 @@ def _ready(app, node, *, tools=True, setup=False, reader=True):
                          *(["project-setup"] if setup else [])],
         "status": "ready", "workspacePath": "/workspace/relay",
         "workspaceId": node["workspaceId"],
+        **({"maxConcurrentRuns": max_runs} if max_runs is not None else {}),
     })
 
 
@@ -96,6 +97,9 @@ def test_each_manager_discussion_is_a_separate_project_thread(managed_env):
     assert response.json()["agentId"] == planner["id"]
     new_thread = client.get(f"/api/v1/threads/{new_thread_id}").json()
     assert new_thread["projectId"] == project["id"]
+    assert new_thread["projectLeadDiscussion"] is True
+    summaries = client.get("/api/v1/threads", params={"view": "summary"}).json()["sessions"]
+    assert next(row for row in summaries if row["id"] == new_thread_id)["projectLeadDiscussion"] is True
     assert new_thread["participantAgentIds"] == [planner["id"]]
     assert new_thread["title"] == f"{project['name']} · Project Lead"
     assert new_thread["taskGoal"] == ""
@@ -106,6 +110,58 @@ def test_each_manager_discussion_is_a_separate_project_thread(managed_env):
     second = _say(client, result["threadId"], "And now?", planner["id"], "manager-second")
     assert second.status_code == 202, second.text
     assert _take_command(app, node)["state"]["project_manager"]["agentId"] == planner["id"]
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_lead_discussion_keeps_routing_to_the_role_after_handover(managed_env, legacy):
+    app, client, node, project, former, successor = managed_env
+    _join(managed_env, successor)
+    if legacy:
+        _ready(app, node)
+        thread_id = app.state.session_store.create_session({
+            "workspacePath": "", "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
+            "ownerUserId": project["ownerUserId"], "computerId": project["computerId"], "projectId": project["id"],
+            "title": "Renamed discussion", "taskGoal": "", "participants": ["human"],
+        })["id"]
+        response = _say(client, thread_id, "What should we do next?", former["id"], "legacy-first-turn")
+        assert response.status_code == 202, response.text
+        first = _take_command(app, node)
+    else:
+        discussion, first = _start(managed_env)
+        thread_id = discussion["threadId"]
+    _complete(app, node, first, thread_id)
+    _assign(client, project, successor)
+
+    response = client.post(f"/api/v1/threads/{thread_id}/messages", json={
+        "text": "Continue planning", "intent": "discuss", "idempotencyKey": "lead-follow-up",
+    })
+    assert response.status_code == 202, response.text
+    manifest = response.json()["collaborationRounds"][-1]
+    assert [assignment["agentId"] for assignment in manifest["assignments"]] == [successor["id"]]
+    command = _take_command(app, node)
+    assert command["logicalAgentId"] == successor["id"]
+    assert command["state"]["project_manager"]["agentId"] == successor["id"]
+    assert "What should we do next?" in command["state"]["prior_conversation"]
+    _complete(app, node, command, thread_id)
+    thread = client.get(f"/api/v1/threads/{thread_id}").json()
+    assert thread["projectLeadDiscussion"] is True
+    assert thread["participantAgentIds"] == [former["id"], successor["id"]]
+    assert any(event.get("text") == "What should we do next?" for event in thread["events"])
+
+    response = _say(client, thread_id, "Check your previous plan", former["id"], "named-follow-up")
+    assert response.status_code == 202, response.text
+    command = _take_command(app, node)
+    assert command["logicalAgentId"] == former["id"]
+    assert "project_manager" not in command["state"]
+
+
+def test_lead_assignment_keeps_lead_duties_out_of_member_responsibilities(managed_env):
+    _, client, _, project, former, successor = managed_env
+    added = _assign(client, project, successor)
+    restored = _assign(client, project, former)
+    for saved in (added, restored):
+        member = next(m for m in saved["members"] if m["agentId"] == successor["id"])
+        assert "coordinate its Agents" not in member["responsibilities"]
 
 
 def test_live_tools_proposals_apply_once_in_backlog(managed_env):

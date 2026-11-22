@@ -1995,8 +1995,9 @@ unchanged for compatibility.
   lead holds management responsibility.
 - `POST /api/v1/projects/{id}/manager/conversation` creates a new Project
   Conversation on each request and returns `threadId` and `agentId`. The current
-  Project Lead joins as its first Agent participant. The owner sends messages
-  through the ordinary Thread composer.
+  Project Lead joins as its first Agent participant. The Thread snapshot and
+  summary carry `projectLeadDiscussion: true`. Messages without an explicit
+  recipient go to the current Lead when dispatched.
 - `GET /api/v1/projects/{id}/manager/overview` returns live Project context,
   complete task counts, recent tasks, capacity, and retrieval coverage.
 - `GET /api/v1/projects/{id}/manager/proposals?threadId={threadId}` returns the
@@ -2043,19 +2044,31 @@ scope. Concurrent requests share one refresh. HTTP 401 clears the refused token
 for the next explicit call, but the refused request is never replayed automatically.
 Every run may manage
 the owner's standalone Tasks and Automations. Project reads require the admitted
-Project's enabled roster identity; writes require its current Project Lead.
-`tools/list` omits `relay_propose_task_changes` for readers, while still exposing
+Project's enabled roster identity. Writes and Task execution controls require
+its current Project Lead. `tools/list` omits `relay_propose_task_changes`,
+`relay_start_task` and `relay_stop_task` for readers, while still exposing
 standalone mutation tools. Unauthorized Project writes return a tool error
 `project_manager_required`; omitting `projectId` never bypasses stored resource scope.
 
 `POST /api/v1/mcp` is the canonical MCP Streamable HTTP endpoint, hosted by
 `backend/relay/mcp/` using the official Python SDK. It supports initialization,
 notifications, `tools/list` and `tools/call` with stateless JSON responses. The
-Python catalog defines Project reads, Task/Automation CRUD, review and Task proposal tools; the local Node
+Python catalog defines Project reads, Task/Automation CRUD, Task execution controls, review
+and Task proposal tools. The local Node
 stdio bridge forwards messages unchanged. No separate MCP deployment is needed.
 The SDK endpoint is registered directly as an ASGI route and is not enumerated
 in FastAPI's generated OpenAPI schema. Its catalog and schemas are discovered
 through MCP `tools/list`.
+
+`relay_start_task` accepts `taskId` and optional `projectId` from a current Lead
+run. It uses the Task's saved assignment and the ordinary Task dispatch path,
+including prerequisites, capacity and Workflow approval gates. The response
+includes `task`, `dispatch` and a nullable `threadId`.
+
+`relay_stop_task` accepts `taskId`, optional `projectId` and optional `reason`.
+It keeps the Task and its assignment and asks the daemon to stop any active
+execution. The response includes `task`, a nullable `threadId` and `outcome`
+of `idle`, `stop_requested` or `settled`.
 
 This endpoint is separate from Service Connections' `/api/v1/connection-tools`;
 its MCP tokens do not authorize external-provider calls. See the

@@ -60,6 +60,7 @@ class SessionLifecycleRows(SessionStoreState):
                         if payload.get("projectId")
                         else {}
                     ),
+                    **({"projectLeadDiscussion": True} if payload.get("projectLeadDiscussion") else {}),
                     **(
                         {"workspaceSubpath": payload["workspaceSubpath"]}
                         if payload.get("workspaceSubpath")
