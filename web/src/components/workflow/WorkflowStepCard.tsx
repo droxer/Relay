@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WorkflowAgentFace } from "./WorkflowAgentFace";
 import { RosterAgentItem, RosterTriggerValue } from "../roster/RosterOption";
 import { AdminDelete, ChevronDownIcon, ChevronUpIcon, ICON, NavMore } from "../icons";
 
@@ -54,6 +55,7 @@ export function WorkflowStepCard({
     "aria-describedby": errors[field] ? id(`${slug}-error`) : undefined,
   });
   const stepLabel = t("workflow.step_label", { index: index + 1 });
+  const owner = agents.find((agent) => agent.id === step.agentId);
   const first = index === 0;
   const last = index === count - 1;
 
@@ -61,6 +63,7 @@ export function WorkflowStepCard({
     <li className="workflow-step-card" aria-labelledby={id("title")}>
       <div className="workflow-step-head">
         <span className="workflow-step-index tnum" aria-hidden="true">{index + 1}</span>
+        {owner ? <WorkflowAgentFace imageUrl={owner.profileImageUrl} /> : null}
         <h3 id={id("title")} className="workflow-step-title">
           <span className="workflow-step-title-text">{step.name.trim() || stepLabel}</span>
           {step.requiresApproval ? <span className="workflow-step-gate">{t("workflow.gate_badge")}</span> : null}

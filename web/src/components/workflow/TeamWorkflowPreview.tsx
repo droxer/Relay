@@ -6,6 +6,7 @@ import { approvalSlotIndex, previewGaps, previewSlots, type SlotMember } from ".
 import { predefinedStyle, teamWorkflowPreviews } from "../../lib/workflowSelection";
 import { ActionRetry, DisclosureChevron } from "../icons";
 import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
+import { WorkflowAgentFace } from "./WorkflowAgentFace";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
 import { useWorkflowName } from "./WorkflowSelect";
 
@@ -36,7 +37,7 @@ export function TeamWorkflowPreview({ team, workflowId, members, leadId, approva
     </div>
     {style ? <>
       <p className="workflow-preview-hint">{t(`collab_style.${style}_hint`)}</p>
-      <RoleSlots members={members} leadId={leadId} style={style} approval={approval} nameOf={nameOf} />
+      <RoleSlots members={members} leadId={leadId} style={style} approval={approval} nameOf={nameOf} imageOf={imageOf} />
     </> : custom ? <WorkflowStepSummary steps={custom.workflowSteps} agentName={nameOf} agentImage={imageOf} label={t("workflow.steps_of", { name: custom.name })} />
       : null}
   </div>;
@@ -45,8 +46,9 @@ export function TeamWorkflowPreview({ team, workflowId, members, leadId, approva
 const initialOf = (name: string) => Array.from(name.trim())[0]?.toUpperCase() ?? "?";
 
 /** Who fills each role slot of a predefined Workflow, in run order. */
-function RoleSlots({ members, leadId, style, nameOf, approval }: {
+function RoleSlots({ members, leadId, style, nameOf, imageOf, approval }: {
   members: SlotMember[]; leadId?: string; style: CollaborationStyle; nameOf: (id: string) => string;
+  imageOf?: (id: string) => string | null | undefined;
   /** The team's person approves the work before the final step. */
   approval?: boolean;
 }) {
@@ -63,10 +65,10 @@ function RoleSlots({ members, leadId, style, nameOf, approval }: {
     if (slot === "member" && role) return t(`team_work.role_${role}`, { defaultValue: t("collab_style.slot_member") });
     return t(`collab_style.slot_${slot === "lead" && index > 0 ? "lead_summary" : slot}`);
   };
-  const approvalStep = { key: "approval", slot: "approval", role: t("collab_style.slot_approval"), name: t("collab_style.slot_approval_name") };
+  const approvalStep = { key: "approval", slot: "approval", memberId: undefined as string | undefined, role: t("collab_style.slot_approval"), name: t("collab_style.slot_approval_name") };
   const steps = preview.slots.flatMap((slot, index) => [
     ...(index === approvalAt ? [approvalStep] : []),
-    { key: `${slot.slot}-${index}`, slot: slot.slot, role: slotLabel(slot.slot, slot.memberId, index), name: nameOf(slot.memberId) },
+    { key: `${slot.slot}-${index}`, slot: slot.slot, memberId: slot.memberId as string | undefined, role: slotLabel(slot.slot, slot.memberId, index), name: nameOf(slot.memberId) },
   ]);
   const builder = preview.slots.find((slot) => slot.slot === "builder");
   const reviewer = preview.slots.find((slot) => slot.slot === "reviewer");
@@ -76,7 +78,9 @@ function RoleSlots({ members, leadId, style, nameOf, approval }: {
     <ol className="collab-style-sequence">
       {steps.map((step, index) => <li key={step.key} data-slot={step.slot}>
         <span className="collab-style-step">
-          <span className="collab-style-step-avatar" aria-hidden="true">{initialOf(step.name)}</span>
+          {step.memberId
+            ? <WorkflowAgentFace imageUrl={imageOf?.(step.memberId)} />
+            : <span className="collab-style-step-avatar" aria-hidden="true">{initialOf(step.name)}</span>}
           <span className="collab-style-step-text">
             <span className="collab-style-step-role">{step.role}<span className="sr-only">: </span></span>
             <span className="collab-style-step-name">{step.name}</span>
