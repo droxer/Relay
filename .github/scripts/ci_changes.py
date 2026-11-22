@@ -34,11 +34,13 @@ def suites(paths: list[str] | None) -> dict[str, bool]:
     return {
         "python": common
         or any(
-            path.startswith("backend/")
+            path.startswith(("backend/", "packages/relay-core/", "packages/relay-daemon/"))
             or path.endswith(".py")
             or path in {"pyproject.toml", "uv.lock", ".python-version"}
             for path in paths
         ),
+        "typescript": common
+        or any(path.startswith(("packages/", "tools/")) for path in paths),
         "web": common
         or any(
             path.startswith(("web/", "packages/relay-core/", "tools/vendor/"))
