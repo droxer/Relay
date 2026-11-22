@@ -12,7 +12,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { AcpConnection, asRecord, contentText, MethodNotFound, permissionOptions, selected, withAcpChild, type JsonRpcMessage } from "./acp-connection.js";
-import { askBroker, runtimeEnv, type PermissionAnswer, type PermissionQuestion, type PermissionQuestionKind } from "./protocol.js";
+import { askBroker, NATIVE_RUNTIME_STARTUP_TIMEOUT_MS, runtimeEnv, type PermissionAnswer, type PermissionQuestion, type PermissionQuestionKind } from "./protocol.js";
 
 /** Asks about one request; `signal` fires once the prompt is over and nobody can act on the answer. */
 export type AskBroker = (question: PermissionQuestion, signal?: AbortSignal) => Promise<PermissionAnswer>;
@@ -34,6 +34,7 @@ export interface OpenCodeAcpIo {
   stderr: { write(text: string): unknown };
   ask: AskBroker;
   signal?: AbortSignal;
+  startupTimeoutMs?: number;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -63,6 +64,10 @@ export class RunJsonWriter {
 
   error(message: string): void {
     this.line({ type: "error", error: { message } });
+  }
+
+  started(): void {
+    this.line({ type: "relay.runtime.started" });
   }
 
   private line(event: Record<string, unknown>): void {
@@ -163,12 +168,16 @@ export function questionKind(acpKind: string | undefined): PermissionQuestionKin
 
 /** Runs one prompt; resolves to the process exit code. */
 export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAcpIo): Promise<number> {
+  if (io.signal?.aborted) return 130;
   const writer = new RunJsonWriter(io.stdout);
   const translator = new SessionUpdateTranslator(writer);
   // A question still open when the prompt ends hangs up, so the broker
   // withdraws its prompt and no open socket keeps this process alive.
   const asks = new AbortController();
   const ask: AskBroker = (question) => io.ask(question, asks.signal);
+  const startup = new AbortController();
+  const timer = setTimeout(() => startup.abort(new Error("Starting OpenCode timed out before the prompt began.")), io.startupTimeoutMs ?? NATIVE_RUNTIME_STARTUP_TIMEOUT_MS);
+  const signal = io.signal ? AbortSignal.any([io.signal, startup.signal]) : startup.signal;
   try {
     return await withAcpChild(
       {
@@ -178,7 +187,7 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
         cwd: options.cwd,
         env: runtimeEnv(io.env ?? process.env),
         stderr: io.stderr,
-        signal: io.signal,
+        signal,
         onRequest: async (message: JsonRpcMessage) => {
           if (message.method === "session/request_permission") {
             return await answerPermissionRequest(message.params ?? {}, translator, ask);
@@ -191,7 +200,10 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
       },
       async (connection) => {
         try {
-          const stopReason = await runPrompt(connection, options);
+          const stopReason = await runPrompt(connection, options, () => {
+            clearTimeout(timer);
+            writer.started();
+          });
           if (stopReason !== "end_turn") {
             reportFailure(io, writer, `OpenCode stopped the turn (${stopReason}).`);
             return 1;
@@ -204,6 +216,7 @@ export async function runOpenCodeAcp(options: OpenCodeAcpOptions, io: OpenCodeAc
       },
     );
   } finally {
+    clearTimeout(timer);
     asks.abort();
   }
 }
@@ -213,7 +226,7 @@ function reportFailure(io: OpenCodeAcpIo, writer: RunJsonWriter, message: string
   io.stderr.write(`error: failed to run prompt: ${message}\n`);
 }
 
-async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions): Promise<string> {
+async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions, onReady: () => void): Promise<string> {
   await connection.request("initialize", {
     protocolVersion: ACP_PROTOCOL_VERSION,
     // OpenCode runs its own tools; the adapter offers no file system or terminal.
@@ -225,6 +238,7 @@ async function runPrompt(connection: AcpConnection, options: OpenCodeAcpOptions)
   if (options.model) {
     await connection.request("session/set_config_option", { sessionId, configId: "model", value: options.model });
   }
+  onReady();
   const result = asRecord(await connection.request("session/prompt", {
     sessionId,
     prompt: [{ type: "text", text: options.prompt }],

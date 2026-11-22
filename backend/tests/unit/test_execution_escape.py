@@ -90,6 +90,11 @@ def _inputs():
             "agentRuns": [{"id": "r", "status": "running"}] if running_agent else [],
         }
         yield session, request, command
+        if command_status == "dispatched" and command is not None:
+            yield session, request, {
+                **command, "id": "cmd_run",
+                "command": {"runId": "r", "reportRuntimeStartup": True},
+            }
 
 
 def _self_resolving(status: dict) -> bool:

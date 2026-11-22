@@ -29,7 +29,7 @@ import {
   ThreadWorkspaceManager,
 } from "./thread-workspace.js";
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
-import { persistTerminalEvent, hasPendingOutput } from "./terminal-outbox.js";
+import { persistTerminalEvent, hasPendingOutput, onOutputDrained } from "./terminal-outbox.js";
 import { materializeImages } from "./image-attachments.js";
 import { createRunMcpProxy, MANAGED_MCP_CONTEXT_ENV } from "./relay-mcp-managed.js";
 import { startNativeMcpBridge } from "./relay-mcp-native.js";
@@ -217,6 +217,7 @@ export async function executeCommand(
       },
     });
     let outputSequence = 0;
+    let runtimeStarted = false;
     let outputPostFailure: Error | undefined;
     // Batches the backend refused outright. A refusal is about the batch, not
     // the run, so the run keeps its exit status and is only flagged as gappy.
@@ -346,7 +347,9 @@ export async function executeCommand(
             runId: command.runId,
             agent,
             entries,
+            ...(runtimeStarted ? { runtimeStarted: true } : {}),
           } satisfies DaemonNodeEvent;
+      runtimeStarted = false;
       if (outputPostFailure) return;
       try { void persistTerminalEvent(fetchFn, event).catch(error => { outputPostFailure = error instanceof Error ? error : new Error(String(error)); }); } catch (error) {
         outputPostFailure = error instanceof Error ? error : new Error(String(error));
@@ -453,9 +456,12 @@ export async function executeCommand(
     }
     // Snapshot document-type workspace files so a successful run can report
     // exactly what it created or changed (see generated-files.ts).
-    const workspaceSnapshot = await snapshotGeneratedFiles(threadWorkspace.hostPath, scanOptions);
+    const workspaceSnapshot = await snapshotGeneratedFiles(threadWorkspace.hostPath, { ...scanOptions, signal });
     let patch;
     let imageInput: Awaited<ReturnType<typeof materializeImages>> | undefined;
+    const unwatchOutput = onOutputDrained(fetchFn, command.id, () => {
+      if (!outputPostDrain) outputBuffer.resume();
+    });
     try {
       imageInput = await materializeImages({
         attachments: command.attachments ?? [],
@@ -479,7 +485,12 @@ export async function executeCommand(
           } : {}),
         } satisfies DaemonNodeEvent, token, signal);
       }
-      patch = await runWithPermissionPrompts(runState, (promptState) => runAgentNode(command.agent, promptState, options));
+      const piOutputMode = command.agent === "pi" ? await execution.piOutputMode?.() : undefined;
+      patch = await runWithPermissionPrompts(runState, (promptState) => runAgentNode(command.agent, promptState, {
+        ...options,
+        piOutputMode,
+        onRuntimeStarted: command.reportRuntimeStartup ? () => { runtimeStarted = true; } : undefined,
+      }));
     } catch (error) {
       execution.forgetAgentReady?.(command.agent);
       consumeRoundResult(threadWorkspace.hostPath, undefined, roundResultPath);
@@ -487,6 +498,7 @@ export async function executeCommand(
       consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
       throw error;
     } finally {
+      unwatchOutput();
       try { imageInput?.cleanup(); } catch (error) {
         logger.warn("Could not remove temporary image inputs", { ...commandLogFields(sandboxId, command), error: transportErrorDetail(error) });
       }

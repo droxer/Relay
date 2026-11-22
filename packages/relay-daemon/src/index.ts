@@ -1624,6 +1624,7 @@ function checkWorkspace(workspacePath: string): void {
 /** One run's hold on the execution context that mounts its workspace. */
 export interface WorkspaceExecution {
   ensureAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void>;
+  piOutputMode?(): Promise<import("relay-core").PiOutputMode | undefined>;
   execStream: typeof localProcessExecStream;
   /** A run of this agent failed: its next run re-checks readiness. */
   forgetAgentReady?(agent: AgentName): void;

@@ -1,7 +1,8 @@
 import { commandExecution } from "./command-execution.js";
 import { extractRuntimeSessionId, RuntimeSessionStream } from "./runtime-session.js";
 import { getAgent } from "./agents.js";
-import { StderrLineRenderer } from "./renderers.js";
+import { JsonLineRenderer, StderrLineRenderer } from "./renderers.js";
+import { parseJsonObject } from "./shell.js";
 import {
   agentCredentialEnv,
   agentWorkspacePath,
@@ -50,16 +51,29 @@ export async function runAgentNode(
   // Daemons pass a thread-specific directory. Direct callers retain the
   // environment-backed workspace for compatibility.
   const cwd = options.workspacePath ?? agentWorkspacePath();
+  let startup: JsonLineRenderer | undefined;
   const run = async (runState: AgentState) => {
     const sessionStream = new RuntimeSessionStream(agent);
     const renderer = def.createRenderer();
     let sawStdout = false;
-    const invocation = commandExecution(def.buildCommand(runState, options.workspacePath));
+    if (options.onRuntimeStarted) {
+      const readyTypes = agent === "codex" ? ["turn.started"]
+        : ["relay.runtime.started", "step_start", "text", "reasoning", "tool_use"];
+      startup = new JsonLineRenderer(line => {
+        if (startup && readyTypes.includes(String(parseJsonObject(line)?.type))) {
+          startup = undefined;
+          options.onRuntimeStarted?.();
+        }
+        return "";
+      });
+    }
+    const invocation = commandExecution(def.buildCommand(runState, options.workspacePath, options.piOutputMode));
     let result = await execute(invocation.command, invocation.args, {
       cwd,
       stdoutRenderer: (chunk) => {
         sawStdout ||= Boolean(chunk);
         sessionStream.feed(chunk);
+        startup?.feed(chunk);
         if (runId) options.eventSink?.agentOutput(runId, agent, "stdout", chunk);
         if (runId && collaborationStream && options.eventSink?.agentCollaboration) {
           for (const event of collaborationStream.feed(chunk)) {

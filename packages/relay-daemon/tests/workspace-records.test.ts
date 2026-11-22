@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { ThreadWorkspaceManager } from "../src/thread-workspace.js";
-import { diffGeneratedFiles } from "../src/generated-files.js";
+import { diffGeneratedFiles, snapshotGeneratedFiles } from "../src/generated-files.js";
 import { agentTaskPrompt, initialAgentState } from "relay-core";
 
 test("agent prompts distinguish deliverables from thread progress", () => {
@@ -287,4 +287,9 @@ test("records migration reports a workspace it cannot sweep and carries on", () 
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
   }
+});
+
+test("a cancelled workspace baseline stops before walking the filesystem", async () => {
+  const signal = AbortSignal.abort(new Error("scan cancelled"));
+  await assert.rejects(snapshotGeneratedFiles(undefined, { signal }), /scan cancelled/);
 });

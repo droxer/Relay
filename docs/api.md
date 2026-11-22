@@ -1384,8 +1384,9 @@ and revalidate state. `canReportGone` is false outside `recovery_required` and
 when a terminal result is retained for finalization (a finalizing request or a
 terminal command, unless its evidence is actually missing); saved evidence must be
 recovered rather than discarded. Clients talking to an older backend must at
-least gate recovery actions on `recovery_required`. Phases are `queued`, `running`, `stopping`, `unresponsive`,
-`finalizing`, `terminal`, and `recovery_required`. A live command lease confirms
+least gate recovery actions on `recovery_required`. Phases are `queued`,
+`starting`, `running`, `stopping`, `unresponsive`, `finalizing`, `terminal`,
+and `recovery_required`. A live command lease confirms
 execution ownership; task/session outcome alone never proves remote termination.
 A fresh computer heartbeat also does not prove execution exit. An online computer
 with unconfirmed execution receives process inspection guidance rather than a
@@ -1393,6 +1394,9 @@ connection-loss message.
 
 In the `queued` phase, `queuedAt` uses the current command's creation time and
 falls back to the run request's creation time. In other phases, `queuedAt` is null.
+For a daemon that reports native startup, `starting` carries `startingRunId`.
+The matching runtime's first ready batch carries `runtimeStarted: true` in
+`agent.output.batch` and advances the phase to `running`.
 
 `DELETE /api/v1/threads/{id}?stop=true` records an event-backed deletion request
 and stops outstanding work. It returns `204` when deleted or `202` with the
@@ -1481,7 +1485,13 @@ the same Project scope can supply this default. Other Threads default to
 
 `POST /threads/{id}/permission-requests/{requestId}` takes the Thread owner's
 signed-in session and returns the updated Thread with its execution status.
-The daemon's prompt deadline covers delivery retries and polling for a decision.
+The daemon's prompt deadline covers delivery retries and waiting for a decision.
+A daemon reads its own prompt through
+`GET /daemon-nodes/{sandboxId}/permission-requests/{requestId}?sessionId={id}`.
+It can pass `waitSeconds` up to 10 to wait for a decision, with a periodic read
+to recover a missed notification. A pending response from a completed long
+poll carries `X-Relay-Permission-Wait: 1` so the daemon can reopen the wait
+immediately.
 
 ## Team responsibilities and work acceptance
 

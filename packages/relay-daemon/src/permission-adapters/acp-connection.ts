@@ -181,14 +181,15 @@ export async function withAcpChild<T>(options: AcpChildOptions, body: (connectio
       connection.close(new Error(`could not start ${options.command}: ${error.message}`));
       resolve();
     });
-    child.once("close", (code, signal) => {
+    child.once("exit", (code, signal) => {
       connection.close(new Error(`${options.label} exited (${signal ?? `code ${code}`}) before the prompt finished`));
       resolve();
     });
   });
   const stop = stopper(child, exited);
   const onAbort = (): void => {
-    connection.close(new Error("The run was cancelled."));
+    const reason = options.signal?.reason;
+    connection.close(reason instanceof Error ? reason : new Error("The run was cancelled."));
     stop();
   };
   if (options.signal?.aborted) onAbort();
@@ -200,5 +201,7 @@ export async function withAcpChild<T>(options: AcpChildOptions, body: (connectio
     child.stdin.end();
     stop();
     await exited;
+    child.stdout.destroy();
+    child.stderr.destroy();
   }
 }

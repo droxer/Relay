@@ -19,7 +19,7 @@ function threadActivityState(session: RelaySession, reading: QueueReading) {
 export function threadStatusLabelKey(session: RelaySession, reading: QueueReading = {}): string {
   const state = threadActivityState(session, reading);
   return state === "ready" ? "thread.status_ready"
-    : ["queued", "running", "stopping", "unresponsive", "finalizing", "recovery_required"].includes(state)
+    : ["queued", "starting", "running", "stopping", "unresponsive", "finalizing", "recovery_required"].includes(state)
       ? `thread.execution_${state}` : `thread.statuses.${state}`;
 }
 
@@ -37,7 +37,7 @@ export function ThreadStatusBadge({ session, compact = false, iconOnly = false, 
   const state = threadActivityState(session, reading);
   const variant = state === "failed" || state === "recovery_required" || state === "unresponsive" ? "danger"
     : state === "waiting_for_human" || state === "stopping" ? "warning"
-    : state === "running" || state === "finalizing" ? "info" : "neutral";
+    : state === "running" || state === "starting" || state === "finalizing" ? "info" : "neutral";
   const label = t(threadStatusLabelKey(session, reading));
   return (
     <Badge

@@ -10,6 +10,7 @@ import time
 from functools import partial
 from typing import TYPE_CHECKING, Any
 from loguru import logger
+from ...core.daemon_records import RUNTIME_STARTED_COMMAND_STATE_KEY
 from ...core.ids import now_iso
 from ...core.repeat_log import RepeatedFailureLog
 from ...persistence.tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
@@ -371,6 +372,7 @@ class EventIngestMixin(RegistryState):
             candidate_seen[stream] = entry["sequence"]
         if not accepted_entries:
             return
+        runtime_started = bool(not late_output and command.get("reportRuntimeStartup") and event.get("runtimeStarted"))
         self.store.append_event(
             event["sessionId"],
             relay_event(
@@ -380,6 +382,7 @@ class EventIngestMixin(RegistryState):
                     "runId": event["runId"],
                     "agent": event["agent"],
                     "entries": accepted_entries,
+                    **({"runtimeStarted": True} if runtime_started else {}),
                 },
             ),
             hydrate_events=False,
@@ -391,7 +394,7 @@ class EventIngestMixin(RegistryState):
                 partial(self._append_run_output, event["runId"], entry["text"]),
             )
         if not late_output:
-            self._note_run_progress(command)
+            self._note_run_progress(command, runtime_started=runtime_started)
 
     def _handle_run_collaboration(
         self, sandbox_id: str, command: dict[str, Any], event: dict[str, Any], late_output: bool
@@ -529,7 +532,7 @@ class EventIngestMixin(RegistryState):
         )
         return self.daemon_store.mark_command_failed(sandbox_id, event)
 
-    def _note_run_progress(self, command: dict[str, Any]) -> None:
+    def _note_run_progress(self, command: dict[str, Any], *, runtime_started: bool = False) -> None:
         """Record that the command's run is still doing something.
 
         Streaming output is the only signal a long agent turn gives between
@@ -542,7 +545,8 @@ class EventIngestMixin(RegistryState):
         now = time.monotonic()
         last = self._last_progress_persisted_at.get(request_id)
         if (
-            last is not None
+            not runtime_started
+            and last is not None
             and now - last < config.DAEMON_RUN_PROGRESS_PERSIST_INTERVAL_SECONDS
         ):
             return
@@ -556,9 +560,13 @@ class EventIngestMixin(RegistryState):
             self._last_progress_persisted_at.pop(request_id, None)
             return
         self._last_progress_persisted_at[request_id] = now
-        self.daemon_store.update_run_request(
-            request_id, {"currentProgressAt": now_iso()}
-        )
+        patch: dict[str, Any] = {"currentProgressAt": now_iso()}
+        if runtime_started:
+            patch["state"] = {
+                **(request.get("state") or {}),
+                RUNTIME_STARTED_COMMAND_STATE_KEY: command["id"],
+            }
+        self.daemon_store.update_run_request(request_id, patch)
 
     def output_for_run(self, run_id: str) -> str:
         return "".join(self.outputs.get(run_id, []))

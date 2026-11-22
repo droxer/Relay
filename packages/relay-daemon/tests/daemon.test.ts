@@ -895,11 +895,11 @@ test(`handoff workspace validation before receiver execution: ${variant}`, async
 });
 }
 
-test("relay daemon reports structured Codex collaboration events", async () => {
+test("relay daemon reports native startup and structured Codex collaboration events", async () => {
   const stop = new AbortController();
   const events: DaemonNodeEvent[] = [];
   let commandServed = false;
-  const command = runCommand("cmd_collaboration");
+  const command = { ...runCommand("cmd_collaboration"), reportRuntimeStartup: true };
   const item = JSON.stringify({
     type: "item.completed",
     item: {
@@ -913,6 +913,7 @@ test("relay daemon reports structured Codex collaboration events", async () => {
       agents_states: { "child-thread": { status: "running", message: null } },
     },
   });
+  const stdout = `${JSON.stringify({ type: "turn.started" })}\n${item}\n`;
   await runRelayDaemon({
     backendUrl: "http://relay.test",
     sandboxId: "sbx_test",
@@ -925,8 +926,8 @@ test("relay daemon reports structured Codex collaboration events", async () => {
     signal: stop.signal,
     environment: fakeEnvironment({
       exec: async (_cmd, args, options) => {
-        if (!isInventoryProbe(args)) options?.stdoutRenderer?.(`${item}\n`);
-        return { exit_code: 0, stdout: `${item}\n`, stderr: "" };
+        if (!isInventoryProbe(args)) options?.stdoutRenderer?.(stdout);
+        return { exit_code: 0, stdout, stderr: "" };
       },
     }),
     fetchFn: async (url, init) => {
@@ -950,6 +951,9 @@ test("relay daemon reports structured Codex collaboration events", async () => {
     },
   });
 
+  const startupSequences = events.flatMap(event =>
+    event.type === "run.output.batch" && event.runtimeStarted ? [event.entries[0]?.sequence] : []);
+  assert.deepEqual([...new Set(startupSequences)], [0]);
   const collaboration = events.find((event) => event.type === "run.collaboration");
   assert.ok(collaboration && collaboration.type === "run.collaboration");
   assert.equal(collaboration.collaboration.tool, "spawnAgent");
@@ -1025,7 +1029,7 @@ test("a native local Claude run asks a person through the daemon's permission br
   assert.equal(requested.leaseId, "lease_permission");
   assert.equal(requested.agent, "claude");
   assert.deepEqual({ ...requested.request, id: "" }, { id: "", toolName: "Bash", toolUseId: "toolu_1", input: "{\"command\":\"ls\"}" });
-  assert.equal(polls[0], `/api/v1/daemon-nodes/sbx_permission/permission-requests/${requested.request.id}?sessionId=ses_1`);
+  assert.equal(polls[0], `/api/v1/daemon-nodes/sbx_permission/permission-requests/${requested.request.id}?sessionId=ses_1&waitSeconds=10`);
   assert.ok(events.some((event) => event.type === "run.completed"));
 });
 

@@ -117,6 +117,7 @@ describe("taskExceptions", () => {
   });
 
   it("says nothing about a session that is running normally", () => {
+    assert.deepEqual(taskExceptions(task({ id: "t1", title: "One" }), execution("starting")), []);
     assert.deepEqual(taskExceptions(task({ id: "t1", title: "One" }), execution("running")), []);
     assert.deepEqual(taskExceptions(task({ id: "t1", title: "One" }), execution("terminal")), []);
   });

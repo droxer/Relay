@@ -315,10 +315,12 @@ async function pollDecision(requestId: string, options: PermissionBrokerOptions,
     `/daemon-nodes/${encodeURIComponent(options.sandboxId)}/permission-requests/${encodeURIComponent(requestId)}`,
   ));
   url.searchParams.set("sessionId", options.command.sessionId);
+  url.searchParams.set("waitSeconds", "10");
   const interval = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   while (true) {
     if (signal.aborted) return deny(cannotAsk(signal.reason));
     const outcome = await pollOnce(url.toString(), options, signal);
+    if (outcome === "waited") continue;
     if (outcome) return outcome;
     try {
       await sleep(interval, signal);
@@ -329,7 +331,7 @@ async function pollDecision(requestId: string, options: PermissionBrokerOptions,
 }
 
 /** A decision when the poll settles the question, undefined to poll again. */
-async function pollOnce(url: string, options: PermissionBrokerOptions, signal: AbortSignal): Promise<PermissionAnswer | undefined> {
+async function pollOnce(url: string, options: PermissionBrokerOptions, signal: AbortSignal): Promise<PermissionAnswer | "waited" | undefined> {
   let response: Response;
   try {
     response = await options.fetchFn(url, {
@@ -361,6 +363,8 @@ async function pollOnce(url: string, options: PermissionBrokerOptions, signal: A
       return deny(typeof body.note === "string" && body.note.trim() ? body.note : DENIED_BY_USER);
     case "expired":
       return deny(EXPIRED);
+    case "pending":
+      return response.headers.get("X-Relay-Permission-Wait") === "1" ? "waited" : undefined;
     default:
       return undefined;
   }

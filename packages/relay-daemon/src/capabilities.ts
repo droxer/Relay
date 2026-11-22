@@ -38,6 +38,7 @@ import {
 
 export const DAEMON_ADVERTISED_CAPABILITIES: readonly DaemonNodeCapability[] = [
   "durable-reports",
+  "native-runtime-startup",
   DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK,
   "runtime-refresh",
   "service-connections",

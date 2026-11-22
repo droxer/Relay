@@ -27,7 +27,7 @@ from ...daemon_registry.records import (
 )
 from ...daemon_registry import config as registry_config
 from ...daemon_registry.dispatch.commands import HEARTBEAT_STATES
-from ...realtime.event_notifier import daemon_command_key
+from ...realtime.event_notifier import daemon_command_key, session_event_key
 from ..actors import (
     bearer_token,
     request_actor,
@@ -470,26 +470,42 @@ def daemon_skill_blob(
 
 
 @router.get("/daemon-nodes/{sandbox_id}/permission-requests/{request_id}")
-def daemon_permission_request(
-    sandbox_id: str, request_id: str, request: Request, ctx: AppContextDep
+async def daemon_permission_request(
+    sandbox_id: str, request_id: str, request: Request, response: Response, ctx: AppContextDep
 ) -> dict[str, Any]:
-    """The answer to a run's permission prompt, polled while the run waits."""
+    """Wait for an authorized decision, with periodic reads if a wake is lost."""
     session_id = request.query_params.get("sessionId") or ""
     if not session_id:
         raise HTTPException(400, "sessionId is required.")
+    wait_seconds = bounded_float(
+        request.query_params.get("waitSeconds"), default=0, minimum=0, maximum=10, field="waitSeconds"
+    )
+    token = bearer_token(request)
+    deadline = time.monotonic() + wait_seconds
+    key = session_event_key(session_id)
+    notifier = ctx.control_plane_notifier
     try:
-        status = ctx.registry.permission_request_status(
-            sandbox_id, bearer_token(request), session_id, request_id
-        )
+        while True:
+            with notifier.observe(key) as version:
+                status = await run_in_threadpool(
+                    ctx.registry.permission_request_status, sandbox_id, token, session_id, request_id
+                )
+                if status is None:
+                    raise HTTPException(404, "Permission request not found.")
+                if status["status"] != "pending":
+                    return status
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or await request.is_disconnected():
+                    if wait_seconds:
+                        response.headers["X-Relay-Permission-Wait"] = "1"
+                    return status
+                await notifier.wait(key, version, timeout=min(1.5, remaining))
     except DeletedDaemonNodeError as error:
         raise HTTPException(410, str(error)) from error
     except UnknownDaemonNodeError as error:
         raise HTTPException(404, "Daemon node not found.") from error
     except PermissionError as error:
         raise HTTPException(401, "Unauthorized daemon node.") from error
-    if status is None:
-        raise HTTPException(404, "Permission request not found.")
-    return status
 
 
 @router.post("/daemon-nodes/{sandbox_id}/events")

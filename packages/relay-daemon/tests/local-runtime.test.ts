@@ -136,3 +136,24 @@ test("a local lease rejects a workspace replaced by a symlink", { skip: process.
     lease.release();
   } finally { await runtime.close(); rmSync(root, { recursive: true, force: true }); }
 });
+
+test("native Pi caches its help result across workspace leases and reprobes a replaced CLI", async () => {
+  await withFakePi(async ({ home }) => {
+    const pi = join(home, "bin", "pi");
+    const help = join(home, "help");
+    const replace = (flags: string) => {
+      const next = pi + ".next";
+      writeFileSync(next, `#!/bin/sh\nprintf x >> "${help}"\nprintf '%s\\n' "${flags}"\n`, { mode: 0o755 });
+      renameSync(next, pi);
+    };
+    replace("--mode <mode>");
+    const runtime = createLocalRuntime();
+    for (const mode of ["json", "json", "streaming"]) {
+      if (mode === "streaming") replace("-P, --print-streaming");
+      const lease = await runtime.acquireWorkspace(home);
+      try { assert.equal(await lease.piOutputMode?.(), mode); }
+      finally { lease.release(); }
+    }
+    assert.equal(readFileSync(help, "utf8"), "xx");
+  });
+});

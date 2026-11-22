@@ -31,7 +31,9 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     return;
   }
   switch (message.method) {
-    case "initialize": return send({ id: message.id, result: { protocolVersion: 1, agentInfo: { name: "OpenCode", version: "2.2.0" } } });
+    case "initialize":
+      if (process.env.FAKE_OPENCODE_HANG_INIT) { log({ startup: "initialize" }); return; }
+      return send({ id: message.id, result: { protocolVersion: 1, agentInfo: { name: "OpenCode", version: "2.2.0" } } });
     case "session/new": return send({ id: message.id, result: { sessionId } });
     case "session/set_config_option": log({ model: message.params.value }); return send({ id: message.id, result: { configOptions: [] } });
     case "session/prompt":
@@ -69,7 +71,7 @@ interface Captured {
 
 async function run(
   behavior: "allow" | "deny",
-  { model, signal, hang }: { model?: string; signal?: AbortSignal; hang?: boolean } = {},
+  { model, signal, hang, hangInit, startupTimeoutMs }: { model?: string; signal?: AbortSignal; hang?: boolean; hangInit?: boolean; startupTimeoutMs?: number } = {},
 ): Promise<Captured> {
   const logPath = join(root, `log-${++runCount}.jsonl`);
   let stdout = "";
@@ -86,7 +88,8 @@ async function run(
       stderr: { write: (text: string) => { stderr += text; } },
       ask,
       signal,
-      env: { ...process.env, FAKE_OPENCODE_LOG: logPath, ...(hang ? { FAKE_OPENCODE_HANG: "1" } : {}) },
+      startupTimeoutMs,
+      env: { ...process.env, FAKE_OPENCODE_LOG: logPath, ...(hang ? { FAKE_OPENCODE_HANG: "1" } : {}), ...(hangInit ? { FAKE_OPENCODE_HANG_INIT: "1" } : {}) },
     },
   );
   const log = readFileLines(logPath);
@@ -106,6 +109,13 @@ function events(stdout: string): Array<Record<string, unknown>> {
 }
 
 describe("OpenCode ACP adapter", () => {
+  it("fails a stalled handshake even while the child stays alive", async () => {
+    const result = await run("allow", { hangInit: true, startupTimeoutMs: 750, signal: AbortSignal.timeout(4_000) });
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /starting OpenCode.*timed out/i);
+    assert.deepEqual(result.log, [{ startup: "initialize" }]);
+  });
+
   it("answers an approved tool with allow_once and prints run-format events", async () => {
     const result = await run("allow");
 
@@ -119,7 +129,8 @@ describe("OpenCode ACP adapter", () => {
       reason: "echo hi",
     });
     assert.deepEqual(result.log[0], { answer: { outcome: { outcome: "selected", optionId: "once" } } });
-    const lines = events(result.stdout);
+    const [started, ...lines] = events(result.stdout);
+    assert.deepEqual(started, { type: "relay.runtime.started" });
     assert.deepEqual(lines[0], { type: "reasoning", delta: true, part: { type: "reasoning", text: "Checking.", messageID: "thought" } });
     assert.deepEqual(lines[1], { type: "text", delta: true, part: { type: "text", text: "Working.", messageID: "reply" } });
     const calls = lines.filter((line) => line.type === "tool_use")

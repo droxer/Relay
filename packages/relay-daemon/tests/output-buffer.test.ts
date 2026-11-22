@@ -139,3 +139,39 @@ it('busy capture still flushes within its maximum durability delay', async () =>
   assert.equal(emitted.length, 1);
   buffer.close();
 });
+
+it("flushes held output as soon as the durable batch is acknowledged", async () => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { TerminalOutbox, hasPendingOutput, onOutputDrained } = await import("../src/terminal-outbox.js");
+  const directory = await mkdtemp(join(tmpdir(), "relay-live-output-"));
+  try {
+    const outbox = new TerminalOutbox(directory);
+    outbox.negotiate(true, true);
+    const send: typeof fetch = async (_url, init) => {
+      const { reports } = JSON.parse(String(init?.body));
+      return Response.json({ receipts: reports.map(({ id, digest }: { id: string; digest: string }) => ({ id, digest, status: 200 })) });
+    };
+    const fetchFn = outbox.wrapFetch(send);
+    const commandId = "pending-command";
+    await outbox.retain({ type: "run.output.batch", commandId, entries: [{ stream: "stdout", text: "first", sequence: 0 }] }).durable;
+    const emitted: string[] = [];
+    const buffer = new OutputEventBuffer(entries => emitted.push(...entries.map(entry => entry.text)), {
+      delayMs: 5, maxDelayMs: 10_000, isBusy: () => hasPendingOutput(fetchFn, commandId),
+    });
+    const unwatch = onOutputDrained(fetchFn, commandId, () => buffer.resume());
+    try {
+      buffer.push("stdout", "second");
+      await new Promise(resolve => setTimeout(resolve, 20));
+      assert.deepEqual(emitted, []);
+      await outbox.replay(send, "http://test/events", "token");
+      assert.deepEqual(emitted, ["second"]);
+    } finally {
+      unwatch();
+      buffer.close();
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

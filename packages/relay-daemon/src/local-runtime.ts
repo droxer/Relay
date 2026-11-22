@@ -1,6 +1,6 @@
-import { join } from "node:path";
-import { realpathSync, statSync } from "node:fs";
-import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent, localRuntimeEnvironment, commandExecution, type AgentName } from "relay-core";
+import { delimiter, join, resolve } from "node:path";
+import { accessSync, constants, realpathSync, statSync } from "node:fs";
+import { agentCredentialEnv, agentHomePath, allAgentCredentialEnvNames, getAgent, localRuntimeEnvironment, commandExecution, type AgentName, type PiOutputMode } from "relay-core";
 import type { DaemonExecutionEnvironment } from "./index.js";
 import { superviseLocalProcess } from "./process-supervisor.js";
 import { exitHooksFor, watchExecutionExit } from "./execution-capture.js";
@@ -20,6 +20,7 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
   // message. A failed probe or a failed run forgets the agent again. This
   // mirrors the per-guest cache a BoxLite computer keeps (sandbox-session.ts).
   const readyAgents = new Set<AgentName>();
+  let piHelp: { executable: string; mode: PiOutputMode } | undefined;
   const probe = async (agent: AgentName, signal?: AbortSignal): Promise<void> => {
     try {
       await ensureLocalAgentReady(agent, signal);
@@ -63,6 +64,25 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
           await probe(agent, signal);
         },
         execStream,
+        piOutputMode: async () => {
+          assertActive();
+          const env = localAgentSubprocessEnv();
+          const executable = piExecutableIdentity(root, env);
+          if (executable && piHelp?.executable === executable) return piHelp.mode;
+          const timeout = AbortSignal.timeout(5_000);
+          const result = await localProcessExecStream("pi", ["--help"], {
+            cwd: root,
+            signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+          });
+          signal?.throwIfAborted();
+          const help = result.stdout + result.stderr;
+          const mode = /(?:^|\s)--mode(?:[=,\s]|$)/m.test(help) ? "json"
+            : /(?:^|\s)(?:-P|--print-streaming)(?:[=,\s]|$)/m.test(help) ? "streaming" : "print";
+          if (result.exit_code === 0 && executable && executable === piExecutableIdentity(root, env)) {
+            piHelp = { executable, mode };
+          }
+          return mode;
+        },
         forgetAgentReady: (agent) => { readyAgents.delete(agent); },
         release: () => { released = true; },
       };
@@ -78,6 +98,33 @@ export function createLocalRuntime(): DaemonExecutionEnvironment {
     },
     close: async () => undefined,
   };
+}
+
+function piExecutableIdentity(cwd: string, env: NodeJS.ProcessEnv): string | undefined {
+  if (process.platform === "win32") {
+    try {
+      const invocation = nativeCommand("pi", [], env);
+      return fileIdentity(invocation.args[0] ?? invocation.command);
+    } catch {
+      return undefined;
+    }
+  }
+  for (const directory of (env.PATH ?? "/usr/bin:/bin").split(delimiter)) {
+    const candidate = resolve(cwd, directory, "pi");
+    try {
+      accessSync(candidate, constants.X_OK);
+      const identity = fileIdentity(candidate);
+      if (identity) return identity;
+    } catch { /* Move to the next executable on PATH. */ }
+  }
+  return undefined;
+}
+
+function fileIdentity(path: string): string | undefined {
+  const resolved = realpathSync.native(path);
+  const stat = statSync(resolved, { bigint: true });
+  if (!stat.isFile()) return undefined;
+  return [resolved, stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(":");
 }
 
 export const localProcessExecStream: typeof superviseLocalProcess = async (cmd, args = [], options = {}) => {

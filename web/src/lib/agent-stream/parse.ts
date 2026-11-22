@@ -51,7 +51,7 @@ export function parseAgentStderr(raw: string): AgentSegment[] {
 
 const AGENT_CHECKPOINT_TYPES: Record<AgentName, "each" | ReadonlySet<unknown>> = {
   claude: new Set(["assistant", "result"]),
-  codex: new Set(["turn.completed", "turn.failed"]),
+  codex: "each",
   // Retry results can echo an assistant error after turn_end. Keep those
   // records together until the next turn begins.
   pi: new Set(["turn_start"]),
