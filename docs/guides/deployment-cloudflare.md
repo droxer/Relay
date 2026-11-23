@@ -365,12 +365,15 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://api.example.com/api/v1/auth/st
 curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/api/v1/auth/status
 # Health check is open on the origin: 200
 curl -sS -o /dev/null -w '%{http_code}\n' https://<service>.up.railway.app/healthz
-# Static assets are immutable (Workers); on Railway, cf-cache-status is HIT
-# after the first request
-curl -sSI https://app.example.com/_next/static/<any-asset> | grep -iE 'cache-control|cf-cache-status'
+# Use a real static asset path. Repeat the GET after a MISS.
+curl -sS -D - -o /dev/null 'https://app.example.com/_next/static/chunks/example.js' \
+  | grep -iE 'cache-control|cf-cache-status|cf-ray'
 # The API is never cached: BYPASS or DYNAMIC
 curl -sSI https://api.example.com/api/v1/auth/status | grep -i cf-cache-status
 ```
+
+On Workers, `deploy/deploy.sh verify` reports the cache status and edge location
+of a static asset. It retries a non-HIT once, then warns if the edge is still cold.
 
 The web UI and its CORS grant:
 
