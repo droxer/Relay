@@ -2687,7 +2687,7 @@
     "question_title": "{{agent}} 需要你的回答",
     "check_title": "{{agent}} 在完成前停下了",
     "unreported_title": "{{agent}} 結束時沒有提交報告",
-    "unreported_text": "它在上方最後一條訊息中說明了停在哪裡、需要什麼。請在此回覆，或選擇下一步。",
+    "unreported_text": "詳情請查看 {{agent}} 的最後一則訊息。",
     "budget_title": "{{agent}} 已達到輪次上限",
     "no_question": "{{agent}} 請求幫助，但沒有說明需要什麼。請回復下一步該怎麼做。",
     "hint_task": "回覆後將繼續 {{ref}}。",
