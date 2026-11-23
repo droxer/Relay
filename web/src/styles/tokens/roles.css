@@ -273,7 +273,10 @@
 
   --type-display-track:      var(--track-display); /* the one tightened tier — see palette.css */
   --type-title-track:        var(--track-title);
-  --type-heading-track:      var(--track-0);
+  /* Heading is the same 16px/600 display face as title and title-content,
+     so it takes the same title step: at 0 it read looser than the drawer
+     and rail titles it sits beside. */
+  --type-heading-track:      var(--track-title);
   --type-number-track:       var(--track-display);
   --type-body-track:         var(--track-body);
   --type-page-track:        var(--track-display);

@@ -515,7 +515,7 @@ describe("composited control contrast", () => {
       const selection = register.match(/--action-soft:\s*color-mix\(in srgb, (#[0-9a-f]{6}) (\d+)%, transparent\)/);
       assert.ok(selection, `${label} must declare the selection wash`);
       for (const [variant, utility, token] of [
-        ["success", "success", "--ok"], ["warning", "warning", "--warn"],
+        ["success", "success", "--ok"], ["warning", "warning-badge", "--warn-badge"],
         ["danger", "danger", "--err"], ["info", "info", "--ink-3"],
       ]) {
         const tint = badge.match(new RegExp(`${variant}: "[^"\n]*bg-${utility}/(\\d+)`));

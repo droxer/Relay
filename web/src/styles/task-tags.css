@@ -3,9 +3,12 @@
 
    A tag badge is "#name" inside a fine keyline. Status badges are a toned
    word on a toned fill (done, blocked, needs project); a tag is a label that
-   means nothing to Relay, so its name stays ink and its colour lives in
-   the keyline and leading "#" (--tag-1…8, see palette.css) — enough to scan a list by
-   tag, never enough to read as a status. */
+   means nothing to Relay, so its name stays ink and its colour lives only
+   in the leading "#" (--tag-1…8, see palette.css) — enough to scan a list by
+   tag, never enough to read as a status. The keyline is neutral: toned at
+   42% it repeated the hue around the whole chip, and with purple off the
+   wheel several tones sit within ΔE 0.05 of a status ink (blush ≈ error,
+   sand ≈ warn, sky ≈ live), so a toned frame read as a status. */
 
 /* ── The mark: tone → colour, the one place the tag palette is read ─── */
 
@@ -64,7 +67,7 @@
   border: 0;
   border-radius: var(--r-1);
   background: transparent;
-  box-shadow: inset 0 0 0 var(--stroke-w) color-mix(in srgb, var(--tag-tone, var(--ink-4)) 42%, transparent);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--line-1);
   color: var(--ink-2);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);

@@ -63,6 +63,7 @@
   --color-success: var(--ok);
   --color-danger: var(--err);
   --color-warning: var(--warn);
+  --color-warning-badge: var(--warn-badge);
   --color-info: var(--info);
   --color-brand-soft: var(--action-soft);
 
@@ -133,6 +134,10 @@
      and a --type-* role at the same size set the same line box, and
      text-base follows the CJK scope's looser body leading. */
   --text-xs--line-height: var(--leading-caps);
+  /* Known mismatch: the 14px roles (--type-label, --type-body-sm) set 14/22,
+     these utilities 14/20. Moving them to 14/22 re-flows every dialog body
+     set in text-sm (the task review dialog's Accept button slid under the
+     error toast in taskStatus.spec.ts), so it needs its own layout pass. */
   --text-sm--line-height: var(--leading-snug);
   --text-dense--line-height: var(--leading-snug);
   --text-base--line-height: var(--leading-normal);

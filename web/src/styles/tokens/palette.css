@@ -116,6 +116,9 @@
      the small-text contrast floor on all content and navigation planes. */
   --ok: #7adb95;   /* success — lifted for tinted selected states */
   --warn: #dec371; /* warning — a muted gold, clear of the brand mark's orange */
+  /* Ink for the warning BADGE — text on its own 8% tint. The same as --warn
+     here; the light register needs it deeper (see there). */
+  --warn-badge: #dec371;
   --err: #ffabbd;  /* critical — crimson, lifted for the dark canvas */
   /* Dark ink on the lifted critical fill. */
   --on-err: #23313b;
@@ -175,7 +178,7 @@
      A Tag (CONTEXT.md) is filed under one of eight tones, picked by hashing
      its name (`tagTone` in lib/taskTags.ts), so the same tag wears the same
      colour on every surface. A tone is only ever the "#" GLYPH that leads a
-     tag badge: never the chip's fill, never the tag's name, never a border —
+     tag badge: never the chip's fill, never the tag's name, never the keyline —
      so a tag can never be mistaken for a status (a toned word on a toned
      fill), the action, or a live run. Each tone sits off the status hues
      (ok 148 · warn 89 · err 9 · live 258) and clears 3:1 as a graphic
@@ -769,10 +772,13 @@
 
   /* OpenType — the base feature recipe every face starts from. It is shared by
      Space Grotesk, Space Mono and the platform fallbacks, and each face
-     assigns its stylistic sets and character variants differently (Space
-     Grotesk's ss01-ss04 redraw single letters, and on San Francisco
-     ss01/ss02 redraw the 6, 9 and 4), so none is
-     switched on: the recipe is the default kerning only. It
+     assigns its stylistic sets and character variants differently (on San
+     Francisco ss01/ss02 redraw the 6, 9 and 4), so none is switched on: the
+     recipe is the default kerning only. The one alternate the app wants —
+     Space Grotesk's serifed capital I (upstream ss05), so "CI", "PII" and
+     "Il1" stay legible — is baked into the vendored subset's cmap instead,
+     where it cannot reach a fallback face. The subset ships no stylistic
+     sets at all. It
      stays a token because `font-feature-settings` REPLACES rather than
      adds — rules that want tabular figures lead with this and append "tnum". */
   --font-features: "kern" 1;
@@ -839,8 +845,12 @@ html[data-theme="light"] {
 
   /* Neutral text; every tier clears AA on the recessed fill. */
   --ink-1: #141f27; /* blue-charcoal ink */
-  --ink-2: #33424c; /* ink */
-  --ink-3: #4c5c66; /* charcoal */
+  /* ink-4 already sits on the AA floor of --surface-2, so the ladder is
+     spaced from there upward in even ~0.09 OKLCH lightness steps (0.23 /
+     0.33 / 0.42 / 0.50). ink-3 at #4c5c66 was 0.04 from ink-4, and the
+     secondary and meta tiers read as one. */
+  --ink-2: #293841; /* ink */
+  --ink-3: #40505a; /* charcoal */
   --ink-4: #58676f; /* steel, deepened for AA */
 
   /* Cool-grey hairlines, with a visible structural edge on the mist canvas. */
@@ -862,7 +872,16 @@ html[data-theme="light"] {
      of the brand's orange; the critical red follows it onto crimson.
      Plain text and selected, tinted badge states clear the 4.5:1 floor. */
   --ok: #0b6424;   /* success — deepened for tinted selected states */
-  --warn: #705400; /* warning, deepened on the gold hue */
+  /* Amber at hue ~76 rather than gold at 86: a gold deepened to 4.5:1 turns
+     olive-brown (#705400 read as mud beside the other status inks), while
+     amber holds its colour at the same depth and stays clear of the orange
+     marker (ΔE 0.10). 4.6:1 on --surface-2. */
+  --warn: #8a5e09; /* warning — amber, deepened */
+  /* A badge prints --warn-badge on an 8% tint of itself, and the tint eats
+     contrast: #8a5e09 measured 4.38:1 there. One step deeper clears 4.5:1 on
+     every plain and selected row. Only the badge pays the depth, so glyphs
+     and status text keep the clearer amber above. */
+  --warn-badge: #795209;
   --err: #ab0d40;  /* critical — crimson, deepened */
   /* Text on an --err fill — white, as the source system's badge-critical prints it
      (verified against the critical fill). */

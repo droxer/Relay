@@ -35,7 +35,7 @@ const badgeVariants = cva(
         neutral: "border-transparent bg-(--control-fill) text-ink",
         success: "border-transparent bg-success/8 text-success",
         info: "border-transparent bg-info/8 text-info",
-        warning: "border-transparent bg-warning/8 text-warning",
+        warning: "border-transparent bg-warning-badge/8 text-warning-badge",
         danger: "border-transparent bg-danger/8 text-danger",
         /* Chrome only — the caller's own stylesheet owns the border colour and
            ink. For badges whose tone scale is richer than the five semantic

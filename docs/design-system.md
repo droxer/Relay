@@ -146,8 +146,8 @@ Dark register / light register, matching `palette.css`:
 | `--surface-list` | `#1c242a` | `#f6f9fa` | list pane |
 | `--surface-band` | `#222c33` | `#dee7ed` | group bands and Task board lane headers |
 | `--ink-1` | `#edf2f6` | `#141f27` | headings and emphasis |
-| `--ink-2` | `#ccd8e1` | `#33424c` | body |
-| `--ink-3` | `#b2c3d0` | `#4c5c66` | secondary labels and neutral notices |
+| `--ink-2` | `#ccd8e1` | `#293841` | body |
+| `--ink-3` | `#b2c3d0` | `#40505a` | secondary labels and neutral notices |
 | `--ink-4` | `#93a5b2` | `#58676f` | timestamps and metadata |
 | `--line-1` | `#405361` | `#b7c3cc` | structural hairline |
 | `--line-2` | `#2f3d48` | `#d6dfe5` | soft hairline |
@@ -158,7 +158,7 @@ Dark register / light register, matching `palette.css`:
 | `--link-ink-strong` | `#ffffff` | `#0b141a` | link hover |
 | `--brand-lead` | `#ff8a3d` | `#b84400` | brand mark lead; `--signature` (focus ring, selection marker) |
 | `--ok` | `#7adb95` | `#0b6424` | success |
-| `--warn` | `#dec371` | `#705400` | attention |
+| `--warn` | `#dec371` | `#8a5e09` | attention |
 | `--err` | `#ffabbd` | `#ab0d40` | failure and destructive intent |
 | `--on-err` | `#23313b` | `#ffffff` | critical fill label |
 | `--live` | `#91b9f2` | `#2457c5` | live execution |
