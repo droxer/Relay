@@ -12,7 +12,7 @@
   <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
-Run AI agents on your own computers, coordinate them as teams, and follow their work from your desktop or phone. Relay supports Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, OpenCode, and Google Antigravity.
+Run AI agents on your own computers, coordinate them as teams, and follow their work from your desktop or phone. Relay supports Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, OpenCode, and the Google Antigravity CLI.
 
 The backend coordinates work; daemons execute it on personal or managed computers, directly on the host or inside a [BoxLite](https://github.com/boxlite-ai/boxlite) sandbox.
 
@@ -92,6 +92,10 @@ make web                         # web UI on 127.0.0.1:5000
 Open <http://127.0.0.1:5000> and sign in as `admin`.
 
 Tests, database migrations, the supervisor, pre-commit hooks, and shutdown commands are covered in [Local Development](docs/local-development.md).
+
+### Use Google Antigravity
+
+On a personal computer connected to Relay, install Google Antigravity CLI (`agy`) 1.5.0 or later. Run `agy` to sign in, then run `agy models` to check your setup. In Relay, open that computer and select **Refresh runtimes**. Choose **Google Antigravity** when you create an agent.
 
 ## Learn more
 

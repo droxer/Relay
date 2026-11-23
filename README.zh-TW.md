@@ -12,7 +12,7 @@
   <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
-在自己的電腦上執行 AI 智慧體，將它們組織為團隊，並隨時透過桌面或手機追蹤工作。Relay 支援 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi 和 OpenCode。
+在自己的電腦上執行 AI 智慧體，將它們組織為團隊，並隨時透過桌面或手機追蹤工作。Relay 支援 Codex、[Claude Code](https://github.com/anthropics/claude-code)、Pi、OpenCode 和 Google Antigravity CLI。
 
 後端負責協調工作，常駐程式在個人或受管理的電腦上執行，可直接使用主機環境，也可執行於 [BoxLite](https://github.com/boxlite-ai/boxlite) 沙箱中。
 
@@ -92,6 +92,10 @@ make web                         # Web 介面，監聽 127.0.0.1:5000
 開啟 <http://127.0.0.1:5000>，以 `admin` 身分登入。
 
 測試、資料庫遷移、監督程式、pre-commit 鉤子與停止命令請參閱[本機開發指南](docs/local-development.md)。
+
+### 使用 Google Antigravity
+
+在已連線至 Relay 的個人電腦上安裝 1.5.0 或更新版本的 Google Antigravity CLI（`agy`）。執行 `agy` 登入，再執行 `agy models` 確認設定。在 Relay 中開啟該電腦，選擇**重新檢測執行時**。建立智慧體時選擇 **Google Antigravity**。
 
 ## 瞭解更多
 

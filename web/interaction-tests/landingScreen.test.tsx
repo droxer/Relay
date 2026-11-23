@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import en from "../src/i18n/locales/en/public.json";
@@ -21,6 +21,8 @@ it("says what Relay is and shows the real product", () => {
   vi.mocked(useWaitlistEnabled).mockReturnValue(null);
   render(<LandingScreen />);
   expect(screen.getByRole("heading", { level: 1, name: en.landing.headline })).toBeTruthy();
+  const heroRegion = screen.getByRole("region", { name: en.landing.headline });
+  expect(within(heroRegion).getByText(/Google Antigravity CLI/)).toBeTruthy();
   const hero = screen.getByRole("img", { name: en.landing.hero_alt }) as HTMLImageElement;
   expect(hero.getAttribute("src")).toBe("/landing/home.webp");
   expect(screen.getByRole("heading", { name: en.landing.how_title })).toBeTruthy();
