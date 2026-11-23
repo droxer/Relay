@@ -9,7 +9,7 @@
   align-items: baseline;
   column-gap: var(--sp-1-5);
   margin-top: var(--sp-2);
-  color: var(--ink-4);
+  color: var(--ink-3);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
   font-feature-settings: var(--font-features), "tnum" 1;
@@ -24,6 +24,7 @@
 
 .run-receipt-outcome {
   color: var(--ink-2);
+  font-weight: 500;
 }
 
 .run-receipt[data-outcome="failed"] .run-receipt-outcome {
