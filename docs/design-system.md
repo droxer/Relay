@@ -144,7 +144,7 @@ Dark register / light register, matching `palette.css`:
 | `--surface-3` | `#2b3842` | `#ffffff` | floating surfaces |
 | `--surface-rail` | `#222c33` | `#e1e8ed` | navigation rail |
 | `--surface-list` | `#1c242a` | `#f6f9fa` | list pane |
-| `--surface-band` | `#222c33` | `#edf2f5` | group bands |
+| `--surface-band` | `#222c33` | `#dee7ed` | group bands and Task board lane headers |
 | `--ink-1` | `#edf2f6` | `#141f27` | headings and emphasis |
 | `--ink-2` | `#ccd8e1` | `#33424c` | body |
 | `--ink-3` | `#b2c3d0` | `#4c5c66` | secondary labels and neutral notices |

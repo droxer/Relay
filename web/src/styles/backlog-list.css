@@ -590,27 +590,23 @@ button.inline-field[aria-expanded="true"] {
    selector, not .backlog-row: routine rows carry data-selected too. */
 tr[data-selected="true"] {
   background: var(--action-soft);
-  --agent-pip-surface: color-mix(in srgb, var(--action) var(--agent-pip-selection-strength, 8%), var(--surface-0));
+  --agent-pip-surface: color-mix(in srgb, var(--action) var(--selection-wash-strength, 8%), var(--surface-0));
 }
 
 /* The accent bar used to be an ::after on a position:relative flex row; a
    <tr> is not a reliable positioning context, so the bar is an inset shadow
    on the leading cell instead — same stripe, same inset. */
 tr[data-selected="true"] > td:first-child {
-  box-shadow: inset var(--accent-bar-w) 0 0 var(--signature);
+  box-shadow: var(--accent-bar);
 }
 
-/* A card is the one selectable object that keeps a ring instead of the bar:
-   it floats on the lane as a bordered tile, and a leading bar inset from a
-   card's rounded edge reads as a stray stripe. It takes the same
-   --action-soft selection wash as the rails and the table rows, and the
-   action-coloured edge stands in for the bar — wash + edge, the rail
-   contract translated to a card. */
+/* Keep the card's plane under the wash so the tile and its avatar cutout
+   stay above the lane. Use the same selection marker as the list view. */
 .backlog-task[data-selected="true"] {
-  background: var(--action-soft);
-  --agent-pip-surface: color-mix(in srgb, var(--action) var(--agent-pip-selection-strength, 8%), var(--surface-0));
-  border-color: var(--action);
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--action);
+  --selected-card-surface: color-mix(in srgb, var(--action) var(--selection-wash-strength, 8%), var(--surface-1));
+  --agent-pip-surface: var(--selected-card-surface);
+  background: var(--selected-card-surface);
+  box-shadow: var(--accent-bar);
 }
 
 /* Floating, not docked into the page header: the header keeps its create and
@@ -982,5 +978,5 @@ tr[data-selected="true"] > td:first-child {
 }
 
 html[data-theme="light"] :is(tr[data-selected], .backlog-task) {
-  --agent-pip-selection-strength: 6%;
+  --selection-wash-strength: 6%;
 }
