@@ -6,7 +6,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { parse as parseToml } from 'smol-toml';
 import { parse, modify, applyEdits, type ParseError } from 'jsonc-parser';
 
-type Runtime = 'codex' | 'claude' | 'opencode' | 'pi';
 export class McpInstallError extends Error {
   constructor(readonly code: string, message: string, readonly blocked = true) { super(message); }
 }
@@ -70,7 +69,7 @@ function install(options: InstallOptions): string[] {
   const manifestPath = join(home, '.relay', 'mcp', 'installed-servers.json');
   const manifest: Record<string, string> = existsSync(manifestPath) ? json(readFileSync(manifestPath, 'utf8'), manifestPath) : {};
   const installed: string[] = [];
-  for (const runtime of options.runtimes as Runtime[]) {
+  for (const runtime of options.runtimes) {
     let path: string; let keys: string[]; let entry: unknown;
     if (runtime === 'codex') {
       path = join(env.CODEX_HOME ?? join(home, '.codex'), 'config.toml');
@@ -93,6 +92,9 @@ function install(options: InstallOptions): string[] {
         const root = join(env.XDG_CONFIG_HOME ?? join(home, '.config'), 'opencode');
         path = existsSync(join(root, 'opencode.jsonc')) ? join(root, 'opencode.jsonc') : join(root, 'opencode.json');
         keys = ['mcp', serverName]; entry = { type: 'local', command: [process.execPath, ...args], enabled: true };
+      } else if (runtime === 'antigravity') {
+        path = join(home, '.gemini', 'config', 'mcp_config.json');
+        keys = ['mcpServers', serverName]; entry = { command: process.execPath, args };
       } else if (runtime === 'pi') {
         path = join(env.PI_CODING_AGENT_DIR ?? join(home, '.pi', 'agent'), 'extensions', `${serverName}.mjs`);
         const source = piExtension(process.execPath, args, serverName);

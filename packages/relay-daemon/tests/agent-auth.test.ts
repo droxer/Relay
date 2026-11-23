@@ -1,4 +1,4 @@
-import { AGENT_NAMES, initialAgentState, runAgentNode } from "relay-core";
+import { initialAgentState, runAgentNode } from "relay-core";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -62,14 +62,12 @@ console.log('saved user-model');
 test("all local runtimes launch from PATH using their existing custom auth directories", async () => {
   const home = mkdtempSync(join(tmpdir(), "relay-native-clis-"));
   const previous = process.env;
-  const homes = { claude: "CLAUDE_CONFIG_DIR", codex: "CODEX_HOME", pi: "PI_CODING_AGENT_DIR", opencode: "XDG_DATA_HOME" };
+  const homes = { claude: "CLAUDE_CONFIG_DIR", codex: "CODEX_HOME", pi: "PI_CODING_AGENT_DIR" };
   const bin = join(home, "bin");
   mkdirSync(bin);
   process.env = { PATH: `${bin}:/usr/bin:/bin`, RELAY_RUN_AS_CURRENT_USER: "1", RELAY_AGENT_HOME: home, RELAY_AGENT_WORKSPACE: home, OPENAI_MODEL: "relay-model", PI_PROVIDER: "relay-provider", KIMI_MODEL: "relay-model" };
   try {
-    // OpenCode runs a native local turn only through its ACP adapter, which
-    // this launch-from-PATH check does not attach; its refusal is tested in relay-core.
-    for (const agent of AGENT_NAMES.filter((name) => name !== "opencode")) {
+    for (const agent of ["claude", "codex", "pi"] as const) {
       const nativeHome = join(home, `native-${agent}`);
       mkdirSync(nativeHome);
       writeFileSync(join(nativeHome, "login"), "existing-user-login");

@@ -1280,6 +1280,7 @@ test("relay daemon reports why each runtime is not ready", async () => {
         if (agent === "codex") throw new AgentNotInstalledError("Codex is not installed on this computer.");
         if (agent === "pi") throw new AgentUnresponsiveError("Pi is not responding.");
         if (agent === "opencode") throw new AgentNotInstalledError("OpenCode is not installed on this computer.");
+        if (agent === "antigravity") throw new AgentNotInstalledError("Google Antigravity is not installed on this computer.");
         if (agent === "claude") throw new Error("Claude Code is not logged in.");
       },
     }),
@@ -1302,13 +1303,14 @@ test("relay daemon reports why each runtime is not ready", async () => {
   assert.deepEqual(first.supportedAgents, []);
   assert.deepEqual(
     Object.fromEntries(Object.entries(first.agentHealth ?? {}).map(([agent, health]) => [agent, health?.status])),
-    { claude: "failed", pi: "unresponsive", codex: "unavailable", opencode: "unavailable" },
+    { claude: "failed", pi: "unresponsive", codex: "unavailable", opencode: "unavailable", antigravity: "unavailable" },
   );
   assert.deepEqual(
     Object.fromEntries((first.executorCapabilities ?? []).map((item) => [item.executorKind, item.status])),
-    { claude: "failed", pi: "unresponsive", codex: "unavailable", opencode: "unavailable" },
+    { claude: "failed", pi: "unresponsive", codex: "unavailable", opencode: "unavailable", antigravity: "unavailable" },
   );
   assert.deepEqual(logs.sort(), [
+    "info antigravity agent not installed",
     "info codex agent not installed",
     "info opencode agent not installed",
     "warn claude agent capability failed",

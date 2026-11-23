@@ -8,6 +8,7 @@ const ADAPTER_SCRIPTS: Record<PermissionPromptAdapter, string> = {
   "claude-mcp": "./claude-mcp.js",
   "codex-app-server": "./codex-app-server.js",
   "opencode-acp": "./opencode-acp.js",
+  "antigravity-acp": "./antigravity-acp.js",
   "pi-extension": "./pi-extension.js",
 };
 

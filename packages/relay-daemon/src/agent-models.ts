@@ -20,6 +20,7 @@ import { agentCredentialEnv, customModelEndpointAgents, runAsAgent, type AgentEx
 //           KB), so the sweep keeps only the slug/visibility/priority keys.
 //   pi      `pi --list-models` — only providers it can authenticate.
 //   opencode  `opencode models` — provider-qualified ids.
+//   antigravity  `agy models` — tab-separated model id and label.
 //
 // A runtime behind a custom endpoint (a proxy or a compatible provider such
 // as DeepSeek) reports only the models that endpoint lists: its vendor's ids
@@ -98,6 +99,7 @@ const MODEL_SOURCES: Record<AgentName, readonly string[]> = {
   pi: ["if command -v pi >/dev/null 2>&1; then pi --list-models 2>&1 | emit list; fi"],
   // `opencode models` prints one `provider/model` id per line.
   opencode: ["if command -v opencode >/dev/null 2>&1; then opencode models 2>/dev/null | emit list; fi"],
+  antigravity: ['if command -v agy >/dev/null 2>&1 && models=$(agy models < /dev/null 2>/dev/null); then printf "%s\\n" "$models" | emit list; fi'],
 };
 
 export function buildModelDiscoveryScript(agent: AgentName): string {
@@ -203,6 +205,11 @@ export function parseAgentModels(
       return validModels(texts("list").flatMap(piListedModels));
     case "opencode":
       return validModels(texts("list").flatMap(openCodeListedModels));
+    case "antigravity":
+      return validModels(texts("list").flatMap((list) => list.split(/\r?\n/).flatMap((line) => {
+        const [id, label] = line.split("\t");
+        return label?.trim() ? [id.trim()] : [];
+      })));
   }
 }
 

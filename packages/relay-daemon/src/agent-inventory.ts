@@ -27,9 +27,9 @@ type ExecLike = (
 ) => Promise<{ exit_code: number; stdout: string; stderr: string; error_message?: string }>;
 
 interface AgentInventorySource {
-  /** Home-relative directory holding `<skill>/SKILL.md` subdirectories. */
-  readonly skillsDir?: string;
-  /** Home-relative JSON files carrying an `mcpServers` map. */
+  /** Config-relative directories holding `<skill>/SKILL.md` subdirectories. */
+  readonly skillsPaths?: readonly string[];
+  /** Config-relative JSON files carrying an `mcpServers` map. */
   readonly mcpJson?: readonly string[];
   /** Home-relative Codex TOML files carrying `[mcp_servers.<name>]` tables. */
   readonly mcpToml?: readonly string[];
@@ -38,11 +38,15 @@ interface AgentInventorySource {
 // Conservative, easily-extended per-agent source map. Each path follows the
 // corresponding CLI's active home so installed skills and MCP servers surface.
 const AGENT_INVENTORY_SOURCES: Record<AgentName, AgentInventorySource> = {
-  claude: { skillsDir: ".claude/skills", mcpJson: [".claude.json", ".mcp.json"] },
-  codex: { skillsDir: ".codex/skills", mcpJson: [".codex/mcp.json"], mcpToml: [".codex/config.toml"] },
-  pi: { skillsDir: ".pi/skills", mcpJson: [".pi/mcp.json"] },
+  claude: { skillsPaths: ["skills"], mcpJson: [".claude.json", ".mcp.json"] },
+  codex: { skillsPaths: ["skills"], mcpJson: ["mcp.json"], mcpToml: ["config.toml"] },
+  pi: { skillsPaths: ["skills"], mcpJson: ["mcp.json"] },
   // OpenCode's skill and MCP locations are not verified yet; none are reported.
   opencode: {},
+  antigravity: {
+    skillsPaths: ["antigravity-cli/skills", "config/skills", "skills"],
+    mcpJson: ["config/mcp_config.json"],
+  },
 };
 
 const RECORD_SEPARATOR = "\t";
@@ -81,6 +85,7 @@ const CONFIG_HOMES: Record<AgentName, string> = {
   codex: '${CODEX_HOME:-$home/.codex}',
   pi: '${PI_CODING_AGENT_DIR:-$home/.pi}',
   opencode: '${XDG_CONFIG_HOME:-$home/.config}/opencode',
+  antigravity: '$home/.gemini',
 };
 
 function buildInventoryScript(): string {
@@ -89,9 +94,10 @@ function buildInventoryScript(): string {
   for (const agent of AGENT_NAMES) {
     const source = AGENT_INVENTORY_SOURCES[agent];
     lines.push(`config_home="${CONFIG_HOMES[agent]}"`);
-    if (source.skillsDir && SAFE_REL_PATH.test(source.skillsDir)) {
+    for (const path of source.skillsPaths ?? []) {
+      if (!SAFE_REL_PATH.test(path)) continue;
       lines.push(
-        `d="$config_home/skills"`,
+        `d="$config_home/${path}"`,
         `if [ -d "$d" ]; then`,
         `  find "$d" -maxdepth 4 -type f -name SKILL.md 2>/dev/null | while IFS= read -r f; do`,
         `    rel="\${f#$d/}"`,
@@ -107,7 +113,7 @@ function buildInventoryScript(): string {
       // homes hold them inside CLAUDE_CONFIG_DIR.
       const configPath = agent === "claude"
         ? `\${CLAUDE_CONFIG_DIR:-$home}/${rel}`
-        : `$config_home/${rel.split("/").pop()}`;
+        : `$config_home/${rel}`;
       lines.push(
         `m="${configPath}"`,
         `if [ -f "$m" ]; then`,
@@ -208,13 +214,14 @@ function parseMcpServers(path: string, content: string): DaemonAgentMcpServer[] 
   const servers: DaemonAgentMcpServer[] = [];
   for (const [name, raw] of Object.entries(map as Record<string, unknown>)) {
     if (!name || typeof raw !== "object" || raw === null) continue;
-    const entry = raw as { command?: unknown; url?: unknown; type?: unknown; transport?: unknown };
-    const transport = resolveTransport(entry);
+    const entry = raw as { command?: unknown; url?: unknown; serverUrl?: unknown; type?: unknown; transport?: unknown };
+    const url = entry.url ?? entry.serverUrl;
+    const transport = resolveTransport({ ...entry, url });
     const command =
       typeof entry.command === "string"
         ? entry.command
-        : typeof entry.url === "string"
-          ? redactMcpUrl(entry.url)
+        : typeof url === "string"
+          ? redactMcpUrl(url)
           : undefined;
     servers.push({ name, transport, ...(command ? { command } : {}) });
   }

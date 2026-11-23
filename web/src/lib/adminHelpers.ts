@@ -20,7 +20,7 @@ export function stableNodeOrder(
 }
 
 /** Runtimes listed only once a computer reports them installed. */
-const OPT_IN_NODE_AGENT_NAMES: ReadonlySet<AgentName> = new Set(["pi", "opencode"]);
+const OPT_IN_NODE_AGENT_NAMES: ReadonlySet<AgentName> = new Set(["pi", "opencode", "antigravity"]);
 
 /** `names` in the node-surface display order. */
 export function orderNodeAgentNames(names: readonly AgentName[]): AgentName[] {

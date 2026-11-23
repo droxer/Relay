@@ -162,7 +162,7 @@ def _runtime_model_policy(nodes: list[dict[str, Any]], executor_kind: str) -> di
 
 def default_agent_name(executor_kind: str, taken: set[str]) -> str:
     """The runtime's name, numbered past any live agent already using it."""
-    base = executor_kind.capitalize()
+    base = "Google Antigravity" if executor_kind == "antigravity" else executor_kind.capitalize()
     if base.casefold() not in taken:
         return base
     suffix = 2

@@ -30,6 +30,7 @@ const AGENT_PATHS: Record<AgentName, readonly string[]> = {
     "M4 4h16v16H4Z",
     "M8 8v8h8V8Z",
   ],
+  antigravity: ["M10.5 4h3l7 16h-3.4l-1.5-3.7H8.4L6.9 20H3.5L10.5 4ZM9.5 13.5h5L12 7.4l-2.5 6.1Z"],
 };
 
 export function AgentMark({ agent, size = ICON.md, className }: AgentMarkProps) {

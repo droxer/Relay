@@ -61,6 +61,7 @@ const AGENT_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"],
   pi: ["PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "PI_PROVIDER", "PI_API"],
   opencode: [],
+  antigravity: ["GEMINI_API_KEY"],
 };
 
 // Local CLIs consume their native environment and saved login, never Relay aliases.
@@ -69,6 +70,7 @@ const NATIVE_CREDENTIAL_ENV_NAMES: Record<AgentName, readonly string[]> = {
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL"],
   pi: ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "MINIMAX_API_KEY", "MINIMAX_CN_API_KEY", "KIMI_API_KEY"],
   opencode: [],
+  antigravity: ["GEMINI_API_KEY"],
 };
 
 export function isLocalAgentExecution(): boolean {
@@ -107,6 +109,7 @@ const AGENT_CREDENTIAL_ENV: Record<AgentName, () => Array<[string, string]>> = {
     return env;
   },
   opencode: () => [],
+  antigravity: () => process.env.GEMINI_API_KEY ? [["GEMINI_API_KEY", process.env.GEMINI_API_KEY]] : [],
 };
 
 /** The credential/provider env a single agent run needs — nothing else. */

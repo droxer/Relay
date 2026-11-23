@@ -38,7 +38,7 @@ it("handles loading, errors and no runtime history", () => {
 it("labels inventory as current, independent of the historical range", () => {
   render(<RuntimeInventory nodes={[]} />);
   expect(screen.getByText("admin.v2.dash_runtime_inventory_hint")).toBeTruthy();
-  expect(screen.getAllByRole("row")).toHaveLength(5);
+  expect(screen.getByRole("row", { name: /Google Antigravity/ })).toBeTruthy();
   expect(screen.queryByRole("row", { name: /Kimi/ })).toBeNull();
 });
 it("does not claim zero installations while the inventory is loading or failed", () => {

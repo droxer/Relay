@@ -33,6 +33,7 @@ export class AgentStreamAccumulator {
   private makeIncrementalParser() {
     if (this.agent === "codex") return new CodexStreamParser();
     if (this.agent === "opencode") return new OpenCodeStreamParser();
+    if (this.agent === "antigravity") return new OpenCodeStreamParser("Google Antigravity");
     return undefined;
   }
 

@@ -1,5 +1,6 @@
 import { nativeWindowsExecution } from "./command-execution.js";
 import {
+  buildAntigravityCommand,
   buildClaudeCommand,
   buildCodexCommand,
   buildOpenCodeCommand,
@@ -35,7 +36,7 @@ export type SkillDelivery =
  * extension (`--extension <script>`): the launch's script is handed to `pi`
  * rather than run by node.
  */
-export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "opencode-acp" | "pi-extension";
+export type PermissionPromptAdapter = "claude-mcp" | "codex-app-server" | "opencode-acp" | "pi-extension" | "antigravity-acp";
 
 /** Whether a local, native-policy run of this runtime can ask a person before a tool use. */
 export type PermissionPromptSupport = { kind: "none" } | { kind: "adapter"; adapter: PermissionPromptAdapter };
@@ -180,6 +181,25 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     // continues the same session with the message.
     liveMessages: { kind: "adapter", delivery: "interrupt" },
     preflight: { label: "OpenCode", command: () => runAsAgent(nativeWindowsExecution() ? 'await relayRun(["opencode", "--version"]); await relayRun(["opencode", "auth", "list"], { capture: true, discardStdout: true });' : "opencode --version && opencode auth list > /dev/null") },
+  },
+  antigravity: {
+    name: "antigravity",
+    displayName: "Google Antigravity",
+    initial: "A",
+    maxFailures: 2,
+    buildCommand: buildAntigravityCommand,
+    createRenderer: () => new OpenCodeStreamRenderer("Google Antigravity"),
+    label: "Google Antigravity",
+    needsGuestAuth: false,
+    skillDelivery: { kind: "prompt-paths" },
+    permissionPrompts: { kind: "adapter", adapter: "antigravity-acp" },
+    liveMessages: { kind: "none" },
+    preflight: {
+      label: "Google Antigravity sign-in",
+      command: () => runAsAgent(nativeWindowsExecution()
+        ? 'await relayRun(["agy", "acp", "--help"], { capture: true, discardStdout: true }); await relayRun(["agy", "models"], { capture: true, discardStdout: true });'
+        : "agy acp --help < /dev/null > /dev/null && agy models < /dev/null > /dev/null"),
+    },
   },
 };
 

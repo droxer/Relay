@@ -49,7 +49,7 @@ def _run_start_command(
     if images:
         if not has_capability(sandbox, "image-attachments"):
             raise _DeliveryRefused("image_client_update_required")
-        if assignment["executorKind"] not in ("codex", "claude"):
+        if assignment["executorKind"] not in ("codex", "claude", "antigravity"):
             raise _DeliveryRefused("image_runtime_unsupported")
     # Preserve the session's recorded directory, never an agent-supplied hint.
     legacy_layout = workspace_layout if not session_snapshot.get("projectId") and (
@@ -106,7 +106,7 @@ def _run_start_command(
         **(
             {"reportRuntimeStartup": True}
             if sandbox.get("sandboxMode") == "none"
-            and assignment["executorKind"] in {"codex", "opencode"}
+            and assignment["executorKind"] in {"codex", "opencode", "antigravity"}
             and has_capability(sandbox, DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP)
             else {}
         ),

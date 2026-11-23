@@ -3,7 +3,7 @@ import type { AgentOutputSink } from "./format.js";
 import type { TokenUsage } from "./token-usage.js";
 import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 
-export type AgentName = "claude" | "pi" | "codex" | "opencode";
+export type AgentName = "claude" | "pi" | "codex" | "opencode" | "antigravity";
 export type { AgentOutputSink };
 
 export const AGENT_USER = "agent";
@@ -149,10 +149,8 @@ export interface AgentState {
   /** Daemon-issued run credential for bounded service tools; never a provider token. */
   connection_tools?: { url: string; token: string };
   /**
-   * Launch spec for the stdio MCP server a local, native-policy Claude run
-   * asks through (`--permission-prompt-tool`). Set by the daemon only when it
-   * started a permission broker for this run; never set for BoxLite or a
-   * trusted local policy.
+   * Runtime adapter launch supplied by the daemon. Antigravity always uses
+   * its ACP adapter. Native local runs attach a broker for permission requests.
    */
   permission_prompt?: PermissionPromptLaunch;
 }

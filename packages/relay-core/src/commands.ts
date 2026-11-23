@@ -3,6 +3,7 @@ import { chainCommands, environmentCommand, nativeWindowsExecution } from "./com
 import { anthropicModel, openaiModel, piModel, piProvider } from "./env.js";
 import { agentWorkspacePath, codexCliConfigOverrides, isLocalAgentExecution, runAsAgent } from "./guest.js";
 import {
+  agentTaskPrompt,
   claudeTaskPrompt,
   codexTaskPrompt,
   opencodeTaskPrompt,
@@ -323,6 +324,19 @@ function buildOpenCodeAcpInvocation(
   const model = runtimeModel(pinnedModel, () => undefined);
   if (model) argv.push("--model", model);
   argv.push("--prompt", prompt);
+  return runAsAgent(chainCommands([...envExports(launch.env), shellCommand(argv)]), workspacePath);
+}
+
+export function buildAntigravityCommand(state: AgentState, workspacePath?: string): string {
+  const launch = state.permission_prompt;
+  if (launch?.adapter !== "antigravity-acp") throw new Error("Antigravity requires its ACP launcher.");
+  const prompt = withResumeNote(withSkillInstructions(agentTaskPrompt(state), state), state);
+  const argv = [launch.command, ...launch.args, "--cwd", workspacePath ?? agentWorkspacePath(), "--prompt", prompt];
+  if (state.agent_model) argv.push("--model", state.agent_model);
+  const resume = resumeId(state);
+  if (resume) argv.push("--resume", resume);
+  if (trustedExecution()) argv.push("--trusted");
+  for (const image of state.input_images ?? []) argv.push("--image", `${image.mediaType}:${image.path}`);
   return runAsAgent(chainCommands([...envExports(launch.env), shellCommand(argv)]), workspacePath);
 }
 

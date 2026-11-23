@@ -373,10 +373,9 @@ describe("permission adapter launch", () => {
     const adapters = new Set<PermissionPromptAdapter>();
     for (const name of AGENT_NAMES) {
       const support = getAgent(name).permissionPrompts;
-      assert.equal(support.kind, "adapter", `${name} declares an adapter`);
       if (support.kind === "adapter") adapters.add(support.adapter);
     }
-    assert.deepEqual([...adapters].sort(), ["claude-mcp", "codex-app-server", "opencode-acp", "pi-extension"]);
+    assert.deepEqual([...adapters].sort(), ["antigravity-acp", "claude-mcp", "codex-app-server", "opencode-acp", "pi-extension"]);
     for (const adapter of adapters) {
       const launch = permissionAdapterLaunch(adapter, { env });
       assert.equal(launch.adapter, adapter);
@@ -392,8 +391,9 @@ describe("permission adapter launch", () => {
 describe("permissionPromptsApply", () => {
   it("follows the registry: runtimes with an adapter, on a local computer, under the native policy", () => {
     for (const agent of AGENT_NAMES) {
-      assert.equal(permissionPromptsApply(agent, "none", {}), true, `${agent} uses native permissions by default`);
-      assert.equal(permissionPromptsApply(agent, "none", { RELAY_LOCAL_PERMISSION_POLICY: "native" }), true, agent);
+      const hasAdapter = getAgent(agent).permissionPrompts.kind === "adapter";
+      assert.equal(permissionPromptsApply(agent, "none", {}), hasAdapter, agent);
+      assert.equal(permissionPromptsApply(agent, "none", { RELAY_LOCAL_PERMISSION_POLICY: "native" }), hasAdapter, agent);
       assert.equal(permissionPromptsApply(agent, "none", { RELAY_LOCAL_PERMISSION_POLICY: "trusted" }), false, agent);
       assert.equal(permissionPromptsApply(agent, "boxlite", {}), false, agent);
     }

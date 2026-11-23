@@ -1,5 +1,5 @@
 /** Product names whose casing a first-letter capital gets wrong. */
-const RUNTIME_LABELS: Readonly<Record<string, string>> = { opencode: "OpenCode" };
+const RUNTIME_LABELS: Readonly<Record<string, string>> = { opencode: "OpenCode", antigravity: "Google Antigravity" };
 
 /**
  * The display name of a runtime (executor kind). Runtime names are proper

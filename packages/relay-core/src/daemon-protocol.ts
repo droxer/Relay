@@ -34,7 +34,8 @@ export interface SandboxRecord {
   credentialVersion?: number;
   retiredAt?: string;
   status: SandboxStatus;
-  agents: Record<AgentName, AgentRuntimeStatus>;
+  /** A Computer record can predate runtimes added in a later release. */
+  agents: Partial<Record<AgentName, AgentRuntimeStatus>>;
   agentDetails?: Partial<Record<AgentName, {
     detail?: string;
     version?: string;
