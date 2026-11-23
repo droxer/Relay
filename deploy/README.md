@@ -194,11 +194,15 @@ and PostgreSQL heartbeats for job health.
 
 ### Isolate daemon ingestion
 
-Set `DAEMON_INGEST_DOMAIN` to an unused subdomain of the deployment's
-Cloudflare zone, then run `deploy/deploy.sh up` from a release containing the
-ingestion service. Daemons keep using `API_DOMAIN`. A Cloudflare Worker
-forwards only the daemon event and report POSTs to the new service and sends
-other daemon requests to the existing API origin.
+The hosted Relay deployment uses `DAEMON_INGEST_DOMAIN=ingest.get-relay.cc`.
+For another Cloudflare zone, choose an unused subdomain of that zone. Set
+the hostname in your local deployment config and use an updated checkout.
+Run `deploy/deploy.sh release` for an existing deployment or
+`deploy/deploy.sh up` for a new deployment.
+
+Daemons connect to `API_DOMAIN`. A Cloudflare Worker forwards daemon event
+and report POSTs to the ingestion service and sends other daemon requests
+to the API origin.
 
 The ingestion service runs `relay serve` with `RELAY_HTTP_ROLE=daemon-ingest`.
 It exposes the two write routes and `/healthz`. The origin is DNS-only and
