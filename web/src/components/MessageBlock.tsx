@@ -304,8 +304,9 @@ export const MessageBlock = memo(function MessageBlock({
             <RunReceipt receipt={receipt} usage={message.tokenUsage} />
           ) : null}
           {/* Actions lead under the answer, where the eye ends; the run's
-              cost and outcome live in the receipt above. */}
-          <footer className="msg-turn-foot">
+              cost and outcome live in the receipt above. A block a live
+              message cut has none: the run's actions follow its last block. */}
+          {message.continued ? null : <footer className="msg-turn-foot">
             <MessageTurnActions
               agent={message.agent}
               agentId={message.agentId}
@@ -317,7 +318,7 @@ export const MessageBlock = memo(function MessageBlock({
               resumable={message.resumable}
               onResume={onResumeAgent}
             />
-          </footer>
+          </footer>}
         </div>
       </article>
     );

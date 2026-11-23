@@ -23,7 +23,7 @@ export type RunReceipt = {
 
 export function runReceipt(message: AgentTurn): RunReceipt | null {
   if (message.streaming || !message.outcome) return null;
-  const started = Date.parse(message.timestamp);
+  const started = Date.parse(message.runStartedAt ?? message.timestamp);
   const finished = message.finishedAt ? Date.parse(message.finishedAt) : Number.NaN;
   const durationMs = Number.isNaN(started) || Number.isNaN(finished) || finished < started ? null : finished - started;
   return {

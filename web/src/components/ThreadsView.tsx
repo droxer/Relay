@@ -755,7 +755,7 @@ export function ThreadsView({
                         retryDisabled={running}
                         pickupFrom={source ? labelForAgentRun(source, logicalAgentNames, agentDisplayNames) : undefined}
                       />
-                      {msg.kind === "agent" ? delegations.filter((delegation) => delegation.requesterRunId === msg.runId).map((delegation) => (
+                      {msg.kind === "agent" && !msg.continued ? delegations.filter((delegation) => delegation.requesterRunId === msg.runId).map((delegation) => (
                         <DirectDelegationCard key={delegation.id} delegation={delegation} names={logicalAgentNames} />
                       )) : null}
                     </div>

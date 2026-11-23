@@ -66,6 +66,12 @@ export type DerivedMessage =
       outcome?: "completed" | "failed" | "cancelled";
       finishedAt?: string;
       exitCode?: number;
+      /** A live message cut this run: this block holds its output up to the
+       * message, and the run continues in a later block after it. */
+      continued?: boolean;
+      /** When the run began, on a block that continues it after a live
+       * message (whose own timestamp is the message's). */
+      runStartedAt?: string;
     }
   | {
       kind: "system";
@@ -216,12 +222,35 @@ function applyCompletedLogFallback(
 }
 
 type RunProjectionState = {
+  /** The run's current (latest) block. */
   index: number;
   attachmentIds: Set<string>;
+  /** The run's whole output; its current block shows it from the offsets. */
   stdout: string;
   stderr: string;
+  stdoutStart: number;
+  stderrStart: number;
   collaborations: CodexCollaborationEvent[];
 };
+
+function segmentStreams(state: RunProjectionState): { stdout: string; stderr: string } {
+  return { stdout: state.stdout.slice(state.stdoutStart), stderr: state.stderr.slice(state.stderrStart) };
+}
+
+/** Where a new block may start: after the last complete line, so a JSONL
+ * record streamed in halves never splits across two blocks. */
+function lineBoundary(text: string, from: number): number {
+  return Math.max(from, text.lastIndexOf("\n") + 1);
+}
+
+/** The block offset after the completed-log fallback rewrote a stream. */
+function rebaseOffset(before: string, after: string, start: number): number {
+  if (start === 0 || before === after) return start;
+  const prefix = before.slice(0, start);
+  if (after.startsWith(prefix)) return start;
+  const at = after.indexOf(prefix);
+  return at >= 0 ? at + prefix.length : Math.min(start, after.length);
+}
 
 /** Incrementally materialize only the event suffix appended since the last render. */
 export class ProjectMessagesAccumulator {
@@ -348,9 +377,46 @@ export class ProjectMessagesAccumulator {
       attachmentIds: new Set(),
       stdout: "",
       stderr: "",
+      stdoutStart: 0,
+      stderrStart: 0,
       collaborations: [],
     });
     return { index, created: true };
+  }
+
+  /** A live message reached a run mid-turn: what the run says next answers
+   * it, so the run's output continues in a new block after the message
+   * instead of growing the block above it. */
+  private continueRunAfterLiveMessage(runId: string, eventId: string, timestamp: string): void {
+    const state = this.runState.get(runId);
+    const block = state ? this.out[state.index] : undefined;
+    if (!state || block?.kind !== "agent" || !block.streaming) return;
+    const stdoutStart = lineBoundary(state.stdout, state.stdoutStart);
+    const stderrStart = lineBoundary(state.stderr, state.stderrStart);
+    this.out[state.index] = {
+      ...block,
+      streaming: false,
+      continued: true,
+      stdout: state.stdout.slice(state.stdoutStart, stdoutStart),
+      stderr: state.stderr.slice(state.stderrStart, stderrStart),
+    };
+    state.stdoutStart = stdoutStart;
+    state.stderrStart = stderrStart;
+    state.collaborations = [];
+    this.out.push({
+      kind: "agent",
+      id: `${this.sessionId}:run:${runId}:after:${eventId}`,
+      timestamp,
+      agent: block.agent,
+      ...(block.agentId ? { agentId: block.agentId } : {}),
+      runId,
+      runStartedAt: block.runStartedAt ?? block.timestamp,
+      streaming: true,
+      ...segmentStreams(state),
+      collaborations: [],
+      attachments: [],
+    });
+    state.index = this.out.length - 1;
   }
 
   private permissionAudit(
@@ -398,6 +464,7 @@ export class ProjectMessagesAccumulator {
       case "user.live_message":
         // Said to a run while it worked: the person's words, marked as reaching that run live.
         this.out.push({ kind: "user", id: event.id, timestamp: event.timestamp, text: event.text, live: true });
+        this.continueRunAfterLiveMessage(event.runId, event.id, event.timestamp);
         return true;
       case "agent.started": {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
@@ -420,7 +487,7 @@ export class ProjectMessagesAccumulator {
         else state.stderr += event.text;
         const block = this.out[ensured.index];
         if (block.kind === "agent") {
-          this.out[ensured.index] = { ...block, stdout: state.stdout, stderr: state.stderr };
+          this.out[ensured.index] = { ...block, ...segmentStreams(state) };
           return true;
         }
         return ensured.created;
@@ -435,7 +502,7 @@ export class ProjectMessagesAccumulator {
         }
         const block = this.out[ensured.index];
         if (block.kind === "agent") {
-          this.out[ensured.index] = { ...block, stdout: state.stdout, stderr: state.stderr };
+          this.out[ensured.index] = { ...block, ...segmentStreams(state) };
           return true;
         }
         return ensured.created;
@@ -528,14 +595,18 @@ export class ProjectMessagesAccumulator {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
         const state = this.runState.get(event.runId);
         if (!state) return ensured.created;
-        if (event.agentLog) applyCompletedLogFallback(state, event.agent, event.agentLog, t);
-        const block = this.out[ensured.index];
+        if (event.agentLog) {
+          const before = { stdout: state.stdout, stderr: state.stderr };
+          applyCompletedLogFallback(state, event.agent, event.agentLog, t);
+          state.stdoutStart = rebaseOffset(before.stdout, state.stdout, state.stdoutStart);
+          state.stderrStart = rebaseOffset(before.stderr, state.stderr, state.stderrStart);
+        }
+        const block = this.out[state.index];
         if (block.kind !== "agent") return ensured.created;
-        this.out[ensured.index] = {
+        this.out[state.index] = {
           ...block,
           streaming: false,
-          stdout: state.stdout,
-          stderr: state.stderr,
+          ...segmentStreams(state),
           ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
           ...(!event.tokenUsage ? { usageUnreported: true } : {}),
           ...(event.outputTruncated ? { outputTruncated: true } : {}),
