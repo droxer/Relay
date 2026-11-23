@@ -44,7 +44,7 @@ def live_target(ctx: Any, session: dict[str, Any], message: dict[str, Any]) -> d
         return None
     run = runs[0]
     addressed = message.get("addressAgentIds") or []
-    if addressed and run.get("logicalAgentId") not in addressed:
+    if addressed and (len(addressed) != 1 or addressed[0] != run.get("logicalAgentId")):
         return None
     if not has_capability(ctx.registry.get(run["nodeId"]), DAEMON_CAPABILITY_LIVE_MESSAGES):
         return None

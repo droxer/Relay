@@ -6,6 +6,8 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
+
 from test_thread_same_computer_targets import _admin_id, _agent, _sync, _thread, _world
 
 from relay.collaboration.queue import ThreadQueueDispatcher, _save_queue
@@ -131,7 +133,8 @@ def test_a_message_the_run_cannot_take_falls_back_to_stop_and_send(monkeypatch):
         ]
 
 
-def test_a_message_for_another_agent_stops_the_run_instead(monkeypatch):
+@pytest.mark.parametrize("include_running_agent", [False, True])
+def test_a_message_for_another_agent_stops_the_run_instead(monkeypatch, include_running_agent):
     monkeypatch.setattr(ThreadQueueDispatcher, "follow_requested_send", lambda *_: None)
     with _world(monkeypatch) as (app, client, _here, _there):
         node = _live_node(app)
@@ -139,7 +142,8 @@ def test_a_message_for_another_agent_stops_the_run_instead(monkeypatch):
         other = _agent(app, node, "Other", "claude")
         _sync(app, node)
         tid, run = _running_thread(app, client, node, solo)
-        response = _enqueue_and_steer(client, tid, {"id": "q_other", "text": "Your turn", "addressAgentIds": [other["id"]]})
+        recipients = [other["id"], solo["id"]] if include_running_agent else [other["id"]]
+        response = _enqueue_and_steer(client, tid, {"id": "q_other", "text": "Your turn", "addressAgentIds": recipients})
         assert response.status_code == 200, response.text
         assert "live" not in response.json()
         [stop] = app.state.registry.take_commands(node["id"], TOKEN)

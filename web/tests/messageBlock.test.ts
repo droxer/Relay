@@ -98,6 +98,31 @@ describe("ProjectMessagesAccumulator", () => {
     assert.equal(projected[1]?.kind === "agent" ? projected[1].stderr : "", "err-1");
   });
 
+  it("reconciles late Antigravity deltas with the completed log and keeps new output", () => {
+    const projector = new ProjectMessagesAccumulator();
+    const run = { sessionId: "ses_1", timestamp, runId: "run_1", agent: "antigravity" as const };
+    const frame = (text: string) => JSON.stringify({ type: "text", delta: true, part: { type: "text", text } }) + "\n";
+    const first = frame("Start. ");
+    const restored = frame("End.");
+    const events: RelaySession["events"] = [
+      { ...run, id: "first", type: "agent.output", stream: "stdout", text: first, sequence: 0 },
+      { ...run, id: "done", type: "agent.completed", status: "completed", exitCode: 0,
+        agentLog: `stdout:\n${first}${restored}`, outputTruncated: true },
+    ];
+    const reply = () => {
+      const message = projector.update(session(events), t).at(-1);
+      assert.ok(message?.kind === "agent");
+      return parseAgentStream("antigravity", message.stdout);
+    };
+    assert.deepEqual(reply(), [{ kind: "text", text: "Start. End." }]);
+    events.push({ ...run, id: "late", type: "agent.output", stream: "stdout", text: restored.slice(0, 20), sequence: 1 });
+    assert.deepEqual(reply(), [{ kind: "text", text: "Start. End." }]);
+    events.push({ ...run, id: "latest", type: "agent.output.batch", entries: [
+      { stream: "stdout", text: restored.slice(20) + restored, sequence: 2 },
+    ] });
+    assert.deepEqual(reply(), [{ kind: "text", text: "Start. End.End." }]);
+  });
+
   it("shows a message sent into a running turn as the person's, marked live", () => {
     const projected = new ProjectMessagesAccumulator().update(session([
       { id: "ev_out", type: "agent.output", sessionId: "ses_1", timestamp, runId: "run_1", agent: "codex", stream: "stdout", text: "Working." },

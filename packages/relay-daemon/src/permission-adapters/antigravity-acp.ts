@@ -1,8 +1,12 @@
 import { readFile } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { asRecord, MethodNotFound, withAcpChild } from "./acp-connection.js";
 import { answerPermissionRequest, RunJsonWriter, SessionUpdateTranslator } from "./acp-session-updates.js";
-import { askBroker, NATIVE_RUNTIME_STARTUP_TIMEOUT_MS, runtimeEnv } from "./protocol.js";
+import { askBroker, listenForLiveMessages, NATIVE_RUNTIME_STARTUP_TIMEOUT_MS, runtimeEnv } from "./protocol.js";
+
+// Give the ACP peer less time to acknowledge than the broker's 30-second deadline.
+const STEER_REPLY_TIMEOUT_MS = 25_000;
 
 async function main(): Promise<void> {
   const { values } = parseArgs({
@@ -82,7 +86,37 @@ async function main(): Promise<void> {
       if (values.model) await connection.request("session/set_model", { sessionId, modelId: values.model });
       clearTimeout(timer);
       writer.started();
-      const result = asRecord(await connection.request("session/prompt", { sessionId, prompt }));
+      const turn = connection.request("session/prompt", { sessionId, prompt });
+      let acceptingSteer = true;
+      let pendingSteer: Promise<unknown> | undefined;
+      const listener = listenForLiveMessages(async ({ text }) => {
+        if (!acceptingSteer || pendingSteer) throw new Error("Antigravity cannot take another message right now.");
+        // Antigravity treats a concurrent prompt in the same ACP session as a steer.
+        const timeout = new AbortController();
+        pendingSteer = Promise.race([
+          connection.request("session/prompt", { sessionId, prompt: [{ type: "text", text }] }),
+          delay(STEER_REPLY_TIMEOUT_MS, undefined, { signal: timeout.signal, ref: false }).then(() => {
+            throw new Error("Antigravity did not acknowledge the live message in time.");
+          }),
+        ]);
+        try {
+          const response = asRecord(await pendingSteer);
+          if (response.stopReason !== "end_turn") throw new Error("Antigravity did not accept the live message.");
+          return "steer";
+        } finally {
+          timeout.abort();
+          pendingSteer = undefined;
+        }
+      });
+      let result: Record<string, unknown>;
+      try {
+        result = asRecord(await turn);
+      } finally {
+        acceptingSteer = false;
+        // Let the broker receive the answer when the turn and steer settle together.
+        await pendingSteer?.catch(() => undefined);
+        listener?.close();
+      }
       const usage = asRecord(result.usage);
       writer.usage({
         input: usage.inputTokens, output: usage.outputTokens,

@@ -172,6 +172,20 @@ describe("OpenCode ACP adapter", () => {
 });
 
 describe("OpenCode ACP adapter helpers", () => {
+  it("keeps a tool's reported error when a later update only marks it failed", () => {
+    let stdout = "";
+    const translator = new SessionUpdateTranslator(new RunJsonWriter({ write: text => { stdout += text; } }));
+    translator.apply({ sessionUpdate: "tool_call", toolCallId: "call_1", name: "shell", status: "in_progress" });
+    translator.apply({
+      sessionUpdate: "tool_call_update", toolCallId: "call_1",
+      content: [{ type: "content", content: { type: "text", text: "Permission denied" } }],
+    });
+    translator.apply({ sessionUpdate: "tool_call_update", toolCallId: "call_1", status: "failed", rawOutput: null });
+    assert.deepEqual(events(stdout).at(-1), {
+      type: "tool_use", part: { callID: "call_1", tool: "shell", state: { status: "error", error: "Permission denied" } },
+    });
+  });
+
   it("writes each assistant chunk before a tool or turn completion", () => {
     let stdout = "";
     const writer = new RunJsonWriter({ write: (text) => { stdout += text; } });

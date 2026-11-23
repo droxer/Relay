@@ -130,7 +130,7 @@ def test_antigravity_thread(tmp_path, monkeypatch, live):
         if browser:
             subprocess.run([
                 "node", str(ROOT / "web/e2e/antigravity-browser.mjs"), harness.url, thread,
-                marker if live else "RELAY_AGY_RESUMED", request["id"],
+                marker if live else "RELAY_AGY_RESUMED", "deny", request["id"],
             ], cwd=ROOT, check=True, timeout=30)
         else:
             harness.post(f"/threads/{thread}/permission-requests/{request['id']}", {"decision": "deny"}, 200)
@@ -143,13 +143,37 @@ def test_antigravity_thread(tmp_path, monkeypatch, live):
             assert first["tokenUsage"]["input"] == 13
             assert first["tokenUsage"]["cacheRead"] == 70
             [cwd] = (tmp_path / "workspace" / ".threads").iterdir()
+            _send(harness, thread, "RELAY_AGY_WAIT_FOR_STEER")
+            eventually(lambda: "RELAY_AGY_WORKING" in json.dumps(harness.session(thread)["events"]))
+            if browser:
+                subprocess.run([
+                    "node", str(ROOT / "web/e2e/antigravity-browser.mjs"), harness.url, thread,
+                    "RELAY_AGY_WORKING", "steer", "RELAY_AGY_STEER",
+                ], cwd=ROOT, check=True, timeout=30)
+            else:
+                queue = f"/threads/{thread}/queue"
+                harness.post(queue, {"action": "enqueue", "id": "steer-test", "text": "RELAY_AGY_STEER",
+                                     "addressAgentIds": [harness.agent["id"]]}, 200)
+                harness.post(queue, {"action": "steer", "id": "steer-test"}, 200)
+
+            def steered():
+                state = harness.session(thread)
+                assert len(state["agentRuns"]) == 4 and state["agentRuns"][-1]["status"] == "running"
+                return next((event for event in state["events"] if event["type"] == "user.live_message"), None)
+
+            message = eventually(steered, timeout=15)
+            assert (message["text"], message["delivery"]) == ("RELAY_AGY_STEER", "steer")
+            (cwd / ".release-steered-turn").touch()
+            _, redirected = _settled(harness, thread, 4)
+            assert redirected["id"] == message["runId"]
+            assert "RELAY_AGY_STEERED" in _reply(redirected)
             (cwd / ".discard-conversation").touch()
-            recovered, fallback = _turn(harness, thread, "RELAY_AGY_FOLLOW_UP", 4)
+            recovered, fallback = _turn(harness, thread, "RELAY_AGY_FOLLOW_UP", 5)
             assert "RELAY_AGY_FALLBACK" in _reply(fallback)
             assert fallback["runtimeSessionId"] != conversation
             outputs = [event for event in recovered["events"] if event["type"].startswith("agent.output")]
             assert "Conversation not found" not in json.dumps(outputs)
-            _, failed = _turn(harness, thread, "RELAY_AGY_FAILURE", 5, status="failed")
+            _, failed = _turn(harness, thread, "RELAY_AGY_FAILURE", 6, status="failed")
             assert failed["exitCode"] == 1
             assert "Provider refused the run" in failed["agentLog"]
     finally:

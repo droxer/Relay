@@ -148,7 +148,7 @@ test("every runtime declares how a live message reaches it", () => {
   assert.deepEqual(getAgent("codex").liveMessages, { kind: "adapter", delivery: "steer" });
   assert.deepEqual(getAgent("pi").liveMessages, { kind: "adapter", delivery: "steer" });
   assert.deepEqual(getAgent("opencode").liveMessages, { kind: "adapter", delivery: "interrupt" });
-  assert.deepEqual(getAgent("antigravity").liveMessages, { kind: "none" });
+  assert.deepEqual(getAgent("antigravity").liveMessages, { kind: "adapter", delivery: "steer" });
 });
 
 /** The `--allowedTools` rules up to the next flag. */

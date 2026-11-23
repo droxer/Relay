@@ -19,6 +19,7 @@ let sessionId;
 let modelPinned = false;
 let resumed = false;
 let pending;
+let steering;
 const emit = (update) => write({ method: "session/update", params: { sessionId, update } });
 const finish = (id, text) => {
   for (const part of [text.slice(0, 10), text.slice(10)]) {
@@ -59,6 +60,26 @@ for await (const line of createInterface({ input: process.stdin })) {
       if (!modelPinned || params.sessionId !== sessionId || params.prompt[0].type !== "text") throw new Error("Invalid ACP session prompt");
       const prompt = params.prompt[0].text;
       const task = prompt.split("[User]\n").at(-1);
+      if (steering) {
+        if (task !== "RELAY_AGY_STEER" || params.sessionId !== steering.sessionId) {
+          throw new Error("Expected the steer in the active ACP session");
+        }
+        respond(id, { stopReason: "end_turn" });
+        const turn = steering;
+        steering = undefined;
+        const waitForReceipt = setInterval(() => {
+          if (!existsSync(".release-steered-turn")) return;
+          clearInterval(waitForReceipt);
+          finish(turn.id, "RELAY_AGY_STEERED");
+        }, 30);
+        waitForReceipt.unref();
+        break;
+      }
+      if (task.includes("RELAY_AGY_WAIT_FOR_STEER")) {
+        steering = { id, sessionId };
+        emit({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "RELAY_AGY_WORKING" } });
+        break;
+      }
       if (task.includes("Remember this marker")) {
         const image = params.prompt[1];
         if (image?.type !== "image" || image.mimeType !== "image/png" || !image.data.startsWith("iVBORw0KGgo")) {
