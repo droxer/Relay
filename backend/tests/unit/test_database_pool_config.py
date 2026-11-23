@@ -26,6 +26,11 @@ def test_postgres_pool_options_are_deployment_tunable(monkeypatch) -> None:
     }
 
 
+def test_postgres_pool_can_disallow_overflow(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_DB_MAX_OVERFLOW", "0")
+    assert database_engine_options("postgresql+psycopg://relay:test@db/relay")["max_overflow"] == 0
+
+
 def test_sqlite_does_not_receive_server_pool_options(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_DB_POOL_SIZE", "24")
 

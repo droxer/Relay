@@ -240,13 +240,13 @@ def railway(op, v):
     if op == "Deploy":
         svc = service(v["s"])
         targets = (s for s in project()["services"].values()
-                   if s["name"] in {"relay-backend", "relay-worker", "relay-web"})
+                   if s["name"] in {"relay-backend", "relay-worker", "relay-web", "relay-daemon-ingest"})
         assert all(not s["triggers"] for s in targets), "disable every service's autodeploy before starting a release"
         assert svc["repo"], "deploy before the repo was connected"
         assert not svc["triggers"], "autodeploy must be disabled before releasing"
         assert re.fullmatch(r"[0-9a-f]{40}", v.get("commitSha", "")), "release must pin a commit"
-        if svc["config"].get("startCommand") == "relay worker":
-            backend = next(s for s in project()["services"].values() if s["config"].get("startCommand") == "relay serve")
+        if svc["name"] in ("relay-worker", "relay-daemon-ingest"):
+            backend = next(s for s in project()["services"].values() if s["name"] == "relay-backend")
             dep = backend["deployments"][0]
             assert dep["id"] in STATE["observed_successful_deployments"], "worker deployed before API readiness was checked"
             assert dep["commitSha"] == v["commitSha"], "worker must use the API release commit"
@@ -341,6 +341,9 @@ def cloudflare(method, path, query, body):
         route = next(r for r in STATE["routes"] if r["id"] == rest[2])
         route.update(body)
         return 200, route
+    if rest[:2] == ["workers", "routes"] and method == "DELETE":
+        STATE["routes"] = [route for route in STATE["routes"] if route["id"] != rest[2]]
+        return 200, {"id": rest[2]}
     if rest[0] == "settings":
         if method == "PATCH":
             count(f"cf.settings.{rest[1]}")
@@ -379,11 +382,18 @@ def workers(method, account, rest, body):
         content_type, raw = body
         parts = {part.get_param("name", header="content-disposition"): part for part in form_parts(content_type, raw)}
         metadata = json.loads(parts["metadata"].get_content())
-        assert metadata["assets"]["jwt"] == "completion-jwt", "script upload without the completion token"
+        if metadata["main_module"] == "daemon-ingest.js":
+            assert "assets" not in metadata
+            ingest = next(svc for svc in project()["services"].values() if svc["name"] == rest[2])
+            assert ingest["deployments"][0]["id"] in STATE["observed_successful_deployments"], (
+                "Worker published before daemon ingestion reached readiness"
+            )
+        else:
+            assert metadata["assets"]["jwt"] == "completion-jwt", "script upload without the completion token"
         STATE["workers"][rest[2]] = {
             "metadata": metadata,
             "module": parts[metadata["main_module"]].get_payload(decode=True).decode(),
-            "manifest": STATE.get("manifest"),
+            "manifest": STATE.get("manifest") if "assets" in metadata else None,
         }
         return 200, {"id": rest[2]}
     raise ValueError(f"unhandled Workers call {method} {rest}")
@@ -490,6 +500,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PATCH(self):
         self.handle_any("PATCH")
+
+    def do_DELETE(self):
+        self.handle_any("DELETE")
 
 
 if __name__ == "__main__":

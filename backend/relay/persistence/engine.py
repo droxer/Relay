@@ -87,7 +87,7 @@ def database_engine_options(database_url: str) -> dict[str, Any]:
         raise ValueError("RELAY_DB_POOL_PRE_PING must be a boolean.")
     options: dict[str, Any] = {
         "pool_size": _positive_env_number("RELAY_DB_POOL_SIZE", "20", int),
-        "max_overflow": _positive_env_number("RELAY_DB_MAX_OVERFLOW", "20", int),
+        "max_overflow": _non_negative_env_int("RELAY_DB_MAX_OVERFLOW", "20"),
         "pool_timeout": _positive_env_number(
             "RELAY_DB_POOL_TIMEOUT_SECONDS", "5", float
         ),

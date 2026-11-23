@@ -294,6 +294,95 @@ def test_batch_replay_preserves_each_report_identity(tmp_path):
     assert response.json()['receipts'] == [{'id': report['id'], 'digest': report['digest'], 'status': 200} for report in reports]
 
 
+def test_ingestion_service_restarts_independently_and_replays_reports(tmp_path, monkeypatch):
+    import json
+
+    from fastapi.testclient import TestClient
+    from relay.app import create_app
+    from store_fixtures import sqlite_url
+
+    _, sessions, event = fixture(tmp_path)
+    monkeypatch.setenv("RELAY_DATABASE_URL", sqlite_url(tmp_path))
+    edge_secret = "a" * 64
+    monkeypatch.setenv("RELAY_EDGE_SECRET", edge_secret)
+    edge = {"X-Relay-Edge": edge_secret}
+    authorized = {**edge, "Authorization": "Bearer secret"}
+    api = TestClient(create_app(tmp_path, background_mode="external"))
+    monkeypatch.setenv("RELAY_HTTP_ROLE", "daemon-ingest")
+    report_url = "/api/v1/daemon-nodes/node/reports"
+    auth_url = "/api/v1/auth/me"
+    body = json.dumps(event)
+    report = {"id": "1" * 64, "digest": sha256(body.encode()).hexdigest(), "body": body}
+    payload = {"reports": [report]}
+    expect_receipt = [{"id": report["id"], "digest": report["digest"], "status": 200}]
+
+    with TestClient(create_app(tmp_path)) as ingest:
+        assert ingest.get("/healthz").status_code == 200
+        assert ingest.get(auth_url, headers=edge).status_code == 404
+        assert ingest.get("/api/openapi.json", headers=edge).status_code == 404
+        assert ingest.get("/api/v1/daemon-nodes/node/commands", headers=authorized).status_code == 404
+        assert ingest.post(report_url, json=payload).status_code == 403
+        assert ingest.post(report_url, headers=edge, json=payload).status_code == 401
+        assert ingest.post(report_url, headers=authorized, json=payload).json()["receipts"] == expect_receipt
+
+    assert api.get(auth_url, headers=edge).status_code == 401
+    with TestClient(create_app(tmp_path)) as ingest:
+        assert ingest.post(report_url, headers=authorized, json=payload).json()["receipts"] == expect_receipt
+        raw = json.dumps({**event, "text": "after restart", "sequence": 1})
+        headers = {
+            **authorized, "Content-Type": "application/json",
+            "X-Relay-Report-Id": "2" * 64, "X-Relay-Report-Digest": sha256(raw.encode()).hexdigest(),
+        }
+        result = ingest.post("/api/v1/daemon-nodes/node/events", headers=headers, content=raw)
+        assert result.status_code == 200, result.text
+        assert result.headers["X-Relay-Report-Id"] == "2" * 64
+    assert [e["text"] for e in sessions.get_session(event["sessionId"])["events"]
+            if e["type"] == "agent.output"] == ["hello", "after restart"]
+
+
+@pytest.mark.parametrize("concurrency", [1, 2])
+def test_ingestion_rejects_overflow_before_starting_more_report_work(tmp_path, monkeypatch, concurrency):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from fastapi.testclient import TestClient
+    from relay.app import create_app
+    from store_fixtures import sqlite_url
+
+    fixture(tmp_path)
+    monkeypatch.setenv("RELAY_DATABASE_URL", sqlite_url(tmp_path))
+    monkeypatch.setenv("RELAY_EDGE_SECRET", "a" * 64)
+    monkeypatch.setenv("RELAY_HTTP_ROLE", "daemon-ingest")
+    monkeypatch.setenv("RELAY_DAEMON_INGEST_CONCURRENCY", str(concurrency))
+    app = create_app(tmp_path)
+    started = Event()
+    resume = Event()
+    authorize = app.state.context.registry.assert_node_event_authorized
+
+    def hold_node(node_id, token):
+        if node_id == "node" and not resume.is_set():
+            started.set()
+            assert resume.wait(10)
+        authorize(node_id, token)
+
+    monkeypatch.setattr(app.state.context.registry, "assert_node_event_authorized", hold_node)
+    headers = {"X-Relay-Edge": "a" * 64, "Authorization": "Bearer secret"}
+    reports = "/api/v1/daemon-nodes/node/reports"
+    with TestClient(app) as ingest, ThreadPoolExecutor(max_workers=1) as executor:
+        first = executor.submit(ingest.post, reports, headers=headers, json={})
+        try:
+            assert started.wait(10)
+            blocked = ingest.post("/api/v1/daemon-nodes/node/events", headers=headers, json={})
+            assert (blocked.status_code, blocked.headers["Retry-After"]) == (503, "1")
+            other = ingest.post("/api/v1/daemon-nodes/other/reports", headers=headers, json={})
+            assert other.status_code == (503 if concurrency == 1 else 404)
+            assert ingest.get("/healthz").status_code == 200
+        finally:
+            resume.set()
+        assert first.result(timeout=10).status_code == 400
+        assert ingest.post(reports, headers=headers, json={}).status_code == 400
+
+
 def test_lost_poll_response_redelivers_the_same_start_fence_until_acknowledged(tmp_path, monkeypatch):
     from datetime import datetime, timedelta
     from relay.persistence.daemon import delivery_recovery

@@ -192,6 +192,30 @@ restarts either service independently on failure. A successful worker deployment
 confirms process startup, not completion of a scheduled job; inspect its logs
 and PostgreSQL heartbeats for job health.
 
+### Isolate daemon ingestion
+
+Set `DAEMON_INGEST_DOMAIN` to an unused subdomain of the deployment's
+Cloudflare zone, then run `deploy/deploy.sh up` from a release containing the
+ingestion service. Daemons keep using `API_DOMAIN`. A Cloudflare Worker
+forwards only the daemon event and report POSTs to the new service and sends
+other daemon requests to the existing API origin.
+
+The ingestion service runs `relay serve` with `RELAY_HTTP_ROLE=daemon-ingest`.
+It exposes the two write routes and `/healthz`. The origin is DNS-only and
+requires the shared edge header on the write routes. The Worker stores that
+header value as a secret binding. Relay still checks each daemon credential
+and records durable report receipts with their effects in PostgreSQL.
+
+The hosted service allows four concurrent requests, one per Computer, and
+opens up to eight PostgreSQL connections. Requests over the limit receive a
+retryable 503 and can replay from the daemon outbox. The release probes the
+new origin and its edge lock before installing the Worker route. Daemon
+ingestion has its own status and restart target.
+
+To route traffic back to the API, clear `DAEMON_INGEST_DOMAIN` and run
+`deploy/deploy.sh cloudflare`. This removes the owned Worker route and keeps
+the service and its DNS record available for a later rollout.
+
 ### Upgrade from the combined service
 
 Before the first split release, configure the four `RELAY_R2_*` keys in the

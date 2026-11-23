@@ -7,14 +7,24 @@ import pytest
 from unittest.mock import AsyncMock
 
 
+@pytest.mark.parametrize("role", ["api", "daemon-ingest"])
 def test_cli_never_logs_bootstrap_token_and_uses_trusted_proxy_list(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, role
 ) -> None:
     secret = "bootstrap-secret-that-must-not-be-logged"
     messages: list[str] = []
     uvicorn_options: dict[str, object] = {}
+    auth_lookups = []
+
+    def has_accounts():
+        auth_lookups.append(True)
+        return False
+
     app = SimpleNamespace(
-        state=SimpleNamespace(auth_store=SimpleNamespace(has_accounts=lambda: False))
+        state=SimpleNamespace(
+            settings=SimpleNamespace(http_role=role),
+            auth_store=SimpleNamespace(has_accounts=has_accounts),
+        )
     )
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", secret)
@@ -36,6 +46,7 @@ def test_cli_never_logs_bootstrap_token_and_uses_trusted_proxy_list(
     cli.main(["serve", "--data-dir", str(tmp_path)])
 
     assert secret not in "\n".join(messages)
+    assert len(auth_lookups) == (1 if role == "api" else 0)
     assert uvicorn_options["proxy_headers"] is True
     assert uvicorn_options["forwarded_allow_ips"] == "10.0.0.0/8"
 

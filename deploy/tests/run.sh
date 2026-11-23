@@ -11,6 +11,7 @@ python3 "$TESTS_DIR/dockerfile.py"
 python3 "$TESTS_DIR/source.py"
 python3 "$TESTS_DIR/workers.py"
 node "$TESTS_DIR/worker.mjs"
+node "$TESTS_DIR/daemon-ingest-worker.mjs"
 bash "$TESTS_DIR/verify-worker-cache.sh"
 bash "$TESTS_DIR/release.sh"
 python3 "$TESTS_DIR/release-config.py"
@@ -25,7 +26,7 @@ from pathlib import Path
 import shutil
 import sys
 source, target = map(Path, sys.argv[1:])
-for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json", "backend/relay/processes.py", "backend/relay/background.py", "backend/relay/cli.py", "backend/relay/__main__.py", "deploy/workers/worker.js", "deploy/workers/_headers"]:
+for name in ["backend/Dockerfile", "web/Dockerfile", "web/Caddyfile", "tools/build-computer.mjs", "package.json", "package-lock.json", "tsconfig.options.json", "backend/pyproject.toml", "backend/uv.lock", "packages/relay-core/package.json", "packages/relay-daemon/package.json", "web/package.json", "backend/relay/processes.py", "backend/relay/background.py", "backend/relay/cli.py", "backend/relay/__main__.py", "deploy/workers/worker.js", "deploy/workers/_headers", "deploy/workers/daemon-ingest.js"]:
     (target / name).parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source / name, target / name)
 PY_SOURCE
@@ -549,7 +550,20 @@ REAL_CURL=$(command -v curl)
 export REAL_CURL
 cat > "$WORK/bin/curl" <<'CURL_STUB'
 #!/usr/bin/env bash
+edge=false
 for arg in "$@"; do
+  case $arg in @/dev/fd/*) edge=true ;; esac
+done
+for arg in "$@"; do
+  case $arg in
+    https://ingest.get-relay.cc/healthz) printf '%s' "${TEST_INGEST_HEALTH_CODE:-200}"; exit 0 ;;
+    https://ingest.get-relay.cc/api/v1/daemon-nodes/release-probe/events)
+      if $edge; then printf 400; else printf 403; fi
+      exit 0 ;;
+    https://ingest.get-relay.cc/api/v1/auth/me)
+      if $edge; then printf 404; else printf 403; fi
+      exit 0 ;;
+  esac
   case $arg in https://*get-relay.cc*) printf '%s' "${TEST_PROBE_CODE:-200}"; exit 0 ;; esac
 done
 exec "$REAL_CURL" "$@"
@@ -604,6 +618,32 @@ deploy restart postgres 2>/dev/null || { echo "FAIL  restart postgres"; FAILURES
 STATE=$(state)
 check "postgres restarts only when named" '.calls["railway.restart.Postgres"] == 1'
 expect_failure "restart rejects an unknown service" 'unknown service: cache' deploy restart cache
+
+echo "--- optional daemon ingestion routes write traffic to a separate service"
+start_mock
+write_config 'DAEMON_INGEST_DOMAIN=ingest.get-relay.cc
+RESTART_HEALTH_SECONDS=0'
+export TEST_INGEST_HEALTH_CODE=502
+deploy railway 2>/dev/null
+expect_failure "an unhealthy ingestion origin blocks the route" 'ingestion origin did not become reachable' deploy release
+STATE=$(state)
+check "the Worker route remains absent during failed bootstrap" '[.routes[] | select(.script == "relay-daemon-ingest")] | length == 0'
+unset TEST_INGEST_HEALTH_CODE
+run_phases 2>"$WORK/ingest.log" || { cat "$WORK/ingest.log"; exit 1; }
+STATE=$(state)
+INGEST=$(svc relay-daemon-ingest)
+check "ingestion uses the pinned source and has a distinct connection budget" \
+  "$INGEST | .config.preDeployCommand == [] and .deployments[0].commitSha == \"$SOURCE_COMMIT\" and (.variables | .DATABASE_URL == \"\${{relay-backend.DATABASE_URL}}\" and .RELAY_HTTP_ROLE == \"daemon-ingest\" and .RELAY_DB_POOL_SIZE == \"8\" and .RELAY_DB_MAX_OVERFLOW == \"0\")"
+check "the ingress origin is DNS-only and the API route is installed" \
+  'any(.dns[]; .name == "ingest.get-relay.cc" and .proxied == false) and any(.routes[]; .pattern == "api.get-relay.cc/api/v1/daemon-nodes/*" and .script == "relay-daemon-ingest")'
+check "the Worker uses an origin-lock secret binding" \
+  '.workers["relay-daemon-ingest"].metadata | any(.bindings[]; .name == "RELAY_INGEST_EDGE_SECRET" and .type == "secret_text" and (.text | length) == 64)'
+write_config
+deploy cloudflare 2>"$WORK/ingest-rollback.log" || { cat "$WORK/ingest-rollback.log"; exit 1; }
+STATE=$(state)
+check "rollback removes only the ingestion route" \
+  'any(.routes[]; .script == "relay-web") and all(.routes[]; .script != "relay-daemon-ingest")'
+
 rm "$WORK/bin/curl"
 unset TEST_PROBE_CODE
 
