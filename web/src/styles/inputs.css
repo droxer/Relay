@@ -224,20 +224,27 @@
 }
 
 /* ChoiceGroup (components/ui/choice-group.tsx) — the FORM control for a short,
-   fixed set of saved values. One skin for both layouts: every option is an
-   outlined tile, and the selected one swaps its line for --action over a
-   light wash of the same ink. Outline, never a solid fill; never --signature,
-   which is the focus ring and would read as "focused" rather than "chosen".
-   The layouts differ only in how tiles share the row:
-   - segments: tiles grow to fill the row equally; when the column is too
-     narrow for every label on one line, a tile drops to the next line and
-     still fills it, so a phone never squeezes a label into a sliver.
-   - chips: tiles keep their own width and wrap. */
+   fixed set of saved values. Kept light: the only line that carries weight is
+   the selected option's.
+   - segments: ONE hairline frame around the group; unselected options are
+     plain text inside it, with no box of their own. Options grow to fill the
+     row, and on a narrow column (phones) a whole option wraps to the next
+     line inside the frame rather than squeezing its label.
+   - chips: each option is a hairline pill that keeps its own width and wraps.
+   Selected = a thin --action line over a faint wash of the same ink. Never a
+   solid fill, and never --signature, which is the focus ring. */
 .choice-group {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-1);
   min-width: 0;
+}
+
+.choice-group[data-layout="segments"] {
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--r-2);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
 }
 
 .choice-group-item {
@@ -246,12 +253,10 @@
   justify-content: center;
   gap: var(--sp-1);
   min-width: 0;
-  min-height: var(--control-h);
   padding: 0 var(--sp-3);
   border: 0;
-  border-radius: var(--r-2);
+  border-radius: var(--r-1);
   background: transparent;
-  box-shadow: inset 0 0 0 var(--stroke-w) var(--line-1);
   color: var(--ink-2);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
@@ -261,23 +266,26 @@
 }
 
 .choice-group[data-layout="segments"] .choice-group-item {
-  /* Starts at its label's one-line width and grows to fill the row. A tile
-     that no longer fits moves to the next line (flex wraps on that width)
-     rather than squeezing its label; only a label wider than the whole
-     column wraps inside its own full-width tile. */
+  /* Starts at its label's one-line width and grows to fill the row; flex
+     wraps on that width, so a tile that no longer fits moves down whole. */
   flex: 1 1 auto;
   max-width: 100%;
+  /* The frame's 2px padding sits outside the item: the group still lands at
+     one --control-h, level with an Input beside it. */
+  min-height: calc(var(--control-h) - 4px);
   white-space: normal;
 }
 
 .choice-group[data-layout="chips"] .choice-group-item {
   flex: 0 0 auto;
   min-height: var(--control-h-sm);
+  border-radius: var(--r-2);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
   white-space: nowrap;
 }
 
 .choice-group[data-size="compact"] .choice-group-item {
-  min-height: var(--control-h-sm);
+  min-height: calc(var(--control-h-sm) - 4px);
 }
 
 .choice-group-item:hover {
@@ -287,10 +295,8 @@
 
 .choice-group .choice-group-item[data-checked],
 .choice-group .choice-group-item[data-checked]:hover {
-  background: color-mix(in srgb, var(--action) 12%, transparent);
-  /* Twice the resting stroke: the line itself says "chosen" in both themes,
-     with the wash as support rather than the signal. */
-  box-shadow: inset 0 0 0 calc(var(--stroke-w) * 2) var(--action);
+  background: color-mix(in srgb, var(--action) 8%, transparent);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--action);
   color: var(--ink-1);
 }
 
@@ -304,7 +310,7 @@
   color: var(--ink-2);
 }
 
-/* Touch: every tile is a full thumb target, whatever its layout or size. */
+/* Touch: every option is a full thumb target, whatever its layout or size. */
 @media (pointer: coarse) {
   .choice-group .choice-group-item {
     min-height: var(--touch-target);
