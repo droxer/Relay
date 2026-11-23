@@ -696,6 +696,42 @@ test("a long transcript mounts its newest turns and reveals older ones on scroll
   expect(await readingDrift(), "revealing the local page holds the reading position").toBeLessThanOrEqual(2);
 });
 
+test("scrolling up through turns not yet laid out keeps every step where the reader put it", async ({ page }) => {
+  // A turn that was never laid out holds a placeholder height until it nears
+  // the viewport. WebKit swaps it for the real one in the frame it paints, so
+  // each swap above the reader moved the page — on a phone, every flick. A
+  // reader holding still never sees it, which is why this steps upward.
+  test.setTimeout(90_000);
+  await mockApi(page);
+  await page.goto("/threads/s-0");
+  const transcript = page.locator(".transcript");
+  await expect(page.locator(".agent-code").last()).toContainText("turn149");
+  await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeGreaterThan(600);
+  const { steps, worst } = await transcript.evaluate(async (scroller) => {
+    // Read after the frame renders: a read inside requestAnimationFrame forces
+    // layout ahead of the corrections that run before paint.
+    const painted = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    const errors: number[] = [];
+    let steps = 0;
+    for (; scroller.scrollTop > 0 && steps < 300; steps++) {
+      const top = scroller.getBoundingClientRect().top;
+      const reference = [...scroller.querySelectorAll(".msg")].find(turn => turn.getBoundingClientRect().top >= top);
+      if (!reference) break;
+      const before = reference.getBoundingClientRect().top;
+      const step = Math.min(180, scroller.scrollTop);
+      scroller.scrollTop -= step;
+      for (let frame = 0; frame < 3; frame++) {
+        await painted();
+        errors.push(Math.abs(reference.getBoundingClientRect().top - before - step));
+      }
+    }
+    return { steps, worst: Math.max(...errors) };
+  });
+  expect(steps, "steps taken to reach the first turn").toBeGreaterThan(20);
+  expect(worst, "largest unrequested move of the reading position").toBeLessThanOrEqual(2);
+  await expect(page.locator(".agent-code").first()).toContainText("turn0");
+});
+
 test("a cold conversation opens on its latest window and requests older messages on demand", async ({ page }) => {
   const thread = session("paged-history", 0, 2);
   const eventStart = 3;
