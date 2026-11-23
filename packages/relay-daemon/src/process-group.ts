@@ -1,4 +1,31 @@
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+
+function listDarwinProcessStates(): string {
+  return execFileSync("/bin/ps", ["-axo", "pgid=,stat="], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 1_000,
+  });
+}
+
+function darwinGroupHasOnlyZombies(group: number, list: () => string): boolean {
+  let states: string;
+  try {
+    states = list();
+  } catch {
+    return false;
+  }
+  let found = false;
+  for (const row of states.trim().split("\n")) {
+    const fields = /^\s*(\d+)\s+(\S+)\s*$/.exec(row);
+    if (!fields) return false;
+    if (Number(fields[1]) !== group) continue;
+    if (!fields[2].startsWith("Z")) return false;
+    found = true;
+  }
+  return found;
+}
 
 /**
  * Whether any member of a host process group can still execute.
@@ -8,7 +35,8 @@ import { readdirSync, readFileSync } from "node:fs";
  * container started without `--init` is the common case. Treating that as
  * "still running" holds the run's slot forever. A zombie cannot execute, so
  * on Linux the group is read from `/proc` and zombies are left out, as the
- * guest supervisor already does inside BoxLite.
+ * guest supervisor already does inside BoxLite. On macOS a zombie-only group
+ * can refuse the probe, so verify the remaining members with `ps`.
  *
  * Returns false only on evidence that nothing in the group executes; throws
  * when the evidence cannot be read, so a caller keeps retaining the run. The
@@ -23,13 +51,18 @@ export function processGroupAlive(
     stat: (pid) => readFileSync(`/proc/${pid}/stat`, "utf8"),
   },
   probe: (group: number) => void = (target) => { process.kill(-target, 0); },
+  listDarwin: () => string = listDarwinProcessStates,
 ): boolean {
-  // The kernel's answer comes first: no such group is proof of exit, and a
-  // refusal (EPERM) is no evidence at all, so the caller keeps the run.
+  // The kernel's answer comes first. A missing group proves exit, while a
+  // refused probe needs separate evidence.
   try {
     probe(group);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ESRCH") return false;
+    // macOS can refuse a probe of a group whose only members are zombies.
+    // Require positive evidence of those members before settling the run.
+    if (code === "EPERM" && platform === "darwin" && darwinGroupHasOnlyZombies(group, listDarwin)) return false;
     throw error;
   }
   if (platform !== "linux") return true;
