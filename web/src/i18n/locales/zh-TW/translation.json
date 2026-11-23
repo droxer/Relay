@@ -889,7 +889,6 @@
     "source_routine": "自動化執行",
     "save_task": "儲存任務",
     "create_task": "建立任務",
-    "details_section": "詳細設定",
     "submit_shortcut": "提交",
     "workspace_not_created": "任務開始後，檔案會顯示在這裡。",
     "workspace_offline": "儲存這些檔案的電腦已離線。仍可檢視已儲存的產物。",
@@ -914,7 +913,7 @@
     "work_age": "已開始 {{count}} 天",
     "wip_limit": "每位使用者的進行中任務上限",
     "unblock": "解除阻塞",
-    "ready_policy": "有可用名額時，就緒任務會自動開始。任務進入待驗收時釋出名額，執行受阻時保留名額。",
+    "ready_policy": "就緒的任務會在智慧體空閒時自動開始。",
     "wip_wait": "已排隊：進行中任務名額空出後，此任務將自動開始。",
     "computer_capacity_wait": "已排隊：所分配計算機的執行名額空出後，此任務將自動開始。",
     "error_active": "請先停止或完成當前執行，再更改任務狀態。",
@@ -936,7 +935,11 @@
     "error_reopen": "請先將任務移至就緒狀態，再繼續處理。",
     "error_cancel": "無法取消此任務。請暫停自動化，或重新開啟已完成的任務。",
     "queued": "已排隊",
-    "history_empty_live": "首次執行正在進行。"
+    "history_empty_live": "首次執行正在進行。",
+    "more_options": "更多選項",
+    "more_options_tags_one": "{{count}} 個標籤",
+    "more_options_tags_other": "{{count}} 個標籤",
+    "title_placeholder": "需要完成什麼？"
   },
   "workspace": {
     "preview_missing": "此檔案已不可用，可能已被移動或刪除。",
@@ -1254,7 +1257,6 @@
     "load_failed": "無法載入自動化。",
     "schedule": "觸發器",
     "enabled_needs_target": "啟用此自動化前，請選擇專案、智慧體或團隊。",
-    "project_hint": "可選。不選專案時，每次執行共用該自動化自己的工作區。",
     "title": "自動化",
     "sub_other": "{{count}} 個自動化",
     "filters": "自動化篩選",
@@ -1299,7 +1301,8 @@
     "sort_label": "自動化排序",
     "save": "儲存自動化",
     "create": "建立自動化",
-    "next_run_column": "下次執行"
+    "next_run_column": "下次執行",
+    "title_placeholder": "要執行什麼？"
   },
   "admin": {
     "control_panel": {
@@ -2979,7 +2982,6 @@
     "all": "全部任務",
     "needs_project": "需要專案",
     "intake_hint": "開始工作前請加入專案",
-    "project_hint": "留空則稍後選擇。分配智慧體或開始工作前需先加入專案。",
     "assignment_needs_project": "將此任務加入專案後才能分配智慧體或團隊。",
     "add_to_project": "加入專案",
     "move_to_project": "移入專案",

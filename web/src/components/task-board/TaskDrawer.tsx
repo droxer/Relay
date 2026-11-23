@@ -185,7 +185,10 @@ function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
         </div>
       )}
       <AutomationPauseBanner task={form} />
-      <div className="routine-toggle">
+      {/* A new automation with nothing to run on has no switch to offer: the
+          assignment above already says what it needs, and choosing a target
+          turns it on (activatesOnAssign). */}
+      {!form.id && cannotEnable ? null : <div className="routine-toggle">
         <span className="routine-toggle-text">
           <Label render={<span />}>{t("routine.enabled")}</Label>
           <span className="adm-form-hint" id={enabledHintId}>
@@ -201,7 +204,7 @@ function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
           aria-label={t("routine.enabled")}
           aria-describedby={enabledHintId}
         />
-      </div>
+      </div>}
     </fieldset>
   );
 }
@@ -243,7 +246,6 @@ export function TaskDrawer({
      workflow decides it; with neither, the switch remembers the choice until
      the drawer opens on another record. */
   const [kindChoice, setKindChoice] = useState<AssignmentKind>("agent");
-  useKeyChange(`${open}:${form.id ?? ""}`, () => setKindChoice("agent"));
   const assignmentKind: AssignmentKind = form.assignedWorkflowId && !form.assignedTeamId ? "workflow"
     : form.assignedAgentId || form.assignedTeamId ? "agent" : kindChoice;
   const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project) && assignmentKind === "workflow");
@@ -252,6 +254,20 @@ export function TaskDrawer({
   const projectTriggerRef = useRef<HTMLButtonElement>(null);
   const [projectError, setProjectError] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  /* Settings that already carry a default fold away on a new record, with
+     their current values in one line; a saved record opens on them, because
+     changing one is the usual reason to edit. */
+  const [moreOpen, setMoreOpen] = useState(Boolean(form.id));
+  useKeyChange(`${open}:${form.id ?? ""}`, () => {
+    setKindChoice("agent");
+    setMoreOpen(Boolean(form.id));
+  });
+  const settingsSummary = [
+    t((form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY) === "human" ? "backlog.acceptance_human" : "backlog.acceptance_automatic"),
+    t(`backlog.priorities.${form.priority}`),
+    t((form.permissionMode ?? "ask") === "ask" ? "backlog.permission_ask" : "backlog.permission_yolo"),
+    ...(form.tags.length ? [t("backlog.more_options_tags", { count: form.tags.length })] : []),
+  ].join(" · ");
   // The submit button names the action it performs, not a generic "Confirm".
   const submitLabel = form.id
     ? t(form.variant === "routine" ? "routine.save" : "backlog.save_task")
@@ -406,9 +422,6 @@ export function TaskDrawer({
       label={t("project.project")}
       labelId={projectLabelId}
       wrapper="div"
-      hint={projectChoice === "optional"
-        ? t(form.variant === "routine" ? "routine.project_hint" : "issues.project_hint")
-        : undefined}
       error={projectError ? t("project.required") : undefined}
     >
       <Select value={form.projectId || (projectChoice === "optional" ? NO_PROJECT : "")} onValueChange={(value) => {
@@ -445,9 +458,12 @@ export function TaskDrawer({
       onClose={() => {
         if (!busy) onClose();
       }}
-      kicker={t(form.variant === "routine" ? "nav.routine" : "nav.backlog")}
+      /* A new record is named by its title alone; the section kicker and the
+         "Draft" subtitle only repeat it. A saved one keeps both: its kicker
+         places it and its subtitle is the reference number. */
+      kicker={form.id ? t(form.variant === "routine" ? "nav.routine" : "nav.backlog") : undefined}
       title={title}
-      subtitle={subtitle}
+      subtitle={form.id ? subtitle : undefined}
       subtitleMono={Boolean(form.id)}
       width="task"
       closeLabel={t("drawer.close")}
@@ -463,6 +479,7 @@ export function TaskDrawer({
       <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown} noValidate>
         <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
+            placeholder={t(form.variant === "routine" ? "routine.title_placeholder" : "backlog.title_placeholder")}
             data-modal-initial-focus={initialFocus === "title" ? "" : undefined}
             name={`${fieldPrefix}-title`}
             autoComplete="off"
@@ -476,12 +493,12 @@ export function TaskDrawer({
             aria-describedby={titleError ? "task-drawer-title-error" : undefined}
           />
         </Field>
-        <Field label={t("backlog.description")}>
+        <Field label={t("backlog.description")} optional={t("admin.v2.optional")}>
           <Textarea
             name={`${fieldPrefix}-description`}
             autoComplete="off"
             value={form.description}
-            rows={5}
+            rows={3}
             onChange={(event) => updateBase({ description: event.target.value })}
           />
         </Field>
@@ -501,8 +518,16 @@ export function TaskDrawer({
           </div>
         ) : null}
         {form.variant === "routine" ? <RoutineSchedule form={form} onChange={onChange} logicalAgents={logicalAgents} teams={teams} projects={projects} /> : null}
-        <fieldset className="adm-form-section">
-          <legend className="adm-form-legend">{t("backlog.details_section")}</legend>
+        <details
+          className="task-drawer-more"
+          open={moreOpen}
+          onToggle={(event) => setMoreOpen(event.currentTarget.open)}
+        >
+          <summary>
+            <span className="task-drawer-more-title">{t("backlog.more_options")}</span>
+            {moreOpen ? null : <span className="task-drawer-more-status">{settingsSummary}</span>}
+          </summary>
+          <div className="task-drawer-more-body">
           {/* Two-up pairs only — acceptance with priority here, status with
               due above — so no field is ever left alone in half a row. */}
           <div className="task-drawer-form-grid">
@@ -564,7 +589,8 @@ export function TaskDrawer({
             targetId={form.id} value={form.connectionGrants} disabled={saving || Boolean(form.sourceRoutineId)}
             mailOnly={!form.id && form.variant !== "routine"}
             onChange={connectionGrants => onChange({ ...form, connectionGrants })} />
-        </fieldset>
+          </div>
+        </details>
         <div className="adm-form-actions">
           {form.id && onDelete ? (
             <Button

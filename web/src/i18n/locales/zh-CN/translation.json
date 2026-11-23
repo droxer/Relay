@@ -889,7 +889,6 @@
     "source_routine": "自动化运行",
     "save_task": "保存任务",
     "create_task": "创建任务",
-    "details_section": "详细设置",
     "submit_shortcut": "提交",
     "workspace_not_created": "任务开始后，文件会显示在这里。",
     "workspace_offline": "存储这些文件的电脑已离线。仍可查看已保存的产物。",
@@ -914,7 +913,7 @@
     "work_age": "已开始 {{count}} 天",
     "wip_limit": "每位用户的进行中任务上限",
     "unblock": "解除阻塞",
-    "ready_policy": "有可用名额时，就绪任务会自动开始。任务进入待验收时释放名额，执行受阻时保留名额。",
+    "ready_policy": "就绪的任务会在智能体空闲时自动开始。",
     "wip_wait": "已排队：进行中任务名额空出后，此任务将自动开始。",
     "computer_capacity_wait": "已排队：所分配计算机的执行名额空出后，此任务将自动开始。",
     "error_active": "请先停止或完成当前运行，再更改任务状态。",
@@ -936,7 +935,11 @@
     "error_reopen": "请先将任务移至就绪状态，再继续处理。",
     "error_cancel": "无法取消此任务。请暂停自动化，或重新打开已完成的任务。",
     "queued": "已排队",
-    "history_empty_live": "首次运行正在进行。"
+    "history_empty_live": "首次运行正在进行。",
+    "more_options": "更多选项",
+    "more_options_tags_one": "{{count}} 个标签",
+    "more_options_tags_other": "{{count}} 个标签",
+    "title_placeholder": "需要完成什么？"
   },
   "workspace": {
     "preview_missing": "此文件已不可用，可能已被移动或删除。",
@@ -1254,7 +1257,6 @@
     "load_failed": "无法加载自动化。",
     "schedule": "触发器",
     "enabled_needs_target": "启用此自动化前，请选择项目、智能体或团队。",
-    "project_hint": "可选。不选项目时，每次运行共用该自动化自己的工作区。",
     "title": "自动化",
     "sub_other": "{{count}} 个自动化",
     "filters": "自动化筛选",
@@ -1299,7 +1301,8 @@
     "sort_label": "自动化排序",
     "save": "保存自动化",
     "create": "创建自动化",
-    "next_run_column": "下次运行"
+    "next_run_column": "下次运行",
+    "title_placeholder": "要运行什么？"
   },
   "admin": {
     "control_panel": {
@@ -2979,7 +2982,6 @@
     "all": "全部任务",
     "needs_project": "需要项目",
     "intake_hint": "开始工作前请加入项目",
-    "project_hint": "留空则稍后选择。分配智能体或开始工作前需先加入项目。",
     "assignment_needs_project": "将此任务加入项目后才能分配智能体或团队。",
     "add_to_project": "加入项目",
     "move_to_project": "移入项目",
