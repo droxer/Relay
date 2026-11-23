@@ -59,6 +59,7 @@ import { threadOriginIndex } from "../lib/threads";
 import { threadPanelLayout } from "../lib/threadPanel";
 import { resolveProjectOverviewState, type ProjectCollectionStatus } from "../lib/projectPage";
 import { HandoffStatus } from "./HandoffStatus";
+import { deriveHandoffStatus } from "../lib/handoffStatus";
 import { TeamHandoffCue } from "./TeamHandoffCue";
 import { ThreadWorkflowSlip, workflowNeedsOwner } from "./composer/WorkflowSlip";
 import { WorkflowProgress } from "./workflow/WorkflowProgress";
@@ -464,10 +465,13 @@ export function ThreadsView({
       break;
     }
   }
-  const showRunStarting = running && (
-    executionPhase === "queued" || Boolean(pendingUserMessage)
+  const handoffStatus = deriveHandoffStatus(activeSession);
+  // The reply owns progress once its stream is present, even when the
+  // execution snapshot still shows the earlier queue phase.
+  const showRunStarting = running && !activeQueuedRun && handoffStatus?.status !== "running" && (
+    executionPhase === "queued" || executionPhase === "starting" || Boolean(pendingUserMessage)
     || ((!executionPhase || executionPhase === "running") && lastTurnMessage?.kind !== "agent")
-  );
+  ) && !displayMessages.some((message) => message.kind === "agent" && message.streaming);
   // The task's own next move — accept a result, lift a block — offered in the
   // chip's popover and, while nothing else is asking, docked on the composer.
   const actionTask = lifecycle.task?.current && taskNeedsAction(lifecycle.task.status) ? lifecycle.task : undefined;
@@ -558,6 +562,7 @@ export function ThreadsView({
            occupies the pane, so no thread row may claim selection — the
            active session outlives the route that opened it. */
         selectedSessionId={projectOverviewState === "hidden" && !showProjectDirectoryEmpty ? activeSession?.id : undefined}
+        selectedRunStarting={transcriptVisible && !transcriptPending && showRunStarting}
         selectedProjectId={selectedProjectId}
         listOnScreen={listOnScreen}
         onSelectThread={onSelectThread}
@@ -780,7 +785,7 @@ export function ThreadsView({
                 ) : showRunStarting
                   ? <RunStartingCue node={activeRuntimeNode} />
                   : null}
-                <HandoffStatus session={activeSession} />
+                <HandoffStatus handoff={handoffStatus} />
                 {activeThreadProject && activeSession ? <ProjectManagerProposals projectId={activeThreadProject.id} threadId={activeSession.id} readOnly={Boolean(projectReadOnly)} running={running} /> : null}
                 <CollaborationStatus session={activeSession} />
                 {/* A setup thread only drafts; the owner applies on the dashboard. */}

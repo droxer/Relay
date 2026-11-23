@@ -547,8 +547,8 @@
       "tokens_unreported": "未報告 token",
       "runtime": "執行時"
     },
-    "run_starting_on": "正在 {{computer}} 上啟動。智慧體一開始輸出就會顯示在這裡。",
-    "run_starting": "正在啟動執行。智慧體一開始輸出就會顯示在這裡。",
+    "run_starting_on": "正在 {{computer}} 上啟動…",
+    "run_starting": "正在啟動…",
     "group_queued": "排隊中",
     "queued_for": "排隊中 · {{duration}}",
     "queued_offline": "排隊中 · 電腦離線",

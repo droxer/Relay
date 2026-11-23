@@ -11,7 +11,7 @@ const agent = {
   enabled: true, availability: "ready", version: 1, skills: [], deletedAt: null, createdAt: at(0), updatedAt: at(0),
   placements: [{ id: "placement-james", agentId: "agt_james", computerId, daemonNodeId: "node", desiredState: "active", status: "ready" }],
 };
-const node = { id: "node", userId: "u", workspaceId: "host", computerId, name: "Relay Dev", activeRuns: [],
+const node = { id: "node", userId: "u", workspaceId: "host", computerId, displayName: "Relay Dev", activeRuns: [],
   online: true, stale: false, status: "ready", agents: { claude: "ready" }, capabilities: ["thread-workspaces", "task-workspaces"] };
 const said = JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "Harness engineering is the practice of building the environment an agent works in: tools, context, permissions, and checks." }] } });
 const session = {
@@ -82,6 +82,55 @@ async function serve(page: Page, theme: Theme, status: "done" | "review" | "bloc
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   return patches;
+}
+
+for (const width of [1440, 390]) {
+  test(`a task reply shows one progress cue at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await serve(page, "light", "done");
+    let acceptReply!: () => void;
+    const accepted = new Promise<void>(resolve => { acceptReply = resolve; });
+    let queued: unknown = session;
+    await page.route(url => url.pathname === `/api/v1/threads/${session.id}`, route => route.fulfill({ json: queued }));
+    await page.route(url => url.pathname.endsWith(`/threads/${session.id}/messages`), async route => {
+      const { text, userMessageId } = route.request().postDataJSON();
+      await accepted;
+      const newRun = { ...session.events[0], id: "e5", runId: "run-2", timestamp: at(56) };
+      queued = {
+        ...session,
+        status: "running",
+        updatedAt: at(56),
+        execution: { phase: "queued", computerOnline: true, queueWaitConfirmed: false },
+        agentRuns: [...session.agentRuns, { id: newRun.runId, agent: "claude", logicalAgentId: agent.id, status: "running", startedAt: at(56), artifactIds: [] }],
+        events: [...session.events, { id: userMessageId, type: "user.message", timestamp: at(56), text }, newRun],
+        eventCount: 5,
+        runCount: 2,
+      };
+      await route.fulfill({ json: queued });
+    });
+    await page.goto(`/threads/${session.id}`);
+    const transcript = page.getByRole("log");
+    await expect(transcript).toContainText("Harness engineering is the practice");
+    await page.locator("textarea").fill("Add an example for a new project");
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+
+    const starting = transcript.getByText(/^Starting on Relay Dev/);
+    const working = transcript.getByText("Working…", { exact: true });
+    try {
+      await expect(starting).toBeVisible();
+      await expect(starting).toHaveText("Starting on Relay Dev…");
+      await expect(working).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath("reply-starting.png") });
+    } finally {
+      acceptReply();
+    }
+    await expect(working).toBeVisible();
+    await page.reload();
+    await expect(working).toBeVisible();
+    await expect(starting).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
 }
 
 for (const theme of ["dark", "light"] as const) {

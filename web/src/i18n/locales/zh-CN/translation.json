@@ -547,8 +547,8 @@
       "tokens_unreported": "未报告 token",
       "runtime": "运行时"
     },
-    "run_starting_on": "正在 {{computer}} 上启动。智能体一开始输出就会显示在这里。",
-    "run_starting": "正在启动运行。智能体一开始输出就会显示在这里。",
+    "run_starting_on": "正在 {{computer}} 上启动…",
+    "run_starting": "正在启动…",
     "group_queued": "排队中",
     "queued_for": "排队中 · {{duration}}",
     "queued_offline": "排队中 · 电脑离线",

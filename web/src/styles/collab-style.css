@@ -172,13 +172,13 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-/* A started run with no output yet: where it is, and that output lands here. */
 .run-starting-cue {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  margin: var(--sp-4) 0 0;
-  color: var(--ink-3);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  overflow-wrap: anywhere;
 }
