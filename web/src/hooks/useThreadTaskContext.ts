@@ -3,12 +3,15 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { observedSessionEventCount } from "../lib/sessionPollMerge";
-import type { RelaySession, ThreadTaskContext } from "../types";
+import type { RelaySession, RelayTaskListItem, ThreadTaskContext } from "../types";
 import { THREAD_TASKS_QUERY_KEY } from "./useRelayData";
 
-/** A live round can add suggestions or change its Task after the context read.
- * Ordinary transcript deltas don't change which rows the context needs. */
-export function useThreadTaskContext(session: RelaySession | undefined, context: ThreadTaskContext | undefined): boolean {
+/** A live round can add suggestions, change its Task, or settle it after the context read. */
+export function useThreadTaskContext(
+  session: RelaySession | undefined,
+  context: ThreadTaskContext | undefined,
+  tasks: readonly RelayTaskListItem[],
+): boolean {
   const client = useQueryClient();
   const lastRequested = useRef<string | null>(null);
   let refresh: string | null = null;
@@ -16,8 +19,12 @@ export function useThreadTaskContext(session: RelaySession | undefined, context:
     const scope = session.collaborationRounds?.find((round) => round.roundId === session.activeRoundId)?.workScope;
     const taskId = scope?.kind === "task" ? scope.taskId : null;
     const nextSteps = session.nextSteps ?? [];
-    if (taskId !== context.activeTaskId || JSON.stringify(nextSteps) !== JSON.stringify(context.nextSteps)) {
-      refresh = JSON.stringify([session.id, taskId, nextSteps]);
+    const firstUnread = Math.max(0, context.eventCount - (session.eventStart ?? 0));
+    const closeout = tasks.some(task => task.linkedSessionIds.includes(session.id))
+      ? session.events.slice(firstUnread).reverse().find(event => event.type === "session.completed")
+      : undefined;
+    if (closeout || taskId !== context.activeTaskId || JSON.stringify(nextSteps) !== JSON.stringify(context.nextSteps)) {
+      refresh = JSON.stringify([session.id, taskId, nextSteps, closeout?.id]);
     }
   }
   const threadId = context?.threadId;
