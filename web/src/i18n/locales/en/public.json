@@ -17,7 +17,7 @@
     "request_access": "Request access",
     "theme_to_light": "Switch to light theme",
     "theme_to_dark": "Switch to dark theme",
-    "runtimes": "Open source under Apache 2.0. Works with Codex, Claude Code, Pi, OpenCode, and Google Antigravity.",
+    "runtimes": "Works with Codex, Claude Code, Pi, OpenCode, and the Google Antigravity CLI.",
     "page_title": "Relay — Put AI agents to work on your own computers",
     "headline": "Put AI agents to work on your own computers",
     "lede": "Install Relay on a laptop or a server, then hand work to agents and teams that run there. Follow their work and review results from your desktop or phone.",

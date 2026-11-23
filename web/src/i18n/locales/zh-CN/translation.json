@@ -2006,7 +2006,7 @@
     "request_access": "申请访问",
     "theme_to_light": "切换到浅色主题",
     "theme_to_dark": "切换到深色主题",
-    "runtimes": "基于 Apache 2.0 开源，支持 Codex、Claude Code、Pi、OpenCode 和 Google Antigravity。",
+    "runtimes": "支持 Codex、Claude Code、Pi、OpenCode 和 Google Antigravity CLI。",
     "page_title": "Relay — 让 AI 智能体在你自己的电脑上工作",
     "headline": "让 AI 智能体在你自己的电脑上工作",
     "lede": "在笔记本或服务器上安装 Relay，将工作交给运行在那里的智能体或团队。随时通过桌面或手机跟进工作、审阅结果。",

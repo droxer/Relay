@@ -165,6 +165,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
           <div className="landing-hero-copy">
             <h1 className="landing-headline" id="landing-headline">{t("landing.headline")}</h1>
             <p className="landing-lede">{t("landing.lede")}</p>
+            <p className="landing-runtimes">{t("landing.runtimes")}</p>
             <div className="landing-ctas">
               <CtaLink cta={ctas.primary} tone="primary" />
               {ctas.secondary ? (
@@ -173,7 +174,6 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                 <SectionLink id={HOW_ID} className="landing-button landing-button-secondary" label={t("landing.cta_secondary")} />
               )}
             </div>
-            <p className="landing-runtimes">{t("landing.runtimes")}</p>
           </div>
           <div className="landing-hero-shot">
             <div className="landing-hero-desktop">
