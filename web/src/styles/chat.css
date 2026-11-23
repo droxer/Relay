@@ -60,16 +60,7 @@
   margin: 0;
   flex: 1 1 auto;
   color: var(--ink-1);
-  /* CONTENT, NOT CHROME. A thread name is written by a person or an agent and
-     runs to a full sentence — "Fix billing export race condition on concurrent
-     invoice writes" set at the tightened display tier would shout
-     someone's words. --type-title keeps that tier for fixed UI nouns
-     (Threads, Backlog, the wordmark), where it reads as the brand's
-     brand; content-derived strings take the calmer sans role. */
-  /* One rung under the 16px record title: the header sits over a 14px
-     transcript (--fs-transcript), and at 16px the thread name outweighed
-     every turn below it. Same calm sans voice as --type-title-content. */
-  font: 400 var(--fs-heading)/var(--leading-normal) var(--font-sans);
+  font: 500 var(--fs-heading)/var(--leading-normal) var(--font-sans);
   letter-spacing: var(--type-title-content-track);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -303,7 +294,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-1) 0;
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 .transcript-phase::before,
@@ -388,7 +379,7 @@
 .team-handoff-elapsed {
   grid-column: 3;
   justify-self: end;
-  color: var(--ink-4);
+  color: var(--ink-3);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
   font-variant-numeric: tabular-nums;
@@ -521,7 +512,7 @@
 }
 
 .msg-time {
-  color: var(--ink-4);
+  color: var(--ink-3);
   /* Metadata, not prose: a step under the 14px transcript and speaker name. */
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
@@ -759,7 +750,7 @@
 .msg-user > .msg-user-note {
   margin: 0;
   padding-inline-end: var(--sp-1);
-  color: var(--ink-4);
+  color: var(--ink-3);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
 }
