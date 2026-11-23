@@ -162,9 +162,17 @@ it("quotes a step's question and sends the owner's picked or written answer", as
   expect(decide).toHaveBeenLastCalledWith("answer", binding, "eu-west");
   const send = within(slip).getByRole("button", { name: "workflow.answer_send" });
   expect((send as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(within(slip).getByRole("textbox", { name: "workflow.answer_label" }), { target: { value: "  both, us first " } });
+  const field = within(slip).getByRole<HTMLTextAreaElement>("textbox", { name: "workflow.answer_label" });
+  fireEvent.change(field, { target: { value: "  both, us first " } });
+  decide.mockRejectedValueOnce(new Error("Request failed"));
   fireEvent.click(send);
   await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(field.disabled).toBe(false));
+  expect(decide).toHaveBeenLastCalledWith("answer", binding, "both, us first");
+  expect(field.value).toBe("  both, us first ");
+  fireEvent.click(send);
+  await waitFor(() => expect(field.value).toBe(""));
+  expect(decide).toHaveBeenCalledTimes(3);
   expect(decide).toHaveBeenLastCalledWith("answer", binding, "both, us first");
   expect(within(slip).queryByText("workflow.retry")).toBeNull();
 });

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { WorkflowRun, WorkflowStepDefinition } from "relay-core";
+import type { RelayEvent, WorkflowRun, WorkflowStepDefinition } from "relay-core";
 
 const stamp = "2026-11-18T00:00:00Z";
 const currentStep = "核对发布清单并确认所有必需的回归用例都已通过 · Verify the release checklist before continuing";
@@ -32,17 +32,28 @@ function makeRun(id: string, status: WorkflowRun["status"], startedAt: string): 
   };
 }
 
-async function fixture(page: Page, language: string, assignedWorkflowId?: string) {
+async function fixture(page: Page, language: string, { assignedWorkflowId, question }: {
+  assignedWorkflowId?: string;
+  question?: string;
+} = {}) {
+  const current = makeRun("Release checklist", "awaiting_approval", "2026-11-18T03:00:00Z");
+  if (question) {
+    current.status = "awaiting_input";
+    current.attemptResults!.push({
+      ...current.assignments[current.currentIndex], runId: "asking-run", commandId: "asking-command",
+      timestamp: current.startedAt, status: "question", reason: "workflow_question", outputs: {}, question,
+    });
+  }
   const runs = [
     makeRun("First release", "cancelled", "2026-11-18T01:00:00Z"),
     makeRun("Earlier release", "completed", "2026-11-18T02:00:00Z"),
-    makeRun("Release checklist", "awaiting_approval", "2026-11-18T03:00:00Z"),
+    current,
   ];
   const sessions = runs.map((run, index) => ({
     id: `release-${index}`, title: "Release Thread", taskGoal: "Ship the release", ownerUserId: "alice",
     ownerAgentId: "builder", projectId: "release", workspacePath: "/workspace",
     status: index === 2 ? "running" : run.status, phase: "created", participants: ["human"],
-    agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [],
+    agentRuns: [], artifacts: [], decisions: [], collaborationRounds: [], events: [] as RelayEvent[],
     workflowRuns: [run], activeWorkflowRunId: run.workflowRunId,
     eventCount: 0, artifactCount: 0, runCount: 0, createdAt: run.startedAt, updatedAt: run.startedAt,
   }));
@@ -69,6 +80,14 @@ async function fixture(page: Page, language: string, assignedWorkflowId?: string
     }
     if (path.endsWith("/threads/release-2/workflow-decisions")) {
       const active = sessions[2];
+      if (question) {
+        active.updatedAt = "2026-11-18T03:01:00Z";
+        active.events.push({
+          ...route.request().postDataJSON(), type: "workflow.recovery_decided",
+          id: "answer-event", sessionId: active.id, timestamp: active.updatedAt, actorUserId: "alice",
+        });
+        active.eventCount = active.events.length;
+      }
       active.workflowRuns = [{ ...active.workflowRuns[0], status: "ready", revision: 19 }];
       task.status = "running";
       task.attention.code = undefined;
@@ -87,13 +106,46 @@ test("reads a Task's Workflow by ID only on the Definition tab", async ({ page }
     const { pathname } = new URL(request.url());
     if (pathname === "/api/v1/workflows" || pathname.startsWith("/api/v1/workflows/")) workflowReads.push(pathname);
   });
-  await fixture(page, "en", "release-plan");
+  await fixture(page, "en", { assignedWorkflowId: "release-plan" });
   await page.goto("/projects/release?task=ship&recordTab=activity");
   await expect(page.getByRole("heading", { name: "Current run" })).toBeVisible();
   expect(workflowReads).toEqual([]);
   await page.getByRole("tab", { name: "Definition" }).click();
   await expect(page.getByText("Release workflow definition", { exact: true })).toBeVisible();
   expect(workflowReads).toEqual(["/api/v1/workflows/release-plan"]);
+});
+
+test("sends a written Workflow answer without submitting the Thread composer", async ({ page }) => {
+  await fixture(page, "en", { question: "Which region should we release to?" });
+  await page.goto("/threads/release-2");
+
+  const reply = page.getByRole("textbox", { name: "Your answer" });
+  await reply.fill("  eu-west  ");
+  const draft = page.locator("textarea[name=message]");
+  await draft.fill("Separate message draft");
+  const composerSubmits = await draft.evaluateHandle((field: HTMLTextAreaElement) => {
+    const events: string[] = [];
+    field.form!.addEventListener("submit", () => events.push("submit"));
+    return events;
+  });
+  const navigations: string[] = [];
+  page.on("request", request => {
+    if (request.isNavigationRequest()) navigations.push(request.url());
+  });
+  const submission = page.waitForRequest(request => request.isNavigationRequest()
+    || request.url().endsWith("/threads/release-2/workflow-decisions"));
+  await page.getByRole("button", { name: "Send answer" }).click();
+
+  const decision = await submission;
+  expect(decision.method()).toBe("POST");
+  expect(decision.postDataJSON()).toEqual({
+    kind: "answer", answer: "eu-west", workflowRunId: "Release checklist", workflowStepId: "step-18",
+    assignmentId: "Release checklist-attempt-18", workflowAttempt: 1, expectedRevision: 18,
+  });
+  await expect(reply).toBeHidden();
+  expect(navigations).toEqual([]);
+  expect(await composerSubmits.jsonValue()).toEqual([]);
+  await expect(draft).toHaveValue("Separate message draft");
 });
 
 test("approves a waiting Workflow Run in Task Activities", async ({ page }) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { listControlPanelAgents } from "../api";
@@ -29,6 +29,7 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
   onChange: (ids: string[] | null) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const targetNamePrefix = useId();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(false);
@@ -83,14 +84,18 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
       {[
         ...candidates.map((target) => ({ id: target.id, name: target.displayName, mark: <RosterAgentMark agent={target} /> })),
         ...missing.map((id) => ({ id, name: t("delegation.unavailable_target"), mark: <UnavailableAgentMark /> })),
-      ].map((target) => (
-        <label key={target.id} className="agent-delegation-option">
-          <Checkbox checked={allEligible || custom.includes(target.id)} disabled={saving || !editable || allEligible || (!custom.includes(target.id) && custom.length >= 20)}
-            onCheckedChange={(checked) => void save(checked ? [...custom, target.id] : custom.filter((id) => id !== target.id))} />
-          {target.mark}
-          <span>{target.name}</span>
-        </label>
-      ))}
+      ].map((target, index) => {
+        const nameId = `${targetNamePrefix}-${index}`;
+        return (
+          <label key={target.id} className="agent-delegation-option">
+            <Checkbox aria-labelledby={nameId}
+              checked={allEligible || custom.includes(target.id)} disabled={saving || !editable || allEligible || (!custom.includes(target.id) && custom.length >= 20)}
+              onCheckedChange={(checked) => void save(checked ? [...custom, target.id] : custom.filter((id) => id !== target.id))} />
+            {target.mark}
+            <span id={nameId}>{target.name}</span>
+          </label>
+        );
+      })}
       {error ? <Alert variant="boxed" role="alert">{error}</Alert> : null}
     </fieldset>
   );

@@ -26,7 +26,8 @@ it("gives every delegation target an avatar, including one no longer eligible", 
     </QueryClientProvider>,
   );
 
-  await screen.findByText("Pictured");
+  await screen.findByRole("checkbox", { name: "Pictured" });
+  expect(screen.getByRole("checkbox", { name: "Plain" })).toBeTruthy();
   const rows = Array.from(document.querySelectorAll(".agent-delegation-option")).slice(1);
   expect(rows).toHaveLength(3);
   for (const row of rows) expect(row.querySelector(".agent-state .profile-image")).not.toBeNull();
