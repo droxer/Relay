@@ -11,13 +11,14 @@ import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group"
    automation) every answer fits on screen, so the reader compares them at a
    glance and picks in one press.
 
-   Every option is an outlined tile; the selected one takes a heavier
-   --action line over a light wash (inputs.css). The layout follows the
-   option count, not the call site:
-   - `segments` (≤ 4 options): tiles grow to fill the row, and wrap a whole
-     tile to the next line when the column is too narrow (phones).
-   - `chips` (5+ options): tiles keep their own width and wrap, the same
-     weight as the weekday picker beside them.
+   Kept light (inputs.css): only the selected option carries a line, a thin
+   --action outline over a faint wash. The layout follows the option count,
+   not the call site:
+   - `segments` (≤ 4 options): one hairline frame around plain-text options
+     that grow to fill the row, and wrap whole inside the frame when the
+     column is too narrow (phones).
+   - `chips` (5+ options): hairline pills that keep their own width and
+     wrap, the same weight as the weekday picker beside them.
    Dynamic lists — projects, computers, agents, time zones — stay a Select:
    their length is unbounded, and that is what a menu is for.
 
