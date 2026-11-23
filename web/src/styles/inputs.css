@@ -226,8 +226,9 @@
 /* ChoiceGroup (components/ui/choice-group.tsx) — the FORM control for a short,
    fixed set of saved values. Same skin as the rail's kind filter above, but on
    radio semantics and sized to sit level with an Input or Select in a two-up
-   form row: the track is one --control-h tall. Selected = raised segment on
-   the track, the one selected shape the drawers already use. */
+   form row: the track is one --control-h tall. Selected = a solid --action
+   segment (or chip) with --on-action ink: a saved value must read at a glance,
+   and a surface tone on the grey track was nearly invisible in light theme. */
 .choice-group {
   min-width: 0;
 }
@@ -254,7 +255,7 @@
   gap: var(--sp-1);
   min-width: 0;
   border: 0;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   text-align: center;
@@ -290,15 +291,11 @@
   background: var(--control-fill);
 }
 
-.choice-group-item[data-checked] {
-  background: var(--surface-0);
-  color: var(--ink-1);
-  box-shadow: 0 0 0 var(--sp-hairline) var(--line-1);
-}
-
-.choice-group[data-layout="chips"] .choice-group-item[data-checked] {
-  background: var(--control-fill);
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
+.choice-group .choice-group-item[data-checked],
+.choice-group .choice-group-item[data-checked]:hover {
+  background: var(--action);
+  color: var(--on-action);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--action);
 }
 
 /* Compact: a switch that sits ABOVE another control (the assignment kind
