@@ -337,9 +337,9 @@ describe("application typography roles", () => {
     // Display text without its paired track silently loses the tracking the
     // role was designed with, and a second letter-spacing in the same rule
     // silently overrides it. The contract is PRESENCE of the declaration, not
-    // a non-zero value: --type-heading-track resolves to var(--track-0) = 0 by
-    // design, and the declaration must still be there so the pairing stays
-    // greppable.
+    // a non-zero value: a track token may resolve to 0 (every track does under
+    // the CJK scope), and the declaration must still be there so the pairing
+    // stays greppable.
     //
     // Two shapes count as display-tier and BOTH must be swept: the --type-*
     // shorthand roles, and rules that opt into `font-family: var(--font-display)`
