@@ -906,7 +906,6 @@
     "source_routine": "Automation runs",
     "save_task": "Save task",
     "create_task": "Create task",
-    "details_section": "Details",
     "submit_shortcut": "to submit",
     "workspace_not_created": "Files appear here after the task starts.",
     "workspace_offline": "The computer with these files is offline. Saved artifacts are still available.",
@@ -933,7 +932,7 @@
     "work_age_other": "Age: {{count}} days",
     "wip_limit": "Work-in-progress limit per user",
     "unblock": "Unblock",
-    "ready_policy": "Ready tasks start automatically when capacity is available. Entering Review frees a task slot. Blocked execution still holds its slot.",
+    "ready_policy": "Ready tasks start as soon as an agent is free.",
     "wip_wait": "Queued: this task will start automatically when work-in-progress capacity opens.",
     "computer_capacity_wait": "Queued: this task will start automatically when an execution slot opens on its Computer.",
     "error_active": "Stop or finish the active run before changing this task’s status.",
@@ -955,7 +954,11 @@
     "error_reopen": "Move this task to Ready before continuing it.",
     "error_cancel": "This task cannot be cancelled. Pause automations or reopen completed work instead.",
     "queued": "Queued",
-    "history_empty_live": "The first run is under way."
+    "history_empty_live": "The first run is under way.",
+    "more_options": "More options",
+    "more_options_tags_one": "{{count}} tag",
+    "more_options_tags_other": "{{count}} tags",
+    "title_placeholder": "What needs to get done?"
   },
   "workspace": {
     "preview_missing": "This file is no longer available. It may have been moved or deleted.",
@@ -1280,7 +1283,6 @@
     "load_failed": "Could not load automations.",
     "schedule": "Trigger",
     "enabled_needs_target": "Choose a project, agent, or team before enabling this automation.",
-    "project_hint": "Optional. Without a project, every run shares the automation's own workspace.",
     "title": "Automations",
     "sub_one": "{{count}} automation",
     "sub_other": "{{count}} automations",
@@ -1329,7 +1331,8 @@
     "sort_label": "Sort automations",
     "save": "Save automation",
     "create": "Create automation",
-    "next_run_column": "Next run"
+    "next_run_column": "Next run",
+    "title_placeholder": "What should run?"
   },
   "admin": {
     "control_panel": {
@@ -3046,7 +3049,6 @@
     "all": "All tasks",
     "needs_project": "Needs project",
     "intake_hint": "Add to a project before starting work",
-    "project_hint": "Leave empty to choose later. Add a project before assigning an agent or starting work.",
     "assignment_needs_project": "Add this task to a project to assign an agent or team.",
     "add_to_project": "Add to project",
     "move_to_project": "Move to project",

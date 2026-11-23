@@ -112,6 +112,7 @@ for (const automation of [false, true]) test(`connection access in a new ${autom
   const form = page.getByRole("dialog", { name: automation ? "New automation" : "New task", exact: true });
   await form.getByRole("textbox", { name: "Goal", exact: true }).fill("Read connected issues");
   if (automation) {
+    await form.locator("summary").filter({ hasText: "More options" }).click();
     await form.locator("summary").filter({ hasText: "Connections" }).click();
     await form.getByRole("checkbox", { name: /Personal GitHub/ }).check();
     await form.getByRole("checkbox", { name: "octo/hello", exact: true }).check();
@@ -134,6 +135,7 @@ for (const automation of [false, true]) test(`Inbox access in a new ${automation
   await page.getByRole("button", { name, exact: true }).first().click();
   const form = page.getByRole("dialog", { name, exact: true });
   await form.getByRole("textbox", { name: "Goal", exact: true }).fill("Summarize the Inbox");
+  await form.locator("summary").filter({ hasText: "More options" }).click();
   await form.locator("summary").filter({ hasText: "Connections" }).click();
   await expect(form.getByRole("checkbox", { name: /outlook@example\.net/ })).toBeVisible();
   for (const provider of mailProviders) await expect(form.locator(`img[src="/brand/${provider.id}.svg"]`)).toBeVisible();

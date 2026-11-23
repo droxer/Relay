@@ -101,7 +101,7 @@ const enabledSwitch = () => within(schedule()).getByRole("switch", { name: "rout
 const enabledHint = () => document.getElementById(enabledSwitch().getAttribute("aria-describedby")!);
 
 it("groups the trigger, its schedule, and the enabled switch as one section", () => {
-  render(<Form initial={emptyRoutineForm(user)} />);
+  render(<Form initial={{ ...emptyRoutineForm(user), projectId: "p" }} />);
   expect(within(schedule()).getByText("automation.trigger_kind")).toBeTruthy();
   expect(within(schedule()).getByText("automation.repeat")).toBeTruthy();
   expect(within(schedule()).getByText("automation.timezone")).toBeTruthy();
@@ -173,8 +173,13 @@ it("turns the switch on as active and off as paused", () => {
   expect(latest().routineState).toBe("paused");
 });
 
-it("says why the schedule cannot be turned on while nothing could run it", () => {
+it("offers no switch on a new automation while nothing could run it", () => {
   render(<Form initial={emptyRoutineForm(user)} />);
+  expect(within(schedule()).queryByRole("switch")).toBeNull();
+});
+
+it("says why a saved schedule cannot be turned on while nothing could run it", () => {
+  render(<Form initial={{ ...emptyRoutineForm(user), id: "task_1", title: "Digest" }} />);
   const toggle = enabledSwitch();
   const disabled = toggle.getAttribute("aria-disabled") === "true" || toggle.hasAttribute("data-disabled") || (toggle as HTMLButtonElement).disabled;
   expect(disabled).toBe(true);
@@ -211,9 +216,8 @@ it("reports a missing title in the drawer's own words", () => {
   expect(screen.getByText("backlog.title_required")).toBeTruthy();
 });
 
-it("offers No project with an automation hint", () => {
+it("offers No project for an automation", () => {
   render(<Form initial={{ ...emptyRoutineForm(user), title: "Digest" }} />);
-  expect(screen.getByText("routine.project_hint")).toBeTruthy();
   expect(screen.getAllByText("issues.no_project").length).toBeGreaterThan(0);
 });
 
@@ -297,10 +301,18 @@ it("submits on ⌘/Ctrl+Enter from a multi-line field, through the same title ch
 
 it("asks when it runs before the settings that carry a default", () => {
   render(<Form initial={emptyRoutineForm(user)} />);
-  const details = screen.getByRole("group", { name: "backlog.details_section" });
-  // The trigger section precedes Details, and Details holds the defaults.
+  const details = screen.getByText("backlog.more_options").closest("details")!;
+  // The trigger section precedes More options, which holds the defaults
+  // folded away on a new automation, their values named in the summary.
+  expect(details.open).toBe(false);
+  expect(details.querySelector("summary")?.textContent).toContain("backlog.priorities.normal");
   expect(schedule().compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(details).getByText("backlog.priority")).toBeTruthy();
   expect(within(details).getByText("backlog.acceptance_policy")).toBeTruthy();
   expect(within(schedule()).queryByText("backlog.priority")).toBeNull();
+});
+
+it("opens More options on a saved automation", () => {
+  render(<Form initial={{ ...emptyRoutineForm(user), id: "task_1", title: "Digest", projectId: "p" }} />);
+  expect(screen.getByText("backlog.more_options").closest("details")!.open).toBe(true);
 });

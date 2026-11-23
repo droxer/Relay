@@ -330,6 +330,77 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
+/* More options — the settings that already carry a default (acceptance,
+   priority, tool permissions, tags, connections). On a new record they fold
+   into one row that names their current values, so the form reads as the
+   decisions only. Opens on the same hairline a section does, in the legend
+   voice, with the chevron Connections uses. */
+.task-drawer-more {
+  min-width: 0;
+  background: linear-gradient(var(--line-2), var(--line-2)) top / 100% var(--sp-hairline) no-repeat;
+  padding-top: var(--sp-2);
+}
+
+.task-drawer-more > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  min-height: var(--touch-target);
+  border-radius: var(--r-1);
+  cursor: pointer;
+  list-style: none;
+}
+
+.task-drawer-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-drawer-more > summary::before {
+  flex-shrink: 0;
+  width: var(--sp-1-5);
+  height: var(--sp-1-5);
+  border-right: 1.5px solid var(--ink-3);
+  border-bottom: 1.5px solid var(--ink-3);
+  content: "";
+  transform: rotate(-45deg);
+  transition: transform var(--t-fast) var(--ease);
+}
+
+.task-drawer-more[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.task-drawer-more-title {
+  flex-shrink: 0;
+  color: var(--ink-2);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
+}
+
+.task-drawer-more > summary:hover .task-drawer-more-title {
+  color: var(--ink-1);
+}
+
+/* The folded values, quieter than the title and cut before they wrap. */
+.task-drawer-more-status {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-drawer-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  padding-top: var(--sp-4);
+}
+
 /* ⌘/Ctrl+Enter submits from any field. Named in the footer only where there
    is a hardware keyboard to press it with — a touch keyboard has no chord,
    and the phone footer needs its width for two full-size buttons. It is the
@@ -353,7 +424,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .task-board-drawer-form .connection-grants > summary::before {
+  .task-board-drawer-form .connection-grants > summary::before,
+  .task-drawer-more > summary::before {
     transition: none;
   }
 }
