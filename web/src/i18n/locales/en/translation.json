@@ -1134,6 +1134,7 @@
     "online_count": "{{count}} online",
     "page_sub": "Connected computers, agent runtimes, and active runs.",
     "empty_title": "No computers connected",
+    "load_failed": "Could not load computers",
     "empty_body": "Connect a computer to run agents, or ask an admin to assign one.",
     "unnamed": "Unnamed computer",
     "disconnect": "Disconnect computer",

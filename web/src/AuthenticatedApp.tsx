@@ -177,6 +177,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const {
     nodes,
     nodesReady,
+    nodesStatus,
+    refetchNodes,
     sessions,
     sessionsLoading,
     hasMoreSessions,
@@ -815,6 +817,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             setUser={setUser}
             visibleNodes={workspaceNodes}
             runtimeNodes={runtimeNodes}
+            nodesStatus={nodesStatus}
+            refetchNodes={refetchNodes}
             isRefreshing={isRefreshing}
             onRefresh={onRefresh}
             onOpenThread={onOpenThread}
