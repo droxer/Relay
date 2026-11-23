@@ -13,7 +13,6 @@
 .connection-grants summary::-webkit-details-marker { display: none; }
 .connection-grants summary:hover { color: var(--ink-1); background: var(--row-hover); }
 .connection-grants summary > svg { flex-shrink: 0; }
-.connection-grants summary:focus-visible { outline: 2px solid var(--action); outline-offset: 3px; }
 .connection-grants-status { margin-inline-start: auto; font: var(--type-meta); min-width: 0; overflow-wrap: anywhere; }
 .connection-grants-status[data-selected] { padding: var(--sp-1) var(--sp-2); border-radius: var(--r-1); color: var(--ink-1); background: var(--action-soft); }
 .connection-grants-chevron { transition: transform var(--t-fast) var(--ease); }

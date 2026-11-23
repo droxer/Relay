@@ -138,33 +138,10 @@
   min-width: 0;
 }
 
-/* A board tile is a fixed frame (backlog.css), so its tags get one line of
-   their own under the title and the title gives up its second line to pay
-   for it — the precedent the hold-up line set (task-status.css). The row
-   never wraps; anything past two tags is already folded into "+N". A
-   held-up tile drops its tags instead: the hold-up is the more urgent fact,
-   and the record carries the tags in full. */
 .backlog-card-body > .tag-list {
   flex: none;
   max-width: 100%;
   margin-block-start: var(--sp-2);
-  overflow: hidden;
-}
-
-/* Fine pointers only: under a coarse one the touch floor (a11y.css) makes
-   the title link 44px — two lines tall — so a one-line clamp left the
-   clipped second line showing under the first line's ellipsis. There the
-   target already pays for two lines, so the title keeps its two. */
-@media not (pointer: coarse) {
-  .backlog-task:has(.backlog-card-body > .tag-list) .backlog-task-title {
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-    max-height: 1lh;
-  }
-}
-
-.backlog-task:has(.task-holdup--tile) .backlog-card-body > .tag-list {
-  display: none;
 }
 
 /* The record's settings list: the tags may wrap, and start on the value

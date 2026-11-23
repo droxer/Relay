@@ -6,7 +6,6 @@ import type { SessionCapabilities } from "../api";
 import { AUTH_CAPABILITIES_QUERY_KEY, AuthSessionClientContext } from "../hooks/useAuthSession";
 import { configurePersonalQueryCache } from "../lib/personalQueryCache";
 import { TaskReviewProvider } from "./task-record/TaskReviewProvider";
-import { ArtifactViewerProvider } from "./ArtifactViewerProvider";
 
 /** Mounted with the Account id as its key. An old request or mutation can
  * only update its old client, never the next Account's personal space. */
@@ -32,7 +31,7 @@ export function PersonalSpaceProvider({ children }: { children: ReactNode }) {
 
   return <AuthSessionClientContext.Provider value={authClient}>
     <QueryClientProvider client={client}>
-      <ArtifactViewerProvider><TaskReviewProvider>{children}</TaskReviewProvider></ArtifactViewerProvider>
+      <TaskReviewProvider>{children}</TaskReviewProvider>
     </QueryClientProvider>
   </AuthSessionClientContext.Provider>;
 }

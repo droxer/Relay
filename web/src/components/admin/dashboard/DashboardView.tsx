@@ -17,10 +17,9 @@ import { NodeStatusCard } from "./NodeStatusCard";
 import { KpiTile } from "./KpiTile";
 import { TokenUsageChart } from "./TokenUsageChart";
 import { TopUsers } from "./TopUsers";
-import { Sparkline } from "./Sparkline";
 import { formatCompact } from "../../../lib/compactNumber";
 import { activityTotals, successRate } from "../../../lib/activityChart";
-import { displayTone, fleetSummary } from "../../../lib/fleetSlots";
+import { fleetSummary } from "../../../lib/fleetSlots";
 
 interface DashboardViewProps {
   nodes: ControlPanelDaemonNodeRecord[];
@@ -77,7 +76,6 @@ export function DashboardView({
             slot="sessions"
             eyebrow={t("admin.v2.dash_kpi_sessions")}
             value={sessionsReady ? formatCompact(sessions.total, i18n.language) : dash}
-            visual={sessionsReady ? <Sparkline points={sessions.dailyCounts.map((day) => day.count)} /> : null}
           />
           {/* Completed share of the threads that finished in the chart's
               window. No reading until something finishes: 0% would claim
@@ -95,25 +93,11 @@ export function DashboardView({
                 : undefined
             }
           />
-          {/* The count, with the fleet's state mix as a meter. The full
-              breakdown is the fleet card's job in the rail below. */}
+          {/* Live fleet count; the full status breakdown sits in NodeStatusCard below. */}
           <KpiTile
             slot="nodes"
             eyebrow={t("admin.v2.dash_kpi_nodes")}
             value={nodesReady ? formatCompact(metrics.total, i18n.language) : dash}
-            visual={
-              fleet.total > 0 ? (
-                <span className="adm-dash-bar adm-dash-tile-meter" aria-hidden="true">
-                  {fleet.slots.filter((slot) => slot.count > 0).map((slot) => (
-                    <span
-                      key={slot.key}
-                      className={`adm-dash-bar-seg tone-${displayTone(slot)}`}
-                      style={{ flexBasis: `${slot.share * 100}%` }}
-                    />
-                  ))}
-                </span>
-              ) : null
-            }
             hint={
               fleet.total > 0
                 ? t("admin.v2.dash_kpi_nodes_hint", { running: fleetCount("running"), ready: fleetCount("ready") })
@@ -131,7 +115,6 @@ export function DashboardView({
               slot="tokens"
               eyebrow={t("admin.v2.dash_kpi_tokens")}
               value={tokens.isError || tokens.isLoading ? dash : formatCompact(tokens.fresh, i18n.language)}
-              visual={tokens.isError || tokens.isLoading ? null : <Sparkline points={tokens.daily.map((day) => day.fresh)} />}
               hint={tokens.isError ? t("workspace.load_failed") : t("admin.v2.dash_kpi_tokens_hint")}
             />
           ) : null}

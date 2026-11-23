@@ -107,7 +107,6 @@ describe("type-face utilities", () => {
     for (const cls of [
       "adm-node-card-handle",
       "adm-cred-value",
-      "adm-assign-node-path",
       "workspace-path-segment",
     ]) {
       pairedWith("code", cls);
@@ -180,7 +179,6 @@ describe("type-face utilities", () => {
     // after tokens/base.css at equal specificity — so `.code` alone loses.
     const pairs: readonly (readonly [string, string])[] = [
       ["styles/admin-v2-users.css", "adm-node-history-identity span"],
-      ["styles/admin-v2-drawers.css", "adm-assign-node-id"],
     ];
 
     for (const [file, selector] of pairs) {

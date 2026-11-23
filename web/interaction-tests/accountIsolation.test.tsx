@@ -1,8 +1,7 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { App } from "../src/App";
-import { useArtifactViewer } from "../src/components/ArtifactViewerProvider";
 
 const state = vi.hoisted(() => ({
   alice: { id: "account-alice", userId: "alice", username: "alice", role: "user" },
@@ -24,13 +23,9 @@ vi.mock("../src/api", () => ({
   getMe: vi.fn(async () => ({ authenticated: true, user: state.alice, capabilities: { automationTriggers: false } })),
   RelayApiError: class extends Error {},
 }));
-vi.mock("../src/components/artifact/ArtifactsDrawer", () => ({
-  ArtifactsDrawer: ({ open }: any) => open ? <div>Alice private artifact</div> : null,
-}));
 vi.mock("../src/AuthenticatedApp", () => ({
   AuthenticatedApp: ({ user, setUser }: any) => {
     const client = useQueryClient();
-    const viewer = useArtifactViewer();
     if (user.username === "alice") state.oldClient = client;
     const query = useQuery({
       queryKey: ["task-record", "private-task"],
@@ -42,7 +37,6 @@ vi.mock("../src/AuthenticatedApp", () => ({
     return <>
       <div>{user.username}</div><div>{query.data}</div>
       <button onClick={() => setUser(null)}>Sign out</button>
-      <button onClick={() => viewer.open({ id: "private-artifact" } as any, "alice-thread")}>Open artifact</button>
     </>;
   },
 }));
@@ -77,15 +71,5 @@ it("isolates a late write from the previous account's mutation", async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   expect(screen.queryByText("Alice late private data")).toBeNull();
-  view.unmount(); root.clear();
-});
-
-it("closes a private artifact viewer when its account signs out", async () => {
-  const { root, view } = await switchAccounts();
-  fireEvent.click(screen.getByText("Open artifact"));
-  await screen.findByText("Alice private artifact");
-  fireEvent.click(screen.getByText("Sign out"));
-  await screen.findByText("Sign in as Bob");
-  await waitFor(() => expect(screen.queryByText("Alice private artifact")).toBeNull());
   view.unmount(); root.clear();
 });

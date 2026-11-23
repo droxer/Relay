@@ -20,6 +20,29 @@
   min-width: 0;
 }
 
+/* Top-of-thread banners (execution recovery, workflow progress) share one grid
+   row so both can coexist without displacing the scrollable transcript. */
+.chat-banners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.chat-banners:empty {
+  display: none;
+}
+
+.chat-panel:has(> .chat-banners:not(:empty)) {
+  grid-template-rows: var(--header-h) auto minmax(0, 1fr) auto;
+}
+
+@media (max-width: 820px) {
+  .messenger-shell[data-mobile-view="chat"] .chat-panel:has(> .chat-banners:not(:empty)) {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+}
+
 .chat-header {
   display: flex;
   align-items: center;

@@ -53,10 +53,6 @@
 .page-header-kicker {
   color: var(--ink-3);
   font: var(--type-micro);
-  /* Deliberately --track-0, not --type-micro-track: kickers/eyebrows are
-     generic containers for arbitrary translated copy and stay SENTENCE
-     CASE — the carve-out .eyebrow documents in tokens/base.css, pinned by
-     typographyTokens.test.ts. */
   letter-spacing: var(--type-micro-track);
 }
 
@@ -82,6 +78,7 @@ body {
    edge (thread.css) has. */
 /* Dark theme — token-level dark values live in tokens/palette.css;
    this block only adds structural rules for this file's components. */
+html[data-theme="dark"] .surface-header,
 html[data-theme="dark"] .chat-header,
 html[data-theme="dark"] .page-header {
   --surface-header-bg: var(--surface-0);

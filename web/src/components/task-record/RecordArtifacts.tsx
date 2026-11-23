@@ -9,7 +9,7 @@ import { RELAY_POLL_INTERVALS_MS } from "../../lib/relayPolling";
 import { RecordFailure } from "./RecordFailure";
 import { artifactFileName, artifactRowFolder, artifactShowsKind, formatArtifactDate } from "../../lib/artifactPreview";
 import { formatBytes } from "../../lib/workspaceFormat";
-import { ArtifactKindIcon } from "../artifact/ArtifactIndexStrip";
+import { ArtifactKindIcon } from "../artifact/ArtifactKindIcon";
 import { ICON } from "../icons";
 import type { ArtifactIndexItem } from "../../types";
 import { Button } from "@/components/ui/button";

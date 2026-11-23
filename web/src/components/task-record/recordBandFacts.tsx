@@ -20,6 +20,13 @@ import type { RecordFact } from "../workspace/RecordBand";
  * place — a second hand-written facts list is how two surfaces end up
  * disagreeing about what a task's status is.
  */
+export interface RecordFactOverrides {
+  status?: ReactNode;
+  priority?: ReactNode;
+  due?: ReactNode;
+  assignee?: ReactNode;
+}
+
 export function recordBandFacts(
   task: RelayTaskListItem,
   variant: "task" | "routine",
@@ -31,9 +38,12 @@ export function recordBandFacts(
   /** The assignee's resolved display name; without it the raw user id
       would stand where a person's name belongs. */
   assigneeName?: string,
-  /** The task's status control (`InlineStatus`); the plain mark otherwise. */
-  statusValue?: ReactNode,
+  /** Inline controls for the task record band (`InlineStatus`, etc.). */
+  controls?: ReactNode | RecordFactOverrides,
 ): RecordFact[] {
+  const overrides: RecordFactOverrides = controls && typeof controls === "object" && !("$$typeof" in controls)
+    ? controls as RecordFactOverrides
+    : { status: controls as ReactNode };
   const facts: RecordFact[] = [];
   if (variant === "routine") {
     facts.push({
@@ -52,17 +62,24 @@ export function recordBandFacts(
     facts.push({
       key: "status",
       label: t("backlog.status"),
-      value: statusValue ?? (
+      value: overrides.status ?? (
         <span className="record-band-inline">
           <TaskStatusIcon status={task.status} />
           {t(`backlog.statuses.${task.status}`)}
         </span>
       ),
     });
+    if (overrides.priority) {
+      facts.push({
+        key: "priority",
+        label: t("backlog.priority"),
+        value: overrides.priority,
+      });
+    }
     facts.push({
       key: "due",
       label: task.scheduledFor ? t("record.scheduled_for") : t("backlog.due"),
-      value: recordDate(task.scheduledFor ?? task.dueDate, locale),
+      value: overrides.due ?? recordDate(task.scheduledFor ?? task.dueDate, locale),
     });
   }
   /* A task opened from a project used to arrive with no trace of the project
@@ -79,7 +96,7 @@ export function recordBandFacts(
   facts.push({
     key: "assignee",
     label: t("backlog.assignee"),
-    value: assigneeName ?? t("backlog.unassigned"),
+    value: overrides.assignee ?? (assigneeName ?? t("backlog.unassigned")),
   });
   facts.push({
     key: "ref",

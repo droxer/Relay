@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { getComputerSetupCommand } from "../../api";
 import { Button } from "../ui/button";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
-import { ComputerKindPicker } from "./ComputerKindPicker";
 import { OsInstallCommand, TargetOsTabs } from "./TargetOsTabs";
 
 export function ComputerDeviceSetup({ onManual }: { onManual: () => void }) {
@@ -24,7 +23,6 @@ export function ComputerDeviceSetup({ onManual }: { onManual: () => void }) {
     return () => { active = false; };
   }, []);
   return <div className="adm-form">
-    <ComputerKindPicker />
     <TargetOsTabs>
       {(os) => <ol className="computer-install-steps">
         <li><h3>{t("computer.connect_command_step")}</h3>

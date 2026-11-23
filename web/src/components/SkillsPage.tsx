@@ -16,6 +16,7 @@ import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import type { CurrentUser, SkillFileInput, SkillRepositoryImportResult, SkillsResponse, SkillVisibility } from "../types";
 import { ActionAdd, ICON } from "./icons";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -28,6 +29,7 @@ import { RelayEmptyState } from "./RelayEmptyState";
 import { compactDate } from "../lib/workspaceFormat";
 import { groupSkillsByFolder } from "../lib/skillGroups";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
+import { SkillPreviewDrawer } from "./SkillPreviewDrawer";
 import { SkillImportProgress } from "./SkillImportProgress";
 import { Drawer } from "@/components/ui/Drawer";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -98,6 +100,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const detailQuery = useSkill(selectedId);
   const [mode, setMode] = useState<CreateMode | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Publish has the drawer's own busy state; a re-import runs from the
   // detail pane, so it needs its own flag to show progress there.
@@ -136,6 +139,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   useKeyChange(selectedId, () => {
     setRevisionFiles([]);
     setRevisionNote("");
+    setPreviewPath(null);
     setError(null);
   });
   useEffect(() => {
@@ -470,7 +474,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               }
             />
             <div className="skill-detail-body">
-            {!mode && error ? <p role="alert" className="skill-error">{error}</p> : null}
+            {!mode && error ? <Alert>{error}</Alert> : null}
             {skill.description ? <p className="skill-description">{skill.description}</p> : null}
             {/* One quiet meta line, not a stat band: three small counts do not
                 earn display-size numerals between two hairlines. */}
@@ -488,7 +492,13 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               <ul className="skill-file-list">
                 {skill.files.map((file) => (
                   <li key={file.path}>
-                    <code>{file.path}</code>
+                    <button
+                      type="button"
+                      className="skill-file-open"
+                      onClick={() => setPreviewPath(file.path)}
+                    >
+                      <code>{file.path}</code>
+                    </button>
                     <span>{t("skills.bytes", { count: file.bytes, value: file.bytes.toLocaleString(i18n.language) })}</span>
                   </li>
                 ))}
@@ -526,7 +536,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                 ))}
               </ol>
               {olderRevisions.isError ? (
-                <p className="skill-error" role="alert">{t("skills.revision_history_load_failed")}</p>
+                <Alert>{t("skills.revision_history_load_failed")}</Alert>
               ) : null}
               {canLoadOlderRevisions ? (
                 <Button
@@ -838,11 +848,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               </div>
             </Field>
             {publishing ? <SkillImportProgress kind={mode} /> : null}
-            {error ? (
-              <p role="alert" className="skill-error">
-                {error}
-              </p>
-            ) : null}
+            {error ? <Alert>{error}</Alert> : null}
             <footer className="adm-form-actions">
               <Button variant="ghost" disabled={busy} onClick={resetCreate}>
                 {t("skills.cancel")}
@@ -861,6 +867,15 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
             </footer>
             </>}
         </Drawer>
+      ) : null}
+      {previewPath && skill ? (
+        <SkillPreviewDrawer
+          skillId={skill.id}
+          fallbackTitle={skill.displayName}
+          channel="latest"
+          initialPath={previewPath}
+          onClose={() => setPreviewPath(null)}
+        />
       ) : null}
       {sharing && skill ? (
         <ShareSkillDrawer

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { PriorityBadge } from "../PriorityBadge";
 import { TaskTagList } from "../TaskTags";
 import { cn } from "@/lib/utils";
-import { type RelaySession, type RelayTaskListItem } from "../../types";
+import { type RelayTaskListItem } from "../../types";
 import { ActionCalendar, ICON } from "../icons";
 import {
   flexRender,
@@ -13,7 +13,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { dueTone, type BacklogSortKey } from "../../lib/backlog";
-import { taskExceptions, taskWorkAgeDays } from "../../lib/taskExceptions";
+import { taskWorkAgeDays } from "../../lib/taskExceptions";
 import { TaskHoldupLine } from "./TaskHoldupLine";
 import { recordHrefForLocation } from "../../lib/workspaceScope";
 import { TaskRefLink } from "./TaskRefLink";
@@ -412,45 +412,4 @@ export function BacklogTaskList({
 
     </BacklogCells.Provider>
   );
-}
-
-
-/**
- * The exception line: why this task is not simply moving. The derivation is
- * shared (`taskExceptions` in lib/taskExceptions), so the row cannot
- * disagree with the record about whether a task is blocked or why.
- *
- * Nothing to say is nothing to draw: the element used to render empty, and
- * an empty flex row still carries its own margin.
- */
-export function TaskFlowDetails({ task, execution }: { task: RelayTaskListItem; execution?: RelaySession["execution"] }) {
-  const { t } = useTranslation();
-  const exceptions = taskExceptions(task, execution);
-  if (exceptions.length === 0) return null;
-  return <div className="backlog-meta backlog-flow">
-    {exceptions.map((exception) => {
-      switch (exception.kind) {
-        case "recovering":
-          return <span key="recovering" role="status">{t(`thread.execution_${exception.phase}`)}</span>;
-        case "blocked": {
-          /* An unknown blocker states the recovery copy, not a blank reason —
-             it used to print a bare "Blocked:" with nothing after the colon.
-             The tooltip carries the reason, which is what a reader hovering a
-             truncated line is reaching for. */
-          const reason = exception.unknown ? t("recovery.unknown.title") : exception.reason;
-          return (
-            <span key="blocked" className="backlog-blocker" title={reason || undefined}>
-              {reason
-                ? `${t("backlog.statuses.blocked")}: ${reason}`
-                : t("backlog.statuses.blocked")}
-            </span>
-          );
-        }
-        case "waiting":
-          return <span key="waiting" className="backlog-due warn">{t("backlog.statuses.waiting_for_human")}</span>;
-        case "age":
-          return <span key="age" className="tnum">{t("backlog.work_age", { count: Number(exception.days.toFixed(1)) })}</span>;
-      }
-    })}
-  </div>;
 }

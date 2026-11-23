@@ -126,21 +126,24 @@ export function LanguageSection({
 }) {
   const { t } = useTranslation();
   return (
-    <RadioGroup
-      className="pref-option-list"
-      aria-label={t("pref.language")}
-      value={language}
-      onValueChange={(value) => onLanguageChange(value as Language)}
-    >
-      {LANGUAGES.map(({ code, label, native }) => (
-        <LanguageOption
-          key={code}
-          code={code}
-          label={label}
-          native={native}
-          selected={language === code}
-        />
-      ))}
-    </RadioGroup>
+    <fieldset className="pref-fieldset">
+      <legend className="pref-group-label">{t("pref.language")}</legend>
+      <RadioGroup
+        className="pref-option-list"
+        aria-label={t("pref.language")}
+        value={language}
+        onValueChange={(value) => onLanguageChange(value as Language)}
+      >
+        {LANGUAGES.map(({ code, label, native }) => (
+          <LanguageOption
+            key={code}
+            code={code}
+            label={label}
+            native={native}
+            selected={language === code}
+          />
+        ))}
+      </RadioGroup>
+    </fieldset>
   );
 }

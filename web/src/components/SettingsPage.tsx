@@ -15,7 +15,6 @@ import {
   AdminConnect,
   NavNotifications,
   PrefAppearance,
-  PrefLanguage,
   PrefTags,
 } from "./icons";
 import type { Language, Theme } from "../lib/appStorage";
@@ -58,9 +57,9 @@ export function SettingsPage({
     { id: "notifications", label: t("notifications.title"), Icon: NavNotifications, href: hrefForSettingsSection("notifications") },
     { id: "tags", label: t("tags.manager.title"), Icon: PrefTags, href: hrefForSettingsSection("tags") },
     { id: "appearance", label: t("pref.appearance"), Icon: PrefAppearance, href: hrefForSettingsSection("appearance") },
-    { id: "language", label: t("pref.language"), Icon: PrefLanguage, href: hrefForSettingsSection("language") },
   ];
-  const sectionLabel = items.find((item) => item.id === section)?.label ?? t("nav.settings");
+  const activeNavSection: SettingsSection = section === "language" ? "appearance" : section;
+  const sectionLabel = items.find((item) => item.id === activeNavSection)?.label ?? t("nav.settings");
 
   return (
     <section
@@ -81,7 +80,7 @@ export function SettingsPage({
         />
         <SectionNav
           items={items}
-          value={section}
+          value={activeNavSection}
           onChange={onSelectSection}
           label={t("nav.settings")}
         />
@@ -98,10 +97,11 @@ export function SettingsPage({
             <NotificationsSection />
           ) : section === "tags" ? (
             <TagsSection />
-          ) : section === "appearance" ? (
-            <AppearanceSection theme={theme} onThemeChange={onThemeChange} />
           ) : (
-            <LanguageSection language={language} onLanguageChange={onLanguageChange} />
+            <div className="account-sections">
+              <AppearanceSection theme={theme} onThemeChange={onThemeChange} />
+              <LanguageSection language={language} onLanguageChange={onLanguageChange} />
+            </div>
           )}
         </div>
       </div>

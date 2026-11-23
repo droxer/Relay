@@ -7,8 +7,6 @@ import { MessageBlock } from "../src/components/MessageBlock";
 import { DialogProvider } from "@/components/ui/DialogProvider";
 import { readArtifactText } from "../src/api";
 
-const open = vi.fn();
-vi.mock("../src/components/ArtifactViewerProvider", () => ({ useArtifactViewer: () => ({ open }) }));
 vi.mock("../src/api", async (importOriginal) => ({
   ...await importOriginal<typeof import("../src/api")>(),
   readArtifactText: vi.fn(async () => "review contents"),
@@ -42,14 +40,6 @@ it("collapses several files into one count and opens the first", () => {
   expect(screen.getByText("artifact.inline_files")).toBeTruthy();
   fireEvent.click(screen.getByRole("button"));
   expect(onOpenArtifact).toHaveBeenCalledWith(report);
-});
-
-it("falls back to the artifact viewer when no panel handler is wired", () => {
-  render(<AttachmentMarker artifacts={[report, data]} sessionId="s" />);
-
-  fireEvent.click(screen.getByRole("button"));
-
-  expect(open).toHaveBeenCalledWith(report, "s", [report, data]);
 });
 
 it("shows one marker after an agent turn instead of a chip per file", () => {

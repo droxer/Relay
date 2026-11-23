@@ -219,30 +219,6 @@
   background: var(--surface-1);
 }
 
-.adm-provision-outcome {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--r-2);
-  border: var(--hairline-soft);
-  background: var(--surface-1);
-}
-
-.adm-provision-outcome-label {
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-  color: var(--ink-1);
-}
-
-.adm-provision-outcome-body {
-  margin: 0;
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-  line-height: var(--leading-normal);
-  color: var(--ink-3);
-}
-
 /* ── Run mode segmented control ───────────────────────────────────── */
 .adm-profile-field {
   display: flex;
@@ -327,18 +303,6 @@
   color: var(--ink-1);
   box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-1);
 }
-
-.adm-profile-segment-dot {
-  width: var(--dot-sm);
-  height: var(--dot-sm);
-  border-radius: var(--r-full);
-  flex-shrink: 0;
-}
-
-/* Ownership is carried by the segment label and active shape, not hue — both
-   kinds read as quiet ink-3 dots. */
-.adm-profile-segment-dot[data-kind="managed"] { background: var(--ink-3); }
-.adm-profile-segment-dot[data-kind="local"] { background: var(--ink-3); }
 
 .adm-profile-field > .adm-form-hint {
   margin: 0;

@@ -3,7 +3,9 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { applyManagerProposal, dismissManagerProposal } from "../api-client/project-manager";
 import type { AppliedManagerProposal, ManagerFields, ManagerProposal } from "../domain-types/project-manager";
+import { Alert } from "./ui/alert";
 import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { navigateToAppPath } from "../lib/appRoute";
@@ -53,7 +55,7 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
       const fields = edits[op.id] ?? op.fields;
       const label = op.title || fields.title || op.taskId || op.key || op.id;
       return <fieldset key={op.id} disabled={!pending || disabled || busy} className="manager-operation">
-        <legend><label><input type="checkbox" checked={selected.includes(op.id)} onChange={event => setSelected(old => event.target.checked ? [...old, op.id] : old.filter(id => id !== op.id))} /> {label}</label></legend>
+        <legend><label><Checkbox checked={selected.includes(op.id)} onCheckedChange={(checked) => setSelected(old => checked ? [...old, op.id] : old.filter(id => id !== op.id))} /> {label}</label></legend>
         {op.taskId ? <a href={`/projects/${encodeURIComponent(projectId)}?task=${encodeURIComponent(op.taskId)}`} onClick={event => {
           if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); void navigateToAppPath(event.currentTarget.getAttribute("href")!);
@@ -76,7 +78,7 @@ export function ManagerProposalCard({ projectId, proposal, disabled, onChanged, 
         {op.after.length || op.afterTaskIds.length || op.kind === "prerequisites" ? <p>{t("project_manager.after", { value: [...op.after, ...op.afterTaskIds].join(", ") || t("project_manager.none") })}</p> : null}
       </fieldset>;
     }) : null}
-    {error ? <p role="alert">{error}</p> : null}
+    {error ? <Alert>{error}</Alert> : null}
     {pending ? <div className="manager-actions"><Button disabled={disabled || busy || selected.length === 0} onClick={() => void apply()}>{t("project_manager.apply")}</Button><Button variant="ghost" disabled={disabled || busy} onClick={() => void dismiss()}>{t("project_manager.dismiss")}</Button></div> : null}
   </section>;
 }

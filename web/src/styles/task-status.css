@@ -319,24 +319,10 @@
    class is plain content and keeps flowing. */
 .backlog-task .backlog-meta {
   flex: none;
-  overflow: hidden;
   margin-top: auto;
-  /* A rung below the title. --fs-2 and --fs-4 are both 14px, so a facts
-     line in the label role was the title's size and weight in a lighter ink,
-     and "Builder" read as loudly as the task's name. The meta role is the
-     caption rung the eyebrow already speaks, so the tile reads ref/rank,
-     title, facts — one scale step at each boundary. */
+  padding-top: var(--sp-2);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
-  /* One row of facts, clipped at whole facts. The frame is a fixed height,
-     so a line that wrapped used to be sliced through its middle at the
-     tile's bottom edge. The row still wraps, but the box is exactly one row
-     tall: a fact that does not fit on it drops out whole rather than showing
-     half its glyphs — the drawer carries it in full. The tallest atom is a
-     badge (one line plus a hairline and 2px of padding, ~1lh + 5.5px), and
-     the next row starts a whole line plus --sp-3 below, so 1lh + --sp-1-5
-     shows the first row entire and none of the second. */
-  height: calc(1lh + var(--sp-1-5));
 }
 
 /* The assignee chip names itself in the label role and the title's ink — right
@@ -536,15 +522,4 @@
   min-width: min(12ch, 40%);
 }
 
-/* On a tile it is its own line under the title. The tile's height is fixed,
-   so a held-up tile gives the title one line instead of two — the hold-up is
-   the more urgent fact. */
 .task-holdup--tile { margin-block-start: var(--sp-2); }
-/* Fine pointers only — see the matching tag rule in task-tags.css. */
-@media not (pointer: coarse) {
-  .backlog-task:has(.task-holdup--tile) .backlog-task-title {
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-    max-height: 1lh;
-  }
-}

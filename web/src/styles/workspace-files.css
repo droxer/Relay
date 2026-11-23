@@ -481,7 +481,7 @@
   min-height: 60vh;
   border: var(--hairline-soft);
   border-radius: var(--r-3);
-  background: var(--dark-ink);
+  background: var(--paper);
 }
 
 /* ---- empty + error states ------------------------------------------- */
@@ -494,71 +494,6 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-}
-
-/* ---- artifacts empty: ghost ledger ----------------------------------
-   The empty artifacts pane previews the list's own anatomy instead of an
-   icon tile: three dashed specimen rows (kind tag · title bar · time slot)
-   that fade out downward. Geometry mirrors .workspace-pick and the tag
-   mirrors .artifact-kind-tag, so the promise — "runs file documents
-   here" — reads in the list's own vocabulary. */
-.artifacts-empty-ghosts {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  margin: 0 0 var(--sp-4);
-  padding: 0;
-  list-style: none;
-}
-
-.artifacts-empty-ghost {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-2);
-  border-bottom: var(--stroke-w) dashed var(--line-1);
-  --rise-from: var(--rise-sm);
-
-  animation: rise var(--t-slow) var(--ease) backwards;
-}
-
-/* Downward fade: the top row is nearly real, the last almost gone — the
-   list trails off into the space real artifacts will occupy. */
-.artifacts-empty-ghost:nth-child(1) { opacity: 0.9; }
-.artifacts-empty-ghost:nth-child(2) { opacity: 0.6; animation-delay: calc(var(--t-stagger) * 2); }
-.artifacts-empty-ghost:nth-child(3) { opacity: 0.32; animation-delay: calc(var(--t-stagger) * 4); }
-
-/* The `state` Badge variant already draws a --tone-line hairline on the chip
-   geometry; this is a ghost in an empty-state illustration, so it overrides the
-   line to DASHED and steps the ink down to --ink-4 (never alpha: that
-   would dim text past the ramp's AA floor). Everything else — inline-flex, the
-   --sp-2 inline pad, --r-2, nowrap — came from restating the badge by hand. */
-.artifacts-empty-tag {
-  --tone: var(--info);
-  border-style: dashed;
-  border-width: var(--stroke-w);
-  padding-block: var(--sp-hairline);
-  color: var(--ink-4);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
-}
-
-.artifacts-empty-line {
-  justify-self: start;
-  width: 100%;
-  height: 6px;
-  border-radius: var(--r-full);
-  background: color-mix(in srgb, var(--ink-4) 30%, transparent);
-}
-
-.artifacts-empty-ghost:nth-child(2) .artifacts-empty-line { width: 72%; }
-.artifacts-empty-ghost:nth-child(3) .artifacts-empty-line { width: 48%; }
-
-.artifacts-empty-date {
-  color: var(--ink-4);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
 }
 
 /* Idle-presence pulse: the tile stays the neutral relay-empty avatar plate;

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { SpaceItem } from "../../lib/threadSpace";
-import { ArtifactKindIcon } from "../artifact/ArtifactIndexStrip";
+import { ArtifactKindIcon } from "../artifact/ArtifactKindIcon";
 import { artifactFileName } from "../../lib/artifactPreview";
 import { Button } from "@/components/ui/button";
 import { ICON } from "../icons";

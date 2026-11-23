@@ -77,7 +77,6 @@ export function RoutineStartButton({
     <Button
       variant="icon"
       size="icon-dense"
-      tinted
       type="button"
       className="backlog-action-primary backlog-action-icon"
       onClick={onStart}

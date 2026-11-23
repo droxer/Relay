@@ -94,6 +94,7 @@ th[data-slot="table-head"] {
    already restack at (backlog-list.css hides `.backlog-rows-head` there).
    Move a table's restack breakpoint and you have to move its line here too. */
 .list-sort-menu { display: none; }
+.backlog-page[data-view="board"] .list-sort-menu { display: flex; }
 
 @media (max-width: 820px) {
   .backlog-page .list-sort-menu { display: flex; }

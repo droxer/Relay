@@ -162,24 +162,6 @@
   height: 6px;
 }
 
-.adm-spark {
-  display: block;
-  width: 100%;
-  max-width: 96px;
-  height: 32px;
-  overflow: visible;
-}
-.adm-spark-stop { stop-color: var(--series-1); }
-.adm-spark-line {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-  stroke: var(--series-1);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-.adm-spark-dot { fill: var(--series-1); }
-
 /* Every KPI and metric numeral reads --type-number (22px/500, tightened):
    the tile, the node-status stat, the channel metric. A number has one size
    and weight app-wide. */

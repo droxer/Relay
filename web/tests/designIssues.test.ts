@@ -159,10 +159,8 @@ describe("reviewed design regressions", () => {
 
   it("associates reviewed select triggers with their visible labels", () => {
     const taskDrawer = readWeb("src/components/task-board/TaskDrawer.tsx");
-    const userDrawer = readWeb("src/components/admin/AddUserDrawer.tsx");
 
     assert.match(taskDrawer, /labelId=\{priorityLabelId\}[\s\S]*?aria-labelledby=\{priorityLabelId\}/);
-    assert.match(userDrawer, /labelId=\{nodeLabelId\}[\s\S]*?aria-labelledby=\{nodeLabelId\}/);
   });
 
   it("reserves fallback space for markdown images", () => {

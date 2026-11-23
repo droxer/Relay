@@ -256,6 +256,26 @@
   border-bottom: 0;
 }
 
+.skill-file-open {
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-1-5);
+  margin-inline-start: calc(-1 * var(--sp-1-5));
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.skill-file-open:hover {
+  background: var(--row-hover);
+}
+
+.skill-file-open:hover code {
+  color: var(--ink-1);
+}
+
 .skill-file-list code {
   font: var(--type-body);
   font-family: var(--font-mono);
@@ -464,13 +484,6 @@
 /* The footer's leading edge carries the drawer's one requirement. */
 .skill-share-hint {
   margin: 0 auto 0 0;
-}
-
-.skill-error {
-  margin: 0;
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-  color: var(--err);
 }
 
 /* The bundle picker is the one native control in these drawers. It keeps the

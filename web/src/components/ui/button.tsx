@@ -51,9 +51,8 @@ const buttonVariants = cva(
         /* Circular icon-only action — the source system's 40px button-icon-circular:
            ink-3 idle; a control wash + line-2 + ink-1 on hover. Always paired
            with the `icon` (--control-h) / `icon-dense` (--control-h-xs) sizes.
-           `tinted` keeps the same neutral hover; the `danger` modifier
-           re-tints it to --err and adds the hairline that keeps the
-           destructive signal alive under forced-colors. */
+           The `danger` modifier re-tints it to --err and adds the hairline that
+           keeps the destructive signal alive under forced-colors. */
         icon: "text-(--ink-3) hover:border-(--line-2) hover:bg-(--control-fill-hover) hover:text-(--ink-1)",
       },
       size: {
@@ -81,12 +80,6 @@ const buttonVariants = cva(
         "icon-sm": "size-(--control-h-sm)",
         "icon-lg": "size-(--control-h-lg)",
       },
-      /* Keep the legacy tinted prop compatible while all non-destructive
-         icon actions follow the neutral hover treatment. */
-      tinted: {
-        true: "hover:border-(--line-2) hover:bg-(--control-fill-hover) hover:text-(--ink-1)",
-        false: "",
-      },
       /* Destructive intent on a QUIET tier — the icon-only row actions (delete
          a node, a user, a chat link, a thread) and menu items where the
          `destructive` variant's resting ring, repeated down every row, would
@@ -98,11 +91,7 @@ const buttonVariants = cva(
          indistinguishable from its neutral siblings — the destructive signal
          disappears exactly where it matters most. Pairing the hue with a
          hairline keeps a SHAPE signal that survives the color being dropped,
-         which is the same reason the `destructive` variant carries a ring.
-
-         Declared after `tinted` so it wins the tailwind-merge conflict when
-         both are set (a tinted icon button that is destructive reads --err,
-         not --action). */
+         which is the same reason the `destructive` variant carries a ring. */
       danger: {
         true: "hover:border-(--err) hover:bg-[color-mix(in_srgb,var(--err)_10%,transparent)] hover:text-(--err) focus-visible:border-(--err) focus-visible:text-(--err)",
         false: "",
@@ -137,7 +126,6 @@ function Button({
   className,
   variant = "default",
   size = "default",
-  tinted = false,
   danger = false,
   loading = false,
   loadingLabel,
@@ -151,7 +139,7 @@ function Button({
       data-slot="button"
       data-variant={variant}
       data-danger={danger || undefined}
-      className={cn(buttonVariants({ variant, size, tinted, danger, className }))}
+      className={cn(buttonVariants({ variant, size, danger, className }))}
       aria-busy={loading || undefined}
       /* Before the spread, so an explicit `aria-label` at the call site
          still wins when the spoken name differs from the tooltip. */

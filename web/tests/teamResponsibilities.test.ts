@@ -24,7 +24,7 @@ describe("team member responsibility cards", () => {
     assert.match(source, /const role = effectiveRoleOf\(member, config\)/);
     assert.match(source, /<span className="team-work-member-role">\{t\(`team_work\.role_\$\{role\}`\)\}<\/span>/);
     assert.doesNotMatch(source, /<TonePill tone="neutral" label=\{t\(`team_work\.role_/);
-    assert.match(source, /<AgentMetaLine executorKind=\{member\.executorKind\} placements=\{member\.placements \?\? \[\]\} \/>/);
+    assert.match(source, /<AgentMetaLine executorKind=\{member\.executorKind\} placements=\{member\.placements \?\? \[\]\} showComputers=\{false\} \/>/);
     // A responsibility is a sentence or two, not a single-line value.
     assert.match(source, /<Textarea\s+rows=\{2\}\s+value=\{config\.responsibility/);
   });

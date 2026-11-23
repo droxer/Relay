@@ -164,7 +164,6 @@ export function DesignSystemSpecimen() {
     </Section>
     <Section title="Icon button modifiers">
       <Button variant="icon" aria-label="Neutral icon action"><NavPreferences /></Button>
-      <Button variant="icon" tinted aria-label="Tinted icon action"><NavPreferences /></Button>
       <Button variant="icon" danger aria-label="Danger icon action"><ActionRemove /></Button>
       <Button variant="destructive">Destructive</Button>
       <Button variant="default" disabled>Disabled fill</Button>

@@ -31,6 +31,12 @@
   .messenger-shell[data-space="open"][data-threadlist="open"] {
     --shell-rail-track: minmax(0px, 0px);
   }
+
+  /* Below 1200px the fourth column cannot open, so hide its toggle rather
+     than showing a no-op control. */
+  .chat-threadlist-button {
+    display: none;
+  }
 }
 
 @media (max-width: 900px) {

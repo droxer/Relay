@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { PermissionAnswers, PermissionQuestionItem, PermissionRequest } from "relay-core";
 import { ActionApprove, ICON } from "../icons";
@@ -251,7 +251,8 @@ function PermissionQuestions({ questions, answers, other, busy, firstControlRef,
   const { t } = useTranslation();
   const id = useId();
   const sendsOnPick = questions.length === 1 && !questions[0].multiSelect;
-  const pick = (question: PermissionQuestionItem, label: string) => {
+  const singleQuestion = questions.length === 1 ? questions[0] : null;
+  const pick = useCallback((question: PermissionQuestionItem, label: string) => {
     const current = answers[question.id] ?? [];
     const next = question.multiSelect
       ? current.includes(label) ? current.filter((item) => item !== label) : [...current, label]
@@ -259,11 +260,29 @@ function PermissionQuestions({ questions, answers, other, busy, firstControlRef,
     const picked = { ...answers, [question.id]: next };
     if (sendsOnPick && !(other[question.id] ?? "").trim()) onSubmit(picked);
     else onPick(picked);
-  };
+  }, [answers, onPick, onSubmit, other, sendsOnPick]);
+
+  useEffect(() => {
+    if (!singleQuestion || !singleQuestion.options.length || busy) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+      const index = Number(event.key) - 1;
+      if (Number.isInteger(index) && index >= 0 && index < 9 && index < singleQuestion.options.length) {
+        event.preventDefault();
+        pick(singleQuestion, singleQuestion.options[index].label);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [busy, pick, singleQuestion]);
+
   return (
     <div className="permission-questions">
       {questions.map((question, questionIndex) => {
         const picked = answers[question.id] ?? [];
+        const showShortcut = singleQuestion !== null;
         return (
           <div key={question.id} className="permission-question" role="group" aria-labelledby={`${id}-q${questionIndex}`}>
             <p id={`${id}-q${questionIndex}`} className="awaiting-input-quote">{question.text}</p>
@@ -281,7 +300,9 @@ function PermissionQuestions({ questions, answers, other, busy, firstControlRef,
                       disabled={busy}
                       onClick={() => pick(question, option.label)}
                     >
-                      <kbd className="awaiting-input-choice-key" aria-hidden="true">{optionIndex + 1}</kbd>
+                      {showShortcut && optionIndex < 9 ? (
+                        <kbd className="awaiting-input-choice-key" aria-hidden="true">{optionIndex + 1}</kbd>
+                      ) : null}
                       <span className="awaiting-input-choice-label">{option.label}</span>
                       {option.description ? <span className="awaiting-input-choice-effect">{option.description}</span> : null}
                     </button>

@@ -88,7 +88,7 @@ export function ThreadMeta({
         <ProjectChip project={project} onOpen={onOpenProject} />
       ) : null}
       <RoomMark participants={participants} agentName={agentName} />
-      {session.computerId && computerOffline ? (
+      {session.computerId ? (
         <ComputerChip computerId={session.computerId} node={computer} />
       ) : null}
     </div>
