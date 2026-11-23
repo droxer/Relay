@@ -162,6 +162,8 @@ class AppSettings:
     # "embedded" runs the scheduler, recovery, and notification loops in the
     # API process; "external" leaves them to `relay worker` (background.py).
     background_mode: str
+    http_role: str
+    daemon_ingest_concurrency: int
     # Which provider realizes a managed computer whose request names none
     # (core/managed_node_policy.py); "fly-machines" for cloud computers.
     managed_node_provider: str
@@ -207,6 +209,8 @@ class AppSettings:
             ),
             startup_repairs_enabled=env.flag("RELAY_STARTUP_REPAIRS", True),
             background_mode=env.choice("RELAY_BACKGROUND_MODE", "embedded", ("embedded", "external")),
+            http_role=env.choice("RELAY_HTTP_ROLE", "api", ("api", "daemon-ingest")),
+            daemon_ingest_concurrency=env.integer("RELAY_DAEMON_INGEST_CONCURRENCY", 4, minimum=1),
             managed_node_provider=env.text("RELAY_MANAGED_NODE_PROVIDER", DEFAULT_MANAGED_NODE_PROVIDER),
             automation_webhook_limit=RateLimit(
                 env.integer("RELAY_AUTOMATION_WEBHOOK_RATE_LIMIT", 60, minimum=1), 60

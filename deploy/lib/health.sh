@@ -15,7 +15,9 @@ railway_serving_deployment() {
 # Railway-hosted UI come back against a running API. Prints "name<TAB>id".
 health_app_services() {
   local name id
-  for name in "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
+  local -a services=("$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE")
+  daemon_ingest_enabled && services+=("$DAEMON_INGEST_SERVICE")
+  for name in "${services[@]}"; do
     id=$(railway_service_id "$name")
     [ -z "$id" ] || printf '%s\t%s\n' "$name" "$id"
   done
@@ -35,6 +37,7 @@ railway_last_log_age() {
 health_probe_url() {
   case $1 in
     "$BACKEND_SERVICE") printf '%s/api/v1/auth/status' "$API_ORIGIN" ;;
+    "${DAEMON_INGEST_SERVICE:-}") printf '%s/healthz' "$DAEMON_INGEST_ORIGIN" ;;
     "$WEB_SERVICE") workers_enabled || printf '%s/' "$WEB_ORIGIN" ;;
   esac
   return 0
@@ -149,13 +152,17 @@ railway_restart_service() {
 # Maps a restart argument to a service name: the configured names, or the
 # short aliases backend, worker, web, and postgres.
 health_service_name() {
+  if daemon_ingest_enabled && { [ "$1" = daemon-ingest ] || [ "$1" = "$DAEMON_INGEST_SERVICE" ]; }; then
+    printf '%s' "$DAEMON_INGEST_SERVICE"
+    return
+  fi
   case $1 in
     backend | api) printf '%s' "$BACKEND_SERVICE" ;;
     worker) printf '%s' "$WORKER_SERVICE" ;;
     web) printf '%s' "$WEB_SERVICE" ;;
     postgres | database | db) printf '%s' "$POSTGRES_SERVICE" ;;
     "$BACKEND_SERVICE" | "$WORKER_SERVICE" | "$WEB_SERVICE" | "$POSTGRES_SERVICE") printf '%s' "$1" ;;
-    *) die "unknown service: $1 (expected backend, worker, web, postgres, or a configured service name)" ;;
+    *) die "unknown service: $1 (expected backend, worker, web, postgres, or configured daemon-ingest)" ;;
   esac
 }
 

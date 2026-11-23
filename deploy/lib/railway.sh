@@ -291,6 +291,10 @@ railway_validate_release() (
     "https://github.com/$GITHUB_REPO.git" "$RELEASE_COMMIT" \
     || die "cannot fetch release source $RELEASE_COMMIT; check Git credentials and repository access"
   python3 "$DEPLOY_DIR/validate-source.py" --git-dir "$temporary/source.git" --commit "$RELEASE_COMMIT" >&2
+  if [ -n "${INGEST_WORKER_SOURCE:-}" ]; then
+    git --git-dir="$temporary/source.git" show "$RELEASE_COMMIT:deploy/workers/daemon-ingest.js" > "$INGEST_WORKER_SOURCE" \
+      || die "release $RELEASE_COMMIT is missing the daemon ingestion Worker"
+  fi
 )
 
 railway_failure_logs() {

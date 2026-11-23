@@ -513,7 +513,10 @@ async def daemon_permission_request(
         raise HTTPException(401, "Unauthorized daemon node.") from error
 
 
-@router.post("/daemon-nodes/{sandbox_id}/events")
+event_router = APIRouter()
+
+
+@event_router.post("/daemon-nodes/{sandbox_id}/events")
 async def daemon_events(
     sandbox_id: str, request: Request, response: Response, ctx: AppContextDep
 ) -> dict[str, bool]:

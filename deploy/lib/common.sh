@@ -33,6 +33,9 @@ load_config() {
   : "${GITHUB_BRANCH:=main}"
   : "${BACKEND_SERVICE:=relay-backend}"
   : "${WORKER_SERVICE:=relay-worker}"
+  : "${DAEMON_INGEST_SERVICE:=relay-daemon-ingest}"
+  : "${DAEMON_INGEST_WORKER:=relay-daemon-ingest}"
+  : "${DAEMON_INGEST_DOMAIN:=}"
   : "${WEB_SERVICE:=relay-web}"
   : "${WEB_HOSTING:=workers}"
   : "${WORKERS_SCRIPT:=relay-web}"
@@ -47,6 +50,11 @@ load_config() {
   : "${RESTART_HEALTH_SECONDS:=120}"
   WEB_ORIGIN="https://${WEB_DOMAIN}"
   API_ORIGIN="https://${API_DOMAIN}"
+  DAEMON_INGEST_ORIGIN="https://${DAEMON_INGEST_DOMAIN}"
+}
+
+daemon_ingest_enabled() {
+  [ -n "${DAEMON_INGEST_DOMAIN:-}" ]
 }
 
 validate_config() {
@@ -66,6 +74,19 @@ validate_config() {
   esac
   printf '%s' "$WORKERS_SCRIPT" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' \
     || die "WORKERS_SCRIPT must be a lowercase Worker name: $WORKERS_SCRIPT"
+  if daemon_ingest_enabled; then
+    validate_hostname "$DAEMON_INGEST_DOMAIN" DAEMON_INGEST_DOMAIN
+    in_zone "$DAEMON_INGEST_DOMAIN" || die "DAEMON_INGEST_DOMAIN must be inside CLOUDFLARE_ZONE"
+    [ "$DAEMON_INGEST_DOMAIN" != "$API_DOMAIN" ] && [ "$DAEMON_INGEST_DOMAIN" != "$WEB_DOMAIN" ] \
+      || die "DAEMON_INGEST_DOMAIN must differ from the API and web domains"
+    case $DAEMON_INGEST_SERVICE in
+      "$BACKEND_SERVICE"|"$WORKER_SERVICE"|"$WEB_SERVICE"|"$POSTGRES_SERVICE")
+        die "DAEMON_INGEST_SERVICE must differ from the other Relay services" ;;
+    esac
+    printf '%s' "$DAEMON_INGEST_WORKER" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$' \
+      || die "DAEMON_INGEST_WORKER must be a lowercase Worker name"
+    [ "$DAEMON_INGEST_WORKER" != "$WORKERS_SCRIPT" ] || die "DAEMON_INGEST_WORKER must differ from WORKERS_SCRIPT"
+  fi
   case $COOKIE_DOMAIN in
     ".$CLOUDFLARE_ZONE") ;;
     *) die "COOKIE_DOMAIN must be .$CLOUDFLARE_ZONE so the web and API hosts share the session cookie" ;;

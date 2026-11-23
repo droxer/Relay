@@ -30,6 +30,8 @@ DEPLOY_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$DEPLOY_DIR/lib/cloudflare.sh"
 # shellcheck source=lib/workers.sh
 . "$DEPLOY_DIR/lib/workers.sh"
+# shellcheck source=lib/daemon-ingest.sh
+. "$DEPLOY_DIR/lib/daemon-ingest.sh"
 # shellcheck source=lib/verify.sh
 . "$DEPLOY_DIR/lib/verify.sh"
 # shellcheck source=lib/health.sh
@@ -94,23 +96,29 @@ worker_variables() {
 }
 
 configure_worker_service() {
-  local backend current name
-  railway_ensure_service "$WORKER_SERVICE" worker
+  configure_shared_backend_service "$WORKER_SERVICE" worker
   WORKER_ID=$(railway_service_id "$WORKER_SERVICE")
+}
+
+configure_shared_backend_service() {
+  local service=$1 profile=$2 overrides=${3:-'{}'} id backend current name variables
+  railway_ensure_service "$service" "$profile"
+  id=$(railway_service_id "$service")
   backend=$(railway_variables "$BACKEND_ID")
-  current=$(railway_variables "$WORKER_ID")
-  railway_upsert_variables "$WORKER_ID" "$(worker_variables "$backend" "$current")"
+  current=$(railway_variables "$id")
+  variables=$(worker_variables "$backend" "$current" | jq -c --argjson overrides "$overrides" '. + $overrides')
+  railway_upsert_variables "$id" "$variables"
   # A reference to a variable the API no longer has resolves to an empty
-  # string; drop it so the worker's settings keep matching the API's.
-  for name in $(jq -r --arg service "$BACKEND_SERVICE" --argjson backend "$backend" '
+  # string; drop it so the service's settings keep matching the API's.
+  for name in $(jq -r --arg service "$BACKEND_SERVICE" --argjson managed "$variables" '
       to_entries[]
       | .key as $key
-      | select(.value == ("${{" + $service + "." + $key + "}}") and ($backend | has($key) | not))
+      | select(.value == ("${{" + $service + "." + $key + "}}") and ($managed | has($key) | not))
       | $key' <<<"$current"); do
-    railway_delete_variable "$WORKER_ID" "$name"
-    info "removed $name from $WORKER_SERVICE ($BACKEND_SERVICE no longer sets it)"
+    railway_delete_variable "$id" "$name"
+    info "removed $name from $service ($BACKEND_SERVICE no longer sets it)"
   done
-  info "worker variables reference $BACKEND_SERVICE; shared storage is R2"
+  info "$service variables reference $BACKEND_SERVICE; shared storage is R2"
 }
 
 # Mail keys left in Railway after the config turned email off. An empty key
@@ -195,6 +203,7 @@ phase_railway() {
   reconcile_mail_variables
   info "backend variables set"
   configure_worker_service
+  configure_daemon_ingest_service
   if workers_enabled; then
     info "the web UI is a Cloudflare Worker (WEB_HOSTING=workers); no Railway web service"
     if [ -n "$(railway_service_id "$WEB_SERVICE")" ]; then
@@ -212,10 +221,13 @@ phase_railway() {
   workers_enabled || railway_ensure_custom_domain "$WEB_ID" "$WEB_DOMAIN"
 }
 
-# cloudflare_dns <zone-id> <service-id> <domain>
+# cloudflare_dns <zone-id> <service-id> <domain> [dns-only]
 cloudflare_dns() {
   local records count i
   records=$(railway_domain_dns_records "$2" "$3")
+  if [ "${4:-}" = dns-only ]; then
+    records=$(jq -c 'map(.proxied = false)' <<<"$records")
+  fi
   count=$(jq length <<<"$records")
   if [ "$count" -eq 0 ]; then
     warn "Railway has not published DNS records for $3 yet; re-run 'deploy.sh cloudflare' in a minute"
@@ -231,9 +243,16 @@ cloudflare_dns() {
 phase_cloudflare() {
   log "Cloudflare: zone $CLOUDFLARE_ZONE"
   resolve_services
-  local zone secret
+  local zone secret ingest_id
   zone=$(cf_zone_id)
   cloudflare_dns "$zone" "$BACKEND_ID" "$API_DOMAIN"
+  if daemon_ingest_enabled; then
+    ingest_id=$(railway_service_id "$DAEMON_INGEST_SERVICE")
+    [ -n "$ingest_id" ] || die "service $DAEMON_INGEST_SERVICE not found — run 'deploy.sh railway' first"
+    cloudflare_dns "$zone" "$ingest_id" "$DAEMON_INGEST_DOMAIN" dns-only
+  elif [ -n "$(railway_service_id "$DAEMON_INGEST_SERVICE")" ]; then
+    remove_daemon_ingest_route "$zone"
+  fi
   if workers_enabled; then
     cf_ensure_worker_host "$zone" "$WEB_DOMAIN"
   else
@@ -252,15 +271,22 @@ phase_cloudflare() {
   cf_upsert_phase_rules "$zone" http_request_cache_settings "$(cf_cache_rules)"
 }
 
-phase_release() {
+phase_release() (
   require_r2_storage
   log "Release: $GITHUB_REPO@$GITHUB_BRANCH"
-  local postgres_id service_id service_repo name
+  local postgres_id service_id service_repo name release_workspace
+  local -a app_services=("$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE")
   RELEASE_COMMIT=$(railway_release_commit)
   info "release commit $RELEASE_COMMIT (GitHub source; local edits are not uploaded)"
+  if daemon_ingest_enabled; then
+    release_workspace=$(mktemp -d)
+    trap 'rm -rf "$release_workspace"' EXIT
+    INGEST_WORKER_SOURCE="$release_workspace/daemon-ingest.js"
+    app_services+=("$DAEMON_INGEST_SERVICE")
+  fi
   railway_validate_release
   resolve_services
-  for name in "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
+  for name in "${app_services[@]}"; do
     service_id=$(railway_service_id "$name")
     [ -n "$service_id" ] || continue
     service_repo=$(railway_service_repo "$service_id")
@@ -270,7 +296,7 @@ phase_release() {
   # Include a retained Railway UI even when Cloudflare hosts the web UI:
   # leaving its branch trigger enabled still creates builds for merged PRs.
   # Disable every target before any build starts.
-  for name in "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
+  for name in "${app_services[@]}"; do
     service_id=$(railway_service_id "$name")
     [ -n "$service_id" ] || continue
     railway_disable_autodeploy "$service_id" || die "could not disable autodeploy for $name"
@@ -284,16 +310,17 @@ phase_release() {
   railway_upsert_variables "$BACKEND_ID" "$(backend_variables "$(railway_variables "$BACKEND_ID")")"
   reconcile_mail_variables
   configure_worker_service
+  configure_daemon_ingest_service
   if workers_enabled; then
     release_backend_and_worker
   else
     release_backend_and_web_service
   fi
-}
+)
 
 # Build the UI before deploying the API: a failed local build must not leave
 # a newly split API running without its background worker.
-release_backend_and_worker() {
+release_backend_and_worker() (
   local backend_deployment worker_deployment zone build
   require_cmd docker python3
   zone=$(cf_zone_id)
@@ -309,9 +336,10 @@ release_backend_and_worker() {
   worker_deployment=$(railway_deploy_service "$WORKER_SERVICE" "$WORKER_ID")
   railway_wait_deployment "$WORKER_SERVICE" "$WORKER_ID" "$worker_deployment" \
     || die "worker deployment failed for commit $RELEASE_COMMIT ($worker_deployment); the web UI was not published"
+  release_daemon_ingest
   info "publishing the web UI to Worker $WORKERS_SCRIPT"
   workers_publish "$zone" "$build/out" "$build/runtime"
-}
+)
 
 release_backend_and_web_service() {
   local backend_deployment web_deployment worker_deployment=skipped failures=0
@@ -328,6 +356,7 @@ release_backend_and_web_service() {
   fi
   if ! railway_wait_deployment "$WEB_SERVICE" "$WEB_ID" "$web_deployment"; then failures=$((failures + 1)); fi
   [ "$failures" -eq 0 ] || die "$failures service deployment(s) failed for commit $RELEASE_COMMIT (backend: $backend_deployment; worker: $worker_deployment; web: $web_deployment)"
+  release_daemon_ingest
 }
 
 # Moving Postgres migrates its volume offline, so this is never part of `up`:
@@ -339,7 +368,9 @@ phase_region() {
     die "moving $POSTGRES_SERVICE takes the API offline while its volume migrates; back it up first (README: Moving region), then re-run with CONFIRM_REGION_MOVE=$RAILWAY_REGION"
   railway_resolve_context
   # The database first: a failed move stops before the backend follows it.
-  for name in "$POSTGRES_SERVICE" "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE"; do
+  local -a services=("$POSTGRES_SERVICE" "$BACKEND_SERVICE" "$WORKER_SERVICE" "$WEB_SERVICE")
+  daemon_ingest_enabled && services+=("$DAEMON_INGEST_SERVICE")
+  for name in "${services[@]}"; do
     id=$(railway_service_id "$name")
     if [ -z "$id" ]; then
       info "no $name service; skipped"

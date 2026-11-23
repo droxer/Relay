@@ -162,6 +162,15 @@ def bindings(args):
     return result
 
 
+def publish_script(args, token, metadata):
+    module = metadata["main_module"]
+    body, content_type = multipart([
+        ("metadata", None, "application/json", json.dumps(metadata).encode()),
+        (module, module, "application/javascript+module", Path(args.worker).read_bytes()),
+    ])
+    request("PUT", f"{args.api_url}/accounts/{args.account}/workers/scripts/{args.script}", token, body, content_type)
+
+
 def publish(args, token, completion):
     config = {
         "html_handling": "auto-trailing-slash",
@@ -176,11 +185,22 @@ def publish(args, token, completion):
         "assets": {"jwt": completion, "config": config},
         "bindings": bindings(args),
     }
-    body, content_type = multipart([
-        ("metadata", None, "application/json", json.dumps(metadata).encode()),
-        ("worker.js", "worker.js", "application/javascript+module", Path(args.worker).read_bytes()),
-    ])
-    request("PUT", f"{args.api_url}/accounts/{args.account}/workers/scripts/{args.script}", token, body, content_type)
+    publish_script(args, token, metadata)
+
+
+def publish_daemon_ingest(args, token):
+    secret = os.environ.get("RELAY_INGEST_EDGE_SECRET")
+    if not secret or not args.api_host:
+        fail("the daemon ingestion Worker requires RELAY_INGEST_EDGE_SECRET and --api-host")
+    publish_script(args, token, {
+        "main_module": "daemon-ingest.js",
+        "compatibility_date": COMPATIBILITY_DATE,
+        "bindings": [
+            {"type": "plain_text", "name": "RELAY_API_HOST", "text": args.api_host},
+            {"type": "plain_text", "name": "RELAY_INGEST_ORIGIN", "text": args.daemon_ingest_origin},
+            {"type": "secret_text", "name": "RELAY_INGEST_EDGE_SECRET", "text": secret},
+        ],
+    })
 
 
 def main():
@@ -188,19 +208,25 @@ def main():
     parser.add_argument("--api-url", required=True)
     parser.add_argument("--account", required=True)
     parser.add_argument("--script", required=True)
-    parser.add_argument("--assets", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--assets")
+    mode.add_argument("--daemon-ingest-origin")
     parser.add_argument("--worker", required=True)
     parser.add_argument("--headers")
     parser.add_argument("--api-origin", help="API origin that /install.sh redirects to")
+    parser.add_argument("--api-host", help="API host to which the daemon ingestion Worker is bound")
     args = parser.parse_args()
     token = os.environ.get("CLOUDFLARE_API_TOKEN")
     if not token:
         fail("CLOUDFLARE_API_TOKEN is not set")
-    root = Path(args.assets)
-    if not root.is_dir():
-        fail(f"assets directory not found: {root}")
-    files = collect(root)
-    publish(args, token, upload_assets(args, token, files))
+    if args.daemon_ingest_origin:
+        publish_daemon_ingest(args, token)
+    else:
+        root = Path(args.assets)
+        if not root.is_dir():
+            fail(f"assets directory not found: {root}")
+        files = collect(root)
+        publish(args, token, upload_assets(args, token, files))
     print(f"    Worker {args.script} published", file=sys.stderr)
 
 

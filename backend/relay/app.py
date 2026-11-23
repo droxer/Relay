@@ -77,6 +77,7 @@ from .api.projects import workflow_runs as project_workflow_run_routes
 from .api.agents import workflows as workflow_definition_routes
 from .api.web import routes as web_routes
 from .api.conditional_get import ConditionalGetMiddleware
+from .bootstrap.daemon_ingest import DaemonIngestMiddleware
 from .api.deps import AppContext
 from .api.contract import (
     API_DOCS_PATH,
@@ -151,11 +152,16 @@ def create_app(
 ) -> FastAPI:
     settings = AppSettings.from_env()  # Every bad value at once, before any service starts.
     _validate_deploy_config()
+    ingest_only = settings.http_role == "daemon-ingest"
+    if ingest_only and not deploy_config.edge_secrets():
+        raise ValueError("RELAY_EDGE_SECRET is required for the daemon-ingest HTTP role.")
     # "external": a separate `relay worker` owns the scheduler, recovery, and
     # computer-notification loops, so this process starts none of them.
     mode = background_mode if background_mode is not None else settings.background_mode
     if mode not in ("embedded", "external"):
         raise ValueError("background_mode must be embedded or external.")
+    if ingest_only:
+        mode = "external"
     root_dir = Path(root_dir)
     logger.info("Relay backend starting", root_dir=str(root_dir), pid=os.getpid(),
                 deployment_id=os.environ.get("RAILWAY_DEPLOYMENT_ID"),
@@ -180,7 +186,7 @@ def create_app(
 
     notification_bridge = database_notification_bridge(stores.sessions, notifier, publish=publish_change)
     _publish_store_changes(stores, notifier)
-    if settings.startup_repairs_enabled:
+    if settings.startup_repairs_enabled and not ingest_only:
         requeue_capacity_waits(task_store=stores.tasks)
         repair_records_before_serving(
             team_store=stores.teams, agent_store=stores.agents, agent_placement_store=stores.placements
@@ -207,7 +213,7 @@ def create_app(
         project_store=stores.projects,
         connections=connections,
     )
-    if settings.startup_repairs_enabled:
+    if settings.startup_repairs_enabled and not ingest_only:
         migrate_legacy_computer_ids(
             agent_store=stores.agents, agent_placement_store=stores.placements, registry=registry
         )
@@ -252,18 +258,19 @@ def create_app(
         else None
     )
     loops = (execution_lifecycle, computer_notifications, artifact_indexer, scheduler) if mode == "embedded" else ()
-    services = [service for service in (notification_bridge, *loops) if service]
+    services = [service for service in (notification_bridge, *loops) if service and not ingest_only]
 
-    mcp_http: RelayMcpHttp
+    mcp_http: RelayMcpHttp | None = None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        computer_installer_routes.warn_if_bundle_stale(settings.computer_bundle)
+        if not ingest_only:
+            computer_installer_routes.warn_if_bundle_stale(settings.computer_bundle)
         for service in services:
             service.start()
         try:
             queue_wakeups = thread_queue.wakeups() if mode == "embedded" and thread_queue else nullcontext()
-            async with queue_wakeups, mcp_http.run():
+            async with queue_wakeups, mcp_http.run() if mcp_http is not None else nullcontext():
                 yield
         finally:
             logger.info("Relay backend graceful shutdown started", pid=os.getpid(),
@@ -277,11 +284,11 @@ def create_app(
         title="Relay backend",
         version="0.1.0",
         lifespan=lifespan,
-        docs_url=API_DOCS_PATH,
-        openapi_url=API_OPENAPI_PATH,
-        redoc_url=API_REDOC_PATH,
+        docs_url=None if ingest_only else API_DOCS_PATH,
+        openapi_url=None if ingest_only else API_OPENAPI_PATH,
+        redoc_url=None if ingest_only else API_REDOC_PATH,
     )
-    _install_http_edge(app)
+    _install_http_edge(app, ingest_concurrency=settings.daemon_ingest_concurrency if ingest_only else None)
     _publish_state(
         app,
         settings=settings,
@@ -304,10 +311,11 @@ def create_app(
         stores.daemon.set_thread_queue_listener(
             publish_change, database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
         )
-    mcp_http = RelayMcpHttp(app.state.context)
-    # Exact transport route precedes the web catch-all without swallowing the
-    # existing /mcp/tokens and compatibility JSON routes.
-    app.router.routes.append(Route("/api/v1/mcp", mcp_http, methods=["GET", "POST", "DELETE"]))
+    if not ingest_only:
+        mcp_http = RelayMcpHttp(app.state.context)
+        # Exact transport route precedes the web catch-all without swallowing
+        # the existing /mcp/tokens and compatibility JSON routes.
+        app.router.routes.append(Route("/api/v1/mcp", mcp_http, methods=["GET", "POST", "DELETE"]))
     _mount_routes(app, settings)
     return app
 
@@ -336,7 +344,7 @@ def _publish_store_changes(stores: Stores, notifier: KeyedEventNotifier) -> None
     )
 
 
-def _install_http_edge(app: FastAPI) -> None:
+def _install_http_edge(app: FastAPI, *, ingest_concurrency: int | None = None) -> None:
     app.add_exception_handler(Exception, unhandled_error)
     # Innermost of these, so SecurityHeadersMiddleware sees the polled lists'
     # `private, no-cache` and leaves it instead of forcing no-store.
@@ -345,6 +353,8 @@ def _install_http_edge(app: FastAPI) -> None:
     app.add_middleware(CookieRequestGuardMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     configure_cors(app)
+    if ingest_concurrency is not None:
+        app.add_middleware(DaemonIngestMiddleware, concurrency=ingest_concurrency)
     if deploy_config.edge_secrets():
         # Added last so it runs first: nothing behind it sees an unproven request.
         app.add_middleware(EdgeOriginGuardMiddleware)
@@ -421,6 +431,8 @@ def _publish_state(
 # Order matters: within each router group, a route registered earlier wins a
 # path both could match. A domain split across modules lists its routers in
 # the order its routes were declared.
+DAEMON_INGEST_ROUTERS = (daemon_wire_routes.event_router, daemon_report_routes.router)
+
 API_ROUTERS = (
     project_workflow_routes.router,
     project_workflow_run_routes.router,
@@ -466,7 +478,7 @@ API_ROUTERS = (
     user_node_routes.router,
     enrollment_routes.router,
     daemon_wire_routes.router,
-    daemon_report_routes.router,
+    *DAEMON_INGEST_ROUTERS,
     managed_node_routes.router,
     notification_routes.router,
     password_reset_routes.router,
@@ -483,6 +495,13 @@ def _mount_routes(app: FastAPI, settings: AppSettings) -> None:
     @app.get("/healthz", tags=["api"], include_in_schema=False)
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "version": API_VERSION}
+
+    if settings.http_role == "daemon-ingest":
+        groups = api_router_groups()
+        for router in DAEMON_INGEST_ROUTERS:
+            include_api_router(groups, router)
+        app.include_router(groups.daemon)
+        return
 
     @app.get("/api", tags=["api"])
     async def api_info() -> dict[str, Any]:

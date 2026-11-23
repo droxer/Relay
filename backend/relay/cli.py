@@ -170,15 +170,17 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(report, indent=2))
         return
     app = create_app(args.data_dir) if args.data_dir else create_app()
-    auth_store = app.state.auth_store
-    if not auth_store.has_accounts():
-        logger.info(
-            "No users yet. Bootstrap the first admin via /api/v1/auth/bootstrap "
-            "using the persisted admin token.",
-        )
-    logger.info("Relay backend listening on http://{}:{}", args.host, args.port)
-    logger.info("Relay backend Admin Console: http://{}:{}/admin", args.host, args.port)
-    logger.info("Relay web UI: http://{}:{}/", args.host, args.port)
+    if app.state.settings.http_role == "daemon-ingest":
+        logger.info("Relay daemon ingestion listening on http://{}:{}", args.host, args.port)
+    else:
+        if not app.state.auth_store.has_accounts():
+            logger.info(
+                "No users yet. Bootstrap the first admin via /api/v1/auth/bootstrap "
+                "using the persisted admin token.",
+            )
+        logger.info("Relay backend listening on http://{}:{}", args.host, args.port)
+        logger.info("Relay backend Admin Console: http://{}:{}/admin", args.host, args.port)
+        logger.info("Relay web UI: http://{}:{}/", args.host, args.port)
     trust_proxy = deploy_config.trust_proxy_headers()
     run_server(
         app,
