@@ -34,9 +34,11 @@ def eventually(check, timeout=30):
 
 
 class DaemonE2E:
-    def __init__(self, root, monkeypatch, *, daemon_options=None):
+    def __init__(self, root, monkeypatch, *, daemon_options=None, executor_kind="codex", daemon_fixture="report-e2e.mjs"):
         self.root = root
         self.daemon_options = daemon_options or {}
+        self.executor_kind = executor_kind
+        self.daemon_fixture = daemon_fixture
         for key, value in {"RELAY_ADMIN_TOKEN": "e2e-admin-token", "RELAY_TASK_SCHEDULER_ENABLED": "0",
                            "RELAY_STARTUP_REPAIRS": "0"}.items():
             monkeypatch.setenv(key, value)
@@ -72,7 +74,7 @@ class DaemonE2E:
         self.ctx = self.app.state.context
         self.start_server(self.port)
 
-    def setup(self):
+    def setup(self, *, create_project=True):
         self.post("/auth/bootstrap", {"token": "e2e-admin-token", "username": "admin", "email": "admin@example.com", "password": "e2e-test-password-123"}, 200)
         self.post("/admin/users", {"userId": "alice", "username": "alice", "email": "alice@example.com", "password": "userpass", "displayName": "Alice"}, 201)
         owner = user_id("alice")
@@ -83,19 +85,20 @@ class DaemonE2E:
                         "workspaceId": str(uuid4()), "workspace": str(workspace), "root": str(self.root),
                         "daemonOptions": self.daemon_options}
         node = self.ctx.registry.register({"sandboxId": self.node_id, "userId": owner,
-            "token": self.profile["token"], "protocolVersion": 2, "supportedAgents": ["codex"],
+            "token": self.profile["token"], "protocolVersion": 2, "supportedAgents": [self.executor_kind],
             "capabilities": ["workspace-scope", "thread-workspaces", "project-workspaces", "durable-reports"],
             "workspacePath": str(workspace), "workspaceId": self.profile["workspaceId"], "status": "ready"})
         (self.root / "profile.json").write_text(json.dumps(self.profile))
         self.start_daemon()
         eventually(lambda: any(item["kind"] == "registered" for item in self.traces()))
         self.agent = self.post("/admin/agents", {"supervisorUserId": owner, "displayName": "E2E Agent",
-            "executorKind": "codex", "defaultRole": "implementer", "computerId": computer_id(node)}, 201)["agent"]
+            "executorKind": self.executor_kind, "defaultRole": "implementer", "computerId": computer_id(node)}, 201)["agent"]
         self.post("/auth/logout", {}, 200)
         self.post("/auth/login", {"username": "alice", "password": "userpass"}, 200)
-        self.project = self.post("/projects", {"name": "Report E2E", "daemonNodeId": self.node_id,
-            "leadAgentId": self.agent["id"], "members": [{"agentId": self.agent["id"], "role": "implementer",
-            "responsibilities": "Exercise report lifecycle"}]}, 201)["project"]
+        if create_project:
+            self.project = self.post("/projects", {"name": "Report E2E", "daemonNodeId": self.node_id,
+                "leadAgentId": self.agent["id"], "members": [{"agentId": self.agent["id"], "role": "implementer",
+                "responsibilities": "Exercise report lifecycle"}]}, 201)["project"]
 
     def post(self, path, body, status):
         response = self.client.post("/api/v1" + path, json=body)
@@ -105,7 +108,7 @@ class DaemonE2E:
     def start_daemon(self):
         env = {key: value for key, value in os.environ.items() if not key.startswith("RELAY_") and key != "DATABASE_URL"}
         self.log = (self.root / "daemon.log").open("a")
-        self.process = subprocess.Popen(["node", str(ROOT / "packages/relay-daemon/tests/fixtures/report-e2e.mjs"),
+        self.process = subprocess.Popen(["node", str(ROOT / "packages/relay-daemon/tests/fixtures" / self.daemon_fixture),
             str(self.root / "profile.json")], cwd=ROOT, env=env, stdout=self.log, stderr=self.log)
 
     def stop_daemon(self):

@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .client_version import CLIENT_VERSION_MAX_LENGTH, CLIENT_VERSION_PATTERN
 
-AgentName = Literal["claude", "pi", "codex", "opencode"]
+AgentName = Literal["claude", "pi", "codex", "opencode", "antigravity"]
 # Older daemons can register and finish reporting runs they already own.
 DaemonWireAgentName = Literal[AgentName, "kimi"]
 DAEMON_WIRE_AGENT_NAMES = get_args(DaemonWireAgentName)

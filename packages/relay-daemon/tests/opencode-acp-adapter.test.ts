@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, describe, it } from "node:test";
-import { answerPermissionRequest, questionKind, RunJsonWriter, runOpenCodeAcp, SessionUpdateTranslator, type AskBroker } from "../src/permission-adapters/opencode-acp.js";
+import { answerPermissionRequest, questionKind, RunJsonWriter, SessionUpdateTranslator, type AskBroker } from "../src/permission-adapters/acp-session-updates.js";
+import { runOpenCodeAcp } from "../src/permission-adapters/opencode-acp.js";
 import { permissionAdapterScript } from "../src/permission-adapters/index.js";
 import type { PermissionQuestion } from "../src/permission-adapters/protocol.js";
 

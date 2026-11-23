@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AGENT_NAMES, buildClaudeCommand, buildCodexCommand, buildPiCommand, getAgent, initialAgentState } from "../src/index.js";
+import { buildClaudeCommand, buildCodexCommand, buildPiCommand, getAgent, initialAgentState } from "../src/index.js";
 
 function withEnv(env: Record<string, string>, action: () => void): void {
   const previous = process.env;
@@ -108,12 +108,12 @@ test("Codex keeps codex exec byte-for-byte without its adapter, and under truste
   }
 });
 
-test("every runtime declares a permission prompt adapter", () => {
-  for (const name of AGENT_NAMES) assert.equal(getAgent(name).permissionPrompts.kind, "adapter", name);
+test("runtimes declare how local permissions are handled", () => {
   assert.deepEqual(getAgent("claude").permissionPrompts, { kind: "adapter", adapter: "claude-mcp" });
   assert.deepEqual(getAgent("codex").permissionPrompts, { kind: "adapter", adapter: "codex-app-server" });
   assert.deepEqual(getAgent("opencode").permissionPrompts, { kind: "adapter", adapter: "opencode-acp" });
   assert.deepEqual(getAgent("pi").permissionPrompts, { kind: "adapter", adapter: "pi-extension" });
+  assert.deepEqual(getAgent("antigravity").permissionPrompts, { kind: "adapter", adapter: "antigravity-acp" });
 });
 
 const liveLaunch = { ...launch, liveLauncher: { command: "/usr/local/bin/node", args: ["/opt/relay/dist/permission-adapters/claude-stream.js"] } };
@@ -148,6 +148,7 @@ test("every runtime declares how a live message reaches it", () => {
   assert.deepEqual(getAgent("codex").liveMessages, { kind: "adapter", delivery: "steer" });
   assert.deepEqual(getAgent("pi").liveMessages, { kind: "adapter", delivery: "steer" });
   assert.deepEqual(getAgent("opencode").liveMessages, { kind: "adapter", delivery: "interrupt" });
+  assert.deepEqual(getAgent("antigravity").liveMessages, { kind: "none" });
 });
 
 /** The `--allowedTools` rules up to the next flag. */

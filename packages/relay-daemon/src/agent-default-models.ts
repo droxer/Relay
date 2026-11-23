@@ -51,6 +51,9 @@ export function defaultModelDiscoveryScript(agent: AgentName): string {
       };
       model = config.model;
 `,
+    antigravity: String.raw`
+      model = json(read(path.join(home, '.gemini', 'antigravity-cli', 'settings.json'))).model;
+`,
   };
   return helpers + "\nlet model;\n" + sources[agent] + String.raw`
   if (typeof model === 'string' && model.length <= 128 && /^[A-Za-z0-9][A-Za-z0-9._:/@[\]+-]*$/.test(model)) {

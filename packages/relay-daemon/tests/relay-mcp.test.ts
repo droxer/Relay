@@ -38,6 +38,29 @@ test('installation preserves settings/comments, is idempotent and refuses user-o
  }finally{rmSync(home,{recursive:true,force:true});}
 });
 
+test("Antigravity's shared MCP config keeps existing servers and installs a scoped stdio entry", () => {
+  const home = mkdtempSync(join(tmpdir(), "relay-agy-mcp-"));
+  try {
+    const dir = join(home, ".gemini", "config");
+    const config = join(dir, "mcp_config.json");
+    mkdirSync(dir, { recursive: true });
+    const other = { serverUrl: "https://example.test/mcp" };
+    writeFileSync(config, JSON.stringify({ mcpServers: { other } }));
+    const configFile = join(home, "private", "relay.json");
+    const options = { home, runtimes: ["antigravity"], configFile, serverName: "relay-test" };
+    assert.deepEqual(installRelayMcp(options), ["antigravity"]);
+    const installed = readFileSync(config, "utf8");
+    const { mcpServers } = JSON.parse(installed);
+    assert.deepEqual(mcpServers.other, other);
+    assert.equal(mcpServers["relay-test"].command, process.execPath);
+    assert.deepEqual(mcpServers["relay-test"].args.slice(-2), ["--config", configFile]);
+    installRelayMcp(options);
+    assert.equal(readFileSync(config, "utf8"), installed);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('real stdio process forwards initialization, discovery and calls to the Python endpoint',async()=>{
  const {spawn}=await import('node:child_process');const {fileURLToPath}=await import('node:url');
  const home=mkdtempSync(join(tmpdir(),'relay-mcp-process-'));const token='relay_mcp_processsecret';

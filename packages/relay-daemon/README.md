@@ -57,7 +57,7 @@ Optional:
   process is running. Relay keeps its own ownership marker until process exit
   so an in-process restart fails early with the owning daemon's details.
 - `RELAY_AGENT_HOME`: override the home inspected by local mode. By default,
-  local mode detects this user's existing Codex/Claude/Pi/OpenCode installations,
+  local mode detects this user's existing Codex/Claude/Pi/OpenCode/Antigravity installations,
   logins, skills, and MCP configuration under `HOME`.
 - `RELAY_USE_LOCAL_AGENT_HOME`: deprecated compatibility flag; local mode now
   uses this user's home by default.
@@ -94,6 +94,12 @@ Agent credentials:
 - Pi uses `PI_API_KEY`, `OPENAI_API_KEY`/`CODEX_API_KEY`, or
   `ANTHROPIC_API_KEY`, plus `PI_MODEL`/`OPENAI_MODEL` when required.
 - OpenCode uses the installed OpenCode CLI authentication (`opencode auth login`).
+- Google Antigravity uses the installed `agy` CLI. Launch `agy` once and sign in,
+  then check `agy models` on the Computer. Refresh its runtimes in Relay and
+  choose Google Antigravity when creating an Agent. If your Antigravity settings
+  use the Gemini API provider, launch the daemon with `GEMINI_API_KEY`.
+  Relay runs `agy acp`, available in Antigravity CLI 1.5.0 and later. Native
+  runs show Antigravity permission requests in the Thread.
 
 ## Operations
 

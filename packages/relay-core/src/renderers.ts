@@ -422,6 +422,8 @@ export class OpenCodeStreamRenderer {
   private readonly shownTools = new Set<string>();
   private readonly failedTools = new Set<string>();
 
+  constructor(private readonly displayName = "OpenCode") {}
+
   feed(chunk: string): string {
     return this.lines.feed(chunk);
   }
@@ -433,7 +435,7 @@ export class OpenCodeStreamRenderer {
     if (event.type === "error") {
       const error = asRecord(event.error);
       const message = sanitizeUntrustedText(String(error.message ?? "unknown error"));
-      return `${this.closeDelta()}\n${status("error", `OpenCode error: ${message}`)}\n`;
+      return `${this.closeDelta()}\n${status("error", `${this.displayName} error: ${message}`)}\n`;
     }
     const part = asRecord(event.part);
     if (event.type === "text" || event.type === "reasoning") {

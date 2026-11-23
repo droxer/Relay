@@ -1,5 +1,4 @@
-import { nativeCommand } from "../native-command.js";
-// Agent Client Protocol plumbing shared by the runtime ACP adapters (OpenCode): JSON-RPC over the child's stdio, child shutdown, and the
+// Agent Client Protocol plumbing shared by the runtime ACP adapters: JSON-RPC over the child's stdio, child shutdown, and the
 // permission option helpers. Nothing here knows a runtime's tool names.
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -167,7 +166,9 @@ export interface AcpChildOptions {
  * reaps it. An abort closes the connection and stops the child at once.
  */
 export async function withAcpChild<T>(options: AcpChildOptions, body: (connection: AcpConnection) => Promise<T>): Promise<T> {
-  const invocation = nativeCommand(options.command, options.args, options.env);
+  const invocation = process.platform === "win32"
+    ? (await import("../native-command.js")).nativeCommand(options.command, options.args, options.env)
+    : { command: options.command, args: options.args };
   const child = spawn(invocation.command, invocation.args, {
     cwd: options.cwd,
     env: options.env,

@@ -114,6 +114,7 @@ test('native model discovery keeps model ids and excludes provider credentials',
     { agent: 'codex', output: JSON.stringify({ models: [{ slug: 'gpt-test', visibility: 'list', priority: 0 }] }), expected: ['gpt-test'] },
     { agent: 'pi', output: 'provider model context\nopenai gpt-test 100000', expected: ['openai/gpt-test'] },
     { agent: 'opencode', output: 'openai/gpt-test\n', expected: ['openai/gpt-test'] },
+    { agent: 'antigravity', output: 'gemini-test\tGemini test\n', expected: ['gemini-test'] },
   ] as const;
   for (const entry of cases) {
     const stub = `const relayRun = async () => ({code:0,stdout:${JSON.stringify(entry.output)},stderr:''});\n`;

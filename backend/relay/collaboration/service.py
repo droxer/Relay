@@ -278,8 +278,8 @@ class CollaborationConductor(
                 node: dict[str, Any] = next((node for node in daemon_nodes if node["id"] == assignment["daemonNodeId"]), {})
                 if "image-attachments" not in (node.get("capabilities") or []):
                     raise CollaborationError("image_client_update_required", "Update this Computer to send images.", status=409)
-                if assignment["executorKind"] not in ("codex", "claude"):
-                    raise CollaborationError("image_runtime_unsupported", "Image attachments currently require Codex or Claude.", status=400)
+                if assignment["executorKind"] not in ("codex", "claude", "antigravity"):
+                    raise CollaborationError("image_runtime_unsupported", "Image attachments currently require Codex, Claude, or Google Antigravity.", status=400)
         return {
             **parsed,
             **connection_fields,

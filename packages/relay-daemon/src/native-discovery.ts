@@ -12,7 +12,7 @@ const emit = (source, text) => { if (text) process.stdout.write(source + '\t' + 
 export function nativeModelDiscoveryScript(agent: AgentName): string {
   return FILE_HELPERS + `const agent = ${JSON.stringify(agent)};\n` + String.raw`
 const cli = async args => {
-  try { const r = await relayRun([agent, ...args], { capture: true, allowFailure: true }); return r.code === 0 ? r.stdout + r.stderr : ''; }
+  try { const r = await relayRun([agent === 'antigravity' ? 'agy' : agent, ...args], { capture: true, allowFailure: true }); return r.code === 0 ? r.stdout + r.stderr : ''; }
   catch { return ''; }
 };
 const api = async (url, headers) => {
@@ -58,24 +58,26 @@ switch (agent) {
   case 'pi': emit('list', await cli(['--list-models'])); break;
 
   case 'opencode': emit('list', await cli(['models'])); break;
+  case 'antigravity': emit('list', await cli(['models'])); break;
 }
 `;
 }
 
-interface InventorySource { skillsDir?: string; mcpJson?: readonly string[]; mcpToml?: readonly string[] }
+interface InventorySource { skillsPaths?: readonly string[]; mcpJson?: readonly string[]; mcpToml?: readonly string[] }
 export function nativeInventoryScript(sources: Record<AgentName, InventorySource>): string {
   return FILE_HELPERS + `const sources = ${JSON.stringify(sources)};\n` + String.raw`
 const configHomes = {
   claude: process.env.CLAUDE_CONFIG_DIR || path.join(home, '.claude'),
   codex: process.env.CODEX_HOME || path.join(home, '.codex'),
   pi: process.env.PI_CODING_AGENT_DIR || path.join(home, '.pi'),
+  antigravity: path.join(home, '.gemini'),
 };
 for (const [agent, source] of Object.entries(sources)) {
   const config = configHomes[agent];
   if (!config) continue;
   const record = (kind, id, text) => emit(kind + '\t' + agent + '\t' + id, text);
-  if (source.skillsDir) {
-    const root = path.join(config, 'skills');
+  for (const directory of source.skillsPaths || []) {
+    const root = path.join(config, directory);
     const walk = (directory, depth) => {
       if (depth > 4) return;
       let entries; try { entries = fs.readdirSync(directory, {withFileTypes:true}); } catch { return; }
@@ -88,7 +90,7 @@ for (const [agent, source] of Object.entries(sources)) {
     walk(root, 1);
   }
   for (const relative of [...(source.mcpJson || []), ...(source.mcpToml || [])]) {
-    const file = agent === 'claude' ? path.join(process.env.CLAUDE_CONFIG_DIR || home, relative) : path.join(config, path.basename(relative));
+    const file = agent === 'claude' ? path.join(process.env.CLAUDE_CONFIG_DIR || home, relative) : path.join(config, relative);
     record('MCP', relative, read(file));
   }
 }

@@ -75,14 +75,13 @@ function codexStdout(message: string): string {
 }
 
 /**
- * OpenCode never runs headless on a native local run: its tools would wait on
- * an approval nobody can give. Without its ACP adapter, which these generic
- * loops do not attach, that run is refused, so they skip it.
+ * These generic calls do not attach ACP adapters. Antigravity always needs an
+ * adapter, as does OpenCode when a native local run can ask for approval.
  */
 function refusedWithoutAdapter(agent: AgentName): boolean {
-  return agent === "opencode"
+  return agent === "antigravity" || (agent === "opencode"
     && process.env.RELAY_RUN_AS_CURRENT_USER === "1"
-    && (process.env.RELAY_LOCAL_PERMISSION_POLICY ?? "native") === "native";
+    && (process.env.RELAY_LOCAL_PERMISSION_POLICY ?? "native") === "native");
 }
 
 function state(overrides: Partial<AgentState> = {}): AgentState {
@@ -2020,9 +2019,9 @@ describe("agent registry", () => {
     assert.equal(isAgentName(42), false);
   });
 
-  it("includes the four registered agents in a stable order", () => {
-    assert.deepEqual(AGENT_NAMES, ["claude", "pi", "codex", "opencode"]);
-    assert.equal(agentNameList(), "claude, pi, codex, opencode");
+  it("includes registered agents in a stable order", () => {
+    assert.deepEqual(AGENT_NAMES, ["claude", "pi", "codex", "opencode", "antigravity"]);
+    assert.equal(agentNameList(), "claude, pi, codex, opencode, antigravity");
   });
 
   it("exposes one adaptive command for every agent", () => {

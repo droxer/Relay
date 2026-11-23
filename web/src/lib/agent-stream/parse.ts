@@ -18,6 +18,7 @@ export function parseAgentStream(agent: AgentName, raw: string): AgentSegment[] 
   if (agent === "codex") return parseCodex(raw);
   if (agent === "pi") return parsePi(raw);
   if (agent === "opencode") return parseOpenCode(raw);
+  if (agent === "antigravity") return parseOpenCode(raw, "Google Antigravity");
   return parsePlain(raw);
 }
 
@@ -57,6 +58,7 @@ const AGENT_CHECKPOINT_TYPES: Record<AgentName, "each" | ReadonlySet<unknown>> =
   pi: new Set(["turn_start"]),
   // `opencode run --format json` prints one whole event per line.
   opencode: "each",
+  antigravity: "each",
 };
 
 type AgentCheckpoint = { end: number; value: Record<string, unknown> };

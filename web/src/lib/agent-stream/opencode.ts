@@ -5,8 +5,8 @@ import type { AgentSegment, ToolSegment } from "./segments.ts";
 
 // Native runs emit whole parts; Relay's ACP adapter marks append-only text
 // chunks with `delta: true`. Keep one growing segment across these records.
-export function parseOpenCode(raw: string): AgentSegment[] {
-  return new OpenCodeStreamParser().append(raw);
+export function parseOpenCode(raw: string, displayName?: string): AgentSegment[] {
+  return new OpenCodeStreamParser(displayName).append(raw);
 }
 
 export class OpenCodeStreamParser {
@@ -15,11 +15,13 @@ export class OpenCodeStreamParser {
   private toolSegmentById = new Map<string, number>();
   private failedTools = new Set<string>();
 
+  constructor(private readonly displayName = "OpenCode") {}
+
   // Preview the unfinished suffix without committing it: the next transport
   // chunk may extend a plain line or complete a fragmented JSON record.
   preview(raw: string): AgentSegment[] {
     if (!raw.trim()) return this.segments;
-    const parser = new OpenCodeStreamParser();
+    const parser = new OpenCodeStreamParser(this.displayName);
     parser.segments = this.segments;
     parser.activeDelta = this.activeDelta;
     parser.toolSegmentById = new Map(this.toolSegmentById);
@@ -46,7 +48,7 @@ export class OpenCodeStreamParser {
       } else if (event.type === "error") {
         this.activeDelta = undefined;
         const error = asRecord(event.error);
-        out.push({ kind: "status", tone: "bad", text: `OpenCode error: ${String(error.message ?? "unknown error")}` });
+        out.push({ kind: "status", tone: "bad", text: `${this.displayName} error: ${String(error.message ?? "unknown error")}` });
       }
     }
     this.segments = out;
