@@ -10,6 +10,7 @@ import {
   labelForAgentRun,
 } from "../src/lib/agentDisplayNames.js";
 import { rerunAssignmentForSession } from "../src/lib/workflow.js";
+import { runReceipt } from "../src/lib/runReceipt.js";
 import type { RelaySession } from "../src/types.js";
 import { parseAgentStream } from "../src/lib/agentStream.js";
 
@@ -106,12 +107,74 @@ describe("ProjectMessagesAccumulator", () => {
       },
     ]), t);
 
-    const live = projected.at(-1);
-    assert.equal(live?.kind, "user");
+    const live = projected.find((message) => message.kind === "user" && message.live);
     assert.equal(live?.kind === "user" ? live.text : "", "Use the staging database.");
-    assert.equal(live?.kind === "user" ? live.live : undefined, true);
-    // The run keeps its one block; the live message does not open a new turn.
-    assert.equal(projected.filter((message) => message.kind === "agent").length, 1);
+  });
+
+  it("continues a run's output after a live message instead of above it", () => {
+    const later = "2026-06-19T12:00:05.000Z";
+    const done = "2026-06-19T12:00:09.000Z";
+    const projected = new ProjectMessagesAccumulator().update(session([
+      { id: "ev_start", type: "agent.started", sessionId: "ses_1", timestamp, runId: "run_1", agent: "codex", logicalAgentId: "agent_a" },
+      { id: "ev_out", type: "agent.output", sessionId: "ses_1", timestamp, runId: "run_1", agent: "codex", stream: "stdout", text: "line one\nhalf a li" },
+      {
+        id: "live_q1", type: "user.live_message", sessionId: "ses_1", timestamp: later,
+        text: "Use the staging database.", runId: "run_1", agent: "codex", delivery: "steer",
+      },
+      { id: "ev_out2", type: "agent.output", sessionId: "ses_1", timestamp: later, runId: "run_1", agent: "codex", stream: "stdout", text: "ne\nSwitching to staging.\n" },
+      { id: "ev_done", type: "agent.completed", sessionId: "ses_1", timestamp: done, runId: "run_1", agent: "codex", status: "completed" },
+    ] as RelaySession["events"]), t);
+
+    assert.deepEqual(projected.map((message) => message.kind), ["user", "agent", "user", "agent"]);
+    const [, before, live, after] = projected;
+    assert.equal(live.kind === "user" ? live.live : undefined, true);
+    assert.ok(before.kind === "agent" && after.kind === "agent");
+    if (before.kind !== "agent" || after.kind !== "agent") return;
+    // The cut falls on a line boundary, so a record streamed in halves stays whole.
+    assert.equal(before.stdout, "line one\n");
+    assert.equal(before.continued, true);
+    assert.equal(before.streaming, false);
+    assert.equal(before.outcome, undefined);
+    assert.equal(after.stdout, "half a line\nSwitching to staging.\n");
+    assert.equal(after.runId, "run_1");
+    assert.equal(after.agentId, "agent_a");
+    assert.notEqual(after.id, before.id);
+    assert.equal(after.outcome, "completed");
+    assert.equal(after.runStartedAt, timestamp);
+    assert.equal(runReceipt(after)?.durationMs, 9000);
+    // The block after the message reads as a new speaker turn, not a grouped tail.
+    assert.equal(isGroupedContinuation(projected, 3), false);
+  });
+
+  it("keeps a run in one block when the live message arrives after it finished", () => {
+    const projected = new ProjectMessagesAccumulator().update(session([
+      { id: "ev_out", type: "agent.output", sessionId: "ses_1", timestamp, runId: "run_1", agent: "codex", stream: "stdout", text: "Done.\n" },
+      { id: "ev_done", type: "agent.completed", sessionId: "ses_1", timestamp, runId: "run_1", agent: "codex", status: "completed" },
+      {
+        id: "live_q1", type: "user.live_message", sessionId: "ses_1", timestamp,
+        text: "Too late.", runId: "run_1", agent: "codex", delivery: "steer",
+      },
+    ] as RelaySession["events"]), t);
+
+    assert.deepEqual(projected.map((message) => message.kind), ["user", "agent", "user"]);
+    assert.equal(projected[1]?.kind === "agent" ? projected[1].continued : true, undefined);
+  });
+
+  it("does not replay the earlier block when the completed log restores the whole run", () => {
+    const projected = new ProjectMessagesAccumulator().update(session([
+      { id: "ev_out", type: "agent.output", sessionId: "ses_1", timestamp, runId: "run_1", agent: "claude", stream: "stdout", text: "First part.\n" },
+      {
+        id: "live_q1", type: "user.live_message", sessionId: "ses_1", timestamp,
+        text: "Also check logs.", runId: "run_1", agent: "claude", delivery: "follow-up",
+      },
+      {
+        id: "ev_done", type: "agent.completed", sessionId: "ses_1", timestamp, runId: "run_1", agent: "claude",
+        status: "completed", agentLog: "stdout:\nFirst part.\nChecked the logs.\n",
+      },
+    ] as RelaySession["events"]), t);
+
+    const after = projected.at(-1);
+    assert.equal(after?.kind === "agent" ? after.stdout : "", "Checked the logs.\n");
   });
 });
 
