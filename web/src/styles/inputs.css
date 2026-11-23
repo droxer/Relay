@@ -224,27 +224,20 @@
 }
 
 /* ChoiceGroup (components/ui/choice-group.tsx) — the FORM control for a short,
-   fixed set of saved values. Same skin as the rail's kind filter above, but on
-   radio semantics and sized to sit level with an Input or Select in a two-up
-   form row: the track is one --control-h tall. Selected = raised segment on
-   the track, the one selected shape the drawers already use. */
+   fixed set of saved values. One skin for both layouts: every option is an
+   outlined tile, and the selected one swaps its line for --action over a
+   light wash of the same ink. Outline, never a solid fill; never --signature,
+   which is the focus ring and would read as "focused" rather than "chosen".
+   The layouts differ only in how tiles share the row:
+   - segments: tiles grow to fill the row equally; when the column is too
+     narrow for every label on one line, a tile drops to the next line and
+     still fills it, so a phone never squeezes a label into a sliver.
+   - chips: tiles keep their own width and wrap. */
 .choice-group {
-  min-width: 0;
-}
-
-.choice-group[data-layout="segments"] {
-  display: flex;
-  gap: 2px;
-  min-height: var(--control-h);
-  padding: 2px;
-  border-radius: var(--r-2);
-  background: var(--control-fill);
-}
-
-.choice-group[data-layout="chips"] {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-1);
+  min-width: 0;
 }
 
 .choice-group-item {
@@ -253,8 +246,13 @@
   justify-content: center;
   gap: var(--sp-1);
   min-width: 0;
+  min-height: var(--control-h);
+  padding: 0 var(--sp-3);
   border: 0;
-  color: var(--ink-3);
+  border-radius: var(--r-2);
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--line-1);
+  color: var(--ink-2);
   font: var(--type-label-strong);
   letter-spacing: var(--type-label-strong-track);
   text-align: center;
@@ -263,52 +261,37 @@
 }
 
 .choice-group[data-layout="segments"] .choice-group-item {
-  flex: 1 1 0;
-  padding: 0 var(--sp-2);
-  border-radius: var(--r-1);
-  background: transparent;
-  /* A long label wraps inside its segment instead of pushing the track wider
-     than the drawer column. */
+  /* Starts at its label's one-line width and grows to fill the row. A tile
+     that no longer fits moves to the next line (flex wraps on that width)
+     rather than squeezing its label; only a label wider than the whole
+     column wraps inside its own full-width tile. */
+  flex: 1 1 auto;
+  max-width: 100%;
   white-space: normal;
 }
 
 .choice-group[data-layout="chips"] .choice-group-item {
   flex: 0 0 auto;
   min-height: var(--control-h-sm);
-  padding: 0 var(--sp-3);
-  border-radius: var(--r-2);
-  background: transparent;
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-1);
   white-space: nowrap;
 }
 
+.choice-group[data-size="compact"] .choice-group-item {
+  min-height: var(--control-h-sm);
+}
+
 .choice-group-item:hover {
+  background: var(--control-fill);
   color: var(--ink-1);
 }
 
-.choice-group[data-layout="chips"] .choice-group-item:hover {
-  background: var(--control-fill);
-}
-
-.choice-group-item[data-checked] {
-  background: var(--surface-0);
+.choice-group .choice-group-item[data-checked],
+.choice-group .choice-group-item[data-checked]:hover {
+  background: color-mix(in srgb, var(--action) 12%, transparent);
+  /* Twice the resting stroke: the line itself says "chosen" in both themes,
+     with the wash as support rather than the signal. */
+  box-shadow: inset 0 0 0 calc(var(--stroke-w) * 2) var(--action);
   color: var(--ink-1);
-  box-shadow: 0 0 0 var(--sp-hairline) var(--line-1);
-}
-
-.choice-group[data-layout="chips"] .choice-group-item[data-checked] {
-  background: var(--control-fill);
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
-}
-
-/* Compact: a switch that sits ABOVE another control (the assignment kind
-   over its picker) rather than standing in a form row of its own. */
-.choice-group[data-size="compact"][data-layout="segments"] {
-  min-height: 0;
-}
-
-.choice-group[data-size="compact"][data-layout="segments"] .choice-group-item {
-  min-height: var(--control-h-2xs);
 }
 
 .choice-group-item[data-disabled] {
@@ -316,10 +299,15 @@
   opacity: var(--opacity-disabled);
 }
 
+.choice-group-item[data-disabled]:hover {
+  background: transparent;
+  color: var(--ink-2);
+}
+
+/* Touch: every tile is a full thumb target, whatever its layout or size. */
 @media (pointer: coarse) {
-  .choice-group[data-layout="segments"] .choice-group-item,
-  .choice-group[data-layout="chips"] .choice-group-item {
-    min-height: 2.25rem;
+  .choice-group .choice-group-item {
+    min-height: var(--touch-target);
   }
 }
 
