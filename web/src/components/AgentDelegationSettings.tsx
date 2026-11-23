@@ -8,6 +8,19 @@ import { userAgentRosterOptions } from "../hooks/useUserAgents";
 import type { UserAgent } from "../types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert } from "@/components/ui/alert";
+import { RosterAgentMark } from "./roster/RosterOption";
+import { IdentityMark } from "./IdentityMark";
+import { ProfileImage } from "./ProfileImagePicker";
+
+/* A target that was removed or moved keeps a row so it can be unchecked; it
+   still gets a face, the neutral agent mark, so no row in the list is bare. */
+function UnavailableAgentMark() {
+  return (
+    <span className="agent-state tone-neutral" aria-hidden="true">
+      <ProfileImage src={null} alt="" fallback={<IdentityMark kind="agent" />} />
+    </span>
+  );
+}
 
 export function AgentDelegationSettings({ agent, editable, admin = false, onChange }: {
   agent: UserAgent;
@@ -67,10 +80,14 @@ export function AgentDelegationSettings({ agent, editable, admin = false, onChan
       {roster.isLoading ? <p role="status">{t("delegation.loading")}</p> : null}
       {roster.error ? <Alert variant="boxed">{t("delegation.load_failed")}</Alert> : null}
       {!roster.isLoading && !roster.error && !candidates.length && !missing.length ? <p>{t("delegation.no_targets")}</p> : null}
-      {[...candidates.map((target) => ({ id: target.id, name: target.displayName })), ...missing.map((id) => ({ id, name: t("delegation.unavailable_target") }))].map((target) => (
+      {[
+        ...candidates.map((target) => ({ id: target.id, name: target.displayName, mark: <RosterAgentMark agent={target} /> })),
+        ...missing.map((id) => ({ id, name: t("delegation.unavailable_target"), mark: <UnavailableAgentMark /> })),
+      ].map((target) => (
         <label key={target.id} className="agent-delegation-option">
           <Checkbox checked={allEligible || custom.includes(target.id)} disabled={saving || !editable || allEligible || (!custom.includes(target.id) && custom.length >= 20)}
             onCheckedChange={(checked) => void save(checked ? [...custom, target.id] : custom.filter((id) => id !== target.id))} />
+          {target.mark}
           <span>{target.name}</span>
         </label>
       ))}
