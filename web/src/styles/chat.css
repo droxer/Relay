@@ -198,6 +198,9 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* The transcript anchors itself (useTranscriptPin): WebKit's native anchor
+     lets placeholder turns jump the view, and two anchors would correct twice. */
+  overflow-anchor: none;
   background: transparent;
 }
 

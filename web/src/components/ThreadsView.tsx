@@ -20,6 +20,7 @@ import {
 import { preloadMarkdown } from "./LazyMarkdown";
 import { threadAgentName } from "../lib/threadBand";
 import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
+import type { ReadingPosition } from "../hooks/useTranscriptPin";
 import { useOlderTranscript } from "../hooks/useOlderTranscript";
 import { useRelayStore } from "../lib/store";
 import { threadSendKey } from "../lib/threadSendStore";
@@ -144,6 +145,8 @@ type ThreadsViewProps = {
   transcriptRef: (node: HTMLDivElement | null) => void;
   composerRef: RefObject<ComposerHandle | null>;
   onTranscriptScroll: () => void;
+  /** Holds the reader's place while turns are inserted above it. */
+  readingPosition: ReadingPosition;
   onSelectThread: (sessionId: string) => void;
   onSelectProject: (projectId: string | null) => void;
   onNewThread: (projectId?: string | null) => void;
@@ -262,6 +265,7 @@ export function ThreadsView({
   transcriptRef,
   composerRef,
   onTranscriptScroll,
+  readingPosition,
   onSelectThread,
   onSelectProject,
   onNewThread,
@@ -361,8 +365,8 @@ export function ThreadsView({
     useOlderTranscript(transcriptVisible ? activeSessionId : undefined);
   const eventStart = activeSession?.eventStart ?? 0;
   const hasEarlierMessages = eventStart > 0;
-  const { start: transcriptStart, sentinelRef, pinOldest } = useTranscriptWindow(
-    activeSessionId, displayMessages.length, eventStart, Boolean(activeSession?.events.length),
+  const { start: transcriptStart, sentinelRef } = useTranscriptWindow(
+    activeSessionId, displayMessages.length, eventStart, Boolean(activeSession?.events.length), readingPosition,
     transcriptVisible && hasEarlierMessages && !earlierFailed ? loadEarlier : undefined,
   );
   // A thread is about to render markdown: start the pipeline download now so
@@ -407,8 +411,8 @@ export function ThreadsView({
   useEffect(() => {
     // A page of file or status events can leave the transcript with no turns
     // and no room to scroll. Keep paging until there is something to read.
-    if (needsFirstMessages && eventStart > 0) void loadEarlier(pinOldest);
-  }, [needsFirstMessages, eventStart, loadEarlier, pinOldest]);
+    if (needsFirstMessages && eventStart > 0) void loadEarlier(readingPosition.hold);
+  }, [needsFirstMessages, eventStart, loadEarlier, readingPosition.hold]);
   // A thread parked on its human: the composer carries the question, and
   // sending the reply is what resumes the work.
   const waiting = useMemo(() => (running ? null : awaitingInput(activeSession, tasks)), [activeSession, running, tasks]);
@@ -706,7 +710,7 @@ export function ThreadsView({
                 {transcriptStart === 0 && hasEarlierMessages ? (
                   <div className="transcript-history">
                     <Button type="button" variant="outline" size="sm" loading={earlierPending}
-                      onClick={() => void loadEarlier(pinOldest)}>
+                      onClick={() => void loadEarlier(readingPosition.hold)}>
                       {t("thread.load_earlier_messages")}
                     </Button>
                     {earlierFailed ? <div role="alert">{t("thread.earlier_messages_failed")}</div> : null}
