@@ -1111,6 +1111,7 @@
     "online_count": "{{count}} 臺線上",
     "page_sub": "已連線的電腦、智慧體執行時和當前執行。",
     "empty_title": "未連線電腦",
+    "load_failed": "無法載入電腦列表",
     "empty_body": "連線電腦以執行智慧體，或請管理員分配電腦。",
     "unnamed": "未命名電腦",
     "disconnect": "斷開電腦連線",

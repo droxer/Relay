@@ -1111,6 +1111,7 @@
     "online_count": "{{count}} 台在线",
     "page_sub": "已连接的电脑、智能体运行时和当前运行。",
     "empty_title": "未连接电脑",
+    "load_failed": "无法加载电脑列表",
     "empty_body": "连接电脑以运行智能体，或请管理员分配电脑。",
     "unnamed": "未命名电脑",
     "disconnect": "断开电脑连接",

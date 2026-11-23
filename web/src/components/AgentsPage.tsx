@@ -39,17 +39,6 @@ interface AgentsPageProps {
   onOpenThread: (sessionId: string) => void;
 }
 
-/** "available" is the healthy default and stays silent — only the three
-    unusable bindings get a badge, so the roster surfaces a defect instead
-    of quietly leaving an agent unreachable. */
-function BindingStatusBadge({ status }: { status: UserAgent["bindingStatus"] }) {
-  const { t } = useTranslation();
-  if (!status || status === "available") return null;
-  return (
-    <TonePill tone={status === "computer_offline" ? "neutral" : "bad"} label={t(`agents_page.binding_status_${status}`)} />
-  );
-}
-
 function RosterRow({
   agent,
   selected,
@@ -60,7 +49,15 @@ function RosterRow({
   onSelect: (agent: UserAgent) => void;
 }) {
   const { t } = useTranslation();
-  const ready = agent.enabled && agent.availability === "ready";
+  const { availability, bindingStatus, enabled } = agent;
+  const bindingIssue = availability === "offline" && bindingStatus !== "available" ? bindingStatus : undefined;
+  const status = !enabled ? (
+    <TonePill tone="neutral" label={t("agents_page.disabled")} />
+  ) : bindingIssue ? (
+    <TonePill tone={bindingIssue === "computer_offline" ? "neutral" : "bad"} label={t(`agents_page.binding_status_${bindingIssue}`)} />
+  ) : availability !== "ready" ? (
+    <StatusPill value={availability} />
+  ) : null;
 
   return (
     <li className="list-virtual">
@@ -76,11 +73,11 @@ function RosterRow({
           aria-current={selected ? "page" : undefined}
           onClick={() => onSelect(agent)}
         >
-          <span className="agents-roster-row-badge">
+          <span className="agents-roster-row-badge" aria-hidden={status ? true : undefined}>
             <AgentStateBadge
               agent={agent.executorKind}
-              ready={ready}
-              availability={agent.enabled ? agent.availability : undefined}
+              ready={enabled && availability === "ready"}
+              availability={enabled ? availability : undefined}
               imageUrl={agent.profileImageUrl}
               name={agent.displayName}
             />
@@ -100,25 +97,7 @@ function RosterRow({
               showComputers={false}
             />
           </span>
-          {/* One row, ONE place for status. Disabled used to render as a Badge
-              inline after the name while Busy / Pending / Offline rendered in
-              this trailing slot, so the same category of information had two
-              landing points depending on which value it took. Explicit status
-              only when it adds information — "ready" is the default healthy
-              state, already carried by the badge pip. */}
-          {!agent.enabled ? (
-            <span className="agents-roster-row-status">
-              <TonePill tone="neutral" label={t("agents_page.disabled")} />
-            </span>
-          ) : agent.availability !== "ready" ? (
-            <span className="agents-roster-row-status">
-              <StatusPill value={agent.availability} />
-            </span>
-          ) : null}
-          {/* Availability already communicates this connection loss. */}
-          {!(agent.enabled && agent.availability === "offline" && agent.bindingStatus === "computer_offline") ? (
-            <BindingStatusBadge status={agent.bindingStatus} />
-          ) : null}
+          {status && <span className="agents-roster-row-status">{status}</span>}
         </Button>
       </article>
     </li>

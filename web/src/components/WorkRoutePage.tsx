@@ -1,6 +1,7 @@
 "use client";
 
 import { lazy, memo, useCallback } from "react";
+import type { QueryStatus } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { ComputerWorkspaceNav } from "./ComputerWorkspaceNav";
@@ -86,6 +87,8 @@ interface WorkRoutePageProps {
   setUser: (user: CurrentUser) => void;
   visibleNodes: DaemonNodeMonitorRecord[];
   runtimeNodes: DaemonNodeMonitorRecord[];
+  nodesStatus: QueryStatus;
+  refetchNodes: () => Promise<unknown>;
   isRefreshing: boolean;
   onRefresh: () => Promise<void>;
   onOpenThread: (sessionId: string, replace?: boolean, parentTaskId?: string) => void;
@@ -214,7 +217,8 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       onOpenThread={onOpenThread}
     />
   ) : route === "computers" ? (
-    <ComputerPage nodes={props.runtimeNodes} currentUser={user} onOpenThread={onOpenThread} />
+    <ComputerPage nodes={props.runtimeNodes} nodesStatus={props.nodesStatus} onRetry={props.refetchNodes}
+      currentUser={user} onOpenThread={onOpenThread} />
   ) : route === "skills" ? (
     <SkillsPage currentUser={user} skillId={props.skillId} onSelectSkill={props.onSelectSkill} />
   ) : route === "settings" ? (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useQueries, useQueryClient, type Query, type UseQueryResult } from "@tanstack/react-query";
+import { useQueries, useQueryClient, type Query, type QueryStatus, type UseQueryResult } from "@tanstack/react-query";
 import { listDaemonNodes, listSessionSummaries, listTasks } from "../api";
 import type { DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskSummary, SessionSummary, TasksResponse } from "../types";
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
@@ -38,6 +38,8 @@ export const COMPUTER_TASKS_QUERY_KEY = [...TASKS_KEY, "computer"] as const;
 type RelayDataResult = {
   nodes: DaemonNodeMonitorRecord[];
   nodesReady: boolean;
+  nodesStatus: QueryStatus;
+  refetchNodes: () => Promise<unknown>;
   sessions: RelaySession[];
   /** The first thread list is still on its way: an empty `sessions` means
    *  "not yet", not "none". */
@@ -68,7 +70,7 @@ type RelayDataResult = {
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "nodes" | "nodesReady" | "sessions" | "sessionsLoading" | "tasks" | "homeTaskProjects" | "homeUntriaged" | "threadTaskContext" | "projectDashboard" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
+  "nodes" | "nodesReady" | "nodesStatus" | "refetchNodes" | "sessions" | "sessionsLoading" | "tasks" | "homeTaskProjects" | "homeUntriaged" | "threadTaskContext" | "projectDashboard" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
 >;
 
 /* The only fields the app reads off the collection polls, folded into one value.
@@ -88,6 +90,8 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
   return {
     nodesReady: nodesQuery.isSuccess,
     nodes: (nodesQuery.data as DaemonNodeMonitorRecord[] | undefined) ?? [],
+    nodesStatus: nodesQuery.status,
+    refetchNodes: nodesQuery.refetch,
     sessions: (sessionsQuery.data as RelaySession[] | undefined) ?? [],
     sessionsLoading: sessionsQuery.isLoading,
     tasks: (Array.isArray(taskData) ? taskData : taskData?.tasks) ?? [],
@@ -166,7 +170,7 @@ export function useRelayData(
   const loadingMoreRef = useRef(false);
   const nextSessionCursor = olderCursor === undefined ? headCursor : olderCursor;
 
-  const { nodes, nodesReady, sessions, sessionsLoading, tasks, homeTaskProjects, homeUntriaged, threadTaskContext,
+  const { nodes, nodesReady, nodesStatus, refetchNodes, sessions, sessionsLoading, tasks, homeTaskProjects, homeUntriaged, threadTaskContext,
     projectDashboard, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
     combine: combineRelayCollections,
     queries: [
@@ -361,6 +365,8 @@ export function useRelayData(
   return {
     nodes,
     nodesReady,
+    nodesStatus,
+    refetchNodes,
     sessions,
     sessionsLoading,
     hasMoreSessions: Boolean(nextSessionCursor),

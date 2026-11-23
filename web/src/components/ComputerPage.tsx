@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { QueryStatus } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   disconnectComputer,
@@ -32,6 +33,7 @@ import { paginate } from "../lib/pagination";
 import { usePagination } from "../hooks/usePagination";
 import { Pagination } from "@/components/ui/Pagination";
 import { RelayEmptyState } from "./RelayEmptyState";
+import { ListSkeleton } from "./ListSkeleton";
 import {
   ActionAdd,
   AdminNode,
@@ -44,10 +46,14 @@ import { isNodeOnline } from "../lib/adminHelpers";
 
 export function ComputerPage({
   nodes,
+  nodesStatus,
+  onRetry,
   currentUser,
   onOpenThread,
 }: {
   nodes: DaemonNodeMonitorRecord[];
+  nodesStatus: QueryStatus;
+  onRetry: () => void;
   currentUser: CurrentUser;
   /** Opens the thread behind a run, so "something is running" is one click
       away from "here is what it is doing". */
@@ -99,6 +105,7 @@ export function ComputerPage({
 
   const pagedNodes = useMemo(() => paginate(myNodes, page), [myNodes, page]);
   const onlineCount = useMemo(() => myNodes.filter(isNodeOnline).length, [myNodes]);
+  const noComputers = myNodes.length === 0;
   const manageExecutorsNode = myNodes.find((node) => node.id === manageExecutorsNodeId) ?? null;
   const tokenNode = myNodes.find((node) => node.id === tokenNodeId) ?? null;
 
@@ -234,9 +241,9 @@ export function ComputerPage({
           what the page is for. */}
       <PageHeader
         title={t("computer.title")}
-        count={myNodes.length > 0
+        count={!noComputers
           ? `${t("computer.count", { count: myNodes.length })} · ${t("computer.online_count", { count: onlineCount })}`
-          : t("computer.count", { count: myNodes.length })}
+          : nodesStatus === "success" ? t("computer.count", { count: 0 }) : undefined}
         titleVariant="title"
         actions={phone ? connectIconAction : connectCta("sm", myNodes.length === 0 ? "ghost" : "default")}
         /* On a phone the title lives in the top bar, so the create control
@@ -247,7 +254,14 @@ export function ComputerPage({
       {/* The shell clips its children, so the roster needs its own scroll
           container — see computer.css. */}
       <div className="computer-page-body">
-        {myNodes.length === 0 ? (
+        {noComputers && nodesStatus === "pending" ? (
+          <ListSkeleton label={t("admin.loading")} rows={3} />
+        ) : noComputers && nodesStatus === "error" ? (
+          <RelayEmptyState feature="computers"
+            title={t("computer.load_failed")}
+            actions={<Button type="button" variant="outline" onClick={onRetry}>{t("workspace.retry")}</Button>}
+          />
+        ) : noComputers ? (
           <RelayEmptyState feature="computers"
             title={t("computer.empty_title")}
             body={t("computer.empty_body")}

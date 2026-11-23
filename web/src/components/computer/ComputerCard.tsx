@@ -90,10 +90,11 @@ export function ComputerCard({
   const sandbox = nodeSandboxProfile(node);
   const runtimes = visibleNodeAgentNames(node);
   const activeRuns = node.activeRuns ?? [];
+  const waitingForConnection = connection.state === "pending";
   // The status pill only earns its place when it says something the presence
   // readout cannot: provisioning, failed, stopped — the same rule as the
   // admin fleet card (`showsLifecycleStatus`).
-  const showStatus = showsLifecycleStatus(status);
+  const showStatus = showsLifecycleStatus(status) && !(waitingForConnection && status === "provisioning");
 
   return (
     // Stale-aware, matching the presence pill: a daemon that stopped
@@ -116,7 +117,11 @@ export function ComputerCard({
               inline, so no two cards had the same header shape. */}
           <h2 className="computer-card-name" translate="no" title={title}><a href={computerWorkHref(computerId(node))} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); void navigateToAppPath(computerWorkHref(computerId(node))); } }}>{title}</a></h2>
           <div className="computer-card-state">
-            <NodePresence node={node} t={t} withLabel unsettled={connection.state === "unsettled"} />
+            {waitingForConnection ? (
+              <TonePill tone="neutral" label={t("computer.connect_waiting")} />
+            ) : (
+              <NodePresence node={node} t={t} withLabel unsettled={connection.state === "unsettled"} />
+            )}
             <HostOsBadge node={node} />
             {showStatus ? (
               <TonePill
@@ -134,8 +139,8 @@ export function ComputerCard({
               of the next. As inline text the break can only fall between
               items. */}
           <p className="computer-card-sub">
-            <span>{t(`admin.v2.node_sandbox_${sandbox}`)}</span>{" "}
-            <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span>
+            <span>{t(`admin.v2.node_sandbox_${sandbox}`)}</span>
+            {node.lastSeenAt && <> <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span></>}
           </p>
           {/* The reader owns this machine, so the fix is theirs to make:
               name it in the open — the command, not only the badge's hover
