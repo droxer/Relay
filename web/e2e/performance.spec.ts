@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /* Loading and rendering budgets, measured against the production export.
 
@@ -38,6 +38,32 @@ function session(id: string, index: number, turns = 0) {
 
 const THREADS = Array.from({ length: 400 }, (_, index) => session(`s-${index}`, index));
 const LONG_THREAD = session("s-0", 0, 150);
+
+async function sampleTranscriptDrift(anchor: Locator, rowSelector: string, scrollToTop = false) {
+  const frames = await anchor.evaluateHandle((element, { rowSelector, scrollToTop }) => {
+    const scroller = element.closest(".transcript")!;
+    const count = () => scroller.querySelectorAll(rowSelector).length;
+    const offset = () => element.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    const initialCount = count();
+    if (scrollToTop) scroller.scrollTop = 0;
+    const before = offset();
+    const drifts: number[] = [];
+    const sample = () => {
+      if (count() > initialCount) drifts.push(Math.abs(offset() - before));
+      if (drifts.length < 30) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+    return drifts;
+  }, { rowSelector, scrollToTop });
+  return async () => {
+    try {
+      await expect.poll(async () => (await frames.jsonValue()).length).toBe(30);
+      return Math.max(...await frames.jsonValue());
+    } finally {
+      await frames.dispose();
+    }
+  };
+}
 
 test("the shared Agent roster omits configuration and opens only the selected record", async ({ page }) => {
   const stamp = hoursAgo(1);
@@ -503,9 +529,33 @@ for (const width of [1280, 390]) {
     await expect(page.locator(".agent-text.is-live")).toHaveCount(1);
     expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: `/tmp/relay-opencode-stream-${width}.png` });
+
+    const transcript = page.locator(".transcript");
+    const distanceToBottom = () => transcript.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop);
+    await expect.poll(distanceToBottom, { message: "short transcript follows the bottom before output grows" }).toBeLessThanOrEqual(24);
+    const longOutput = Array.from({ length: 40 }, (_, line) => `\n\nLive output paragraph ${line + 1}.`).join("");
+    await chunk(longOutput);
+    await expect(prose.getByText("Live output paragraph 40.", { exact: true })).toBeAttached();
+    await expect.poll(() => transcript.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(600);
+    await expect.poll(distanceToBottom).toBeLessThanOrEqual(24);
+
+    await transcript.evaluate(el => { el.scrollTop = 0; });
+    const readingAnchor = prose.locator("p").first();
+    await expect(readingAnchor).toBeInViewport();
+    const readingDrift = await sampleTranscriptDrift(readingAnchor, ".agent-prose p");
+    await chunk("\n\nOutput while reading.");
+    await expect(prose.getByText("Output while reading.", { exact: true })).toBeAttached();
+    expect(await readingDrift(), "live output leaves the reading position alone").toBeLessThanOrEqual(2);
+
+    await transcript.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect.poll(distanceToBottom).toBeLessThanOrEqual(24);
+    await chunk("\n\n" + "Continued output after returning to the bottom. ".repeat(80));
+    await expect(prose.getByText(/Continued output after returning to the bottom/)).toBeInViewport();
+    await expect.poll(distanceToBottom).toBeLessThanOrEqual(24);
+
     await emit({ ...base, id: "complete", type: "agent.completed", status: "completed", exitCode: 0 });
     await expect(page.locator(".agent-text.is-live")).toHaveCount(0);
-    await expect(prose.locator("p")).toHaveText("Reviewing the streaming output.");
+    await expect(prose.locator("p").first()).toHaveText("Reviewing the streaming output.");
     await expect(prose.locator("code")).toContainText("const ready = true;");
   });
 }
@@ -640,20 +690,10 @@ test("a long transcript mounts its newest turns and reveals older ones on scroll
   const initial = await turns.count();
   expect(initial, "turns mounted for a 150-turn thread").toBeLessThanOrEqual(60);
 
-  // Reaching the top loads the next page without jumping the reader.
-  const transcript = page.locator(".transcript");
-  // .transcript-turn is display:contents, so measure the block it wraps.
-  // textContent, not innerText: an off-screen turn is content-visibility skipped.
-  const oldestTurn = Number((await page.locator(".agent-code").first().textContent())!.match(/turn(\d+)/)![1]);
-  await transcript.evaluate((element) => { element.scrollTop = 0; });
+  await expect.poll(() => page.locator(".transcript").evaluate(element => element.scrollTop)).toBeGreaterThan(600);
+  const readingDrift = await sampleTranscriptDrift(turns.locator("> :first-child").first(), ".transcript-turn", true);
   await expect.poll(() => turns.count()).toBeGreaterThan(initial);
-  const offset = await page.locator(".agent-code", { hasText: new RegExp(`\\bturn${oldestTurn} = `) }).evaluate((element) => {
-    const frame = element.closest(".transcript")!.getBoundingClientRect();
-    return element.getBoundingClientRect().top - frame.top;
-  });
-  // It was at the top edge when the page landed; it must not have been
-  // shoved a page down (or up) by the turns mounted above it.
-  expect(Math.abs(offset), "the turn the reader was looking at stays in view").toBeLessThan(400);
+  expect(await readingDrift(), "revealing the local page holds the reading position").toBeLessThanOrEqual(2);
 });
 
 test("a cold conversation opens on its latest window and requests older messages on demand", async ({ page }) => {
@@ -789,17 +829,18 @@ test("scrolling toward older messages fetches one history page without moving th
     await transcript.evaluate(element => { element.scrollTop = 120; });
     await expect.poll(() => historyReads).toBe(1);
     await transcript.evaluate(element => { element.scrollTop = 0; });
-    const turn = output.filter({ hasText: /\bturn7 =/ });
-    const offset = () => turn.evaluate(element =>
-      element.getBoundingClientRect().top - element.closest(".transcript")!.getBoundingClientRect().top);
-    const before = await offset();
+    const readingAnchor = output.filter({ hasText: /\bturn7 =/ });
+    await expect(readingAnchor).toBeInViewport();
+    const readingDrift = await sampleTranscriptDrift(readingAnchor, ".agent-code");
     releaseHistory();
     await expect(output).toHaveCount(15);
-    await expect(output.first()).toContainText("turn0");
-    await expect.poll(async () => Math.abs(await offset() - before)).toBeLessThan(400);
+    expect(await output.allTextContents()).toEqual(Array.from({ length: 15 }, (_, turn) => `export const turn${turn} = ${turn};`));
+    expect(await readingDrift(), "largest reading position change after the page arrives").toBeLessThanOrEqual(2);
     expect(historyReads).toBe(1);
     expect(artifactReads).toBe(0);
-    await page.getByRole("button", { name: /view generated review/i }).click();
+    const artifact = page.getByRole("button", { name: /view generated review/i });
+    await artifact.scrollIntoViewIfNeeded();
+    await artifact.press("Enter");
     await expect(page.getByText("Generated review body")).toBeVisible();
     expect(artifactReads).toBe(1);
   } finally {
