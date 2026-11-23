@@ -37,8 +37,7 @@ import { createProjectManagerBridge, managerWorkspaceTool } from "./project-mana
 import { materializeSkills, runSkillDelivery } from "./agent-skills.js";
 import { permissionPromptsApply, startPermissionBroker } from "./permission-broker.js";
 import { liveRuns } from "./live-runs.js";
-import { permissionAdapterLaunch } from "./permission-adapters/index.js";
-import { stageAntigravityAcp } from "./permission-adapters/antigravity-guest.js";
+import { permissionAdapterLaunch, stageGuestPermissionAdapter } from "./permission-adapters/index.js";
 import type { DaemonLogFields, DaemonLogger, DaemonExecutionEnvironment, WorkspaceExecution } from './index.js';
 import { commandLogFields, commandLeaseEventFields, runCancelledEvent } from './run-events.js';
 const DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS = 60_000;
@@ -166,13 +165,15 @@ export async function executeCommand(
    * long as the run; every other run is unchanged.
    */
   async function runWithPermissionPrompts<T>(runState: AgentState, execution: WorkspaceExecution, run: (state: AgentState) => Promise<T>): Promise<T> {
-    const support = getAgent(command.agent).permissionPrompts;
-    if (support.kind !== "adapter" || !permissionPromptsApply(command.agent, environment.sandboxMode)) {
-      if (command.agent !== "antigravity") return await run(runState);
+    const definition = getAgent(command.agent);
+    const support = definition.permissionPrompts;
+    if (support.kind !== "adapter") return await run(runState);
+    if (!permissionPromptsApply(command.agent, environment.sandboxMode)) {
+      if (!definition.adapterRequiredForExecution) return await run(runState);
       if (environment.sandboxMode === "none") {
-        return await run({ ...runState, permission_prompt: permissionAdapterLaunch("antigravity-acp", { env: {} }) });
+        return await run({ ...runState, permission_prompt: permissionAdapterLaunch(support.adapter, { env: {} }) });
       }
-      const staged = await stageAntigravityAcp(execution, threadWorkspace.executionPath, signal);
+      const staged = await stageGuestPermissionAdapter(support.adapter, execution, threadWorkspace.executionPath, signal);
       try {
         return await run({ ...runState, permission_prompt: staged.launch });
       } finally {

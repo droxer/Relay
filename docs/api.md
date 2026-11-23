@@ -1933,11 +1933,12 @@ caches, because record versions and tags changed.
 `run.start.attachments` contains the same immutable metadata, never image bytes,
 R2 credentials, or expiring URLs. The daemon verifies size and SHA-256, writes
 private temporary files within the mounted workspace, and removes them after
-execution, including failures. Codex receives native image inputs (including its
-app-server adapter); Claude receives structured image blocks on stdin. Other
-runtimes are refused explicitly. The Computer must advertise `image-attachments`;
-the configured model must support image input. The most recent image-bearing
-message remains visual context for subsequent turns and recovery.
+execution, including failures. Codex receives native image inputs, including through
+its app-server adapter. Claude receives structured image blocks on stdin. Google
+Antigravity receives image blocks through ACP. The Computer must advertise
+`image-attachments`, and the configured model must support image input.
+The most recent image-bearing message remains visual context for subsequent
+turns and recovery.
 
 Hosted installs reuse `RELAY_BLOB_STORE=r2`; without it, bytes remain in the
 existing database-backed deployment mode. Apply Alembic revision `20261103_0109`

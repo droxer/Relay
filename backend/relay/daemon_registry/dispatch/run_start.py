@@ -14,6 +14,7 @@ from ...core.daemon_capabilities import (
     DAEMON_CAPABILITY_AGENT_SKILLS,
     DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP,
 )
+from ...core.thread_attachments import IMAGE_ATTACHMENT_AGENTS
 from ..records import (
     CARRIED_RUN_REQUEST_STATE_KEYS,
 )
@@ -49,7 +50,7 @@ def _run_start_command(
     if images:
         if not has_capability(sandbox, "image-attachments"):
             raise _DeliveryRefused("image_client_update_required")
-        if assignment["executorKind"] not in ("codex", "claude", "antigravity"):
+        if assignment["executorKind"] not in IMAGE_ATTACHMENT_AGENTS:
             raise _DeliveryRefused("image_runtime_unsupported")
     # Preserve the session's recorded directory, never an agent-supplied hint.
     legacy_layout = workspace_layout if not session_snapshot.get("projectId") and (

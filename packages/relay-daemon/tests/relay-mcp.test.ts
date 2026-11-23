@@ -61,6 +61,29 @@ test("Antigravity's shared MCP config keeps existing servers and installs a scop
   }
 });
 
+test("Antigravity can install Relay MCP into a blank config without accepting malformed JSON", () => {
+  const home = mkdtempSync(join(tmpdir(), "relay-agy-empty-mcp-"));
+  try {
+    const dir = join(home, ".gemini", "config");
+    const config = join(dir, "mcp_config.json");
+    mkdirSync(dir, { recursive: true });
+    const options = { home, runtimes: ["antigravity"], configFile: join(home, "relay.json"), serverName: "relay-test" };
+    for (const blank of ["", " \n\t"]) {
+      writeFileSync(config, blank);
+      assert.deepEqual(installRelayMcp(options), ["antigravity"]);
+      const installed = readFileSync(config, "utf8");
+      assert.equal(JSON.parse(installed).mcpServers["relay-test"].command, process.execPath);
+      installRelayMcp(options);
+      assert.equal(readFileSync(config, "utf8"), installed);
+    }
+    writeFileSync(config, "{invalid");
+    assert.throws(() => installRelayMcp(options), { code: "mcp_invalid_configuration" });
+    assert.equal(readFileSync(config, "utf8"), "{invalid");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('real stdio process forwards initialization, discovery and calls to the Python endpoint',async()=>{
  const {spawn}=await import('node:child_process');const {fileURLToPath}=await import('node:url');
  const home=mkdtempSync(join(tmpdir(),'relay-mcp-process-'));const token='relay_mcp_processsecret';

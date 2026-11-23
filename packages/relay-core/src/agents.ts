@@ -74,6 +74,8 @@ export interface AgentDefinition {
   skillDelivery: SkillDelivery;
   /** How live permission prompts reach a person on a local, native-policy run. */
   permissionPrompts: PermissionPromptSupport;
+  /** Whether to launch through the permission adapter even without a broker. */
+  adapterRequiredForExecution?: true;
   /** How a message reaches a live run; the same adapter that carries its permission prompts carries it. */
   liveMessages: LiveMessageSupport;
   preflight: { label: string; command(): string };
@@ -193,6 +195,7 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     needsGuestAuth: false,
     skillDelivery: { kind: "prompt-paths" },
     permissionPrompts: { kind: "adapter", adapter: "antigravity-acp" },
+    adapterRequiredForExecution: true,
     liveMessages: { kind: "none" },
     preflight: {
       label: "Google Antigravity sign-in",

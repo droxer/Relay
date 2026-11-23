@@ -63,13 +63,21 @@ async function main(): Promise<void> {
       }));
       if (init.protocolVersion !== 1) throw new Error("Antigravity returned an unsupported ACP protocol version.");
       const workspace = { cwd: values.cwd, mcpServers: [] };
-      const session = asRecord(values.resume
-        ? await connection.request("session/resume", { ...workspace, sessionId: values.resume })
-        : await connection.request("session/new", workspace));
-      if (typeof session.sessionId !== "string" || !session.sessionId || (values.resume && session.sessionId !== values.resume)) {
-        throw new Error("Antigravity ACP returned an unexpected session ID.");
+      if (values.resume) {
+        const capabilities = asRecord(asRecord(init.agentCapabilities).sessionCapabilities);
+        if (!capabilities.resume) throw new Error("Antigravity ACP does not support resuming sessions.");
+        const resumed = asRecord(await connection.request("session/resume", { ...workspace, sessionId: values.resume }));
+        if (resumed.sessionId !== undefined && resumed.sessionId !== values.resume) {
+          throw new Error("Antigravity ACP returned an unexpected session ID.");
+        }
+        sessionId = values.resume;
+      } else {
+        const created = asRecord(await connection.request("session/new", workspace));
+        if (typeof created.sessionId !== "string" || !created.sessionId) {
+          throw new Error("Antigravity ACP did not return a session ID.");
+        }
+        sessionId = created.sessionId;
       }
-      sessionId = session.sessionId;
       writer.session(sessionId);
       if (values.model) await connection.request("session/set_model", { sessionId, modelId: values.model });
       clearTimeout(timer);

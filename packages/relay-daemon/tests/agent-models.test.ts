@@ -230,6 +230,24 @@ describe("agent model discovery", () => {
     assert.deepEqual(defaults, {}, "a removed or invalid setting must clear the previous report");
   });
 
+  it("resolves the saved Antigravity model against its live catalog", async () => {
+    const defaults: Partial<Record<AgentName, string>> = {};
+    const list = record("list", "gemini-test\tGemini Test Flash\ngemini-other\tGemini Other");
+    for (const [configured, expected] of [
+      ["Gemini Test Flash", { antigravity: "gemini-test" }],
+      ["gemini-other", { antigravity: "gemini-other" }],
+      ["Gemini Missing", {}],
+    ] as const) {
+      const exec = async (): Promise<ExecResult> => ({
+        exit_code: 0, stdout: list + record("default-model-label", configured), stderr: "",
+      });
+      assert.deepEqual(await discoverAgentModels(exec, ["antigravity"], undefined, undefined, undefined, defaults), {
+        antigravity: ["gemini-test", "gemini-other"],
+      });
+      assert.deepEqual(defaults, expected);
+    }
+  });
+
   it("asks each runtime with its own credentials and omits runtimes that report nothing", async () => {
     const outputs: Partial<Record<AgentName, string>> = {
       codex: record("catalog", CODEX_CATALOG),

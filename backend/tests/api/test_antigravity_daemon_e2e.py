@@ -65,6 +65,9 @@ def test_antigravity_thread(tmp_path, monkeypatch, live):
         home = tmp_path / "home"
         bin_dir = home / "bin"
         bin_dir.mkdir(parents=True)
+        settings = home / ".gemini" / "antigravity-cli" / "settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(json.dumps({"model": "Gemini test"}))
         cli = ROOT / "packages/relay-daemon/tests/fixtures/agy-e2e.mjs"
         shim = bin_dir / "agy"
         shim.write_text(f'#!/bin/sh\nexec node {shlex.quote(str(cli))} "$@"\n')
@@ -77,14 +80,17 @@ def test_antigravity_thread(tmp_path, monkeypatch, live):
     try:
         harness.setup(create_project=False)
 
-        def available_models():
+        def ready_node():
             nodes = harness.client.get("/api/v1/daemon-nodes").json()["nodes"]
             node = next((node for node in nodes if node["id"] == harness.node_id), {})
-            return node.get("agentModels", {}).get("antigravity") if node.get("agents", {}).get("antigravity") == "ready" else None
+            if node.get("agents", {}).get("antigravity") == "ready" and node.get("agentModels", {}).get("antigravity"):
+                return node
+            return None
 
-        models = eventually(available_models)
-        model = models[0]
-        assert live or model == "gemini-test"
+        node = eventually(ready_node)
+        model = node["agentModels"]["antigravity"][0]
+        if not live:
+            assert node["agentDefaultModels"]["antigravity"] == model == "gemini-test"
         pin = harness.client.patch(f"/api/v1/agents/{harness.agent['id']}", json={"modelPolicy": {"model": model}})
         assert pin.status_code == 200, pin.text
         thread = harness.post("/threads", {
@@ -138,9 +144,11 @@ def test_antigravity_thread(tmp_path, monkeypatch, live):
             assert first["tokenUsage"]["cacheRead"] == 70
             [cwd] = (tmp_path / "workspace" / ".threads").iterdir()
             (cwd / ".discard-conversation").touch()
-            _, fallback = _turn(harness, thread, "RELAY_AGY_FOLLOW_UP", 4)
+            recovered, fallback = _turn(harness, thread, "RELAY_AGY_FOLLOW_UP", 4)
             assert "RELAY_AGY_FALLBACK" in _reply(fallback)
             assert fallback["runtimeSessionId"] != conversation
+            outputs = [event for event in recovered["events"] if event["type"].startswith("agent.output")]
+            assert "Conversation not found" not in json.dumps(outputs)
             _, failed = _turn(harness, thread, "RELAY_AGY_FAILURE", 5, status="failed")
             assert failed["exitCode"] == 1
             assert "Provider refused the run" in failed["agentLog"]

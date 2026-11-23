@@ -34,7 +34,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   switch (method) {
     case "initialize":
       if (params.protocolVersion !== 1) throw new Error("Expected ACP version 1");
-      respond(id, { protocolVersion: 1 });
+      respond(id, { protocolVersion: 1, agentCapabilities: { sessionCapabilities: { resume: {} } } });
       break;
     case "session/new":
       if (realpathSync(params.cwd) !== process.cwd()) throw new Error("The ACP workspace did not match the process cwd.");
@@ -48,7 +48,7 @@ for await (const line of createInterface({ input: process.stdin })) {
       }
       sessionId = params.sessionId;
       resumed = true;
-      respond(id, { sessionId });
+      respond(id, {});
       break;
     case "session/set_model":
       if (params.sessionId !== sessionId || params.modelId !== model) throw new Error("Expected the pinned model");

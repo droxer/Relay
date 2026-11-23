@@ -152,7 +152,10 @@ export async function discoverAgentModels(
       });
       if (result.exit_code !== 0 || overflow) return [agent, []] as const;
       const stdout = output || result.stdout;
-      const configuredDefault = decodeRecords(stdout).find(({ source }) => source === "default-model")?.text;
+      const records = decodeRecords(stdout);
+      const configuredDefault = agent === "antigravity"
+        ? antigravityDefaultModel(records)
+        : records.find(({ source }) => source === "default-model")?.text;
       if (configuredDefault && validModels([configuredDefault]).length) defaultModels[agent] = configuredDefault;
       const fresh = providerListText(stdout);
       if (fresh) providerLists.set(agent, fresh);
@@ -206,10 +209,7 @@ export function parseAgentModels(
     case "opencode":
       return validModels(texts("list").flatMap(openCodeListedModels));
     case "antigravity":
-      return validModels(texts("list").flatMap((list) => list.split(/\r?\n/).flatMap((line) => {
-        const [id, label] = line.split("\t");
-        return label?.trim() ? [id.trim()] : [];
-      })));
+      return validModels(texts("list").flatMap(antigravityListedModels).map(({ id }) => id));
   }
 }
 
@@ -221,14 +221,32 @@ export function openCodeListedModels(text: string): string[] {
     .filter((line) => /^[^\s/]+\/\S+$/.test(line));
 }
 
-function decodeRecords(stdout: string): Array<{ source: string; text: string }> {
-  const records: Array<{ source: string; text: string }> = [];
+type DiscoveryRecord = { source: string; text: string };
+
+function decodeRecords(stdout: string): DiscoveryRecord[] {
+  const records: DiscoveryRecord[] = [];
   for (const line of stdout.split("\n")) {
     const [source, payload] = line.trim().split(RECORD_SEPARATOR);
     if (!source || !payload) continue;
     records.push({ source, text: Buffer.from(payload, "base64").toString("utf8") });
   }
   return records;
+}
+
+function antigravityListedModels(text: string): Array<{ id: string; label: string }> {
+  return text.split(/\r?\n/).flatMap((line) => {
+    const [id, label] = line.split("\t").map((part) => part.trim());
+    return id && label ? [{ id, label }] : [];
+  });
+}
+
+function antigravityDefaultModel(records: DiscoveryRecord[]): string | undefined {
+  const configured = records.find(({ source }) => source === "default-model-label")?.text;
+  if (!configured) return undefined;
+  const catalog = records.filter(({ source }) => source === "list").flatMap(({ text }) => antigravityListedModels(text));
+  if (catalog.some(({ id }) => id === configured)) return configured;
+  const matches = validModels(catalog.filter(({ label }) => label === configured).map(({ id }) => id));
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function claudeModels(sources: {

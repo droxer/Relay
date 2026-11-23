@@ -15,12 +15,15 @@ it("reads configured defaults for every runtime without emitting other configura
       ".codex/config.toml": 'model = "codex-root"\nprofile = "work"\n[profiles.work]\nmodel = "codex-profile"\n[mcp_servers.other]\nmodel = "wrong"',
       ".pi/agent/settings.json": JSON.stringify({ defaultProvider: "provider", defaultModel: "pi-configured" }),
       ".config/opencode/opencode.jsonc": '{ // saved setting\n "model": "provider/opencode-configured", /* note */ }',
+      ".gemini/antigravity-cli/settings.json": JSON.stringify({ model: "Gemini Test Flash", unrelated: "private-value" }),
     };
     for (const [file, text] of Object.entries(files)) {
       mkdirSync(dirname(join(home, file)), { recursive: true });
       writeFileSync(join(home, file), text);
     }
     const env = { PATH: process.env.PATH, HOME: home };
+    const antigravity = execFileSync(process.execPath, ["--input-type=module", "-e", defaultModelDiscoveryScript("antigravity")], { env, encoding: "utf8" });
+    assert.equal(antigravity, `default-model-label\t${Buffer.from("Gemini Test Flash").toString("base64")}\n`);
     for (const [agent, expected] of Object.entries({ claude: "claude-configured", codex: "codex-profile", pi: "provider/pi-configured", opencode: "provider/opencode-configured" })) {
       const output = execFileSync(process.execPath, ["--input-type=module", "-e", defaultModelDiscoveryScript(agent as AgentName)], { env, encoding: "utf8" });
       assert.equal(output, `default-model\t${Buffer.from(expected).toString("base64")}\n`, agent);
