@@ -24,6 +24,7 @@ from app_state_helpers import replace_app_context
 from relay.api.deps import AppContext
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.core.daemon_records import ThreadRunActiveError
 from relay.tasks.dispatch import start_task_on_ready_node
 from relay.tasks.scheduler import TaskScheduler
 
@@ -489,8 +490,8 @@ def test_task_waits_when_another_run_takes_the_last_slot(monkeypatch, tmp_path, 
     assert ctx.registry.daemon_store.run_request_for_command(command["id"])["taskId"] == task["id"]
 
 
-def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
-    """Manual failures block under the same policy as scheduled failures."""
+@pytest.mark.parametrize("thread_busy", [False, True], ids=["failure", "thread-busy"])
+def test_manual_dispatch_waits_for_busy_threads_and_blocks_other_failures(monkeypatch, thread_busy) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -503,6 +504,8 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
         project = project_for(app.state.project_store, ALICE, node, [agent["id"]])
 
         async def failing_run(node_id, request):
+            if thread_busy:
+                raise ThreadRunActiveError("competing-thread")
             raise ValueError("capacity_exhausted: node is full")
 
         monkeypatch.setattr(app.state.backend, "run", failing_run)
@@ -525,15 +528,16 @@ def test_manual_dispatch_failure_blocks_until_manual_retry(monkeypatch) -> None:
         )
 
         assert result is not None
-        assert result["dispatch"]["state"] == "rejected"
+        assert result["dispatch"]["state"] == ("queued" if thread_busy else "rejected")
         assert result["dispatch"]["code"] == "capacity_exhausted"
-        failed = app.state.task_store.get_task(task["id"])
-        assert failed["status"] == "blocked"
-        assert "dispatchRetry" not in failed
-        assert "capacity_exhausted: node is full" in failed["blockerReason"]
-        assert "manually" in failed["blockerReason"]
+        current = app.state.task_store.get_task(task["id"])
+        assert current["status"] == ("queued" if thread_busy else "blocked")
+        assert "dispatchRetry" not in current
+        if not thread_busy:
+            assert "capacity_exhausted: node is full" in current["blockerReason"]
+            assert "manually" in current["blockerReason"]
         # Known rejection releases the claim so an explicit retry can proceed.
-        assert "dispatchClaim" not in failed
+        assert "dispatchClaim" not in current
 
 
 def test_unrecorded_dispatch_failure_reraises_the_original_error(monkeypatch) -> None:

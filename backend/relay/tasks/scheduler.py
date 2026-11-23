@@ -18,7 +18,7 @@ from ..core.ids import new_database_id
 from ..core.models import AgentName
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
-from ..core.daemon_records import ComputerRunCapacityError
+from ..core.daemon_records import ComputerRunCapacityError, ThreadRunActiveError
 from ..persistence.task.rows import task_claim_sort_key
 from ..persistence.task.rules import compact_task_writes
 from .claims import dispatch_claim_active
@@ -691,7 +691,7 @@ class TaskScheduler:
                 code = dispatch_failure_code(error)
                 if claim_id and code != "dispatch_failed":
                     self.task_store.release_dispatch_claim(task["id"], claim_id)
-                if isinstance(error, ComputerRunCapacityError):
+                if isinstance(error, (ComputerRunCapacityError, ThreadRunActiveError)):
                     record_computer_capacity_wait(self.task_store, task)
                     return False
                 record_dispatch_failure(

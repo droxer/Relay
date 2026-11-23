@@ -157,6 +157,65 @@ def test_queue_dispatches_real_round_and_retains_mention_target(monkeypatch):
         assert app.state.registry.daemon_store.active_run_request_for_session_any_node(tid)
 
 
+def test_queued_follow_up_retries_when_another_round_wins_admission(monkeypatch):
+    import asyncio
+    from test_thread_same_computer_targets import _world, _agent, _sync, _thread
+    from relay.collaboration.models import MessageIntent
+    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.collaboration.service import CollaborationConductor
+    from relay.persistence.events import relay_event
+
+    with _world(monkeypatch) as (app, client, node, _):
+        agent = _agent(app, node, "Solo", "codex")
+        _sync(app, node)
+        thread = _thread(app, node, agent)
+        tid = thread["id"]
+        store = app.state.session_store
+        store.append_event(tid, relay_event("session.status", tid, {"status": "completed", "phase": "done"}))
+        message = {"id": "q_follow_up", "text": "Verify the staging migration"}
+        response = client.post(f"/api/v1/threads/{tid}/queue", json={"action": "enqueue", **message})
+        assert response.status_code == 200, response.text
+
+        submit = CollaborationConductor.submit
+
+        async def start_competing_round(self, intent, actor):
+            await submit(self, MessageIntent(thread_id=tid, text="Competing turn"), actor)
+            return await submit(self, intent, actor)
+
+        dispatcher = ThreadQueueDispatcher(app.state.context)
+        with monkeypatch.context() as race:
+            race.setattr(CollaborationConductor, "submit", start_competing_round)
+            asyncio.run(dispatcher.dispatch(tid))
+        state = store.get_session(tid)["messageQueue"]
+        assert state["messages"] == [message]
+        assert not state["paused"]
+        assert "sending" not in state
+        assert "error" not in state
+
+        registry = app.state.registry
+        token = "token_node_here"
+        [first] = registry.take_commands(node["id"], token)
+        asyncio.run(dispatcher.dispatch(tid))
+        assert registry.take_commands(node["id"], token) == []
+        registry.handle_event(node["id"], {
+            "type": "run.completed", "commandId": first["id"], "sessionId": tid,
+            "runId": first["runId"], "agent": first["agent"], "exitCode": 0,
+            "agentLog": "Finished.", "leaseId": first.get("leaseId"),
+            "roundResult": {"status": "done", "work": {"status": "done", "evidence": ["Verified"]}},
+        }, token)
+        assert app.state.context.execution_lifecycle.status(store.get_session(tid))["phase"] == "terminal"
+
+        asyncio.run(dispatcher.dispatch(tid))
+        asyncio.run(dispatcher.dispatch(tid))
+        [second] = registry.take_commands(node["id"], token)
+        assert second["state"]["task_goal"] == message["text"]
+        snapshot = store.get_session(tid)
+        assert snapshot["messageQueue"]["messages"] == []
+        assert [event["text"] for event in snapshot["events"] if event["type"] == "user.message"] == [
+            "Competing turn", message["text"],
+        ]
+
+
 @pytest.mark.parametrize("background_mode", ["embedded", "external"])
 def test_run_exit_wakes_the_queue_between_scheduler_ticks(monkeypatch, tmp_path, background_mode):
     from postgres_backend import postgres_backend_requested

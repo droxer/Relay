@@ -1488,7 +1488,7 @@ class _FixedOrgSettings:
         return dict(self._settings)
 
 
-def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
+def _round_scheduler_fixture(root: str, *, max_task_rounds: int, automation: bool = False):
     task_store = make_task_store(root)
     registry = DaemonNodeRegistry(
         make_session_store(root), make_daemon_store(root), task_store=task_store
@@ -1526,55 +1526,103 @@ def _round_scheduler_fixture(root: str, *, max_task_rounds: int):
         org_settings_store=_FixedOrgSettings(max_task_rounds),
         project_store=projects,
     )
-    task = task_store.create_task(
-        {
-            "title": "Migrate the billing tables",
-            "assignedAgent": "codex",
-            "assignedAgentId": agent["id"],
-            "assigneeUserId": "alice",
-            "ownerUserId": "alice",
-            "projectId": project["id"],
-            "status": "assigned",
-        }
-    )
+    fields = {
+        "title": "Migrate the billing tables",
+        "assignedAgent": "codex",
+        "assignedAgentId": agent["id"],
+        "assigneeUserId": "alice",
+        "ownerUserId": "alice",
+        "projectId": project["id"],
+        "status": "assigned",
+    }
+    if automation:
+        routine = task_store.create_task({**fields, "isRoutine": True, "routineState": "active"})
+        task = task_store.create_triggered_occurrence(
+            routine["id"], run_date="2026-10-13", trigger_kind="schedule", depth=0,
+            context="---\nTrigger context\nFired by: Schedule\n- Schedule: Daily at 09:00 (UTC)",
+        )
+        assert task and task["sourceRoutineId"] == routine["id"]
+    else:
+        task = task_store.create_task(fields)
     return task_store, registry, scheduler, task
 
 
 def _report_round(registry, command, status: str) -> None:
+    event_fields = {
+        "commandId": command["id"],
+        "sessionId": command["sessionId"],
+        "runId": command["runId"],
+        "agent": command["agent"],
+        "leaseId": command["leaseId"],
+    }
+    registry.handle_event("sbx_alice", {"type": "run.executing", **event_fields}, "node_token")
     registry.handle_event(
         "sbx_alice",
         {
             "type": "run.completed",
-            "commandId": command["id"],
-            "sessionId": command["sessionId"],
-            "runId": command["runId"],
-            "agent": "codex",
+            **event_fields,
             "exitCode": 0,
-            "agentLog": "worked",
+            "agentLog": '{"type":"item.completed","item":{"type":"agent_message","text":"Worked on the migration."}}',
             "roundResult": {"status": status, "note": "more to do"},
         },
         "node_token",
     )
 
 
-def test_scheduler_runs_a_second_round_in_the_same_thread() -> None:
+@pytest.mark.parametrize("automation", [False, True], ids=["task", "automation"])
+@pytest.mark.parametrize("update", ["none", "task-edit", "follow-up"])
+def test_scheduler_continues_in_the_same_thread_without_a_new_user_message(
+    automation, update,
+) -> None:
+    from relay.sessions.agent_state import initial_agent_state
+    from relay.sessions.controller import SessionController
+
     async def run_flow() -> None:
         with TemporaryDirectory() as root:
             task_store, registry, scheduler, task = _round_scheduler_fixture(
-                root, max_task_rounds=3
+                root, max_task_rounds=3, automation=automation,
             )
 
             assert (await scheduler.tick()).dispatched == 1
             [first] = registry.take_commands("sbx_alice", "node_token")
             _report_round(registry, first, "continue")
+            sid = first["sessionId"]
+            follow_up = None
+            expected_goal = first["state"]["task_goal"]
+            if update == "task-edit":
+                title = f"{task['title']} in staging"
+                task_store.update_task(task["id"], {"title": title})
+                expected_goal = title + expected_goal.removeprefix(task["title"])
+            elif update == "follow-up":
+                follow_up = expected_goal = "Only verify the staging migration"
+                SessionController(registry.store).record_user_message(
+                    sid, follow_up, actor_user_id="alice",
+                )
+                competing = registry.prepare_run_request(
+                    "sbx_alice", sid, follow_up, [{"executorKind": "codex"}],
+                    initial_agent_state(follow_up),
+                )
+                assert (await scheduler.tick()).dispatched == 0
+                waiting = task_store.get_task(task["id"])
+                assert waiting["status"] == "queued"
+                assert waiting["dispatchOutcome"]["code"] == "capacity_exhausted"
+                assert not waiting.get("dispatchClaim")
+                assert registry.cancel_run_request_before_delivery(competing["id"], "Stopped before delivery.")
 
             assert (await scheduler.tick()).dispatched == 1
             [second] = registry.take_commands("sbx_alice", "node_token")
 
             # Same thread, so the second round opens the workspace the first
             # round left behind instead of an empty one.
-            assert second["sessionId"] == first["sessionId"]
+            assert second["sessionId"] == sid
             assert second["runId"] != first["runId"]
+            session = registry.store.get_session(sid)
+            assert [event["text"] for event in session["events"] if event["type"] == "user.message"] == (
+                [follow_up] if follow_up else []
+            )
+            assert second["state"]["task_goal"] == expected_goal
+            context = second["state"].get("prior_conversation", "") + second["state"].get("prior_agent_bridge", "")
+            assert "Worked on the migration." in context
             _report_round(registry, second, "done")
 
             finished = task_store.get_task(task["id"])
@@ -1821,6 +1869,8 @@ def test_queued_project_task_starts_after_delivery(monkeypatch, policy):
             assert (await scheduler.tick()).dispatched == 1
             [continuation] = registry.take_commands("sbx_alice", "node_token")
             assert continuation["sessionId"] == command["sessionId"]
+            session = registry.store.get_session(continuation["sessionId"])
+            assert not any(event["type"] == "user.message" for event in session["events"])
             _report_round(registry, continuation, "done")
             delivery_status = "review" if policy == "human" else "done"
             assert tasks.get_task(task["id"])["status"] == delivery_status

@@ -224,14 +224,14 @@ def latest_user_turn_marker(session: dict[str, Any]) -> tuple[str, int] | None:
     return max(markers) if markers else None
 
 
-def latest_user_turn_text(session: dict[str, Any]) -> str:
+def latest_user_turn_text(session: dict[str, Any], *, fallback_goal: str | None = None) -> str:
     """Return the current prompt using the same turn boundary as continuity."""
     marker = latest_user_turn_marker(session)
     if marker and marker[1] >= 0:
         event = session["events"][marker[1]]
         if event.get("type") == "user.message":
             return event["text"]
-    return session.get("taskGoal") or ""
+    return fallback_goal if fallback_goal is not None else (session.get("taskGoal") or "")
 
 
 def _run_timestamp(run: dict[str, Any]) -> str:
