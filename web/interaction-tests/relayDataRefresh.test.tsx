@@ -2,7 +2,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { RelaySession, SessionSummariesResponse } from "../src/types";
+import { materializeEvents, relayEvent } from "relay-core";
+import type { RelaySession, RelayTaskSummary, SessionSummariesResponse } from "../src/types";
 import { applySessionEvent } from "../src/lib/sessionEvents";
 import { useProjectTaskScope, useTaskCollectionVisible, useTaskListScope } from "../src/hooks/useLocationPathname";
 import { useRelayData } from "../src/hooks/useRelayData";
@@ -202,7 +203,7 @@ it("reconciles new suggestions for the open Thread without refreshing for ordina
   list.mockResolvedValueOnce({ tasks: [], threadTaskContext: { ...context, eventCount: 6, nextSteps: [suggestion] } });
   const view = renderHook(({ session }: { session?: RelaySession }) => {
     const data = useRelayData(undefined, true, true, true, false, undefined, undefined, { threadId: "thread" });
-    return useThreadTaskContext(session, data.threadTaskContext);
+    return useThreadTaskContext(session, data.threadTaskContext, data.tasks);
   }, { wrapper, initialProps: { session: undefined } as { session?: RelaySession } });
   try {
     await waitFor(() => expect(client.isFetching()).toBe(0));
@@ -215,6 +216,54 @@ it("reconciles new suggestions for the open Thread without refreshing for ordina
     expect(view.result.current).toBe(false);
     await waitFor(() => expect(view.result.current).toBe(true));
     expect(list.mock.calls.map(call => call[1]?.threadId)).toEqual(["thread", "thread"]);
+  } finally {
+    view.unmount(); client.clear();
+  }
+});
+
+it("shows an automatic Task as Done when its Thread closes, before polling", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const threadId = "task-thread";
+  const created = relayEvent("session.created", threadId, {
+    workspacePath: "/workspace", taskGoal: "Fix the test", participants: ["human", "codex"],
+  });
+  const started = relayEvent("agent.started", threadId, { agent: "codex", runId: "run" });
+  const running = materializeEvents([created, started]);
+  const task: RelayTaskSummary = {
+    id: "task", title: "Fix the test", description: "", status: "running", priority: "normal",
+    acceptancePolicy: "automatic", linkedSessionIds: [threadId], createdAt: created.timestamp,
+    updatedAt: started.timestamp, activityCount: 0, eventCount: 3,
+  };
+  const context = { threadId, eventCount: 2, activeTaskId: null, nextSteps: [] };
+  const list = vi.mocked(listTasks).mockClear();
+  list.mockResolvedValueOnce({ tasks: [task], threadTaskContext: context });
+  const view = renderHook(({ session }: { session: RelaySession }) => {
+    const data = useRelayData(undefined, true, true, true, false, undefined, undefined, { threadId });
+    useThreadTaskContext(session, data.threadTaskContext, data.tasks);
+    return data.tasks[0]?.status;
+  }, { wrapper, initialProps: { session: running } });
+  try {
+    await waitFor(() => expect(view.result.current).toBe("running"));
+    const agentExited = applySessionEvent(running, relayEvent("agent.completed", threadId, {
+      agent: "codex", runId: "run", status: "completed", exitCode: 0,
+    }));
+    view.rerender({ session: agentExited });
+    await act(async () => {});
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(view.result.current).toBe("running");
+
+    list.mockResolvedValueOnce({
+      tasks: [{ ...task, status: "done", eventCount: 4 }],
+      threadTaskContext: { ...context, eventCount: 4 },
+    });
+    const closed = applySessionEvent(agentExited, relayEvent("session.completed", threadId, { outcome: "Done" }));
+    const tail = { ...closed, eventStart: 2, events: closed.events.slice(2) };
+    view.rerender({ session: tail });
+    await waitFor(() => expect(view.result.current).toBe("done"));
+    view.rerender({ session: applySessionEvent(tail, relayEvent("session.renamed", threadId, { title: "Renamed" })) });
+    await act(async () => {});
+    expect(list.mock.calls.map(call => call[1]?.threadId)).toEqual([threadId, threadId]);
   } finally {
     view.unmount(); client.clear();
   }

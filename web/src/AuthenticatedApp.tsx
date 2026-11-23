@@ -280,7 +280,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     }),
     [activeSessionId, composingNew, myThreads, selectedSessionId, requestedSessionId, openingRoute?.route, openingComputerId, openingProjectId, runtimeNodes],
   );
-  const threadTasksCurrent = useThreadTaskContext(activeSession, threadTaskContext);
+  const threadTasksCurrent = useThreadTaskContext(activeSession, threadTaskContext, tasks);
   const space = useThreadSpace(activeSession?.id);
   const targetComputerId = openingRoute?.computerId ?? projects.find(project => project.id === openingRoute?.projectId)?.computerId;
   const threadTargetNodes = useMemo(() => targetComputerId ? runtimeNodes.filter(node => stableComputerId(node) === targetComputerId) : runtimeNodes,
