@@ -45,7 +45,9 @@
 .message-queue-glyph { color: var(--ink-4); }
 
 .message-queue-text {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
   width: 100%;
   min-width: 0;
   margin: 0;
@@ -61,6 +63,8 @@
 
 .message-queue-summary {
   display: block;
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -91,9 +95,12 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-1);
-  color: var(--ink-2);
-  font: var(--type-body);
+  padding: var(--sp-1) var(--sp-1) var(--sp-2);
+  margin-bottom: var(--sp-1);
+  border-bottom: var(--hairline);
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 .message-queue-error { margin: var(--sp-2); color: var(--ink-1); font: var(--type-body); overflow-wrap: anywhere; }
 @media (pointer: coarse) {
@@ -102,13 +109,69 @@
 }
 
 .message-queue-content { min-width: 0; }
+
+/* Recipient pills sit on the message's own line, ahead of the text — "to
+   whom" then "what", the way the draft reads with its @mentions. The same
+   achromatic ink wash as the composer's mention pill: the palette keeps its
+   one hue for live work. */
+.message-queue-recipients {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  max-width: 55%;
+}
+
 .message-queue-recipient {
-  display: block;
-  overflow: hidden;
-  color: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+  height: calc(var(--control-h-xs) - var(--sp-1) * 2);
+  padding-inline: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--control-fill-hover);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
+  color: var(--ink-1);
   font: var(--type-meta);
-  text-overflow: ellipsis;
+  font-weight: 500;
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
+}
+
+.message-queue-recipient[data-room],
+.message-queue-recipient[data-overflow] { padding-inline: var(--sp-2); color: var(--ink-2); }
+.message-queue-recipient[data-overflow] { flex: none; font-variant-numeric: tabular-nums; }
+
+.message-queue-recipient[data-unavailable] {
+  padding-inline: var(--sp-2);
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+}
+
+.message-queue-recipient-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border-radius: var(--r-full);
+  background: var(--surface-0);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
+  color: var(--ink-1);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.message-queue-recipient-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .message-queue-preview { grid-column: 2 / -1; min-width: 0; padding-block: var(--sp-2); }
 .message-queue-preview p {

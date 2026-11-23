@@ -3,6 +3,10 @@ import { useTranslation } from "react-i18next";
 import type { QueuedMessage } from "../../lib/threadQueue";
 import { Button } from "@/components/ui/button";
 import { ActionFollowUp, ActionRemove, ICON } from "../icons";
+import { identityMonogram } from "../../lib/identity";
+
+/** Pills before the rest fold into a "+N" chip, so the message text keeps the row. */
+const MAX_RECIPIENT_PILLS = 2;
 
 /** Future instructions stay on the composer; inspecting them never changes their schedule. */
 export function MessageQueue({ messages, running, pending, paused, waiting, sending, error, recipientNames = {}, removedAt, onUndo, onResume, onSteer, onEdit, onRemove }: {
@@ -53,7 +57,8 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
         {messages.map((message, index) => {
           const open = expanded === message.id;
           const recipientIds = message.addressTeamId ? [message.addressTeamId] : message.addressAgentIds ?? [];
-          const recipients = recipientIds.length ? recipientIds.map(id => recipientNames[id] ?? t("queue.recipient_unavailable")).join(t("queue.recipient_separator")) : t("queue.room_recipient");
+          const shown = recipientIds.slice(0, MAX_RECIPIENT_PILLS);
+          const overflow = recipientIds.slice(MAX_RECIPIENT_PILLS).map(id => recipientNames[id] ?? t("queue.recipient_unavailable"));
           const previewId = `${regionId}-${index}`;
           return (
             <li key={message.id} className="message-queue-item" data-expanded={open || undefined}>
@@ -63,8 +68,25 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
                   aria-controls={open ? previewId : undefined}
                   aria-label={`${t(open ? "queue.collapse_item" : "queue.preview_item", { number: index + 1 })}: ${message.text}`}
                   onClick={() => setExpanded(open ? null : message.id)}>
-                  {recipients ? <span className="message-queue-recipient">{recipients}</span> : null}
-                  <span className="message-queue-summary">{open ? t("queue.collapse_item", { number: index + 1 }) : message.text}</span>
+                  <span className="message-queue-recipients">
+                    {shown.length ? shown.map(id => {
+                      const name = recipientNames[id];
+                      return (
+                        <span key={id} className="message-queue-recipient" data-unavailable={name ? undefined : true}>
+                          {name ? <span className="message-queue-recipient-mark" aria-hidden="true">{identityMonogram(name)}</span> : null}
+                          <span className="message-queue-recipient-name">{name ?? t("queue.recipient_unavailable")}</span>
+                        </span>
+                      );
+                    }) : (
+                      <span className="message-queue-recipient" data-room>
+                        <span className="message-queue-recipient-name">{t("queue.room_recipient")}</span>
+                      </span>
+                    )}
+                    {overflow.length ? <span className="message-queue-recipient" data-overflow title={overflow.join(t("queue.recipient_separator"))}>
+                      +{overflow.length}
+                    </span> : null}
+                  </span>
+                  <span className="message-queue-summary" dir="auto">{open ? t("queue.collapse_item", { number: index + 1 }) : message.text}</span>
                 </button>
               </div>
               <div className="message-queue-actions">
