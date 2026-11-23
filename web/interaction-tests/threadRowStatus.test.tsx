@@ -144,6 +144,18 @@ it("names the running agent, never its executor kind", () => {
   expect(unnamed.querySelector(".conversation-status")?.textContent).toBe("thread.group_running");
 });
 
+it("hides the selected row's working label while the transcript shows startup", () => {
+  const item: ThreadItem = { session: session("active", "running"), runningAgentName: "Ada" };
+  const row = (runStartingInTranscript: boolean) => (
+    <ul><ThreadRow item={item} tone="run" selected onSelect={vi.fn()} now={0} runStartingInTranscript={runStartingInTranscript} /></ul>
+  );
+  const { rerender } = render(row(true));
+  expect(screen.queryByText("thread.agent_working:Ada")).toBeNull();
+  expect(screen.getByRole("button", { name: /Thread active/ })).toBeTruthy();
+  rerender(row(false));
+  expect(screen.getByText("thread.agent_working:Ada")).toBeTruthy();
+});
+
 it.each(["completed", "cancelled", "failed"])("gives a settled standalone %s conversation its own badge", (status) => {
   const container = renderRow({ session: session("chat", status, { execution: { phase: "terminal" } as never }) }, "idle");
   expect(container.querySelector(".task-status-icon")).toBeNull();

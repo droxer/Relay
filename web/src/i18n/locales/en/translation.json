@@ -553,8 +553,8 @@
       "tokens_unreported": "Tokens not reported",
       "runtime": "Runtime"
     },
-    "run_starting_on": "Starting on {{computer}}. Output appears here as soon as the agent begins.",
-    "run_starting": "Starting the run. Output appears here as soon as the agent begins.",
+    "run_starting_on": "Starting on {{computer}}…",
+    "run_starting": "Starting…",
     "group_queued": "Queued",
     "queued_for": "Queued · {{duration}}",
     "queued_offline": "Queued · computer offline",

@@ -69,6 +69,7 @@ export function ThreadListPanel({
   kindFilter,
   onKindFilterChange,
   selectedSessionId,
+  selectedRunStarting,
   selectedProjectId,
   listOnScreen,
   onSelectThread,
@@ -105,6 +106,7 @@ export function ThreadListPanel({
   kindFilter: ThreadKindFilter;
   onKindFilterChange: (filter: ThreadKindFilter) => void;
   selectedSessionId: string | undefined;
+  selectedRunStarting?: boolean;
   selectedProjectId: string | null;
   /** On a phone, whether this pane is the one showing. A selection outlives
    *  the trip back to the list, so it cannot say. */
@@ -197,6 +199,7 @@ export function ThreadListPanel({
               tone={section.tone}
               layout="full"
               selected={selectedSessionId === item.session.id}
+              runStartingInTranscript={selectedRunStarting && selectedSessionId === item.session.id}
               onSelect={selectThread}
               onRename={renameThread}
               onClose={closeThread}

@@ -1,12 +1,10 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
-import type { RelaySession } from "../types";
-import { deriveHandoffStatus } from "../lib/handoffStatus";
+import type { deriveHandoffStatus } from "../lib/handoffStatus";
 
-export function HandoffStatus({ session }: { session: RelaySession | undefined }) {
+export function HandoffStatus({ handoff }: { handoff: ReturnType<typeof deriveHandoffStatus> }) {
   const { t } = useTranslation();
-  const handoff = deriveHandoffStatus(session);
   if (!handoff) return null;
   return (
     <div className="handoff-panel" role="status" aria-live="polite">

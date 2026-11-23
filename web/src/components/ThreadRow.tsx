@@ -31,6 +31,7 @@ type ThreadTone = "attn" | "run" | "queued" | "idle";
 type ThreadRowProps = {
   item: ThreadItem;
   selected: boolean;
+  runStartingInTranscript?: boolean;
   onSelect: (sessionId: string) => void;
   onRename?: (session: RelaySession) => void;
   onClose?: (sessionId: string) => void;
@@ -51,7 +52,7 @@ type ThreadRowProps = {
 /* Memoized: the rail mounts dozens of rows and its parents re-render for
    reasons no row cares about. Every prop is stable when unchanged — items are
    carried forward by reuseThreadItems, handlers by useStableCallback. */
-export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onRename, onClose, tone: suppliedTone, layout = "full", now }: ThreadRowProps) {
+export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingInTranscript, onSelect, onRename, onClose, tone: suppliedTone, layout = "full", now }: ThreadRowProps) {
   const { t, i18n } = useTranslation();
   /* No hover on touch, so the hover-revealed pencil and cross would sit on
      every row for good — two small targets that cost the title a third of
@@ -142,7 +143,8 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
     : undefined;
   const context = projectName ?? originContext;
   const contextLabel = projectName ? projectLabel : originLabel;
-  const { subline } = threadRowMeta({ layout, hasStatus: Boolean(status), hasContext: Boolean(context) });
+  const visibleStatus = runStartingInTranscript && status?.tone === "run" ? null : status;
+  const { subline } = threadRowMeta({ layout, hasStatus: Boolean(visibleStatus), hasContext: Boolean(context) });
 
   function handleClose() {
     onClose?.(session.id);
@@ -170,7 +172,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             {hasLifecycle ? <TaskStatusIcon status={iconStatus} />
               /* A chat whose subline states its status keeps only the badge's
                  tinted mark: spelling it twice cost the title its width. */
-              : <ThreadStatusBadge session={session} reading={reading} compact iconOnly={Boolean(subline && status)} />}
+              : <ThreadStatusBadge session={session} reading={reading} compact iconOnly={Boolean(status && (subline || !visibleStatus))} />}
             <span className="conversation-name">
               {item.origin ? (
                 /* An automation run carries the Automations nav glyph on its
@@ -200,8 +202,8 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, onSelect, onR
             /* One muted line of words: status first, then where the work
                lives. The tone is drawn once, by the title's status icon. */
             <span className="conversation-subline">
-              {status ? (
-                <span className="conversation-status" data-tone={status.tone}>{status.text}</span>
+              {visibleStatus ? (
+                <span className="conversation-status" data-tone={visibleStatus.tone}>{visibleStatus.text}</span>
               ) : null}
               {context ? (
                 <span
