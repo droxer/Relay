@@ -18,7 +18,7 @@ def start(client, payload):
 
 
 def decision(session, kind):
-    run = session["workflowRuns"][0]
+    run = session["workflowRuns"][-1]  # the live run; a Task started again appends one
     step = run["assignments"][run["currentIndex"]]
     return {**{key: step[key] for key in ("workflowRunId", "workflowStepId", "workflowAttempt", "assignmentId")},
             "kind": kind, "expectedRevision": run["revision"]}

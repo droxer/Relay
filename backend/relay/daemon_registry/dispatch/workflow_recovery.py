@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...collaboration.workflow_events import current_workflow_run
 from ...persistence.events import relay_event
 from ...persistence.resource_lock import resource_transaction
 from ..state import RegistryState
@@ -18,7 +19,7 @@ class WorkflowRecoveryMixin(RegistryState):
             session = self.store.get_session(sid)
             if not session.get("workflowRuns"):
                 raise ValueError("workflow_run_missing")
-            run = session["workflowRuns"][0]
+            run = current_workflow_run(session)
             request = self.daemon_store.get_run_request(workflow_request_id(run))
             if not request or request["sessionId"] != sid or request["assignments"] != run["assignments"]:
                 raise ValueError("workflow_request_mismatch")
@@ -31,7 +32,7 @@ class WorkflowRecoveryMixin(RegistryState):
                 ) or self.daemon_store.list_active_runs(session_ids={sid}):
                     raise ValueError("workflow_exit_evidence_required")
                 session = self.store.append_event(sid, relay_event("workflow.recovery_decided", sid, decision))
-                run = session["workflowRuns"][0]
+                run = current_workflow_run(session)
                 self.daemon_store.update_run_request(request["id"], {
                     "assignments": run["assignments"],
                     "state": workflow_request_state(run, request),

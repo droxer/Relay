@@ -44,6 +44,18 @@ export interface AgentState {
   agent_model?: string;
   /** Resume this runtime conversation instead of starting a new one. */
   resume_session_id?: string;
+  /**
+   * Why the conversation resumes: `interrupted` (the default) retries a run
+   * that was cut off; `continue` is this agent's next turn in the same thread,
+   * which reads `resume_prior_conversation` in place of the full transcript.
+   */
+  resume_mode?: "interrupted" | "continue";
+  /**
+   * What happened in the thread after the resumed conversation's last turn.
+   * Only a `continue` resume reads it; a resume that falls back to a fresh
+   * conversation reads `prior_conversation` and the bridge instead.
+   */
+  resume_prior_conversation?: string;
   /** The runtime conversation this run used, as reported by its CLI. */
   runtime_session_id?: string;
   /** The job this run is doing within its team, e.g. "reviewer". */

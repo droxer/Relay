@@ -73,17 +73,17 @@ def dispatch_task_workflow(
             if not claimed:
                 return _result(ctx.task_store.get_task(task["id"]), "queued", code="dispatch_in_progress")
             claim_id = claimed["dispatchClaim"]["id"]
-            sid = str(uuid5(NAMESPACE_URL, "relay.task-workflow.v1:" + claim_id))
-            assignments = compile_workflow(team, roster, run_id=sid)
-            session = registry.stage_workflow_gate({
-                "id": sid, "ownerUserId": owner, "teamId": task.get("assignedTeamId"),
+            run_id = str(uuid5(NAMESPACE_URL, "relay.task-workflow.v1:" + claim_id))
+            session = registry.stage_workflow_gate({  # continues the Task's own thread when it fits
+                "id": run_id, "ownerUserId": owner, "teamId": task.get("assignedTeamId"),
                 "projectId": project["id"], "computerId": project["computerId"],
                 "workspacePath": node.get("workspacePath") or "/workspace",
                 "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
                 "taskGoal": task_goal_text(task),
-            }, assignments, task=claimed)
+            }, compile_workflow(team, roster, run_id=run_id), task=claimed, continue_thread=True)
+            sid = session["id"]
             ctx.task_store.link_session(task["id"], sid)
-            if session["workflowRuns"][0]["status"] == "ready":
+            if session["workflowRuns"][-1]["status"] == "ready":
                 session = registry.admit_workflow_first_step(sid)
             else:
                 request = registry.daemon_store.active_run_request_for_task(task["id"])

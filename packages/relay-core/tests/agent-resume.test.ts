@@ -18,6 +18,39 @@ test("a resumed run asks the CLI for its own session back", () => {
   assert.match(buildClaudeCommand(resuming), /interrupted/);
 });
 
+const continuing = {
+  ...resuming,
+  resume_mode: "continue" as const,
+  prior_conversation: "[Conversation so far]\n\n[User]\nthe whole history",
+  prior_agent_bridge: "[Previous from @codex]\nthe bridge",
+  resume_prior_conversation: "[Since your last turn in this thread]\n\n[User]\na note in between",
+};
+
+test("a continued turn reads only what happened since, inside its own conversation", () => {
+  const command = buildClaudeCommand(continuing);
+  assert.match(command, new RegExp(`'--resume' '${SESSION}'|--resume ${SESSION}`));
+  assert.match(command, /Continued conversation/);
+  assert.doesNotMatch(command, /interrupted/);
+  assert.match(command, /a note in between/);
+  // The resumed conversation already holds these; repeating them doubles the context.
+  assert.doesNotMatch(command, /the whole history/);
+  assert.doesNotMatch(command, /the bridge/);
+});
+
+test("a continued turn whose conversation is gone falls back to the full transcript", async () => {
+  const commands: string[] = [];
+  await runAgentNode("claude", continuing, { execStream: async (_cmd, args: string[] = []) => {
+    const command = args.join(" ");
+    commands.push(command);
+    if (command.includes("--resume")) return { exit_code: 1, stdout: "", stderr: "No conversation found" };
+    return { exit_code: 0, stdout: "", stderr: "" };
+  } });
+  assert.equal(commands.length, 2);
+  assert.match(commands[1]!, /the whole history/);
+  assert.match(commands[1]!, /the bridge/);
+  assert.doesNotMatch(commands[1]!, /Continued conversation/);
+});
+
 test("a fresh run and a runtime without resume support never resume", () => {
   const fresh = initialAgentState("task");
   assert.doesNotMatch(buildClaudeCommand(fresh), /--resume/);

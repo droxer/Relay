@@ -12,6 +12,7 @@ from ...core.workflow_selection import predefined_style
 from ...collaboration.models import RunIntent
 from ...collaboration.service import CollaborationConductor
 from ...collaboration.errors import CollaborationError
+from ...collaboration.workflow_events import current_workflow_run
 from .workflows import owned_workflow_team
 
 from ...agents.routing import resolve_agent_assignments
@@ -96,7 +97,7 @@ def stage_workflow_gate(
             if existing is not None:
                 if existing.get("ownerUserId") != owner or existing.get("teamId") != team_id or existing.get("taskGoal") != goal:
                     raise ValueError("workflow_request_conflict")
-                if existing["workflowRuns"][0]["status"] == "ready" and existing.get("status") not in ("completed", "failed", "cancelled"):
+                if current_workflow_run(existing)["status"] == "ready" and existing.get("status") not in ("completed", "failed", "cancelled"):
                     return ctx.registry.admit_workflow_first_step(
                         session_id, validate=lambda snapshot: validate_workflow_write(ctx, owner, snapshot),
                     )
@@ -120,7 +121,7 @@ def stage_workflow_gate(
                 "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
                 "taskGoal": goal,
             }, assignments)
-            if session["workflowRuns"][0]["status"] == "ready" and session.get("status") not in ("completed", "failed", "cancelled"):
+            if current_workflow_run(session)["status"] == "ready" and session.get("status") not in ("completed", "failed", "cancelled"):
                 return ctx.registry.admit_workflow_first_step(
                     session["id"], validate=lambda snapshot: validate_workflow_write(ctx, owner, snapshot),
                 )

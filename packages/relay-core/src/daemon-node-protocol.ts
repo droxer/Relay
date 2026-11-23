@@ -80,7 +80,7 @@ export const DAEMON_NODE_SUPPORTED_PROTOCOL_VERSIONS: readonly number[] = [2, 1]
  * in its run.completed event, so the backend never has to walk the workspace
  * itself (which only works when they share a filesystem).
  */
-export type DaemonNodeCapability = "native-runtime-startup" | "durable-output-ack" | "durable-reports" | "report-cleanup" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "workspace-list-thread-records" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope" | "live-messages";
+export type DaemonNodeCapability = "native-runtime-startup" | "durable-output-ack" | "durable-reports" | "report-cleanup" | "service-connections" | "image-attachments" | "runtime-refresh" | "generated-files" | "workspace-read-shared" | "workspace-list-thread-records" | "structured-agent-events" | "thread-workspaces" | "project-workspaces" | "project-workspace-delete" | "task-workspaces" | "round-result" | "workflow-results" | "work-results" | "direct-delegation" | "project-manager" | "project-manager-mcp" | "project-reader-mcp" | "relay-work-mcp" | "produced-files" | "handoff-validation" | "agent-skills" | "agent-model" | "endpoint-models" | "execution-journal-report" | "agent-resume" | "agent-continue" | "project-setup" | "project-links" | "artifact-layout" | "dot-thread-records" | "relay-thread-records" | "workspace-scope" | "project-workspace-scope" | "live-messages";
 /** Waits for backend output receipts with a 60s default drain budget and durable replay. */
 export const DAEMON_CAPABILITY_DURABLE_OUTPUT_ACK: DaemonNodeCapability = "durable-output-ack";
 export const DAEMON_CAPABILITY_DURABLE_REPORTS: DaemonNodeCapability = "durable-reports";
@@ -149,6 +149,13 @@ export const DAEMON_CAPABILITY_WORKFLOW_RESULTS: DaemonNodeCapability = "workflo
 export const DAEMON_CAPABILITY_EXECUTION_JOURNAL_REPORT: DaemonNodeCapability = "execution-journal-report";
 /** Terminal events carry `runtimeSessionId`, and `AgentState.resume_session_id` resumes it. */
 export const DAEMON_CAPABILITY_AGENT_RESUME: DaemonNodeCapability = "agent-resume";
+/**
+ * The daemon honours `AgentState.resume_mode: "continue"`: an agent's next turn
+ * in a thread resumes its own runtime conversation and reads only what happened
+ * since (`resume_prior_conversation`). Optional: without it the backend replays
+ * the full transcript into a fresh conversation, as before.
+ */
+export const DAEMON_CAPABILITY_AGENT_CONTINUE: DaemonNodeCapability = "agent-continue";
 /**
  * The daemon understands `run.steer`: it hands a message to a live run through
  * the run's runtime adapter and answers `run.steered`. A run without such a

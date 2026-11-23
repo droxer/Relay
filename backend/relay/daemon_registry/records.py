@@ -403,17 +403,53 @@ def resumable_runtime_session(
     Only the same logical agent (or, for legacy runs, the same executor) may
     resume it; a different agent never inherits another's conversation.
     """
+    run = _latest_run_of_agent(session, assignment)
+    return run.get("runtimeSessionId") if run else None
+
+
+_SETTLED_RUN_STATUSES = frozenset({"completed", "failed", "cancelled"})
+
+
+def _latest_run_of_agent(
+    session: dict[str, Any], assignment: dict[str, Any]
+) -> dict[str, Any] | None:
+    """This agent's newest run in the thread, if it ran on the same runtime.
+
+    A conversation belongs to one runtime: an agent since switched from Codex
+    to Claude cannot pick up its Codex thread, so it starts afresh.
+    """
     agent_id = assignment.get("agentId")
+    executor = assignment.get("executorKind")
     for run in reversed(session.get("agentRuns") or []):
-        same_agent = (
-            run.get("logicalAgentId") == agent_id
-            if agent_id
-            else run.get("agent") == assignment.get("executorKind")
-        )
+        same_agent = run.get("logicalAgentId") == agent_id if agent_id else run.get("agent") == executor
         if not same_agent:
             continue
-        return run.get("runtimeSessionId")
+        if executor and run.get("agent") != executor:
+            return None
+        return run
     return None
+
+
+def continuable_run(
+    session: dict[str, Any], assignment: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The finished run whose runtime conversation this agent's next turn continues.
+
+    Only the agent's newest run counts: an older conversation would miss what
+    the newest one did. It must have settled (a run still going cannot be
+    resumed beside itself), reported its conversation, and — where both say —
+    ran in the same placement, since a conversation lives on the computer
+    that held it.
+    """
+    run = _latest_run_of_agent(session, assignment)
+    if not run or run.get("status") not in _SETTLED_RUN_STATUSES:
+        return None
+    if not run.get("runtimeSessionId"):
+        return None
+    placement = assignment.get("placementId")
+    if placement and run.get("placementId") and run["placementId"] != placement:
+        return None
+    return run
 
 
 def daemon_active_run(run: dict[str, Any]) -> dict[str, Any]:

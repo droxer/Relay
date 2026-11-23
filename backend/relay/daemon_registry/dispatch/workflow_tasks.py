@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ...collaboration.workflow_events import current_workflow_run
 from ...core.human_waits import question_id_for_run, wait_record
 from ...sessions.controller import SessionController
 from ...tasks.execution import request_execution_owner
@@ -21,7 +22,7 @@ def assert_workflow_task_owner(registry: RegistryState, request: dict[str, Any],
         or task.get("projectId") != session.get("projectId")
         or task.get("assignedTeamId") != session.get("teamId")
         or (task.get("assignedWorkflowId") is not None and task["assignedWorkflowId"] !=
-            (session["workflowRuns"][0]["teamSnapshot"].get("workflowId") or session.get("teamId")))
+            (current_workflow_run(session)["teamSnapshot"].get("workflowId") or session.get("teamId")))
         or session["id"] not in task.get("linkedSessionIds", [])):
         raise ValueError("task_ownership_changed: workflow no longer owns this task")
 
@@ -29,7 +30,7 @@ def assert_workflow_task_owner(registry: RegistryState, request: dict[str, Any],
 def sync_workflow_task(registry: RegistryState, request: dict[str, Any], session: dict[str, Any]) -> None:
     if not request.get("taskId") or not registry.task_store:
         return
-    run = session["workflowRuns"][0]
+    run = current_workflow_run(session)
     status = {"completed": "done", "cancelled": "cancelled", "blocked": "blocked",
               "awaiting_approval": "waiting_for_human", "awaiting_input": "waiting_for_human",
               "ready": "assigned"}[run["status"]]

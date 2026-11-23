@@ -22,6 +22,29 @@ from .workflow_compilation import workflow_work_graph, retry_workflow_assignment
 from .workflow_results import workflow_step_result
 
 
+def active_workflow_run(session: dict[str, Any]) -> dict[str, Any] | None:
+    """The thread's current workflow run.
+
+    A thread can hold several runs — a Task's workflow started again continues
+    in its own thread — but only the newest is ever live: a run starts only
+    once every earlier one has settled.
+    """
+    runs = session.get("workflowRuns") or []
+    active_id = session.get("activeWorkflowRunId")
+    return next(
+        (run for run in reversed(runs) if run.get("workflowRunId") == active_id),
+        runs[-1] if runs else None,
+    )
+
+
+def current_workflow_run(session: dict[str, Any]) -> dict[str, Any]:
+    """The active run of a thread that must hold one."""
+    run = active_workflow_run(session)
+    if run is None:
+        raise ValueError("workflow_run_missing")
+    return run
+
+
 def _assert_session_open(session: dict[str, Any], event: dict[str, Any]) -> None:
     if event.get("sessionId") != session["id"]:
         raise ValueError("workflow_session_mismatch")
@@ -64,6 +87,9 @@ def apply_workflow_started(session: dict[str, Any], event: dict[str, Any]) -> No
         "assignments": assignments, "currentIndex": 0, "revision": 0,
         "status": "awaiting_approval" if assignments[0]["awaitApproval"] else "ready",
         "gateDecisions": [], "startedAt": event["timestamp"],
+        # A later run in the same thread may carry a re-worded Task goal; the
+        # first run's goal is the thread's own.
+        **({"taskGoal": event["taskGoal"]} if isinstance(event.get("taskGoal"), str) else {}),
     }
     session["workflowRuns"] = [*runs, run]
     session["activeWorkflowRunId"] = run_id
