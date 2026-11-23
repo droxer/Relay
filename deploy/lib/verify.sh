@@ -65,18 +65,45 @@ verify_edge_cache() {
   esac
 }
 
-# Worker assets come from Cloudflare's asset store, not the zone cache, so
-# there is no cf-cache-status to read; check what the Worker promises instead.
+# Workers Static Assets report their own cache status. Repeat a cold GET once
+# and include each edge location since consecutive requests can reach different colos.
 verify_worker_assets() {
-  local cache_control
-  cache_control=$(curl -sS -I --max-time 30 "$WEB_ORIGIN$1" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1) == "cache-control" {print $2}')
-  case $cache_control in
-    *immutable*) info "ok    static assets are served immutable from the Worker" ;;
-    *)
+  local attempt headers code cache_control status ray colo observation previous=
+  for attempt in 1 2; do
+    headers=$(curl -sS -D - -o /dev/null --max-time 30 "$WEB_ORIGIN$1" 2>/dev/null) || headers=
+    IFS='|' read -r code cache_control status ray <<< "$(awk '
+      { sub(/\r$/, "") }
+      /^HTTP\// { code = $2; cache_control = status = ray = "" }
+      tolower($0) ~ /^cache-control:/ {
+        sub(/^[^:]+:[[:space:]]*/, "")
+        cache_control = cache_control ? cache_control ", " $0 : $0
+      }
+      tolower($0) ~ /^cf-cache-status:/ { status = $2 }
+      tolower($0) ~ /^cf-ray:/ { ray = $2 }
+      END { print code "|" tolower(cache_control) "|" status "|" ray }
+    ' <<< "$headers")"
+
+    if [ "$code" != 200 ]; then
+      expect_code "Worker static asset" 200 "${code:-000}"
+      break
+    fi
+    if ! [[ $cache_control =~ (^|,)[[:space:]]*immutable[[:space:]]*(,|$) ]]; then
       info "FAIL  static asset Cache-Control is '${cache_control:-missing}', expected immutable (check deploy/workers/_headers)"
       VERIFY_FAILURES=$((VERIFY_FAILURES + 1))
-      ;;
-  esac
+      break
+    fi
+
+    colo=${ray##*-}
+    observation="${status:-missing} (${colo:-unknown edge})"
+    if [ "$status" = HIT ]; then
+      info "ok    Worker static asset CF-Cache-Status: ${previous:+$previous -> }$observation"
+      break
+    fi
+    if [ "$attempt" -eq 2 ]; then
+      warn "Worker static asset CF-Cache-Status: $previous -> $observation, expected HIT once the edge is warm"
+    fi
+    previous=$observation
+  done
   expect_code "a missing asset is a 404, not the app shell" 404 "$(http_code "$WEB_ORIGIN/_next/static/relay-verify-missing.js")"
 }
 
