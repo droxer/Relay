@@ -102,7 +102,10 @@ function install(options: InstallOptions): string[] {
         if (existsSync(path) && (!manifest[key] || digest(readFileSync(path, 'utf8')) !== manifest[key])) conflict(path, serverName);
         privateWrite(path, source); manifest[key] = digest(source); privateWrite(manifestPath, JSON.stringify(manifest, null, 2)); installed.push(runtime); continue;
       } else continue;
-      const text = existsSync(path) ? readFileSync(path, 'utf8') : '{}\n'; const config = json(text, path);
+      const existing = existsSync(path) ? readFileSync(path, 'utf8') : '{}\n';
+      // agy treats an empty MCP config as having no configured servers.
+      const text = runtime === 'antigravity' && !existing.trim() ? '{}\n' : existing;
+      const config = json(text, path);
       const current = config[keys[0]!]?.[keys[1]!]; const key = `${path}:${serverName}`;
       if (current !== undefined && (!manifest[key] || digest(current) !== manifest[key])) conflict(path, serverName);
       privateWrite(path, applyEdits(text, modify(text, keys, entry, { formattingOptions: { insertSpaces: true, tabSize: 2 } })));

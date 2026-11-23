@@ -56,6 +56,26 @@ export async function runAgentNode(
     const sessionStream = new RuntimeSessionStream(agent);
     const renderer = def.createRenderer();
     let sawStdout = false;
+    // Keep an unconfirmed resume out of the Thread until it reaches its
+    // session or becomes the final attempt. The command log still sees it.
+    let pendingOutput: Array<{ stream: "stdout" | "stderr"; text: string }> | undefined =
+      runState.resume_session_id && runId && options.eventSink ? [] : undefined;
+    let remaining = agentTranscriptLimit();
+    const publishOutput = (stream: "stdout" | "stderr", text: string): void => {
+      if (runId) options.eventSink?.agentOutput(runId, agent, stream, text);
+    };
+    const flushPendingOutput = (): void => {
+      for (const entry of pendingOutput ?? []) publishOutput(entry.stream, entry.text);
+      pendingOutput = undefined;
+    };
+    const recordOutput = (stream: "stdout" | "stderr", chunk: string): void => {
+      if (!pendingOutput) return publishOutput(stream, chunk);
+      if (chunk && remaining > 0) {
+        const text = chunk.slice(0, remaining);
+        pendingOutput.push({ stream, text });
+        remaining -= text.length;
+      }
+    };
     if (options.onRuntimeStarted) {
       const readyTypes = agent === "codex" ? ["turn.started"]
         : ["relay.runtime.started", "step_start", "text", "reasoning", "tool_use"];
@@ -73,8 +93,9 @@ export async function runAgentNode(
       stdoutRenderer: (chunk) => {
         sawStdout ||= Boolean(chunk);
         sessionStream.feed(chunk);
+        if (pendingOutput && chunk.includes("\n") && sessionStream.finish()) flushPendingOutput();
         startup?.feed(chunk);
-        if (runId) options.eventSink?.agentOutput(runId, agent, "stdout", chunk);
+        recordOutput("stdout", chunk);
         if (runId && collaborationStream && options.eventSink?.agentCollaboration) {
           for (const event of collaborationStream.feed(chunk)) {
             options.eventSink.agentCollaboration(runId, agent, event);
@@ -83,7 +104,7 @@ export async function runAgentNode(
         return renderer.feed(chunk);
       },
       stderrRenderer: (chunk) => {
-        if (runId) options.eventSink?.agentOutput(runId, agent, "stderr", chunk);
+        recordOutput("stderr", chunk);
         return stderrRenderer.feed(chunk);
       },
       sink: options.sink,
@@ -98,15 +119,17 @@ export async function runAgentNode(
       const failure = renderer.runFailure();
       if (failure) result = { ...result, exit_code: 1, error_message: result.error_message ?? failure };
     }
-    return { result, runtimeSessionId: sessionStream.finish() ?? extractRuntimeSessionId(result.stdout, agent) };
+    return { result, runtimeSessionId: sessionStream.finish() ?? extractRuntimeSessionId(result.stdout, agent), flushPendingOutput };
   };
-  let { result, runtimeSessionId } = await run(state);
+  let attempt = await run(state);
   // A resume that never reached its conversation (pruned, or recorded on
   // another computer) did no work, so the run starts fresh instead of failing.
-  if (state.resume_session_id && result.exit_code !== 0 && !runtimeSessionId && !options.signal?.aborted) {
+  if (state.resume_session_id && attempt.result.exit_code !== 0 && !attempt.runtimeSessionId && !options.signal?.aborted) {
     const { resume_session_id: _dropped, ...fresh } = state;
-    ({ result, runtimeSessionId } = await run(fresh));
+    attempt = await run(fresh);
   }
+  attempt.flushPendingOutput();
+  const { result, runtimeSessionId } = attempt;
   const tokenUsage = extractTokenUsageFromJsonl(result.stdout, agent);
 
   return {

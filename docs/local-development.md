@@ -22,7 +22,7 @@ service commands, data layout, and test organization.
 | Backend | [FastAPI](https://github.com/fastapi/fastapi), [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy), [Pydantic](https://github.com/pydantic/pydantic), [Alembic](https://github.com/sqlalchemy/alembic), [uv](https://github.com/astral-sh/uv) |
 | Web | [Next.js](https://github.com/vercel/next.js), [React](https://github.com/facebook/react), [Tailwind CSS](https://github.com/tailwindlabs/tailwindcss), [TanStack Query](https://github.com/TanStack/query), [Zustand](https://github.com/pmndrs/zustand) |
 | Sandboxing | [BoxLite](https://github.com/boxlite-ai/boxlite) |
-| Agents | Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, [OpenCode](https://opencode.ai) |
+| Agents | Codex, [Claude Code](https://github.com/anthropics/claude-code), Pi, [OpenCode](https://opencode.ai), [Google Antigravity CLI](https://antigravity.google/docs/cli/) |
 
 ## Environment Files
 

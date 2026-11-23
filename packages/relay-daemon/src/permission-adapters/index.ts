@@ -3,6 +3,7 @@
 // except Pi's, which `pi` itself loads with `--extension`.
 import { fileURLToPath } from "node:url";
 import type { PermissionPromptAdapter, PermissionPromptLaunch } from "relay-core";
+import { stageAntigravityAcp } from "./antigravity-guest.js";
 
 const ADAPTER_SCRIPTS: Record<PermissionPromptAdapter, string> = {
   "claude-mcp": "./claude-mcp.js",
@@ -28,4 +29,16 @@ export function permissionAdapterLaunch(
   return adapter === "claude-mcp"
     ? { ...launch, liveLauncher: { command: process.execPath, args: [fileURLToPath(new URL(CLAUDE_LIVE_LAUNCHER, import.meta.url))] } }
     : launch;
+}
+
+const GUEST_ADAPTER_STAGERS: Partial<Record<PermissionPromptAdapter, typeof stageAntigravityAcp>> = {
+  "antigravity-acp": stageAntigravityAcp,
+};
+
+export function stageGuestPermissionAdapter(
+  adapter: PermissionPromptAdapter, ...args: Parameters<typeof stageAntigravityAcp>
+) {
+  const stage = GUEST_ADAPTER_STAGERS[adapter];
+  if (!stage) throw new Error(`Relay cannot stage the ${adapter} adapter in a guest.`);
+  return stage(...args);
 }

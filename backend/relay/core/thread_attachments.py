@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+IMAGE_ATTACHMENT_AGENTS = ("codex", "claude", "antigravity")
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_MESSAGE_IMAGES = 4
 

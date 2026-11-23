@@ -1,6 +1,6 @@
 import type { AgentName } from "relay-core";
 
-/** Read user-level defaults in the execution environment, emitting only a model id.
+/** Read user-level defaults in the execution environment, emitting only the configured model.
  * No catalog ordering or vendor fallback is treated as a configured default.
  * The same Node program runs on native Windows and inside POSIX discovery.
  */
@@ -55,10 +55,14 @@ export function defaultModelDiscoveryScript(agent: AgentName): string {
       model = json(read(path.join(home, '.gemini', 'antigravity-cli', 'settings.json'))).model;
 `,
   };
-  return helpers + "\nlet model;\n" + sources[agent] + String.raw`
+  const emit = agent === "antigravity" ? String.raw`
+  if (typeof model === 'string' && model.length <= 256 && model.trim()) {
+    process.stdout.write('default-model-label\t' + Buffer.from(model.trim()).toString('base64') + '\n');
+  }
+` : String.raw`
   if (typeof model === 'string' && model.length <= 128 && /^[A-Za-z0-9][A-Za-z0-9._:/@[\]+-]*$/.test(model)) {
     process.stdout.write('default-model\t' + Buffer.from(model).toString('base64') + '\n');
   }
-}
 `;
+  return helpers + "\nlet model;\n" + sources[agent] + emit + "}\n";
 }
