@@ -196,7 +196,7 @@ export const AGENT_REGISTRY: Record<AgentName, AgentDefinition> = {
     skillDelivery: { kind: "prompt-paths" },
     permissionPrompts: { kind: "adapter", adapter: "antigravity-acp" },
     adapterRequiredForExecution: true,
-    liveMessages: { kind: "none" },
+    liveMessages: { kind: "adapter", delivery: "steer" },
     preflight: {
       label: "Google Antigravity sign-in",
       command: () => runAsAgent(nativeWindowsExecution()

@@ -209,9 +209,8 @@ type OpenPrompt = {
 };
 
 function applyCompletedLogFallback(
-  state: { stdout: string; stderr: string }, agent: AgentName, agentLog: string, t: TFunction,
+  state: RunStreams, fallback: RunStreams, agent: AgentName, t: TFunction,
 ): void {
-  const fallback = streamsFromAgentLog(agentLog);
   if (!state.stdout.includes(fallback.stdout.trim())) {
     const fallbackText = agentMessagePlainText(agent, fallback.stdout, "", t);
     if (fallbackText && !agentMessagePlainText(agent, state.stdout, "", t).includes(fallbackText)) {
@@ -221,16 +220,18 @@ function applyCompletedLogFallback(
   state.stderr = appendMissingStream(state.stderr, fallback.stderr);
 }
 
-type RunProjectionState = {
+type RunStreams = { stdout: string; stderr: string };
+
+type RunProjectionState = RunStreams & {
   /** The run's current (latest) block. */
   index: number;
   attachmentIds: Set<string>;
   /** The run's whole output; its current block shows it from the offsets. */
-  stdout: string;
-  stderr: string;
   stdoutStart: number;
   stderrStart: number;
   collaborations: CodexCollaborationEvent[];
+  /** Reconcile late output against the stream before adding log recovery text. */
+  completedOutput?: { streamed: RunStreams; fallback: RunStreams };
 };
 
 function segmentStreams(state: RunProjectionState): { stdout: string; stderr: string } {
@@ -250,6 +251,16 @@ function rebaseOffset(before: string, after: string, start: number): number {
   if (after.startsWith(prefix)) return start;
   const at = after.indexOf(prefix);
   return at >= 0 ? at + prefix.length : Math.min(start, after.length);
+}
+
+function reconcileCompletedOutput(state: RunProjectionState, agent: AgentName, t: TFunction): void {
+  const completed = state.completedOutput;
+  if (!completed) return;
+  const output = { ...completed.streamed };
+  applyCompletedLogFallback(output, completed.fallback, agent, t);
+  state.stdoutStart = rebaseOffset(state.stdout, output.stdout, state.stdoutStart);
+  state.stderrStart = rebaseOffset(state.stderr, output.stderr, state.stderrStart);
+  Object.assign(state, output);
 }
 
 /** Incrementally materialize only the event suffix appended since the last render. */
@@ -441,6 +452,30 @@ export class ProjectMessagesAccumulator {
     };
   }
 
+  private appendRunOutput(
+    event: Extract<RelaySession["events"][number], { type: "agent.output" | "agent.output.batch" }>,
+    t: TFunction,
+  ): boolean {
+    const { index, created } = this.ensureRun(event.runId, event.agent, event.timestamp);
+    const state = this.runState.get(event.runId);
+    if (!state) return created;
+    const entries = event.type === "agent.output" ? [event] : event.entries;
+    const completed = state.completedOutput;
+    const output = completed ? { ...completed.streamed } : state;
+    for (const entry of entries) output[entry.stream] += entry.text;
+    if (completed) {
+      state.completedOutput = { ...completed, streamed: output };
+      reconcileCompletedOutput(state, event.agent, t);
+    }
+    const block = this.out[index];
+    const streams = segmentStreams(state);
+    if (block.kind === "agent" && (block.stdout !== streams.stdout || block.stderr !== streams.stderr)) {
+      this.out[index] = { ...block, ...streams };
+      return true;
+    }
+    return created;
+  }
+
   private applyEvent(event: RelaySession["events"][number], t: TFunction): boolean {
     switch (event.type) {
       case "system.notice":
@@ -479,34 +514,9 @@ export class ProjectMessagesAccumulator {
         }
         return ensured.created;
       }
-      case "agent.output": {
-        const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
-        const state = this.runState.get(event.runId);
-        if (!state) return ensured.created;
-        if (event.stream === "stdout") state.stdout += event.text;
-        else state.stderr += event.text;
-        const block = this.out[ensured.index];
-        if (block.kind === "agent") {
-          this.out[ensured.index] = { ...block, ...segmentStreams(state) };
-          return true;
-        }
-        return ensured.created;
-      }
-      case "agent.output.batch": {
-        const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
-        const state = this.runState.get(event.runId);
-        if (!state) return ensured.created;
-        for (const entry of event.entries) {
-          if (entry.stream === "stdout") state.stdout += entry.text;
-          else state.stderr += entry.text;
-        }
-        const block = this.out[ensured.index];
-        if (block.kind === "agent") {
-          this.out[ensured.index] = { ...block, ...segmentStreams(state) };
-          return true;
-        }
-        return ensured.created;
-      }
+      case "agent.output":
+      case "agent.output.batch":
+        return this.appendRunOutput(event, t);
       case "agent.collaboration": {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
         const state = this.runState.get(event.runId);
@@ -596,10 +606,11 @@ export class ProjectMessagesAccumulator {
         const state = this.runState.get(event.runId);
         if (!state) return ensured.created;
         if (event.agentLog) {
-          const before = { stdout: state.stdout, stderr: state.stderr };
-          applyCompletedLogFallback(state, event.agent, event.agentLog, t);
-          state.stdoutStart = rebaseOffset(before.stdout, state.stdout, state.stdoutStart);
-          state.stderrStart = rebaseOffset(before.stderr, state.stderr, state.stderrStart);
+          state.completedOutput = {
+            streamed: state.completedOutput?.streamed ?? { stdout: state.stdout, stderr: state.stderr },
+            fallback: streamsFromAgentLog(event.agentLog),
+          };
+          reconcileCompletedOutput(state, event.agent, t);
         }
         const block = this.out[state.index];
         if (block.kind !== "agent") return ensured.created;

@@ -55,6 +55,8 @@ interface KnownToolCall {
   title?: string;
   kind?: string;
   rawInput?: unknown;
+  rawOutput?: unknown;
+  content?: unknown;
   status: ToolState["status"];
 }
 
@@ -83,26 +85,36 @@ export class SessionUpdateTranslator {
     const id = typeof update.toolCallId === "string" ? update.toolCallId : "";
     if (!id) return;
     const known = this.calls.get(id);
-    if (known?.status === "completed" || known?.status === "error") return;
     const call: KnownToolCall = known ? { ...known } : { name: "tool", status: "pending" };
     if (typeof update.name === "string" && update.name) call.name = update.name;
     if (typeof update.title === "string" && update.title) call.title = update.title;
     if (typeof update.kind === "string") call.kind = update.kind;
-    if (update.rawInput !== undefined) call.rawInput = update.rawInput;
-    if (update.status === "in_progress") call.status = "running";
-    if (update.status === "completed") call.status = "completed";
-    if (update.status === "failed") call.status = "error";
+    if (update.rawInput != null) call.rawInput = update.rawInput;
+    if (update.rawOutput != null) call.rawOutput = update.rawOutput;
+    if (update.content != null) call.content = update.content;
+    if (call.status === "pending" || call.status === "running") {
+      if (update.status === "in_progress") call.status = "running";
+      if (update.status === "completed") call.status = "completed";
+      if (update.status === "failed") call.status = "error";
+    }
     if (isDeepStrictEqual(known, call)) return;
     this.calls.set(id, call);
-    const output = call.status === "completed" || call.status === "error" ? outputText(update) : "";
-    // `opencode run` names a failed tool's message `error`, not `output`.
-    this.writer.toolUse(id, call.name, {
-      status: call.status,
-      ...(call.rawInput !== undefined ? { input: call.rawInput } : {}),
-      ...(output ? (call.status === "error" ? { error: output } : { output }) : {}),
-      ...(call.title ? { title: call.title } : {}),
-    });
+    const state = toolState(call);
+    if (!known || known.name !== call.name || !isDeepStrictEqual(toolState(known), state)) {
+      this.writer.toolUse(id, call.name, state);
+    }
   }
+}
+
+function toolState(call: KnownToolCall): ToolState {
+  const output = call.status === "completed" || call.status === "error" ? outputText(call) : "";
+  // `opencode run` names a failed tool's message `error`, not `output`.
+  return {
+    status: call.status,
+    ...(call.rawInput !== undefined ? { input: call.rawInput } : {}),
+    ...(output ? (call.status === "error" ? { error: output } : { output }) : {}),
+    ...(call.title ? { title: call.title } : {}),
+  };
 }
 
 /** One `session/request_permission` in, the ACP outcome to send back. Never selects an `always` option. */
@@ -141,9 +153,7 @@ export function questionKind(acpKind: string | undefined): PermissionQuestionKin
   return "tool";
 }
 
-function outputText(update: Record<string, unknown>): string {
-  if (update.rawOutput !== undefined) {
-    return typeof update.rawOutput === "string" ? update.rawOutput : JSON.stringify(update.rawOutput) ?? "";
-  }
-  return contentText(update.content);
+function outputText(call: KnownToolCall): string {
+  const raw = typeof call.rawOutput === "string" ? call.rawOutput : JSON.stringify(call.rawOutput);
+  return raw?.trim() ? raw : contentText(call.content);
 }

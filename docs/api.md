@@ -2140,9 +2140,11 @@ message to the running agent now, `pause`, or `resume`.
 `{ messages: [{ id, text, addressAgentIds? }], paused, sending?, live?, error? }`.
 
 `steer` first hands the message to the live run when the run's Computer
-advertises `live-messages` and the message is for the agent that is working (not
-a team or another agent): the queue records `live: { id, commandId, until }`,
+advertises `live-messages` and the message names only the working Agent or has
+no explicit recipient. The queue records `live: { id, commandId, until }`,
 holds the message from edits and other sends, and queues a `run.steer` command.
+Google Antigravity can steer an active turn through a second prompt in the
+same ACP session on Computers running its adapter with a live-message broker.
 The Computer's `run.steered` answer settles it — `delivered` removes the message
 from the queue and appends a `user.live_message` event (shown in the transcript
 as the person's message, marked as sent while the agent worked; it is not a new
