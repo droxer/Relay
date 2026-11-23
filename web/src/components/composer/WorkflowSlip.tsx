@@ -84,12 +84,14 @@ export function WorkflowSlip({ run, decide, focusOnMount = true }: {
 
   // `pending` names the button pressed: a decision kind, or the option text answered.
   const act = async (kind: WorkflowDecision, answer?: string) => {
-    if (pending) return;
+    if (pending) return false;
     setPending(answer ?? kind);
     try {
       await (answer === undefined ? decide(kind, binding) : decide(kind, binding, answer));
+      return true;
     } catch {
       // Announced by the mutation; a 409 refetches the thread.
+      return false;
     } finally {
       setPending(null);
     }
@@ -165,15 +167,9 @@ export function WorkflowSlip({ run, decide, focusOnMount = true }: {
           </li>
         ))}
       </ul> : null}
+      {/* On a Thread, the slip docks inside the message form. */}
       {asked ? (
-        <form
-          className="workflow-slip-answer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const answer = draft.trim();
-            if (answer) void act("answer", answer).then(() => setDraft(""));
-          }}
-        >
+        <div className="workflow-slip-answer">
           <Textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -183,10 +179,19 @@ export function WorkflowSlip({ run, decide, focusOnMount = true }: {
             aria-label={t("workflow.answer_label")}
             placeholder={t("workflow.answer_placeholder")}
           />
-          <Button type="submit" size="sm" disabled={pending !== null || !draft.trim()} aria-busy={(pending !== null && pending === draft.trim()) || undefined}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending !== null || !draft.trim()}
+            aria-busy={(pending !== null && pending === draft.trim()) || undefined}
+            onClick={async () => {
+              const answer = draft.trim();
+              if (answer && await act("answer", answer)) setDraft("");
+            }}
+          >
             {t("workflow.answer_send")}
           </Button>
-        </form>
+        </div>
       ) : null}
     </section>
   );
