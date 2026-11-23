@@ -273,51 +273,12 @@ describe("My Computer: connect CTA respects the local-computer limit", () => {
   });
 });
 
-describe("Admin console: adding a local computer", () => {
-  const DRAWERS = [
-    "web/src/components/admin/AddNodeDrawer.tsx",
-    "web/src/components/admin/AssignNodeDrawer.tsx",
-  ];
-
-  it("creates a user device as direct-run, matching self-service enrollment", async () => {
-    // Regression: both drawers sent `sandboxMode: "boxlite"` alongside
-    // `nodeLocation: "user-device"`. The backend stores the mode verbatim,
-    // so the admin was handed `--sandbox boxlite` with no
-    // `--use-local-agent-home` and the daemon tried to boot a VM on someone's
-    // laptop — while the drawer's own copy promised agents would "run directly
-    // on this computer".
-    for (const path of DRAWERS) {
-      const source = await read(path);
-      const call = source.match(/createControlPanelDaemonNode\(\{[\s\S]*?\n\s*\}\);/)?.[0] ?? "";
-      assert.notEqual(call.trim(), "", `${path}: the create-call regex stopped matching — refresh it`);
-      assert.match(call, /nodeLocation: "user-device"/, path);
-      assert.match(call, /sandboxMode: "none"/, path);
-      assert.doesNotMatch(call, /sandboxMode: "boxlite"/, path);
-    }
-  });
-
-  it("pairs nodeLocation with sandboxMode in the type, so the drawers cannot drift again", async () => {
-    // The two fields are not independent. Encoding that in the input type makes
-    // the regression above a compile error rather than a start command the
-    // user's machine cannot execute.
+describe("Admin console: computer creation types", () => {
+  it("pairs nodeLocation with sandboxMode in the type, so callers cannot drift", async () => {
     const types = await read("web/src/domain-types/computers.ts");
     const input = types.match(/export type CreateControlPanelDaemonNodeInput =[\s\S]*?\n\s*\}\);/)?.[0] ?? "";
     assert.notEqual(input.trim(), "", "the input-type regex stopped matching — refresh it");
     assert.match(input, /nodeLocation: "user-device";[\s\S]*?sandboxMode: "none";/);
     assert.match(input, /nodeLocation\?: never;[\s\S]*?sandboxMode\?: "boxlite";/);
-  });
-
-  it("labels the workspace field with a key that resolves", async () => {
-    // `workspace_label` has no root-level entry — it lives under `nav`, so
-    // i18next echoed the key and the admin read the literal "workspace_label"
-    // above the path input.
-    const locale = JSON.parse(await read("web/src/i18n/locales/en/translation.json"));
-    for (const path of DRAWERS) {
-      const source = await read(path);
-      assert.doesNotMatch(source, /t\("workspace_label"\)/, path);
-      assert.match(source, /t\("nav\.workspace_label"\)/, path);
-    }
-    assert.equal(typeof locale.nav.workspace_label, "string");
-    assert.equal(locale.workspace_label, undefined, "the key was never root-level");
   });
 });

@@ -99,22 +99,20 @@ it("gets owner labels with the Computer history and loads older pages on request
   expect(screen.queryByRole("button", { name: "admin.v2.history_load_more" })).toBeNull();
 });
 
-it("opens the waitlist within Users and returns to the roster", async () => {
+it("opens the waitlist from the admin rail and returns to the user roster", async () => {
   show();
-  const tabs = await screen.findByRole("navigation", { name: "admin.v2.nav_users" });
-  fireEvent.click(await within(tabs).findByRole("link", { name: "admin.v2.nav_waitlist" }));
-  expect(screen.getByRole("heading", { name: "admin.v2.title_users" })).toBeTruthy();
+  const rail = await screen.findByRole("navigation", { name: "admin.v2.nav_label" });
+  fireEvent.click(await within(rail).findByRole("link", { name: "admin.v2.nav_waitlist" }));
+  expect(screen.getByRole("heading", { name: "admin.v2.title_waitlist" })).toBeTruthy();
   expect(await screen.findByRole("searchbox", { name: "admin.waitlist.search_placeholder" })).toBeTruthy();
-  const rail = screen.getByRole("navigation", { name: "admin.v2.nav_label" });
-  expect(within(rail).queryByRole("link", { name: "admin.v2.nav_waitlist" })).toBeNull();
-  expect(within(rail).getByRole("link", { name: "admin.v2.nav_users" }).getAttribute("aria-current")).toBe("page");
-  fireEvent.click(within(tabs).getByRole("link", { name: "admin.v2.nav_users" }));
+  expect(within(rail).getByRole("link", { name: "admin.v2.nav_waitlist" }).getAttribute("aria-current")).toBe("page");
+  fireEvent.click(within(rail).getByRole("link", { name: "admin.v2.nav_users" }));
   expect(await screen.findByText("admin.v2.empty_users_title")).toBeTruthy();
 });
 
-it("keeps existing waitlist links inside Users when public signup is closed", async () => {
+it("labels the rail destination as Invitations when public signup is closed", async () => {
   show("waitlist", false);
-  const tabs = await screen.findByRole("navigation", { name: "admin.v2.nav_users" });
-  expect(within(tabs).getByRole("link", { name: "admin.v2.nav_invitations" }).getAttribute("aria-current")).toBe("page");
-  expect(screen.getByRole("heading", { name: "admin.v2.title_users" })).toBeTruthy();
+  const rail = await screen.findByRole("navigation", { name: "admin.v2.nav_label" });
+  expect(within(rail).getByRole("link", { name: "admin.v2.nav_invitations" }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("heading", { name: "admin.v2.nav_invitations" })).toBeTruthy();
 });

@@ -14,6 +14,8 @@ interface SkillPreviewDrawerProps {
   fallbackTitle: string;
   /** Which bundle the agent actually gets, so the preview shows that text. */
   channel?: "stable" | "latest";
+  /** Optional bundle file path to open initially instead of SKILL.md. */
+  initialPath?: string;
   onClose: () => void;
 }
 
@@ -32,6 +34,7 @@ export function SkillPreviewDrawer({
   skillId,
   fallbackTitle,
   channel = "stable",
+  initialPath,
   onClose,
 }: SkillPreviewDrawerProps) {
   const { t, i18n } = useTranslation();
@@ -43,7 +46,7 @@ export function SkillPreviewDrawer({
   };
   const detailQuery = useSkill(skillId);
   const skill = detailQuery.data;
-  const [pickedPath, setPath] = useState(ENTRY_FILE);
+  const [pickedPath, setPath] = useState(initialPath ?? ENTRY_FILE);
   // Land on the entry file, or the first one the bundle does carry.
   const path = !skill || skill.files.some((file) => file.path === pickedPath)
     ? pickedPath

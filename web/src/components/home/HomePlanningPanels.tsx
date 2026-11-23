@@ -95,6 +95,7 @@ export function UpcomingPanel({ rows, today, hrefFor, onOpen }: {
   const runTime = (row: UpcomingItem) => (row.kind === "automation" && row.task.routineNextRunAt
     ? ` · ${new Date(row.task.routineNextRunAt).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" })}`
     : "");
+  const hasTimes = visible.some((row) => row.kind === "automation" && Boolean(row.task.routineNextRunAt));
   return (
     <section className="home-section" aria-labelledby="home-upcoming-title">
       <header className="home-section-header">
@@ -115,7 +116,9 @@ export function UpcomingPanel({ rows, today, hrefFor, onOpen }: {
                     </span>
                     <span className="home-plan-copy">
                       <span className="home-item-title">{row.task.title}</span>
-                      <span className="home-plan-meta">{t(`home.plan.${row.kind}`)}{runTime(row)}</span>
+                      {row.kind === "automation" ? (
+                        <span className="home-plan-meta">{t(`home.plan.${row.kind}`)}{runTime(row)}</span>
+                      ) : null}
                     </span>
                   </HomeLink>
                 </li>
@@ -126,7 +129,7 @@ export function UpcomingPanel({ rows, today, hrefFor, onOpen }: {
         {rows.length > UPCOMING_PREVIEW
           ? <ShowAllToggle count={rows.length} expanded={expanded} onToggle={() => setExpanded(!expanded)} />
           : null}
-        <p className="home-plan-note">{t("home.plan.schedule_note")}</p>
+        {hasTimes ? <p className="home-plan-note">{t("home.plan.schedule_note")}</p> : null}
       </div>
     </section>
   );

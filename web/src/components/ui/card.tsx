@@ -87,11 +87,9 @@ function CardTitle({
     defaultTagName: "h3",
     props: mergeProps<"h3">(
       {
-        // Card title — the --type-heading role (700 / 15px /
-        // --leading-heading): not the display tier, which is the only one
-        // that tracks tight.
+        // Card title — matches the --type-heading role (600 / 16px / --leading-title).
         className: cn(
-          "m-0 text-lg leading-(--leading-heading) font-bold tracking-(--track-0) text-ink",
+          "m-0 text-lg leading-(--leading-title) font-semibold tracking-(--track-title) text-ink",
           className
         ),
       },

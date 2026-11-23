@@ -88,8 +88,6 @@ export function WorkflowStepCard({
             />
             <DropdownMenuContent align="end">
               <DropdownMenuItem disabled={first} onClick={() => onMove(0)}>{t("workflow.move_first")}</DropdownMenuItem>
-              <DropdownMenuItem disabled={first} onClick={() => onMove(index - 1)}>{t("workflow.move_up_short")}</DropdownMenuItem>
-              <DropdownMenuItem disabled={last} onClick={() => onMove(index + 1)}>{t("workflow.move_down_short")}</DropdownMenuItem>
               <DropdownMenuItem disabled={last} onClick={() => onMove(count - 1)}>{t("workflow.move_last")}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem danger disabled={count <= 1} onClick={onRemove}>

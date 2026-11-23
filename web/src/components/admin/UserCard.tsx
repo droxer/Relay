@@ -71,7 +71,6 @@ export function UserCard({
               <Button
                 variant="icon"
                 size="icon-dense"
-                tinted
                 type="button"
                 className="adm-node-card-icon-btn"
                 onClick={() => onEdit(member.id)}
@@ -84,7 +83,6 @@ export function UserCard({
             <Button
               variant="icon"
               size="icon-dense"
-              tinted
               type="button"
               danger
               className="adm-node-card-icon-btn"

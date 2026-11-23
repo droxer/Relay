@@ -31,7 +31,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ProfileImage, ProfileImagePicker } from "./ProfileImagePicker";
 import { ActivitiesSkeleton, WorkspaceActivities, WorkspaceError } from "./workspace/WorkspacePrimitives";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RecordBand, type RecordFact } from "./workspace/RecordBand";
+import type { RecordFact } from "./workspace/RecordBand";
 import { RecordLayout } from "./workspace/RecordLayout";
 import { StatusPill, TonePill } from "./StatusPill";
 import { truncateId } from "../lib/adminHelpers";
@@ -61,7 +61,6 @@ function TeamProfile({
   computerId,
   members,
   workflowAgents,
-  facts,
   onDeleted,
 }: {
   team: AgentTeam;
@@ -69,8 +68,6 @@ function TeamProfile({
   computerId: string;
   members: AgentTeam["members"];
   workflowAgents: readonly WorkflowAgent[];
-  /** The record's properties, shown under the identity in the rail. */
-  facts: readonly RecordFact[];
   onDeleted: () => void;
 }) {
   const { t } = useTranslation();
@@ -261,12 +258,27 @@ function TeamProfile({
 
   return (
     <div className="workspace-profile">
-      {/* Same dossier grammar as the agent record: a document column holding
-          the roster and its style, an identity rail beside it. Everything
-          that changes the team — name, roster, style, criteria, delete —
-          sits behind one "Edit team" button, so the read view is the team
-          and not a panel of pencils. */}
-      <div className="workspace-profile-panel workspace-profile-dossier">
+      {/* Unified dossier layout matching AgentProfilePanel: identity header on
+          top, single document column beneath, and the persistent RecordLayout
+          properties aside on the right across both Profile and Activities tabs. */}
+      <div className="workspace-profile-panel workspace-profile-dossier agent-dossier">
+        <div className="agent-dossier-identity">
+          <div className="agent-dossier-portrait">
+            <ProfileImagePicker
+              imageUrl={team.profileImageUrl}
+              name={team.name}
+              fallback={<IdentityMark kind="team" />}
+              editable
+              disabled={busy}
+              onUpload={uploadImage}
+              onRemove={removeImage}
+              presets={{ kind: "teams", onSelect: selectImagePreset }}
+            />
+          </div>
+          <div className="agent-dossier-identity-copy">
+            <p className="agent-dossier-role">{t("teams.members")}: <span className="tnum">{team.members.length}</span></p>
+          </div>
+        </div>
         <div className="workspace-dossier-doc">
           <form className="team-profile-inline-form" onSubmit={(event) => void save(event)}>
             <section aria-labelledby="team-profile-members">
@@ -401,26 +413,6 @@ function TeamProfile({
           </form>
           {!editing ? <TeamWorkflowLibrary team={team} agents={workflowAgents} userId={userId} /> : null}
         </div>
-
-        <section className="workspace-dossier-rail" aria-label={t("workspace.identity_label")}>
-          <div className="workspace-dossier-portrait">
-            <ProfileImagePicker
-              imageUrl={team.profileImageUrl}
-              name={team.name}
-              fallback={<IdentityMark kind="team" />}
-              editable
-              disabled={busy}
-              onUpload={uploadImage}
-              onRemove={removeImage}
-              presets={{ kind: "teams", onSelect: selectImagePreset }}
-            />
-          </div>
-
-          {/* The record's properties as plain label/value rows — the same
-              panel every record's right column carries (RecordLayout). */}
-          <RecordBand facts={facts} label={t("workspace.band_team_label")} variant="panel" />
-        </section>
-
       </div>
     </div>
   );
@@ -540,13 +532,13 @@ export function TeamWorkspacePage({
         )}
       />
 
-      {/* One body shell for both tabs, matching the agent record — it
-          owns the container query the profile dossier grid reads. */}
-      <RecordLayout facts={pageTab === "profile" ? [] : teamFacts} label={t("workspace.band_team_label")}>
+      {/* One persistent properties rail across both tabs so the layout never
+          jumps between Profile and Activities. */}
+      <RecordLayout facts={teamFacts} label={t("workspace.band_team_label")}>
       <div className="workspace-body">
         <TabsContent value="profile">
           <TeamProfile team={team} userId={userId} computerId={computerId} members={members}
-            workflowAgents={outsideWorkflowAgents && agents.length ? agents : team.members} facts={teamFacts} onDeleted={onDeleted} />
+            workflowAgents={outsideWorkflowAgents && agents.length ? agents : team.members} onDeleted={onDeleted} />
         </TabsContent>
         <TabsContent value="activities">
           {briefQuery.isLoading && !briefQuery.data ? (

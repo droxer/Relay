@@ -32,12 +32,10 @@ it("shows only the selected operating system's install command", async () => {
   expect(screen.getByText("setup-command")).toBeTruthy();
 });
 
-it("shows the cloud computer as coming soon, not as a choice", () => {
+it("omits unavailable coming-soon computer kinds from setup", () => {
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
-  const cloud = screen.getByRole("radio", { name: /Cloud computer/ });
-  expect(cloud.getAttribute("aria-disabled") ?? cloud.hasAttribute("disabled").toString()).toBe("true");
-  expect(within(cloud).getByText("Coming soon")).toBeTruthy();
-  expect(screen.getByRole("radio", { name: /Local computer/ }).getAttribute("aria-checked")).toBe("true");
+  expect(screen.queryByRole("radio", { name: /Cloud computer/ })).toBeNull();
+  expect(screen.queryByText("Coming soon")).toBeNull();
 });
 
 it("explains installation before generating a command", () => {

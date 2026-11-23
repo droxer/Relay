@@ -22,7 +22,7 @@ import { TaskReviewPanel } from "./TaskReviewPanel";
 import { TaskWorkflowTimeline } from "./TaskWorkflowTimeline";
 import { RecordRuns } from "./RecordRuns";
 import { TaskRecordActions } from "./TaskRecordActions";
-import { InlineStatus } from "../task-board/InlineTaskFields";
+import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "../task-board/InlineTaskFields";
 import { useInlineTaskEdits } from "../../hooks/useInlineTaskEdits";
 import { canManageAutomation, type RecordAction } from "./recordActions";
 import { TaskRecordDefinition } from "./TaskRecordDefinition";
@@ -146,7 +146,13 @@ export function TaskRecordPage({
     agentName: (agentId) => logicalAgents.find((agent) => agent.id === agentId)?.displayName,
     projectName: (projectId) => projectOf(projectId)?.name,
   }), [teams, logicalAgents, projectOf]);
-  const assigneeName = taskAssigneeLabel(task, taskAgentDisplayName(task, logicalAgents, teams), t);
+  const assigneeAgent = task.assignedAgentId ? logicalAgents.find((agent) => agent.id === task.assignedAgentId) : undefined;
+  const assigneeDisplay = {
+    name: taskAgentDisplayName(task, logicalAgents, teams),
+    imageUrl: assigneeAgent?.profileImageUrl ?? assignedTeam?.profileImageUrl ?? null,
+    ready: assigneeAgent ? assigneeAgent.availability === "ready" : Boolean(assignedTeam?.enabled),
+  };
+  const assigneeName = taskAssigneeLabel(task, assigneeDisplay.name, t);
   const facts: RecordFact[] = recordBandFacts(
     task,
     variant,
@@ -155,15 +161,44 @@ export function TaskRecordPage({
     t,
     task.projectId ? { id: task.projectId, name: projectName || task.projectId } : undefined,
     assigneeName,
-    /* The same control the list row carries: the board's stages, plus
-       Block / Unblock, so the record has no second way to change status. */
-    <InlineStatus
-      task={task}
-      labeled
-      readOnly={!statusEdits}
-      onChange={(status) => statusEdits?.changeStatus(task, status)}
-      onToggleHold={() => { void statusEdits?.toggleHold(task); }}
-    />,
+    {
+      /* Inline controls in the record sidebar eliminate extra Edit-drawer trips
+         for everyday Status, Priority, Due, and Assignee changes. */
+      status: (
+        <InlineStatus
+          task={task}
+          labeled
+          readOnly={!statusEdits}
+          onChange={(status) => statusEdits?.changeStatus(task, status)}
+          onToggleHold={() => { void statusEdits?.toggleHold(task); }}
+        />
+      ),
+      priority: variant === "task" ? (
+        <InlinePriority
+          priority={task.priority}
+          readOnly={!statusEdits}
+          onChange={(priority) => statusEdits?.changePriority(task, priority)}
+        />
+      ) : undefined,
+      due: variant === "task" && !task.scheduledFor ? (
+        <InlineDue
+          task={task}
+          readOnly={!statusEdits}
+          onChange={(dueDate) => statusEdits?.changeDue(task, dueDate)}
+        />
+      ) : undefined,
+      assignee: variant === "task" ? (
+        <InlineAssignee
+          task={task}
+          agents={logicalAgents}
+          teams={teams}
+          project={project}
+          display={assigneeDisplay}
+          readOnly={!statusEdits}
+          onChange={(change) => statusEdits?.changeAssignment(task, change)}
+        />
+      ) : undefined,
+    },
   );
 
   const listPath = recordHrefForLocation(variant === "routine" ? "routine" : "backlog", null);
@@ -248,13 +283,6 @@ export function TaskRecordPage({
 
       <RecordLayout facts={facts} label={t("record.record_label")}>
       <div className="workspace-body">
-        {task.status === "review" && !task.isRoutine ? <TaskReviewPanel
-          key={task.id}
-          taskId={task.id}
-          readOnly={readOnly}
-          onOpenThread={onOpenThread}
-          onRequestChanges={() => { const threadId = task.linkedSessionIds.at(-1); if (threadId) onOpenThread(threadId); }}
-        /> : null}
         {variant === "routine" ? (
           <TabsContent value="runs" className="record-runs-panel">
             <AutomationPauseBanner
@@ -273,6 +301,15 @@ export function TaskRecordPage({
           </TabsContent>
         ) : (
           <TabsContent value="activity">
+            {/* Review evidence lives on Activity (the default landing tab) so
+                switching to Definition or Files isn't buried beneath it. */}
+            {task.status === "review" && !task.isRoutine ? <TaskReviewPanel
+              key={task.id}
+              taskId={task.id}
+              readOnly={readOnly}
+              onOpenThread={onOpenThread}
+              onRequestChanges={() => { const threadId = task.linkedSessionIds.at(-1); if (threadId) onOpenThread(threadId); }}
+            /> : null}
             {/* Why a run is stuck, and what to do about it, before the trace
                 of how it got there. */}
             {task.status !== "review" && task.attention?.code !== "workflow_blocked" ? <TaskRecoveryPanel task={task} onOpenThread={onOpenThread} /> : null}

@@ -132,10 +132,14 @@ export function BacklogFiltersBar({
         const bar = stateFromSelections(next, BACKLOG_BAR_KEYS, ["assignee"]);
         if (BACKLOG_BAR_KEYS.some((key) => bar[key] !== filters[key])) onChange({ ...filters, ...bar } as BacklogFilters);
       }}
-      /* The extra field (the project, a project's status) is the page's, not
-         the bar's: Clear leaves it, as it always has. */
-      onClear={() => onChange({ ...initialFilters, status: filters.status })}
-      clearableCount={BACKLOG_BAR_KEYS.filter((key) => filters[key] !== "all" && filters[key] !== "").length}
+      onClear={() => {
+        if (extraField && extraField.value !== "") extraField.onChange("");
+        onChange({ ...initialFilters, status: filters.status });
+      }}
+      clearableCount={
+        BACKLOG_BAR_KEYS.filter((key) => filters[key] !== "all" && filters[key] !== "").length
+        + (extraField && extraField.value !== "" ? 1 : 0)
+      }
       trailing={sortMenu}
       actions={actions}
     />

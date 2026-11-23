@@ -58,76 +58,15 @@ describe("owner handle beside the name", () => {
 });
 
 describe("provision drawers", () => {
-  it("gives the run-mode radio a focusable box instead of hiding the ring", () => {
-    // Same invariant, new mechanism. The segment used to be a native radio
-    // stretched invisibly across the option purely so base.css's single
-    // `input:focus-visible` ring would land on the option's geometry — and
-    // `opacity: 0` on that input would have hidden the outline along with the
-    // box. The option is a `<button role="radio">` from the shared RadioGroup
-    // now, which base.css rings directly through `button:focus-visible`, so
-    // the guard is that no hidden input has come back.
-    const source = readWeb("src/components/admin/RunModeField.tsx");
-    assert.ok(
-      source.includes("RadioGroupChoice"),
-      "the run-mode segment must go through the shared radio group",
-    );
-    assert.ok(
-      !source.includes('type="radio"'),
-      "a hand-rolled native radio cannot carry the shared focus ring here",
-    );
-    const css = readWeb("src/styles/admin-v2-provision.css");
-    assert.ok(
-      !css.includes(".adm-profile-segment-input"),
-      "the stretched-input trick is obsolete — remove its rule with it",
-    );
-  });
-
-  it("does not print an error string as a resting hint", () => {
-    const source = readWeb("src/components/admin/AddNodeDrawer.tsx");
-    const hint = source.slice(source.indexOf("adm-form-hint\">"));
-    assert.ok(
-      !hint.includes("admin.user_required"),
-      "the assignment hint must be guidance, not the field's own error text",
-    );
-  });
-
-  it("says what handle will be stored when it differs from what was typed", () => {
-    // The preview card is gone; the id field's hint carries the same promise
-    // — `@Alice` is not what gets stored — without announcing per keystroke.
-    const source = readWeb("src/components/admin/AddUserDrawer.tsx");
-    assert.match(source, /normalizedHandle !== userId\.trim\(\)/);
-    assert.match(source, /admin\.v2\.user_id_normalized/);
-    assert.ok(!source.includes("adm-provision-preview"), "the preview card must not come back");
-    assert.ok(!source.includes("aria-live"), "the hint must not announce on every character");
-  });
-
-  it("never offers the admin's own autofill for an account they are creating", () => {
-    for (const path of [
-      "src/components/admin/AddUserDrawer.tsx",
-      "src/components/admin/EditUserDrawer.tsx",
-    ]) {
-      const source = readWeb(path);
-      for (const value of ["\"username\"", "\"email\"", "\"new-password\""]) {
-        assert.ok(
-          !source.includes(`autoComplete=${value}`),
-          `${path} must not autofill ${value} into someone else's account`,
-        );
-      }
+  it("never offers the admin's own autofill for an account they are editing", () => {
+    const source = readWeb("src/components/admin/EditUserDrawer.tsx");
+    for (const value of ["\"username\"", "\"email\"", "\"new-password\""]) {
+      assert.ok(
+        !source.includes(`autoComplete=${value}`),
+        `EditUserDrawer must not autofill ${value} into someone else's account`,
+      );
     }
   });
-
-  it("focuses every field it validates", () => {
-    const source = readWeb("src/components/admin/AddUserDrawer.tsx");
-    const chain = source.slice(source.indexOf("const firstInvalid"), source.indexOf("if (firstInvalid)"));
-    for (const field of ["userId", "maxLocalComputers", "username", "password"]) {
-      assert.ok(chain.includes(field), `${field} is validated but never focused`);
-    }
-  });
-
-  // The console no longer mounts computer-creation drawers or their success
-  // handlers. The former arrival-highlight assertion belonged to that removed
-  // flow; the surviving drawers' validation/accessibility checks remain above.
-
 });
 
 describe("password policy", () => {

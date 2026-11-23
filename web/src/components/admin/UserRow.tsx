@@ -198,7 +198,6 @@ export function UserTable({
               {edit ? (
                 <Button variant="icon"
                   size="icon-dense"
-                  tinted
                   type="button"
                   className="adm-node-card-icon-btn"
                   onClick={() => edit(member.id)}
@@ -211,7 +210,6 @@ export function UserTable({
               {del ? (
                 <Button variant="icon"
                   size="icon-dense"
-                  tinted
                   type="button"
                   danger
                   className="adm-node-card-icon-btn"

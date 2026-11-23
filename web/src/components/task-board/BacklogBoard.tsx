@@ -132,11 +132,19 @@ function BoardLanes({ value, lanes, laneTotals, cardProps, onCreateInLane, onLan
     return rejection === "needs_assignment" ? "blocked" : undefined;
   }
 
+  // Keep the resting board focused on the 5 core workflow stages; show
+  // `queued` and `cancelled` only when they hold cards or while dragging.
+  const visibleStages = TASK_FLOW_STAGES.filter((status) => (
+    (status !== "queued" && status !== "cancelled")
+    || laneTotals[status] > 0
+    || Boolean(draggedTask)
+  ));
+
   // Snap is suspended mid-drag (backlog.css) so dnd-kit's edge auto-scroll
   // is not re-snapped back to the current lane every frame.
   return (
     <KanbanBoard className="backlog-board" data-dragging={draggedTask ? "true" : undefined}>
-      {TASK_FLOW_STAGES.map((status) => (
+      {visibleStages.map((status) => (
         <KanbanColumn
           key={status}
           value={status}

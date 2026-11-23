@@ -375,8 +375,12 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); triggerSend(); }}>
-      {prompt}
-      {queue}
+      {prompt || queue ? (
+        <div className="composer-dock">
+          {prompt}
+          {queue}
+        </div>
+      ) : null}
       <div className="composer-input-wrap" data-running={running || undefined}>
         <div className="composer-input">
           <ComposerImagePreviews input={imageInput} />

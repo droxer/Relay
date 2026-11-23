@@ -103,9 +103,8 @@ describe("UI primitive contracts", () => {
 
     // Every cva modifier has to be destructured out of props, or it spreads onto
     // the DOM node and React warns about an unknown attribute.
-    assert.match(signature, /\btinted\b/);
     assert.match(signature, /\bdanger\b/);
-    assert.match(source, /buttonVariants\(\{ variant, size, tinted, danger, className \}\)/);
+    assert.match(source, /buttonVariants\(\{ variant, size, danger, className \}\)/);
   });
 
   it("gives the quiet danger tier a border, not hue alone", async () => {

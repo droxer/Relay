@@ -28,8 +28,6 @@ import { NodesView } from "./admin/NodesView";
 import { ManageExecutorsDrawer } from "./admin/ManageExecutorsDrawer";
 import { ManagedNodeHistory } from "./admin/ManagedNodeHistory";
 import { PageHeader } from "./PageHeader";
-import { SectionNav } from "./SectionNav";
-import { hrefForAdminSection } from "../lib/appRoute";
 import { isNodeOnline } from "../lib/adminHelpers";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -124,13 +122,13 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
      card/list switch is hidden there (admin-v2-users.css). */
   const phone = useMediaQuery(PHONE_QUERY);
   const shownLayout: AdminLayout = phone ? "card" : layout;
-  const directory = useAdminUsers({ enabled: Boolean(admin) && view === "users", live: view === "users" && shownLayout === "list" });
+  const directory = useAdminUsers({ enabled: Boolean(admin) && view === "users", live: view === "users" });
   const users = directory.response?.users ?? NO_USERS;
   const pagedRoster = directory.response?.page !== undefined;
   const { nodes, mergeNodes, refetch, inventoryLoading, inventoryError } = useAdminNodes({
     enabled: Boolean(admin) && (view === "dashboard" || view === "computers"
       || (view === "users" && directory.response !== undefined && !pagedRoster)),
-    live: view === "dashboard" || (view !== "waitlist" && layout === "list"),
+    live: view === "dashboard" || view === "computers" || view === "users",
   });
   const pollError = inventoryError ?? (view === "users" && directory.error ? directory.error.message : null);
   const managedNodesQuery = useInfiniteQuery({
@@ -404,9 +402,11 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
       ? String(managedNodesQuery.error)
       : null;
   const headerError = authError ?? pollError ?? managedNodesError;
-  const viewTitle = t(`admin.v2.title_${usersSection ? "users" : view}`);
+  const viewTitle = view === "waitlist"
+    ? t(waitlistOpen ? "admin.v2.title_waitlist" : "admin.v2.nav_invitations")
+    : t(`admin.v2.title_${view}`);
   const hasHeaderActions = Boolean(headerError) || usersSection;
-  const headerCount = usersSection
+  const headerCount = view === "users"
     ? directory.loading ? undefined : t("admin.user_count", { count: directory.response?.userCount ?? users.length })
     : view === "computers"
       // The owner's page counts "4 computers · 3 online"; the fleet reads the
@@ -434,7 +434,7 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
           titleVariant="title"
           layout="stacked"
         />
-        <AdminViewToggle view={usersSection ? "users" : view} onChange={setView} />
+        <AdminViewToggle view={view} waitlistOpen={waitlistOpen} onChange={setView} />
       </div>
 
       <div className="sec-main">
@@ -479,21 +479,6 @@ function AdminPageView({ currentUser, section, onSelectSection }: AdminPageProps
             </>
           ) : undefined}
         />
-
-        {usersSection ? (
-          <div className="adm-users-tabs">
-            <SectionNav
-              variant="tabs"
-              label={t("admin.v2.nav_users")}
-              value={view}
-              onChange={setView}
-              items={[
-                { id: "users", label: t("admin.v2.nav_users"), href: hrefForAdminSection("users") },
-                { id: "waitlist", label: t(waitlistOpen ? "admin.v2.nav_waitlist" : "admin.v2.nav_invitations"), href: hrefForAdminSection("waitlist") },
-              ]}
-            />
-          </div>
-        ) : null}
 
         <div className="adm-content">
           <div className="adm-content-main">

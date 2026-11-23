@@ -42,8 +42,8 @@ export function ThreadHeader({ taskThread = false, activeSession, facts, artifac
         </Button>
         <div className="chat-title-text">
           <h2 title={activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : undefined}>{activeSession ? (activeSession.title?.trim() || activeSession.taskGoal) : t("thread.new_thread")}</h2>
-        {activeSession?.execution && activeSession.execution.phase !== "terminal" ? (
-          <span className="chat-title-status" role="status">{t(`thread.execution_${activeSession.execution.phase}`)}{activeSession.deletionRequestedAt ? ` · ${t("thread.deletion_pending")}` : ""}</span>
+        {activeSession?.deletionRequestedAt ? (
+          <span className="chat-title-status" role="status">{t("thread.deletion_pending")}</span>
         ) : null}
         </div>
       </div>

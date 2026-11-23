@@ -8,18 +8,14 @@ import {
   agentsForTeamComputer,
   membersOffComputer,
   pruneMembershipToComputer,
-  teamComputerId,
 } from "../../lib/teamComputer";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
-import { teamContractChanged, teamMutationInput } from "../../lib/teamForm";
+import { teamMutationInput } from "../../lib/teamForm";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
-import { PresetAvatarGrid } from "../PresetAvatarGrid";
-import type { AgentTeam, TeamMemberConfig } from "../../types";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { TeamMemberPicker, type TeamMembership } from "../TeamMemberPicker";
 import { ComputerOptionsFeedback } from "../computer/ComputerOptionsFeedback";
@@ -29,28 +25,21 @@ import { useOnOpen } from "@/hooks/useKeyChange";
 
 export function TeamDrawer({
   open,
-  team,
   userId,
   onClose,
 }: {
   open: boolean;
-  team?: AgentTeam | null;
   userId?: string;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const avatarLabelId = useId();
   const computerLabelId = useId();
-  const { confirm } = useDialogs();
-  const { createTeamMutation, updateTeamMutation, deleteTeamMutation } = useRelayMutations();
+  const { createTeamMutation } = useRelayMutations();
   const [name, setName] = useState("");
   const [memberIds, setMemberIds] = useState<string[]>([]);
-  const [memberConfigs, setMemberConfigs] = useState<Record<string, TeamMemberConfig>>({});
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<string[]>([]);
   const [leadId, setLeadId] = useState("");
-  const [profileImageUrl, setProfileImageUrl] = useState(() => randomPresetAvatar("teams"));
-  // Null until the user picks: the computer then follows the team record, or
-  // the only computer the user has.
+  // Null until the user picks: defaults to the only computer the user has.
   const [computerPick, setComputerPick] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<"name" | "computer" | "members" | "off_computer" | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -58,15 +47,13 @@ export function TeamDrawer({
   const membersRef = useRef<HTMLFieldSetElement>(null);
 
   useOnOpen(open, () => {
-    setName(team?.name ?? "");
-    setMemberIds(team?.memberAgentIds ?? []);
-    setLeadId(team?.leadAgentId ?? "");
-    setMemberConfigs(team?.memberConfigs ?? {});
-    setAcceptanceCriteria(team?.acceptanceCriteria ?? []);
-    setProfileImageUrl(randomPresetAvatar("teams"));
+    setName("");
+    setMemberIds([]);
+    setLeadId("");
+    setAcceptanceCriteria([]);
     setComputerPick(null);
     setValidationError(null);
-  }, team?.id ?? "");
+  });
 
   const { agents: userAgents } = useUserAgents(open ? userId : undefined);
   const agents = useMemo(
@@ -76,22 +63,18 @@ export function TeamDrawer({
   const computers = useComputerOptions(userId ?? "", open && Boolean(userId));
   // A team lives on one computer: it is chosen first, and the member picker
   // only offers the agents placed on it.
-  const savedComputerId = team ? teamComputerId(team, agents) : "";
   const computerId = computerPick
-    ?? (savedComputerId || (computers.options.length === 1 ? computers.options[0].computerId : ""));
+    ?? (computers.options.length === 1 ? computers.options[0].computerId : "");
   const computerAgents = useMemo(
     () => agentsForTeamComputer(agents, computerId, memberIds),
     [agents, computerId, memberIds],
   );
-  const busy = createTeamMutation.isPending || updateTeamMutation.isPending || deleteTeamMutation.isPending;
-  const saving = createTeamMutation.isPending || updateTeamMutation.isPending;
+  const busy = createTeamMutation.isPending;
   const hasUnsavedChanges = open && (
-    teamContractChanged({ memberConfigs, acceptanceCriteria }, team ?? {}, memberIds)
-    || name.trim() !== (team?.name ?? "").trim()
-    || (computerPick !== null && computerPick !== savedComputerId)
-    || leadId !== (team?.leadAgentId ?? "")
-    || memberIds.length !== (team?.memberAgentIds ?? []).length
-    || memberIds.some((id) => !(team?.memberAgentIds ?? []).includes(id))
+    name.trim().length > 0
+    || computerPick !== null
+    || memberIds.length > 0
+    || acceptanceCriteria.some((line) => line.trim().length > 0)
   );
   const confirmDiscardChanges = useUnsavedChangesGuard(hasUnsavedChanges && !busy);
 
@@ -140,33 +123,14 @@ export function TeamDrawer({
       leadAgentId: leadId,
       memberAgentIds: memberIds,
       computerId,
-      memberConfigs, acceptanceCriteria,
-      enabled: team?.enabled ?? true,
+      acceptanceCriteria,
+      enabled: true,
     });
     try {
-      // The image of an existing team is changed from its own page, where an
-      // upload is also possible; this drawer only picks one at creation.
-      if (team) await updateTeamMutation.mutateAsync({ teamId: team.id, input });
-      else await createTeamMutation.mutateAsync({ ...input, profileImageUrl });
+      await createTeamMutation.mutateAsync({ ...input, profileImageUrl: randomPresetAvatar("teams") });
       onClose();
     } catch {
       // The shared mutation error handler keeps the drawer open for correction.
-    }
-  }
-
-  async function remove() {
-    if (!team) return;
-    if (!(await confirm({
-      title: t("teams.delete_title", { name: team.name }),
-      message: t("teams.delete_message", { name: team.name }),
-      confirmLabel: t("teams.delete"),
-      tone: "danger",
-    }))) return;
-    try {
-      await deleteTeamMutation.mutateAsync(team.id);
-      onClose();
-    } catch {
-      // Error already announced.
     }
   }
 
@@ -175,7 +139,7 @@ export function TeamDrawer({
       open={open}
       onClose={() => { void requestClose(); }}
       kicker={t("teams.title")}
-      title={team ? t("teams.edit") : t("teams.add")}
+      title={t("teams.add")}
       subtitle={t("teams.drawer_subtitle")}
       width="form"
       closeLabel={t("drawer.close")}
@@ -223,17 +187,6 @@ export function TeamDrawer({
             aria-describedby={validationError === "name" ? "team-name-error" : undefined}
           />
         </Field>
-        {team ? null : (
-          <Field label={t("teams.avatar")} labelId={avatarLabelId} wrapper="div">
-            <PresetAvatarGrid
-              kind="teams"
-              value={profileImageUrl}
-              onChange={setProfileImageUrl}
-              labelledBy={avatarLabelId}
-              disabled={busy}
-            />
-          </Field>
-        )}
         <TeamMemberPicker
           ref={membersRef}
           agents={computerAgents}
@@ -257,9 +210,8 @@ export function TeamDrawer({
           />
         </Field>
         <div className="adm-form-actions">
-          {team ? <Button size="cta" type="button" variant="destructive" className="adm-form-actions-leading" onClick={() => void remove()} disabled={busy} loading={deleteTeamMutation.isPending}>{t("teams.delete")}</Button> : null}
           <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={busy}>{t("dialog.cancel")}</Button>
-          <Button size="cta" type="submit" loading={saving} disabled={deleteTeamMutation.isPending || (!team && (computers.isLoading || computers.options.length === 0))}>{saving ? t("admin.saving") : team ? t("teams.save") : t("teams.create")}</Button>
+          <Button size="cta" type="submit" loading={busy} disabled={computers.isLoading || computers.options.length === 0}>{busy ? t("admin.saving") : t("teams.create")}</Button>
         </div>
       </form>
     </Drawer>

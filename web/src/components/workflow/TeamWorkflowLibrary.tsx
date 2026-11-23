@@ -60,10 +60,12 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
       {/* One cluster on the trailing edge, like the Members head's Edit
           button: neither control floats between the title and the edge. */}
       {canManage ? <div className="workflow-library-actions">
-        <Select value="" disabled={change.isPending || !available.length} onValueChange={id => { if (id) apply(() => linkTeamWorkflow(team.id, id)); }}>
-          <SelectTrigger size="sm" className="w-auto" aria-label={t("workflow.assign_workflow")}><SelectValue>{t("workflow.assign_workflow")}</SelectValue></SelectTrigger>
-          <SelectContent>{available.map(workflow => <SelectItem key={workflow.id} value={workflow.id}>{workflow.name} · {projectNames.get(workflow.projectId)}</SelectItem>)}</SelectContent>
-        </Select>
+        {available.length > 0 ? (
+          <Select value="" disabled={change.isPending} onValueChange={id => { if (id) apply(() => linkTeamWorkflow(team.id, id)); }}>
+            <SelectTrigger size="sm" className="w-auto" aria-label={t("workflow.assign_workflow")}><SelectValue>{t("workflow.assign_workflow")}</SelectValue></SelectTrigger>
+            <SelectContent>{available.map(workflow => <SelectItem key={workflow.id} value={workflow.id}>{workflow.name} · {projectNames.get(workflow.projectId)}</SelectItem>)}</SelectContent>
+          </Select>
+        ) : null}
         <Button type="button" variant="default" size="sm" onClick={() => setEditing({ workflow: null })}><ActionAdd size={ICON.sm} aria-hidden="true" />{t("workflow.create")}</Button>
       </div> : null}
     </div>

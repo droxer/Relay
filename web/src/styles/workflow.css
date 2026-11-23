@@ -232,29 +232,18 @@
 
 /* ---------- thread progress ---------- */
 
-/* Workflow threads have an explicit progress row between header and log.
-   It must not scroll away with the log's initial pin-to-bottom. */
-.chat-panel:has(> .workflow-progress) {
-  grid-template-rows: var(--header-h) auto minmax(0, 1fr) auto;
-}
-
-.chat-panel > .workflow-progress {
-  justify-self: center;
+/* Workflow threads keep progress pinned above the transcript inside .chat-banners. */
+.chat-banners > .workflow-progress {
+  align-self: center;
   width: min(100% - var(--page-gutter) * 2, var(--thread-measure) - var(--page-gutter) * 2);
   margin: var(--sp-2) 0 var(--sp-1);
-}
-
-@media (max-width: 820px) {
-  .messenger-shell[data-mobile-view="chat"] .chat-panel:has(> .workflow-progress) {
-    grid-template-rows: auto minmax(0, 1fr) auto;
-  }
 }
 
 /* A phone keeps the progress a band: the details button rides beside the
    summary, and the step line gives way while the composer's slip already
    names that step. */
 @media (max-width: 640px) {
-  .chat-panel > .workflow-progress {
+  .chat-banners > .workflow-progress {
     flex-wrap: nowrap;
   }
 

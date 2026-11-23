@@ -78,7 +78,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
           {role ? <span className="team-work-member-role">{t(`team_work.role_${role}`)}</span> : null}
           {member.enabled === false ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
         </span>
-        <AgentMetaLine executorKind={member.executorKind} placements={member.placements ?? []} />
+        <AgentMetaLine executorKind={member.executorKind} placements={member.placements ?? []} showComputers={false} />
       </span>
       {side}
     </header>

@@ -5,11 +5,11 @@ import { useTranslation } from "react-i18next";
 import { changePassword, updateAccountProfile } from "../../api";
 import type { CurrentUser } from "../../types";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, passwordProblem } from "../../lib/passwordPolicy";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "../UserAvatar";
-import { ICON, RowOpen } from "../icons";
 
 const IDENTITY_AVATAR_SIZE = 48;
 
@@ -120,7 +120,7 @@ export function AccountSection({ user, onUserChange }: {
             <Input aria-describedby="account-profile-hint" value={name} onChange={(event) => { setName(event.target.value); setProfileSaved(false); setProfileError(""); }} required maxLength={100} autoComplete="nickname" disabled={profileBusy} />
           </Field>
           <p id="account-profile-hint" className="account-field-hint">{t("account.profile_hint")}</p>
-          {profileError && <p className="account-settings-error" role="alert">{profileError}</p>}
+          {profileError ? <Alert>{profileError}</Alert> : null}
         </AccountPanel>
       </form>
 
@@ -146,23 +146,9 @@ export function AccountSection({ user, onUserChange }: {
           <Field label={t("account.confirm_password")}>
             <Input type="password" value={confirm} onChange={(event) => { setConfirm(event.target.value); setPasswordSaved(false); setPasswordError(""); }} autoComplete="new-password" required maxLength={MAX_PASSWORD_LENGTH} disabled={passwordBusy} />
           </Field>
-          {passwordError && <p className="account-settings-error" role="alert">{passwordError}</p>}
+          {passwordError ? <Alert>{passwordError}</Alert> : null}
         </AccountPanel>
       </form>
-
-      <section className="account-group" aria-labelledby="account-connections-title">
-        <h3 id="account-connections-title" className="pref-group-label">{t("account.connections")}</h3>
-        {/* One row that reads as a destination: a name that is not the
-            heading again, what lives there, and the chevron every other row
-            that opens a page carries. */}
-        <a className="account-panel account-link-row" href="/settings/connections">
-          <span className="account-link-row-text">
-            <span className="pref-option-label">{t("account.manage_connections")}</span>
-            <span className="account-panel-note">{t("connections.intro")}</span>
-          </span>
-          <RowOpen className="account-link-row-open" size={ICON.sm} aria-hidden="true" />
-        </a>
-      </section>
     </div>
   );
 }

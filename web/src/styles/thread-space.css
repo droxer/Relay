@@ -194,9 +194,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink-3);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
-  line-height: var(--leading-loose);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-wrap: pretty;
 }
 

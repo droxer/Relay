@@ -224,10 +224,6 @@
   .shortcuts-columns {
     grid-template-columns: 1fr;
   }
-
-  .command-footer {
-    display: none;
-  }
 }
 
 .command-close {

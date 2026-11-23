@@ -686,16 +686,17 @@ export function ThreadsView({
           onBackToThreads={onBackToThreads}
         />
 
-        {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} onReportGone={onReportExecutionGone} /> : null}
-
-        {workflowRun ? (
-          <WorkflowProgress
-            key={workflowRun.workflowRunId}
-            run={workflowRun}
-            agentName={(agentId) => logicalAgentNames[agentId] ?? t("project.member_unavailable")}
-            agentImage={(agentId) => logicalAgentImages[agentId]}
-          />
-        ) : null}
+        <div className="chat-banners">
+          {activeSession ? <ExecutionRecoveryPanel session={activeSession} onRetry={onRetryExecutionRecovery} onReportGone={onReportExecutionGone} /> : null}
+          {workflowRun ? (
+            <WorkflowProgress
+              key={workflowRun.workflowRunId}
+              run={workflowRun}
+              agentName={(agentId) => logicalAgentNames[agentId] ?? t("project.member_unavailable")}
+              agentImage={(agentId) => logicalAgentImages[agentId]}
+            />
+          ) : null}
+        </div>
         {/* The wizard is instructions, not a chat log: it gets a plain scroller,
             so the transcript's pin-to-bottom (and its live log role) cannot
             scroll it past its own heading as the install command loads in. */}

@@ -24,7 +24,6 @@ import { parsePlanSteps, type PlanStep } from "../lib/plan";
 import type { RelayArtifact } from "relay-core";
 import { useArtifactBody } from "../lib/useArtifactBody";
 import { summarizeArtifact } from "../lib/artifactStats";
-import { useArtifactViewer } from "./ArtifactViewerProvider";
 import type { DerivedMessage } from "../lib/projectMessages";
 import { Button } from "@/components/ui/button";
 export { isGroupedContinuation, projectMessages } from "../lib/projectMessages";
@@ -113,18 +112,17 @@ function PlanCard({ artifact, sessionId, agentDisplayNames }: { artifact: RelayA
   );
 }
 
-function ArtifactCard({ artifact, sessionId, allArtifacts, onOpenArtifact, agentDisplayNames }: { artifact: RelayArtifact; sessionId: string; allArtifacts?: RelayArtifact[]; onOpenArtifact?: (artifact: RelayArtifact) => void; agentDisplayNames?: Partial<Record<AgentName, string>> }) {
+function ArtifactCard({ artifact, sessionId, onOpenArtifact, agentDisplayNames }: { artifact: RelayArtifact; sessionId: string; onOpenArtifact?: (artifact: RelayArtifact) => void; agentDisplayNames?: Partial<Record<AgentName, string>> }) {
   if (artifact.kind === "plan") {
     return <PlanCard artifact={artifact} sessionId={sessionId} agentDisplayNames={agentDisplayNames} />;
   }
-  return <ArtifactChip artifact={artifact} sessionId={sessionId} allArtifacts={allArtifacts} onOpenArtifact={onOpenArtifact} />;
+  return <ArtifactChip artifact={artifact} sessionId={sessionId} onOpenArtifact={onOpenArtifact} />;
 }
 
 const ARTIFACT_STAT_MAX_BYTES = 256 * 1024;
 
-function ArtifactChip({ artifact, sessionId, allArtifacts, onOpenArtifact }: { artifact: RelayArtifact; sessionId: string; allArtifacts?: RelayArtifact[]; onOpenArtifact?: (artifact: RelayArtifact) => void }) {
+function ArtifactChip({ artifact, sessionId, onOpenArtifact }: { artifact: RelayArtifact; sessionId: string; onOpenArtifact?: (artifact: RelayArtifact) => void }) {
   const { t, i18n } = useTranslation();
-  const viewer = useArtifactViewer();
   const locale = i18n.language || undefined;
   // The file viewer owns the request. A chip can derive a stat once its
   // body has already been opened and cached.
@@ -137,10 +135,7 @@ function ArtifactChip({ artifact, sessionId, allArtifacts, onOpenArtifact }: { a
       <Button variant="ghost"
         type="button"
         className="artifact-chip-main"
-        onClick={() => {
-          if (onOpenArtifact) onOpenArtifact(artifact);
-          else viewer.open(artifact, sessionId, allArtifacts);
-        }}
+        onClick={() => onOpenArtifact?.(artifact)}
         aria-label={t("artifact.view_named", { title: artifact.title })}
       >
         <span className="artifact-chip-icon" aria-hidden="true">

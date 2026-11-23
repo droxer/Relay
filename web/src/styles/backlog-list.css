@@ -283,29 +283,6 @@ tr[data-routine-state="paused"] .backlog-row-title,
 .backlog-due-value.warn { color: var(--warn); }
 .backlog-due-value.bad { color: var(--err); }
 
-/* An unset date is an offer, not a value: it opens the record where the date
-   is set. It stays a ghost until the row is under the pointer so a screenful
-   of undated rows does not read as a screenful of buttons. */
-.backlog-due-empty {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  height: var(--control-h-xs);
-  margin: 0;
-  padding: 0 var(--sp-1-5) 0 var(--sp-1);
-  border: 0;
-  border-radius: var(--r-2);
-  background: transparent;
-  color: var(--ink-4);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.backlog-row:hover .backlog-due-empty { color: var(--ink-3); }
-.backlog-due-empty:hover { background: var(--control-fill-hover); color: var(--ink-1); }
-
 /* Inline property controls (InlineTaskFields): the row's own marks, made
    pressable. At rest they read exactly as the static marks did — no border,
    no fill — and only the hovered control takes the control fill, so a list
