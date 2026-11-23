@@ -242,7 +242,7 @@
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
   border-bottom: var(--hairline-soft);
-  background: var(--surface-0);
+  background: var(--surface-band);
 }
 
 /* No colored lane rail: the status icon, the label and the count sit together
