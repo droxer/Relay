@@ -11,11 +11,13 @@ import { RadioGroup, RadioGroupChoice } from "@/components/ui/radio-group"
    automation) every answer fits on screen, so the reader compares them at a
    glance and picks in one press.
 
-   The skin follows the option count, not the call site:
-   - `segments` (≤ 4 options): equal-width segments in one track, the switch
-     over a Project's assignment picker.
-   - `chips` (5+ options, or labels too long to share a track): a wrapping row
-     of pills, the same weight as the weekday picker beside it.
+   Every option is an outlined tile; the selected one takes a heavier
+   --action line over a light wash (inputs.css). The layout follows the
+   option count, not the call site:
+   - `segments` (≤ 4 options): tiles grow to fill the row, and wrap a whole
+     tile to the next line when the column is too narrow (phones).
+   - `chips` (5+ options): tiles keep their own width and wrap, the same
+     weight as the weekday picker beside them.
    Dynamic lists — projects, computers, agents, time zones — stay a Select:
    their length is unbounded, and that is what a menu is for.
 
