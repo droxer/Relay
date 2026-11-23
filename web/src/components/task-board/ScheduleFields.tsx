@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { previewSchedule } from "../../api";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
@@ -70,17 +71,16 @@ export function ScheduleFields({ schedule, onChange }: Props) {
 
   return (
     <>
-      <Field label={t("automation.repeat")} labelId={presetLabelId} wrapper="div">
-        <Select value={preset} onValueChange={(value) => value && setRepeat(repeatForPreset(value as SchedulePreset, repeat))}>
-          <SelectTrigger className="w-full" aria-labelledby={presetLabelId}>
-            <SelectValue>{(value: SchedulePreset) => t(`automation.presets.${value}`)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {SCHEDULE_PRESETS.map((option) => (
-              <SelectItem key={option} value={option} label={t(`automation.presets.${option}`)}>{t(`automation.presets.${option}`)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Seven fixed cadences: a row of chips, the same weight as the weekday
+          picker it reveals, instead of a menu the reader must open to compare. */}
+      <Field label={t("automation.repeat")} labelId={presetLabelId} wrapper="div" className="trigger-filters-wide">
+        <ChoiceGroup<SchedulePreset>
+          name="automation-repeat"
+          aria-labelledby={presetLabelId}
+          value={preset}
+          onValueChange={(value) => setRepeat(repeatForPreset(value, repeat))}
+          options={SCHEDULE_PRESETS.map((option) => ({ value: option, label: t(`automation.presets.${option}`) }))}
+        />
       </Field>
       {"at" in repeat ? (
         <Field label={t("automation.at")}>

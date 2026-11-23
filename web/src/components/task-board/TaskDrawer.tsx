@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentTeam, UserAgent, ProjectListItem, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
 import { TASK_PRIORITIES } from "../../lib/backlog";
@@ -114,24 +115,19 @@ function BacklogFields({ form, onChange, canRun }: {
           the task's status control, the same one the list and board use. */}
       {form.id ? null : (
       <Field label={t("backlog.status")} labelId={statusLabelId} hint={t("backlog.ready_policy")} wrapper="div">
-        <Select
+        <ChoiceGroup<TaskStatus>
+          name="backlog-status"
+          aria-labelledby={statusLabelId}
           value={form.status}
-          onValueChange={(value) => {
-            if (value == null) return
-            onChange({ ...form, status: value as TaskStatus })
-          }}
-        >
-          <SelectTrigger className="w-full" aria-labelledby={statusLabelId}>
-            <SelectValue>{(value: TaskStatus) => t(`backlog.statuses.${value}`)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {NEW_TASK_STATUSES
-              .filter((status) => canRun || status !== "assigned" || status === form.status)
-              .map((status) => (
-              <SelectItem key={status} value={status} label={t(`backlog.statuses.${status}`)}>{t(`backlog.statuses.${status}`)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onValueChange={(status) => onChange({ ...form, status })}
+          options={NEW_TASK_STATUSES.map((status) => ({
+            value: status,
+            label: t(`backlog.statuses.${status}`),
+            /* Intake keeps Ready on screen but unavailable, so the reader sees
+               the step a project would unlock rather than a lone segment. */
+            disabled: !canRun && status === "assigned" && status !== form.status,
+          }))}
+        />
       </Field>
       )}
       <Field label={t("backlog.due")} wrapper="div" labelId={dueLabelId}>
@@ -516,39 +512,26 @@ export function TaskDrawer({
               hint={form.startedAt ? t("backlog.acceptance_locked") : undefined}
               wrapper="div"
             >
-              <Select
+              <ChoiceGroup<"human" | "automatic">
+                name={`${fieldPrefix}-acceptance`}
+                aria-labelledby={acceptanceLabelId}
                 value={form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY}
                 disabled={Boolean(form.startedAt)}
-                onValueChange={(value) => {
-                  if (value === "human" || value === "automatic") onChange({ ...form, acceptancePolicy: value });
-                }}
-              >
-                <SelectTrigger className="w-full" aria-labelledby={acceptanceLabelId}>
-                  <SelectValue>{(value: string) => t(value === "automatic" ? "backlog.acceptance_automatic" : "backlog.acceptance_human")}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="human">{t("backlog.acceptance_human")}</SelectItem>
-                  <SelectItem value="automatic">{t("backlog.acceptance_automatic")}</SelectItem>
-                </SelectContent>
-              </Select>
+                onValueChange={(acceptancePolicy) => onChange({ ...form, acceptancePolicy })}
+                options={[
+                  { value: "human", label: t("backlog.acceptance_human") },
+                  { value: "automatic", label: t("backlog.acceptance_automatic") },
+                ]}
+              />
             </Field>
             <Field label={t("backlog.priority")} labelId={priorityLabelId} wrapper="div">
-              <Select
+              <ChoiceGroup<TaskPriority>
+                name={`${fieldPrefix}-priority`}
+                aria-labelledby={priorityLabelId}
                 value={form.priority}
-                onValueChange={(value) => {
-                  if (value == null) return
-                  updateBase({ priority: value as TaskPriority })
-                }}
-              >
-                <SelectTrigger className="w-full" aria-labelledby={priorityLabelId}>
-                  <SelectValue>{(value: TaskPriority) => t(`backlog.priorities.${value}`)}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_PRIORITIES.map((priority) => (
-                    <SelectItem key={priority} value={priority} label={t(`backlog.priorities.${priority}`)}>{t(`backlog.priorities.${priority}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={(priority) => updateBase({ priority })}
+                options={TASK_PRIORITIES.map((priority) => ({ value: priority, label: t(`backlog.priorities.${priority}`) }))}
+              />
             </Field>
           </div>
           <Field
@@ -557,21 +540,18 @@ export function TaskDrawer({
             hint={<span id={permissionHintId}>{t("backlog.permission_mode_hint")}</span>}
             wrapper="div"
           >
-            <Select
+            <ChoiceGroup<"ask" | "yolo">
+              name={`${fieldPrefix}-permission`}
+              aria-labelledby={permissionLabelId}
+              aria-describedby={permissionHintId}
               value={form.permissionMode ?? "ask"}
               disabled={busy}
-              onValueChange={(value) => {
-                if (value === "ask" || value === "yolo") updateBase({ permissionMode: value });
-              }}
-            >
-              <SelectTrigger className="w-full" aria-labelledby={permissionLabelId} aria-describedby={permissionHintId}>
-                <SelectValue>{(value: string) => t(value === "yolo" ? "backlog.permission_yolo" : "backlog.permission_ask")}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ask">{t("backlog.permission_ask")}</SelectItem>
-                <SelectItem value="yolo">{t("backlog.permission_yolo")}</SelectItem>
-              </SelectContent>
-            </Select>
+              onValueChange={(permissionMode) => updateBase({ permissionMode })}
+              options={[
+                { value: "ask", label: t("backlog.permission_ask") },
+                { value: "yolo", label: t("backlog.permission_yolo") },
+              ]}
+            />
           </Field>
           <TaskTagsField
             name={`${fieldPrefix}-tags`}

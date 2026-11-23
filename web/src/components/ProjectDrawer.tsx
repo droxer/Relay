@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectDescriptionField, ProjectFolderField, ProjectNameField } from "./ProjectFormFields";
 import { RosterAgentItem, RosterEmptyOption, RosterTriggerValue } from "./roster/RosterOption";
@@ -67,6 +67,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const { t } = useTranslation();
   const { createProjectMutation, startProjectSetupMutation } = useRelayMutations();
   const [origin, setOrigin] = useState<"fresh" | "existing">("fresh");
+  const originLabelId = useId();
   const [mode, setMode] = useState<Mode>(userId ? "describe" : "manual");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -222,22 +223,25 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       bodyClassName="adm-drawer-body--column"
     >
       <form className="adm-form project-setup-form" onSubmit={(event) => void submit(event)} noValidate>
-        <Field label={t("project.origin_label")} hint={t(origin === "fresh" ? "project.origin_fresh_hint" : "project.origin_existing_hint")}>
-          <RadioGroup
-            className="project-origin-options"
-            aria-label={t("project.origin_label")}
+        <Field label={t("project.origin_label")} labelId={originLabelId} wrapper="div"
+          hint={t(origin === "fresh" ? "project.origin_fresh_hint" : "project.origin_existing_hint")}>
+          {/* Two answers that reshape the whole form below: segments, so both
+              stay in view and the switch reads as a mode, not a setting. */}
+          <ChoiceGroup<"fresh" | "existing">
             name="project-origin"
+            aria-labelledby={originLabelId}
             value={origin}
             disabled={busy}
             onValueChange={(value) => {
-              setOrigin(value as "fresh" | "existing");
+              setOrigin(value);
               setFolder("");
               setFolderError(null);
             }}
-          >
-            <label className="project-member-flag"><RadioGroupItem value="fresh" />{t("project.origin_fresh")}</label>
-            <label className="project-member-flag"><RadioGroupItem value="existing" />{t("project.origin_existing")}</label>
-          </RadioGroup>
+            options={[
+              { value: "fresh", label: t("project.origin_fresh") },
+              { value: "existing", label: t("project.origin_existing") },
+            ]}
+          />
         </Field>
         {describing ? (
           <>
@@ -306,12 +310,10 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
           </>
         )}
 
-        {selectedComputer && setupAgents.length ? <Field label={t("project_manager.agent")} htmlFor="new-project-manager">
-          <select id="new-project-manager" value={managerAgentId ?? ""} disabled={busy} onChange={e => setManagerChoice(e.target.value || null)}>
-            <option value="">{t("project_manager.none")}</option>
-            {setupAgents.map(agent => <option key={agent.id} value={agent.id}>{agent.displayName}</option>)}
-          </select>
-        </Field> : null}
+        {selectedComputer && setupAgents.length ? (
+          <ManagerAgentField agents={setupAgents} value={managerAgentId ?? ""} disabled={busy}
+            onChange={(value) => setManagerChoice(value || null)} />
+        ) : null}
         <div className="adm-form-actions">
           {userId && origin === "fresh" ? (
             <Button
@@ -397,6 +399,34 @@ function SetupAgentField({ agents, value, disabled, hint, onChange }: {
         </SelectTrigger>
         <SelectContent>
           <RosterEmptyOption value={AUTO_SETUP_AGENT} label={t("project.setup_agent_auto")} />
+          {agents.map((agent) => <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />)}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
+
+/** The project's manager agent: an open-ended roster, so a roster Select — the
+ *  same picker as the setup agent beside it, not a bare native <select>. */
+function ManagerAgentField({ agents, value, disabled, onChange }: {
+  agents: UserAgent[];
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  const labelId = useId();
+  const selectedAgent = agents.find((agent) => agent.id === value);
+  return (
+    <Field label={t("project_manager.agent")} labelId={labelId} wrapper="div">
+      <Select value={value} onValueChange={(next) => onChange(next ?? "")}>
+        <SelectTrigger id="new-project-manager" className="w-full" disabled={disabled} aria-labelledby={labelId}>
+          {selectedAgent ? <RosterTriggerValue agent={selectedAgent} /> : (
+            <SelectValue>{() => t("project_manager.none")}</SelectValue>
+          )}
+        </SelectTrigger>
+        <SelectContent>
+          <RosterEmptyOption value="" label={t("project_manager.none")} />
           {agents.map((agent) => <RosterAgentItem key={agent.id} value={agent.id} agent={agent} />)}
         </SelectContent>
       </Select>

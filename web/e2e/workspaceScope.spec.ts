@@ -91,8 +91,9 @@ test("Task tool permissions reach a running Codex turn and can be changed in the
     await page.goto(`${path}/tasks/${task.id}`);
     await page.getByRole("button", { name: "Edit", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "Edit task", exact: true });
-    await editor.getByRole("combobox", { name: "Tool permissions" }).click();
-    await page.getByRole("option", { name: "YOLO (auto-approve)", exact: true }).click();
+    // Two options, so the editor shows them side by side (ChoiceGroup), not a select.
+    await editor.getByRole("radiogroup", { name: "Tool permissions" })
+      .getByRole("radio", { name: "YOLO (auto-approve)", exact: true }).click();
     await editor.getByRole("button", { name: "Save task", exact: true }).click();
     await expect.poll(async () => (await get(api, `/tasks/${task.id}`)).permissionMode).toBe("yolo");
 

@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectDrawer } from "../src/components/ProjectDrawer";
@@ -63,7 +63,9 @@ it("creates the project from the intent and asks the chosen agent to draft its s
   render(<ProjectDrawer open computers={computers} userId="alice" onClose={vi.fn()} onSaved={onSaved} />);
   fireEvent.change(screen.getByRole("textbox", { name: /^project\.setup_intent/ }), { target: { value: "Launch the site.\nWith pricing." } });
   fireEvent.click(screen.getByRole("button", { name: "node" }));
-  fireEvent.click(screen.getByRole("button", { name: /^Bo · / }));
+  // The setup agent, not the manager picker below it, which lists the same roster.
+  const setupAgentField = screen.getByText("project.setup_agent").closest("[data-slot='field']") as HTMLElement;
+  fireEvent.click(within(setupAgentField).getByRole("button", { name: /^Bo · / }));
   fireEvent.click(screen.getByRole("button", { name: "project.setup_draft" }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
   expect(create).toHaveBeenCalledWith({

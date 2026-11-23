@@ -4,6 +4,7 @@ import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
@@ -41,21 +42,18 @@ export function TriggerKindField({ triggers, triggersEnabled = true, onChange }:
   const kinds = TRIGGER_KINDS.filter((kind) => triggersEnabled || kind === "schedule" || kind === current);
   const options: KindChoice[] = [...kinds, NO_TRIGGER];
   const label = (choice: KindChoice) => t(`automation.kinds.${choice}`);
+  /* Up to five short answers to "what starts it" — on screen at once, so the
+     reader weighs Schedule against an event without opening a menu. It is the
+     field every other one below depends on, so it spans the form. */
   return (
-    <Field label={t("automation.trigger_kind")} labelId={labelId} wrapper="div">
-      <Select<KindChoice> value={value} onValueChange={(next) => {
-        if (!next || next === value) return;
-        onChange(next === NO_TRIGGER ? [] : [triggerForKind(next as RoutineTriggerKind)]);
-      }}>
-        <SelectTrigger className="w-full" aria-labelledby={labelId}>
-          <SelectValue>{label}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((choice) => (
-            <SelectItem key={choice} value={choice} label={label(choice)}>{label(choice)}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <Field label={t("automation.trigger_kind")} labelId={labelId} wrapper="div" className="trigger-filters-wide">
+      <ChoiceGroup<KindChoice>
+        name="automation-trigger-kind"
+        aria-labelledby={labelId}
+        value={value}
+        onValueChange={(next) => onChange(next === NO_TRIGGER ? [] : [triggerForKind(next)])}
+        options={options.map((choice) => ({ value: choice, label: label(choice) }))}
+      />
     </Field>
   );
 }
@@ -78,16 +76,13 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   return (
     <>
       <Field label={t("automation.on")} labelId={onId} wrapper="div" className="trigger-filters-wide">
-        <Select value={trigger.on} onValueChange={(value) => value && onChange({ ...trigger, on: value as RoutineTriggerOn })}>
-          <SelectTrigger className="w-full" aria-labelledby={onId}>
-            <SelectValue>{(value: RoutineTriggerOn) => t(`automation.on_values.${value}`)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {TRIGGER_ON[trigger.kind].map((on) => (
-              <SelectItem key={on} value={on} label={t(`automation.on_values.${on}`)}>{t(`automation.on_values.${on}`)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ChoiceGroup<RoutineTriggerOn>
+          name="automation-trigger-on"
+          aria-labelledby={onId}
+          value={trigger.on}
+          onValueChange={(on) => onChange({ ...trigger, on })}
+          options={TRIGGER_ON[trigger.kind].map((on) => ({ value: on, label: t(`automation.on_values.${on}`) }))}
+        />
       </Field>
       {/* The filters narrow the event, so they read as one group under it
           rather than as nine peers of the trigger itself. A status change is
@@ -107,7 +102,9 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
           {choice("projectId", t("automation.filter_project"), projects.map((p) => ({ value: p.id, label: p.name })))}
           {choice("assignedAgentId", t("automation.filter_agent"), agents.map((a) => ({ value: a.id, label: a.displayName, mark: <RosterAgentMark agent={a} /> })))}
           {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name, mark: <RosterTeamMark team={team} /> })))}
-          {choice("priority", t("automation.filter_priority"), TASK_PRIORITIES.map((p) => ({ value: p, label: t(`backlog.priorities.${p}`) })))}
+          {/* Any + three priorities: a fixed set, so it reads as segments
+              rather than a menu like the open-ended rosters above. */}
+          <PriorityFilter value={filters.priority ?? ANY} onChange={(value) => setFilter("priority", value)} />
           <Field label={t("automation.filter_title")} labelId={titleLabelId} error={error ? t(error) : undefined} errorId={errorId}
             className="trigger-filters-wide">
             <Input name="automation-title-contains" maxLength={TITLE_CONTAINS_MAX + 20}
@@ -117,6 +114,25 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
         </div>
       </div>
     </>
+  );
+}
+
+function PriorityFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useTranslation();
+  const labelId = useId();
+  return (
+    <Field label={t("automation.filter_priority")} labelId={labelId} wrapper="div">
+      <ChoiceGroup<string>
+        name="automation-filter-priority"
+        aria-labelledby={labelId}
+        value={value}
+        onValueChange={onChange}
+        options={[
+          { value: ANY, label: t("automation.filter_any") },
+          ...TASK_PRIORITIES.map((priority) => ({ value: priority, label: t(`backlog.priorities.${priority}`) })),
+        ]}
+      />
+    </Field>
   );
 }
 
