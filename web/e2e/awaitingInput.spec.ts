@@ -80,6 +80,7 @@ async function serve(page: Page, theme: "light" | "dark", taskScoped = true, ove
     if (path.endsWith(`/tasks/${task.id}`)) body = waitingTask;
     if (path.endsWith("/runs")) body = { taskId: task.id, runs: [] };
     if (path.endsWith(`/tasks/${task.id}/events`)) body = { events: [] };
+    if (request.method() === "POST" && path.endsWith(`/threads/${session.id}/decisions`)) body = thread;
     if (request.method() === "POST" && path.endsWith(`/threads/${session.id}/messages`)) {
       sent.push(JSON.parse(request.postData() ?? "{}").text);
       body = { ...thread, status: "running" };
@@ -137,12 +138,48 @@ test("a gate stop offers the agent's own next steps below the response with a fr
   await expect.poll(() => sent).toEqual([steps[0]]);
 });
 
-test("a gate stop with no suggestions offers no canned follow-ups", async ({ page }) => {
+test("a gate stop with no suggestions lets the person mark the task done", async ({ page }) => {
   const gate = "The work can't be accepted yet. A required step failed to run.";
   await serve(page, "light", true, { finalOutcome: gate }, { waitingReason: gate });
   await page.goto(`/threads/${session.id}`);
-  await expect(page.locator(".composer-input-wrap textarea")).toBeVisible();
+  const prompt = page.getByRole("region", { name: "Reviewer stopped before finishing" });
+  await expect(prompt).toContainText("A required step failed to run.", { timeout: 3000 });
   await expect(page.getByRole("region", { name: "Suggested next" })).toHaveCount(0);
+  const decide = page.waitForRequest((request) => request.method() === "POST" && new URL(request.url()).pathname.endsWith(`/threads/${session.id}/decisions`));
+  await prompt.getByRole("button", { name: "It’s finished. Mark #12 done" }).click();
+  expect((await decide).postDataJSON().kind).toBe("mark_done");
+  await expect(prompt.getByText("#12 is marked done.")).toBeVisible();
+});
+
+test("a round limit with no suggestions can be answered on mobile when another Task owns the round", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await serve(page, "light", true, {
+    collaborationRounds: [{ ...session.collaborationRounds[0], workScope: { kind: "task", taskId: "another-task" } }],
+  }, {
+    awaiting: { kind: "budget", text: "The Task reached its round limit." },
+  });
+  await page.goto(`/threads/${session.id}`);
+  const prompt = page.getByRole("region", { name: "Reviewer reached its round limit" });
+  await expect(prompt).toBeVisible({ timeout: 3000 });
+  await expect(prompt.getByRole("button", { name: /Mark #12 done/ })).toHaveCount(0);
+  await prompt.getByRole("button", { name: "Answer", exact: true }).click();
+  const input = page.locator(".composer-input-wrap textarea");
+  await expect(input).toBeFocused();
+  await input.fill("Continue with staging only.");
+  const message = page.waitForRequest((request) => request.method() === "POST" && new URL(request.url()).pathname.endsWith(`/threads/${session.id}/messages`));
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  expect((await message).postDataJSON()).toMatchObject({ text: "Continue with staging only.", questionId: "wait-1" });
+});
+
+test("an approval sends the id of the Task's current wait", async ({ page }) => {
+  await serve(page, "light", true, { finalOutcome: "Waiting for approval before the next step." }, {
+    awaiting: { kind: "approval", text: "Waiting for approval before the next step." },
+  });
+  await page.goto(`/threads/${session.id}`);
+  const prompt = page.getByRole("region", { name: "Reviewer is done. Approve to continue" });
+  const message = page.waitForRequest((request) => request.method() === "POST" && new URL(request.url()).pathname.endsWith(`/threads/${session.id}/messages`));
+  await prompt.getByRole("button", { name: "Approve and continue" }).click();
+  expect((await message).postDataJSON()).toMatchObject({ questionId: "wait-1", approve: true });
 });
 
 for (const kind of ["check", "budget"] as const) {

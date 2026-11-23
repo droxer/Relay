@@ -421,8 +421,7 @@ export function ThreadsView({
   // answers that question. Naming it lets the backend refuse a reply that a
   // newer question has overtaken instead of resuming the task with it.
   const waitingQuestionId = waiting?.questionId;
-  // A stopped run offers ordinary follow-ups beneath its response. Only a
-  // question or approval needs a prompt attached to the reply box.
+  // A stopped run can offer suggested follow-ups beneath its response.
   const followUpWait = waiting?.kind === "check" || waiting?.kind === "budget";
   // A finished turn's suggested follow-ups, while nothing else claims the
   // thread: no run, no question, no decision, no open permission prompt. A
@@ -434,6 +433,14 @@ export function ThreadsView({
     }),
     [activeSession, running, waiting, followUpWait, awaitingDecision],
   );
+  const showFollowUpSteps = followUpWait && nextSteps.length > 0;
+  const activeWorkScope = activeSession?.collaborationRounds?.find(
+    (round) => round.roundId === activeSession.activeRoundId,
+  )?.workScope;
+  // The thread decision closes the active round's Task. A wait can also name
+  // this thread from a different Task, whose reply is routed by questionId.
+  const canMarkWaitingTaskDone = !followUpWait
+    || (activeWorkScope?.kind === "task" && activeWorkScope.taskId === waiting?.task?.id);
   // What the person writes mid-run waits for the next round; a started
   // thread only — staging a new one has no run to wait on.
   const queueEnabled = transcriptVisible && threadDetailsReady && Boolean(activeSession) && !initializingThread && !projectReadOnly;
@@ -899,7 +906,7 @@ export function ThreadsView({
               sendHandoff={sendHandoff}
               onRequestChanges={() => composerRef.current?.focus()}
             />
-          ) : followUpWait ? null : waiting ? (
+          ) : showFollowUpSteps ? null : waiting ? (
             <AwaitingInputPrompt
               key={`${activeSession?.id}:${waitingQuestionId ?? waiting.kind}`}
               waiting={waiting}
@@ -907,7 +914,7 @@ export function ThreadsView({
               nextAgentName={waiting.nextAgentId ? logicalAgentNames[waiting.nextAgentId] : undefined}
               onChoose={(reply, options) => composerRef.current?.send(reply, options) ?? Promise.resolve(false)}
               onReply={() => composerRef.current?.focus()}
-              onMarkDone={() => sendDecision("mark_done")}
+              onMarkDone={canMarkWaitingTaskDone ? () => sendDecision("mark_done") : undefined}
             />
           ) : actionTask?.status === "review" && !running ? (
             <TaskReviewPanel

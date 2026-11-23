@@ -111,8 +111,7 @@ export function AwaitingInputPrompt({ waiting, agentName, nextAgentName, onChoos
       ...(markDone ? [markDone] : []),
     ]
     : !asked
-    // A gate stop or a spent budget renders as follow-ups beneath the
-    // response (ThreadsView), so only the person's own mark done is left.
+    // At a gate stop or round limit, the person can write a reply or close the task.
     ? (markDone ? [markDone] : [])
     : waiting.options.map((option) => ({ label: option, reply: option, sent: resumed }));
   const choose = async (index: number) => {

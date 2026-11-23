@@ -2749,7 +2749,7 @@
     "question_title": "{{agent}} needs your answer",
     "check_title": "{{agent}} stopped before finishing",
     "unreported_title": "{{agent}} ended without a report",
-    "unreported_text": "Its last message above says where it stopped and what it needs. Answer here, or pick a next step.",
+    "unreported_text": "See the last message from {{agent}} for details.",
     "budget_title": "{{agent}} reached its round limit",
     "no_question": "{{agent}} asked for help without saying what it needs. Reply with how to proceed.",
     "hint_task": "Your reply resumes {{ref}}.",
