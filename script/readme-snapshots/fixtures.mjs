@@ -702,6 +702,13 @@ export function routeBody(pathname, params, language, theme = "dark") {
   if (head === "agents" && id) return { agent: byId(agents, id) };
   if (path === "/teams") return { teams };
   if (path === "/workflows") return { workflows: [] };
+  /* Before the bare team route, which would answer this path with { team }
+     and crash the workflow library on a missing `projects`. */
+  if (head === "teams" && tail === "workflow-choices") {
+    const team = byId(teams, id);
+    const onComputer = projects.filter(project => project.computerId === team?.computerId);
+    return { workflows: [], projects: onComputer.map(({ id: projectId, name }) => ({ id: projectId, name })) };
+  }
   if (head === "teams" && id) return { team: byId(teams, id) };
 
   if (path === "/projects") return { projects };
