@@ -19,7 +19,8 @@ import {
   ICON,
   NavBack,
 } from "./icons";
-import { StatusPill, TonePill } from "./StatusPill";
+import { StateMark } from "./StateMark";
+import { describeAgentRosterStatus } from "../lib/agentStatus";
 import { AgentDetailPage } from "./AgentDetailPage";
 import { MobileTopbarBack } from "./MobileTopbarSlot";
 import { PageHeader } from "./PageHeader";
@@ -49,21 +50,18 @@ function RosterRow({
   onSelect: (agent: UserAgent) => void;
 }) {
   const { t } = useTranslation();
-  const { availability, bindingStatus, enabled } = agent;
-  const bindingIssue = availability === "offline" && bindingStatus !== "available" ? bindingStatus : undefined;
-  const status = !enabled ? (
-    <TonePill tone="neutral" label={t("agents_page.disabled")} />
-  ) : bindingIssue ? (
-    <TonePill tone={bindingIssue === "computer_offline" ? "neutral" : "bad"} label={t(`agents_page.binding_status_${bindingIssue}`)} />
-  ) : availability !== "ready" ? (
-    <StatusPill value={availability} />
-  ) : null;
+  const { availability, enabled } = agent;
+  const rosterStatus = describeAgentRosterStatus(agent);
+  const statusLabel = rosterStatus
+    ? t(rosterStatus.key, rosterStatus.defaultValue ? { defaultValue: rosterStatus.defaultValue } : undefined)
+    : null;
 
   return (
     <li className="list-virtual">
       <article
         className="agents-roster-row rail-row"
         data-availability={agent.availability}
+        data-unavailable={rosterStatus?.unavailable ? "true" : undefined}
         data-selected={selected ? "true" : "false"}
       >
         <Button
@@ -73,7 +71,7 @@ function RosterRow({
           aria-current={selected ? "page" : undefined}
           onClick={() => onSelect(agent)}
         >
-          <span className="agents-roster-row-badge" aria-hidden={status ? true : undefined}>
+          <span className="agents-roster-row-badge" aria-hidden={statusLabel ? true : undefined}>
             <AgentStateBadge
               agent={agent.executorKind}
               ready={enabled && availability === "ready"}
@@ -86,18 +84,30 @@ function RosterRow({
             <span className="agents-roster-row-title">
               <span className="agents-roster-row-name">{agent.displayName}</span>
             </span>
-            {/* The band above this row names the computer, so the row says
-                only which runtime it is — same trade the grouped task lists
-                made when the band took over the status column. */}
-            <AgentMetaLine
-              executorKind={agent.executorKind}
-              placements={agent.placements}
-              model={agentModel(agent)}
-              className="agents-roster-row-meta"
-              showComputers={false}
-            />
+            {/* Status leads the secondary line instead of occupying a right-side
+                pill column that crushes names in the 318px rail or 375px phone. */}
+            <span className="agents-roster-row-sub">
+              {rosterStatus && statusLabel ? (
+                <>
+                  <span className="agents-roster-row-state" data-tone={rosterStatus.tone}>
+                    <StateMark shape={rosterStatus.shape} tone={rosterStatus.tone} />
+                    <span>{statusLabel}</span>
+                  </span>
+                  <span className="agent-meta-separator" aria-hidden="true">·</span>
+                </>
+              ) : null}
+              {/* The band above this row names the computer, so the row says
+                  only which runtime it is — same trade the grouped task lists
+                  made when the band took over the status column. */}
+              <AgentMetaLine
+                executorKind={agent.executorKind}
+                placements={agent.placements}
+                model={agentModel(agent)}
+                className="agents-roster-row-meta"
+                showComputers={false}
+              />
+            </span>
           </span>
-          {status && <span className="agents-roster-row-status">{status}</span>}
         </Button>
       </article>
     </li>

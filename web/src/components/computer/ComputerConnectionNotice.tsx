@@ -38,11 +38,14 @@ export function ComputerConnectionNotice({
   const { title, body } = noticeKey(connection, Boolean(node.managedNodeId));
   const webCleanup = node.capabilities?.includes("report-cleanup");
   const Icon = connection.tone === "bad" ? StatusError : connection.tone === "warn" ? StatusWarn : StatusInfo;
+  // Offline and revoked states are already named in the card header's presence
+  // readout, so repeating the title here adds clutter without new information.
+  const showTitle = connection.state !== "offline" && connection.state !== "revoked";
   return (
     <div className="computer-card-connection" data-tone={connection.tone} role="status">
       <Icon size={ICON.sm} aria-hidden="true" />
       <div className="computer-card-connection-copy">
-        <p className="computer-card-connection-title">{t(title)}</p>
+        {showTitle ? <p className="computer-card-connection-title">{t(title)}</p> : null}
         <p className="computer-card-connection-body">
           <Trans i18nKey={webCleanup && connection.issue === "quarantine" ? "computer.connection_quarantine_web_body" : body}
             t={t} components={{ cmd: <code className="code" /> }} />
