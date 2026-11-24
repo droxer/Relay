@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import Any
 
-from sqlalchemy import case, func, select, text
+from sqlalchemy import and_, case, func, select, text, true
 from sqlalchemy.sql.elements import ColumnElement
 
-from ...core.reporting_period import BucketSize, reporting_dates
+from ...core.reporting_period import BucketSize, range_utc_bounds, reporting_dates
 from ..engine import store_transaction
+from ..tables.tasks import task_sessions, tasks
 from .state import SessionStoreState
 
 
@@ -214,6 +215,62 @@ class SessionMetricRows(SessionStoreState):
                 for offset in range(day_window)
             ],
             "topUsers": [{"userId": str(user_id), "sessionCount": int(count)} for user_id, count in user_rows],
+        }
+
+    def dashboard_conversation_metrics(
+        self,
+        *,
+        date_range: tuple[date, date] | None = None,
+        zone: tzinfo = UTC,
+        all_time: bool = False,
+    ) -> dict[str, int]:
+        """Classify threads into conversations, task runs, and automation runs in SQL."""
+        sessions = self.sessions
+        has_routine = (
+            select(task_sessions.c.id)
+            .select_from(task_sessions.join(tasks, tasks.c.id == task_sessions.c.task_id))
+            .where(
+                task_sessions.c.session_id == sessions.c.id,
+                tasks.c.deleted_at.is_(None),
+                tasks.c.is_routine.is_(True),
+            )
+            .exists()
+        )
+        has_task = (
+            select(task_sessions.c.id)
+            .select_from(task_sessions.join(tasks, tasks.c.id == task_sessions.c.task_id))
+            .where(
+                task_sessions.c.session_id == sessions.c.id,
+                tasks.c.deleted_at.is_(None),
+            )
+            .exists()
+        )
+        if date_range is not None and not all_time:
+            start_at, end_at = range_utc_bounds(date_range, zone)
+            in_range: Any = and_(sessions.c.created_at >= start_at, sessions.c.created_at < end_at)
+        else:
+            in_range = true()
+        is_chat = ~has_task
+        is_task_run = and_(has_task, ~has_routine)
+        statement = select(
+            func.sum(case((in_range, 1), else_=0)).label("total"),
+            func.sum(case((and_(in_range, is_chat), 1), else_=0)).label("chats"),
+            func.sum(case((is_chat, 1), else_=0)).label("total_chats"),
+            func.sum(case((and_(in_range, is_chat, sessions.c.project_id.is_not(None)), 1), else_=0)).label("project_chats"),
+            func.sum(case((and_(in_range, is_chat, sessions.c.project_id.is_(None)), 1), else_=0)).label("standalone_chats"),
+            func.sum(case((and_(in_range, is_task_run), 1), else_=0)).label("task_runs"),
+            func.sum(case((and_(in_range, has_routine), 1), else_=0)).label("automation_runs"),
+        ).select_from(sessions)
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(statement).mappings().one()
+        return {
+            "total": int(row["total"] or 0),
+            "chats": int(row["chats"] or 0),
+            "totalChats": int(row["total_chats"] or 0),
+            "projectChats": int(row["project_chats"] or 0),
+            "standaloneChats": int(row["standalone_chats"] or 0),
+            "taskRuns": int(row["task_runs"] or 0),
+            "automationRuns": int(row["automation_runs"] or 0),
         }
 
     def _all_time_buckets(

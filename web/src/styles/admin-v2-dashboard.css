@@ -61,6 +61,16 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* Multi-row KPI panel — two balanced 4-column rows on desktop (activity &
+   output on top, outcomes & inventory underneath). */
+.adm-dash-kpis--grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.adm-dash-kpis--grid .adm-dash-tile:nth-child(4n) { border-right: none; }
+.adm-dash-kpis--grid .adm-dash-tile:nth-child(-n + 4) { border-bottom: var(--hairline); }
+.adm-dash-kpis--grid .adm-dash-tile:last-child:nth-child(4n + 3) { grid-column: span 2; border-right: none; }
+
 /* Entrance — the tiles mount once per dashboard load, so they rise on the
    shared --t-stagger ladder (login cover, project members). --rise-sm: the
    rail's overflow: hidden would clip the taller pane-tier travel. */
@@ -74,6 +84,9 @@
 .adm-dash-tile:nth-child(3) { animation-delay: calc(var(--t-stagger) * 2); }
 .adm-dash-tile:nth-child(4) { animation-delay: calc(var(--t-stagger) * 3); }
 .adm-dash-tile:nth-child(5) { animation-delay: calc(var(--t-stagger) * 4); }
+.adm-dash-tile:nth-child(6) { animation-delay: calc(var(--t-stagger) * 5); }
+.adm-dash-tile:nth-child(7) { animation-delay: calc(var(--t-stagger) * 6); }
+.adm-dash-tile:nth-child(8) { animation-delay: calc(var(--t-stagger) * 7); }
 
 .adm-dash-kpis-wrap {
   position: relative;
@@ -120,6 +133,9 @@
 
 .adm-dash-tile--sessions,
 .adm-dash-tile--success { --tile-key: var(--series-1); }
+.adm-dash-tile--conversations { --tile-key: var(--series-2); }
+.adm-dash-tile--tasks { --tile-key: var(--ok-mark); }
+.adm-dash-tile--projects { --tile-key: var(--series-1); }
 .adm-dash-tile--nodes { --tile-key: var(--live); }
 .adm-dash-tile--tokens { --tile-key: var(--series-1); }
 
@@ -242,6 +258,52 @@
 .adm-dash-panel--wide {
   grid-column: 1 / -1;
 }
+
+/* Projects, tasks, and conversations share one balanced three-card row. */
+.adm-dash-work-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-5);
+  align-items: stretch;
+}
+
+.adm-dash-work-card {
+  min-height: 0;
+}
+
+.adm-dash-work-total {
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.adm-dash-work-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  flex: 1;
+  min-height: 0;
+}
+
+.adm-dash-work-footer {
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+/* Data-series marks for non-status breakdowns (projects, conversations).
+   Each reads the dashboard's theme-calibrated --series-* palette so dark and
+   light registers keep identical hue separation without borrowing status hues. */
+.adm-dash-bar-seg[data-series="1"],
+.adm-dash-stat[data-series="1"] .adm-dash-stat-dot { background: var(--series-1); }
+.adm-dash-bar-seg[data-series="2"],
+.adm-dash-stat[data-series="2"] .adm-dash-stat-dot { background: var(--series-2); }
+.adm-dash-bar-seg[data-series="3"],
+.adm-dash-stat[data-series="3"] .adm-dash-stat-dot { background: var(--series-3); }
+.adm-dash-bar-seg[data-series="rest"],
+.adm-dash-stat[data-series="rest"] .adm-dash-stat-dot { background: var(--series-rest); }
 
 /* Transport errors can contain long paths; keep their text inside the card. */
 .adm-dash [data-slot="card-description"] {
@@ -646,16 +708,49 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .adm-dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Medium widths keep Projects and Tasks paired while Conversations spans the
+     row underneath with a two-column stat list instead of three wide single cards. */
+  .adm-dash-work-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .adm-dash-work-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .adm-dash-work-card:last-child:nth-child(odd) .adm-dash-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3) var(--sp-6);
+  }
+
+  .adm-dash-kpis,
+  .adm-dash-kpis--grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adm-dash-tile { grid-column: span 1; }
   /* Two columns: divide rows, and let an odd final metric span the rail. */
-  .adm-dash-tile:nth-child(2n) { border-right: none; }
+  .adm-dash-kpis--grid .adm-dash-tile:nth-child(odd) { border-right: var(--hairline); }
+  .adm-dash-tile:nth-child(2n),
+  .adm-dash-kpis--grid .adm-dash-tile:nth-child(2n) { border-right: none; }
   .adm-dash-tile:not(:last-child):not(:nth-last-child(2):nth-child(odd)) { border-bottom: var(--hairline); }
-  .adm-dash-tile:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: none; }
+  .adm-dash-tile:last-child:nth-child(odd),
+  .adm-dash-kpis--grid .adm-dash-tile:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: none; }
   /* The floor exists so a desktop row holds one height while readings load.
      Stacked, each row is its own height, and the floor only padded the
      foot-less Computers / Users pair into two tall empty boxes. */
   .adm-dash-tile { min-height: 0; }
+}
+
+/* Narrow panes and phones stack the three work summary cards one per row. */
+@container admin-dashboard (max-width: 42rem) {
+  .adm-dash-work-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adm-dash-work-card:last-child:nth-child(odd) .adm-dash-stat-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
 }
 
 /* Text zoom changes the space the ring and legend need together. Stack
@@ -702,6 +797,25 @@
   .adm-dash-tile:last-child:nth-child(odd) { grid-column: 1 / -1; border-right: none; }
 }
 
+/* Very narrow panes or 200% text zoom: collapse the multi-row KPI panel to
+   one column after the 900px media rule so two tiles never squeeze or clip. */
+@container admin-dashboard (max-width: 22rem) {
+  .adm-dash-kpis.adm-dash-kpis--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .adm-dash-kpis.adm-dash-kpis--grid .adm-dash-tile,
+  .adm-dash-kpis.adm-dash-kpis--grid .adm-dash-tile:nth-child(odd),
+  .adm-dash-kpis.adm-dash-kpis--grid .adm-dash-tile:last-child:nth-child(odd) {
+    grid-column: auto;
+    border-right: none;
+  }
+
+  .adm-dash-kpis.adm-dash-kpis--grid .adm-dash-tile:not(:last-child) {
+    border-bottom: var(--hairline);
+  }
+}
+
 /* Phone: stay two-up rather than collapsing to a single column — four stacked
    full-width tiles pushed the first chart most of a screen below the fold. */
 @media (max-width: 640px) {
@@ -710,7 +824,8 @@
     gap: var(--sp-4);
   }
 
-  .adm-dash-grid {
+  .adm-dash-grid,
+  .adm-dash-work-row {
     gap: var(--sp-4);
   }
 

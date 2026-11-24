@@ -73,6 +73,40 @@ def dashboard_tokens(
     )
 
 
+@router.get("/admin/dashboard/work")
+def dashboard_work(
+    request: Request, ctx: AppContextDep, tz: str | None = None,
+    start: date | None = None, end: date | None = None, all_time: bool = False,
+) -> dict[str, Any]:
+    """Project, task, and conversation totals for the admin Dashboard view."""
+    require_admin_session(request, ctx.auth_store)
+    zone = _dashboard_zone(tz)
+    period = _dashboard_period(start, end, zone, all_time=all_time)
+    zone_key = str(zone)
+    projects = DASHBOARD_CACHE.get_or_build(
+        ctx.project_store,
+        ("projects", zone_key, period),
+        lambda: ctx.project_store.dashboard_project_metrics(
+            date_range=period, zone=zone, all_time=all_time
+        ),
+    )
+    tasks = DASHBOARD_CACHE.get_or_build(
+        ctx.task_store,
+        ("tasks", zone_key, period),
+        lambda: ctx.task_store.dashboard_task_metrics(
+            date_range=period, zone=zone, all_time=all_time
+        ),
+    )
+    conversations = DASHBOARD_CACHE.get_or_build(
+        ctx.session_store,
+        ("conversations", zone_key, period),
+        lambda: ctx.session_store.dashboard_conversation_metrics(
+            date_range=period, zone=zone, all_time=all_time
+        ),
+    )
+    return {"projects": projects, "tasks": tasks, "conversations": conversations}
+
+
 def _dashboard_zone(name: str | None) -> tzinfo:
     if not name or len(name) > 64:
         return UTC
