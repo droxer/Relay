@@ -177,12 +177,12 @@ export function ProjectWorkspacePage({
   );
   const boardTasks = useMemo(() => projectBoardTasks(tasks, project.id), [tasks, project.id]);
   const metricsCache = useMemo<TaskListCache>(() => ({ projectId: project.id, scope: "project-dashboard" }), [project.id]);
-  // The shell owns this query on Dashboard. Other tabs use the same compact
-  // result for the badge, independent of the board's filters and pagination.
+  // The shell owns this query on Dashboard. Other tabs read the cached compact
+  // result for the badge without adding an extra request on direct tab loads.
   const dashboardQuery = useQuery({
     queryKey: [...TASKS_QUERY_KEY, project.id, "project-dashboard"],
     queryFn: ({ signal }) => listTasks(signal, metricsCache),
-    enabled: pageOwnsTasks && pageTab !== "dashboard",
+    enabled: false,
     staleTime: RELAY_POLL_INTERVALS_MS.tasks,
   });
   const counts = dashboard ?? dashboardQuery.data?.projectDashboard;
