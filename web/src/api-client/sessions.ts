@@ -157,6 +157,7 @@ export async function readArtifactBlob(
 export function runLogicalAgents(input: AgentRunInput): Promise<RelaySession> {
   return apiJson<RelaySession>("/agent-runs", {
     method: "POST",
+    retryMessageDelivery: Boolean(input.idempotencyKey && input.userMessageId && !input.sessionId && !input.decision),
     body: {
       taskGoal: input.taskGoal,
       ...(input.connectionGrants !== undefined ? { connectionGrants: input.connectionGrants } : {}),
@@ -183,6 +184,7 @@ export function submitThreadMessage(
 ): Promise<RelaySession> {
   return apiJson<RelaySession>(`/threads/${encodeURIComponent(sessionId)}/messages?view=compact`, {
     method: "POST",
+    retryMessageDelivery: Boolean(input.idempotencyKey || input.userMessageId),
     body: {
       text: input.text,
       ...(input.attachmentIds?.length ? { attachmentIds: input.attachmentIds } : {}),

@@ -791,7 +791,7 @@ export function ThreadsView({
                     onCancel={!activeSession?.deletionRequestedAt && !projectReadOnly ? onCancelRun : undefined}
                   />
                 ) : showRunStarting
-                  ? <RunStartingCue node={activeRuntimeNode} />
+                  ? <RunStartingCue node={activeRuntimeNode} sendingMessage={Boolean(pendingUserMessage)} />
                   : null}
                 <HandoffStatus handoff={handoffStatus} />
                 {activeThreadProject && activeSession ? <ProjectManagerProposals projectId={activeThreadProject.id} threadId={activeSession.id} readOnly={Boolean(projectReadOnly)} running={running} /> : null}

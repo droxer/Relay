@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { getMe, RelayApiError } from "../api";
+import { cancelMessageDeliveryRetries } from "../api-client/client";
 import type { CurrentUser } from "../types";
 import { clearTokens, writeSignedInHint } from "../lib/appStorage";
 import { subscribeSessionRevalidation } from "../lib/sessionRevalidation";
@@ -31,6 +32,7 @@ function authRetryDelay(attempt: number): number {
 }
 
 function clearPersonalCredentials(): void {
+  cancelMessageDeliveryRetries();
   clearTokens();
   useRelayStore.setState({ tokens: {}, selectedUser: "", selectedSessionId: undefined, activeSessionId: null, composingNew: false });
 }
