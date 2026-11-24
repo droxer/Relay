@@ -70,7 +70,7 @@ import { SETUP_STEPS, homeSetupProgressOf } from "./lib/onboarding";
 import type { ComposerDispatchOptions, ComposerHandle } from "./components/composer/Composer";
 import { latestThreadArtifacts, visibleThreadArtifacts } from "./lib/threadArtifacts";
 import { resolveNewThreadComputer, threadOwnAgentId } from "./lib/threadRuntime";
-import { navigateToAppPath, parseAppPath } from "./lib/appRoute";
+import { navigateToAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { parseProjectPageTab, queryCollectionStatus, showThreadChrome } from "./lib/projectPage";
 import { projectDirectoryEntryOptions, projectIndexOptions, projectRecordOptions } from "./hooks/projectQueries";
