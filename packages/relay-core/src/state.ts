@@ -12,6 +12,7 @@ export const GUEST_WORKSPACE = "/workspace";
 export interface ProjectSetupBrief {
   file: string;
   intent: string;
+  goal?: string;
   candidates: Array<{ agentId: string; name: string; executorKind?: string; defaultRole?: string; personality?: string }>;
   roles: string[];
   previousProposal?: Record<string, unknown>;

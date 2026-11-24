@@ -151,6 +151,7 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(monkeypat
     }]
     assert row["setupSummary"] == {
         "state": "proposed", "mode": "plan", "threadId": "setup-thread", "hasProposal": True,
+        "proposedTaskCount": 1,
     }
     assert "contextSummary" not in row
     assert not {"context", "goal", "description", "setup"} & row.keys()

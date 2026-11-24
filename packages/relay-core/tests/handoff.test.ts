@@ -372,6 +372,26 @@ describe("prompts", () => {
     assert.match(inProject, /The owner decides whether to adopt them/);
     assert.doesNotMatch(outside, /contextSuggestions/);
   });
+  it("gives a plan draft the project goal and asks for bounded tasks with prerequisites", () => {
+    const prompt = claudeTaskPrompt(state({
+      task_goal: "Plan launch work",
+      project_setup: {
+        mode: "plan",
+        file: ".relay/project-setup-run-1.json",
+        intent: "Focus on launch readiness",
+        goal: "Ship pricing",
+        candidates: [],
+        roles: [],
+        openTasks: [{ id: "design", title: "Design pricing" }],
+      },
+    }));
+
+    assert.match(prompt, /\[Project plan\]/);
+    assert.match(prompt, /Project goal: Ship pricing/);
+    assert.match(prompt, /The owner's ask: Focus on launch readiness/);
+    assert.match(prompt, /"id":"design","title":"Design pricing"/);
+    assert.match(prompt, /add prerequisites only where a task needs an earlier result/);
+  });
   it("asks for suggested next steps only when a file will be read back, and keeps them private", () => {
     const asked = claudeTaskPrompt(state({ task_goal: "Ship it", next_steps_file: ".relay/next-steps.json" }));
     const plain = claudeTaskPrompt(state({ task_goal: "Ship it" }));

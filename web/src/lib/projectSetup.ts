@@ -110,11 +110,13 @@ export function effectiveLead(members: readonly SetupMemberDraft[], leadAgentId:
   return kept[0]?.agentId ?? null;
 }
 
-/** One PATCH applies the proposal: the brief, the roster, and the setup's
- *  closing, so the project never shows a half-applied setup. The roster is
- *  sent only when the owner kept at least one member; an empty selection
- *  leaves the current roster alone. */
-export function setupApplyInput(project: ProjectRecord, draft: SetupDraft): UpdateProjectInput {
+/** Save the brief and roster. When selected Tasks are being created, their
+ *  apply request owns the setup resolution. */
+export function setupApplyInput(
+  project: ProjectRecord,
+  draft: SetupDraft,
+  { resolveSetup = true }: { resolveSetup?: boolean } = {},
+): UpdateProjectInput {
   const kept = draft.members.filter(memberKept);
   const managerId = effectiveLead(draft.members, draft.leadAgentId);
   const members = kept.map(({ agentId, role, responsibilities, instructions }) => ({
@@ -132,8 +134,8 @@ export function setupApplyInput(project: ProjectRecord, draft: SetupDraft): Upda
     ...changed("goal", draft.goal, project.goal),
     ...changed("description", draft.description, project.description),
     ...changed("context", draft.context, project.context),
-    ...(members.length ? { members, leadAgentId: effectiveLead(draft.members, draft.leadAgentId) } : {}),
-    setupResolution: "applied",
+    ...(members.length ? { members, leadAgentId: managerId } : {}),
+    ...(resolveSetup ? { setupResolution: "applied" } : {}),
   };
 }
 

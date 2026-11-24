@@ -26,6 +26,7 @@ export function projectDirectoryEntry(project: ProjectRecord): ProjectDirectoryE
     ...(suggestionCount > 0 ? { contextSummary: { suggestionCount } } : {}),
     ...(setup ? { setupSummary: {
       state: setup.state, mode: setup.mode, threadId: setup.threadId, hasProposal: Boolean(setup.proposal),
+      ...(setup.proposal ? { proposedTaskCount: setup.proposal.tasks?.length ?? 0 } : {}),
     } } : {}),
   };
 }

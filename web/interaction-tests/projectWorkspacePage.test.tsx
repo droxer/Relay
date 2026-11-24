@@ -69,7 +69,7 @@ it("offers no second way to the board when nothing needs attention", () => {
 it("has no General tab; a retired ?tab=general link lands on the Dashboard", () => {
   window.history.replaceState({}, "", "/projects/p?tab=general");
   renderPage(project());
-  expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+  expect(screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/u, ""))).toEqual([
     "project.dashboard_tab", "project.tasks_tab", "routine.title", "workspace.tab_workspace", "project.members_tab", "project.settings_tab",
   ]);
   expect(screen.getByRole("tab", { name: "project.dashboard_tab", selected: true })).toBeTruthy();
@@ -105,6 +105,7 @@ it("renders the backlog board on Tasks, scoped to this project's live tasks, wit
   renderPage(project());
   fireEvent.click(screen.getByRole("tab", { name: "project.tasks_tab" }));
   await waitFor(() => expect(screen.getByTestId("backlog-board")).toBeTruthy());
+  expect(screen.getByRole("tab", { name: "project.tasks_tab", selected: true }).textContent).toBe("project.tasks_tab1");
   expect(board.props).toMatchObject({ projectId: "p", readOnly: false });
   expect((board.props?.tasks as RelayTaskListItem[]).map((item) => item.id)).toEqual(["mine"]);
 });

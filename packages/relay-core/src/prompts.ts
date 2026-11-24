@@ -337,13 +337,14 @@ function projectPlanPrelude(setup: ProjectSetupBrief): string {
   return [
     "[Project plan]",
     "You are planning this project's next work for its owner to review. Do not start the work and do not create project files; the owner applies your plan as tasks.",
+    ...(setup.goal ? [`Project goal: ${setup.goal}`] : []),
     `The owner's ask: ${setup.intent}`,
     `The project's unfinished tasks (build on them; do not repeat them): ${JSON.stringify(setup.openTasks ?? [])}`,
     `Agents you may assign (only these, by agentId): ${JSON.stringify(setup.candidates)}`,
     ...(setup.previousProposal
       ? [`Your previous plan, to revise per the owner's note: ${JSON.stringify(setup.previousProposal)}`]
       : []),
-    "Propose up to 8 tasks that are bounded and verifiable, in the order they should happen.",
+    "Break the goal into up to 8 concrete, bounded, non-overlapping tasks with verifiable outcomes. List them in order and add prerequisites only where a task needs an earlier result.",
     TASK_ORDER_RULE,
     `When you stop, write \`${setup.file}\` as JSON: {"tasks": [${PROPOSED_TASK_SHAPE}], "rationale": "<why this order>"}.`,
     "Use valid JSON with double quotes. If the ask is too vague, still write your best plan and say what you assumed in the rationale; end your reply by asking the owner what to change.",
