@@ -5,6 +5,7 @@ import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
 import { taskAssigneeLabel } from "../lib/taskAssignment";
 import { useTranslation } from "react-i18next";
+import { ICON, NavRoutine } from "./icons";
 
 /** Every task shows its assigned agent/team as a visible name. */
 export function TaskAssignee({
@@ -21,11 +22,14 @@ export function TaskAssignee({
   agentImageUrl?: string | null;
 }) {
   const { t } = useTranslation();
-  const assigned = Boolean(task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
+  const workflow = Boolean(task.assignedWorkflowId && !task.assignedTeamId && !task.assignedAgentId);
+  const assigned = Boolean(workflow || task.assignedAgentId || task.assignedAgent || task.assignedTeamId);
   const name = taskAssigneeLabel(task, agentDisplayName, t);
   return (
     <span className="task-assignee" translate="no" data-unassigned={assigned ? "false" : "true"}>
-      {assigned ? (
+      {workflow ? (
+        <NavRoutine size={ICON.sm} aria-label={t("workflow.assigned_workflow")} />
+      ) : assigned ? (
         <TaskExecutionBadge task={task} ready={ready} availability={availability} displayName={name} imageUrl={agentImageUrl} />
       ) : null}
       <span className="task-assignee-name" title={name}>{name}</span>
