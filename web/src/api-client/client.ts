@@ -63,6 +63,16 @@ export async function fetchWithSession(input: string, init: RequestInit = {}): P
   return response;
 }
 
+const MESSAGE_RETRY_DELAYS_MS = [500, 1_500];
+const MESSAGE_ATTEMPT_TIMEOUT_MS = 15_000;
+const RETRYABLE_MESSAGE_STATUSES = new Set([408, 500, 502, 503, 504]);
+let messageDeliveryGeneration = 0;
+
+/** Pending messages belong to the Account that started them. */
+export function cancelMessageDeliveryRetries(): void {
+  messageDeliveryGeneration++;
+}
+
 export async function apiJson<T>(
   path: string,
   options: {
@@ -72,11 +82,14 @@ export async function apiJson<T>(
     signal?: AbortSignal;
     credentials?: RequestCredentials;
     versioned?: boolean;
+    /** Only for messages the server deduplicates by an ID in the request body. */
+    retryMessageDelivery?: boolean;
     /** Checks the parsed body of a successful response before it is trusted as `T`. */
     guard?: ResponseGuard<T>;
   } = {},
 ): Promise<T> {
-  const response = await fetchWithSession(options.versioned === false ? relayBackendPath(path) : relayApiEndpoint(path), {
+  const url = options.versioned === false ? relayBackendPath(path) : relayApiEndpoint(path);
+  const init: RequestInit = {
     method: options.method ?? "GET",
     signal: options.signal,
     credentials: options.credentials ?? "include",
@@ -85,8 +98,32 @@ export async function apiJson<T>(
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
-  return readApiResponse(response, `${options.method ?? "GET"} ${path}`, options.guard);
+  };
+  const endpoint = `${init.method} ${path}`;
+  if (!options.retryMessageDelivery) {
+    return readApiResponse(await fetchWithSession(url, init), endpoint, options.guard);
+  }
+
+  const generation = messageDeliveryGeneration;
+  const mayRetry = () => generation === messageDeliveryGeneration && !options.signal?.aborted;
+  for (let attempt = 0; ; attempt++) {
+    const timeout = AbortSignal.timeout(MESSAGE_ATTEMPT_TIMEOUT_MS);
+    const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    let response: Response | undefined;
+    try {
+      response = await fetchWithSession(url, { ...init, signal });
+      return await readApiResponse(response, endpoint, options.guard);
+    } catch (error) {
+      const delay = MESSAGE_RETRY_DELAYS_MS[attempt];
+      // Even an unreadable error body can carry a definitive HTTP rejection.
+      const transient = response && !response.ok
+        ? RETRYABLE_MESSAGE_STATUSES.has(response.status)
+        : timeout.aborted || error instanceof TypeError;
+      if (delay === undefined || !transient || !mayRetry()) throw error;
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      if (!mayRetry()) throw error;
+    }
+  }
 }
 
 export type PrivateResponseCache<T> = { etag?: string; data?: T };

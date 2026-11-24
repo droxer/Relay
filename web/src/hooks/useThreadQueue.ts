@@ -47,7 +47,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     mutationKey,
     mutationFn: ({ threadId, action, id, text, address }: QueueChange) => apiJson<QueueState>(
       `/threads/${encodeURIComponent(threadId)}/queue?view=versioned`,
-      { method: "POST", body: { action, id, text, ...address } },
+      { method: "POST", body: { action, id, text, ...address }, retryMessageDelivery: action === "enqueue" && !!id },
     ),
     onSuccess: async (updated, { threadId, queueKey, action, text }) => {
       const queryKey = [...THREAD_QUEUE_QUERY_KEY, threadId];

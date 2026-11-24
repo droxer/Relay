@@ -79,6 +79,38 @@ it("renders the acknowledged queue without a second GET after enqueue", async ()
   expect(reads()).toBe(before);
 });
 
+it("keeps the enqueue pending and reuses its message ID after losing the response", async () => {
+  const send = await vi.importActual<typeof import("../src/api-client/client")>("../src/api-client/client");
+  const read = vi.mocked(apiJson).getMockImplementation()!;
+  vi.mocked(apiJson).mockImplementation((path, options) => options?.method === "POST"
+    ? send.apiJson(path, options)
+    : read(path, options));
+  const bodies: string[] = [];
+  const receipt = Promise.withResolvers<Response>();
+  vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+    const body = String(init?.body);
+    bodies.push(body);
+    const { id, text } = JSON.parse(body);
+    if (!saved.messages.some(message => message.id === id)) saved.messages.push({ id, text });
+    if (bodies.length === 1) throw new TypeError("Connection closed");
+    return receipt.promise;
+  });
+  const hook = open();
+  let accepted: Promise<boolean> | undefined;
+  await act(async () => { accepted = hook.result.current.enqueue("Keep going"); });
+  await waitFor(() => expect(bodies).toHaveLength(2));
+  expect(hook.result.current.pending).toBe(true);
+  expect(hook.result.current.error).toBeNull();
+  await act(async () => {
+    receipt.resolve(Response.json(saved));
+    expect(await accepted).toBe(true);
+  });
+  await waitFor(() => expect(hook.result.current.pending).toBe(false));
+  expect(bodies).toEqual([bodies[0], bodies[0]]);
+  expect(hook.result.current.messages).toEqual(saved.messages);
+  expect(saved.messages).toHaveLength(1);
+});
+
 it("backs off an empty queue during a run and picks up work queued elsewhere", async () => {
   vi.useFakeTimers();
   vi.mocked(apiJson).mockClear();

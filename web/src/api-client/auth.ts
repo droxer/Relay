@@ -2,7 +2,7 @@ import type { Language, Theme } from "../lib/appStorage.ts";
 import type { OnboardingPatch } from "../lib/onboarding.ts";
 import type { CurrentUser, HomeSnoozesPatch } from "../types.ts";
 import { takeEarlyAuthProbe } from "../lib/earlyAuthProbe.ts";
-import { apiJson, readApiResponse } from "./client.ts";
+import { apiJson, cancelMessageDeliveryRetries, readApiResponse } from "./client.ts";
 
 /** What a signed-out visitor may do. A flag absent on an older backend reads
     as off. `passwordResetEnabled` is true only while the server can email. */
@@ -58,6 +58,7 @@ export function login(input: { username: string; password: string }): Promise<{ 
 }
 
 export function logout(): Promise<{ ok: boolean }> {
+  cancelMessageDeliveryRetries();
   return apiJson<{ ok: boolean }>("/auth/logout", { method: "POST" });
 }
 
