@@ -134,6 +134,7 @@ export function ProjectFolderField({
   value,
   error,
   unavailable = null,
+  readOnly = false,
   required = false,
   onChange,
 }: {
@@ -141,6 +142,7 @@ export function ProjectFolderField({
   value: string;
   error: string | null;
   unavailable?: string | null;
+  readOnly?: boolean;
   required?: boolean;
   onChange: (value: string) => void;
 }) {
@@ -158,7 +160,7 @@ export function ProjectFolderField({
       : t(required ? "project.existing_folder_hint" : "project.folder_hint"));
 
   async function verify() {
-    if (unavailable || !path || shapeError) return;
+    if (readOnly || unavailable || !path || shapeError) return;
     const request = ++latest.current;
     setCheck({ kind: "checking" });
     try {
@@ -191,6 +193,7 @@ export function ProjectFolderField({
         placeholder={t("project.folder_placeholder")}
         value={value}
         disabled={Boolean(unavailable)}
+        readOnly={readOnly}
         onChange={(event) => {
           latest.current += 1;
           setCheck({ kind: "idle" });

@@ -754,7 +754,10 @@ user's home in direct-run mode and none under BoxLite). Relay's workspace root
 and private state cannot overlap the linked directory. Refusals return 422 with
 `detail: { code: "project_workspace_<reason>", message }`.
 `POST /projects/workspace-check` validates without creating a link and returns
-`{ workspaceHostPath }` with the canonical directory path. Linked projects store
+`{ workspaceHostPath }` with the canonical directory path. If the selected
+Computer detects an existing `.relay` directory inside that folder, the response
+also includes `hasRelayDirectory: true`. The create drawer uses this flag to
+ask for confirmation before linking the folder. Linked projects store
 that canonical path and a `links/{id}` workspace subpath; both are immutable.
 Runs and live file operations require link support, including at command
 delivery if a daemon's capabilities change after queueing.

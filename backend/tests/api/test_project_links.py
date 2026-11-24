@@ -58,13 +58,14 @@ def daemon(monkeypatch):
 
     async def dispatch(ctx, node, command):
         sent.append({"nodeId": node["id"], **command})
-        if answer:
+        if "code" in answer:
             return {"type": "workspace.error", "commandId": command["id"], "path": "", **answer}
         return {
             "type": "workspace.linked",
             "commandId": command["id"],
             "path": "",
             "hostPath": command["hostPath"].rstrip("/"),
+            **answer,
         }
 
     monkeypatch.setattr(project_links, "dispatch_workspace_command", dispatch)
@@ -186,9 +187,12 @@ def test_older_daemon_cannot_link(env, daemon) -> None:
     assert sent == []
 
 
-def test_workspace_check_is_a_dry_run(env, daemon) -> None:
+@pytest.mark.parametrize("has_relay_directory", [False, True])
+def test_workspace_check_is_a_dry_run(env, daemon, has_relay_directory) -> None:
     app, client, node = env
-    sent, _ = daemon
+    sent, answer = daemon
+    if has_relay_directory:
+        answer["hasRelayDirectory"] = True
 
     response = client.post(
         "/api/v1/projects/workspace-check",
@@ -196,7 +200,7 @@ def test_workspace_check_is_a_dry_run(env, daemon) -> None:
     )
 
     assert response.status_code == 200, response.text
-    assert response.json() == {"workspaceHostPath": "/Users/alice/code/app"}
+    assert response.json() == {"workspaceHostPath": "/Users/alice/code/app", **answer}
     [command] = sent
     assert command["dryRun"] is True
     assert app.state.project_store.list_projects(ALICE) == []
@@ -259,18 +263,20 @@ def test_link_command_response_is_recorded(env) -> None:
     app, client, node = env
     app.state.registry.enqueue(
         node["id"],
-        {"id": "cmd-link", "type": "workspace.link", "workspaceSubpath": "links/x", "hostPath": "/Users/alice/app"},
+        {"id": "cmd-link", "type": "workspace.link", "workspaceSubpath": "links/x", "hostPath": "/Users/alice/app", "dryRun": True},
     )
     [command] = app.state.registry.take_commands(node["id"], f"token_{node['id']}")
 
     response = client.post(
         f"/api/v1/daemon-nodes/{node['id']}/events",
         headers={"Authorization": f"Bearer token_{node['id']}"},
-        json={"type": "workspace.linked", "commandId": "cmd-link", "leaseId": command["leaseId"], "path": "", "hostPath": "/Users/alice/app"},
+        json={"type": "workspace.linked", "commandId": "cmd-link", "leaseId": command["leaseId"], "path": "", "hostPath": "/Users/alice/app", "hasRelayDirectory": True},
     )
 
     assert response.status_code == 200, response.text
-    assert app.state.daemon_store.get_workspace_response("cmd-link")["hostPath"] == "/Users/alice/app"
+    event = app.state.daemon_store.get_workspace_response("cmd-link")
+    assert event["hostPath"] == "/Users/alice/app"
+    assert event["hasRelayDirectory"] is True
 
 
 def test_link_refusal_codes_are_accepted(env) -> None:

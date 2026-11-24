@@ -8,7 +8,7 @@ and answers with the directory's canonical path. See `project-links.ts`.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Literal, NotRequired, TypedDict
 
 from fastapi import HTTPException
 from loguru import logger
@@ -27,6 +27,11 @@ from ..computers.workspace_transport import dispatch_workspace_command
 WORKSPACE_HOST_PATH_MAX_LENGTH = 4096
 # POSIX absolute, or a Windows drive path; the daemon re-validates either way.
 _ABSOLUTE_HOST_PATH = re.compile(r"^(/|[A-Za-z]:[\\/])")
+
+
+class ProjectWorkspaceCheck(TypedDict):
+    workspaceHostPath: str
+    hasRelayDirectory: NotRequired[Literal[True]]
 
 
 def requested_host_path(body: dict[str, Any]) -> str | None:
@@ -97,9 +102,12 @@ async def link_existing_directory(
     host_path: str,
     workspace_subpath: str,
     dry_run: bool = False,
-) -> str:
-    """Ask the selected computer to validate (and unless `dry_run`, link) a
-    directory; returns its canonical path or raises the daemon's refusal."""
+) -> ProjectWorkspaceCheck:
+    """Validate the directory on the selected computer, raising any refusal.
+
+    A dry run may report an existing `.relay` directory. A real request
+    registers the link with the computer.
+    """
     node = (
         await run_in_threadpool(ctx.registry.get, node_id)
         if isinstance(node_id, str) and node_id
@@ -143,7 +151,10 @@ async def link_existing_directory(
                     sandbox_id=sibling["id"],
                     error=str(error),
                 )
-    return canonical
+    result: ProjectWorkspaceCheck = {"workspaceHostPath": canonical}
+    if dry_run and event.get("hasRelayDirectory") is True:
+        result["hasRelayDirectory"] = True
+    return result
 
 
 def registration_project_links(

@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
+import { checkProjectWorkspace } from "../api";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
@@ -11,6 +12,7 @@ import { agentsEligibleForProject } from "../lib/projectPage";
 import { provisionalProjectName } from "../lib/projectSetup";
 import type { DaemonNodeMonitorRecord, UserAgent, ProjectRecord } from "../types";
 import { Button } from "@/components/ui/button";
+import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -65,6 +67,7 @@ function ProjectDrawerWithAgents(props: ProjectDrawerProps & { userId: string })
 
 function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, layer }: ProjectDrawerProps & { agents: UserAgent[] }) {
   const { t } = useTranslation();
+  const { confirm, announce } = useDialogs();
   const { createProjectMutation, startProjectSetupMutation } = useRelayMutations();
   const [origin, setOrigin] = useState<"fresh" | "existing">("fresh");
   const originLabelId = useId();
@@ -78,6 +81,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const [managerChoice, setManagerChoice] = useState<string | null>();
   const [computerChoice, setComputerChoice] = useState("");
   const [folder, setFolder] = useState("");
+  const [checkingFolder, setCheckingFolder] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [intentError, setIntentError] = useState<string | null>(null);
@@ -107,7 +111,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const chosenManager = managerChoice === undefined ? defaultManagerId : managerChoice;
   // A choice made for one computer cannot stand on another.
   const managerAgentId = chosenManager && setupAgents.some((agent) => agent.id === chosenManager) ? chosenManager : null;
-  const busy = createProjectMutation.isPending || startProjectSetupMutation.isPending;
+  const busy = checkingFolder || createProjectMutation.isPending || startProjectSetupMutation.isPending;
   const hasUnsavedChanges = Boolean(name || goal || description || intent || computerChoice || folder);
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !busy);
   const describing = origin === "fresh" && mode === "describe";
@@ -135,11 +139,32 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   }
 
   function chooseComputer(value: string) {
+    if (busy) return;
     if (value !== computerId) setManagerChoice(undefined);
     if (value !== computerId) setFolder("");
     setComputerChoice(value);
     setComputerError(null);
     setFolderError(null);
+  }
+
+  async function confirmExistingFolder(path: string) {
+    setCheckingFolder(true);
+    setFolderError(null);
+    try {
+      const check = await checkProjectWorkspace(computerId, path);
+      return !check.hasRelayDirectory || await confirm({
+        title: t("project.folder_relay_notice_title"),
+        message: t("project.folder_relay_notice_message"),
+        confirmLabel: t("project.folder_relay_continue"),
+      });
+    } catch (error) {
+      const key = projectFolderErrorKey(error);
+      if (key) setFolderError(t(key));
+      else announce({ message: t("errors.save_project"), tone: "error" });
+      return false;
+    } finally {
+      setCheckingFolder(false);
+    }
   }
 
   async function submitManual() {
@@ -149,6 +174,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       return;
     }
     if (!requireComputer()) return;
+    if (workspaceHostPath && !(await confirmExistingFolder(workspaceHostPath))) return;
     const nextDescription = description.trim();
     const result = await createProjectMutation.mutateAsync({
       name: name.trim(),
@@ -299,6 +325,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 computers={projectComputers}
                 value={computerId}
                 error={computerError}
+                disabled={busy}
                 triggerRef={computerTriggerRef}
                 onChange={chooseComputer}
               />
@@ -309,6 +336,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
               daemonNodeId={computerId}
               value={linksFolders ? folder : ""}
               error={folderError}
+              readOnly={busy}
               unavailable={folderUnavailable}
               onChange={(value) => { setFolder(value); setFolderError(null); }}
             /> : null}
@@ -344,10 +372,11 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   );
 }
 
-function ComputerField({ computers, value, error, triggerRef, onChange }: {
+function ComputerField({ computers, value, error, disabled = false, triggerRef, onChange }: {
   computers: DaemonNodeMonitorRecord[];
   value: string;
   error: string | null;
+  disabled?: boolean;
   triggerRef: RefObject<HTMLButtonElement | null>;
   onChange: (value: string) => void;
 }) {
@@ -366,7 +395,7 @@ function ComputerField({ computers, value, error, triggerRef, onChange }: {
         <SelectTrigger
           ref={triggerRef}
           className="w-full project-computer-select"
-          disabled={computers.length === 0}
+          disabled={disabled || computers.length === 0}
           aria-labelledby={labelId}
           aria-invalid={Boolean(error) || undefined}
           aria-describedby={error ? "project-computer-error" : undefined}

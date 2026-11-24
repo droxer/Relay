@@ -137,7 +137,10 @@ def _workspace_linked(value: dict[str, Any]) -> EventFields:
     host_path = string_field(value, "hostPath")
     if not host_path:
         raise ValueError("invalid daemon workspace.linked event.")
-    return {"hostPath": host_path}
+    result: EventFields = {"hostPath": host_path}
+    if value.get("hasRelayDirectory") is True:
+        result["hasRelayDirectory"] = True
+    return result
 
 
 def _workspace_listing(value: dict[str, Any]) -> EventFields:
