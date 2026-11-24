@@ -13,6 +13,7 @@ import { rerunAssignmentForSession } from "../src/lib/workflow.js";
 import { runReceipt } from "../src/lib/runReceipt.js";
 import type { RelaySession } from "../src/types.js";
 import { parseAgentStream } from "../src/lib/agentStream.js";
+import { truncateAgentTranscript } from "../../packages/relay-core/src/transcript.js";
 
 const timestamp = "2026-06-19T12:00:00.000Z";
 
@@ -121,6 +122,110 @@ describe("ProjectMessagesAccumulator", () => {
       { stream: "stdout", text: restored.slice(20) + restored, sequence: 2 },
     ] });
     assert.deepEqual(reply(), [{ kind: "text", text: "Start. End.End." }]);
+  });
+
+  describe("Antigravity transcript recovery", () => {
+    const run = { sessionId: "ses_1", timestamp, runId: "run_1", agent: "antigravity" as const };
+    const frame = (type: string, part: Record<string, unknown>) =>
+      JSON.stringify({ type, delta: true, part }) + "\n";
+    const output = (sequence: number, text: string) =>
+      ({ ...run, id: `out-${sequence}`, type: "agent.output" as const, stream: "stdout" as const, text, sequence });
+    const completed = (log: string, outputTruncated = false) =>
+      ({ ...run, id: "done", type: "agent.completed" as const, status: "completed" as const,
+        exitCode: 0, agentLog: `stdout:\n${log}`, outputTruncated });
+    const rendered = (messages: ReturnType<typeof projectMessages>) =>
+      messages.flatMap((message) => message.kind === "agent"
+        ? [parseAgentStream("antigravity", message.stdout)] : []);
+
+    it("keeps a full reply once when its completion log retained only the ends", () => {
+      const head = frame("text", { text: "Start. " });
+      const middle = "Details. ".repeat(80);
+      const rest = frame("text", { text: middle }) + frame("text", { text: "End." });
+      const fallback = truncateAgentTranscript(head + rest, 220);
+      assert.match(fallback, /output omitted/);
+      const expected = [[{ kind: "text", text: `Start. ${middle}End.` }]];
+      assert.deepEqual(rendered(projectMessages(session([output(0, head + rest), completed(fallback)]), t)), expected);
+
+      const projector = new ProjectMessagesAccumulator();
+      const events: RelaySession["events"] = [output(0, head), completed(fallback, true)];
+      assert.match(JSON.stringify(rendered(projector.update(session(events), t))), /End\./);
+      events.push(output(1, rest));
+      assert.deepEqual(rendered(projector.update(session(events), t)), expected);
+    });
+
+    it("puts the recovered opening before surviving middle output", () => {
+      const head = frame("text", { text: "Opening." });
+      const lost = frame("text", { text: "Lost. ".repeat(80) });
+      const middle = frame("text", { text: "Surviving middle. " });
+      const tail = frame("text", { text: "Ending." });
+      const fallback = truncateAgentTranscript(head + lost + middle + tail, 220);
+      const messages = projectMessages(session([output(2, middle + tail), completed(fallback, true)]), t);
+      assert.deepEqual(rendered(messages), [[
+        { kind: "text", text: "Opening." },
+        { kind: "text", text: "[... output omitted ...]" },
+        { kind: "text", text: "Surviving middle. Ending." },
+      ]]);
+    });
+
+    it("restores tool and reasoning frames even when the streamed reply already matches", () => {
+      const reply = frame("text", { text: "Done." });
+      const reasoning = frame("reasoning", { text: "Checking the README." });
+      const tool = frame("tool_use", { callID: "read", tool: "read_file", state: { status: "completed" } });
+      const activity = [{ kind: "thinking", text: "Checking the README." }, { kind: "tool", id: "read", name: "read_file" }];
+      assert.deepEqual(rendered(projectMessages(session([completed(reasoning + tool, true)]), t)), [activity]);
+      assert.deepEqual(rendered(projectMessages(session([output(0, reply), completed(reasoning + tool + reply, true)]), t)), [
+        [...activity, { kind: "text", text: "Done." }],
+      ]);
+    });
+
+    it("updates the original tool row when its result lands after a steering message", () => {
+      const opening = frame("tool_use", { callID: "read", tool: "read_file", state: { status: "running" } });
+      const result = frame("tool_use", { callID: "read", tool: "read_file",
+        state: { status: "error", title: "README.md", error: "File unavailable" } });
+      const reply = frame("text", { text: "I moved on." });
+      const events: RelaySession["events"] = [
+        output(0, opening),
+        { ...run, id: "asked", type: "agent.permission_requested",
+          request: { ...run, id: "permit", input: "{}", toolName: "read_file", toolUseId: "read" } },
+        { ...run, id: "steer", type: "user.live_message", text: "Skip this file.", delivery: "steer" },
+        { ...run, id: "denied", type: "agent.permission_resolved", requestId: "permit", decision: "deny" },
+      ];
+      const projector = new ProjectMessagesAccumulator();
+      projector.update(session(events), t);
+      events.push(output(1, result.slice(0, 30)));
+      projector.update(session(events), t);
+      events.push(output(2, result.slice(30) + reply));
+      const expected = [
+        [
+          { kind: "tool", id: "read", name: "read_file", target: "README.md" },
+          { kind: "status", scope: "tool", tone: "bad", text: "File unavailable" },
+        ],
+        [{ kind: "text", text: "I moved on." }],
+      ];
+      assert.deepEqual(rendered(projector.update(session(events), t)), expected);
+      events.push(completed(opening + result + reply));
+      const settled = projector.update(session(events), t);
+      assert.deepEqual(rendered(settled), expected);
+      const turns = settled.filter((message) => message.kind === "agent");
+      assert.deepEqual(turns.map((message) => message.permissions?.map((audit) => audit.outcome)), [["deny"], undefined]);
+    });
+
+    it("keeps steering boundaries when the completion log restores earlier frames", () => {
+      const head = frame("text", { text: "Opening. " });
+      const reasoning = frame("reasoning", { text: "Before steering." });
+      const before = frame("text", { text: "Working." });
+      const after = frame("text", { text: "Redirected." });
+      const events: RelaySession["events"] = [
+        output(0, head), output(2, before),
+        { ...run, id: "steer", type: "user.live_message", text: "Redirect.", delivery: "steer" },
+        completed(head + reasoning + before + after, true),
+        output(3, after),
+      ];
+      assert.deepEqual(rendered(projectMessages(session(events), t)), [
+        [{ kind: "text", text: "Opening. " }, { kind: "thinking", text: "Before steering." }, { kind: "text", text: "Working." }],
+        [{ kind: "text", text: "Redirected." }],
+      ]);
+    });
   });
 
   it("shows a message sent into a running turn as the person's, marked live", () => {
