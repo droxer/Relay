@@ -7,6 +7,8 @@
    shorthand that resets `text-wrap-mode` to `wrap`, so a later `balance`
    undoes its `white-space: nowrap`. */
 .login-headline,
+.landing-headline,
+.landing-section-title,
 .adm-auth-title,
 .page-header-title--display,
 .adm-drawer-title,
@@ -131,6 +133,8 @@
   /* Square icon buttons want the floor on BOTH axes — the rule above only
      sets height, and a 44px-tall, 28px-wide button is still a miss. */
   [data-slot="toast-close"],
+  .landing-theme-toggle,
+  .landing-foot-github,
   .profile-image-picker-remove,
   .sidenav-btn,
   .artifact-index-btn,
