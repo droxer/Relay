@@ -12,7 +12,8 @@ import { AgentSkillsPanel } from "./AgentSkillsPanel";
 import { IdentityMark } from "./IdentityMark";
 import { PageHeader } from "./PageHeader";
 import { ProfileImage } from "./ProfileImagePicker";
-import { StatusPill } from "./StatusPill";
+import { StatusPill, TonePill } from "./StatusPill";
+import { describeAgentRosterStatus } from "../lib/agentStatus";
 import { describeAgentPlacements } from "../lib/agentPlacements";
 import { truncateId } from "../lib/adminHelpers";
 import { agentModel } from "../lib/agentModels.ts";
@@ -100,7 +101,18 @@ export function AgentDetailPage({
     {
       key: "availability",
       label: t("admin.v2.agent_availability_label"),
-      value: <StatusPill value={agent.availability} />,
+      value: (() => {
+        const rosterStatus = describeAgentRosterStatus(agent);
+        if (!rosterStatus || rosterStatus.key.startsWith("status.")) {
+          return <StatusPill value={agent.availability} />;
+        }
+        return (
+          <TonePill
+            tone={rosterStatus.tone === "live" ? "info" : rosterStatus.tone}
+            label={t(rosterStatus.key)}
+          />
+        );
+      })(),
     },
     {
       key: "id",

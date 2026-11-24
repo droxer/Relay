@@ -82,6 +82,18 @@ it("shows only the most specific status on an unavailable Agent and keeps its ro
   await waitFor(() => expect(within(ada).queryByText("agents_page.binding_status_runtime_missing")).toBeNull());
 });
 
+it("keeps unavailable Agent status aligned between the roster row and Agent detail view", async () => {
+  const client = createClient();
+  client.setQueryData([USER_AGENTS_QUERY_KEY, user.userId], { agents: [agent] });
+  const { container } = render(<QueryClientProvider client={client}>
+    <AgentsPage currentUser={user} detailAgent={agent} onOpenAgent={vi.fn()} onBackToAgents={vi.fn()} onOpenThread={vi.fn()} />
+  </QueryClientProvider>);
+
+  const row = container.querySelector(".agents-roster-row");
+  expect(row?.getAttribute("data-unavailable")).toBe("true");
+  expect(screen.getAllByText("agents_page.binding_status_runtime_missing").length).toBeGreaterThanOrEqual(2);
+});
+
 it("distinguishes a Computer awaiting first connection from offline, reconnecting, and online", async () => {
   const client = createClient();
   const list = vi.mocked(listDaemonNodes);
@@ -89,7 +101,10 @@ it("distinguishes a Computer awaiting first connection from offline, reconnectin
   render(<QueryClientProvider client={client}><Computers /></QueryClientProvider>);
   await screen.findByRole("link", { name: pendingComputer.displayName });
   expect(screen.getByText("computer.connect_waiting")).toBeTruthy();
+  expect(screen.getByText("computer.connect_waiting_hint")).toBeTruthy();
   expect(screen.queryByText("nodes.presence_offline")).toBeNull();
+  // Pending computers hide the empty runtimes block to keep the card concise.
+  expect(screen.queryByText("admin.v2.node_runtimes")).toBeNull();
 
   const update = async (node: DaemonNodeMonitorRecord, label: string) => {
     list.mockResolvedValueOnce({ nodes: [node] });
@@ -99,8 +114,27 @@ it("distinguishes a Computer awaiting first connection from offline, reconnectin
   };
   const registered = { ...pendingComputer, status: "ready", lastSeenAt: time } satisfies DaemonNodeMonitorRecord;
   await update(registered, "nodes.presence_offline");
+  // Offline cards keep their last known runtimes compact and omit duplicate offline titles.
+  expect(screen.queryByText("computer.connection_offline_title")).toBeNull();
+  expect(screen.getByText("computer.connection_offline_body")).toBeTruthy();
   await update({ ...registered, online: true, stale: false }, "nodes.presence_unsettled");
   await update({ ...registered, online: true, stale: false, dispatchable: true }, "nodes.presence_online");
+});
+
+it("highlights a revoked Computer in the header without duplicating its notice title", async () => {
+  const client = createClient();
+  const list = vi.mocked(listDaemonNodes);
+  const revoked: DaemonNodeMonitorRecord = {
+    ...pendingComputer,
+    status: "stopped",
+    lastSeenAt: time,
+    transport: { state: "revoked", causes: ["revoked"] },
+  };
+  list.mockResolvedValue({ nodes: [revoked] });
+  render(<QueryClientProvider client={client}><Computers /></QueryClientProvider>);
+  await screen.findByRole("link", { name: revoked.displayName });
+  expect(screen.getAllByText("computer.connection_revoked_title")).toHaveLength(1);
+  expect(screen.getByText("computer.connection_revoked_body")).toBeTruthy();
 });
 
 it("shows loading, then a retryable failure, then the successful empty Computer list", async () => {

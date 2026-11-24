@@ -29,6 +29,9 @@
      agent roster read as canvas while the thread rail beside it read as a
      rail. */
   background: var(--surface-list);
+  /* Match the avatar status pip's halo and hollow-ring centre to the rail
+     plane in both dark and light registers instead of falling back to --surface-0. */
+  --agent-pip-surface: var(--surface-list);
 }
 
 /* The roster's filter band is .list-filter-bar / .list-filter-search
@@ -112,7 +115,7 @@
 
 .agents-roster-row-select {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   /* One cell gap across the rails — the same --sp-2 the team row uses. */
   gap: var(--sp-2);
@@ -177,10 +180,44 @@
   white-space: nowrap;
 }
 
-/* Status pill sits flush right; it must not compress — the name column
-   ellipsizes first. Vertical alignment comes from the grid's align-items. */
-.agents-roster-row-status {
+/* Unavailable agents step their name one ink rung quieter so available agents
+   lead at a glance without dimming text via opacity (paletteTokens contract). */
+.agents-roster-row[data-unavailable="true"]:not([data-selected="true"]) .agents-roster-row-name {
+  color: var(--ink-2);
+}
+
+/* Secondary line: optional leading status mark + word, followed by runtime meta.
+   Keeping status here frees the name line from right-column truncation in the
+   318px rail and 375px phone viewports. */
+.agents-roster-row-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.agents-roster-row-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
   flex: none;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  white-space: nowrap;
+}
+
+.agents-roster-row-state[data-tone="bad"] {
+  color: var(--err);
+}
+
+.agents-roster-row-state[data-tone="warn"] {
+  color: var(--warn);
+}
+
+.agents-roster-row-state[data-tone="live"] {
+  color: var(--ink-2);
 }
 
 /* ── The agent meta line ─────────────────────────────────────────────────
@@ -410,5 +447,9 @@
     display: flex;
     align-self: flex-start;
     margin: var(--sp-2) var(--sp-3) 0;
+  }
+
+  .agents-roster-row-select {
+    min-height: var(--touch-target);
   }
 }

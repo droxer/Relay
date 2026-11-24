@@ -96,17 +96,14 @@
   color: var(--ink-3);
 }
 
-/* A handful of machines, not a fleet: full records rather than survey tiles.
-   As a page of its own the roster has the whole canvas, so records sit side
-   by side once each still gets a record's width (34rem), sharing the full
-   width rather than stopping at a cap that left a dead band on the right.
-   Records differ in height by a whole section (active runs come and go), so
-   they flow in columns rather than grid rows: a short record beside a busy
-   one left a hole under it in a row, and stretching it to match only moved
-   the hole inside the card. Narrower, it is the single stack it always was. */
+/* A handful of machines, not a fleet: predictable left-to-right two-column
+   grid on wide viewports, collapsing to a clean single stack below tablet
+   width (1040px) so cards stay legible without multi-column reflow jumps. */
 .computer-list {
-  column-gap: var(--sp-4);
-  column-width: 34rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--sp-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -115,8 +112,12 @@
 .computer-list > li {
   display: flex;
   min-width: 0;
-  margin-bottom: var(--sp-4);
-  break-inside: avoid;
+}
+
+@media (max-width: 1040px) {
+  .computer-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ---- record ---------------------------------------------------------- */
@@ -138,6 +139,16 @@
   /* The card plane (ui/card.tsx bg-card, --surface-1), shared with the
      admin fleet's .adm-node-card — one computer, one card. */
   background: var(--surface-1);
+}
+
+/* Unavailable computers step their frame and icon back quietly while keeping
+   the same card plane and legible title link across dark and light registers. */
+.computer-card[data-online="false"] {
+  border-color: var(--line-2);
+}
+
+.computer-card[data-online="false"] .computer-card-avatar {
+  color: var(--ink-4);
 }
 
 .computer-card-hero {
@@ -164,13 +175,28 @@
   gap: var(--sp-1);
 }
 
-/* Presence, OS, lifecycle and update badges: the line under the name. */
+/* Presence, OS, and lifecycle readouts: flush dot + word under the name. */
 .computer-card-state {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1) var(--sp-3);
   min-width: 0;
+}
+
+.computer-presence-plain {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  min-height: var(--chip-h);
+  color: var(--ink-3);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  white-space: nowrap;
+}
+
+.computer-presence-plain[data-state="revoked"] {
+  color: var(--err);
 }
 
 .computer-card-name {
@@ -229,21 +255,40 @@
 /* Supporting text, not a paragraph that out-shouts the name: the body-sm
    rung, one ink step down. */
 .computer-card-outdated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-1-5);
   margin: var(--sp-1) 0 0;
   color: var(--ink-2);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
 }
 
+.computer-card-outdated-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  color: var(--warn);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  white-space: nowrap;
+}
+
+.computer-card-outdated-sep {
+  color: var(--ink-4);
+}
+
 /* Why the machine is not simply online, and what to do: a quiet inset under
-   the header, one ink step down from the name. The glyph carries the tone;
-   the text stays ink so a dark computer does not read as an incident. */
+   the header with a left semantic stripe instead of a heavy four-sided box,
+   so it stays light in both dark and light registers. */
 .computer-card-connection {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-2);
-  padding: var(--sp-3);
-  border: var(--hairline);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-left: var(--accent-bar-w) solid var(--line-1);
   border-radius: var(--r-2);
   background: var(--surface-2);
 }
@@ -255,12 +300,24 @@
   color: var(--ink-3);
 }
 
+.computer-card-connection[data-tone="warn"] {
+  border-left-color: var(--warn);
+}
+
 .computer-card-connection[data-tone="warn"] > svg {
   color: var(--warn);
 }
 
+.computer-card-connection[data-tone="bad"] {
+  border-left-color: var(--err);
+}
+
 .computer-card-connection[data-tone="bad"] > svg {
   color: var(--err);
+}
+
+.computer-card-connection .code {
+  overflow-wrap: anywhere;
 }
 
 .computer-card-connection-copy {
@@ -434,6 +491,14 @@ button.computer-run-open:hover {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.computer-runtime-list[data-compact="true"] {
+  gap: var(--sp-1-5) var(--sp-4);
+}
+
+.computer-runtime-list[data-compact="true"] .computer-runtime-name {
+  color: var(--ink-3);
 }
 
 .computer-runtime-row {

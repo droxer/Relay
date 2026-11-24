@@ -12,7 +12,7 @@ import { RuntimeMark } from "../RuntimeMark";
 import { StateMark } from "../StateMark";
 import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
-import { ClientOutdatedBadge, hasClientUpdate } from "./ClientOutdatedBadge";
+import { hasClientUpdate } from "./ClientOutdatedBadge";
 import { ComputerConnectionNotice } from "./ComputerConnectionNotice";
 import { ComputerReportCleanup } from "./ComputerReportCleanup";
 import { computerConnection, connectionNeedsNotice, type ComputerConnection } from "../../lib/computerConnection";
@@ -90,16 +90,21 @@ export function ComputerCard({
   const sandbox = nodeSandboxProfile(node);
   const runtimes = visibleNodeAgentNames(node);
   const activeRuns = node.activeRuns ?? [];
+  const online = isNodeOnline(node);
   const waitingForConnection = connection.state === "pending";
+  const revokedConnection = connection.state === "revoked";
   // The status pill only earns its place when it says something the presence
   // readout cannot: provisioning, failed, stopped — the same rule as the
   // admin fleet card (`showsLifecycleStatus`).
-  const showStatus = showsLifecycleStatus(status) && !(waitingForConnection && status === "provisioning");
+  const showStatus = showsLifecycleStatus(status)
+    && !(waitingForConnection && status === "provisioning")
+    && !revokedConnection;
+  const showRuntimesSection = online || (!waitingForConnection && runtimes.length > 0);
 
   return (
     // Stale-aware, matching the presence pill: a daemon that stopped
     // heartbeating is dark even though its record still says `online`.
-    <article className="computer-card" data-online={isNodeOnline(node) ? "true" : "false"}>
+    <article className="computer-card" data-online={online ? "true" : "false"} data-connection={connection.state}>
       <header className="computer-card-hero">
         <span
           className="computer-card-avatar"
@@ -118,7 +123,15 @@ export function ComputerCard({
           <h2 className="computer-card-name" translate="no" title={title}><a href={computerWorkHref(computerId(node))} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); void navigateToAppPath(computerWorkHref(computerId(node))); } }}>{title}</a></h2>
           <div className="computer-card-state">
             {waitingForConnection ? (
-              <TonePill tone="neutral" label={t("computer.connect_waiting")} />
+              <span className="computer-presence-plain" data-state="pending">
+                <StateMark shape="dashed" tone="neutral" />
+                <span>{t("computer.connect_waiting")}</span>
+              </span>
+            ) : revokedConnection ? (
+              <span className="computer-presence-plain" data-state="revoked">
+                <StateMark shape="ring" tone="bad" />
+                <span>{t("computer.connection_revoked_title")}</span>
+              </span>
             ) : (
               <NodePresence node={node} t={t} withLabel unsettled={connection.state === "unsettled"} />
             )}
@@ -131,7 +144,6 @@ export function ComputerCard({
                 live={statusTone(status) === "info"}
               />
             ) : null}
-            <ClientOutdatedBadge node={node} t={t} />
           </div>
           {/* The separators are drawn by CSS on each item after the first, and each
               item is nowrap: a wrapping flex row breaks between children, so
@@ -143,11 +155,18 @@ export function ComputerCard({
             {node.lastSeenAt && <> <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span></>}
           </p>
           {/* The reader owns this machine, so the fix is theirs to make:
-              name it in the open — the command, not only the badge's hover
-              title — at the sub line's quiet weight, under the name. */}
+              name the update status and the command together on one quiet line
+              under the sub-line instead of repeating it in a header pill. */}
           {hasClientUpdate(node) ? (
             <p className="computer-card-outdated">
-              <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <code className="code" /> }} />
+              <span className="computer-card-outdated-label">
+                <StateMark shape="solid" tone="warn" />
+                <span>{t("computer.client_outdated")}</span>
+              </span>
+              <span className="computer-card-outdated-sep" aria-hidden="true">·</span>
+              <span>
+                <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <code className="code" /> }} />
+              </span>
             </p>
           ) : null}
         </div>
@@ -204,10 +223,15 @@ export function ComputerCard({
         </div>
       </header>
 
-      {/* Anything short of plainly online gets a sentence: what is happening,
-          whether it fixes itself, and the command to run when it does not. */}
+      {/* Anything short of plainly online gets a concise sentence: what is
+          happening, whether it fixes itself, and the command to run when it
+          does not. Waiting-for-connection shows its own terminal check hint. */}
       {connectionNeedsNotice(connection) ? (
         <ComputerConnectionNotice node={node} connection={connection} t={t} />
+      ) : waitingForConnection ? (
+        <div className="computer-card-connection" data-tone="neutral" role="status">
+          <p className="computer-card-connection-body">{t("computer.connect_waiting_hint")}</p>
+        </div>
       ) : null}
       {reportActions}
 
@@ -243,24 +267,28 @@ export function ComputerCard({
         </section>
       )}
 
-      <section className="computer-card-section">
-        <div className="computer-card-section-head">
-          <h3 className="computer-card-section-title">{t("admin.v2.node_runtimes")}</h3>
-          <div className="computer-card-section-actions">
-            <RuntimeRefreshButton nodeId={node.id} online={isNodeOnline(node)}
-              supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
+      {showRuntimesSection ? (
+        <section className="computer-card-section">
+          <div className="computer-card-section-head">
+            <h3 className="computer-card-section-title">{t("admin.v2.node_runtimes")}</h3>
+            {online ? (
+              <div className="computer-card-section-actions">
+                <RuntimeRefreshButton nodeId={node.id} online={online}
+                  supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
+              </div>
+            ) : null}
           </div>
-        </div>
-        {runtimes.length === 0 ? (
-          <p className="computer-card-idle">{t("admin.v2.node_hosted_agents_empty")}</p>
-        ) : (
-          <ul className="computer-runtime-list">
-            {runtimes.map((name) => (
-              <RuntimeRow key={name} node={node} agent={name} t={t} />
-            ))}
-          </ul>
-        )}
-      </section>
+          {runtimes.length === 0 ? (
+            <p className="computer-card-idle">{t("admin.v2.node_hosted_agents_empty")}</p>
+          ) : (
+            <ul className="computer-runtime-list" data-compact={!online ? "true" : undefined}>
+              {runtimes.map((name) => (
+                <RuntimeRow key={name} node={node} agent={name} t={t} />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       {/* The workspace path is looked up, not read: one quiet footer line.
           The id is copied, never read, so it lives in the overflow menu. */}
