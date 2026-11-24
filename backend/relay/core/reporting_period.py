@@ -1,9 +1,17 @@
 """Calendar buckets for dashboard reporting, with compact long-history series."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import Literal
 
 BucketSize = Literal["day", "month", "year"]
+
+
+def range_utc_bounds(date_range: tuple[date, date], zone: tzinfo) -> tuple[datetime, datetime]:
+    """Return inclusive-start, exclusive-end UTC bounds for local calendar dates."""
+    start_day, end_day = date_range
+    start_at = datetime.combine(start_day, datetime.min.time(), tzinfo=zone).astimezone(UTC)
+    end_at = datetime.combine(end_day + timedelta(days=1), datetime.min.time(), tzinfo=zone).astimezone(UTC)
+    return start_at, end_at
 
 
 def reporting_dates(start: date, end: date, *, compact: bool = False) -> tuple[list[date], BucketSize]:

@@ -230,6 +230,45 @@ export interface DashboardSessionsResponse {
   topUsers: Array<{ userId: string; sessionCount: number; displayName?: string; handle?: string }>;
 }
 
+export interface DashboardProjectMetrics {
+  total: number;
+  enabled: number;
+  disabled: number;
+  archived: number;
+  created: number;
+  activeInRange: number;
+}
+
+export interface DashboardTaskMetrics {
+  total: number;
+  open: number;
+  created: number;
+  done: number;
+  inProgress: number;
+  blocked: number;
+  backlog: number;
+  cancelled: number;
+  inProjects: number;
+  standalone: number;
+  statusCounts: Record<string, number>;
+}
+
+export interface DashboardConversationMetrics {
+  total: number;
+  chats: number;
+  totalChats: number;
+  projectChats: number;
+  standaloneChats: number;
+  taskRuns: number;
+  automationRuns: number;
+}
+
+export interface DashboardWorkResponse {
+  projects: DashboardProjectMetrics;
+  tasks: DashboardTaskMetrics;
+  conversations: DashboardConversationMetrics;
+}
+
 export interface TokenCounts {
   input: number;
   output: number;
@@ -272,6 +311,10 @@ export interface TokenUsageSnapshot {
 
 export function getDashboardSessions(signal?: AbortSignal, range?: DashboardRange): Promise<DashboardSessionsResponse> {
   return apiJson<DashboardSessionsResponse>(`/admin/dashboard/sessions?${dashboardQuery(range)}`, { signal });
+}
+
+export function getDashboardWork(signal?: AbortSignal, range?: DashboardRange): Promise<DashboardWorkResponse> {
+  return apiJson<DashboardWorkResponse>(`/admin/dashboard/work?${dashboardQuery(range)}`, { signal });
 }
 
 export function getDashboardTokens(signal?: AbortSignal, timeZone = viewerTimeZone(), range?: DashboardRange): Promise<TokenUsageSnapshot> {

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Collection
+from datetime import UTC, date, tzinfo
 from itertools import batched
 from typing import Any
 
 from sqlalchemy import (
+    and_,
     case,
     delete,
     func,
@@ -17,11 +19,14 @@ from sqlalchemy.exc import IntegrityError
 
 from ...core.ids import new_database_id, now_iso
 from ...core.project_directory import PROJECT_DIRECTORY_FIELDS
+from ...core.reporting_period import range_utc_bounds
 from ...projects.setup_result import generated_setup_name
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata, names_no_uuid_row
 from ..tables import projects as projects_tables
+from ..tables.sessions import sessions as sessions_table
+from ..tables.tasks import tasks as tasks_table
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .manager import ManagerRows
 from .tool_reads import ProjectToolReads
@@ -223,6 +228,51 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                 "version": row.event_version, "memberCount": row.member_count,
                 **({"archivedAt": format_db_time(row.archived_at)} if row.archived_at else {}),
             } for row in conn.execute(statement)]
+
+    def dashboard_project_metrics(
+        self,
+        *,
+        date_range: tuple[date, date] | None = None,
+        zone: tzinfo = UTC,
+        all_time: bool = False,
+    ) -> dict[str, int]:
+        """Aggregate project inventory and range activity without reading snapshots."""
+        columns = self.projects.c
+        live = columns.archived_at.is_(None)
+        session_filters: list[Any] = [sessions_table.c.project_id == columns.id]
+        task_filters: list[Any] = [
+            tasks_table.c.project_id == columns.id,
+            tasks_table.c.deleted_at.is_(None),
+            tasks_table.c.is_routine.is_(False),
+        ]
+        created_in_range: Any = live
+        if date_range is not None and not all_time:
+            start_at, end_at = range_utc_bounds(date_range, zone)
+            created_in_range = and_(live, columns.created_at >= start_at, columns.created_at < end_at)
+            session_filters.extend([sessions_table.c.created_at >= start_at, sessions_table.c.created_at < end_at])
+            task_filters.extend([tasks_table.c.created_at >= start_at, tasks_table.c.created_at < end_at])
+        has_activity = or_(
+            select(sessions_table.c.id).where(*session_filters).exists(),
+            select(tasks_table.c.id).where(*task_filters).exists(),
+        )
+        statement = select(
+            func.sum(case((live, 1), else_=0)).label("total"),
+            func.sum(case((and_(live, columns.enabled.is_(True)), 1), else_=0)).label("enabled"),
+            func.sum(case((and_(live, columns.enabled.is_(False)), 1), else_=0)).label("disabled"),
+            func.sum(case((columns.archived_at.is_not(None), 1), else_=0)).label("archived"),
+            func.sum(case((created_in_range, 1), else_=0)).label("created"),
+            func.sum(case((and_(live, has_activity), 1), else_=0)).label("active_in_range"),
+        ).select_from(self.projects)
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(statement).mappings().one()
+        return {
+            "total": int(row["total"] or 0),
+            "enabled": int(row["enabled"] or 0),
+            "disabled": int(row["disabled"] or 0),
+            "archived": int(row["archived"] or 0),
+            "created": int(row["created"] or 0),
+            "activeInRange": int(row["active_in_range"] or 0),
+        }
 
     def list_linked_workspaces(self, computer_id: str) -> list[dict[str, str]]:
         """Every linked directory on one computer, archived projects included,

@@ -508,6 +508,14 @@ the ledger in storage and caches each reporting window briefly. See
 `GET /api/v1/admin/dashboard/agents` returns `{count}` for the current
 fleet across Accounts. The count includes disabled Agents and excludes deleted
 ones. The backend caches the aggregate for up to 30 seconds.
+`GET /api/v1/admin/dashboard/work` accepts the same `start`, `end`, `tz`, and
+`all_time` parameters and returns `{projects, tasks, conversations}`: current
+live/archived Project inventory plus Projects created or active in the selected
+range, live Task totals plus Tasks created in the range grouped by status and
+Project vs standalone scope, and Thread counts split into Chats (Project vs
+standalone conversations), Task runs, and Automation runs. Each aggregate is
+computed in SQL without reading snapshots and cached per store for up to 30
+seconds.
 `GET /api/v1/admin/dashboard/sessions` includes the display name and handle
 of each ranked User whose Account is still in the directory.
 `GET /api/v1/admin/daemon-nodes?view=web` includes the owner label for

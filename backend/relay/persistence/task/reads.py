@@ -7,7 +7,7 @@ A mixin of ``DatabaseTaskStore``; it shares the store's engine and tables
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, UTC
+from datetime import date, datetime, tzinfo, UTC
 from typing import Any
 from sqlalchemy import (
     ARRAY,
@@ -19,12 +19,14 @@ from sqlalchemy import (
     func,
     or_,
     select,
+    true,
     tuple_,
     union_all,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from ...core.home_tasks import HOME_GROUP_LIMIT, HOME_TASK_FIELDS
 from ...core.permission_requests import DEFAULT_TASK_PERMISSION_MODE
+from ...core.reporting_period import range_utc_bounds
 from .flow import wip_count_query, user_wip_limit
 from .reducer import materialize_task_events
 from ..engine import store_transaction
@@ -590,6 +592,95 @@ class TaskReadRows(TaskStoreState):
         with store_transaction(self.engine) as conn:
             total, active = conn.execute(statement).one()
         return int(total), int(active)
+
+    def dashboard_task_metrics(
+        self,
+        *,
+        date_range: tuple[date, date] | None = None,
+        zone: tzinfo = UTC,
+        all_time: bool = False,
+    ) -> dict[str, Any]:
+        """Aggregate live task counts and range status breakdowns without reading snapshots."""
+        tasks = self.tasks
+        live_scope = (
+            tasks.c.deleted_at.is_(None),
+            tasks.c.is_routine.is_(False),
+            or_(
+                tasks.c.project_id.is_(None),
+                select(projects.c.id).where(projects.c.id == tasks.c.project_id).exists(),
+            ),
+        )
+        if date_range is not None and not all_time:
+            start_at, end_at = range_utc_bounds(date_range, zone)
+            in_range: Any = and_(tasks.c.created_at >= start_at, tasks.c.created_at < end_at)
+        else:
+            in_range = true()
+        in_project = tasks.c.project_id.is_not(None).label("in_project")
+        statement = (
+            select(
+                tasks.c.status.label("status"),
+                in_project,
+                func.count().label("total"),
+                func.sum(case((in_range, 1), else_=0)).label("in_range"),
+            )
+            .where(*live_scope)
+            .group_by(tasks.c.status, in_project)
+        )
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(statement).mappings().all()
+
+        in_progress_statuses = frozenset({"assigned", "queued", "running", "waiting_for_human", "review"})
+        total_all = 0
+        open_all = 0
+        created = 0
+        done = 0
+        in_progress = 0
+        blocked = 0
+        backlog = 0
+        cancelled = 0
+        in_projects = 0
+        standalone = 0
+        status_counts: dict[str, int] = {}
+
+        for row in rows:
+            status = str(row["status"])
+            row_total = int(row["total"] or 0)
+            row_range = int(row["in_range"] or 0)
+            total_all += row_total
+            if status not in ("done", "cancelled"):
+                open_all += row_total
+            if row_range <= 0:
+                continue
+            created += row_range
+            status_counts[status] = status_counts.get(status, 0) + row_range
+            if row["in_project"]:
+                in_projects += row_range
+            else:
+                standalone += row_range
+            if status == "done":
+                done += row_range
+            elif status in in_progress_statuses:
+                in_progress += row_range
+            elif status == "blocked":
+                blocked += row_range
+            elif status == "backlog":
+                backlog += row_range
+            elif status == "cancelled":
+                cancelled += row_range
+
+        return {
+            "total": total_all,
+            "open": open_all,
+            "created": created,
+            "done": done,
+            "inProgress": in_progress,
+            "blocked": blocked,
+            "backlog": backlog,
+            "cancelled": cancelled,
+            "inProjects": in_projects,
+            "standalone": standalone,
+            "statusCounts": status_counts,
+        }
 
     def list_task_summaries(
         self, *, user_id: str | None = None, limit: int | None = None,

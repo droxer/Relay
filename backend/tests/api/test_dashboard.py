@@ -387,7 +387,7 @@ def test_dashboard_custom_range_filters_totals_rankings_and_tokens(monkeypatch) 
 def test_dashboard_rejects_invalid_ranges(monkeypatch) -> None:
     with TemporaryDirectory() as root:
         _, client = _dashboard_client(monkeypatch, root)
-        for route in ("sessions", "tokens"):
+        for route in ("sessions", "tokens", "work"):
             for params in (
                 {"start": "2026-01-02", "end": "2026-01-01"},
                 {"start": "2024-01-01", "end": "2026-01-01"},
@@ -426,7 +426,177 @@ def test_dashboard_all_time_includes_history_beyond_custom_range_limit(monkeypat
         # Changing back must restore the default window and its own cached answer.
         assert client.get("/api/v1/admin/dashboard/sessions").json()["total"] == 0
         assert client.get("/api/v1/admin/dashboard/tokens").json()["fresh"] == 5
-        for route in ("sessions", "tokens"):
+        for route in ("sessions", "tokens", "work"):
             assert client.get(f"/api/v1/admin/dashboard/{route}", params={
                 **params, "start": "2026-01-01", "end": "2026-01-02",
             }).status_code == 422
+
+
+def test_dashboard_work_aggregates_projects_tasks_and_conversations(monkeypatch, tmp_path) -> None:
+    from sqlalchemy import update
+    from relay.persistence.engine import store_transaction
+
+    app, client = _dashboard_client(monkeypatch, str(tmp_path))
+    owner = client.get("/api/v1/auth/me").json()["user"]["userId"]
+    projects = app.state.project_store
+    tasks = app.state.task_store
+    sessions = app.state.session_store
+
+    active_project = projects.create_project(owner, {
+        "name": "Active Project",
+        "computerId": "comp-1",
+        "members": [],
+    })
+    disabled_project = projects.create_project(owner, {
+        "name": "Disabled Project",
+        "computerId": "comp-1",
+        "members": [],
+        "enabled": False,
+    })
+    archived_project = projects.create_project(owner, {
+        "name": "Archived Project",
+        "computerId": "comp-1",
+        "members": [],
+    })
+    projects.archive_project(archived_project["id"], expected_version=archived_project["version"])
+
+    # Tasks: 1 done in project, 1 blocked standalone, 1 backlog old (outside range),
+    # 1 deleted (excluded), 1 routine definition (excluded from task counts).
+    done_task = tasks.create_task({
+        "title": "Ship metrics",
+        "description": "",
+        "ownerUserId": owner,
+        "projectId": active_project["id"],
+        "status": "done",
+    })
+    blocked_task = tasks.create_task({
+        "title": "Unblock deploy",
+        "description": "",
+        "ownerUserId": owner,
+        "status": "blocked",
+    })
+    old_task = tasks.create_task({
+        "title": "Old backlog",
+        "description": "",
+        "ownerUserId": owner,
+        "status": "backlog",
+    })
+    deleted_task = tasks.create_task({
+        "title": "Deleted task",
+        "description": "",
+        "ownerUserId": owner,
+        "status": "backlog",
+    })
+    tasks.delete_task(deleted_task["id"])
+    routine = tasks.create_task({
+        "title": "Nightly check",
+        "description": "",
+        "ownerUserId": owner,
+        "isRoutine": True,
+        "routine": {"cadence": "daily", "time": "09:00"},
+    })
+
+    # Threads: 1 project chat, 1 standalone chat, 1 old standalone chat, 1 task run, 1 automation run.
+    project_chat = sessions.create_session({
+        "taskGoal": "Project chat",
+        "workspacePath": "/work",
+        "ownerUserId": owner,
+        "projectId": active_project["id"],
+    })
+    standalone_chat = sessions.create_session({
+        "taskGoal": "Standalone chat",
+        "workspacePath": "/work",
+        "ownerUserId": owner,
+    })
+    old_chat = sessions.create_session({
+        "taskGoal": "Historical chat",
+        "workspacePath": "/work",
+        "ownerUserId": owner,
+    })
+    task_run = sessions.create_session({
+        "taskGoal": "Run task",
+        "workspacePath": "/work",
+        "ownerUserId": owner,
+        "projectId": active_project["id"],
+    })
+    tasks.link_session(done_task["id"], task_run["id"])
+    auto_run = sessions.create_session({
+        "taskGoal": "Run automation",
+        "workspacePath": "/work",
+        "ownerUserId": owner,
+    })
+    tasks.link_session(routine["id"], auto_run["id"])
+
+    in_window = datetime(2026, 2, 10, 12, 0, tzinfo=UTC)
+    before_window = datetime(2026, 1, 5, 12, 0, tzinfo=UTC)
+    with store_transaction(projects.engine) as conn:
+        conn.execute(update(projects.projects).where(projects.projects.c.id == active_project["id"]).values(created_at=in_window))
+        conn.execute(update(projects.projects).where(projects.projects.c.id == disabled_project["id"]).values(created_at=before_window))
+        conn.execute(update(projects.projects).where(projects.projects.c.id == archived_project["id"]).values(created_at=in_window))
+        conn.execute(update(tasks.tasks).where(tasks.tasks.c.id.in_([done_task["id"], blocked_task["id"]])).values(created_at=in_window))
+        conn.execute(update(tasks.tasks).where(tasks.tasks.c.id == old_task["id"]).values(created_at=before_window))
+        conn.execute(update(sessions.sessions).where(sessions.sessions.c.id.in_([
+            project_chat["id"], standalone_chat["id"], task_run["id"], auto_run["id"],
+        ])).values(created_at=in_window))
+        conn.execute(update(sessions.sessions).where(sessions.sessions.c.id == old_chat["id"]).values(created_at=before_window))
+
+    statements: list[str] = []
+
+    def capture(_conn, _cursor, statement, _params, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement.lower())
+
+    event.listen(projects.engine, "before_cursor_execute", capture)
+    try:
+        params = {"start": "2026-02-09", "end": "2026-02-11", "tz": "UTC"}
+        first = client.get("/api/v1/admin/dashboard/work", params=params)
+        second = client.get("/api/v1/admin/dashboard/work", params=params)
+        all_time = client.get("/api/v1/admin/dashboard/work", params={"all_time": "true", "tz": "UTC"})
+    finally:
+        event.remove(projects.engine, "before_cursor_execute", capture)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    body = first.json()
+    assert body["projects"] == {
+        "total": 2,
+        "enabled": 1,
+        "disabled": 1,
+        "archived": 1,
+        "created": 1,
+        "activeInRange": 1,
+    }
+    assert body["tasks"] == {
+        "total": 3,
+        "open": 2,
+        "created": 2,
+        "done": 1,
+        "inProgress": 0,
+        "blocked": 1,
+        "backlog": 0,
+        "cancelled": 0,
+        "inProjects": 1,
+        "standalone": 1,
+        "statusCounts": {"done": 1, "blocked": 1},
+    }
+    assert body["conversations"] == {
+        "total": 4,
+        "chats": 2,
+        "totalChats": 3,
+        "projectChats": 1,
+        "standaloneChats": 1,
+        "taskRuns": 1,
+        "automationRuns": 1,
+    }
+    assert all_time.status_code == 200
+    all_body = all_time.json()
+    assert all_body["projects"]["created"] == 2
+    assert all_body["tasks"]["created"] == 3
+    assert all_body["tasks"]["backlog"] == 1
+    assert all_body["conversations"]["chats"] == 3
+    assert all_body["conversations"]["standaloneChats"] == 2
+    # All dashboard work queries avoid loading JSON snapshots.
+    assert statements
+    assert all("snapshot" not in sql for sql in statements)
+    assert TestClient(app).get("/api/v1/admin/dashboard/work").status_code == 401
