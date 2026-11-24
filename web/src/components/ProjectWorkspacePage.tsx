@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import { listTasks, type TaskListCache } from "../api";
 import { projectRecordOptions } from "../hooks/projectQueries";
 import { useProjectLeadDiscussion } from "../hooks/useProjectLeadDiscussion";
 import { useOwnAgentBadge, useUserAgents } from "../hooks/useUserAgents";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
+import { TASKS_QUERY_KEY } from "../hooks/useRelayData";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import {
   DEFAULT_PROJECT_PAGE_TAB,
@@ -23,6 +25,7 @@ import type {
   ProjectMember,
   ProjectListItem,
   ProjectDashboardSummary,
+  RelayTask,
   RelayTaskListItem,
 } from "../types";
 import { ICON, NavBack } from "./icons";
@@ -41,11 +44,12 @@ import { TonePill } from "./StatusPill";
 import { Button } from "@/components/ui/button";
 import { RoutinesPage } from "./RoutinesPage";
 import { BacklogPage } from "./BacklogPage";
-import { ProjectDashboard } from "./ProjectDashboard";
+import { ProjectDashboard, ProjectTaskPlanning, ProjectTasksCreated } from "./ProjectDashboard";
 import { ProjectContextSuggestions } from "./ProjectContextUpkeep";
 import { ProjectManagerLine } from "./ProjectManagerLine";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 import { isProjectDirectoryEntry } from "../lib/projectDirectory";
+import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
 
 /* The header's subtitle says what the open tab is for. It used to describe
    the tasks board on every tab, including the ones that are not it. */
@@ -93,6 +97,7 @@ export function ProjectWorkspacePage({
 }) {
   const { t } = useTranslation();
   const [memberEditor, setMemberEditor] = useState<{ member: ProjectMember | null } | null>(null);
+  const [createdTasks, setCreatedTasks] = useState<{ projectId: string; titles: string[] } | null>(null);
   /* The tab is always written explicitly and left to canonicalization to
      drop when it is implied: an open `?task=` implies Tasks, so a bare
      "dashboard" would otherwise read back as Tasks and keep the task open. */
@@ -127,14 +132,19 @@ export function ProjectWorkspacePage({
   const pageTab: ProjectPageTab = recordTaskId ? "tasks" : urlTab;
   const directoryEntry = isProjectDirectoryEntry(project);
   const setup = directoryEntry ? project.setupSummary : project.setup;
-  const showingSetup = pageTab === "dashboard" && !projectReadOnly(project) && setupNeedsAttention(setup);
+  const membersReadOnly = projectReadOnly(project);
+  const canPlan = !membersReadOnly && currentUser.userId === project.ownerUserId;
+  const showingSetup = pageTab === "dashboard" && canPlan && setupNeedsAttention(setup);
   const { agents: setupAgents } = useUserAgents(currentUser.userId, true, showingSetup);
   const lead = useOwnAgentBadge(currentUser.userId, project.leadAgentId, pageTab === "dashboard" && !showingSetup);
   const dashboardAgents = showingSetup && setupAgents.length ? setupAgents : agents;
   const managerAgents = lead ? [lead] : dashboardAgents;
   const needsDashboardRecord = pageTab === "dashboard"
     && (Boolean(project.contextSummary?.suggestionCount) || (setupNeedsAttention(setup) && (directoryEntry || Boolean(project.contextSummary))));
+  const needsPlanningRecord = pageTab === "dashboard" && canPlan && directoryEntry
+    && (Boolean(project.leadAgentId) || dashboard?.metrics.total === 0 || (!pageOwnsTasks && tasks.length === 0));
   const needsProjectRecord = needsDashboardRecord
+    || needsPlanningRecord
     || (pageTab === "members" && directoryEntry)
     || (pageTab === "settings" && (directoryEntry || Boolean(project.contextSummary)));
   const detail = useQuery({
@@ -166,6 +176,31 @@ export function ProjectWorkspacePage({
     [tasks, project.id],
   );
   const boardTasks = useMemo(() => projectBoardTasks(tasks, project.id), [tasks, project.id]);
+  const metricsCache = useMemo<TaskListCache>(() => ({ projectId: project.id, scope: "project-dashboard" }), [project.id]);
+  // The shell owns this query on Dashboard. Other tabs use the same compact
+  // result for the badge, independent of the board's filters and pagination.
+  const dashboardQuery = useQuery({
+    queryKey: [...TASKS_QUERY_KEY, project.id, "project-dashboard"],
+    queryFn: ({ signal }) => listTasks(signal, metricsCache),
+    enabled: pageOwnsTasks && pageTab !== "dashboard",
+    staleTime: RELAY_POLL_INTERVALS_MS.tasks,
+  });
+  const counts = dashboard ?? dashboardQuery.data?.projectDashboard;
+  const openTaskCount = counts?.openTaskCount
+    ?? (counts ? counts.metrics.total - counts.metrics.done
+      : boardTasks.filter((task) => task.status !== "done" && task.status !== "cancelled").length);
+  const onTasksCreated = (records: RelayTask[]) => {
+    setCreatedTasks({ projectId: project.id, titles: records.map((task) => task.title) });
+  };
+  const viewCreatedTasks = () => {
+    const url = new URL(window.location.href);
+    const projectPath = `/projects/${encodeURIComponent(project.id)}`;
+    if (url.pathname.replace(/\/$/u, "") === projectPath) {
+      openTaskRecord(null);
+    } else {
+      void navigateToAppPath(canonicalBrowserUrl(projectPath, "?tab=tasks"));
+    }
+  };
   const computer = computers.find((node) => stableComputerId(node) === project.computerId);
   const computerLabel = computer?.displayName?.trim()
     || project.computerId.replace(/^device:[^:]+:/, "");
@@ -185,8 +220,6 @@ export function ProjectWorkspacePage({
     },
   ];
 
-  /* Archived/disabled projects are read-only rooms — no member management. */
-  const membersReadOnly = projectReadOnly(project);
   const leadDiscussion = useProjectLeadDiscussion({ projectId: project.id, currentUser, onOpenThread });
   /* Only the owner talks to the lead here (the conversation route is
      owner-scoped), and only while the project can take new work. */
@@ -230,8 +263,13 @@ export function ProjectWorkspacePage({
                 key={tab}
                 value={tab}
                 className={`workspace-page-tab${pageTab === tab ? " is-active" : ""}`}
+                aria-label={tab === "tasks" ? t(PROJECT_TAB_LABEL[tab]) : undefined}
+                aria-description={tab === "tasks" && openTaskCount > 0 ? t("project.tasks_tab_open", { count: openTaskCount }) : undefined}
               >
                 {t(PROJECT_TAB_LABEL[tab])}
+                {tab === "tasks" && openTaskCount > 0 ? (
+                  <span className="project-tasks-tab-count" aria-hidden="true">{openTaskCount}</span>
+                ) : null}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -241,16 +279,30 @@ export function ProjectWorkspacePage({
       <div className="workspace-body">
         <TabsContent value="dashboard">
           <ProjectDashboard
-            review={projectRecord && setupNeedsAttention(projectRecord.setup) && !membersReadOnly ? (
+            confirmation={createdTasks?.projectId === project.id ? (
+              <ProjectTasksCreated titles={createdTasks.titles} onOpenBoard={viewCreatedTasks} onDismiss={() => setCreatedTasks(null)} />
+            ) : null}
+            review={projectRecord && setupNeedsAttention(projectRecord.setup) && canPlan ? (
               <ProjectSetupPanel
                 project={projectRecord}
                 setup={projectRecord.setup}
                 agents={dashboardAgents}
                 onOpenThread={onOpenThread}
-                onOpenTask={openTaskRecord}
                 onManual={() => setPageTab("members")}
+                onTasksCreated={onTasksCreated}
+                onViewTasks={viewCreatedTasks}
               />
             ) : null}
+            planning={canPlan && !setupNeedsAttention(setup) && projectRecord && !setupNeedsAttention(projectRecord.setup)
+              ? (empty) => (
+                <ProjectTaskPlanning
+                  key={project.id}
+                  project={projectRecord}
+                  empty={empty}
+                  onAssignLead={() => setPageTab("members")}
+                  onOpenBoard={() => setPageTab("tasks")}
+                />
+              ) : undefined}
             steward={(
               <ProjectManagerLine
                 project={project}
@@ -262,9 +314,9 @@ export function ProjectWorkspacePage({
             )}
             proposals={projectRecord
               ? <ProjectContextSuggestions project={projectRecord} readOnly={membersReadOnly} onOpenThread={onOpenThread} />
-              : needsDashboardRecord ? detailStatus : null}
+              : needsDashboardRecord || needsPlanningRecord ? detailStatus : null}
             tasks={boardTasks}
-            summary={dashboard}
+            summary={counts}
             onOpenRecord={(taskId) => openTaskRecord(taskId)}
             onOpenBoard={() => setPageTab("tasks")}
           />

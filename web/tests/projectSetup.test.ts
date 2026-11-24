@@ -83,6 +83,14 @@ describe("setup drafts", () => {
     assert.deepEqual(input.members?.map((m) => m.projectManager ?? false), [true, false]);
   });
 
+  it("leaves the proposal open while the selected tasks are filed", () => {
+    const draft = setupDraftFromProposal(proposal, project);
+    const input = setupApplyInput(project, draft, { resolveSetup: false });
+    assert.equal(input.goal, "Ship by March 14");
+    assert.equal(input.leadAgentId, "ada");
+    assert.equal(input.setupResolution, undefined);
+  });
+
   it("keeps management with the chosen lead when a legacy proposal names another manager", () => {
     const managed = { ...project, managerAgentId: "bo" } as ProjectRecord;
     const named = { ...proposal, members: proposal.members?.map((m) => (m.agentId === "bo" ? { ...m, projectManager: true } : m)) };
@@ -149,6 +157,7 @@ describe("setupAwaitingApply", () => {
   it("points the setup thread at an unapplied proposal", () => {
     assert.equal(setupAwaitingApply(proposed, "t1"), proposed.setup);
     const summary = projectDirectoryEntry(proposed);
+    assert.equal(summary.setupSummary?.proposedTaskCount, 2);
     assert.equal(setupAwaitingApply(summary, "t1"), summary.setupSummary);
     assert.equal(setupAwaitingApply(summary, "t2"), null);
   });

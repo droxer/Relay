@@ -16,10 +16,11 @@ from test_project_setup_api import _complete, _take_command
 setup_env = setup_api.setup_env
 
 
-def _crewed(client, project, planner, builder) -> dict:
+def _crewed(client, project, planner, builder, **brief) -> dict:
     latest = client.get(f"/api/v1/projects/{project['id']}").json()["project"]
     response = client.patch(f"/api/v1/projects/{project['id']}", json={
         "expectedVersion": latest["version"],
+        **brief,
         "leadAgentId": planner["id"],
         "members": [
             {"agentId": planner["id"], "role": "planner", "responsibilities": "Plan", "enabled": True},
@@ -49,6 +50,31 @@ def test_plan_mode_needs_a_crew(setup_env):
         "intent": "Plan", "mode": "plan",
     })
     assert (response.status_code, response.json()["detail"]) == (409, "project_plan_needs_crew")
+
+
+@pytest.mark.parametrize(("brief", "body", "expected"), [
+    ({"goal": "Ship pricing", "description": "Use the existing design"}, {}, "Ship pricing\n\nUse the existing design"),
+    ({"goal": "Ship pricing"}, {"intent": "   "}, "Ship pricing"),
+    ({"description": "Use the existing design"}, {}, "Use the existing design"),
+    ({"goal": "Ship pricing"}, {"intent": "Focus on copy"}, "Focus on copy"),
+    ({"goal": "Ship pricing"}, {"intent": []}, None),
+    ({"goal": "Ship pricing"}, {"revise": True}, None),
+    ({}, {}, None),
+])
+def test_plan_intent_falls_back_to_the_project_brief(setup_env, brief, body, expected):
+    app, client, node, project, planner, builder = setup_env
+    project = _crewed(client, project, planner, builder, **brief)
+
+    started = client.post(f"/api/v1/projects/{project['id']}/setup", json={"mode": "plan", **body})
+
+    if expected is None:
+        assert (started.status_code, started.json()["detail"]) == (400, "project_setup_intent_required")
+        return
+    assert started.status_code == 202, started.text
+    assert started.json()["project"]["setup"]["intent"] == expected
+    setup = _take_command(app, node)["state"]["project_setup"]
+    assert setup["intent"] == expected
+    assert setup.get("goal") == brief.get("goal")
 
 
 def test_plan_round_sees_open_tasks_and_drafts_only_tasks(setup_env):
@@ -145,12 +171,41 @@ def test_a_retried_apply_keeps_tasks_in_backlog(setup_env):
     assert queued.json()["tasks"][0]["status"] == "backlog"
 
 
-def test_interrupted_apply_rolls_back_tasks_before_retry(setup_env, monkeypatch):
+def test_applying_an_empty_plan_selection_resolves_the_draft_without_tasks(setup_env):
     app, client, node, project, planner, builder = setup_env
     project = _crewed(client, project, planner, builder)
     _plan(app, client, node, project, [{"key": "design", "title": "Design pricing"}])
-    draft_id = client.get(f"/api/v1/projects/{project['id']}/setup").json()["setup"]["draftId"]
-    url = f"/api/v1/projects/{project['id']}/setup/tasks"
+    url = f"/api/v1/projects/{project['id']}/setup"
+    draft_id = client.get(url).json()["setup"]["draftId"]
+
+    response = client.post(f"{url}/tasks", json={"draftId": draft_id, "taskKeys": []})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["tasks"] == []
+    assert response.json()["project"]["setup"]["state"] == "applied"
+
+
+@pytest.mark.parametrize("mode", ["setup", "plan"])
+def test_interrupted_apply_rolls_back_tasks_before_retry(setup_env, monkeypatch, mode):
+    app, client, node, project, planner, builder = setup_env
+    project = _crewed(client, project, planner, builder)
+    project_url = f"/api/v1/projects/{project['id']}"
+    started = client.post(f"{project_url}/setup", json={"mode": mode, "intent": "Plan the pricing page"})
+    assert started.status_code == 202, started.text
+    _complete(app, node, _take_command(app, node), started.json()["threadId"], proposal={
+        "goal": "Ship pricing",
+        "tasks": [{"key": "design", "title": "Design pricing"}],
+    })
+    project = client.get(project_url).json()["project"]
+    if mode == "setup":
+        brief = client.patch(project_url, json={"expectedVersion": project["version"], "goal": "Ship pricing"})
+        assert brief.status_code == 200, brief.text
+        project = brief.json()["project"]
+    assert project["setup"]["state"] == "proposed"
+    task_id = project["setup"]["taskId"]
+    initial_status = app.state.task_store.get_task(task_id)["status"]
+    url = f"{project_url}/setup/tasks"
+    body = {"draftId": project["setup"]["draftId"], "queue": True}
     store = app.state.project_store
 
     with monkeypatch.context() as interrupted:
@@ -158,15 +213,21 @@ def test_interrupted_apply_rolls_back_tasks_before_retry(setup_env, monkeypatch)
             raise HTTPException(503, "simulated project write failure")
 
         interrupted.setattr(store, "_replace_members", fail_recording)
-        failed = client.post(url, json={"draftId": draft_id, "queue": True})
+        failed = client.post(url, json=body)
     assert failed.status_code == 503
-    assert [task["title"] for task in client.get("/api/v1/tasks").json()["tasks"]] == ["Plan the next work: Plan the pricing page"]
+    assert [task["id"] for task in client.get("/api/v1/tasks").json()["tasks"]] == [task_id]
+    assert app.state.task_store.get_task(task_id)["status"] == initial_status
     assert store.get_project(project["id"])["setup"]["state"] == "proposed"
 
-    retry = client.post(url, json={"draftId": draft_id, "queue": True})
+    retry = client.post(url, json=body)
     assert retry.status_code == 200, retry.text
     assert len(client.get("/api/v1/tasks").json()["tasks"]) == 2
     assert retry.json()["tasks"][0]["status"] == "backlog"
+    assert retry.json()["project"]["setup"]["state"] == "applied"
+    assert app.state.task_store.get_task(task_id)["status"] == "done"
+    again = client.post(url, json=body)
+    assert again.json()["tasks"] == retry.json()["tasks"]
+    assert again.json()["project"]["version"] == retry.json()["project"]["version"]
 
 
 def test_plan_apply_refuses_more_than_ten_prerequisites(setup_env):

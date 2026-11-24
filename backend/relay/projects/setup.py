@@ -41,7 +41,11 @@ class ProjectSetupError(ValueError):
         super().__init__(code)
 
 
-def setup_intent(value: Any) -> str:
+def setup_intent(value: Any, *, project: dict[str, Any], mode: str, revise: bool) -> str:
+    if mode == "plan" and not revise and (value is None or isinstance(value, str) and not value.strip()):
+        goal = (project.get("goal") or "").strip()
+        description = (project.get("description") or "").strip()
+        value = "\n\n".join(part for part in (goal, description) if part)[:SETUP_INTENT_MAX_LENGTH]
     if not isinstance(value, str) or not value.strip():
         raise ProjectSetupError("project_setup_intent_required", status=400)
     normalized = value.strip()
@@ -153,6 +157,7 @@ def setup_manifest_block(
     previous_proposal: dict[str, Any] | None,
     draft_id: str,
     mode: str = "setup",
+    goal: str | None = None,
     open_tasks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """What the round manifest carries so the registry can brief the agent."""
@@ -161,6 +166,7 @@ def setup_manifest_block(
         "draftId": draft_id,
         "mode": mode,
         **({"openTasks": open_tasks} if mode == "plan" else {}),
+        **({"goal": goal} if mode == "plan" and goal else {}),
         "intent": intent,
         "candidates": candidates,
         "roles": list(AGENT_ROLES),

@@ -521,6 +521,51 @@ button.project-member-row:hover .project-member-row-open {
   min-width: 0;
 }
 
+.project-plan-goal {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.project-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.project-tasks-created {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: var(--hairline);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+}
+
+.project-tasks-created > svg {
+  color: var(--ok);
+}
+
+.project-tasks-created-copy {
+  flex: 1 1 13rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-tasks-created-copy p {
+  margin: var(--sp-1) 0 0;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+
+.project-tasks-tab-count {
+  margin-inline-start: var(--sp-2);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
 .project-dashboard-attention {
   display: grid;
   margin: 0 calc(-1 * var(--sp-2));
@@ -878,7 +923,37 @@ button.project-member-row:hover .project-member-row-open {
    wears the Settings section's hairline card so it reads as part of the
    record, not as a banner bolted on top of it. */
 .project-setup-panel {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   margin: 0 auto var(--sp-6);
+}
+
+.project-setup-panel .project-settings-actions {
+  flex-wrap: wrap;
+}
+
+.project-setup-drafting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.project-setup-drafting h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.project-setup-drafting .project-settings-head {
+  border: 0;
+}
+
+.project-setup-drafting .project-settings-foot {
+  margin: 0;
+  padding: 0 var(--sp-3) var(--sp-2);
+  border: 0;
 }
 
 /* The setup thread's pointer back to the dashboard, where a draft is applied. */
@@ -962,15 +1037,81 @@ button.project-member-row:hover .project-member-row-open {
   min-width: 9rem;
 }
 
-.project-setup-detail {
-  padding-left: calc(var(--sp-2) + 1rem);
+.project-setup-disclosure {
+  min-width: 0;
+}
+
+.project-setup-disclosure > summary {
+  padding-block: var(--sp-1);
+  cursor: pointer;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+}
+
+.project-setup-disclosure[open] > summary {
+  margin-block-end: var(--sp-2);
+}
+
+.project-setup-preview {
+  display: block;
+  margin-inline-start: var(--sp-4);
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-setup-disclosure[open] > summary > .project-setup-preview {
+  display: none;
+}
+
+.project-setup-task-heading {
+  justify-content: space-between;
+}
+
+.project-setup-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  margin-inline-start: calc(var(--sp-2) + 1rem);
+}
+
+.project-setup-task-meta > span {
+  min-width: 0;
+  padding-inline: var(--sp-2);
+  border: var(--hairline);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  overflow-wrap: anywhere;
+}
+
+.project-setup-task-description {
+  display: -webkit-box;
+  margin-inline-start: calc(var(--sp-2) + 1rem);
+  min-width: 0;
+  text-align: start;
   white-space: pre-line;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  padding: 0;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.project-setup-task-description[aria-expanded="true"] {
+  display: block;
+}
+
+.project-setup-task-description:hover {
+  text-decoration: underline;
 }
 
 .project-setup-error {
   margin: 0;
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
+  overflow-wrap: anywhere;
 }
 
 /* The mode switch leads the drawer's action bar; Cancel and the primary

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectDrawer } from "../src/components/ProjectDrawer";
+import { ProjectTaskPlanning } from "../src/components/ProjectDashboard";
 import { ProjectSetupPanel } from "../src/components/ProjectSetupPanel";
 import type { DaemonNodeMonitorRecord, ProjectRecord, ProjectSetup } from "../src/types";
 
@@ -58,20 +59,22 @@ it("opens on intent and asks for one before drafting", () => {
   expect(screen.getByRole("alert").textContent).toBe("project.setup_intent_required");
 });
 
-it("creates the project from the intent and asks the chosen agent to draft its setup", async () => {
+it("uses the only Computer and keeps the drafting agent under Advanced", async () => {
   const onSaved = vi.fn();
   render(<ProjectDrawer open computers={computers} userId="alice" onClose={vi.fn()} onSaved={onSaved} />);
   fireEvent.change(screen.getByRole("textbox", { name: /^project\.setup_intent/ }), { target: { value: "Launch the site.\nWith pricing." } });
-  fireEvent.click(screen.getByRole("button", { name: "node" }));
-  // The setup agent, not the manager picker below it, which lists the same roster.
+  expect(screen.queryByText("project_manager.agent")).toBeNull();
+  const advanced = screen.getByText("project.setup_advanced");
+  expect(advanced.closest("details")?.open).toBe(false);
+  fireEvent.click(advanced);
+  expect(advanced.closest("details")?.open).toBe(true);
   const setupAgentField = screen.getByText("project.setup_agent").closest("[data-slot='field']") as HTMLElement;
   fireEvent.click(within(setupAgentField).getByRole("button", { name: /^Bo · / }));
   fireEvent.click(screen.getByRole("button", { name: "project.setup_draft" }));
   await waitFor(() => expect(onSaved).toHaveBeenCalled());
   expect(create).toHaveBeenCalledWith({
     name: "Launch the site", description: "Launch the site.\nWith pricing.", daemonNodeId: "node",
-    // The preselected manager is sent as the owner's explicit choice.
-    managerAgentId: "ada", leadAgentId: null, members: [],
+    managerAgentId: null, leadAgentId: null, members: [],
   });
   expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Launch the site.\nWith pricing.", agentId: "bo" } });
   expect(onSaved.mock.calls[0][0].version).toBe(2);
@@ -87,11 +90,13 @@ it("still opens the created project when its setup cannot start", async () => {
   await waitFor(() => expect(onSaved).toHaveBeenCalledWith(created));
 });
 
-it("keeps the manual form one click away", () => {
+it("saves a goal when the owner creates a project manually", async () => {
   render(<ProjectDrawer open computers={computers} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "project.setup_manual" }));
-  expect(screen.getByRole("textbox", { name: "project.name" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "project.create" })).toBeTruthy();
+  fireEvent.change(screen.getByRole("textbox", { name: "project.name" }), { target: { value: "New repo" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /^project\.goal/ }), { target: { value: "  Ship pricing  " } });
+  fireEvent.click(screen.getByRole("button", { name: "project.create" }));
+  await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: "New repo", goal: "Ship pricing", daemonNodeId: "node" })));
 });
 
 const linkingComputers = [{ ...computers[0], capabilities: ["project-workspaces", "project-links"] }] as unknown as DaemonNodeMonitorRecord[];
@@ -106,7 +111,7 @@ function openManualForm(list: DaemonNodeMonitorRecord[]) {
 const folderBox = () => screen.getByRole("textbox", { name: /^project\.folder/ });
 
 it("shows the folder before a computer is chosen, and says to choose one", () => {
-  render(<ProjectDrawer open computers={linkingComputers} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
+  render(<ProjectDrawer open computers={[...linkingComputers, { ...linkingComputers[0], id: "other" }]} userId="alice" onClose={vi.fn()} onSaved={vi.fn()} />);
   fireEvent.click(screen.getByRole("radio", { name: "project.origin_existing" }));
   expect((folderBox() as HTMLInputElement).disabled).toBe(true);
   expect(screen.getByText("project.existing_folder_choose_computer")).toBeTruthy();
@@ -127,13 +132,14 @@ it("enables the folder once a linking computer is chosen", () => {
 it("checks the folder with the computer and creates the project in it", async () => {
   checkProjectWorkspace.mockResolvedValue({ workspaceHostPath: "/Users/alice/code/app" });
   openManualForm(linkingComputers);
+  fireEvent.change(screen.getByRole("textbox", { name: /^project\.goal/ }), { target: { value: "Maintain the app" } });
   fireEvent.change(folderBox(), { target: { value: " /Users/alice/code/app/ " } });
   fireEvent.blur(folderBox());
   await waitFor(() => expect(checkProjectWorkspace).toHaveBeenCalledWith("node", "/Users/alice/code/app/"));
   await screen.findByText(/^project\.folder_linkable/);
   fireEvent.click(screen.getByRole("button", { name: "project.create" }));
   await waitFor(() => expect(create).toHaveBeenCalled());
-  expect(create.mock.calls[0][0]).toMatchObject({ daemonNodeId: "node", workspaceHostPath: "/Users/alice/code/app/" });
+  expect(create.mock.calls[0][0]).toMatchObject({ daemonNodeId: "node", workspaceHostPath: "/Users/alice/code/app/", goal: "Maintain the app" });
 });
 
 it("refuses a relative folder without asking the computer", () => {
@@ -200,18 +206,35 @@ function renderPanel(setup: ProjectSetup = proposedSetup) {
   );
 }
 
-it("applies a reviewed proposal in one patch and files its tasks", async () => {
+it("saves the brief and roster while leaving the draft open to file tasks", async () => {
   getProjectSetup.mockResolvedValue({ setup: proposedSetup, candidates: [] });
   renderPanel();
-  fireEvent.click(screen.getByRole("button", { name: "project.setup_apply" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_apply_tasks" }));
   await waitFor(() => expect(applyTasks).toHaveBeenCalled());
   const input = update.mock.calls[0][0].input;
-  expect(input).toMatchObject({ expectedVersion: 3, name: "Spring launch", goal: "Ship by Friday", leadAgentId: "ada", setupResolution: "applied" });
+  expect(input).toMatchObject({ expectedVersion: 3, name: "Spring launch", goal: "Ship by Friday", leadAgentId: "ada" });
+  expect(input).not.toHaveProperty("setupResolution");
   expect(input.members.map((m: { agentId: string }) => m.agentId)).toEqual(["ada", "bo"]);
-  expect(applyTasks).toHaveBeenCalledWith({ projectId: "p", input: {
+  expect(applyTasks).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p", input: {
     draftId: "setup_1", taskKeys: ["sitemap", "pages"], assignedAgentIds: { sitemap: "bo", pages: null },
-  } });
+  } }));
   expect(screen.getByText("project.setup_task_after")).toBeTruthy();
+});
+
+it("can apply the brief without creating any tasks", async () => {
+  getProjectSetup.mockResolvedValue({ setup: proposedSetup, candidates: [] });
+  renderPanel();
+  expect(screen.getByText("project.setup_edit_brief").closest("details")?.open).toBe(false);
+  const sitemap = screen.getByRole("checkbox", { name: "Draft the sitemap" });
+  expect(within(sitemap.closest("li")!).getByText("Bo")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_select_none" }));
+  expect(sitemap.getAttribute("aria-checked")).toBe("false");
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_select_all" }));
+  expect(sitemap.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_select_none" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_apply" }));
+  await waitFor(() => expect(update.mock.calls[0]?.[0].input.setupResolution).toBe("applied"));
+  expect(applyTasks).not.toHaveBeenCalled();
 });
 
 it("unticks a proposed member who can no longer join and says why", async () => {
@@ -223,7 +246,7 @@ it("unticks a proposed member who can no longer join and says why", async () => 
   });
   renderPanel();
   await screen.findByText("project.setup_issue.agent_disabled");
-  fireEvent.click(screen.getByRole("button", { name: "project.setup_apply" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_apply_tasks" }));
   await waitFor(() => expect(update).toHaveBeenCalled());
   expect(update.mock.calls[0][0].input.members.map((m: { agentId: string }) => m.agentId)).toEqual(["ada"]);
   await waitFor(() => expect(applyTasks).toHaveBeenCalled());
@@ -233,10 +256,11 @@ it("unticks a proposed member who can no longer join and says why", async () => 
 it("asks for changes in the same thread", async () => {
   getProjectSetup.mockResolvedValue({ setup: proposedSetup, candidates: [] });
   renderPanel();
+  expect(screen.queryByRole("textbox", { name: /^project\.setup_revise_label/ })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "project.setup_revise" }));
   expect(startSetup).not.toHaveBeenCalled();
   fireEvent.change(screen.getByRole("textbox", { name: /^project\.setup_revise_label/ }), { target: { value: "Drop Bo" } });
-  fireEvent.click(screen.getByRole("button", { name: "project.setup_revise" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_send_revision" }));
   await waitFor(() => expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { intent: "Drop Bo", revise: true } }));
 });
 
@@ -246,7 +270,7 @@ it("creates plan tasks for the owner to start separately", async () => {
   renderPanel(plan);
   expect(screen.queryByText("project.setup_crew")).toBeNull();
   expect(screen.getByText("project.setup_tasks_backlog_hint")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "project.plan_apply" }));
+  fireEvent.click(screen.getByRole("button", { name: "project.plan_apply_tasks" }));
   await waitFor(() => expect(applyTasks).toHaveBeenCalled());
   expect(update).not.toHaveBeenCalled();
   expect(applyTasks.mock.calls[0][0].input.taskKeys).toEqual(["sitemap", "pages"]);
@@ -302,8 +326,8 @@ it("disables creating an existing project on a computer that cannot link folders
   expect(screen.queryByText("project.existing_folder_required")).toBeNull();
 });
 
-it("links a draft to the task it runs under", () => {
-  const onOpenTask = vi.fn();
+it("links to the drafting Thread without exposing its bookkeeping Task", () => {
+  const onOpenThread = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const drafting: ProjectSetup = { ...proposedSetup, state: "drafting", proposal: undefined, taskId: "task_setup" };
   render(
@@ -312,12 +336,32 @@ it("links a draft to the task it runs under", () => {
         project={{ ...created, version: 3, setup: drafting } as ProjectRecord}
         setup={drafting}
         agents={agents as never}
-        onOpenThread={vi.fn()}
-        onOpenTask={onOpenTask}
+        onOpenThread={onOpenThread}
         onManual={vi.fn()}
       />
     </QueryClientProvider>,
   );
-  fireEvent.click(screen.getByRole("button", { name: "project.setup_open_task" }));
-  expect(onOpenTask).toHaveBeenCalledWith("task_setup");
+  expect(screen.queryByRole("button", { name: "project.setup_open_task" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "project.setup_open_thread" }));
+  expect(onOpenThread).toHaveBeenCalledWith("t");
+});
+
+it("saves a missing goal before starting the first task plan", async () => {
+  const project = { ...created, leadAgentId: "ada" };
+  render(<ProjectTaskPlanning project={project} empty onOpenBoard={vi.fn()} onAssignLead={vi.fn()} />);
+  const submit = screen.getByRole<HTMLButtonElement>("button", { name: "project.plan_save_goal" });
+  expect(submit.disabled).toBe(true);
+  fireEvent.change(screen.getByRole("textbox", { name: /^project\.goal/ }), { target: { value: "  Ship pricing  " } });
+  fireEvent.click(submit);
+  await waitFor(() => expect(startSetup).toHaveBeenCalledWith({ projectId: "p", input: { mode: "plan" } }));
+  expect(update).toHaveBeenCalledWith(expect.objectContaining({ input: { expectedVersion: 1, goal: "Ship pricing" } }));
+  expect(update.mock.invocationCallOrder[0]).toBeLessThan(startSetup.mock.invocationCallOrder[0]);
+});
+
+it("sends the owner to Collaboration when the project has no Lead", () => {
+  const onAssignLead = vi.fn();
+  render(<ProjectTaskPlanning project={created} empty onOpenBoard={vi.fn()} onAssignLead={onAssignLead} />);
+  fireEvent.click(screen.getByRole("button", { name: "project.plan_assign_lead" }));
+  expect(onAssignLead).toHaveBeenCalled();
+  expect(startSetup).not.toHaveBeenCalled();
 });

@@ -70,8 +70,8 @@ def _prepare_project_setup(
     if code := project_work_error(project):
         raise HTTPException(409, code)
     try:
-        intent = setup_intent(body.get("intent"))
         mode = setup_mode(body.get("mode"), project)
+        intent = setup_intent(body.get("intent"), project=project, mode=mode, revise=bool(body.get("revise")))
         if mode == "setup" and project.get("workspaceHostPath"):
             # An existing project keeps the name, brief, and roster its owner
             # gave it; only planning further work is drafted for it.
@@ -120,7 +120,7 @@ def _prepare_project_setup(
 
     open_tasks = (
         plan_open_tasks(
-            project, ctx.task_store.list_task_summaries(user_id=project["ownerUserId"]),
+            project, ctx.task_store.list_task_summaries(user_id=project["ownerUserId"], project_id=project_id),
         )
         if mode == "plan" else None
     )
@@ -161,6 +161,7 @@ def _prepare_project_setup(
                 previous_proposal=previous_proposal,
                 draft_id=draft["draftId"],
                 mode=mode,
+                goal=project.get("goal"),
                 open_tasks=open_tasks,
             ),
         )

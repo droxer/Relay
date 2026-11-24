@@ -89,13 +89,13 @@ export interface ProjectSetupResponse {
   candidates: ProjectSetupCandidate[];
 }
 
-export interface StartProjectSetupInput {
-  intent: string;
+export type StartProjectSetupInput = {
   agentId?: string;
-  /** Draft again in the same thread from the last proposal. */
-  revise?: boolean;
-  mode?: ProjectSetupMode;
-}
+} & (
+  | { mode?: "setup"; intent: string; revise?: boolean }
+  | { mode: "plan"; intent: string; revise: true }
+  | { mode: "plan"; intent?: string; revise?: false }
+);
 
 export interface ApplySetupTasksInput {
   draftId: string;
@@ -150,7 +150,10 @@ export interface ProjectRecord {
   archivedAt?: string;
 }
 
-export type ProjectSetupSummary = Pick<ProjectSetup, "state" | "mode" | "threadId"> & { hasProposal: boolean };
+export type ProjectSetupSummary = Pick<ProjectSetup, "state" | "mode" | "threadId"> & {
+  hasProposal: boolean;
+  proposedTaskCount?: number;
+};
 
 export interface ProjectDirectoryEntry extends Pick<ProjectRecord,
   "id" | "ownerUserId" | "name" | "computerId" | "workspaceLayout" | "workspaceSubpath"

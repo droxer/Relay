@@ -16,9 +16,13 @@ export function ProjectSetupCue({ project, threadId, onOpenProject }: {
   const setup = setupAwaitingApply(project, threadId);
   if (!project || !setup) return null;
   const plan = setup.mode === "plan";
+  const proposedTaskCount = "hasProposal" in setup ? setup.proposedTaskCount : setup.proposal?.tasks?.length;
+  const title = t(plan ? "project.setup_cue_plan_title" : "project.setup_cue_title");
   return (
     <div className="handoff-panel project-setup-cue" role="status" aria-live="polite">
-      <div className="handoff-panel-title">{t(plan ? "project.setup_cue_plan_title" : "project.setup_cue_title")}</div>
+      <div className="handoff-panel-title">
+        {title}{proposedTaskCount ? ` · ${t("project.setup_tasks_proposed", { count: proposedTaskCount })}` : ""}
+      </div>
       <p className="project-setup-cue-body">{t(plan ? "project.setup_cue_plan_body" : "project.setup_cue_body", { project: project.name })}</p>
       <div>
         <Button type="button" variant="outline" onClick={() => onOpenProject(project.id)}>
