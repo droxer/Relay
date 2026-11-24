@@ -219,6 +219,6 @@ export function taskAssigneeLabel(
 ): string {
   if (task.assignedTeamId) return resolvedName || t("backlog.assignment_unavailable_team");
   if (task.assignedAgentId) return resolvedName || t("backlog.assignment_unavailable_agent");
-  if (task.assignedWorkflowId) return t("workflow.assigned_workflow");
+  if (task.assignedWorkflowId) return resolvedName || t("workflow.assigned_workflow");
   return task.assignedAgent || t("backlog.unassigned");
 }
