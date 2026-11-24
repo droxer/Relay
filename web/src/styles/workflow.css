@@ -20,9 +20,11 @@
   letter-spacing: var(--type-label-track);
 }
 
-/* The approval gate: a word on a warm tint, since a person must act there. */
+/* The approval gate: a word on a warm tint, since a person must act there.
+   Uses --warn-badge rather than --warn because text painted over its own 8%
+   tint needs the deeper light-register tone to clear 4.5:1 on every plane. */
 .workflow-step-gate {
-  --tone: var(--warn);
+  --tone: var(--warn-badge);
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -510,9 +512,14 @@
 
 /* A stopped step's mark fills with its tone's tint; a running one keeps a
    ring and wears the shared live-ring (tokens/base.css), the beat every
-   live dot in Relay shares. */
+   live dot in Relay shares. Waiting marks step to --warn-badge over the 8%
+   tint so the numeral clears 4.5:1 in light mode. */
 .workflow-timeline-step:is([data-state="waiting"], [data-state="blocked"]) .workflow-step-index {
   background: var(--tone-tint);
+}
+
+.workflow-timeline-step[data-state="waiting"] .workflow-step-index {
+  --tone: var(--warn-badge);
 }
 
 .workflow-timeline-step[data-state="current"] .workflow-step-index::after {

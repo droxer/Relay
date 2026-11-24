@@ -420,6 +420,7 @@ button[data-danger]:focus-visible,
    here, on the row, so every meta line inside inherits the fix. */
 .rail-row[data-selected="true"],
 tr[data-selected="true"],
+.backlog-task[data-selected="true"],
 [data-highlighted] {
   --ink-4: var(--ink-3);
 }
