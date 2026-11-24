@@ -111,13 +111,13 @@ def test_skill_detail_bounds_revision_pages_without_changing_the_default(client)
     assert client.get(f"{url}/revisions", params={"before": 4}).status_code == 404
 
 
-def test_skill_catalog_reads_history_in_one_query(client):
+def test_skill_catalog_reads_projections_and_counts_without_history(client):
     ids = {publish(client, name=f"skill-{i}")["id"] for i in range(4)}
     engine = client.app.state.context.skill_store.engine
     queries = []
 
     def record(_conn, _cursor, statement, *_args):
-        if statement.lstrip().upper().startswith("SELECT") and "skill_events" in statement:
+        if statement.lstrip().upper().startswith("SELECT"):
             queries.append(statement)
 
     event.listen(engine, "before_cursor_execute", record)
@@ -125,7 +125,10 @@ def test_skill_catalog_reads_history_in_one_query(client):
         assert {row["id"] for row in client.get("/api/v1/skills").json()["skills"]} == ids
     finally:
         event.remove(engine, "before_cursor_execute", record)
-    assert len(queries) == 1
+    assert all("skill_events" not in statement for statement in queries)
+    assert sum("\nFROM skills" in statement for statement in queries) == 1
+    [assignments] = [statement for statement in queries if "FROM skill_assignments" in statement]
+    assert "count(" in assignments and "GROUP BY" in assignments
 
 @pytest.mark.parametrize("mutation,expected", [
     ({"files": [{"path": "SKILL.md", "contentBase64": "not base64!"}]}, 422),

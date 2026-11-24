@@ -14,6 +14,7 @@ from ..persistence.protocols import (
     TeamStore,
 )
 from ..projects.catalog import agent_has_active_project
+from ..security.user_handles import user_record
 from ..teams.membership import remove_agent_from_teams
 
 
@@ -70,8 +71,7 @@ def user_is_live(ctx: NodeAgentContext, user_id: str) -> bool:
     auth_store = getattr(ctx, "auth_store", None)
     if auth_store is None:
         return True
-    # list_users already excludes soft-deleted rows.
-    return any(user.get("id") == user_id for user in auth_store.list_users())
+    return user_record(auth_store, user_id) is not None
 
 
 def sync_node_agents(ctx: NodeAgentContext, node: dict[str, Any]) -> None:

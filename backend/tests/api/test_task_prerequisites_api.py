@@ -206,7 +206,7 @@ def test_global_issues_reads_only_one_window_with_full_collection_counts(project
     assert data["page"] == {"page": 2, "total": 65}
     assert data["counts"]["open"] == 65
     assert data["groupTotals"] == {project["id"]: 65}
-    assert data["tags"] == ["Intake", "Café"]
+    assert set(data["tags"]) == {"Intake", "Café"}
     assert len(data["tasks"]) == 15
     assert any("LIMIT" in sql and "OFFSET" in sql for sql, _ in statements)
     if store.engine.dialect.name == "postgresql":

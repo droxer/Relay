@@ -7,30 +7,28 @@ from typing import Any
 from sqlalchemy import and_, or_, select
 
 from ..engine import store_transaction
+from ..sql import names_no_uuid_row
 from .rows import _revision_dict
 from .state import SkillStoreState
 
 
 class SkillReadRows(SkillStoreState):
     def get_skill(self, skill_id: str) -> dict[str, Any] | None:
+        if names_no_uuid_row(self.engine, skill_id):
+            return None
+        skills = self.skills
         with store_transaction(self.engine) as conn:
-            exists = conn.scalar(
-                select(self.skills.c.id).where(self.skills.c.id == skill_id)
-            )
-            return self._replay(conn, exists) if exists else None
+            row = conn.execute(select(skills.c.id, skills.c.snapshot).where(skills.c.id == skill_id)).first()
+            return self._read_projection(conn, row.id, row.snapshot) if row is not None else None
 
     def list_skills(self, viewer_user_id: str) -> list[dict[str, Any]]:
+        skills = self.skills
+        statement = select(skills.c.id, skills.c.snapshot).where(and_(
+            skills.c.deleted_at.is_(None),
+            or_(skills.c.visibility == "public", skills.c.owner_user_id == viewer_user_id),
+        ))
         with store_transaction(self.engine) as conn:
-            result = self._replay_matching(
-                conn,
-                and_(
-                    self.skills.c.deleted_at.is_(None),
-                    or_(
-                        self.skills.c.visibility == "public",
-                        self.skills.c.owner_user_id == viewer_user_id,
-                    ),
-                ),
-            )
+            result = [self._read_projection(conn, row.id, row.snapshot) for row in conn.execute(statement)]
         return sorted(
             result, key=lambda item: (item["displayName"].casefold(), item["id"])
         )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from itertools import groupby
 from typing import Any
 
 from sqlalchemy import insert, select, update
@@ -85,24 +84,20 @@ class SkillEventRows(SkillStoreState):
         ).mappings()
         return self._reduce_skill(skill_id, history)
 
+    def _read_projection(self, conn: Any, skill_id: str, snapshot: Any) -> dict[str, Any]:
+        if (
+            isinstance(snapshot, dict)
+            and snapshot.get("id") == skill_id
+            and {"ownerUserId", "name", "displayName", "visibility", "updatedAt", "deletedAt"} <= snapshot.keys()
+        ):
+            return snapshot
+        return self._replay(conn, skill_id)
+
     def _replay_events(self) -> Any:
         events = self.events_table
         return select(events.c.skill_id, events.c.type, events.c.payload).where(events.c.type.in_((
             "skill.created", "skill.revision.added", "skill.revision.promoted", "skill.updated", "skill.deleted",
         )))
-
-    def _replay_matching(self, conn: Any, predicate: Any) -> list[dict[str, Any]]:
-        events = self.events_table
-        rows = conn.execute(
-            self._replay_events()
-            .join(self.skills, self.skills.c.id == events.c.skill_id)
-            .where(predicate)
-            .order_by(events.c.skill_id, events.c.sequence)
-        ).mappings()
-        return [
-            self._reduce_skill(str(skill_id), history)
-            for skill_id, history in groupby(rows, key=lambda row: row["skill_id"])
-        ]
 
     @staticmethod
     def _reduce_skill(skill_id: str, rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:

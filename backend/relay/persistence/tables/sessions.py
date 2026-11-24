@@ -18,6 +18,16 @@ from sqlalchemy import (
 from ..sql import database_id_column, entity_uuid_type, json_type, metadata
 
 
+POSTGRES_QUEUED_THREAD = (
+    "(snapshot #>> '{messageQueue,messages,0,id}') IS NOT NULL "
+    "AND (snapshot #>> '{messageQueue,paused}') = 'false'"
+)
+SQLITE_QUEUED_THREAD = (
+    "json_extract(snapshot, '$.messageQueue.messages[0].id') IS NOT NULL "
+    "AND json_extract(snapshot, '$.messageQueue.paused') IS 0"
+)
+
+
 sessions = Table(
     "sessions",
     metadata,
@@ -45,10 +55,13 @@ sessions = Table(
     # Derived from snapshot.deletionRequestedAt so the deletion sweep can
     # find its few rows without reading every snapshot.
     Column("deletion_requested_at", DateTime(timezone=True), nullable=True),
-    Index("ix_sessions_updated_at", "updated_at"),
+    Index("ix_sessions_recency", "updated_at", "id"),
     Index("ix_sessions_created_at", "created_at"),
-    Index("ix_sessions_project_id", "project_id"),
-    Index("ix_sessions_owner_updated_at", "owner_user_id", "updated_at"),
+    Index("ix_sessions_owner_recency", "owner_user_id", "updated_at", "id"),
+    Index("ix_sessions_project_owner_recency", "project_id", "owner_user_id", "updated_at", "id",
+          postgresql_where=text("project_id IS NOT NULL"), sqlite_where=text("project_id IS NOT NULL")),
+    Index("ix_sessions_queued_threads", "id",
+          postgresql_where=text(POSTGRES_QUEUED_THREAD), sqlite_where=text(SQLITE_QUEUED_THREAD)),
     Index(
         "ix_sessions_pending_deletion",
         "updated_at",

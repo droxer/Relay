@@ -7,9 +7,6 @@ from __future__ import annotations
 import json
 from datetime import timedelta
 from typing import Any
-from sqlalchemy import (
-    func,
-)
 from ..db_time import format_db_time, parse_db_time, require_db_time
 from ...core.ids import new_database_id
 
@@ -407,9 +404,3 @@ def daemon_event_to_row(event: dict[str, Any]) -> dict[str, Any]:
         "timestamp": parse_db_time(event["timestamp"]),
         "payload": event,
     }
-
-
-def terminal_time_expression(table: Any) -> Any:
-    if "updated_at" in table.c:
-        return func.coalesce(table.c.completed_at, table.c.updated_at, table.c.created_at)
-    return func.coalesce(table.c.completed_at, table.c.started_at)

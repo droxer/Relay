@@ -104,12 +104,9 @@ def list_skills(request: Request, ctx: AppContextDep) -> dict[str, Any]:
     for agent in agents:
         for skill_id in {entry["skillId"] for entry in skill_grants.read_grants(agent)}:
             counts[skill_id] = counts.get(skill_id, 0) + 1
-    assignment_counts: dict[str, int] = {}
-    for assignment in ctx.skill_store.list_assignments():
-        if assignment["createdByUserId"] == actor["userId"] or actor["isAdmin"]:
-            assignment_counts[assignment["skillId"]] = (
-                assignment_counts.get(assignment["skillId"], 0) + 1
-            )
+    assignment_counts = ctx.skill_store.count_assignments_by_skill(
+        created_by_user_id=None if actor["isAdmin"] else actor["userId"],
+    )
     return {"skills": [
         {
             **skill,
@@ -157,12 +154,9 @@ def get_skill(
             if any(entry["skillId"] == skill_id for entry in skill_grants.read_grants(agent))
         ],
         **revision_page,
-        "assignments": [
-            assignment
-            for assignment in ctx.skill_store.list_assignments(skill_id=skill_id)
-            if actor["isAdmin"]
-            or assignment["createdByUserId"] == actor["userId"]
-        ],
+        "assignments": ctx.skill_store.list_assignments(
+            skill_id=skill_id, created_by_user_id=None if actor["isAdmin"] else actor["userId"],
+        ),
         "files": [
             {key: entry[key] for key in ("path", "sha256", "bytes")}
             for entry in ctx.skill_store.revision_files(skill["currentRevisionId"])

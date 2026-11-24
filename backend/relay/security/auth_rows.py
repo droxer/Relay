@@ -126,15 +126,6 @@ def row_to_user(row: Any) -> dict[str, Any]:
     }
 
 
-def user_with_department(
-    user: dict[str, Any], departments: dict[str, dict[str, Any]]
-) -> dict[str, Any]:
-    department = departments.get(user.get("departmentId") or "")
-    if not department:
-        return user
-    return {**user, "departmentName": department["name"]}
-
-
 def row_to_database_account(row: Any) -> dict[str, Any]:
     return {
         "id": str(row["id"]),

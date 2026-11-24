@@ -21,6 +21,7 @@ from relay.persistence.engine import store_transaction
 from relay.persistence.notification.store import DatabaseNotificationStore
 from relay.persistence.task.store import DatabaseTaskStore
 from datetime import UTC
+from sqlalchemy import event
 
 SEEN = "2026-10-16T12:00:00Z"
 
@@ -117,6 +118,39 @@ def test_replaying_an_approval_notice_preserves_read_state_and_scopes_deduplicat
     assert replayed["readAt"] is not None
     assert replayed["createdAt"] == first["createdAt"]
     assert store.list_for_user("u-2")["unreadCount"] == 1
+
+
+def test_notice_batches_keep_first_delivery_and_latest_incident_facts(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    row = {"user_id": "u-1", "kind": APPROVAL_REQUESTED, "data": {"version": 1}, "dedupeKey": "q-1"}
+    later = {**row, "data": {"version": 2}}
+    statements = []
+
+    def record(_conn, _cursor, statement, _params, *_args):
+        if statement.startswith("INSERT INTO notifications"):
+            statements.append(statement)
+
+    event.listen(store.engine, "before_cursor_execute", record)
+    try:
+        store.add([
+            row, later,
+            *[{**row, "user_id": f"recipient-{i}"} for i in range(100)],
+        ])
+        assert len(statements) == 2
+        [notice] = store.list_for_user("u-1")["notifications"]
+        assert notice["data"] == {"version": 1}
+        store.mark_read("u-1", [notice["id"]])
+        store.update_incident([row, later])
+        assert len(statements) == 3
+        [updated] = store.list_for_user("u-1")["notifications"]
+        assert updated["data"] == {"version": 2}
+        assert updated["createdAt"] == notice["createdAt"]
+        assert updated["readAt"] is not None
+        store.clear("u-1", [notice["id"]])
+        store.update_incident([row])
+        assert store.list_for_user("u-1") == {"notifications": [], "unreadCount": 0}
+    finally:
+        event.remove(store.engine, "before_cursor_execute", record)
 
 
 # --- client version ----------------------------------------------------------

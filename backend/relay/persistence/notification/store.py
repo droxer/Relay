@@ -20,6 +20,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime, UTC
 from hashlib import sha256
+from itertools import batched
 from json import dumps
 from typing import Any
 
@@ -39,26 +40,38 @@ type WatchTransition = tuple[str, str | None, str]
 class _WatchStateChanged(Exception):
     """Another watcher won a claim, so roll back any other claims in this transaction."""
 
-def insert_notification_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
-    """Insert notices; a dedupeKey identifies one notice per recipient/kind.
-
-    Replaying that notice preserves its original read state and creation time.
-    """
+def _insert_notices(conn: Any, rows: list[dict[str, Any]], *, replace_data: bool = False) -> None:
     now = datetime.now(UTC)
+    values: dict[str, dict[str, Any]] = {}
     for row in rows:
-        dedupe_key = row.get("dedupeKey")
+        dedupe_key = row["dedupeKey"] if replace_data else row.get("dedupeKey")
         notice_id = (
             str(uuid.uuid5(uuid.NAMESPACE_URL, f"relay.notification/{row['user_id']}/{row['kind']}/{dedupe_key}"))
             if dedupe_key else new_database_id()
         )
-        dialect_insert = postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
-        statement = dialect_insert(notifications).values(
-            id=notice_id, user_id=row["user_id"], kind=row["kind"],
-            data=row["data"], created_at=now, read_at=None,
+        notice = dict(
+            id=notice_id, user_id=row["user_id"], kind=row["kind"], data=row["data"],
+            created_at=now, read_at=None,
         )
-        if dedupe_key:
+        if replace_data:
+            values[notice_id] = notice
+        else:
+            values.setdefault(notice_id, notice)
+    dialect_insert = postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
+    for batch in batched(sorted(values), 100):
+        statement = dialect_insert(notifications).values([values[notice_id] for notice_id in batch])
+        if replace_data:
+            statement = statement.on_conflict_do_update(
+                index_elements=[notifications.c.id], set_={"data": statement.excluded.data},
+            )
+        else:
             statement = statement.on_conflict_do_nothing(index_elements=[notifications.c.id])
         conn.execute(statement)
+
+
+def insert_notification_rows(conn: Any, rows: list[dict[str, Any]]) -> None:
+    """Insert notices once, preserving their original facts and read state."""
+    _insert_notices(conn, rows)
 
 
 def _is_uuid(value: str) -> bool:
@@ -101,10 +114,7 @@ class DatabaseNotificationStore:
     def update_incident(self, rows: list[dict[str, Any]]) -> None:
         """Update facts in place, preserving recipient read/clear state."""
         with store_transaction(self.engine) as conn:
-            insert_notification_rows(conn, rows)
-            for row in rows:
-                notice_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"relay.notification/{row['user_id']}/{row['kind']}/{row['dedupeKey']}"))
-                conn.execute(update(notifications).where(notifications.c.id == notice_id).values(data=row['data']))
+            _insert_notices(conn, rows, replace_data=True)
 
     @staticmethod
     def _visible(user_id: str, muted: list[str]) -> Any:

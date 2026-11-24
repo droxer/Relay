@@ -112,8 +112,12 @@ class _Projects:
     def __init__(self, projects: list[dict[str, Any]]):
         self._projects = projects
 
-    def list_projects(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
-        return self._projects
+    def agent_has_active_project(self, agent_id: str, *, exclude_computer_id: str | None = None) -> bool:
+        return any(
+            member.get("agentId") == agent_id
+            for project in self._projects if project.get("computerId") != exclude_computer_id
+            for member in project.get("members", [])
+        )
 
 
 def test_an_agent_cannot_move_off_its_teams_computer() -> None:

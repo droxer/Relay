@@ -494,7 +494,7 @@ def test_soft_deleted_user_does_not_get_a_placement_backfilled(
     agents = make_agent_store(tmp_path)
     placements = make_agent_placement_store(tmp_path)
     auth_store = SimpleNamespace(
-        list_users=lambda: [{"id": "bob"}],  # alice was soft-deleted
+        list_users=lambda *, user_ids: [],  # alice was soft-deleted
     )
     ctx = SimpleNamespace(
         agent_store=agents,
@@ -525,7 +525,7 @@ def test_soft_deleted_user_does_not_get_a_placement_backfilled(
 def test_live_user_still_gets_a_placement_backfilled(tmp_path: Path) -> None:
     agents = make_agent_store(tmp_path)
     placements = make_agent_placement_store(tmp_path)
-    auth_store = SimpleNamespace(list_users=lambda: [{"id": "alice"}])
+    auth_store = SimpleNamespace(list_users=lambda *, user_ids: [{"id": "alice"}] if user_ids == ["alice"] else [])
     ctx = SimpleNamespace(
         agent_store=agents,
         agent_placement_store=placements,

@@ -22,7 +22,7 @@ from .account_identity import (
     lock_account_identities,
 )
 from .auth_cache import SESSION_ACCOUNTS
-from .auth_rows import row_to_department, row_to_user, user_to_row, user_with_department
+from .auth_rows import row_to_user, user_to_row
 from .auth_state import AuthStoreState
 from .entity_ids import USER_ENTITY_KIND, database_id_for_reference, normalize_database_id
 from .user_handles import slugify_handle
@@ -221,24 +221,26 @@ class AuthUsers(AuthStoreState):
             return [{**row, "id": str(row["id"])} for row in rows]
 
     def list_users(self, *, user_ids: list[str] | None = None) -> list[dict[str, Any]]:
-        statement = select(self.users).where(self.users.c.deleted_at.is_(None))
+        users, departments = self.users, self.departments
+        statement = (
+            select(users, departments.c.name.label("department_name"))
+            .select_from(users.outerjoin(departments, departments.c.id == users.c.department_id))
+            .where(users.c.deleted_at.is_(None))
+            .order_by(users.c.created_at, users.c.id)
+        )
         if user_ids is not None:
-            statement = statement.where(self.users.c.id.in_(user_ids))
+            user_ids = [user_id for user_id in user_ids if not names_no_uuid_row(self.engine, user_id)]
+            if not user_ids:
+                return []
+            statement = statement.where(users.c.id.in_(user_ids))
+        result = []
         with store_transaction(self.engine) as conn:
-            department_rows = conn.execute(select(self.departments)).mappings().all()
-            departments = {
-                str(row["id"]): row_to_department(row) for row in department_rows
-            }
-            rows = (
-                conn.execute(
-                    statement.order_by(self.users.c.created_at, self.users.c.id)
-                )
-                .mappings()
-                .all()
-            )
-        return [
-            user_with_department(row_to_user(row), departments) for row in rows
-        ]
+            for row in conn.execute(statement).mappings():
+                user = row_to_user(row)
+                if row["department_name"] is not None:
+                    user["departmentName"] = row["department_name"]
+                result.append(user)
+        return result
 
     def soft_delete_user(self, user_id: str) -> dict[str, Any]:
         user_id = (user_id or "").strip()

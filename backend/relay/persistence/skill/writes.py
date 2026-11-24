@@ -105,6 +105,7 @@ class SkillWriteRows(SkillStoreState):
                         **skill,
                         "currentRevisionId": revision["id"],
                         "stableRevisionId": revision["id"],
+                        "updatedAt": revision["createdAt"],
                     }
                     conn.execute(
                         update(self.skills)
@@ -139,7 +140,7 @@ class SkillWriteRows(SkillStoreState):
                 with store_transaction(self.engine) as conn:
                     row = (
                         conn.execute(
-                            select(self.skills.c.id, self.skills.c.event_version)
+                            select(self.skills.c.id, self.skills.c.event_version, self.skills.c.snapshot)
                             .where(self.skills.c.id == skill_id)
                             .with_for_update()
                         )
@@ -148,7 +149,7 @@ class SkillWriteRows(SkillStoreState):
                     )
                     if not row:
                         raise KeyError(skill_id)
-                    current = self._replay(conn, row["id"])
+                    current = self._read_projection(conn, row["id"], row["snapshot"])
                     if current.get("deletedAt"):
                         raise SkillValidationError("skill-deleted")
                     if manifest["name"] != current["name"]:
@@ -213,7 +214,7 @@ class SkillWriteRows(SkillStoreState):
         with self._write_lock, store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
-                    select(self.skills.c.id, self.skills.c.event_version)
+                    select(self.skills.c.id, self.skills.c.event_version, self.skills.c.snapshot)
                     .where(self.skills.c.id == skill_id)
                     .with_for_update()
                 )
@@ -222,7 +223,7 @@ class SkillWriteRows(SkillStoreState):
             )
             if not row:
                 raise KeyError(skill_id)
-            current = self._replay(conn, row["id"])
+            current = self._read_projection(conn, row["id"], row["snapshot"])
             if current.get("deletedAt"):
                 raise SkillValidationError("skill-deleted")
             revision = (
@@ -297,7 +298,7 @@ class SkillWriteRows(SkillStoreState):
             with store_transaction(self.engine) as conn:
                 row = (
                     conn.execute(
-                        select(self.skills.c.id, self.skills.c.event_version)
+                        select(self.skills.c.id, self.skills.c.event_version, self.skills.c.snapshot)
                         .where(self.skills.c.id == skill_id)
                         .with_for_update()
                     )
@@ -306,7 +307,7 @@ class SkillWriteRows(SkillStoreState):
                 )
                 if not row:
                     raise KeyError(skill_id)
-                current = self._replay(conn, row["id"])
+                current = self._read_projection(conn, row["id"], row["snapshot"])
                 if current.get("deletedAt"):
                     raise SkillValidationError("skill-deleted")
                 timestamp = now_iso()

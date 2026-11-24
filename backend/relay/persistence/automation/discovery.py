@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Text, and_, cast, insert, literal_column, or_, select, update
+from sqlalchemy import Text, cast, insert, literal_column, or_, select, tuple_, update
 
 from ..engine import store_transaction
 from ..tables.automations import automation_scan_cursors, automation_state
@@ -34,12 +34,7 @@ def routing_page(
         tasks.c.created_at <= before,
     )
     if after_created_at is not None and after_id is not None:
-        query = query.where(
-            or_(
-                tasks.c.created_at > after_created_at,
-                and_(tasks.c.created_at == after_created_at, tasks.c.id > after_id),
-            )
-        )
+        query = query.where(tuple_(tasks.c.created_at, tasks.c.id) > (after_created_at, after_id))
     query = query.order_by(tasks.c.created_at, tasks.c.id).limit(limit)
     with store_transaction(engine) as conn:
         rows = conn.execute(query).mappings().all()

@@ -107,15 +107,12 @@ def assert_agent_can_move(
                 f"Agent belongs to team {team.get('name') or team['id']} on another "
                 "computer. Remove it from the team before moving it.",
             )
-    for project in project_store.list_projects(include_archived=False):
-        if project.get("computerId") != target_computer_id and any(
-            member.get("agentId") == agent["id"] for member in project.get("members", [])
-        ):
-            raise AgentMoveError(
-                "agent_project_computer_mismatch",
-                "Agent belongs to a project on another computer. Remove it from "
-                "the project before moving it.",
-            )
+    if project_store.agent_has_active_project(agent["id"], exclude_computer_id=target_computer_id):
+        raise AgentMoveError(
+            "agent_project_computer_mismatch",
+            "Agent belongs to a project on another computer. Remove it from "
+            "the project before moving it.",
+        )
 
 
 def place_agent_on_node(

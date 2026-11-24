@@ -86,7 +86,7 @@ revisions = Table(
         "bytes >= 0 AND bytes <= 4194304", name="ck_skill_revisions_bytes"
     ),
     UniqueConstraint("skill_id", "revision", name="uq_skill_revisions_number"),
-    Index("ix_skill_revisions_skill", "skill_id", "revision"),
+    Index("ix_skill_revisions_created_by_user", "created_by_user_id"),
 )
 
 blobs = Table(
@@ -182,5 +182,5 @@ assignments = Table(
         name="uq_skill_assignments_target",
     ),
     Index("ix_skill_assignments_target", "target_type", "target_id"),
-    Index("ix_skill_assignments_skill", "skill_id"),
+    Index("ix_skill_assignments_created_by_user", "created_by_user_id", "skill_id"),
 )

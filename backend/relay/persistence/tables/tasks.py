@@ -16,9 +16,29 @@ from sqlalchemy import (
     Table,
     Text,
     UniqueConstraint,
+    and_,
+    func,
+    literal_column,
+    or_,
     text,
 )
+from ...core.task_capacity import WIP_EXEMPT_STATUSES, WIP_STARTED_STATUSES
 from ..sql import database_id_column, entity_uuid_type, json_type, metadata
+
+# Two boolean keys sort high, normal (including legacy defaults), then low.
+DISPATCH_NOT_HIGH = "(priority <> 'high')"
+DISPATCH_LOW = "(priority = 'low')"
+DISPATCH_DUE_MISSING = "(due_date IS NULL)"
+DISPATCH_DUE_DATE = "COALESCE(due_date, '9999-12-31')"
+
+
+def dispatch_index_where(dialect: str) -> Any:
+    false = "false" if dialect == "postgresql" else "0"
+    return text(
+        f"status IN ('assigned', 'queued') AND is_routine IS {false} AND deleted_at IS NULL "
+        "AND (assigned_agent IS NOT NULL OR assigned_team_id IS NOT NULL OR project_id IS NOT NULL)"
+    )
+
 
 def routine_index_where(dialect: str, *extra: str) -> Any:
     """Partial-index predicate spelled exactly as the store queries render it
@@ -110,16 +130,15 @@ tasks = Table(
         sqlite_where=text("deleted_at IS NULL"),
     ),
     Index(
-        "ix_tasks_dispatch_queue",
-        "due_date",
+        "ix_tasks_dispatch_order",
+        literal_column(DISPATCH_NOT_HIGH),
+        literal_column(DISPATCH_LOW),
+        literal_column(DISPATCH_DUE_MISSING),
+        literal_column(DISPATCH_DUE_DATE),
         "created_at",
         "id",
-        postgresql_where=text(
-            "status IN ('assigned', 'queued') AND is_routine IS false AND deleted_at IS NULL"
-        ),
-        sqlite_where=text(
-            "status IN ('assigned', 'queued') AND is_routine IS 0 AND deleted_at IS NULL"
-        ),
+        postgresql_where=dispatch_index_where("postgresql"),
+        sqlite_where=dispatch_index_where("sqlite"),
     ),
     Index(
         "ix_tasks_due_schedules",
@@ -144,6 +163,19 @@ tasks = Table(
         ),
     ),
 )
+
+task_wip_scope = func.coalesce(tasks.c.assignee_user_id, tasks.c.owner_user_id, type_=entity_uuid_type())
+task_occupies_wip = and_(
+    tasks.c.status.not_in(tuple(literal_column(f"'{status}'") for status in WIP_EXEMPT_STATUSES)),
+    literal_column("(snapshot ->> 'workflowStage')").is_distinct_from(literal_column("'review'")),
+    tasks.c.is_routine.is_(False),
+    tasks.c.deleted_at.is_(None),
+    or_(
+        literal_column("(snapshot ->> 'startedAt')").is_not(None),
+        tasks.c.status.in_(tuple(literal_column(f"'{status}'") for status in WIP_STARTED_STATUSES)),
+    ),
+)
+Index("ix_tasks_wip_scope", task_wip_scope, postgresql_where=task_occupies_wip, sqlite_where=task_occupies_wip)
 
 events = Table(
     "task_events",

@@ -29,11 +29,12 @@ from sqlalchemy import (
     literal_column,
     select,
     text,
+    tuple_,
     update,
 )
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
-from ..db_time import format_db_time, parse_db_time
+from ..db_time import parse_db_time
 from ..engine import store_transaction
 from ..tables.maintenance import maintenance_cursors
 
@@ -95,8 +96,7 @@ def compact_completed_run_output(
         if position:
             after_at, after_id = parse_db_time(position["updatedAt"]), position["id"]
             candidates = candidates.where(
-                (sessions.c.updated_at > after_at)
-                | ((sessions.c.updated_at == after_at) & (sessions.c.id > after_id))
+                tuple_(sessions.c.updated_at, sessions.c.id) > (after_at, after_id)
             )
         rows = conn.execute(
             candidates.order_by(sessions.c.updated_at, sessions.c.id).limit(max(1, limit))
@@ -108,7 +108,7 @@ def compact_completed_run_output(
                 update(maintenance_cursors)
                 .where(maintenance_cursors.c.name == CURSOR_NAME)
                 .values(
-                    position={"updatedAt": format_db_time(last_at), "id": str(last_id)},
+                    position={"updatedAt": last_at.isoformat(), "id": str(last_id)},
                     updated_at=func.now(),
                 )
             )

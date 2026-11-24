@@ -2,36 +2,15 @@
 
 from __future__ import annotations
 
-from sqlalchemy import and_, or_, select, func
-from ...tasks.flow import WIP_EXEMPT_STATUSES, WIP_STARTED_STATUSES, wip_limit
+from sqlalchemy import select, func
+from ...tasks.flow import wip_limit
 from ..tables.auth import users
-from ..tables.tasks import tasks
+from ..tables.tasks import task_occupies_wip, task_wip_scope, tasks
 
 
 def wip_count_query(scope: str, *, exclude_task_id: str | None = None):
-    scope_filter = (
-        and_(tasks.c.assignee_user_id.is_(None), tasks.c.owner_user_id.is_(None))
-        if scope == "unowned"
-        else or_(
-            tasks.c.assignee_user_id == scope,
-            and_(tasks.c.assignee_user_id.is_(None), tasks.c.owner_user_id == scope),
-        )
-    )
-    query = (
-        select(func.count())
-        .select_from(tasks)
-        .where(
-            scope_filter,
-            tasks.c.status.not_in(WIP_EXEMPT_STATUSES),
-            tasks.c.snapshot["workflowStage"].as_string().is_distinct_from("review"),
-            tasks.c.is_routine.is_(False),
-            tasks.c.deleted_at.is_(None),
-            or_(
-                tasks.c.snapshot["startedAt"].as_string().is_not(None),
-                tasks.c.status.in_(WIP_STARTED_STATUSES),
-            ),
-        )
-    )
+    scope_filter = task_wip_scope.is_(None) if scope == "unowned" else task_wip_scope == scope
+    query = select(func.count()).select_from(tasks).where(scope_filter, task_occupies_wip)
     return query.where(tasks.c.id != exclude_task_id) if exclude_task_id else query
 
 

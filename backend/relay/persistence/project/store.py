@@ -130,6 +130,18 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         with store_transaction(self.engine) as conn:
             return {str(key) for batch in batched(ids, 500) for key in conn.scalars(statement.where(columns.id.in_(batch)))}
 
+    def agent_has_active_project(self, agent_id: str, *, exclude_computer_id: str | None = None) -> bool:
+        if names_no_uuid_row(self.engine, agent_id):
+            return False
+        columns, members = self.projects.c, self.members.c
+        statement = select(columns.id).join_from(
+            self.members, self.projects, members.project_id == columns.id,
+        ).where(members.agent_id == agent_id, columns.archived_at.is_(None))
+        if exclude_computer_id is not None:
+            statement = statement.where(columns.computer_id != exclude_computer_id)
+        with store_transaction(self.engine) as conn:
+            return conn.scalar(statement.limit(1)) is not None
+
     def workflow_projects(
         self, owner_user_id: str, computer_id: str | None, linked_ids: Collection[str],
     ) -> list[tuple[str, str, bool]]:
@@ -159,23 +171,17 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
     def list_linked_workspaces(self, computer_id: str) -> list[dict[str, str]]:
         """Every linked directory on one computer, archived projects included,
         in the shape the daemon's registration response carries."""
-        statement = select(self.projects.c.snapshot).where(
-            self.projects.c.computer_id == computer_id,
-            self.projects.c.workspace_subpath.startswith(LINKED_WORKSPACE_PREFIX),
+        projects = self.projects.c
+        statement = select(
+            projects.snapshot["workspaceSubpath"].as_string().label("workspaceSubpath"),
+            projects.snapshot["workspaceHostPath"].as_string().label("hostPath"),
+        ).where(
+            projects.computer_id == computer_id,
+            projects.workspace_subpath.startswith(LINKED_WORKSPACE_PREFIX),
         )
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(statement).mappings().all()
-        return sorted(
-            (
-                {
-                    "workspaceSubpath": row["snapshot"]["workspaceSubpath"],
-                    "hostPath": row["snapshot"]["workspaceHostPath"],
-                }
-                for row in rows
-                if row["snapshot"].get("workspaceHostPath")
-            ),
-            key=lambda link: link["workspaceSubpath"],
-        )
+            rows = [dict(row) for row in conn.execute(statement).mappings() if row["hostPath"]]
+        return sorted(rows, key=lambda link: link["workspaceSubpath"])
 
     def update_project(
         self,

@@ -62,4 +62,6 @@ def resolve_user_id(auth_store: Any, user_id: str) -> str:
 
 
 def user_record(auth_store: Any, user_id: str) -> dict[str, Any] | None:
-    return next((user for user in auth_store.list_users() if user.get("id") == user_id), None)
+    if not user_id:
+        return None
+    return next((user for user in auth_store.list_users(user_ids=[user_id]) if user.get("id") == user_id), None)

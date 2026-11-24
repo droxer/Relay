@@ -67,6 +67,16 @@ Not changed: `session_events` is not partitioned. PostgreSQL requires the partit
 
 ### Deployment
 
+Revision `20261124_0131` builds replacement PostgreSQL indexes concurrently
+before dropping the superseded indexes. It can run while the backend serves
+requests. If a concurrent build is interrupted, rerun the migration to rebuild
+any invalid index. Downgrading restores the old indexes.
+
+Stop old writers before applying revision `20261124_0132`. It syncs the
+initial Skill revision timestamp into the stored projection, which the new
+backend reads directly. The event log stays authoritative and the migration
+leaves its records intact. Apply both revisions before starting the new backend.
+
 The following cutover cautions apply when upgrading from before the
 `20261010_0085`–`0087` storage changes. Apply all current migrations.
 

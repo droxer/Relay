@@ -283,6 +283,18 @@ def test_postgres_performance_projections_and_queue_pages(migrated_schema):
         owner_user_id=owner, workspace_path="/work", limit=2
     )
     assert len(artifacts) == 1 and artifacts[0]["createdAt"].endswith("02.000Z")
+    second_session = sessions.create_session({"taskGoal": "Other", "workspacePath": "/work"})
+    for item in (session, second_session):
+        sessions.append_event(item["id"], relay_event("session.queue", item["id"], {
+            "queue": {"messages": [{"id": "next", "text": "next"}], "paused": False},
+        }))
+    queued = sorted([session["id"], second_session["id"]])
+    assert sessions.queued_thread_ids(limit=1) == queued[:1]
+    assert sessions.queued_thread_ids(after=queued[0]) == queued[1:]
+    sessions.append_event(queued[1], relay_event("session.queue", queued[1], {
+        "queue": {"messages": [{"id": "next", "text": "next"}], "paused": True},
+    }))
+    assert sessions.queued_thread_ids() == queued[:1]
     tasks = DatabaseTaskStore(url)
     for i in range(5):
         task = tasks.create_task({"title": str(i), "ownerUserId": owner})
@@ -475,7 +487,7 @@ def test_schema_review_backfills_derived_columns_and_projections(migrated_schema
 
     after = sessions.list_artifact_summaries(owner_user_id=owner, limit=10)
     assert [a["id"] for a in after] == [a["id"] for a in before] == ["a2", "b1"]
-    assert [s["id"] for s in sessions.list_pending_deletions()] == [sid]
+    assert [session_id for _, session_id in sessions.list_pending_deletion_ids()] == [sid]
     assert tasks.list_task_summaries(user_id=owner) == []
     assert daemons.pending_command_for_run_request(request_id)["command"]["_runRequestId"] == request_id
     with sessions.engine.connect() as conn:
@@ -618,3 +630,42 @@ def test_account_email_index_is_case_insensitive_and_reversible(
             assert connection.execute(text("SELECT count(*) FROM auth_accounts")).scalar() == 4
     finally:
         engine.dispose()
+
+
+def test_skill_projection_backfill_matches_legacy_replay(migrated_schema, tmp_path, monkeypatch):
+    from relay.persistence.db_time import parse_db_time
+    from relay.persistence.skill.objects import LocalSkillObjectStore
+    from relay.persistence.skill.store import DatabaseSkillStore
+    from relay.security.auth import DatabaseAccountAuthStore
+    from sqlalchemy import update
+
+    url, _ = migrated_schema
+    config = Config(str(REPO_ROOT / "backend" / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    command.downgrade(config, "20261124_0131")
+    owner = DatabaseAccountAuthStore(url).ensure_user("alice")["id"]
+    store = DatabaseSkillStore(url, object_store=LocalSkillObjectStore(tmp_path / "objects"))
+    original = "2026-11-24T00:00:00.000Z"
+    revised = "2026-11-24T00:00:00.005Z"
+    times = iter((original, revised, original, revised))
+    with monkeypatch.context() as scoped:
+        scoped.setattr("relay.persistence.skill.writes.now_iso", lambda: next(times))
+        skills = [store.create_skill(owner, {
+            "name": name,
+            "files": [{"path": "SKILL.md", "content": f"---\nname: {name}\ndescription: Test\n---\nBody".encode()}],
+        }) for name in ("legacy", "edited")]
+    legacy, edited = skills
+    edited = store.update_skill(edited["id"], {"displayName": "Edited after publication"})
+    store.upsert_assignment(legacy["id"], target_type="user", target_id=owner,
+                            mode="optional", pin="stable", invocation="implicit", created_by_user_id=owner)
+    with store.engine.begin() as conn:
+        conn.execute(update(store.skills).where(store.skills.c.id == legacy["id"]).values(
+            updated_at=parse_db_time(original), snapshot={**legacy, "updatedAt": original},
+        ))
+    events_before = store.events(legacy["id"])
+
+    command.upgrade(config, "head")
+
+    assert store.get_skill(legacy["id"]) == legacy
+    assert store.get_skill(edited["id"]) == edited
+    assert store.events(legacy["id"]) == events_before

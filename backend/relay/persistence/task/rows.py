@@ -6,13 +6,9 @@ from __future__ import annotations
 from datetime import date as _date
 from datetime import datetime, UTC
 from typing import Any
-from sqlalchemy import (
-    case,
-)
 from ...automations.model import listens, schedule_triggers, state_of
 from ..db_time import parse_db_time
 from ...core.ids import new_database_id
-from ..tables import tasks as tasks_tables
 
 
 def compact_task_summary(
@@ -143,16 +139,3 @@ def task_claim_sort_key(task: dict[str, Any]) -> tuple[int, str, str, str]:
     priority_rank = _priority_rank(task.get("priority"))
     due_date = task.get("dueDate") or "9999-12-31"
     return (priority_rank, due_date, task.get("createdAt") or "", task["id"])
-
-
-def _priority_order_expression() -> Any:
-    return case(
-        (tasks_tables.tasks.c.priority == "high", 0),
-        (tasks_tables.tasks.c.priority == "normal", 1),
-        (tasks_tables.tasks.c.priority == "low", 2),
-        else_=1,
-    )
-
-
-def _due_date_missing_expression() -> Any:
-    return case((tasks_tables.tasks.c.due_date.is_(None), 1), else_=0)

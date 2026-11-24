@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from ...persistence.team.store import TeamValidationError, validate_team_payload
 from ...security.request_auth import require_admin_session, require_user_session
+from ...security.user_handles import user_record
 from ...core.team_workflows import is_workflow_team
 from ...core.workflows import (
     team_workflows, workflow_catalog, workflow_execution_snapshot, workflow_preview, workflow_step_agent_ids,
@@ -14,7 +15,7 @@ from ...core.workflow_selection import PREDEFINED_WORKFLOWS, default_workflow_id
 from ...teams.workflow import validate_workflow_write
 from ...teams.computer import resolve_team_computer
 from ...teams.membership import with_member_roles
-from .agents import _agent_views, _node_map, _user_exists
+from .agents import _agent_views, _node_map
 from ..deps import AppContextDep
 from ..actors import request_actor, chat_service_user_header
 from ..bodies import JsonBodyDep, string_field
@@ -419,7 +420,7 @@ def create_control_panel_team(
     owner_user_id = string_field(body, "ownerUserId")
     if not owner_user_id:
         raise HTTPException(400, "ownerUserId is required.")
-    if not _user_exists(ctx.auth_store, owner_user_id):
+    if not user_record(ctx.auth_store, owner_user_id):
         raise HTTPException(404, "User not found.")
     _workflow_owner(request, ctx, owner_user_id, body)
     try:

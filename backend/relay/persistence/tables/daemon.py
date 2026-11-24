@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -12,14 +14,30 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     Table,
     Text,
+    func,
+    literal_column,
     text,
 )
+from sqlalchemy.sql.elements import ColumnClause
+from ...core.daemon_records import TERMINAL_DAEMON_STATUSES
 from ..sql import database_id_column, entity_uuid_type, json_type, metadata
 
 # Run requests in these states hold their thread (and task) exclusively.
 ACTIVE_RUN_REQUEST_STATUSES = frozenset(
     {"prepared", "running", "dispatching", "finalizing"}
 )
+_ACTIVE_STATUSES: tuple[ColumnClause[str], ...] = tuple(
+    literal_column(f"'{status}'") for status in sorted(ACTIVE_RUN_REQUEST_STATUSES)
+)
+_TERMINAL_STATUSES: tuple[ColumnClause[str], ...] = tuple(
+    literal_column(f"'{status}'") for status in sorted(TERMINAL_DAEMON_STATUSES)
+)
+
+
+def terminal_time_expression(table: Any) -> Any:
+    if "updated_at" in table.c:
+        return func.coalesce(table.c.completed_at, table.c.updated_at, table.c.created_at)
+    return func.coalesce(table.c.completed_at, table.c.started_at)
 
 
 nodes = Table(
@@ -245,21 +263,42 @@ run_requests = Table(
     Index("ix_daemon_run_requests_task_id", "task_id"),
 )
 
+active_run_request = run_requests.c.status.in_(_ACTIVE_STATUSES)
+terminal_run_request = run_requests.c.status.not_in(_ACTIVE_STATUSES)
+
 Index(
     "uq_daemon_run_requests_active_session",
     run_requests.c.session_id,
     unique=True,
-    postgresql_where=run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
-    sqlite_where=run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+    postgresql_where=active_run_request,
+    sqlite_where=active_run_request,
 )
 
+_active_task_request = run_requests.c.task_id.is_not(None) & active_run_request
 Index(
     "uq_daemon_run_requests_active_task",
     run_requests.c.task_id,
     unique=True,
-    postgresql_where=(run_requests.c.task_id.is_not(None) & run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)),
-    sqlite_where=(run_requests.c.task_id.is_not(None) & run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)),
+    postgresql_where=_active_task_request,
+    sqlite_where=_active_task_request,
 )
+_has_current_command = run_requests.c.current_command_id.is_not(None)
+Index("ix_daemon_run_requests_command", run_requests.c.current_command_id,
+      postgresql_where=_has_current_command, sqlite_where=_has_current_command)
+Index("ix_daemon_run_requests_terminal_retention", run_requests.c.updated_at, run_requests.c.id,
+      postgresql_where=terminal_run_request, sqlite_where=terminal_run_request)
+Index("ix_daemon_run_requests_recovery", run_requests.c.recovery_after, run_requests.c.id,
+      postgresql_where=active_run_request, sqlite_where=active_run_request)
+
+
+def terminal_daemon_record(table: Any) -> Any:
+    return table.c.status.in_(_TERMINAL_STATUSES)
+
+
+for _table in (commands, runs):
+    _terminal = terminal_daemon_record(_table)
+    Index(f"ix_{_table.name}_terminal_retention", _table.c.node_id,
+          terminal_time_expression(_table), _table.c.id, postgresql_where=_terminal, sqlite_where=_terminal)
 
 events = Table(
     "daemon_events",
