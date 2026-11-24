@@ -9,20 +9,26 @@ from ci_changes import changed_paths, suites
 class SuiteSelectionTests(unittest.TestCase):
     def test_surface_changes(self):
         cases = {
-            "backend/relay/app.py": (True, False, False),
-            "web/src/App.tsx": (False, False, True),
-            "packages/relay-core/src/index.ts": (True, True, True),
-            "packages/relay-daemon/src/index.ts": (True, True, False),
-            "packages/relay-supervisor/src/index.ts": (False, True, False),
-            "tools/vendor/braces/index.js": (False, True, True),
-            "README.md": (False, False, False),
-            "package-lock.json": (True, True, True),
-            ".github/workflows/ci.yml": (True, True, True),
+            "backend/relay/app.py": (True, False, False, True),
+            "backend/migrations/env.py": (True, False, False, True),
+            "backend/tests/api/test_daemon_api.py": (True, False, False, False),
+            "backend/uv.lock": (True, False, False, True),
+            "web/src/App.tsx": (False, False, True, True),
+            "packages/relay-core/src/index.ts": (True, True, True, True),
+            "packages/relay-daemon/src/index.ts": (True, True, False, True),
+            "packages/relay-daemon/tsconfig.json": (True, True, False, True),
+            "packages/relay-daemon/tests/install.test.ts": (True, True, False, False),
+            "packages/relay-supervisor/src/index.ts": (False, True, False, False),
+            "tools/vendor/braces/index.js": (False, True, True, True),
+            "tsconfig.options.json": (True, True, True, True),
+            "README.md": (False, False, False, False),
+            "package-lock.json": (True, True, True, True),
+            ".github/workflows/ci.yml": (True, True, True, True),
         }
         for path, expected in cases.items():
             with self.subTest(path=path):
                 selected = suites([path])
-                self.assertEqual(tuple(selected[k] for k in ("python", "typescript", "web")), expected)
+                self.assertEqual(selected, dict(zip(("python", "typescript", "web", "concurrency"), expected)))
 
     def test_unknown_diff_runs_all_suites(self):
         self.assertTrue(all(suites(None).values()))
@@ -41,7 +47,7 @@ class SuiteSelectionTests(unittest.TestCase):
         paths = changed_paths("pull_request", {"pull_request": {"base": {"sha": "abc"}, "head": {"sha": "def"}}})
         self.assertEqual(paths, ["web/src/App.tsx", "backend/relay/app.py"])
         check_output.assert_called_once_with(["git", "diff", "--name-only", "--no-renames", "-z", "abc...def"])
-        self.assertEqual(suites(paths), {"python": True, "typescript": False, "web": True})
+        self.assertEqual(suites(paths), {"python": True, "typescript": False, "web": True, "concurrency": True})
 
 
 if __name__ == "__main__":
