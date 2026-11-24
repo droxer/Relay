@@ -953,7 +953,3 @@ tr[data-selected="true"] > td:first-child {
     white-space: nowrap;
   }
 }
-
-html[data-theme="light"] :is(tr[data-selected], .backlog-task) {
-  --selection-wash-strength: 6%;
-}

@@ -303,17 +303,16 @@
      so this lightens on dark and darkens on light; the dark hover strength
      is capped below to preserve label contrast. */
   :root {
-    --control-fill: color-mix(in srgb, var(--ink-1) 20%, transparent);
-    --control-fill-hover: color-mix(in srgb, var(--ink-1) 36%, transparent);
+    --control-fill: color-mix(in srgb, var(--ink-1) 18%, transparent);
+    --control-fill-hover: color-mix(in srgb, var(--ink-1) 28%, transparent);
   }
 
   html[data-theme="light"] {
     --ink-2: var(--ink-1);
-    /* The 20% fill above darkens every filled control, which pulled the base
-       --ink-3/--ink-4 on it to 4.25:1 — below the default mode. Derived from
-       --ink-1 so the ladder keeps its order and clears AA on that fill. */
-    --ink-3: color-mix(in srgb, var(--ink-1) 90%, var(--surface-0));
-    --ink-4: color-mix(in srgb, var(--ink-1) 84%, var(--surface-0));
+    /* The boosted control fill darkens filled controls, so pull --ink-3/--ink-4
+       closer to --ink-1 so every tier clears AA on both rest (18%) and hover (28%). */
+    --ink-3: color-mix(in srgb, var(--ink-1) 94%, var(--surface-0));
+    --ink-4: color-mix(in srgb, var(--ink-1) 88%, var(--surface-0));
     --line-1: color-mix(in srgb, var(--ink-1) 42%, var(--surface-0));
     --line-2: color-mix(in srgb, var(--ink-1) 28%, var(--surface-0));
     --focus-w: 3px;
@@ -321,11 +320,14 @@
   }
 
   html[data-theme="dark"] {
-    /* The shared 36% hover wash lifts dark controls too close to their text
-       (3.91–4.42:1). Keep it above the enhanced 20% rest wash while leaving
-       enough headroom for labels on raised surfaces and hovered rows. */
-    --control-fill-hover: color-mix(in srgb, var(--ink-1) 28%, transparent);
-    --ink-2: color-mix(in srgb, var(--dark-ink) 92%, var(--dark-surface));
+    /* On dark overlays (--surface-3), higher ink washes lift the background toward
+       mid-grey. Cap the washes at 16%/20% and lift --ink-2/--ink-3/--ink-4 so every
+       tier keeps its ladder order and stays >= 4.5:1 on both rest and hover fills. */
+    --control-fill: color-mix(in srgb, var(--ink-1) 16%, transparent);
+    --control-fill-hover: color-mix(in srgb, var(--ink-1) 20%, transparent);
+    --ink-2: color-mix(in srgb, var(--dark-ink) 97%, var(--dark-surface));
+    --ink-3: color-mix(in srgb, var(--dark-ink) 93%, var(--dark-surface));
+    --ink-4: color-mix(in srgb, var(--dark-ink) 88%, var(--dark-surface));
     --line-1: color-mix(in srgb, var(--dark-ink) 38%, var(--dark-surface));
     --line-2: color-mix(in srgb, var(--dark-ink) 26%, var(--dark-surface));
     --focus-w: 3px;

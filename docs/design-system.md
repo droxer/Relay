@@ -146,11 +146,11 @@ Dark register / light register, matching `palette.css`:
 | `--surface-list` | `#1c242a` | `#f6f9fa` | list pane |
 | `--surface-band` | `#222c33` | `#dee7ed` | group bands and Task board lane headers |
 | `--ink-1` | `#edf2f6` | `#141f27` | headings and emphasis |
-| `--ink-2` | `#ccd8e1` | `#293841` | body |
-| `--ink-3` | `#b2c3d0` | `#40505a` | secondary labels and neutral notices |
-| `--ink-4` | `#93a5b2` | `#58676f` | timestamps and metadata |
+| `--ink-2` | `#d2dde6` | `#273640` | body |
+| `--ink-3` | `#bacbd7` | `#3a4b55` | secondary labels and neutral notices |
+| `--ink-4` | `#a3b5c3` | `#4d5d66` | timestamps and metadata |
 | `--line-1` | `#405361` | `#b7c3cc` | structural hairline |
-| `--line-2` | `#2f3d48` | `#d6dfe5` | soft hairline |
+| `--line-2` | `#364653` | `#c8d3dc` | soft hairline |
 | `--action` | `#d3e0e9` | `#364b59` | primary action |
 | `--action-hover` | `#e3ebf1` | `#475e6d` | primary action hover |
 | `--on-action` | `#23313b` | `#ffffff` | primary action label |
@@ -159,9 +159,27 @@ Dark register / light register, matching `palette.css`:
 | `--brand-lead` | `#ff8a3d` | `#b84400` | brand mark lead; `--signature` (focus ring, selection marker) |
 | `--ok` | `#7adb95` | `#0b6424` | success |
 | `--warn` | `#dec371` | `#8a5e09` | attention |
+| `--warn-badge` | `#dec371` | `#795209` | attention text over 8% warning tint |
 | `--err` | `#ffabbd` | `#ab0d40` | failure and destructive intent |
 | `--on-err` | `#23313b` | `#ffffff` | critical fill label |
 | `--live` | `#91b9f2` | `#2457c5` | live execution |
+| `--ok-mark` | `#3dae69` | `#2f9a5a` | success chart/progress area mark |
+| `--warn-mark` | `#a98426` | `#c4950f` | attention chart/progress area mark (hatched) |
+| `--err-mark` | `#d2305a` | `#a5123f` | failure chart/progress area mark |
+| `--live-mark` | `#5e93e8` | `#3a76e0` | live chart/progress area mark |
+| `--code-keyword` | `#e0906a` | `#9c4221` | syntax: keywords, built-ins, types |
+| `--code-string` | `#a9c47c` | `#41601f` | syntax: strings, regexps, quotes |
+| `--code-number` | `#e3bf7a` | `#895e05` | syntax: numbers, literals, symbols |
+| `--code-declaration` | `#8ab4e6` | `#1f4f82` | syntax: function/class declarations |
+| `--code-attribute` | `#6cd2c8` | `#166b6b` | syntax: attributes, properties, variables |
+| `--tag-1` | `#73dfe0` | `#297b7d` | tag `#` glyph: lagoon |
+| `--tag-2` | `#50bda9` | `#1a7262` | tag `#` glyph: teal |
+| `--tag-3` | `#a8c768` | `#516f22` | tag `#` glyph: moss |
+| `--tag-4` | `#cbb057` | `#7b6616` | tag `#` glyph: ochre |
+| `--tag-5` | `#d4876a` | `#9c4f3b` | tag `#` glyph: clay |
+| `--tag-6` | `#db7aa0` | `#ab3c6b` | tag `#` glyph: rose |
+| `--tag-7` | `#f59ec7` | `#a34c7d` | tag `#` glyph: blush |
+| `--tag-8` | `#68b7de` | `#246c96` | tag `#` glyph: sky |
 | `--elevation-shadow` | `rgba(8, 16, 23, 0.32)` | `rgba(37, 60, 80, 0.16)` | floating shadow color |
 | `--scrim` | `rgba(8, 16, 23, 0.6)` | `rgba(23, 35, 44, 0.24)` | overlay scrim |
 
@@ -204,14 +222,13 @@ kind label, not by hue.
 
 Ink chooses, hue reports, and the two never trade places:
 
-| ink (`--action`) | blue (`--live`) |
-|---|---|
-| the primary action fill (default `Button`, one per view) | composer running indicator |
-| the selected-row accent bar, active nav marker | |
-| selection wash (`--action-soft`) | task + backlog running rows |
-| checked checkbox / radio / switch, current pager page | agent stream activity, busy header |
-| | thread pulse, streaming rail node, trailing chevron of the brand mark |
-| | status pill on a running agent/node (TonePill `live`), the running status icon, running row accents |
+| ink (`--action`) | signature (`--signature` / `--brand-lead`) | blue (`--live`) |
+|---|---|---|
+| the primary action fill (default `Button`, one per view) | focus ring (`--focus-outline`) | composer running indicator |
+| selection wash (`--action-soft`) | the selected-row accent bar, active nav marker | task + backlog running rows |
+| checked checkbox / radio / switch, current pager page | lead chevron of the brand mark | agent stream activity, busy header |
+| | | thread pulse, streaming rail node, trailing chevron of the brand mark |
+| | | status pill on a running agent/node (TonePill `live`), the running status icon, running row accents |
 
 The other hues are meanings too: `--warn` gold is a person needed (a question,
 a check, a stopped gate), `--err` crimson a failure, `--ok` green done. The
@@ -256,20 +273,21 @@ same `--t-pulse`. Larger live objects (the transcript rail node) keep
 "Hue for meaning" is a claim about **meaning**, not pigment. The carve-outs, all
 deliberate — a reader who takes the rule literally will file them as bugs:
 
-- **Link ink is wayfinding, not decoration**: anchors in prose (`--link`)
-  and the focus ring (`--focus-outline`). It is ink, told apart by its
-  underline (the ring by its offset) — never a fill, a status, or a hue.
-- **The brand mark is the one orange.** `favicon.svg` (a fixed charcoal tile with a subtle hairline; the signed-in app highlights
+- **Link ink is wayfinding, not decoration**: anchors in prose (`--link`) are
+  ink, told apart by their underline — never a fill, a status, or a hue.
+- **The brand mark and `--signature` are the one orange.** `favicon.svg` (a fixed charcoal tile with a subtle `--line-1` hairline; the signed-in app highlights
   the acting chevron and keeps both brand colors when idle), `relay-mark.svg` (the same
   badge, shared with the PWA and opaque Apple/Android launcher variants), the
   wordmark `relay-logo.svg` (follows the viewer's scheme), and `RelayMark`'s
   `tone="brand"` (side nav, sign-in, landing, empty transcript) draw a
-  `--brand-lead` lead chevron and a `--live` trailing chevron; the login and
-  landing watermarks wash the same pair at 10%, and the email carries it as
-  its handoff bar. It is the only place baton orange appears and the one
-  static use of the live blue: the mark depicts the handoff, it does not
-  report a run. `RelayMark` inside working UI (transcript phase separators, generic
-  empty states) keeps the default ink tone.
+  `--brand-lead` lead chevron and a `--live` trailing chevron; the email carries
+  the same pair as its handoff bar. Inside the app, `--signature` lends
+  `--brand-lead` to two thin-line jobs only: the focus ring (`--focus-outline`)
+  and the selected-item marker bar (`--accent-bar`, `.rail-row`). It is never a
+  fill, a link, or a status colour, and the mark is the one static use of the
+  live blue: it depicts the handoff, it does not report a run. `RelayMark`
+  inside working UI (transcript phase separators, generic empty states) keeps
+  the default ink tone.
 - **Identity marks are neutral.** Agents and teams render as neutral class
   glyphs (`IdentityMark.tsx`) — no procedural per-name hues. Identity is
   carried by glyph shape, never *what is happening*.
@@ -497,12 +515,12 @@ through to `--font-cjk`, which follows `<html lang>`.
   `--elevation-shadow` in each theme. Do not introduce component-specific
   shadow recipes. Inset rings remain appropriate for hairlines and selection
   marks. The landing page's sticky nav keeps its existing `backdrop-filter`.
-- **Focus:** `--focus-outline` — a 2px solid **link-ink** ring at a 2px
+- **Focus:** `--focus-outline` — a 2px solid **`--signature` (`--brand-lead`)** ring at a 2px
   offset (WCAG 1.4.11), drawn with `outline`, **not** `box-shadow`, so no
   ancestor's `overflow: hidden` can clip it and forced-colors mode preserves
-  it. The ring is link ink beside the action's ink plate, so `--focus-offset`
-  — the gap of canvas between plate and ring — is what tells a focused
-  primary button apart. Destructive controls take
+  it. Using `--signature` rather than `--action` keeps a focused primary button
+  visibly distinct from its own plate; `--signature` clears 4.3:1 on every solid
+  plane in both registers. Destructive controls take
   `--focus-outline-danger`, which differs by **both** colour (`--err`) and
   shape (dashed) — the stroke style is the half that survives forced-colors
   mode, where the hue is dropped. A field inside a composite control (search
@@ -597,8 +615,8 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Use the default `Button` (the ink `--action` plate via `--primary`) for the
   primary action, one per view; step every other button beside it down to
   `outline` or `ghost`.
-- Use `--action` otherwise for selection — accent bars, checked controls, the
-  current page — and pair an action fill with `--on-action`.
+- Use `--action` for checked controls and the current page, and pair an action
+  fill with `--on-action`; use `--signature` for focus rings and selection bars.
 - Use `--action-soft` for selected rows and active navigation.
 - Give buttons, tab chips, and badges `--r-2`; reserve `--r-full` for
   actual circles and capsules, and `--r-pill` for marketing CTAs.
@@ -607,8 +625,8 @@ tile (`.relay-empty-avatar` in `empty-state.css`), shared by the centered
 - Use `--live` only for work happening right now, and only where `--t-pulse`
   is used — see the scope rule under Colors.
 - Pair `--live` with motion and text, never colour alone.
-- Use `--link` for anchors and the focus ring, and underline the anchor;
-  `--measure*` for reading columns.
+- Use `--link` for anchors and underline the anchor; `--measure*` for reading
+  columns.
 - Set type with a role — `font: var(--type-*)` plus its paired
   `letter-spacing: var(--type-*-track)` — at every site, even where the
   paired track is 0; the declaration is the contract. A one-off size reads a
