@@ -34,7 +34,7 @@ export async function listTasks(signal?: AbortSignal, cache?: TaskListCache): Pr
   const params = new URLSearchParams({ view: "summary" });
   if (cache?.projectId) params.set("projectId", cache.projectId);
   if (cache?.scope) params.set("scope", cache.scope);
-  if (cache?.scope === "project-dashboard") params.set("today", isoToday());
+  if (cache?.scope === "project-dashboard" || cache?.scope === "home") params.set("today", isoToday());
   if (cache?.threadId) params.set("threadId", cache.threadId);
   if (cache?.computerId) params.set("computerId", cache.computerId);
   const path = `/tasks?${params}`;
@@ -202,13 +202,15 @@ export function listTaskFiles(
  */
 export function listTaskEvents(
   taskId: string,
-  options: { includeOccurrences?: boolean; view?: "activity" | "lifecycle"; before?: number } = {},
+  options: { includeOccurrences?: boolean; view?: "activity" | "lifecycle"; before?: number; cursor?: string; limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<TaskEventsResponse> {
   const params = new URLSearchParams();
   if (options.includeOccurrences) params.set("include", "occurrences");
   if (options.view) params.set("view", options.view);
   if (options.before !== undefined) params.set("before", String(options.before));
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
   const query = params.toString();
   return apiJson<TaskEventsResponse>(`/tasks/${encodeURIComponent(taskId)}/events${query ? `?${query}` : ""}`, { signal });
 }

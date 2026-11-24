@@ -149,9 +149,10 @@ back off to 60 seconds. Returning reconciles stale caches without forcing fresh
 ones to reload. The shell gets the Home badge and Thread activity from the
 Thread collection. Task and Automation lists select a Task summary scope.
 An open Thread reads its own Task context and the linked Task's lifecycle
-events. Home reads a compact Task projection, intake counts, and Project
-totals in one query. The Project Dashboard gets counts and five attention
-rows. Project-scoped Task surfaces share a query and ETag per Project and scope.
+events. Home limits Task candidates per group in SQL and reads the fields its
+panels need. Intake and Project totals cover the full collection. The Project
+Dashboard gets counts and five attention rows. Project-scoped Task surfaces
+share a query and ETag per Project and scope.
 The Project directory, Workspace, Members, and Settings use the Thread
 projection. The global Project list defers context and context suggestions
 to the selected Project detail. Project file browsers share cached listings

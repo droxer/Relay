@@ -34,7 +34,7 @@ class WorkflowGateStagingMixin(RegistryState):
         """
         for session_id in reversed(task.get("linkedSessionIds") or []):
             try:
-                session = self.store.get_session(session_id)
+                session = self.store.get_session_header(session_id)
             except (KeyError, FileNotFoundError):
                 continue
             runs = session.get("workflowRuns") or []
@@ -83,7 +83,7 @@ class WorkflowGateStagingMixin(RegistryState):
         session_id = payload["id"]
         with resource_transaction(engine, f"workflow-gate:{session_id}"):
             try:
-                existing = self.store.get_session(session_id)
+                existing = self.store.get_session_header(session_id)
             except KeyError:
                 existing = None
             if existing is not None:
@@ -114,12 +114,12 @@ class WorkflowGateStagingMixin(RegistryState):
             elif existing.get("status") in ("completed", "failed", "cancelled"):
                 self.store.append_event(session_id, relay_event(
                     "session.status", session_id, {"status": "running", "phase": "workflow"},
-                ))
+                ), hydrate_events=False)
             session = self.store.append_event(session_id, relay_event(
                 "workflow.started", session_id,
                 {"assignments": assignments, "actorUserId": payload["ownerUserId"],
                  **({"taskGoal": payload["taskGoal"]} if existing is not None else {})},
-            ))
+            ), hydrate_events=False)
             run = current_workflow_run(session)
             request = self.daemon_store.create_run_request({
                 "id": workflow_request_id(run), "sessionId": session_id,

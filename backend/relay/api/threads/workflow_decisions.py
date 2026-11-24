@@ -17,9 +17,10 @@ from ...persistence.resource_lock import resource_transaction
 from ...security.request_auth import require_user_session
 from ...teams.workflow import validate_workflow_write
 from ...daemon_registry.dispatch.workflow_admission import workflow_node_ids
-from ..actors import chat_service_user_header, get_session_or_404
+from ..actors import chat_service_user_header, get_session_header_for_actor
 from ..bodies import JsonBodyDep
 from ..deps import AppContext, AppContextDep
+from .transcript import workflow_transcript
 
 from ...daemon_registry.dispatch.workflow_tasks import sync_workflow_task
 from ...daemon_registry.dispatch.workflow_admission import workflow_request_id
@@ -78,20 +79,29 @@ def workflow_decision(
     owner = account.get("userId")
     # Do not let user input overwrite the event type, timestamp or audit actor.
     _validate_body(_request_body)
+    if not owner:
+        raise HTTPException(403, "workflow_owner_required")
+    try:
+        initial = ctx.session_store.get_session_header(session_id)
+    except KeyError as error:
+        raise HTTPException(404, "Session not found.") from error
+    if initial.get("ownerUserId") != owner:
+        raise HTTPException(403, "workflow_owner_required")
     with ctx.registry.dispatch_lock, ctx.registry.dispatch_scope(
-        workflow_node_ids(get_session_or_404(ctx.session_store, session_id)),
+        workflow_node_ids(initial),
     ), resource_transaction(
         ctx.registry.daemon_store.engine, f"workflow-gate:{session_id}",
     ), ctx.session_store.mutation_scope(session_id):
-        session = get_session_or_404(ctx.session_store, session_id)
-        if not owner or session.get("ownerUserId") != owner:
-            raise HTTPException(403, "workflow_owner_required")
+        session = get_session_header_for_actor(ctx.session_store, session_id, {"userId": owner, "isAdmin": False})
         if _request_body["kind"] in ("retry", "cancel", "answer"):
             try:
                 result = ctx.registry.decide_workflow_recovery(session_id, {**_request_body, "actorUserId": owner})
             except ValueError as error:
                 raise HTTPException(409, str(error)) from error
-            return {**result, "execution": ctx.execution_lifecycle.status(result)}
+            return {
+                **workflow_transcript(ctx.session_store, result),
+                "execution": ctx.execution_lifecycle.status(result),
+            }
         project_id = session.get("projectId")
         project = ctx.project_store.get_project(project_id) if project_id else None
         if not project or project.get("ownerUserId") != owner:
@@ -115,7 +125,7 @@ def workflow_decision(
             result = ctx.session_store.append_event(session_id, relay_event(
                 "workflow.gate_decided", session_id,
                 {**_request_body, "actorUserId": owner},
-            ))
+            ), hydrate_events=False)
             if _request_body["kind"] == "approve":
                 result = ctx.registry.admit_workflow_first_step(
                     session_id, validate=lambda snapshot: validate_workflow_write(ctx, owner, snapshot),
@@ -126,4 +136,4 @@ def workflow_decision(
                     sync_workflow_task(ctx.registry, workflow_request, result)
         except ValueError as error:
             raise HTTPException(409, str(error)) from error
-        return {**result, "execution": ctx.execution_lifecycle.status(result)}
+        return {**workflow_transcript(ctx.session_store, result), "execution": ctx.execution_lifecycle.status(result)}

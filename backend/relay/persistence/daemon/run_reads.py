@@ -52,7 +52,7 @@ class DaemonRunReads(DaemonStoreState):
 
     def list_workspace_active_runs(
         self, owner_user_id: str, *, project_id: str | None = None, team_id: str | None = None,
-        agent_id: str | None = None, computer_id: str | None = None,
+        agent_id: str | None = None, computer_id: str | None = None, include_node: bool = False,
     ) -> list[dict[str, Any]]:
         runs, nodes = self.runs, self.nodes
         statement = select(
@@ -78,6 +78,7 @@ class DaemonRunReads(DaemonStoreState):
                 {
                     "runId": row["runId"], "sessionId": row["sessionId"], "taskGoal": row["taskGoal"],
                     "agent": row["agent"], "startedAt": format_db_time(row["startedAt"]),
+                    **({"nodeId": row["id"]} if include_node else {}),
                 }
                 for row in conn.execute(statement).mappings()
                 if project_id is None or resolve_computer_id(row) == computer_id

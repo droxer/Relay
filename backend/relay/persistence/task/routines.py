@@ -72,7 +72,7 @@ class TaskRoutineRows(TaskStoreState):
             )
             occurrence = materialize_task_events(occurrence_events)
             occurrence_row = task_to_row(occurrence, version=len(occurrence_events))
-            conn.execute(insert(self.tasks).values(**occurrence_row))
+            conn.execute(insert(self.tasks).values(**occurrence_row, automation_id=routine_id))
             copy_automation_grants(conn, routine.get("ownerUserId") or "", routine_id, occurrence["id"])
             for sequence, occurrence_event in enumerate(occurrence_events):
                 conn.execute(

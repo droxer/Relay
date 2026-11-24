@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from relay.api.admin.dashboard import DASHBOARD_CACHE
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.core.ids import new_database_id
 from relay.security.auth_cache import SESSION_ACCOUNTS
 from user_ids import user_id
 
@@ -140,14 +141,23 @@ def test_team_list_reads_each_member_and_the_fleet_once(roster, monkeypatch) -> 
 
 def test_placement_list_reads_the_fleet_once(roster, monkeypatch) -> None:
     app, client, agent_ids = roster
+    store = app.state.agent_store
+    agent = store.get_agent(agent_ids[0])
+    for _ in range(3):
+        node = _register_node(app, new_database_id())
+        app.state.agent_placement_store.create_placement(agent, node["id"], {"desiredState": "removed"})
     baseline = client.get("/api/v1/admin/agent-placements").json()
-    assert len(baseline["placements"]) == len(agent_ids)
+    assert len(baseline["placements"]) == len(agent_ids) + 3
 
     nodes = _count_calls(monkeypatch, app.state.registry, "monitor_nodes")
+    agents = _count_calls(monkeypatch, store, "get_agent")
+    batches = _count_calls(monkeypatch, store, "get_agents_by_ids")
     listed = client.get("/api/v1/admin/agent-placements").json()
 
     assert listed == baseline
     assert nodes[0] == 1
+    assert agents[0] == 0
+    assert batches[0] == 1
 
 
 def test_personal_teams_only_read_member_placements_and_related_nodes(roster, monkeypatch):
@@ -233,8 +243,7 @@ def test_auth_status_asks_the_store_once_after_accounts_exist(monkeypatch) -> No
 # ── Fix 4: task lists remain complete unless explicitly limited ────────────────────────────────
 
 
-@pytest.mark.parametrize("view", ["summary", "full"])
-def test_task_list_without_a_limit_preserves_completeness(monkeypatch, view) -> None:
+def test_task_summary_without_a_limit_preserves_completeness(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -250,7 +259,7 @@ def test_task_list_without_a_limit_preserves_completeness(monkeypatch, view) -> 
 
             monkeypatch.setattr(app.state.task_store, name, recording)
 
-        query = "?view=summary" if view == "summary" else ""
+        query = "?view=summary"
         assert client.get(f"/api/v1/tasks{query}").status_code == 200
         assert client.get(f"/api/v1/tasks{query}{'&' if query else '?'}limit=900").status_code == 200
         assert client.get(f"/api/v1/tasks{query}{'&' if query else '?'}limit=0").status_code == 200
@@ -278,8 +287,35 @@ def test_task_list_keeps_older_tasks_and_routines_beyond_200(monkeypatch, query)
         response = client.get(f"/api/v1/tasks{query}")
         assert response.status_code == 200
         tasks = response.json()["tasks"]
+        cursor = response.json().get("nextCursor")
+        while cursor:
+            page = client.get("/api/v1/tasks", params={"cursor": cursor}).raise_for_status().json()
+            tasks.extend(page["tasks"])
+            cursor = page["nextCursor"]
         assert {task["id"] for task in tasks} == expected
         assert any(task["isRoutine"] for task in tasks)
+
+
+def test_default_task_list_pages_without_replaying_history(roster, monkeypatch):
+    app, client, _ = roster
+    store = app.state.task_store
+    owner = client.get("/api/v1/auth/me").json()["user"]["userId"]
+    expected = []
+    for index in range(3):
+        task = store.create_task({"title": str(index), "ownerUserId": owner})
+        store.record_activity(task["id"], "Past activity")
+        expected.append(task["id"])
+
+    def reject_full_list(**_):
+        pytest.fail("Task listing must not replay every Task")
+
+    monkeypatch.setattr(store, "list_tasks", reject_full_list)
+    page = client.get("/api/v1/tasks", params={"limit": 2}).raise_for_status().json()
+    assert len(page["tasks"]) == 2 and page["nextCursor"]
+    assert all("events" not in task and task["eventCount"] >= 2 for task in page["tasks"])
+    rest = client.get("/api/v1/tasks", params={"cursor": page["nextCursor"]}).raise_for_status().json()
+    assert rest["nextCursor"] is None
+    assert {task["id"] for task in page["tasks"] + rest["tasks"]} == set(expected)
 
 
 # ── Fix 6: large answers are gzipped; the UI revalidates ─────────────────
@@ -294,14 +330,14 @@ def test_large_json_answers_are_gzipped_and_still_conditional(monkeypatch) -> No
         for index in range(30):
             assert client.post("/api/v1/tasks", json={"title": f"task {index} " + "x" * 80}).status_code == 201
 
-        listed = client.get("/api/v1/tasks", headers={"Accept-Encoding": "gzip"})
+        listed = client.get("/api/v1/tasks?limit=30", headers={"Accept-Encoding": "gzip"})
         assert listed.status_code == 200
         assert listed.headers["content-encoding"] == "gzip"
         assert len(listed.json()["tasks"]) == 30
         etag = listed.headers["etag"]
 
         again = client.get(
-            "/api/v1/tasks",
+            "/api/v1/tasks?limit=30",
             headers={"Accept-Encoding": "gzip", "If-None-Match": etag},
         )
         assert again.status_code == 304

@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { updateUserPreferences } from "../../api-client/auth";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { useMutationError } from "../../hooks/useMutationError";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
+import { HOME_TASKS_QUERY_KEY, SESSIONS_QUERY_KEY } from "../../hooks/useRelayData";
 import { taskStartMutationInput } from "../../lib/taskBoardForm";
 import type { HomeItem } from "../../lib/homeQueue";
 import type { CurrentUser, RelayTaskListItem, StartTaskResponse } from "../../types";
@@ -22,6 +24,7 @@ export function useHomeActions(setUser: (user: CurrentUser) => void): HomeAction
   const { t } = useTranslation();
   const { announce } = useDialogs();
   const { reportMutationError } = useMutationError();
+  const queryClient = useQueryClient();
   const { startTaskMutation } = useRelayMutations();
 
   const attempt = useCallback(async (run: () => Promise<unknown>, done: string, failed: string): Promise<boolean> => {
@@ -40,10 +43,12 @@ export function useHomeActions(setUser: (user: CurrentUser) => void): HomeAction
       async () => {
         const { user } = await updateUserPreferences({ homeSnoozes: { snooze: [{ key: item.key, stamp: item.stamp }] } });
         setUser(user);
+        void queryClient.invalidateQueries({ queryKey: HOME_TASKS_QUERY_KEY });
+        void queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY });
       },
       t("home.done.snoozed"),
       "home.errors.snooze",
-    ), [attempt, setUser, t]);
+    ), [attempt, queryClient, setUser, t]);
 
   const startTask = useCallback<HomeActions["startTask"]>((task) =>
     startTaskMutation.mutateAsync(taskStartMutationInput(task)), [startTaskMutation]);

@@ -116,24 +116,24 @@ class DatabaseAgentStore:
             else None
         )
 
-    def get_agents_by_ids(self, agent_ids: list[str]) -> list[dict[str, Any]]:
-        """Read live members with one checkout and bounded primary-key batches."""
+    def get_agents_by_ids(self, agent_ids: list[str], *, include_deleted: bool = False) -> list[dict[str, Any]]:
+        """Read Agents with one checkout and bounded primary-key batches."""
         ids = [key for key in dict.fromkeys(agent_ids) if not names_no_uuid_row(self.engine, key)]
         if not ids:
             return []
         found = {}
         with store_transaction(self.engine) as conn:
             for offset in range(0, len(ids), 500):
-                rows = conn.execute(
+                statement = (
                     select(self.agents.c.snapshot, self.agents.c.supervisor_user_id)
-                    .where(
-                        self.agents.c.id.in_(ids[offset:offset + 500]),
-                        self.agents.c.deleted_at.is_(None),
-                    )
-                ).mappings()
+                    .where(self.agents.c.id.in_(ids[offset:offset + 500]))
+                )
+                if not include_deleted:
+                    statement = statement.where(self.agents.c.deleted_at.is_(None))
+                rows = conn.execute(statement).mappings()
                 for row in rows:
                     agent = _normalized_agent_snapshot(row["snapshot"], row["supervisor_user_id"])
-                    if not agent.get("deletedAt"):
+                    if include_deleted or not agent.get("deletedAt"):
                         found[agent["id"]] = agent
         return [found[key] for key in ids if key in found]
 

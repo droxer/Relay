@@ -116,7 +116,16 @@ def test_project_summary_defers_context_to_detail(monkeypatch, tmp_path) -> None
     assert client.get(f"/api/v1/projects/{project['id']}").json()["project"]["context"] == context
 
 
-def test_project_directory_defers_member_contracts_and_setup_proposals(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize(("proposal", "proposed_task_count"), [
+    (None, None),
+    ({"tasks": []}, 0),
+    ({"tasks": [{"title": "Review the release", "description": "Detailed proposal"}, {"title": "Publish the release"}]}, 2),
+])
+def test_project_directory_defers_member_contracts_and_setup_proposals(
+    monkeypatch, tmp_path, proposal, proposed_task_count,
+) -> None:
+    from sqlalchemy import event
+
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(str(tmp_path))
     client = TestClient(app)
@@ -136,12 +145,23 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(monkeypat
     setup = {
         "state": "proposed", "mode": "plan", "agentId": agent["id"], "threadId": "setup-thread",
         "startedAt": project["createdAt"], "intent": "Draft the release",
-        "proposal": {"tasks": [{"title": "Review the release", "description": "Detailed proposal"}]},
+        "proposal": proposal,
     }
     project = app.state.project_store.update_project(project["id"], {"setup": setup}, expected_version=project["version"])
     path = "/api/v1/projects?view=directory"
-    result = client.get(path)
+    statements = []
+
+    def capture(_conn, _cursor, statement, *_args):
+        statements.append(statement)
+
+    engine = app.state.project_store.engine
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        result = client.get(path)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
     assert result.status_code == 200
+    assert not any(statement.startswith("SELECT projects.snapshot \n") for statement in statements)
     row, = result.json()["projects"]
     assert row["view"] == "directory"
     assert row["id"] == project["id"] and row["version"] == project["version"]
@@ -150,8 +170,8 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(monkeypat
         "agentId": agent["id"], "role": "implementer", "enabled": True, "projectManager": True,
     }]
     assert row["setupSummary"] == {
-        "state": "proposed", "mode": "plan", "threadId": "setup-thread", "hasProposal": True,
-        "proposedTaskCount": 1,
+        "state": "proposed", "mode": "plan", "threadId": "setup-thread", "hasProposal": proposal is not None,
+        **({"proposedTaskCount": proposed_task_count} if proposed_task_count is not None else {}),
     }
     assert "contextSummary" not in row
     assert not {"context", "goal", "description", "setup"} & row.keys()

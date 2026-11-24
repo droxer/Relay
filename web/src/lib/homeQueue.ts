@@ -57,6 +57,7 @@ export interface HomeSnooze {
 export interface HomeQueueInput {
   tasks: readonly RelayTaskListItem[];
   untriaged?: HomeUntriagedSummary | null;
+  waitingToStart?: number;
   sessions: readonly RelaySession[];
   nodes: readonly DaemonNodeMonitorRecord[];
   userId: string;
@@ -70,7 +71,7 @@ export function homeQueue(input: HomeQueueInput): HomeItem[] {
   const items = [
     ...permissionItems(input.sessions, input.userId),
     ...taskItems(mine, input.today),
-    ...offlineItems(input.nodes, mine, input.userId),
+    ...offlineItems(input.nodes, input.waitingToStart ?? mine.filter(task => task.status === "assigned" || task.status === "queued").length, input.userId),
     ...untriagedItems(input.untriaged === undefined ? summarizeUntriaged(mine) : input.untriaged),
     ...suggestionItems(input.sessions, input.userId),
   ];
@@ -141,10 +142,9 @@ function taskItems(tasks: readonly RelayTaskListItem[], today: string): HomeItem
  *  only that work is waiting — not that it waits on this computer. */
 function offlineItems(
   nodes: readonly DaemonNodeMonitorRecord[],
-  mine: readonly RelayTaskListItem[],
+  waitingToStart: number,
   userId: string,
 ): HomeItem[] {
-  const waitingToStart = mine.filter((task) => task.status === "assigned" || task.status === "queued").length;
   if (!waitingToStart) return [];
   return nodes
     .filter((node) => node.userId === userId && !node.retiredAt && (!node.online || node.stale))

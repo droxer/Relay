@@ -94,7 +94,7 @@ def with_dependency_summaries(
     summaries = {task["id"]: task for task in tasks if task.get("status") != "done"}
     missing = [key for key in ids if key not in summaries]
     for offset in range(0, len(missing), 500):
-        for task in ctx.task_store.list_task_summaries(task_ids=missing[offset:offset + 500]):
+        for task in ctx.task_store.prerequisite_summaries(actor["userId"], missing[offset:offset + 500]):
             summaries[task["id"]] = task
     result: list[dict[str, Any]] = []
     for task in tasks:

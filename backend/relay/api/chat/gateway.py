@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, Request
 from ..deps import AppContextDep
 from ..actors import require_chat_service_request
 from ..bodies import JsonBodyDep, string_field
+from ..record_cursor import encode_record_cursor
+from ..threads.reads import thread_list_position
 
 router = APIRouter()
 
@@ -71,8 +73,11 @@ def chat_conversation_sessions(
     require_chat_service_request(request)
     body = _request_body
     identity = _resolve_owner(ctx, body)
-    sessions = ctx.session_store.list_sessions(owner_user_id=identity["userId"], include_archived=False)
-    return {"sessions": sessions}
+    limit, before = thread_list_position(request)
+    sessions, position = ctx.session_store.list_session_record_page(
+        owner_user_id=identity["userId"], include_archived=False, limit=limit, before=before,
+    )
+    return {"sessions": sessions, "nextCursor": encode_record_cursor(position) if position else None}
 
 
 @router.post("/internal/chat/conversation/mapping")

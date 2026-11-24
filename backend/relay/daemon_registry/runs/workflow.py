@@ -18,13 +18,13 @@ from .run_cursor import CLEARED_RUN_CURSOR
 class WorkflowProgressionMixin(RegistryState):
     def _finalize_workflow_step(self, request: dict[str, Any], event: dict[str, Any], claim: str) -> None:
         sid = request["sessionId"]
-        with self.dispatch_scope(workflow_node_ids(self.store.get_session(sid))), resource_transaction(self.daemon_store.engine, f"workflow-gate:{sid}"), self.store.mutation_scope(sid):
+        with self.dispatch_scope(workflow_node_ids(self.store.get_session_header(sid))), resource_transaction(self.daemon_store.engine, f"workflow-gate:{sid}"), self.store.mutation_scope(sid):
             request = self.daemon_store.update_run_request_if_claimed(
                 request["id"], TERMINAL_CLAIM_ID_STATE_KEY, claim, {},
             )
             if not request:
                 return
-            session = self.store.get_session(sid)
+            session = self.store.get_session_header(sid)
             if session.get("status") in ("cancelled", "failed", "completed") or session.get("deletionRequestedAt"):
                 # The caller's terminal-session branch owns these cases.
                 raise ValueError("workflow_session_closed")
@@ -46,14 +46,14 @@ class WorkflowProgressionMixin(RegistryState):
             self._close_terminal_session_agent(event)
             payload = {**workflow_binding(run), "expectedRevision": run["revision"], "terminalEvent": event}
             payload.pop("revision")
-            session = self.store.append_event(sid, relay_event("workflow.step_finished", sid, payload))
+            session = self.store.append_event(sid, relay_event("workflow.step_finished", sid, payload), hydrate_events=False)
             run = current_workflow_run(session)
             owner_stopped = request["state"].get("_relay_stop_actor_user_id") == session.get("ownerUserId")
             status = "cancelled" if owner_stopped else "completed" if run["status"] == "completed" else "prepared"
             if owner_stopped:
                 session = self.store.append_event(sid, relay_event("session.status", sid, {
                     "status": "cancelled", "phase": "cancelled", "actorUserId": session["ownerUserId"],
-                }))
+                }), hydrate_events=False)
                 run = current_workflow_run(session)
             self.daemon_store.update_run_request_if_claimed(
                 request["id"], TERMINAL_CLAIM_ID_STATE_KEY, claim,
@@ -61,10 +61,10 @@ class WorkflowProgressionMixin(RegistryState):
                  "state": workflow_request_state(run, request)},
             )
             if status == "completed":
-                self.store.append_event(sid, relay_event("session.completed", sid, {
+                session = self.store.append_event(sid, relay_event("session.completed", sid, {
                     "outcome": "Workflow completed with all required recorded outputs.", "workOutcome": "done",
-                }))
-            sync_workflow_task(self, request, self.store.get_session(sid))
+                }), hydrate_events=False)
+            sync_workflow_task(self, request, session)
             self.daemon_store.mark_cancel_commands_completed(request["nodeId"], event["commandId"])
         self.active_commands.pop(event["commandId"], None)
         self.clear_run_output(event["runId"])
@@ -77,7 +77,7 @@ class WorkflowProgressionMixin(RegistryState):
             # Report ingestion may already own a transaction. A savepoint is
             # required before catching admission errors, or a partial stage/link
             # could commit with the preceding result after publication failed.
-            with self.dispatch_lock, self.dispatch_scope(workflow_node_ids(self.store.get_session(sid))), store_transaction(self.daemon_store.engine) as connection, connection.begin_nested():
+            with self.dispatch_lock, self.dispatch_scope(workflow_node_ids(self.store.get_session_header(sid))), store_transaction(self.daemon_store.engine) as connection, connection.begin_nested():
                 self.admit_workflow_first_step(sid)
         except ValueError as error:
             if str(error) == "workflow_computer_unavailable":
@@ -92,7 +92,7 @@ class WorkflowProgressionMixin(RegistryState):
                         raise
                     self._settle_prepared_request_for_missing_session(recovery_request_id)
                     return
-                session = self.store.get_session(sid)
+                session = self.store.get_session_header(sid)
                 run = current_workflow_run(session)
                 request = self.daemon_store.get_run_request(workflow_request_id(run))
                 if run["status"] != "ready" or session["status"] in ("completed", "failed", "cancelled") or not request or request.get("currentCommandId"):
@@ -101,7 +101,7 @@ class WorkflowProgressionMixin(RegistryState):
                 session = self.store.append_event(sid, relay_event("workflow.admission_blocked", sid, {
                     **{key: value for key, value in binding.items() if key != "revision"},
                     "expectedRevision": run["revision"], "reason": str(error),
-                }))
+                }), hydrate_events=False)
                 self.daemon_store.update_run_request(request["id"], {
                     "state": workflow_request_state(current_workflow_run(session), request),
                 })

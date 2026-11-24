@@ -34,8 +34,7 @@ from ...teams.membership import remove_agent_from_teams
 from ..deps import AppContextDep
 from ..actors import request_actor
 from ..bodies import JsonBodyDep, json_body, string_field
-from ...skills.bundle import resolve_bundle
-from ...skills.assignments import effective_assignments
+from ...skills.bundle import resolve_agent_skills
 from ...skills.grants import read_grants
 from .workflow_entry import custom_workflow_entry
 
@@ -220,15 +219,16 @@ def list_agent_placements(request: Request, ctx: AppContextDep) -> dict[str, Any
         include_removed=True,
     )
     nodes = _node_map(ctx)
-    agents: dict[str, dict[str, Any] | None] = {}
-    for placement in placements:
-        agents.setdefault(
-            placement["agentId"], ctx.agent_store.get_agent(placement["agentId"])
-        )
+    agent_ids = list(dict.fromkeys(placement["agentId"] for placement in placements))
+    agents = {agent["id"]: agent for agent in ctx.agent_store.get_agents_by_ids(agent_ids, include_deleted=True)}
+    placement_nodes = {
+        node["id"]: node for placement in placements if (node := placement_node(placement, nodes))
+    }
+    node_names = computer_display_names(ctx, list(placement_nodes.values()))
     return {
         "placements": [
             _placement_view(
-                ctx, placement, nodes=nodes, agent=agents[placement["agentId"]]
+                ctx, placement, nodes=nodes, agent=agents.get(placement["agentId"]), node_names=node_names,
             )
             for placement in placements
         ]
@@ -285,7 +285,7 @@ def update_agent_placement(
         raise HTTPException(404, "Agent placement not found.") from error
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    return {"placement": _placement_view(ctx, placement)}
+    return {"placement": _placement_view(ctx, placement, agent=ctx.agent_store.get_agent(placement["agentId"]))}
 
 
 @router.delete("/admin/agent-placements/{placement_id}", status_code=200)
@@ -299,7 +299,7 @@ def delete_agent_placement(
         )
     except KeyError as error:
         raise HTTPException(404, "Agent placement not found.") from error
-    return {"placement": _placement_view(ctx, placement)}
+    return {"placement": _placement_view(ctx, placement, agent=ctx.agent_store.get_agent(placement["agentId"]))}
 
 
 @router.post("/agent-runs", status_code=202)
@@ -599,20 +599,20 @@ def _agent_skills(
             seen.add(key)
             skills.append({**skill, "source": "node"})
 
-    bundle, skipped = resolve_bundle(ctx, agent)
-    available = {entry["skillId"] for entry in (bundle or {}).get("skills", [])}
-    reasons = {entry["skillId"]: entry["reason"] for entry in skipped}
+    resolution = resolve_agent_skills(ctx, agent, include_files=False)
+    available = {entry["skillId"] for entry in (resolution.bundle or {}).get("skills", [])}
+    reasons = {entry["skillId"]: entry["reason"] for entry in resolution.skipped}
     grants = {
         item["skillId"]: {
             **item, "assignmentId": item["id"], "inherited": item["targetType"] != "agent",
         }
-        for item in effective_assignments(ctx, agent)
+        for item in resolution.assignments
     }
     # Match dispatch: legacy direct grants override inherited assignments.
     grants.update({item["skillId"]: item for item in read_grants(agent)})
     for grant in grants.values():
         skill_id = grant["skillId"]
-        skill = ctx.skill_store.get_skill(skill_id)
+        skill = resolution.skills.get(skill_id)
         # Assignment scopes never grant visibility into another User's private
         # publication. Keep the unavailable assignment without its metadata.
         if (
@@ -642,13 +642,11 @@ def _placement_view(
     placement: dict[str, Any],
     *,
     nodes: NodeMap | None = None,
-    agent: dict[str, Any] | None = None,
+    agent: dict[str, Any] | None,
     node_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     node_map = _node_map(ctx) if nodes is None else nodes
     node = placement_node(placement, node_map)
-    if agent is None:
-        agent = ctx.agent_store.get_agent(placement["agentId"])
     view = placement_status(
         placement, agent, node
     )

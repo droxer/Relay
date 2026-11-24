@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -85,13 +86,25 @@ class SkillEventRows(SkillStoreState):
         return self._reduce_skill(skill_id, history)
 
     def _read_projection(self, conn: Any, skill_id: str, snapshot: Any) -> dict[str, Any]:
-        if (
-            isinstance(snapshot, dict)
-            and snapshot.get("id") == skill_id
-            and {"ownerUserId", "name", "displayName", "visibility", "updatedAt", "deletedAt"} <= snapshot.keys()
-        ):
-            return snapshot
-        return self._replay(conn, skill_id)
+        return self._read_projections(conn, [(skill_id, snapshot)])[skill_id]
+
+    def _read_projections(self, conn: Any, selected: Iterable[Any]) -> dict[str, dict[str, Any]]:
+        results, missing = {}, []
+        for key, snapshot in selected:
+            if (isinstance(snapshot, dict) and snapshot.get("id") == key
+                    and {"ownerUserId", "name", "displayName", "visibility", "updatedAt", "deletedAt"} <= snapshot.keys()):
+                results[key] = snapshot
+            else:
+                missing.append(key)
+        if missing:
+            events = self.events_table
+            histories: dict[str, list[Any]] = defaultdict(list)
+            for row in conn.execute(
+                self._replay_events().where(events.c.skill_id.in_(missing)).order_by(events.c.skill_id, events.c.sequence),
+            ).mappings():
+                histories[row["skill_id"]].append(row)
+            results.update((key, self._reduce_skill(key, histories[key])) for key in missing)
+        return results
 
     def _replay_events(self) -> Any:
         events = self.events_table

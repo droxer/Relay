@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { materializeEvents, relayEvent } from "relay-core";
 import type { RelaySession, RelayTaskSummary, SessionSummariesResponse } from "../src/types";
 import { applySessionEvent } from "../src/lib/sessionEvents";
-import { useProjectTaskScope, useTaskCollectionVisible, useTaskListScope } from "../src/hooks/useLocationPathname";
+import { useTaskRoute } from "../src/hooks/useLocationPathname";
 import { useRelayData } from "../src/hooks/useRelayData";
 import { useThreadTaskContext } from "../src/hooks/useThreadTaskContext";
 import { listDaemonNodes, listSandboxes, listSessionSummaries, listTasks } from "../src/api";
@@ -93,7 +93,7 @@ it("reads Task summaries only on surfaces that display or route Task records", a
   });
   navigate("/projects/id?tab=workspace");
   const view = renderHook(() => {
-    const needsTasks = useTaskCollectionVisible();
+    const { visible: needsTasks } = useTaskRoute();
     return useRelayData(undefined, true, needsTasks, false, !needsTasks);
   }, { wrapper });
   try {
@@ -132,9 +132,7 @@ it("does not use Project Dashboard rows or their validator for the account Task 
   });
   go("/projects/project-a");
   const view = renderHook(() => {
-    const projectId = useProjectTaskScope();
-    const visible = useTaskCollectionVisible();
-    const scope = useTaskListScope();
+    const { visible, projectId, scope } = useTaskRoute();
     return useRelayData(undefined, true, visible, true, !visible, projectId, scope);
   }, { wrapper });
   try {

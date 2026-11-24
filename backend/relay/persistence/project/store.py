@@ -5,6 +5,7 @@ from itertools import batched
 from typing import Any
 
 from sqlalchemy import (
+    case,
     delete,
     func,
     insert,
@@ -15,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from ...core.ids import new_database_id, now_iso
+from ...core.project_directory import PROJECT_DIRECTORY_FIELDS
 from ...projects.setup_result import generated_setup_name
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
@@ -119,6 +121,60 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
             (project_with_manager(dict(row["snapshot"])) for row in rows),
             key=lambda project: (project["name"].casefold(), project["id"]),
         )
+
+    def list_project_directory(self, owner_user_id: str) -> list[dict[str, Any]]:
+        """Read directory metadata and roster roles without transferring Project text or proposals."""
+        projects, members = self.projects, self.members
+        snapshot = projects.c.snapshot
+        suggestions = snapshot["contextSuggestions"]
+        setup = snapshot["setup"]
+        proposal = setup["proposal"]
+        proposed_tasks = proposal["tasks"]
+        setup_fields = ("state", "mode", "threadId")
+        fields = tuple(key for key in PROJECT_DIRECTORY_FIELDS if key != "managerAgentId")
+        with store_transaction(self.engine) as conn:
+            suggestion_count: Any
+            proposed_task_count: Any
+            if conn.dialect.name == "postgresql":
+                suggestion_count = case(
+                    (func.jsonb_typeof(suggestions) == "array", func.jsonb_array_length(suggestions)), else_=0,
+                )
+                proposed_task_count = case(
+                    (func.jsonb_typeof(proposed_tasks) == "array", func.jsonb_array_length(proposed_tasks)), else_=0,
+                )
+            else:
+                suggestion_count = func.coalesce(func.json_array_length(suggestions), 0)
+                proposed_task_count = func.coalesce(func.json_array_length(proposed_tasks), 0)
+            statement = select(
+                *(snapshot[key].label(key) for key in fields),
+                suggestion_count.label("suggestion_count"),
+                setup.as_string().not_in(("", "{}")).label("has_setup"),
+                proposal.as_string().not_in(("", "{}")).label("has_proposal"),
+                proposed_task_count.label("proposed_task_count"),
+                *(setup[key].label(f"setup_{key}") for key in setup_fields),
+                members.c.agent_id, members.c.role, members.c.enabled.label("member_enabled"),
+            ).select_from(projects.outerjoin(members, members.c.project_id == projects.c.id)).where(
+                projects.c.owner_user_id == owner_user_id,
+            ).order_by(projects.c.name_key, projects.c.id, members.c.position)
+            directory: dict[str, dict[str, Any]] = {}
+            for row in conn.execute(statement).mappings():
+                project_id = row["id"]
+                project = directory.get(project_id)
+                if project is None:
+                    project = {key: row[key] for key in fields if row[key] is not None or key in ("leadAgentId", "managerThreadId")}
+                    project.update(view="directory", members=[])
+                    if row["suggestion_count"]:
+                        project["contextSummary"] = {"suggestionCount": row["suggestion_count"]}
+                    if row["has_setup"]:
+                        project["setupSummary"] = {
+                            **{key: row[f"setup_{key}"] for key in setup_fields if row[f"setup_{key}"] is not None},
+                            "hasProposal": bool(row["has_proposal"]),
+                            **({"proposedTaskCount": row["proposed_task_count"]} if row["has_proposal"] else {}),
+                        }
+                    directory[project_id] = project
+                if row["agent_id"] is not None:
+                    project["members"].append({"agentId": row["agent_id"], "role": row["role"], "enabled": row["member_enabled"]})
+        return [project_with_manager(project) for project in directory.values()]
 
     def live_owned_project_ids(self, owner_user_id: str, project_ids: Collection[str]) -> set[str]:
         """Check ownership and archive state using only the requested Project IDs."""

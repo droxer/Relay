@@ -12,6 +12,7 @@ from ...core.daemon_capabilities import has_capability
 from ...core.daemon_records import ComputerRunCapacityError
 from ...core.workflows import snapshot_team_id
 from ...core.ids import new_database_id
+from ...persistence.task.rules import compact_task_writes
 from ...persistence.resource_lock import resource_transaction
 from ...sessions.agent_state import initial_agent_state
 from ..scheduling import node_accepts_run
@@ -89,10 +90,10 @@ class WorkflowAdmissionMixin(RegistryState):
         """
         if getattr(self.store, "engine", None) is not self.daemon_store.engine:
             raise ValueError("workflow_shared_transaction_required")
-        with self.dispatch_lock, self.dispatch_scope(workflow_node_ids(self.store.get_session(session_id))), resource_transaction(
+        with self.dispatch_lock, self.dispatch_scope(workflow_node_ids(self.store.get_session_header(session_id))), resource_transaction(
             self.daemon_store.engine, f"workflow-gate:{session_id}",
-        ), self.store.mutation_scope(session_id), ExitStack() as task_scope:
-            session = self.store.get_session(session_id)
+        ), self.store.mutation_scope(session_id), compact_task_writes(), ExitStack() as task_scope:
+            session = self.store.get_session_header(session_id)
             if session.get("deletionRequestedAt") or session.get("status") in (
                 "completed", "failed", "cancelled",
             ):
@@ -206,6 +207,6 @@ class WorkflowAdmissionMixin(RegistryState):
                 linked = self.daemon_store.get_command(delivered.get("currentCommandId")) if delivered.get("currentCommandId") else None
                 if not linked or linked.get("status") == "pending":
                     raise ValueError("workflow_publication_failed")
-            session = self.store.get_session(session_id)
+            session = self.store.get_session_header(session_id)
             sync_workflow_task(self, delivered, session)
             return session

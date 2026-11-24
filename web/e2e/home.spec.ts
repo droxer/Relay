@@ -156,7 +156,7 @@ test("idle Home revalidates each compact collection once per poll", async ({ pag
   await expect.poll(() => reads.length).toBe(2);
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 250));
   const initial = [
-    { path: "/api/v1/tasks", query: "?view=summary&scope=home", validator: null },
+    { path: "/api/v1/tasks", query: expect.stringMatching(/^\?view=summary&scope=home&today=\d{4}-\d{2}-\d{2}$/), validator: null },
     { path: "/api/v1/threads", query: "?view=summary&limit=20&include=activity", validator: null },
   ];
   expect(reads).toEqual(expect.arrayContaining(initial));

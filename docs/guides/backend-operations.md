@@ -6,6 +6,14 @@ Historical migration numbers below identify the changes that introduced each
 contract; use [the migration guide](../../backend/migrations/README.md) to apply
 all current migrations before starting the matching backend and worker release.
 
+## Automation run ledger
+
+Revision `20261124_0133` backfills each recorded run's Automation link and
+builds the pagination index concurrently. A database trigger captures
+occurrence events from old backend and worker replicas during the rollout.
+If a concurrent index build is interrupted, rerun the migration to replace the
+invalid index.
+
 ## Unacknowledged run cancellation
 
 `Cancelling active run` is recorded once after a durable stop command is
@@ -32,6 +40,7 @@ metric.
 - Recovery reads at most 100 active runs and claims at most 100 run requests per pass. PostgreSQL uses `SKIP LOCKED` with a five-second recovery lease; existing dispatch/finalization claims remain authoritative. Explicit run-request updates make changed work eligible for recovery again. Recovery no longer holds the fleet dispatch lock across its scan, and monitoring does not initiate recovery.
 - Retention visits at most 100 nodes and deletes at most 1,000 rows per command/run/event table per pass. It transfers IDs instead of command payloads and rotates node cursors. Partial indexes support terminal-record lookup. Admission and terminal transitions retain their existing synchronization.
 - SSE reconnects retain the existing event-ID contract and use a `(session_id, payload ->> 'id')` index. Sequence-based live reads are unchanged.
+- Task dispatch batches run-request and capacity checks for each candidate page. A tick scans at most 100 candidates by default. If that budget is spent, the next tick resumes after the last scanned candidate.
 
 ## Deployment
 

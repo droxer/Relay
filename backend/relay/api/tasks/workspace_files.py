@@ -31,7 +31,7 @@ from ..computers.workspace_transport import (
     workspace_path,
 )
 from ..deps import AppContext, AppContextDep
-from .history import newest_artifacts_by_file, occurrence_tasks
+from .history import newest_artifacts_by_file, occurrence_file_records
 
 router = APIRouter()
 
@@ -106,7 +106,7 @@ def _prepare_task_files(task_id: str, request: Request, ctx: AppContext) -> Any:
     sources: list[tuple[str, str]] = [
         (task_id, session_id) for session_id in task.get("linkedSessionIds", [])
     ]
-    for occurrence in occurrence_tasks(ctx, task, actor, record_view=True):
+    for occurrence in occurrence_file_records(ctx, task, actor):
         sources.extend(
             (occurrence["id"], session_id)
             for session_id in occurrence.get("linkedSessionIds", [])
@@ -156,7 +156,7 @@ def _task_workspace_target(
     binding = recorded_task_workspace(task, ctx.session_store, nodes)
     if task.get("isRoutine"):
         # A routine is a browse-only parent; each occurrence owns its binding.
-        for occurrence in reversed(occurrence_tasks(ctx, task, actor, record_view=True)):
+        for occurrence in reversed(occurrence_file_records(ctx, task, actor)):
             binding = recorded_task_workspace(occurrence, ctx.session_store, nodes)
             if binding:
                 if binding["layout"] == "task":

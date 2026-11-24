@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.exc import IntegrityError
@@ -49,6 +50,9 @@ class SkillStoreState:
             ...
 
         def _read_projection(self, conn: Any, skill_id: str, snapshot: Any) -> dict[str, Any]:
+            ...
+
+        def _read_projections(self, conn: Any, selected: Iterable[Any]) -> dict[str, dict[str, Any]]:
             ...
 
         @staticmethod

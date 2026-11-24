@@ -13,6 +13,7 @@ from ...persistence.resource_lock import resource_transaction
 from ...projects.workflow import validate_project_workflow
 from ..agents.workflow_gates import _body
 from ..bodies import JsonBodyDep
+from ..threads.transcript import workflow_transcript
 from ..deps import AppContextDep
 from ..projects.access import current_project_node
 from .workflows import owned_definition, workflow_owner
@@ -45,15 +46,15 @@ def start_workflow(workflow_id: str, request: Request, ctx: AppContextDep, *, _r
             node['id'] for node in ctx.registry.monitor_nodes() if computer_id(node) == project['computerId']
         ]), resource_transaction(ctx.registry.daemon_store.engine, f'workflow-start:{session_id}'):
             try:
-                existing = ctx.session_store.get_session(session_id)
+                existing = ctx.session_store.get_session_header(session_id)
             except KeyError:
                 existing = None
             if existing:
                 if existing.get('ownerUserId') != owner or existing.get('teamId') != team_id or existing.get('projectId') != project_id or existing.get('taskGoal') != goal:
                     raise ValueError('workflow_request_conflict')
                 if existing['workflowRuns'][0]['status'] == 'ready' and existing['status'] not in ('completed', 'failed', 'cancelled'):
-                    return ctx.registry.admit_workflow_first_step(session_id)
-                return existing
+                    return workflow_transcript(ctx.session_store, ctx.registry.admit_workflow_first_step(session_id))
+                return workflow_transcript(ctx.session_store, existing)
             team = ctx.team_store.get_team(team_id) if team_id else None
             if team_id and not team:
                 raise ValueError('workflow_team_unavailable')
@@ -73,6 +74,8 @@ def start_workflow(workflow_id: str, request: Request, ctx: AppContextDep, *, _r
                 'workspacePath': node.get('workspacePath') or '/workspace',
                 'workspaceSubpath': project['workspaceSubpath'], 'taskGoal': goal,
             }, assignments)
-            return ctx.registry.admit_workflow_first_step(session_id) if session['workflowRuns'][0]['status'] == 'ready' else session
+            if session['workflowRuns'][0]['status'] == 'ready':
+                session = ctx.registry.admit_workflow_first_step(session_id)
+            return workflow_transcript(ctx.session_store, session)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error

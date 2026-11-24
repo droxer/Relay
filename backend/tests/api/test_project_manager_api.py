@@ -3,8 +3,11 @@
 It reads live project records and stages owner-applied changes; the owner
 talks to it through the ordinary Thread message route.
 """
+from datetime import datetime, timedelta
+
 from fastapi.testclient import TestClient
 import pytest
+from relay.persistence.events import relay_event
 import test_project_setup_api as setup_api
 from test_project_setup_api import _take_command, _complete
 
@@ -281,7 +284,7 @@ def test_selected_plan_missing_prerequisite_and_invalid_assignment_roll_back(man
     assert client.post(url, json={"idempotencyKey":"first-only", "operationIds":["1"]}).status_code == 409
 
 
-def test_existing_foreign_task_and_thread_are_inaccessible(managed_env):
+def test_existing_foreign_task_and_thread_are_inaccessible(managed_env, monkeypatch):
     _, client, node, project, *_ = managed_env
     started, command = _start(managed_env)
     other = client.post('/api/v1/projects', json={'name':'Other', 'daemonNodeId':node['id'], 'members':[]}).json()['project']
@@ -290,6 +293,12 @@ def test_existing_foreign_task_and_thread_are_inaccessible(managed_env):
     assert _tool(managed_env, command, 'propose', {'operations':[{'kind':'update','taskId':private['id'],'fields':{'title':'Stolen'}}]}).status_code == 404
     overview = _tool(managed_env, command, 'overview').json()
     assert overview['total'] == 0
+
+    def reject_full_read(*args, **kwargs):
+        raise AssertionError("The manager reads only the requested page of Threads and messages")
+
+    monkeypatch.setattr(managed_env[0].state.session_store, "get_session", reject_full_read)
+    monkeypatch.setattr(managed_env[0].state.session_store, "list_session_snapshots", reject_full_read)
     assert _tool(managed_env, command, 'thread', {'threadId':'missing'}).status_code == 404
     thread = _tool(managed_env, command, 'thread', {'threadId':started['threadId']})
     assert thread.status_code == 200
@@ -297,6 +306,56 @@ def test_existing_foreign_task_and_thread_are_inaccessible(managed_env):
         'What should we do next?',
     ]
     assert _tool(managed_env, command, 'threads').status_code == 200
+
+
+def test_manager_pages_messages_and_caps_visible_run_output(managed_env, monkeypatch):
+    app, _, _, project, *_ = managed_env
+    _, command = _start(managed_env)
+    store = app.state.session_store
+    thread = store.create_session({
+        "ownerUserId": project["ownerUserId"], "projectId": project["id"],
+        "workspacePath": "/workspace", "taskGoal": "Original goal",
+    })
+    thread_id = thread["id"]
+    timestamp = datetime.fromisoformat(thread["createdAt"])
+
+    def append(event_type, body):
+        nonlocal timestamp
+        timestamp += timedelta(milliseconds=1)
+        event = relay_event(event_type, thread_id, {**body, "timestamp": timestamp.isoformat(timespec="milliseconds").replace("+00:00", "Z")})
+        store.append_event(thread_id, event, hydrate_events=False)
+
+    for index in range(51):
+        append("user.message", {"text": f"Message {index}"})
+    append("agent.started", {"runId": "finished", "agent": "codex"})
+    append("agent.completed", {
+        "runId": "finished", "agent": "codex", "agentLog": "Published report",
+        "status": "completed", "exitCode": 0,
+    })
+    append("agent.started", {"runId": "unfinished", "agent": "codex"})
+    append("agent.output.batch", {"runId": "unfinished", "agent": "codex", "entries": [
+        {"stream": "stdout", "text": "é" * 7950},
+        {"stream": "stdout", "text": "a" * 60},
+    ]})
+
+    consumed = []
+    load_output = store._message_output
+
+    def record_output(conn, thread, run_ids, limit):
+        consumed.append(set(run_ids))
+        return load_output(conn, thread, run_ids, limit)
+
+    monkeypatch.setattr(store, "_message_output", record_output)
+    first = _tool(managed_env, command, "thread", {"threadId": thread_id, "cursor": 0}).raise_for_status().json()
+    last = _tool(managed_env, command, "thread", {"threadId": thread_id}).raise_for_status().json()
+    assert first["messages"][0]["text"] == "Original goal"
+    assert first["nextCursor"] == 50
+    assert last["coverage"] == {"total": 54, "shown": 50, "maxMessageChars": 8000}
+    reports = {message.get("runId"): message for message in last["messages"]}
+    finished, unfinished = reports["finished"], reports["unfinished"]
+    assert finished["text"] == "Published report" and finished["truncated"] is False
+    assert unfinished["text"] == "é" * 7950 + "a" * 50 and unfinished["truncated"] is True
+    assert consumed == [set(), {"unfinished"}]
 
 
 def test_cycle_apply_rolls_back_metadata_and_rejects_dismissed_proposal(managed_env, monkeypatch):

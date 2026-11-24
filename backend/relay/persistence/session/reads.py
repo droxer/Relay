@@ -16,22 +16,28 @@ from ...core.project_roles import with_project_lead_discussion
 from sqlalchemy import (
     Text,
     and_,
+    case,
     cast,
+    func,
     literal_column,
     or_,
     select,
     text,
     tuple_,
+    type_coerce,
 )
 from .output_compaction import compact_completed_run_output
 from ..db_time import format_db_time
 from ..engine import store_transaction
 from .. import sql
-from ..tables.sessions import POSTGRES_QUEUED_THREAD, SQLITE_QUEUED_THREAD, agent_runs
+from ..tables.sessions import POSTGRES_QUEUED_THREAD, SQLITE_QUEUED_THREAD
+from ..tables.tasks import tasks
+from ..workspace import workspace_task_scope, workspace_thread_scope
 from ..tables.daemon import active_run_request, run_requests, runs as daemon_runs
 from .rows import (
     _artifact_field_sql,
     _canonical_database_session_id,
+    compact_database_session_snapshot,
     session_event_cursor_expression,
     hydrate_session_logs,
 )
@@ -246,12 +252,42 @@ class SessionReadRows(SessionStoreState):
         )
         return summaries
 
+    def list_session_record_page(
+        self, *, owner_user_id: str, limit: int, before: SummaryPosition | None = None,
+        include_archived: bool = True,
+    ) -> tuple[list[dict[str, Any]], SummaryPosition | None]:
+        """Page owner-visible snapshots without opening the event log."""
+        if sql.names_no_uuid_row(self.engine, owner_user_id):
+            return [], None
+        sessions = self.sessions
+        snapshot = sessions.c.snapshot
+        # Older stores can carry inline events. Drop them at the database boundary.
+        compact = (snapshot.op("-", return_type=snapshot.type)(literal_column("'events'"))
+                   if self.engine.dialect.name == "postgresql"
+                   else func.json_remove(snapshot, "$.events", type_=snapshot.type))
+        statement = select(
+            sessions.c.id, sessions.c.updated_at, sessions.c.version, compact.label("snapshot"),
+        ).where(sessions.c.owner_user_id == owner_user_id)
+        if not include_archived:
+            statement = statement.where(snapshot["archived"].as_boolean().is_not(True))
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(self._summary_page_scope(statement, before).limit(limit + 1)).mappings().all()
+        page = rows[:limit]
+        position = (page[-1]["updated_at"], str(page[-1]["id"])) if len(rows) > limit else None
+        return [
+            compact_database_session_snapshot(row["snapshot"], event_count=int(row["version"]))
+            for row in page
+        ], position
+
     def list_session_summary_page(
         self,
         *,
         owner_user_id: str | None = None,
         limit: int = 100,
         before: SummaryPosition | None = None,
+        project_id: str | None = None,
+        team_id: str | None = None,
+        agent_id: str | None = None,
     ) -> tuple[list[dict[str, Any]], SummaryPosition | None]:
         """One page of summaries, newest first, and where the next one starts.
 
@@ -323,9 +359,9 @@ class SessionReadRows(SessionStoreState):
             ).label("artifactCount"),
         )
         if owner_user_id is not None:
-            statement = statement.where(
-                self.sessions.c.owner_user_id == owner_user_id
-            )
+            statement = statement.where(*workspace_thread_scope(
+                self.sessions, owner_user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+            ))
         page_size = max(1, limit)
         # One extra row says whether another page exists without a COUNT.
         statement = self._summary_page_scope(statement, before).limit(page_size + 1)
@@ -391,15 +427,10 @@ class SessionReadRows(SessionStoreState):
             select(sessions.c.id, sessions.c.updated_at.label(_POSITION_COLUMN),
                    *(snapshot[field].as_string().label(field) for field in fields),
                    literal_column(f"COALESCE({array_length}({runs}), 0)").label("runCount"))
-            .where(sessions.c.owner_user_id == owner_user_id)
+            .where(*workspace_thread_scope(
+                sessions, owner_user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+            ))
         )
-        if project_id is not None:
-            statement = statement.where(sessions.c.project_id == project_id)
-        if team_id is not None:
-            statement = statement.where(snapshot["teamId"].as_string() == team_id)
-        if agent_id is not None:
-            joined = select(agent_runs.c.session_id).where(agent_runs.c.logical_agent_id == agent_id)
-            statement = statement.where(or_(snapshot["ownerAgentId"].as_string() == agent_id, sessions.c.id.in_(joined)))
         statement = self._summary_page_scope(statement, before)
         if limit is not None:
             limit = max(1, limit)
@@ -409,6 +440,47 @@ class SessionReadRows(SessionStoreState):
         page = rows[:limit]
         next_position = (page[-1][_POSITION_COLUMN], str(page[-1]["id"])) if len(rows) > len(page) else None
         return [{key: value for key, value in row.items() if key != _POSITION_COLUMN} for row in page], next_position
+
+    def workspace_thread_counts(
+        self, owner: str, *, project_id: str | None = None,
+        team_id: str | None = None, agent_id: str | None = None,
+    ) -> tuple[int, int]:
+        sessions = self.sessions
+        snapshot = sessions.c.snapshot
+        scope = {"project_id": project_id, "team_id": team_id, "agent_id": agent_id}
+        task_scope = workspace_task_scope(tasks, owner, **scope)
+        waiting = select(tasks.c.id).where(
+            *task_scope, tasks.c.status == "waiting_for_human",
+            tasks.c.snapshot["waitingSessionId"].as_string() == cast(sessions.c.id, Text),
+        ).exists()
+        rounds = snapshot["collaborationRounds"]
+        if self.engine.dialect.name == "postgresql":
+            values = func.jsonb_array_elements(case((func.jsonb_typeof(rounds) == "array", rounds)))
+        else:
+            values = func.json_each(rounds)
+        entries = values.table_valued("value").alias("round_entry")
+        current = type_coerce(entries.c.value, snapshot.type)
+        held = select(tasks.c.id).select_from(tasks, entries).where(
+            *task_scope, current["roundId"].as_string() == snapshot["activeRoundId"].as_string(),
+            current["workScope"]["kind"].as_string() == "task",
+            current["workScope"]["taskId"].as_string() == cast(tasks.c.id, Text),
+        ).exists()
+        active = or_(sessions.c.status.in_(("running", "waiting_for_human")), and_(
+            sessions.c.status == "completed", or_(waiting, and_(snapshot["workOutcome"].as_string() == "blocked", ~held)),
+        ))
+        statement = select(func.count(), func.count().filter(active)).select_from(sessions).where(
+            *workspace_thread_scope(sessions, owner, **scope),
+        )
+        with store_transaction(self.engine) as conn:
+            total, active_count = conn.execute(statement).one()
+        return int(total), int(active_count)
+
+    def project_thread_count(self, owner: str, project_id: str) -> int:
+        sessions = self.sessions
+        with store_transaction(self.engine) as conn:
+            return int(conn.scalar(select(func.count()).select_from(sessions).where(
+                sessions.c.owner_user_id == owner, sessions.c.project_id == project_id,
+            )) or 0)
 
     def list_open_sessions_idle_since(self, cutoff: datetime) -> list[dict[str, Any]]:
         """Open (``running``) threads untouched since ``cutoff``, as snapshots.

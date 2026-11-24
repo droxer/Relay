@@ -33,6 +33,15 @@ def read_transcript_page(
     return {"eventStart": start, "eventCount": end, "events": events}
 
 
+def workflow_transcript(store: SessionStore, snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Return a bounded response for a Workflow mutation's current snapshot."""
+    page = read_transcript_page(store, snapshot, None, compact=True)
+    if page["eventStart"] == 0:
+        # A complete response uses the same shape as the Thread record.
+        page.pop("eventStart")
+    return {**transcript_projection({**snapshot, **page}, compact=True), **page}
+
+
 def _events_revision(events: list[dict[str, Any]]) -> str:
     return sha256(JSONResponse(events).body).hexdigest()
 

@@ -93,7 +93,7 @@ class RunProgressionMixin(RegistryState):
         Call only while owning the request transition, after terminal command
         evidence has been persisted. A failed session alone is not exit evidence.
         """
-        session = self.store.get_session(event["sessionId"])
+        session = self.store.get_session_header(event["sessionId"])
         run = next(
             (run for run in session.get("agentRuns", [])
              if run["id"] == event["runId"] and run.get("status") == "running"),
@@ -136,8 +136,10 @@ class RunProgressionMixin(RegistryState):
         run_request = fenced_request
         sandbox = self._finalization_sandbox(run_request["nodeId"])
         controller = self._controller_for_sandbox(sandbox, run_request.get("taskId"), run_request)
+        workflow = bool((run_request.get("state") or {}).get("_relay_workflow_admission"))
+        read_session = self.store.get_session_header if workflow else self.store.get_session
         try:
-            session_before = self.store.get_session(run_request["sessionId"])
+            session_before = read_session(run_request["sessionId"])
         except KeyError:
             self._finalize_vanished_session(run_request, event, terminal_claim_id)
             return
@@ -146,7 +148,7 @@ class RunProgressionMixin(RegistryState):
                 run_request, event, terminal_claim_id, session_before, controller
             )
             return
-        if (run_request.get("state") or {}).get("_relay_workflow_admission"):
+        if workflow:
             self._finalize_workflow_step(run_request, event, terminal_claim_id)
             return
         assert_workflow_runtime_supported(run_request)

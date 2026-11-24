@@ -166,6 +166,15 @@ class RunRequestRows(DaemonStoreState):
             ).mappings().first()
         return row_to_run_request(row) if row else None
 
+    def active_run_request_task_ids(self, task_ids: set[str]) -> set[str]:
+        if not task_ids:
+            return set()
+        requests = self.run_requests
+        with store_transaction(self.engine) as conn:
+            return set(conn.scalars(
+                select(requests.c.task_id).where(active_run_request, requests.c.task_id.in_(task_ids)).distinct(),
+            ))
+
     def get_run_request(self, request_id: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             row = (

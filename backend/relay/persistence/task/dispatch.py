@@ -45,9 +45,16 @@ from .rows import (
     task_to_row,
 )
 from .state import TaskStoreState
+from .flow import full_wip_scopes
 
 
 class TaskDispatchRows(TaskStoreState):
+    def dispatch_capacity_full(self, scopes: set[str]) -> set[str]:
+        if not scopes:
+            return set()
+        with store_transaction(self.engine) as conn:
+            return full_wip_scopes(conn, scopes)
+
     def list_dispatchable_tasks(
         self, limit: int | None = None, *, after: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:

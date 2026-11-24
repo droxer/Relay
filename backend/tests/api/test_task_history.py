@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select, update
 
 from relay.app import create_app
 from relay.persistence.events import relay_event
@@ -222,6 +223,20 @@ def test_task_events_include_occurrences_merges_by_timestamp(monkeypatch) -> Non
             for event in events
         )
 
+        walked = []
+        cursor = None
+        for _ in range(len(events) + 1):
+            params = {"include": "occurrences", "limit": 2}
+            if cursor:
+                params["cursor"] = cursor
+            page = client.get(f"/api/v1/tasks/{routine['id']}/events", params=params).json()
+            assert len(page["events"]) <= 2
+            walked[:0] = page["events"]
+            cursor = page["nextCursor"]
+            if cursor is None:
+                break
+        assert cursor is None and walked == events
+
 
 def _runs(client: TestClient, task_id: str, **params: Any) -> list[dict[str, Any]]:
     response = client.get(f"/api/v1/tasks/{task_id}/runs", params=params)
@@ -277,6 +292,18 @@ def test_routine_run_reports_timing_and_failure(monkeypatch) -> None:
         assert run["startedAt"] is not None
         assert run["endedAt"] is not None
         assert run["endedAt"] >= run["startedAt"]
+        assert run["failureMessage"] == "Agent failed"
+
+        # Older projections can lag the authoritative Task events.
+        store = app.state.task_store
+        with store.engine.begin() as conn:
+            row = store.tasks.c
+            snapshot = conn.scalar(select(row.snapshot).where(row.id == occurrence["id"]))
+            conn.execute(
+                update(store.tasks).where(row.id == occurrence["id"])
+                .values(snapshot={**snapshot, "status": "assigned", "eventCount": 0}),
+            )
+        assert _runs(client, routine["id"])[0] == run
 
 
 def test_routine_run_without_terminal_status_has_no_end(monkeypatch) -> None:

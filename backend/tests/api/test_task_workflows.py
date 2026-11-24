@@ -1,5 +1,6 @@
 """Project Task admission uses the frozen workflow ledger, not legacy Team rounds."""
 from datetime import UTC, datetime, timedelta
+from inspect import currentframe
 
 import pytest
 
@@ -87,6 +88,16 @@ def test_late_workflow_approval_starts_a_fresh_queue_grace(monkeypatch):
 
 def test_task_workflow_gate_retry_and_completion_keep_one_execution(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
+        read_session = app.state.session_store.get_session
+
+        def guard_history(session_id):
+            caller = currentframe().f_back
+            assert caller.f_code.co_name not in {
+                "admit_workflow_first_step", "_finalize_workflow_step", "_resume_workflow_admission",
+            }, "Workflow state transitions must not read the Thread transcript"
+            return read_session(session_id)
+
+        monkeypatch.setattr(app.state.session_store, "get_session", guard_history)
         task, workflow = task_workflow(client, project, payload)
         session = start_task(client, task)
         sid = session["id"]

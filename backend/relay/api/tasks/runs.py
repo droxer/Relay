@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from loguru import logger
 from starlette.concurrency import run_in_threadpool
 
+from ...core.task_runs import RUN_TERMINAL_STATUSES
 from ...security.actor import Actor
 from ...tasks.assignment import logical_agent_for_assignment
 from ...tasks.deletion import task_has_active_linked_session
@@ -19,17 +21,19 @@ from ...tasks.start import PreparedStart, prepare_task_start, start_prepared_tas
 from ...tasks.workspace import task_artifacts_dir
 from ..actors import (
     get_task_for_actor,
+    get_task_header_for_actor,
     request_actor,
 )
 from ..bodies import assignment_list, json_body, string_field
 from ..deps import AppContext, AppContextDep
+from ..threads.transcript import workflow_transcript
 from ..projects.access import ensure_task_project_writable
 from ..schemas import (
     TaskStartBody,
     openapi_body,
     parse_request_body,
 )
-from .history import newest_artifacts_by_file, occurrence_tasks
+from .history import newest_artifacts_by_file
 from .payloads import public_task_envelope, task_request_errors
 
 router = APIRouter()
@@ -54,7 +58,10 @@ async def start_task(
     task_id: str, request: Request, ctx: AppContextDep
 ) -> dict[str, Any]:
     # Every answer below carries a task (often the routine definition).
-    return public_task_envelope(await _start_task(task_id, request, ctx))
+    result = public_task_envelope(await _start_task(task_id, request, ctx))
+    if (session := result.get("session")) and session.get("workflowRuns") and "events" not in session:
+        result["session"] = await run_in_threadpool(workflow_transcript, ctx.session_store, session)
+    return result
 
 
 async def _start_task(
@@ -150,9 +157,6 @@ async def pickup_task(
 # ledger answers "is this healthy lately", so it reads recent runs by default.
 RUN_LEDGER_LIMIT = 30
 RUN_LEDGER_MAX_LIMIT = 200
-# The task statuses that end a run. There is no "failed" task status — a run
-# that went wrong lands in `blocked`, carrying the reason that put it there.
-RUN_TERMINAL_STATUSES = ("done", "blocked", "cancelled")
 
 
 def run_row(
@@ -179,7 +183,7 @@ def run_row(
     if task.get("status") not in RUN_TERMINAL_STATUSES:
         ended_at = None
         failure_message = None
-    session_ids = list(task.get("linkedSessionIds", []))
+    session_ids = list(task.get("linkedSessionIds") or [])
     artifacts = newest_artifacts_by_file(
         ctx, [(task["id"], session_id) for session_id in session_ids], owner_user_id=task.get("ownerUserId"),
         artifact_sessions=artifact_sessions,
@@ -224,22 +228,25 @@ def task_runs(
     if limit < 1:
         raise HTTPException(400, "limit must be at least 1.")
     actor = request_actor(request, ctx.auth_store)
-    task = get_task_for_actor(ctx.task_store, task_id, actor, record_view=True)
+    task = get_task_header_for_actor(ctx.task_store, task_id, actor)
     position = None
     if before is not None:
         parts = before.split("|")
         if len(parts) != 3 or not parts[2]:
             raise HTTPException(400, "Invalid run ledger cursor.")
-        position = parts[0], parts[1], parts[2]
+        try:
+            position = parts[0], parts[1], str(UUID(parts[2]))
+        except ValueError as error:
+            raise HTTPException(400, "Invalid run ledger cursor.") from error
     if not task.get("isRoutine"):
-        runs = [] if position is not None else [run_row(ctx, get_task_for_actor(ctx.task_store, task_id, actor))]
-        return {"taskId": task_id, "runs": runs, "nextCursor": None}
+        records = [] if position is not None else ctx.task_store.task_run_records(actor["userId"], [task_id])
+        return {"taskId": task_id, "runs": [run_row(ctx, record) for record in records], "nextCursor": None}
     page_size = min(limit, RUN_LEDGER_MAX_LIMIT)
     positions = ctx.task_store.occurrence_positions(
-        task.get("occurrenceIds") or [], actor["userId"], limit=page_size + 1, before=position,
+        task_id, actor["userId"], limit=page_size + 1, before=position,
     )
     page = positions[:page_size]
-    runs = occurrence_tasks(ctx, task, actor, occurrence_ids=[key for _, _, key in page])
+    runs = ctx.task_store.task_run_records(actor["userId"], [key for _, _, key in page])
     artifact_sessions = ctx.session_store.list_artifact_sources(
         {key for run in runs for key in run.get("linkedSessionIds") or []}, actor["userId"],
     )

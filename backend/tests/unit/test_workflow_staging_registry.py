@@ -27,7 +27,8 @@ def test_stage_has_durable_request_without_commands(runtime):
     assert session["workflowRuns"][0]["status"] == "awaiting_approval"
     restarted = DaemonNodeRegistry(sessions, daemons)
     restarted.reap_stale_runs()
-    assert sessions.get_session(session["id"]) == session
+    assert "events" not in session
+    assert sessions.get_session_header(session["id"]) == session
     assert len(daemons.list_active_run_requests()) == 1
     assert daemons.list_active_run_requests()[0]["status"] == "prepared"
     assert daemons.take_queued_commands("node") == []

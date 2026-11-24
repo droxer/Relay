@@ -606,7 +606,7 @@ class AssignmentDeliveryMixin(RegistryState):
     def _ensure_agent_started_for_command(
         self, run_request: dict[str, Any], command: dict[str, Any]
     ) -> None:
-        session = self.store.get_session(run_request["sessionId"])
+        session = self.store.get_session_header(run_request["sessionId"])
         if any(
             agent_run.get("id") == command["runId"]
             for agent_run in session.get("agentRuns", [])

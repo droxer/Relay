@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from enum import Enum
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, UTC
 from typing import Any
@@ -19,9 +18,9 @@ from ..core.models import AgentName
 from ..persistence.protocols import TaskDispatchAssignment
 from ..core.validation import valid_agent
 from ..core.daemon_records import ComputerRunCapacityError, ThreadRunActiveError
-from ..persistence.task.rows import task_claim_sort_key
 from ..persistence.task.rules import compact_task_writes
 from .claims import dispatch_claim_active
+from .scheduling.candidates import CandidateOutcome, DispatchCandidates
 from .assignment import validate_standalone_assignment
 from .requests import TaskRequestError
 from ..agents.routing import (
@@ -105,15 +104,6 @@ def _await_dispatch(future: concurrent.futures.Future[Any], task_id: str) -> Any
             )
 
 
-class CandidateOutcome(Enum):
-    """What one pass over an assigned task did."""
-
-    IGNORED = "ignored"  # not dispatchable yet; not counted
-    SKIPPED = "skipped"  # held back for a recorded reason
-    ATTEMPTED = "attempted"  # claimed and handed to a daemon, which refused it
-    DISPATCHED = "dispatched"
-
-
 @dataclass(frozen=True)
 class _Route:
     """Where a routed task runs and with which assignments."""
@@ -132,7 +122,7 @@ class SchedulerTickResult:
     skipped: int = 0
 
 
-class TaskScheduler:
+class TaskScheduler(DispatchCandidates):
     def __init__(
         self,
         *,
@@ -164,6 +154,7 @@ class TaskScheduler:
         self.thread_queue: Any = None
         self._loop_task: asyncio.Task[None] | None = None
         self._tick_lock = asyncio.Lock()
+        self._dispatch_scan_after: dict[str, Any] | None = None
 
     def start(self) -> None:
         if self._loop_task and not self._loop_task.done():
@@ -221,29 +212,12 @@ class TaskScheduler:
                 logger.exception("Task scheduler tick failed")
             await asyncio.sleep(self.interval_seconds)
 
-    def _dispatch_assigned_tasks(self, loop: asyncio.AbstractEventLoop) -> tuple[int, int]:
-        dispatched = skipped = attempts = 0
-        for candidate in self._dispatchable_tasks():
-            if attempts >= self.max_dispatches_per_tick:
-                break
-            try:
-                outcome = self._dispatch_candidate(loop, candidate)
-            except Exception:  # noqa: BLE001 - one malformed task must not starve the queue behind it
-                logger.exception("Task dispatch candidate failed", task_id=candidate.get("id"))
-                skipped += 1
-                continue
-            if outcome is CandidateOutcome.SKIPPED:
-                skipped += 1
-            elif outcome in (CandidateOutcome.ATTEMPTED, CandidateOutcome.DISPATCHED):
-                attempts += 1
-                dispatched += outcome is CandidateOutcome.DISPATCHED
-        return dispatched, skipped
-
     def _dispatch_candidate(
-        self, loop: asyncio.AbstractEventLoop, candidate: dict[str, Any]
+        self, loop: asyncio.AbstractEventLoop, candidate: dict[str, Any], *,
+        active_task_ids: set[str] | None, full_scopes: set[str] | None,
     ) -> CandidateOutcome:
         """Route, claim, and dispatch one assigned task."""
-        held = self._held_back(candidate)
+        held = self._held_back(candidate, active_task_ids, full_scopes)
         if held is not None:
             return held
         task = self._materialize_legacy_assignment(candidate) or candidate
@@ -311,15 +285,19 @@ class TaskScheduler:
         # later tick; anything else was recorded on the task as a failure.
         return CandidateOutcome.SKIPPED if state == "queued" else CandidateOutcome.ATTEMPTED
 
-    def _held_back(self, candidate: dict[str, Any]) -> CandidateOutcome | None:
+    def _held_back(
+        self, candidate: dict[str, Any], active_task_ids: set[str] | None, full_scopes: set[str] | None,
+    ) -> CandidateOutcome | None:
         """Why an assigned task must not be routed this tick, if it must not."""
         # Legacy projectless work that was already Ready waits for triage.
         if issue_needs_project(candidate):
             return CandidateOutcome.IGNORED
         # Admitted work stays assigned until the daemon starts executing.
         # Do not re-route it, block it, or enqueue another execution.
+        task_id = candidate["id"]
         if dispatch_claim_active(candidate) or (
-            self.registry.daemon_store.active_run_request_for_task(candidate["id"])
+            task_id in active_task_ids if active_task_ids is not None
+            else self.registry.daemon_store.active_run_request_for_task(task_id)
         ):
             return CandidateOutcome.SKIPPED
         outcome = candidate.get("dispatchOutcome") or {}
@@ -330,10 +308,16 @@ class TaskScheduler:
         ):
             self._fail_legacy_retry(candidate, outcome, retry)
             return CandidateOutcome.SKIPPED
-        if not is_wip(candidate) and self.task_store.count_wip(flow_scope(candidate)) >= self.task_store.wip_limit_for_user(flow_scope(candidate)):
-            record_dispatch_failure(self.task_store, candidate,
-                code="task_wip_limit", message=WIP_WAIT_MESSAGE)
-            return CandidateOutcome.SKIPPED
+        if not is_wip(candidate):
+            scope = flow_scope(candidate)
+            full = (scope in full_scopes if full_scopes is not None
+                    else self.task_store.count_wip(scope) >= self.task_store.wip_limit_for_user(scope))
+            if full:
+                if candidate.get("status") != "queued" or retry or (
+                    outcome.get("state"), outcome.get("code")
+                ) != ("queued", "task_wip_limit"):
+                    record_dispatch_failure(self.task_store, candidate, code="task_wip_limit", message=WIP_WAIT_MESSAGE)
+                return CandidateOutcome.SKIPPED
         return None
 
     def _fail_legacy_retry(
@@ -726,32 +710,3 @@ class TaskScheduler:
                 node_id=node_id,
             )
             return True
-
-    def _dispatchable_tasks(self) -> Iterator[dict[str, Any]]:
-        if hasattr(self.task_store, "list_dispatchable_tasks"):
-            after = None
-            page_size = max(25, min(200, self.max_dispatches_per_tick))
-            while True:
-                page = self.task_store.list_dispatchable_tasks(
-                    limit=page_size, after=after
-                )
-                if not page:
-                    return
-                # Capture cursor before routing mutates any task in this page.
-                after = dict(page[-1])
-                yield from page
-                if len(page) < page_size:
-                    return
-        else:
-            tasks = [
-                task
-                for task in self.task_store.list_tasks()
-                if task.get("status") in ("assigned", "queued")
-                and not task.get("isRoutine")
-                and (
-                    task.get("assignedAgent")
-                    or task.get("assignedTeamId")
-                    or task.get("projectId")
-                )
-            ]
-            yield from sorted(tasks, key=task_claim_sort_key)

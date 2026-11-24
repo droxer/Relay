@@ -25,6 +25,7 @@ from ...security.request_auth import require_user_session
 from ...teams.workflow import validate_workflow_write
 from ..actors import chat_service_user_header
 from ..bodies import JsonBodyDep
+from ..threads.transcript import workflow_transcript
 from ..deps import AppContextDep
 from ..projects.access import current_project_node, project_for_owner
 
@@ -91,17 +92,17 @@ def stage_workflow_gate(
                                   + ([workflow_id] if workflow_id and workflow_id != team_id else []))
             session_id = str(uuid5(NAMESPACE_URL, identity))
             try:
-                existing = ctx.session_store.get_session(session_id)
+                existing = ctx.session_store.get_session_header(session_id)
             except KeyError:
                 existing = None
             if existing is not None:
                 if existing.get("ownerUserId") != owner or existing.get("teamId") != team_id or existing.get("taskGoal") != goal:
                     raise ValueError("workflow_request_conflict")
                 if current_workflow_run(existing)["status"] == "ready" and existing.get("status") not in ("completed", "failed", "cancelled"):
-                    return ctx.registry.admit_workflow_first_step(
+                    existing = ctx.registry.admit_workflow_first_step(
                         session_id, validate=lambda snapshot: validate_workflow_write(ctx, owner, snapshot),
                     )
-                return existing
+                return workflow_transcript(ctx.session_store, existing)
             validate_workflow_write(ctx, owner, team)
             node = current_project_node(ctx, project)
             if node is None:
@@ -122,10 +123,10 @@ def stage_workflow_gate(
                 "taskGoal": goal,
             }, assignments)
             if current_workflow_run(session)["status"] == "ready" and session.get("status") not in ("completed", "failed", "cancelled"):
-                return ctx.registry.admit_workflow_first_step(
+                session = ctx.registry.admit_workflow_first_step(
                     session["id"], validate=lambda snapshot: validate_workflow_write(ctx, owner, snapshot),
                 )
-            return session
+            return workflow_transcript(ctx.session_store, session)
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
 
