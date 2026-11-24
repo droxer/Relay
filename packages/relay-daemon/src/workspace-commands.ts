@@ -1,3 +1,5 @@
+import { lstatSync } from "node:fs";
+import { join } from "node:path";
 import type { DaemonNodeCommand, DaemonNodeEvent } from "relay-core";
 import { ProjectLinkError, type ProjectLinkRegistry } from "./project-links.js";
 import { type ThreadWorkspaceManager } from "./thread-workspace.js";
@@ -25,8 +27,10 @@ export function workspaceReply(
     try {
       const hostPath = command.dryRun ? projectLinks.validate(command.hostPath)
         : projectLinks.link(command.workspaceSubpath, command.hostPath);
+      const hasRelayDirectory = command.dryRun && lstatSync(join(hostPath, ".relay"), { throwIfNoEntry: false })?.isDirectory();
       return { type: "workspace.linked", commandId: command.id,
-        ...(command.leaseId ? { leaseId: command.leaseId } : {}), path: "", hostPath };
+        ...(command.leaseId ? { leaseId: command.leaseId } : {}), path: "", hostPath,
+        ...(hasRelayDirectory ? { hasRelayDirectory: true } : {}) };
     } catch (error) {
       return { type: "workspace.error", commandId: command.id,
         ...(command.leaseId ? { leaseId: command.leaseId } : {}), path: "",

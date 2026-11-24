@@ -608,7 +608,7 @@ export interface DaemonPermissionDecision {
 export type DaemonNodeEvent =
   | { type: "workspace.deleted"; commandId: string; leaseId?: string; path: string }
   /** `hostPath` is the directory's canonical path on the computer. */
-  | { type: "workspace.linked"; commandId: string; leaseId?: string; path: ""; hostPath: string }
+  | { type: "workspace.linked"; commandId: string; leaseId?: string; path: ""; hostPath: string; hasRelayDirectory?: true }
   | {
       type: "run.executing";
       commandId: string;

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import test from "node:test";
 
 import { configuredProjectRoots, ProjectLinkError, ProjectLinkRegistry } from "../src/project-links.js";
 import { ThreadWorkspaceManager } from "../src/thread-workspace.js";
+import { workspaceReply } from "../src/workspace-commands.js";
 
 interface Fixture {
   base: string;
@@ -46,6 +47,32 @@ test("an existing directory inside an allowed root links to its canonical path",
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
+});
+
+test("a dry run reports an existing .relay directory and the real link keeps it intact", (t) => {
+  const { base, allowed, workspaceRoot, registry } = fixture();
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const repo = join(allowed, "app");
+  mkdirSync(repo);
+  const relayDir = join(repo, ".relay");
+  const workspaces = new ThreadWorkspaceManager(workspaceRoot, "none", registry);
+  const command = { type: "workspace.link", id: "check", workspaceSubpath: "links/app", hostPath: `${repo}/` } as const;
+  const linked = { type: "workspace.linked", commandId: "check", path: "", hostPath: repo };
+
+  const check = () => workspaceReply({ ...command, dryRun: true }, workspaceRoot, workspaces, registry);
+  assert.deepEqual(check(), linked);
+  writeFileSync(relayDir, "ordinary file");
+  assert.deepEqual(check(), linked);
+  rmSync(relayDir);
+  mkdirSync(relayDir);
+  const previousRecord = join(relayDir, "previous-record");
+  writeFileSync(previousRecord, "existing record");
+
+  assert.deepEqual(check(), { ...linked, hasRelayDirectory: true });
+  assert.equal(linkErrorCode(() => registry.resolve(command.workspaceSubpath)), "not-found");
+  assert.deepEqual(workspaceReply(command, workspaceRoot, workspaces, registry), linked);
+  assert.equal(registry.resolve(command.workspaceSubpath), repo);
+  assert.equal(readFileSync(previousRecord, "utf8"), "existing record");
 });
 
 test("link validation refuses paths the computer has not allowed", () => {

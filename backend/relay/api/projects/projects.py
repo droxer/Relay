@@ -31,6 +31,7 @@ from ..conditional_get import private_conditional_json
 from .setup_task import close_setup_task
 from .access import project_for_owner, require_owned_project
 from .links import (
+    ProjectWorkspaceCheck,
     link_existing_directory,
     new_linked_workspace_subpath,
     requested_host_path,
@@ -137,14 +138,14 @@ def _project_directory_entry(project: dict[str, Any]) -> dict[str, Any]:
 @router.post("/projects/workspace-check")
 async def check_project_workspace(
     request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep
-) -> dict[str, Any]:
+) -> ProjectWorkspaceCheck:
     """Ask the selected computer whether an existing directory may be linked."""
     actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
     body = _request_body
     host_path = requested_host_path(body)
     if host_path is None:
         raise HTTPException(400, "project_workspace_path_invalid")
-    canonical = await link_existing_directory(
+    return await link_existing_directory(
         ctx,
         owner_user_id=actor["userId"],
         node_id=body.get("daemonNodeId"),
@@ -152,7 +153,6 @@ async def check_project_workspace(
         workspace_subpath=new_linked_workspace_subpath(),
         dry_run=True,
     )
-    return {"workspaceHostPath": canonical}
 
 
 @router.post("/projects", status_code=201)
@@ -185,7 +185,7 @@ async def create_project(
         # The computer validates and records the link before the project
         # exists, so the project's first run already finds its directory.
         workspace_subpath = new_linked_workspace_subpath()
-        canonical = await link_existing_directory(
+        linked = await link_existing_directory(
             ctx,
             owner_user_id=actor["userId"],
             node_id=body.get("daemonNodeId"),
@@ -195,7 +195,7 @@ async def create_project(
         payload = {
             **payload,
             "workspaceSubpath": workspace_subpath,
-            "workspaceHostPath": canonical,
+            "workspaceHostPath": linked["workspaceHostPath"],
         }
     try:
         project = await run_in_threadpool(

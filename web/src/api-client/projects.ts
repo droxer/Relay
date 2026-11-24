@@ -37,13 +37,15 @@ export function createProject(input: CreateProjectInput): Promise<{ project: Pro
   return apiJson<{ project: ProjectRecord }>("/projects", { method: "POST", body: input });
 }
 
-/** Asks the computer whether it would link this directory; resolves to its canonical path. */
+type ProjectWorkspaceCheck = { workspaceHostPath: string; hasRelayDirectory?: true };
+
+/** Asks the computer whether it would link this directory. */
 export function checkProjectWorkspace(
   daemonNodeId: string,
   workspaceHostPath: string,
   signal?: AbortSignal,
-): Promise<{ workspaceHostPath: string }> {
-  return apiJson<{ workspaceHostPath: string }>("/projects/workspace-check", {
+): Promise<ProjectWorkspaceCheck> {
+  return apiJson<ProjectWorkspaceCheck>("/projects/workspace-check", {
     method: "POST",
     body: { daemonNodeId, workspaceHostPath },
     signal,
