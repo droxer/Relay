@@ -4,13 +4,15 @@ import { MessageQueue } from "../src/components/composer/MessageQueue";
 
 it("expands a message without changing the queue and moves it only on explicit edit", () => {
   const onEdit = vi.fn();
-  render(<MessageQueue messages={[{ id: "q1", text: "Read this long instruction", addressAgentIds: ["a"] }]} running
-    recipientNames={{ a: "Reviewer" }} onSteer={vi.fn()} onEdit={onEdit} onRemove={vi.fn()} />);
-  const preview = screen.getByRole("button", { name: /Read this long instruction/ });
+  render(<MessageQueue messages={[{ id: "q1", text: "@Reviewer Read this long instruction", addressAgentIds: ["a"] }]} running
+    recipients={{ a: { name: "Reviewer", kind: "agent" } }} onSteer={vi.fn()} onEdit={onEdit} onRemove={vi.fn()} />);
+  const preview = screen.getByRole("button", { name: /@Reviewer Read this long instruction/ });
+  expect(screen.getByText("Read this long instruction")).toBeTruthy();
   fireEvent.click(screen.getByText("Reviewer"));
   expect(preview.getAttribute("aria-expanded")).toBe("true");
   expect(onEdit).not.toHaveBeenCalled();
   expect(screen.getByText("Reviewer")).toBeTruthy();
+  expect(screen.getByText("Read this long instruction")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "queue.edit_item" }));
   expect(onEdit).toHaveBeenCalledWith("q1");
 });

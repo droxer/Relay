@@ -859,7 +859,10 @@ export function ThreadsView({
           queue={queueEnabled ? (
             <MessageQueue
               messages={threadQueue.messages}
-              recipientNames={Object.fromEntries([...logicalAgents.map(agent => [agent.id, agent.displayName]), ...composerTeams.map(team => [team.id, team.name])])}
+              recipients={Object.fromEntries([
+                ...logicalAgents.map(agent => [agent.id, { name: agent.displayName, profileImageUrl: agent.profileImageUrl, kind: "agent" as const }]),
+                ...composerTeams.map(team => [team.id, { name: team.name, profileImageUrl: team.profileImageUrl, kind: "team" as const }]),
+              ])}
               removedAt={threadQueue.removedAt}
               onUndo={threadQueue.undoRemove}
               pending={threadQueue.pending}

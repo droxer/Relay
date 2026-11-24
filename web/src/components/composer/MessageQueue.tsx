@@ -1,15 +1,16 @@
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { QueuedMessage } from "../../lib/threadQueue";
+import { stripLeadingQueueMentions, type QueueRecipient, type QueuedMessage } from "../../lib/threadQueue";
 import { Button } from "@/components/ui/button";
+import { IdentityMark } from "../IdentityMark";
+import { ProfileImage } from "../ProfileImagePicker";
 import { ActionFollowUp, ActionRemove, ICON } from "../icons";
-import { identityMonogram } from "../../lib/identity";
 
 /** Pills before the rest fold into a "+N" chip, so the message text keeps the row. */
 const MAX_RECIPIENT_PILLS = 2;
 
 /** Future instructions stay on the composer; inspecting them never changes their schedule. */
-export function MessageQueue({ messages, running, pending, paused, waiting, sending, error, recipientNames = {}, removedAt, onUndo, onResume, onSteer, onEdit, onRemove }: {
+export function MessageQueue({ messages, running, pending, paused, waiting, sending, error, recipients = {}, removedAt, onUndo, onResume, onSteer, onEdit, onRemove }: {
   messages: readonly QueuedMessage[];
   running: boolean;
   pending?: boolean;
@@ -17,7 +18,7 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
   waiting?: boolean;
   sending?: string;
   error?: string | null;
-  recipientNames?: Record<string, string>;
+  recipients?: Record<string, QueueRecipient>;
   removedAt?: string;
   onUndo?: () => void;
   onResume?: () => void;
@@ -58,7 +59,9 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
           const open = expanded === message.id;
           const recipientIds = message.addressTeamId ? [message.addressTeamId] : message.addressAgentIds ?? [];
           const shown = recipientIds.slice(0, MAX_RECIPIENT_PILLS);
-          const overflow = recipientIds.slice(MAX_RECIPIENT_PILLS).map(id => recipientNames[id] ?? t("queue.recipient_unavailable"));
+          const overflow = recipientIds.slice(MAX_RECIPIENT_PILLS).map(id => recipients[id]?.name ?? t("queue.recipient_unavailable"));
+          const displayText = stripLeadingQueueMentions(message.text, recipientIds, recipients);
+          const summaryText = open ? t("queue.collapse_item", { number: index + 1 }) : displayText;
           const previewId = `${regionId}-${index}`;
           return (
             <li key={message.id} className="message-queue-item" data-expanded={open || undefined}>
@@ -70,11 +73,20 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
                   onClick={() => setExpanded(open ? null : message.id)}>
                   <span className="message-queue-recipients">
                     {shown.length ? shown.map(id => {
-                      const name = recipientNames[id];
+                      const recipient = recipients[id];
                       return (
-                        <span key={id} className="message-queue-recipient" data-unavailable={name ? undefined : true}>
-                          {name ? <span className="message-queue-recipient-mark" aria-hidden="true">{identityMonogram(name)}</span> : null}
-                          <span className="message-queue-recipient-name">{name ?? t("queue.recipient_unavailable")}</span>
+                        <span key={id} className="message-queue-recipient" data-unavailable={recipient ? undefined : true}>
+                          {recipient ? (
+                            <ProfileImage
+                              src={recipient.profileImageUrl}
+                              alt=""
+                              fallback={<IdentityMark kind={recipient.kind} />}
+                              className="message-queue-recipient-mark"
+                            />
+                          ) : null}
+                          <span className="message-queue-recipient-name" translate={recipient ? "no" : undefined}>
+                            {recipient?.name ?? t("queue.recipient_unavailable")}
+                          </span>
                         </span>
                       );
                     }) : (
@@ -86,7 +98,7 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
                       +{overflow.length}
                     </span> : null}
                   </span>
-                  <span className="message-queue-summary" dir="auto">{open ? t("queue.collapse_item", { number: index + 1 }) : message.text}</span>
+                  {summaryText ? <span className="message-queue-summary" dir="auto">{summaryText}</span> : null}
                 </button>
               </div>
               <div className="message-queue-actions">
@@ -103,7 +115,7 @@ export function MessageQueue({ messages, running, pending, paused, waiting, send
                 </Button>
               </div>
               {open ? <div id={previewId} className="message-queue-preview">
-                <p dir="auto">{message.text}</p>
+                <p dir="auto">{displayText || message.text}</p>
                 <Button type="button" size="xs" variant="ghost" aria-label={t("queue.edit_item", { number: index + 1 })}
                   disabled={pending || sending === message.id} onClick={() => onEdit(message.id)}>{t("queue.move_to_draft")}</Button>
               </div> : null}

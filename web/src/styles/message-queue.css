@@ -154,18 +154,10 @@
 }
 
 .message-queue-recipient-mark {
-  display: grid;
-  flex: none;
-  place-items: center;
   width: var(--icon-md);
   height: var(--icon-md);
+  flex: none;
   border-radius: var(--r-full);
-  background: var(--surface-0);
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
-  color: var(--ink-1);
-  font-size: 0.625rem;
-  font-weight: 600;
-  line-height: 1;
 }
 
 .message-queue-recipient-name {
