@@ -40,6 +40,7 @@ projects = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("archived_at", DateTime(timezone=True), nullable=True),
     Index("ix_projects_owner_updated", "owner_user_id", "updated_at"),
+    Index("ix_projects_computer_workspace", "computer_id", "workspace_subpath"),
     Index(
         "uq_projects_live_owner_name",
         "owner_user_id",

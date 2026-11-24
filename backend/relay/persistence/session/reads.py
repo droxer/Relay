@@ -20,13 +20,15 @@ from sqlalchemy import (
     literal_column,
     or_,
     select,
+    text,
+    tuple_,
 )
 from .output_compaction import compact_completed_run_output
 from ..db_time import format_db_time
 from ..engine import store_transaction
 from .. import sql
-from ..tables.sessions import agent_runs
-from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES, run_requests, runs as daemon_runs
+from ..tables.sessions import POSTGRES_QUEUED_THREAD, SQLITE_QUEUED_THREAD, agent_runs
+from ..tables.daemon import active_run_request, run_requests, runs as daemon_runs
 from .rows import (
     _artifact_field_sql,
     _canonical_database_session_id,
@@ -74,7 +76,7 @@ class SessionReadRows(SessionStoreState):
         snapshot = sessions.c.snapshot
         live_request = select(run_requests.c.id).where(
             run_requests.c.session_id == sessions.c.id,
-            run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+            active_run_request,
         ).exists()
         live_run = select(daemon_runs.c.id).where(
             daemon_runs.c.session_id == sessions.c.id, daemon_runs.c.status == "running",
@@ -103,9 +105,7 @@ class SessionReadRows(SessionStoreState):
         position = self.sessions.c.updated_at
         thread_id = self.sessions.c.id
         if before is not None:
-            statement = statement.where(or_(
-                position < before[0], and_(position == before[0], thread_id < before[1]),
-            ))
+            statement = statement.where(tuple_(position, thread_id) < before)
         return statement.order_by(position.desc(), thread_id.desc())
 
     def queue_receipt(self, thread_id: str, message_id: str) -> dict[str, Any] | None:
@@ -117,10 +117,8 @@ class SessionReadRows(SessionStoreState):
 
     def queued_thread_ids(self, limit: int = 100, after: str | None = None) -> list[str]:
         with store_transaction(self.engine) as conn:
-            statement = select(self.sessions.c.id).where(
-                self.sessions.c.snapshot["messageQueue"]["messages"][0]["id"].as_string().is_not(None),
-                self.sessions.c.snapshot["messageQueue"]["paused"].as_boolean().is_(False),
-            )
+            predicate = POSTGRES_QUEUED_THREAD if conn.dialect.name == "postgresql" else SQLITE_QUEUED_THREAD
+            statement = select(self.sessions.c.id).where(text(predicate))
             if after:
                 statement = statement.where(self.sessions.c.id > after)
             return list(conn.scalars(statement.order_by(self.sessions.c.id).limit(limit)))
@@ -394,7 +392,6 @@ class SessionReadRows(SessionStoreState):
                    *(snapshot[field].as_string().label(field) for field in fields),
                    literal_column(f"COALESCE({array_length}({runs}), 0)").label("runCount"))
             .where(sessions.c.owner_user_id == owner_user_id)
-            .order_by(sessions.c.updated_at.desc(), sessions.c.id.desc())
         )
         if project_id is not None:
             statement = statement.where(sessions.c.project_id == project_id)
@@ -403,12 +400,7 @@ class SessionReadRows(SessionStoreState):
         if agent_id is not None:
             joined = select(agent_runs.c.session_id).where(agent_runs.c.logical_agent_id == agent_id)
             statement = statement.where(or_(snapshot["ownerAgentId"].as_string() == agent_id, sessions.c.id.in_(joined)))
-        if before is not None:
-            updated_at, session_id = before
-            statement = statement.where(or_(
-                sessions.c.updated_at < updated_at,
-                (sessions.c.updated_at == updated_at) & (sessions.c.id < session_id),
-            ))
+        statement = self._summary_page_scope(statement, before)
         if limit is not None:
             limit = max(1, limit)
             statement = statement.limit(limit + 1)

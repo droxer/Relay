@@ -553,6 +553,9 @@ class TaskReadRows(TaskStoreState):
         if user_id is not None:
             statement = statement.where(self.tasks.c.owner_user_id == user_id)
         if task_ids is not None:
+            task_ids = [task_id for task_id in task_ids if not names_no_uuid_row(self.engine, task_id)]
+            if not task_ids:
+                return []
             statement = statement.where(self.tasks.c.id.in_(task_ids))
         if project_id is not None:
             if names_no_uuid_row(self.engine, project_id):

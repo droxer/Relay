@@ -3,16 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from functools import partial
 
-from sqlalchemy import (
-    Index,
-)
-
 from ..engine import after_store_commit, create_all_tables, shared_engine
 from ..sql import metadata as shared_metadata
 from ..tables import daemon as daemon_tables
-from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
-from ...core.daemon_records import TERMINAL_DAEMON_STATUSES
-from .rows import terminal_time_expression
 from .nodes import NodeRows
 from .observations import NodeObservationRows
 from .commands import CommandQueueRows
@@ -82,85 +75,3 @@ class DatabaseDaemonStore(
         self, listener: Callable[[str], None], *, database_channel: str
     ) -> None:
         self._thread_queue_changes.attach(listener, database_channel)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Index("ix_daemon_run_requests_current_command", DatabaseDaemonStore.run_requests.c.current_command_id,
-      postgresql_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
-      sqlite_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
-Index("ix_daemon_run_requests_terminal_retention", DatabaseDaemonStore.run_requests.c.updated_at,
-      DatabaseDaemonStore.run_requests.c.id,
-      postgresql_where=DatabaseDaemonStore.run_requests.c.status.not_in(ACTIVE_RUN_REQUEST_STATUSES),
-      sqlite_where=DatabaseDaemonStore.run_requests.c.status.not_in(ACTIVE_RUN_REQUEST_STATUSES))
-Index("ix_daemon_run_requests_recovery", DatabaseDaemonStore.run_requests.c.recovery_after,
-      DatabaseDaemonStore.run_requests.c.id,
-      postgresql_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
-      sqlite_where=DatabaseDaemonStore.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
-for _table in (DatabaseDaemonStore.commands, DatabaseDaemonStore.runs):
-    Index(f"ix_{_table.name}_terminal_retention", _table.c.node_id,
-          terminal_time_expression(_table), _table.c.id,
-          postgresql_where=_table.c.status.in_(TERMINAL_DAEMON_STATUSES),
-          sqlite_where=_table.c.status.in_(TERMINAL_DAEMON_STATUSES))

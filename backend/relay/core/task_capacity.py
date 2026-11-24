@@ -3,6 +3,8 @@
 from typing import Any
 
 MAX_CONCURRENT_TASKS = 100
+WIP_EXEMPT_STATUSES = ("review", "done", "cancelled")
+WIP_STARTED_STATUSES = ("running", "waiting_for_human")
 
 
 def normalize_task_capacity(value: Any) -> int:

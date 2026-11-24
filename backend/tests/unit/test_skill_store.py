@@ -101,6 +101,27 @@ def test_create_skill_is_event_authoritative_and_makes_revision(tmp_path):
     assert store.get_skill(skill["id"])["name"] == "review"
 
 
+def test_skill_reads_and_writes_use_the_projection(tmp_path, monkeypatch):
+    store, alice, _ = _store(tmp_path)
+    times = iter(("2026-11-24T00:00:00.000Z", "2026-11-24T00:00:00.001Z"))
+    with monkeypatch.context() as scoped:
+        scoped.setattr("relay.persistence.skill.writes.now_iso", lambda: next(times))
+        skill = _create(store, alice)
+    assert skill["updatedAt"] == "2026-11-24T00:00:00.001Z"
+
+    def fail_replay(*args):
+        pytest.fail("Skill used event replay for a valid projection")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(store, "_replay", fail_replay)
+        assert store.get_skill(skill["id"]) == skill
+        assert store.list_skills(alice) == [skill]
+        updated = store.add_revision(skill["id"], alice, _files(description="Revised"))
+        assert store.get_skill(skill["id"]) == updated
+    with store.engine.connect() as conn:
+        assert store._replay(conn, skill["id"]) == updated
+
+
 def test_frontmatter_supports_yaml_folded_description_and_string_metadata(tmp_path):
     store, alice, _ = _store(tmp_path)
     content = b'---\nname: review\ndescription: >-\n  Reviews code\n  carefully.\nlicense: Apache-2.0\ncompatibility: Requires git\nmetadata:\n  author: relay\n  version: "1.0"\nallowed-tools: Read Bash(git:*)\n---\nBody'

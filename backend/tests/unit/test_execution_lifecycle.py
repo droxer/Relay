@@ -82,7 +82,7 @@ async def _background_recovery():
         return []
     registry = SimpleNamespace(
         reap_stale_runs=lambda: ticks.append(True),
-        store=SimpleNamespace(list_pending_deletions=pending),
+        store=SimpleNamespace(list_pending_deletion_ids=pending),
     )
     service = ExecutionLifecycleService(registry, None, interval_seconds=0.01)
     service.start()

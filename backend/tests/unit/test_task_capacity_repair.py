@@ -45,6 +45,12 @@ def test_queued_index_migration_keeps_history_and_round_trips(tmp_path):
     spec.loader.exec_module(module)
     with store.engine.begin() as conn:
         module.op = Operations(MigrationContext.configure(conn))
+        # The current metadata has a replacement queue index. Recreate the
+        # index present at 0111 before exercising that revision's downgrade.
+        conn.execute(text(
+            "CREATE INDEX ix_tasks_dispatch_queue ON tasks (due_date, created_at, id) "
+            "WHERE status IN ('assigned', 'queued') AND is_routine IS 0 AND deleted_at IS NULL"
+        ))
         before = conn.execute(select(store.events)).all()
         module.downgrade()
         sql = conn.scalar(text("SELECT sql FROM sqlite_master WHERE name='ix_tasks_dispatch_queue'"))

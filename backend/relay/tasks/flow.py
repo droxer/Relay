@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from ..core.task_capacity import WIP_EXEMPT_STATUSES, WIP_STARTED_STATUSES
+
 UNKNOWN_REASON = "Execution needs attention."
-WIP_EXEMPT_STATUSES = ("review", "done", "cancelled")
-WIP_STARTED_STATUSES = ("running", "waiting_for_human")
 WIP_WAIT_MESSAGE = "Work-in-progress capacity is full. This task will start automatically when a slot opens."
 FLOW_STAGES = ("backlog", "assigned", "queued", "running", "review", "done", "cancelled")
 # A new task waits for a person's acceptance unless it asks otherwise. A task

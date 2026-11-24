@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, Index, Table, Text
+from sqlalchemy import Column, DateTime, Index, Table, Text, text
 from ..sql import database_id_column, json_type, metadata
 
 
@@ -17,7 +17,11 @@ notifications = Table(
     # Cleared notices stay as rows so a replayed dedupe key cannot bring
     # them back; the watcher prunes them with the rest.
     Column("cleared_at", DateTime(timezone=True), nullable=True),
-    Index("ix_notifications_user_id_created_at", "user_id", "created_at"),
+    Index("ix_notifications_visible_recency", "user_id", "created_at", "id",
+          postgresql_where=text("cleared_at IS NULL"), sqlite_where=text("cleared_at IS NULL")),
+    Index("ix_notifications_unread", "user_id", "kind",
+          postgresql_where=text("cleared_at IS NULL AND read_at IS NULL"),
+          sqlite_where=text("cleared_at IS NULL AND read_at IS NULL")),
     Index("ix_notifications_created_at", "created_at"),
 )
 

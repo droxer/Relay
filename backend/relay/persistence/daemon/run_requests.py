@@ -21,7 +21,7 @@ from ..events import daemon_event
 from ...core.ids import new_database_id, now_iso
 from ..engine import after_store_commit, publish_database_notification, store_transaction
 from ...core.thread_queue import THREAD_QUEUE_READY_PREFIX
-from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
+from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES, active_run_request
 from .rules import _assert_node_run_request_capacity
 from ...core.daemon_records import (
     assignment_runtime,
@@ -109,7 +109,7 @@ class RunRequestRows(DaemonStoreState):
                         select(self.run_requests)
                         .where(self.run_requests.c.node_id == node_pk)
                         .where(
-                            self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)
+                            active_run_request
                         )
                     )
                     .mappings()
@@ -161,7 +161,7 @@ class RunRequestRows(DaemonStoreState):
             row = conn.execute(
                 select(self.run_requests)
                 .where(self.run_requests.c.task_id == task_id)
-                .where(self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
+                .where(active_run_request)
                 .limit(1)
             ).mappings().first()
         return row_to_run_request(row) if row else None
@@ -183,7 +183,7 @@ class RunRequestRows(DaemonStoreState):
         now = require_db_time(now_iso())
         with store_transaction(self.engine) as conn:
             statement = select(self.run_requests).where(
-                self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES),
+                active_run_request,
                 or_(self.run_requests.c.recovery_after.is_(None), self.run_requests.c.recovery_after <= now),
             ).order_by(self.run_requests.c.recovery_after.asc().nulls_first(), self.run_requests.c.id).limit(max(1, limit)).with_for_update(skip_locked=True)
             rows = conn.execute(statement).mappings().all()
@@ -196,7 +196,7 @@ class RunRequestRows(DaemonStoreState):
         self, node_id: str | None = None, *, session_ids: set[str] | None = None, limit: int | None = None, after_id: str | None = None
     ) -> list[dict[str, Any]]:
         statement = select(self.run_requests).where(
-            self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)
+            active_run_request
         )
         if node_id is not None:
             statement = statement.where(self.run_requests.c.node_id == node_id)
@@ -241,7 +241,7 @@ class RunRequestRows(DaemonStoreState):
             row = (
                 conn.execute(
                     select(self.run_requests)
-                    .where(self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
+                    .where(active_run_request)
                     .where(self.run_requests.c.current_command_id == command_id)
                 )
                 .mappings()
@@ -277,7 +277,7 @@ class RunRequestRows(DaemonStoreState):
                 conn.execute(
                     select(self.run_requests)
                     .where(self.run_requests.c.current_command_id == command_id)
-                    .where(self.run_requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES))
+                    .where(active_run_request)
                     .with_for_update()
                 )
                 .mappings()

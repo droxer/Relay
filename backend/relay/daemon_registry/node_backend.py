@@ -211,7 +211,6 @@ class ServerDaemonNodeBackend(
             if idempotent_session:
                 return idempotent_session
 
-            active_runs_by_node = self._active_runs_by_node()
             prepared_request = self._prepared_run_request(request, run_request_id)
             if prepared_request:
                 request = self._resume_prepared_request(request, prepared_request)
@@ -244,11 +243,14 @@ class ServerDaemonNodeBackend(
             self._validate_existing_session_computer(
                 existing_session, sandbox_id, request
             )
-            self._validate_run_assignments(
+            target_nodes = {
                 sandbox_id,
-                request,
-                active_runs_by_node,
-            )
+                *(assignment.get("daemonNodeId") or sandbox_id for assignment in request["assignments"]),
+            }
+            if prepared_request:
+                target_nodes.add(prepared_request["nodeId"])
+            active_runs_by_node = self._active_runs_by_node(target_nodes)
+            self._validate_run_assignments(sandbox_id, request, active_runs_by_node)
             actor_user_id, owner_agent_id, owner_user_id = self._run_owner(
                 request, sandbox
             )

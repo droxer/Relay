@@ -253,7 +253,7 @@ def test_scheduler_pages_remain_complete_when_candidates_leave_queue(tmp_path):
         seen.append(candidate["id"])
         store.update_task(candidate["id"], {"status": "done"})
     assert set(seen) == expected and len(seen) == len(expected)
-    queue_queries = [sql for sql in statements if "ORDER BY CASE" in sql]
+    queue_queries = [sql for sql in statements if sql.startswith("SELECT tasks.snapshot") and "ORDER BY" in sql]
     assert len(queue_queries) == 3
     assert all("LIMIT" in sql for sql in queue_queries)
 

@@ -16,6 +16,7 @@ from fastapi import HTTPException
 
 from ..persistence.org.settings import DEFAULT_MAX_LOCAL_COMPUTERS
 from ..persistence.resource_lock import resource_transaction
+from ..security.user_handles import user_record
 
 USER_DEVICE_LOCATION = "user-device"
 
@@ -39,13 +40,8 @@ def global_max_local_computers(ctx: Any) -> int:
 
 def user_override(ctx: Any, user_id: str) -> int | None:
     """The user's pinned limit, or None when they inherit the global."""
-    if not user_id:
-        return None
-    for user in ctx.auth_store.list_users():
-        if user.get("id") == user_id:
-            value = user.get("maxLocalComputers")
-            return int(value) if value is not None else None
-    return None
+    value = (user_record(ctx.auth_store, user_id) or {}).get("maxLocalComputers")
+    return int(value) if value is not None else None
 
 
 def effective_max_local_computers(ctx: Any, user_id: str) -> int:
@@ -72,10 +68,11 @@ def decorate_account_limits(ctx: Any, account: dict[str, Any]) -> dict[str, Any]
     user_id = account.get("userId") or ""
     if not user_id:
         return account
+    override = user_override(ctx, user_id)
     return {
         **account,
-        "maxLocalComputers": user_override(ctx, user_id),
-        "effectiveMaxLocalComputers": effective_max_local_computers(ctx, user_id),
+        "maxLocalComputers": override,
+        "effectiveMaxLocalComputers": global_max_local_computers(ctx) if override is None else override,
         "localComputerCount": count_local_computers(ctx, user_id),
     }
 

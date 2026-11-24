@@ -157,7 +157,7 @@ def test_artifact_index_rows_leave_with_their_session(tmp_path):
     assert store.list_artifact_summaries(limit=10) == []
 
 
-def test_pending_deletions_use_the_derived_column(tmp_path):
+def test_pending_deletions_seek_past_a_deleted_page(tmp_path):
     store = session_store(tmp_path)
     kept = store.create_session({"taskGoal": "Keep", "workspacePath": "/work"})
     doomed = store.create_session({"taskGoal": "Doomed", "workspacePath": "/work"})
@@ -165,13 +165,20 @@ def test_pending_deletions_use_the_derived_column(tmp_path):
         doomed["id"],
         relay_event("session.deletion_requested", doomed["id"], {"requestedBy": "a"}),
     )
+    later = store.create_session({"taskGoal": "Also doomed", "workspacePath": "/work"})
+    store.append_event(
+        later["id"],
+        relay_event("session.deletion_requested", later["id"], {"requestedBy": "a"}),
+    )
     statements = capture_sql(store.engine)
 
-    pending = store.list_pending_deletions()
-
-    assert [s["id"] for s in pending] == [doomed["id"]]
-    assert kept["id"] not in {s["id"] for s in pending}
+    pending = store.list_pending_deletion_ids()
+    assert {session_id for _, session_id in pending} == {doomed["id"], later["id"]}
+    assert kept["id"] not in {session_id for _, session_id in pending}
     assert "deletion_requested_at IS NOT NULL" in statements[0]
+    assert "snapshot" not in statements[0]
+    store.delete_session(pending[0][1])
+    assert store.list_pending_deletion_ids(limit=1, after=pending[0]) == pending[1:]
 
 
 def task_store(tmp_path):

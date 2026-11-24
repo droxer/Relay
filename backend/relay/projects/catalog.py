@@ -356,11 +356,7 @@ def _normalize_member(value: Any) -> dict[str, Any]:
 
 
 def agent_has_active_project(project_store: Any, agent_id: str) -> bool:
-    return any(
-        member.get("agentId") == agent_id
-        for project in project_store.list_projects(include_archived=False)
-        for member in project.get("members", [])
-    )
+    return project_store.agent_has_active_project(agent_id)
 
 
 def _required_text(value: Any, code: str, *, max_length: int | None = None) -> str:

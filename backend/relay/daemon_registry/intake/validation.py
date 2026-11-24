@@ -197,9 +197,9 @@ class RunTargetValidationMixin(NodeBackendState):
             **manifest, "delegationCandidates": candidates,
         }}}
 
-    def _active_runs_by_node(self) -> dict[str, builtins.list[dict[str, Any]]]:
+    def _active_runs_by_node(self, node_ids: set[str]) -> dict[str, builtins.list[dict[str, Any]]]:
         active_runs_by_node: dict[str, builtins.list[dict[str, Any]]] = defaultdict(list)
-        for active_run in self.registry.daemon_store.list_active_runs():
+        for active_run in self.registry.daemon_store.list_active_runs(node_ids=node_ids):
             active_runs_by_node[active_run["nodeId"]].append(active_run)
         return active_runs_by_node
 

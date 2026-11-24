@@ -6,6 +6,7 @@ They stay in the backlog until the owner starts them separately.
 
 from __future__ import annotations
 
+from itertools import batched
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -129,9 +130,13 @@ def _link_prerequisites(
     chosen: list[dict[str, Any]],
     applied: dict[str, str],
 ) -> None:
+    requested_ids = {task_id for task in chosen for task_id in task.get("afterTaskIds") or []}
     project_task_ids = {
         task["id"]
-        for task in ctx.task_store.list_task_summaries(user_id=project["ownerUserId"])
+        for batch in batched(sorted(requested_ids), 500)
+        for task in ctx.task_store.list_task_summaries(
+            user_id=project["ownerUserId"], project_id=project["id"], task_ids=list(batch),
+        )
         if task.get("projectId") == project["id"] and not task.get("deletedAt")
     }
     for task in chosen:

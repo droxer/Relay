@@ -22,6 +22,7 @@ from ...core.daemon_capabilities import (
 )
 from ...persistence.agent.placements import placement_status
 from ...security.request_auth import require_admin_session
+from ...security.user_handles import user_record
 from ...agents.binding import binding_status
 from ...agents.location import AgentMoveError, place_agent_on_node
 from ...agents.creation import AgentCreationError, create_agent_for_user
@@ -128,7 +129,7 @@ def create_control_panel_agent(
     require_admin_session(request, ctx.auth_store)
     body = _request_body
     user_id = string_field(body, "supervisorUserId")
-    if not _user_exists(ctx.auth_store, user_id):
+    if not user_record(ctx.auth_store, user_id):
         raise HTTPException(404, "User not found.")
     try:
         agent = create_agent_for_user(ctx, user_id, body)
@@ -366,11 +367,6 @@ async def run_logical_agents(request: Request, ctx: AppContextDep) -> dict[str, 
             else {"code": error.code, "message": str(error)}
         )
         raise HTTPException(error.status, detail) from error
-
-
-def _user_exists(auth_store: Any, user_id: str) -> bool:
-    # list_users already excludes soft-deleted users.
-    return any(user.get("id") == user_id for user in auth_store.list_users())
 
 
 def _update_agent_and_realize_placements(

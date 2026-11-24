@@ -220,6 +220,7 @@ class ExecutionLifecycleService:
         self.clock = lambda: datetime.now(UTC)
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
+        self._deletion_cursor: tuple[datetime, str] | None = None
 
     def status(self, session: dict[str, Any]) -> dict[str, Any]:
         store = self.registry.daemon_store
@@ -423,9 +424,8 @@ class ExecutionLifecycleService:
                 if session.get("status") not in TERMINAL:
                     session = controller.cancel_session(session_id, "Thread deletion requested.")
             if not request:
-                for run in self.registry.daemon_store.list_active_runs():
-                    if run.get("sessionId") == session_id:
-                        self.registry.cancel_active_run(run["nodeId"], session_id, "Thread deletion requested.")
+                for run in self.registry.daemon_store.list_active_runs(session_ids={session_id}):
+                    self.registry.cancel_active_run(run["nodeId"], session_id, "Thread deletion requested.")
             session, status = self.settle_for_deletion(
                 session, session.get("deletionRequestedBy") or "unknown"
             )
@@ -483,15 +483,16 @@ class ExecutionLifecycleService:
             self.registry.reap_stale_runs()
         except Exception:  # noqa: BLE001 - recovery loop supervisor: logs and retries next tick
             logger.exception("Execution reconciliation failed; deletion recovery continues")
-        pending = self.registry.store.list_pending_deletions(limit=100, offset=getattr(self, "_deletion_offset", 0))
-        self._deletion_offset = getattr(self, "_deletion_offset", 0) + len(pending) if len(pending) == 100 else 0
-        for session in pending:
+        limit = 100
+        pending = self.registry.store.list_pending_deletion_ids(limit=limit, after=self._deletion_cursor)
+        self._deletion_cursor = pending[-1] if len(pending) == limit else None
+        for _, session_id in pending:
             try:
-                self.finish_delete(session["id"])
+                self.finish_delete(session_id)
             except KeyError:
                 pass  # Another replica completed deletion.
             except Exception:  # noqa: BLE001 - recovery loop supervisor: logs and retries next tick
-                logger.exception("Thread deletion recovery failed", session_id=session["id"])
+                logger.exception("Thread deletion recovery failed", session_id=session_id)
 
     def start(self) -> None:
         if self._task and not self._task.done():

@@ -6,20 +6,21 @@ A mixin of ``DatabaseSessionStore``; it shares the store's engine and tables
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from functools import partial
 from sqlalchemy import (
     delete,
     insert,
     select,
+    tuple_,
 )
 from .artifact_blobs import delete_session_blobs
 from ..db_time import parse_db_time
 from ..engine import after_store_commit, store_transaction
 from ...core.ids import new_database_id, now_iso
-from ..sql import metadata as shared_metadata
 from ..tables.attachments import attachments
-from ..tables.daemon import ACTIVE_RUN_REQUEST_STATUSES
+from ..tables.daemon import active_run_request, run_requests
 from .state import SessionStoreState
 
 
@@ -94,11 +95,9 @@ class SessionDeletionRows(SessionStoreState):
             # Admission locks this same session row before reserving a run.
             # Inspect durable requests inside this transaction, not only in the
             # HTTP handler's replica-local dispatch lock.
-            requests = shared_metadata.tables.get("daemon_run_requests")
-            if requests is not None and conn.execute(
-                select(requests.c.id).where(requests.c.session_id == session_id)
-                .where(requests.c.status.in_(ACTIVE_RUN_REQUEST_STATUSES)).limit(1)
-            ).first():
+            if conn.scalar(select(run_requests.c.id).where(
+                run_requests.c.session_id == session_id, active_run_request,
+            ).limit(1)) is not None:
                 return False
             if snapshot.get("status") != "cancelled" and any(
                 run.get("status") == "running" for run in snapshot.get("agentRuns", [])
@@ -142,14 +141,17 @@ class SessionDeletionRows(SessionStoreState):
             )
         return True
 
-    def list_pending_deletions(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+    def list_pending_deletion_ids(
+        self, *, limit: int = 100, after: tuple[datetime, str] | None = None,
+    ) -> list[tuple[datetime, str]]:
+        sessions = self.sessions
+        position = tuple_(sessions.c.updated_at, sessions.c.id)
+        statement = select(sessions.c.updated_at, sessions.c.id).where(sessions.c.deletion_requested_at.is_not(None))
+        if after is not None:
+            statement = statement.where(position > after)
         with store_transaction(self.engine) as conn:
-            rows = conn.execute(
-                select(self.sessions.c.snapshot)
-                .where(self.sessions.c.deletion_requested_at.is_not(None))
-                .order_by(self.sessions.c.updated_at, self.sessions.c.id).offset(offset).limit(limit)
-            ).scalars().all()
-        return list(rows)
+            rows = conn.execute(statement.order_by(sessions.c.updated_at, sessions.c.id).limit(limit))
+            return [(updated_at, session_id) for updated_at, session_id in rows]
 
     def _schedule_attachment_cleanup(self, conn: Any, session_id: str) -> None:
         keys = list(conn.execute(select(attachments.c.blob_key).where(

@@ -48,10 +48,7 @@ class SkillStoreState:
         ) -> None:
             ...
 
-        def _replay(self, conn: Any, skill_id: str) -> dict[str, Any]:
-            ...
-
-        def _replay_matching(self, conn: Any, predicate: Any) -> list[dict[str, Any]]:
+        def _read_projection(self, conn: Any, skill_id: str, snapshot: Any) -> dict[str, Any]:
             ...
 
         @staticmethod

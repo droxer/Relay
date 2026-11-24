@@ -305,7 +305,7 @@ class NodeLivenessMixin(RegistryState):
         ]
         if not matches:
             return None
-        active_runs_by_node = self._active_runs_by_node()
+        active_runs_by_node = self._active_runs_by_node(node_ids={node["id"] for node in matches})
         return min(
             matches,
             key=lambda sandbox: self._selection_key(

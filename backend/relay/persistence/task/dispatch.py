@@ -11,12 +11,14 @@ from datetime import datetime, UTC
 from typing import Any
 from loguru import logger
 from sqlalchemy import (
-    and_,
+    Boolean,
+    Date,
     exists,
-    func,
     insert,
+    literal_column,
     or_,
     select,
+    tuple_,
     update,
 )
 from ...core.ids import new_relay_id
@@ -28,6 +30,7 @@ from ..db_time import parse_db_time
 from ...core.ids import now_iso
 from ..events import relay_task_event
 from ..engine import store_transaction
+from ..tables.tasks import DISPATCH_DUE_DATE, DISPATCH_DUE_MISSING, DISPATCH_LOW, DISPATCH_NOT_HIGH, dispatch_index_where
 from .rules import _HYDRATE_TASK_WRITES, apply_task_events
 from ...tasks.claims import dispatch_claim_active, new_dispatch_claim
 from .events import (
@@ -37,8 +40,6 @@ from .events import (
     round_event,
 )
 from .rows import (
-    _due_date_missing_expression,
-    _priority_order_expression,
     task_claim_sort_key,
     task_event_to_row,
     task_to_row,
@@ -50,64 +51,31 @@ class TaskDispatchRows(TaskStoreState):
     def list_dispatchable_tasks(
         self, limit: int | None = None, *, after: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
+        order = (
+            literal_column(DISPATCH_NOT_HIGH, Boolean),
+            literal_column(DISPATCH_LOW, Boolean),
+            literal_column(DISPATCH_DUE_MISSING, Boolean),
+            literal_column(DISPATCH_DUE_DATE, Date),
+            self.tasks.c.created_at,
+            self.tasks.c.id,
+        )
         statement = (
             select(self.tasks.c.snapshot)
-            .where(self.tasks.c.status.in_(("assigned", "queued")))
-            .where(
-                or_(
-                    self.tasks.c.assigned_agent.is_not(None),
-                    self.tasks.c.assigned_team_id.is_not(None),
-                    self.tasks.c.project_id.is_not(None),
-                )
-            )
-            .where(self.tasks.c.is_routine.is_(False))
+            .where(dispatch_index_where(self.engine.dialect.name))
             .where(
                 or_(
                     self.tasks.c.dispatch_next_attempt_at.is_(None),
                     self.tasks.c.dispatch_next_attempt_at <= datetime.now(UTC),
                 )
             )
-            .order_by(
-                _priority_order_expression(),
-                _due_date_missing_expression(),
-                self.tasks.c.due_date.asc(),
-                self.tasks.c.created_at.asc(),
-                self.tasks.c.id.asc(),
-            )
+            .where(~self._waiting_on_prerequisites())
+            .order_by(*order)
         )
-        statement = statement.where(
-            self.tasks.c.deleted_at.is_(None)
-        ).where(~self._waiting_on_prerequisites())
         if after is not None:
-            # The same total ordering as the candidate query, including NULL due dates.
-            sort_key = task_claim_sort_key(after)
-            columns = [
-                _priority_order_expression(),
-                _due_date_missing_expression(),
-                func.coalesce(self.tasks.c.due_date, _date.max),
-                self.tasks.c.created_at,
-                self.tasks.c.id,
-            ]
-            values: list[Any] = [
-                sort_key[0],
-                1 if not after.get("dueDate") else 0,
-                _date.fromisoformat(after["dueDate"])
-                if after.get("dueDate")
-                else _date.max,
-                parse_db_time(after["createdAt"]),
-                after["id"],
-            ]
-            statement = statement.where(
-                or_(
-                    *[
-                        and_(
-                            *(columns[j] == values[j] for j in range(i)),
-                            columns[i] > values[i],
-                        )
-                        for i in range(len(columns))
-                    ]
-                )
-            )
+            priority, due, created, task_id = task_claim_sort_key(after)
+            statement = statement.where(tuple_(*order) > (
+                priority != 0, priority == 2, not after.get("dueDate"), _date.fromisoformat(due), parse_db_time(created), task_id,
+            ))
         if limit is not None:
             statement = statement.limit(max(1, limit))
         with store_transaction(self.engine) as conn:

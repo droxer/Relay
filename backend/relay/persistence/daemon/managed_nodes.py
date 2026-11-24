@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, UTC
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, func, insert, or_, select, update
+from sqlalchemy import Text, delete, insert, literal_column, or_, select, text, tuple_, update
 
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..resource_lock import resource_transaction
@@ -130,13 +130,14 @@ class DatabaseManagedNodeStore:
         if candidate.get("desiredState") != "running":
             return
         slot = _managed_node_policy_slot(candidate, self.default_provider)
+        user_id = candidate.get("userId")
         duplicate = next(
             (
                 node
-                for node in self.list_nodes()
+                for node in self.list_nodes(user_id=user_id)
                 if node["id"] != exclude_node_id
                 and node.get("desiredState") == "running"
-                and node.get("userId") == candidate.get("userId")
+                and node.get("userId") == user_id
                 and _managed_node_policy_slot(node, self.default_provider) == slot
             ),
             None,
@@ -171,9 +172,8 @@ class DatabaseManagedNodeStore:
         with self._policy_slot_lock(), self._mutation_scope():
             candidates = [
                 node
-                for node in self.list_nodes()
-                if node.get("userId") == user_id
-                and _managed_node_policy_slot(node, self.default_provider) == requested_slot
+                for node in self.list_nodes(user_id=user_id)
+                if _managed_node_policy_slot(node, self.default_provider) == requested_slot
             ]
             existing = next(
                 (node for node in candidates if node.get("desiredState") == "running"),
@@ -200,9 +200,9 @@ class DatabaseManagedNodeStore:
         self, *, include_deleted: bool = False, user_id: str | None = None,
         include_ids: set[str] | None = None,
     ) -> list[dict[str, Any]]:
-        statement = select(self.records.c.snapshot).where(self.records.c.kind == "nodes")
+        statement = select(self.records.c.snapshot).where(text(managed_nodes_tables.NODE_RECORD))
         if user_id is not None:
-            owned = self.records.c.snapshot["userId"].as_string() == user_id
+            owned = literal_column(managed_nodes_tables.NODE_OWNER, Text) == user_id
             statement = statement.where(or_(owned, self.records.c.id.in_(include_ids)) if include_ids else owned)
         elif include_ids is not None:
             if not include_ids:
@@ -217,17 +217,11 @@ class DatabaseManagedNodeStore:
     def list_deleted_nodes(
         self, *, limit: int, before: tuple[str, str] | None = None,
     ) -> list[dict[str, Any]]:
-        snapshot = self.records.c.snapshot
         record_id = self.records.c.id
-        updated_at = func.coalesce(snapshot["updatedAt"].as_string(), snapshot["createdAt"].as_string())
-        statement = select(snapshot).where(
-            self.records.c.kind == "nodes",
-            snapshot["desiredState"].as_string() == "deleted",
-            snapshot["phase"].as_string() == "deleted",
-        )
+        updated_at = literal_column(managed_nodes_tables.DELETED_NODE_TIME, Text)
+        statement = select(self.records.c.snapshot).where(text(managed_nodes_tables.DELETED_NODE_RECORD))
         if before is not None:
-            at, node_id = before
-            statement = statement.where(or_(updated_at < at, (updated_at == at) & (record_id < node_id)))
+            statement = statement.where(tuple_(updated_at, record_id) < before)
         with store_transaction(self.engine) as conn:
             return list(conn.scalars(statement.order_by(updated_at.desc(), record_id.desc()).limit(limit)))
 
@@ -537,10 +531,20 @@ class DatabaseManagedNodeStore:
             return updated, attempt
 
     def mark_ready(self, daemon_node_id: str) -> dict[str, Any] | None:
-        candidate = next((item for item in self.list_nodes() if item.get("activeDaemonNodeId") == daemon_node_id), None)
-        if not candidate:
+        records = self.records
+        with store_transaction(self.engine) as conn:
+            node_id = conn.scalar(
+                select(records.c.id)
+                .where(
+                    text(managed_nodes_tables.NODE_RECORD),
+                    literal_column(managed_nodes_tables.NODE_DAEMON_ID, Text) == daemon_node_id,
+                    records.c.snapshot["desiredState"].as_string().is_distinct_from("deleted"),
+                )
+                .order_by(literal_column("COALESCE(snapshot ->> 'createdAt', '')"), records.c.id)
+                .limit(1)
+            )
+        if node_id is None:
             return None
-        node_id = candidate["id"]
         with self._mutation_scope(node_id):
             node = self.get_node(node_id)
             if not node or node.get("desiredState") != "running" or node.get("activeDaemonNodeId") != daemon_node_id:

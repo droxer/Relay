@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import delete, insert, or_, select, update
+from sqlalchemy import delete, func, insert, or_, select, update
 
 from ...core.ids import new_database_id, now_iso
 from ..db_time import format_db_time
@@ -115,10 +115,13 @@ class SkillAssignmentRows(SkillStoreState):
         *,
         skill_id: str | None = None,
         targets: list[tuple[str, str]] | None = None,
+        created_by_user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         statement = select(self.assignments)
         if skill_id is not None:
             statement = statement.where(self.assignments.c.skill_id == skill_id)
+        if created_by_user_id is not None:
+            statement = statement.where(self.assignments.c.created_by_user_id == created_by_user_id)
         if targets is not None:
             if not targets:
                 return []
@@ -137,6 +140,14 @@ class SkillAssignmentRows(SkillStoreState):
             (_assignment_dict(row) for row in rows),
             key=lambda item: (item["skillId"], item["targetType"], item["targetId"]),
         )
+
+    def count_assignments_by_skill(self, *, created_by_user_id: str | None = None) -> dict[str, int]:
+        assignments = self.assignments
+        statement = select(assignments.c.skill_id, func.count()).group_by(assignments.c.skill_id)
+        if created_by_user_id is not None:
+            statement = statement.where(assignments.c.created_by_user_id == created_by_user_id)
+        with store_transaction(self.engine) as conn:
+            return {str(skill_id): count for skill_id, count in conn.execute(statement)}
 
     def delete_assignment(self, assignment_id: str) -> dict[str, Any]:
         with self._write_lock, store_transaction(self.engine) as conn:
