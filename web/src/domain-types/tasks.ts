@@ -96,6 +96,7 @@ export interface TasksResponse {
 
 export interface ProjectDashboardSummary {
   metrics: Record<"total" | "active" | "blocked" | "overdue" | "done", number>;
+  openTaskCount?: number;
   attentionTotal: number;
   hasQueuedOrRunning: boolean;
   attention: {

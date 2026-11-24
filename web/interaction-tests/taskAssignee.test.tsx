@@ -37,6 +37,24 @@ for (const view of ["card", "row"] as const) {
   });
 }
 
+for (const view of ["card", "row"] as const) {
+  it(`distinguishes a workflow assignment on the ${view}`, () => {
+    const task = {
+      id: "workflow-task", title: "Review changes", status: "backlog", priority: "normal",
+      assignedWorkflowId: "workflow-1", linkedSessionIds: [],
+      createdAt: "2026-09-21T00:00:00Z", updatedAt: "2026-09-21T00:00:00Z",
+    } as RelayTaskListItem;
+    const { container, getByLabelText } = render(view === "card"
+      ? <BacklogTaskCard task={task} ready={false} agentDisplayName="Build and review" selected={false} onToggleSelect={vi.fn()} onOpen={vi.fn()} />
+      : <BacklogTaskList tasks={[task]} sort={null} onSort={vi.fn()} selectAll={null} selectedIds={new Set()}
+          onToggleSelect={vi.fn()} contextFor={() => ({ ready: false, agentDisplayName: "Build and review" })} onOpenTask={vi.fn()} />);
+    expect(container.querySelector(".task-assignee-name")?.textContent).toBe("Build and review");
+    expect(container.querySelector(".task-assignee")?.getAttribute("data-unassigned")).toBe("false");
+    expect(getByLabelText("workflow.assigned_workflow")).toBeTruthy();
+    expect(container.querySelector(".agent-state")).toBeNull();
+  });
+}
+
 it.each(["ready", "busy", "offline", "pending"] as const)(
   "keeps the team name visible while availability is %s", async (availability) => {
     const { TaskAssignee } = await import("../src/components/TaskAssignee");

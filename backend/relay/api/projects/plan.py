@@ -49,7 +49,7 @@ def apply_setup_tasks(
     if project_for_owner(ctx, project_id, actor["userId"], require_enabled=True) is None:
         raise HTTPException(404, "Project not found.")
 
-    def apply(project: dict[str, Any]) -> dict[str, Any]:
+    def apply(project: dict[str, Any]) -> dict[str, Any] | None:
         # mutate_setup holds the project row lock and a shared transaction.
         # Every nested store write joins it: no task can commit without its
         # apply key, and another replica rechecks the keys after taking the lock.
@@ -58,16 +58,19 @@ def apply_setup_tasks(
         setup = applicable_setup(project, body.get("draftId"))
         chosen = selected_tasks(setup, body.get("taskKeys"))
         overrides = assignee_overrides(body.get("assignedAgentIds"))
+        if not chosen and setup.get("mode") != "plan":
+            return None
+        already_applied = setup.get("appliedTasks") or {}
+        if setup.get("state") == "applied" and all(task["key"] in already_applied for task in chosen):
+            return None
         applied = _create_missing(ctx, actor, project, setup, chosen, overrides)
         _link_prerequisites(ctx, project, chosen, applied)
+        if setup.get("state") == "proposed":
+            close_setup_task(ctx, setup)
+            setup = {**setup, "state": "applied", "resolvedAt": now_iso()}
         return {
             **setup,
             "appliedTasks": applied,
-            **(
-                {"state": "applied", "resolvedAt": now_iso()}
-                if setup.get("mode") == "plan" and setup.get("state") == "proposed"
-                else {}
-            ),
         }
 
     try:
@@ -75,11 +78,8 @@ def apply_setup_tasks(
     except ProjectSetupError as error:
         raise HTTPException(error.status, error.code) from error
     setup = applicable_setup(project, body.get("draftId"))
-    if setup.get("state") == "applied":
-        # The plan is in the backlog now; its drafting task is finished.
-        close_setup_task(ctx, setup)
     chosen = selected_tasks(setup, body.get("taskKeys"))
-    applied = setup["appliedTasks"]
+    applied = setup.get("appliedTasks") or {}
     tasks = [ctx.task_store.get_task(applied[task["key"]]) for task in chosen]
     return {
         "project": project,

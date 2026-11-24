@@ -125,9 +125,11 @@ def _project_directory_entry(project: dict[str, Any]) -> dict[str, Any]:
     if suggestions := project.get("contextSuggestions"):
         result["contextSummary"] = {"suggestionCount": len(suggestions)}
     if setup := project.get("setup"):
+        proposal = setup.get("proposal") or {}
         result["setupSummary"] = {
             **{key: setup[key] for key in ("state", "mode", "threadId") if key in setup},
-            "hasProposal": bool(setup.get("proposal")),
+            "hasProposal": bool(proposal),
+            **({"proposedTaskCount": len(proposal.get("tasks") or [])} if proposal else {}),
         }
     return result
 

@@ -91,18 +91,19 @@
      one material.
      Each tier is checked against every surface by paletteTokens.test.ts. */
   --ink-1: #edf2f6; /* headings, emphasis */
-  --ink-2: #ccd8e1; /* body */
-  --ink-3: #b2c3d0; /* secondary labels */
-  --ink-4: #93a5b2; /* timestamps, meta, disabled — recedes, still AA on --surface-3 */
+  --ink-2: #d2dde6; /* body */
+  --ink-3: #bacbd7; /* secondary labels — clears AA even on hovered control fills */
+  --ink-4: #a3b5c3; /* timestamps, meta, disabled — clears AA on --surface-3 and 8% control/selection washes */
 
   /* Cool-grey structural and soft hairlines. */
   --line-1: #405361; /* structural hairline */
-  --line-2: #2f3d48; /* soft hairline */
+  --line-2: #364653; /* soft hairline — stays visible on --surface-3 overlays */
 
   /* Restrained blue-grey actions. Signal blue remains exclusive to live
      execution. Selection uses a quiet wash with a clear ink marker. */
   --action: #d3e0e9;
   --action-hover: #e3ebf1;
+  --selection-wash-strength: 8%;
   --action-soft: color-mix(in srgb, #d3e0e9 8%, transparent);
   --on-action: #23313b;
 
@@ -171,8 +172,8 @@
   --code-keyword: #e0906a;      /* keywords, built-ins, types */
   --code-string: #a9c47c;       /* strings, regexps, quotes */
   --code-number: #e3bf7a;       /* numbers, literals, symbols */
-  --code-declaration: #8fb8de;  /* function/class titles, sections */
-  --code-attribute: #7fc8d1;    /* attributes, properties, tags, variables */
+  --code-declaration: #8ab4e6;  /* function/class titles, sections */
+  --code-attribute: #6cd2c8;    /* attributes, properties, tags, variables */
 
   /* Tag tones — the second place hue carries identity rather than meaning.
      A Tag (CONTEXT.md) is filed under one of eight tones, picked by hashing
@@ -181,7 +182,7 @@
      tag badge: never the chip's fill, never the tag's name, never the keyline —
      so a tag can never be mistaken for a status (a toned word on a toned
      fill), the action, or a live run. Each tone sits off the status hues
-     (ok 148 · warn 89 · err 9 · live 258) and clears 3:1 as a graphic
+     (ok 151 · warn 92 · err 6 · live 257) and clears 3:1 as a graphic
      against --surface-3, the brightest dark plane. All eight are hues: the
      two greys this set once held (slate, stone) read as "no colour" beside
      the rest, so a third of a list looked untagged. Lagoon and blush took
@@ -189,13 +190,13 @@
      other tone and to the status hues, and set paler than their neighbours
      (teal, rose) so lightness separates them where hue is close. */
   --tag-1: #73dfe0; /* lagoon — a pale cyan between teal and sky */
-  --tag-2: #5fc2b2; /* teal */
-  --tag-3: #a9c47c; /* moss */
-  --tag-4: #d9b56c; /* sand */
-  --tag-5: #df8e6c; /* clay */
-  --tag-6: #e389a8; /* rose */
-  --tag-7: #feb0d1; /* blush — a pale pink, lighter than rose; no purple tone */
-  --tag-8: #74bcdd; /* sky */
+  --tag-2: #50bda9; /* teal */
+  --tag-3: #a8c768; /* moss */
+  --tag-4: #cbb057; /* ochre — pulled deeper off --warn */
+  --tag-5: #d4876a; /* clay — pulled softer off --brand-lead */
+  --tag-6: #db7aa0; /* rose */
+  --tag-7: #f59ec7; /* blush — cooler pink, distinct from --err; no purple tone */
+  --tag-8: #68b7de; /* sky */
 
 
   /* "Two hues" is a claim about MEANING, not pigment, and the distinction
@@ -843,23 +844,22 @@ html[data-theme="light"] {
   /* Group and lane headers are a recessed plane on the light canvas. */
   --surface-band: #dee7ed;
 
-  /* Neutral text; every tier clears AA on the recessed fill. */
+  /* Neutral text; every tier clears AA on the recessed fill and 8% control/selection washes. */
   --ink-1: #141f27; /* blue-charcoal ink */
-  /* ink-4 already sits on the AA floor of --surface-2, so the ladder is
-     spaced from there upward in even ~0.09 OKLCH lightness steps (0.23 /
-     0.33 / 0.42 / 0.50). ink-3 at #4c5c66 was 0.04 from ink-4, and the
-     secondary and meta tiers read as one. */
-  --ink-2: #293841; /* ink */
-  --ink-3: #40505a; /* charcoal */
-  --ink-4: #58676f; /* steel, deepened for AA */
+  /* ink-4 clears AA on --surface-band plus --control-fill (8%) and --row-hover (4%),
+     and the ramp steps upward in balanced OKLCH lightness rungs (~0.07–0.09). */
+  --ink-2: #273640; /* ink */
+  --ink-3: #3a4b55; /* charcoal */
+  --ink-4: #4d5d66; /* steel, deepened for composited AA */
 
   /* Cool-grey hairlines, with a visible structural edge on the mist canvas. */
   --line-1: #b7c3cc; /* hairline */
-  --line-2: #d6dfe5; /* hairline-soft */
+  --line-2: #c8d3dc; /* hairline-soft — visible even on recessed --surface-2 */
 
   /* Blue-charcoal action with white ink; selection is a restrained wash. */
   --action: #364b59;
   --action-hover: #475e6d;
+  --selection-wash-strength: 6%;
   --action-soft: color-mix(in srgb, #364b59 6%, transparent);
   --on-action: #ffffff;
   --brand-lead: #b84400; /* the mark's lead chevron, deepened for paper */
@@ -910,20 +910,19 @@ html[data-theme="light"] {
   --code-string: #41601f;
   --code-number: #895e05;
   --code-declaration: #1f4f82;
-  --code-attribute: #1b6670;
+  --code-attribute: #166b6b;
 
   /* Light tag tones — the same eight hues deepened until each glyph clears
-     3:1 as a graphic on --surface-2, the darkest light plane. Lagoon and
-     blush stop just past it (3.2:1 and 3.6:1 on the chip fill), paler than
-     the rest for the same reason they are paler in the dark set. */
-  --tag-1: #3c8f90;
-  --tag-2: #1d7a6b;
-  --tag-3: #557226;
-  --tag-4: #8d6412;
-  --tag-5: #a64b2b;
-  --tag-6: #b13f6b;
-  --tag-7: #b56088;
-  --tag-8: #26709a;
+     3:1 as a graphic on every plane (including --surface-band and active washes)
+     while staying clear of status hues and purple. */
+  --tag-1: #297b7d;
+  --tag-2: #1a7262;
+  --tag-3: #516f22;
+  --tag-4: #7b6616;
+  --tag-5: #9c4f3b;
+  --tag-6: #ab3c6b;
+  --tag-7: #a34c7d;
+  --tag-8: #246c96;
 
 
   --elevation-shadow: rgba(37, 60, 80, 0.16);

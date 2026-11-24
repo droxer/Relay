@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getProjectSetup, RelayApiError } from "../api";
@@ -17,12 +17,13 @@ import {
   type SetupMemberDraft,
   type SetupTaskDraft,
 } from "../lib/projectSetup";
-import { type ProjectRole, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
+import { AGENT_ROLE_OPTIONS, type ProjectRole, type RelayTask, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { RoleSelectItems } from "./agents/RoleSelectItems";
 import { Textarea } from "@/components/ui/textarea";
 import { RosterAgentMark } from "./roster/RosterOption";
@@ -35,10 +36,10 @@ type PanelProps = {
   setup: ProjectSetup;
   agents: UserAgent[];
   onOpenThread: (threadId: string) => void;
-  /** Open the task the draft runs under. */
-  onOpenTask?: (taskId: string) => void;
   /** Leave the setup to the owner: the Members tab is where a crew is built by hand. */
   onManual: () => void;
+  onTasksCreated?: (tasks: RelayTask[]) => void;
+  onViewTasks?: () => void;
 };
 
 /** The project's agent-drafted setup while it still needs the owner: being
@@ -50,7 +51,7 @@ export function ProjectSetupPanel(props: PanelProps) {
   if (setup.state === "failed") return <SetupFailed {...props} />;
   if (setup.state === "proposed" && setup.proposal) {
     // A new proposal (a revision) replaces the owner's working copy.
-    return <SetupReview key={setup.finishedAt ?? setup.startedAt} {...props} />;
+    return <SetupReview key={setup.draftId ?? setup.finishedAt ?? setup.startedAt} {...props} proposal={setup.proposal} />;
   }
   return null;
 }
@@ -60,17 +61,18 @@ function useAgentName(agents: UserAgent[]) {
   return (agentId: string) => agents.find((agent) => agent.id === agentId)?.displayName ?? t("project.setup_unknown_agent");
 }
 
-function SetupShell({ title, body, children, footer }: {
+function SetupShell({ title, body, children, footer, drafting = false }: {
   title: string;
   body?: string;
   children?: ReactNode;
   footer: ReactNode;
+  drafting?: boolean;
 }) {
   const { t } = useTranslation();
   return (
-    <section className="project-settings-section project-setup-panel" aria-label={t("project.setup_panel_label")}>
+    <section className={`project-settings-section project-setup-panel${drafting ? " project-setup-drafting" : ""}`} aria-label={t("project.setup_panel_label")}>
       <header className="project-settings-head">
-        <h2 className="workspace-dossier-section-title">{title}</h2>
+        <h2 className="workspace-dossier-section-title">{drafting ? <Spinner aria-hidden="true" /> : null}{title}</h2>
         {body ? <p className="project-settings-hint">{body}</p> : null}
       </header>
       {children}
@@ -102,35 +104,28 @@ function useDismiss(project: ProjectRecord) {
   return { dismiss, pending: updateProjectMutation.isPending, error };
 }
 
-function ThreadButton({ setup, onOpenThread, onOpenTask }: Pick<PanelProps, "setup" | "onOpenThread" | "onOpenTask">) {
+function ThreadButton({ setup, onOpenThread }: Pick<PanelProps, "setup" | "onOpenThread">) {
   const { t } = useTranslation();
-  const { threadId, taskId } = setup;
-  return (
-    <>
-      {taskId && onOpenTask ? (
-        <Button type="button" variant="outline" onClick={() => onOpenTask(taskId)}>{t("project.setup_open_task")}</Button>
-      ) : null}
-      {threadId ? (
-        <Button type="button" variant="outline" onClick={() => onOpenThread(threadId)}>{t("project.setup_open_thread")}</Button>
-      ) : null}
-    </>
-  );
+  const { threadId } = setup;
+  return threadId ? (
+    <Button type="button" variant="ghost" onClick={() => onOpenThread(threadId)}>{t("project.setup_open_thread")}</Button>
+  ) : null;
 }
 
-function SetupDrafting({ project, setup, agents, onOpenThread, onOpenTask }: PanelProps) {
+function SetupDrafting({ project, setup, agents, onOpenThread }: PanelProps) {
   const { t } = useTranslation();
   const agentName = useAgentName(agents);
   const { dismiss, pending, error } = useDismiss(project);
   return (
     <SetupShell
-      title={t("project.setup_drafting_title")}
-      body={t("project.setup_drafting_body", { agent: agentName(setup.agentId) })}
+      drafting
+      title={t(setup.mode === "plan" ? "project.plan_drafting" : "project.setup_drafting", { agent: agentName(setup.agentId) })}
       footer={(
         <>
           <SetupError message={error} />
           <div className="project-settings-actions">
+            <ThreadButton setup={setup} onOpenThread={onOpenThread} />
             <Button type="button" variant="ghost" onClick={() => void dismiss()} disabled={pending}>{t("project.setup_dismiss")}</Button>
-            <ThreadButton setup={setup} onOpenThread={onOpenThread} onOpenTask={onOpenTask} />
           </div>
         </>
       )}
@@ -138,33 +133,35 @@ function SetupDrafting({ project, setup, agents, onOpenThread, onOpenTask }: Pan
   );
 }
 
-function SetupFailed({ project, setup, agents, onOpenThread, onOpenTask, onManual }: PanelProps) {
+function SetupFailed({ project, setup, agents, onOpenThread, onManual }: PanelProps) {
   const { t } = useTranslation();
   const agentName = useAgentName(agents);
   const { startProjectSetupMutation } = useRelayMutations();
   const { dismiss, pending, error } = useDismiss(project);
+  const plan = setup.mode === "plan";
   const body = setup.error === "setup_no_proposal"
     ? t("project.setup_failed_no_proposal", { agent: agentName(setup.agentId) })
     : setup.error === "setup_run_failed"
       ? t("project.setup_failed_run")
-      : t("project.setup_failed_generic");
+      : t(plan ? "project.plan_failed_generic" : "project.setup_failed_generic");
   const busy = pending || startProjectSetupMutation.isPending;
+  const input = { intent: setup.intent, agentId: setup.agentId };
   const retry = () => startProjectSetupMutation
-    .mutateAsync({ projectId: project.id, input: { intent: setup.intent, agentId: setup.agentId, mode: setup.mode } })
+    .mutateAsync({ projectId: project.id, input: plan ? { ...input, mode: "plan" } : input })
     // The shared mutation handler announces the error.
     .catch(() => undefined);
   return (
     <SetupShell
-      title={t("project.setup_failed_title")}
+      title={t(plan ? "project.plan_failed_title" : "project.setup_failed_title")}
       body={body}
       footer={(
         <>
           <SetupError message={error} />
           <div className="project-settings-actions">
-            <Button type="button" variant="ghost" disabled={busy} onClick={() => void dismiss().then((done) => { if (done) onManual(); })}>
-              {t("project.setup_manual")}
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => void dismiss().then((done) => { if (done && !plan) onManual(); })}>
+              {t(plan ? "project.setup_dismiss" : "project.setup_manual")}
             </Button>
-            <ThreadButton setup={setup} onOpenThread={onOpenThread} onOpenTask={onOpenTask} />
+            <ThreadButton setup={setup} onOpenThread={onOpenThread} />
             {setupDraftingAllowed(project, setup.mode) ? (
               <Button type="button" disabled={busy} loading={startProjectSetupMutation.isPending} onClick={() => void retry()}>
                 {t("project.setup_try_again")}
@@ -177,13 +174,15 @@ function SetupFailed({ project, setup, agents, onOpenThread, onOpenTask, onManua
   );
 }
 
-function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: PanelProps) {
+function SetupReview({ project, setup, agents, onOpenThread, onTasksCreated, onViewTasks, proposal }: PanelProps & {
+  proposal: NonNullable<ProjectSetup["proposal"]>;
+}) {
   const { t } = useTranslation();
   const agentName = useAgentName(agents);
   const { updateProjectMutation, applySetupTasksMutation, startProjectSetupMutation } = useRelayMutations();
   // A plan proposes only tasks: the crew and brief stay as they are.
   const plan = setup.mode === "plan";
-  const [draft, setDraft] = useState<SetupDraft>(() => setupDraftFromProposal(setup.proposal!, project));
+  const [draft, setDraft] = useState<SetupDraft>(() => setupDraftFromProposal(proposal, project));
   /* The record carries the proposal; the setup endpoint adds whether each
      proposed member could still be applied. When it answers, a member that
      can no longer join is unticked and explained — Apply's own validation
@@ -191,6 +190,7 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
   const annotated = useQuery({
     queryKey: [PROJECT_SETUP_QUERY_KEY, project.id, setup.finishedAt],
     queryFn: ({ signal }) => getProjectSetup(project.id, signal),
+    enabled: !plan && draft.members.length > 0,
   });
   const [issuesSeen, setIssuesSeen] = useState(false);
   const annotatedMembers = annotated.data?.setup?.proposal?.members;
@@ -206,12 +206,18 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
     });
   }
   const [revision, setRevision] = useState("");
+  const [showRevision, setShowRevision] = useState(false);
+  const revisionId = useId();
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
   const { dismiss, pending: dismissing, error: dismissError } = useDismiss(project);
-  const busy = updateProjectMutation.isPending || applySetupTasksMutation.isPending
-    || startProjectSetupMutation.isPending || dismissing;
+  const busy = applying || startProjectSetupMutation.isPending || dismissing;
   const keptTasks = draft.tasks.filter((task) => task.include && task.title.trim());
+  const selectedMembers = keptMemberIds(draft);
+  const assignees = !plan && selectedMembers.size > 0
+    ? selectedMembers
+    : new Set(project.members.filter((member) => member.enabled).map((member) => member.agentId));
 
   const patchMember = (agentId: string, patch: Partial<SetupMemberDraft>) => setDraft((current) => {
     const members = current.members.map((member) => (member.agentId === agentId ? { ...member, ...patch } : member));
@@ -221,29 +227,37 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
   async function apply() {
     if (busy) return;
     setError(null);
-    if (!plan) {
-      try {
-        await updateProjectMutation.mutateAsync({ projectId: project.id, input: setupApplyInput(project, draft) });
-      } catch (cause) {
-        setError(cause instanceof RelayApiError && cause.code === "project_version_conflict"
-          ? t("project.setup_conflict")
-          : cause instanceof Error ? cause.message : String(cause));
-        return;
-      }
+    if (keptTasks.length && !setup.draftId) {
+      setError(t("project.setup_stale_draft"));
+      return;
     }
-    if (!keptTasks.length || !setup.draftId) return;
-    // One request files every kept task with its prerequisites; a retry
-    // creates only the ones still missing.
-    const members = plan
-      ? new Set((project.members ?? []).filter((member) => member.enabled).map((member) => member.agentId))
-      : keptMemberIds(draft);
+    setApplying(true);
     try {
-      await applySetupTasksMutation.mutateAsync({
-        projectId: project.id,
-        input: setupTasksApplyInput(setup.draftId, draft, members),
-      });
-    } catch (cause) {
-      setError(t("project.setup_tasks_failed", { message: cause instanceof Error ? cause.message : String(cause) }));
+      if (!plan) {
+        const input = setupApplyInput(project, draft, { resolveSetup: keptTasks.length === 0 });
+        try {
+          await updateProjectMutation.mutateAsync({ projectId: project.id, input, baseProject: project });
+        } catch (cause) {
+          setError(cause instanceof RelayApiError && cause.code === "project_version_conflict"
+            ? t("project.setup_conflict")
+            : cause instanceof Error ? cause.message : String(cause));
+          return;
+        }
+      }
+      if (keptTasks.length && setup.draftId) {
+        try {
+          await applySetupTasksMutation.mutateAsync({
+            projectId: project.id,
+            input: setupTasksApplyInput(setup.draftId, draft, assignees),
+            onTasksCreated,
+            onViewTasks,
+          });
+        } catch (cause) {
+          setError(t("project.setup_tasks_failed", { message: cause instanceof Error ? cause.message : String(cause) }));
+        }
+      }
+    } finally {
+      setApplying(false);
     }
   }
 
@@ -256,7 +270,7 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
     try {
       await startProjectSetupMutation.mutateAsync({
         projectId: project.id,
-        input: { intent: revision.trim(), revise: true, ...(plan ? { mode: "plan" as const } : {}) },
+        input: plan ? { intent: revision.trim(), revise: true, mode: "plan" } : { intent: revision.trim(), revise: true },
       });
       setRevision("");
     } catch {
@@ -273,27 +287,22 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
           <SetupError message={error ?? dismissError} />
           <div className="project-settings-actions">
             <Button type="button" variant="ghost" disabled={busy} onClick={() => void dismiss()}>{t("project.setup_dismiss")}</Button>
-            <ThreadButton setup={setup} onOpenThread={onOpenThread} onOpenTask={onOpenTask} />
+            <ThreadButton setup={setup} onOpenThread={onOpenThread} />
             <Button
               type="button"
               disabled={busy || (plan && !keptTasks.length)}
-              loading={updateProjectMutation.isPending || applySetupTasksMutation.isPending}
+              loading={applying}
               loadingLabel={t("project.setup_applying")}
               onClick={() => void apply()}
             >
-              {t(plan ? "project.plan_apply" : "project.setup_apply")}
+              {plan ? t("project.plan_apply_tasks", { count: keptTasks.length })
+                : keptTasks.length ? t("project.setup_apply_tasks", { count: keptTasks.length }) : t("project.setup_apply")}
             </Button>
           </div>
         </>
       )}
     >
       <fieldset className="project-settings-fields" disabled={busy}>
-        {setup.proposal?.rationale ? (
-          <div className="project-setup-group">
-            <h3 className="project-setup-subhead">{t("project.setup_rationale")}</h3>
-            <p className="project-setup-rationale">{setup.proposal.rationale}</p>
-          </div>
-        ) : null}
         {plan ? null : (<>
         <Field label={t("project.name")}>
           <Input
@@ -305,8 +314,15 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
           />
         </Field>
         <ProjectGoalField value={draft.goal} onChange={(goal) => setDraft((current) => ({ ...current, goal }))} />
-        <ProjectDescriptionField value={draft.description} onChange={(description) => setDraft((current) => ({ ...current, description }))} />
-        <ProjectContextField value={draft.context} onChange={(context) => setDraft((current) => ({ ...current, context }))} />
+        <details className="project-setup-disclosure">
+          <summary>{t("project.setup_edit_brief")}
+            {draft.description || draft.context ? <span className="project-setup-preview">{draft.description || draft.context}</span> : null}
+          </summary>
+          <div className="project-setup-group">
+            <ProjectDescriptionField value={draft.description} onChange={(description) => setDraft((current) => ({ ...current, description }))} />
+            <ProjectContextField value={draft.context} onChange={(context) => setDraft((current) => ({ ...current, context }))} />
+          </div>
+        </details>
 
         <div className="project-setup-group">
           <h3 className="project-setup-subhead">{t("project.setup_crew")}</h3>
@@ -330,13 +346,22 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
 
         {draft.tasks.length ? (
           <div className="project-setup-group">
-            <h3 className="project-setup-subhead">{t(plan ? "project.plan_tasks" : "project.setup_first_tasks")}</h3>
+            <div className="project-plan-actions project-setup-task-heading">
+              <h3 className="project-setup-subhead">{t("project.setup_selected_tasks", { selected: keptTasks.length, total: draft.tasks.length })}</h3>
+              <Button type="button" variant="ghost" size="dense" onClick={() => setDraft((current) => ({
+                ...current,
+                tasks: current.tasks.map((task) => ({ ...task, include: keptTasks.length !== current.tasks.length })),
+              }))}>
+                {t(keptTasks.length === draft.tasks.length ? "project.setup_select_none" : "project.setup_select_all")}
+              </Button>
+            </div>
             <ol className="project-setup-list">
               {draft.tasks.map((task) => (
                 <SetupTaskRow
                   key={task.key}
                   task={task}
                   tasks={draft.tasks}
+                  assignee={task.assignedAgentId && assignees.has(task.assignedAgentId) ? agentName(task.assignedAgentId) : undefined}
                   onInclude={(include) => setDraft((current) => ({
                     ...current,
                     tasks: current.tasks.map((item) => (item.key === task.key ? { ...item, include } : item)),
@@ -348,7 +373,20 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
           </div>
         ) : null}
 
-        {setupDraftingAllowed(project, setup.mode) ? <div className="project-setup-group">
+        {proposal.rationale ? (
+          <details className="project-setup-disclosure">
+            <summary>{t(plan ? "project.plan_rationale" : "project.setup_rationale")}</summary>
+            <p className="project-setup-rationale">{proposal.rationale}</p>
+          </details>
+        ) : null}
+
+        {setupDraftingAllowed(project, setup.mode) ? <div>
+          <Button type="button" variant="outline" size="dense" aria-expanded={showRevision}
+            aria-controls={showRevision ? revisionId : undefined} onClick={() => setShowRevision(!showRevision)}>
+            {t("project.setup_revise")}
+          </Button>
+        </div> : null}
+        {showRevision ? <div className="project-setup-group" id={revisionId}>
           <Field label={t("project.setup_revise_label")} error={revisionError ?? undefined} errorId="project-setup-revise-error">
             <Textarea
               name="setup-revision"
@@ -361,9 +399,9 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
               aria-describedby={revisionError ? "project-setup-revise-error" : undefined}
             />
           </Field>
-          <div>
+          <div className="project-plan-actions">
             <Button type="button" variant="outline" disabled={busy} loading={startProjectSetupMutation.isPending} onClick={() => void revise()}>
-              {t("project.setup_revise")}
+              {t("project.setup_send_revision")}
             </Button>
           </div>
         </div> : null}
@@ -372,12 +410,14 @@ function SetupReview({ project, setup, agents, onOpenThread, onOpenTask }: Panel
   );
 }
 
-function SetupTaskRow({ task, tasks, onInclude }: {
+function SetupTaskRow({ task, tasks, assignee, onInclude }: {
   task: SetupTaskDraft;
   tasks: readonly SetupTaskDraft[];
+  assignee?: string;
   onInclude: (include: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
   const after = setupTaskAfterTitles(task, tasks);
   const existing = task.afterTaskIds?.length ?? 0;
   return (
@@ -386,14 +426,18 @@ function SetupTaskRow({ task, tasks, onInclude }: {
         <Checkbox checked={task.include} onCheckedChange={(value) => onInclude(value === true)} />
         <span>{task.title}</span>
       </label>
-      {task.description ? <p className="project-settings-hint project-setup-detail">{task.description}</p> : null}
-      {after.length || existing ? (
-        <p className="project-settings-hint project-setup-detail">
-          {[
-            ...(after.length ? [t("project.setup_task_after", { tasks: after.join(", ") })] : []),
-            ...(existing ? [t("project.setup_task_after_existing", { count: existing })] : []),
-          ].join(" · ")}
-        </p>
+      {task.assignedAgentId || after.length || existing ? (
+        <div className="project-setup-task-meta">
+          {task.assignedAgentId ? <span>{assignee ?? t("project.setup_task_unassigned")}</span> : null}
+          {after.length ? <span>{t("project.setup_task_after", { tasks: after.join(", ") })}</span> : null}
+          {existing ? <span>{t("project.setup_task_after_existing", { count: existing })}</span> : null}
+        </div>
+      ) : null}
+      {task.description ? (
+        <button type="button" className="project-settings-hint project-setup-task-description" aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}>
+          {task.description}
+        </button>
       ) : null}
     </li>
   );
@@ -425,7 +469,10 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
           {agent ? <RosterAgentMark agent={agent} /> : null}
           <strong translate="no">{name}</strong>
         </label>
-        <Select value={member.role} disabled={inactive} onValueChange={(value) => onChange({ role: value as ProjectRole })}>
+        <Select value={member.role} disabled={inactive} onValueChange={(value) => {
+          const role = AGENT_ROLE_OPTIONS.find((option) => option === value);
+          if (role) onChange({ role });
+        }}>
           <SelectTrigger className="project-setup-role" aria-label={`${t("project.role")} · ${name}`}>
             <SelectValue>{(value: ProjectRole) => t(`project.roles.${value}`)}</SelectValue>
           </SelectTrigger>
@@ -441,15 +488,20 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
       {blocked ? (
         <p id={issueId} className="project-settings-hint text-destructive">{t(`project.setup_issue.${member.issue}`)}</p>
       ) : (
-        <Textarea
-          name={`setup-responsibilities-${member.agentId}`}
-          aria-label={`${t("project.responsibilities")} · ${name}`}
-          rows={2}
-          maxLength={4000}
-          disabled={!member.include}
-          value={member.responsibilities}
-          onChange={(event) => onChange({ responsibilities: event.target.value })}
-        />
+        <details className="project-setup-disclosure">
+          <summary>{t("project.responsibilities")}
+            <span className="project-setup-preview">{member.responsibilities}</span>
+          </summary>
+          <Textarea
+            name={`setup-responsibilities-${member.agentId}`}
+            aria-label={`${t("project.responsibilities")} · ${name}`}
+            rows={2}
+            maxLength={4000}
+            disabled={!member.include}
+            value={member.responsibilities}
+            onChange={(event) => onChange({ responsibilities: event.target.value })}
+          />
+        </details>
       )}
     </li>
   );

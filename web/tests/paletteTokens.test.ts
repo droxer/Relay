@@ -101,6 +101,12 @@ describe("Relay palette tokens", () => {
       assert.ok(b > g && g > r && b - r <= 50, "--action is a restrained blue-grey, distinct from signal blue");
     }
     assert.match(lightRegister, /--action-soft:\s*color-mix\(in srgb, #[0-9a-f]{6} \d+%, transparent\);/);
+    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
+      const soft = register.match(/--action-soft:\s*color-mix\(in srgb, #[0-9a-f]{6} (\d+)%, transparent\);/);
+      const strength = register.match(/--selection-wash-strength:\s*(\d+)%;/);
+      assert.ok(soft && strength, `${label} must declare both --action-soft and --selection-wash-strength`);
+      assert.equal(strength[1], soft[1], `${label} --selection-wash-strength must match --action-soft`);
+    }
   });
 
   it("carries exactly one primary button, so there is no second fill to keep in step", () => {
@@ -166,8 +172,10 @@ describe("Relay palette tokens", () => {
       const live = tokenIn(register, "--live");
       const [r, g, b] = channels(live);
       assert.ok(b > g && g > r, `${label} --live ${live} left the blue family (b > g > r required)`);
-      const ratio = contrast(live, tokenIn(register, "--surface-0"));
-      assert.ok(ratio >= 4.5, `${label} --live on --surface-0 is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
+      for (const plane of ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--surface-band"]) {
+        const ratio = contrast(live, tokenIn(register, plane));
+        assert.ok(ratio >= 4.5, `${label} --live on ${plane} is ${ratio.toFixed(2)}:1 — below the 4.5:1 floor`);
+      }
     }
   });
 
@@ -570,7 +578,7 @@ describe("surface ladder", () => {
 describe("focus contract", () => {
   const roles = readStyle("tokens/roles.css");
 
-  it("draws the ring with outline in link ink, which no ancestor's overflow can clip", () => {
+  it("draws the ring with outline in signature orange, which no ancestor's overflow can clip", () => {
     // A box-shadow ring is painted inside the nearest overflow:hidden ancestor
     // and gets sliced off by it. This app is built out of scrollers and clipped
     // rows, so the ring silently lost an edge against container boundaries.
@@ -853,5 +861,112 @@ describe("signature and tint hygiene", () => {
         .map((m) => `${name}: ${m[0]}`)
     );
     assert.deepEqual(offenders, [], `set --tone and use var(--tone-tint):\n  ${offenders.join("\n  ")}`);
+  });
+
+  it("uses --warn-badge whenever warning text sits over --tone-tint", () => {
+    const workflow = stripStyleComments(readStyle("workflow.css"));
+    assert.match(workflow, /\.workflow-step-gate\s*\{[^}]*--tone:\s*var\(--warn-badge\);/s);
+    assert.match(workflow, /\.workflow-timeline-step\[data-state="waiting"\] \.workflow-step-index\s*\{[^}]*--tone:\s*var\(--warn-badge\);/s);
+  });
+
+  it("keeps code syntax tokens above 4.5:1 on code planes and tag glyphs above 3:1 everywhere", () => {
+    const codeTokens = ["--code-keyword", "--code-string", "--code-number", "--code-declaration", "--code-attribute"];
+    const tagTokens = ["--tag-1", "--tag-2", "--tag-3", "--tag-4", "--tag-5", "--tag-6", "--tag-7", "--tag-8"];
+    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
+      for (const token of codeTokens) {
+        const fg = tokenIn(register, token);
+        for (const plane of ["--surface-0", "--surface-1", "--surface-2", "--surface-3"]) {
+          const ratio = contrast(fg, tokenIn(register, plane));
+          assert.ok(ratio >= 4.5, `${label} ${token} on ${plane} is ${ratio.toFixed(2)}:1 — below 4.5:1`);
+        }
+      }
+      for (const token of tagTokens) {
+        const fg = tokenIn(register, token);
+        for (const plane of SOLID_PLANES) {
+          const ratio = contrast(fg, tokenIn(register, plane));
+          assert.ok(ratio >= 3.0, `${label} ${token} on ${plane} is ${ratio.toFixed(2)}:1 — below 3:1`);
+        }
+      }
+    }
+    const tagsCss = stripStyleComments(readStyle("task-tags.css"));
+    assert.doesNotMatch(
+      tagsCss,
+      /\.tag-badge--toggle[^{]*\{[^}]*--tag-tone/s,
+      "tag toggle fills and borders stay neutral so the tag hue remains strictly on '#'",
+    );
+  });
+
+  it("keeps prefers-contrast: more inks above 4.5:1 on boosted control fills in both registers", () => {
+    const roles = stripStyleComments(readStyle("tokens/roles.css"));
+    const hcBlock = roles.match(/@media\s*\(prefers-contrast:\s*more\)\s*\{([\s\S]*?)\n\}/)?.[1];
+    assert.ok(hcBlock, "roles.css must declare @media (prefers-contrast: more)");
+    const parsePct = (block: string, prop: string) => {
+      const m = block.match(new RegExp(`${prop}:\\s*color-mix\\(in srgb,[^;]*?(\\d+)%`));
+      return m ? Number(m[1]) / 100 : null;
+    };
+    const rootBlock = hcBlock.match(/:root\s*\{([^}]*)\}/)?.[1] ?? "";
+    const lightBlock = hcBlock.match(/html\[data-theme="light"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+    const darkBlock = hcBlock.match(/html\[data-theme="dark"\]\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    const checks: Array<{
+      label: string;
+      register: string;
+      cf: number;
+      cfh: number;
+      inks: Record<string, string>;
+    }> = [
+      {
+        label: "light",
+        register: lightRegister,
+        cf: parsePct(lightBlock, "--control-fill") ?? parsePct(rootBlock, "--control-fill")!,
+        cfh: parsePct(lightBlock, "--control-fill-hover") ?? parsePct(rootBlock, "--control-fill-hover")!,
+        inks: {
+          "--ink-1": tokenIn(lightRegister, "--ink-1"),
+          "--ink-2": tokenIn(lightRegister, "--ink-1"),
+          "--ink-3": composite(tokenIn(lightRegister, "--ink-1"), tokenIn(lightRegister, "--surface-0"), parsePct(lightBlock, "--ink-3")!),
+          "--ink-4": composite(tokenIn(lightRegister, "--ink-1"), tokenIn(lightRegister, "--surface-0"), parsePct(lightBlock, "--ink-4")!),
+        },
+      },
+      {
+        label: "dark",
+        register: darkRegister,
+        cf: parsePct(darkBlock, "--control-fill") ?? parsePct(rootBlock, "--control-fill")!,
+        cfh: parsePct(darkBlock, "--control-fill-hover") ?? parsePct(rootBlock, "--control-fill-hover")!,
+        inks: {
+          "--ink-1": tokenIn(darkRegister, "--ink-1"),
+          "--ink-2": composite(tokenIn(darkRegister, "--ink-1"), tokenIn(darkRegister, "--surface-1"), parsePct(darkBlock, "--ink-2")!),
+          "--ink-3": composite(tokenIn(darkRegister, "--ink-1"), tokenIn(darkRegister, "--surface-1"), parsePct(darkBlock, "--ink-3")!),
+          "--ink-4": composite(tokenIn(darkRegister, "--ink-1"), tokenIn(darkRegister, "--surface-1"), parsePct(darkBlock, "--ink-4")!),
+        },
+      },
+    ];
+
+    for (const { label, register, cf, cfh, inks } of checks) {
+      const ink1 = tokenIn(register, "--ink-1");
+      for (const [inkName, inkHex] of Object.entries(inks)) {
+        for (const plane of SOLID_PLANES) {
+          const surface = tokenIn(register, plane);
+          for (const [state, alpha] of [["rest", cf], ["hover", cfh]] as const) {
+            const bg = composite(ink1, surface, alpha);
+            const ratio = contrast(inkHex, bg);
+            assert.ok(ratio >= 4.5, `prefers-contrast ${label} ${inkName} on ${plane} (${state}): ${ratio.toFixed(2)}:1`);
+          }
+        }
+      }
+    }
+  });
+
+  it("keeps dashboard chart secondary series above 3:1 against the card surface", () => {
+    const dashboard = stripStyleComments(readStyle("admin-v2-dashboard.css"));
+    const s3 = dashboard.match(/--series-3:\s*color-mix\(in srgb, var\((--tag-\d+)\) (\d+)%, var\(--surface-1\)\);/);
+    const sr = dashboard.match(/--series-rest:\s*color-mix\(in srgb, var\((--ink-\d+)\) (\d+)%, var\(--surface-1\)\);/);
+    assert.ok(s3 && sr, "admin-v2-dashboard.css must declare --series-3 and --series-rest");
+    for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
+      const card = tokenIn(register, "--surface-1");
+      const s3Color = composite(tokenIn(register, s3[1]), card, Number(s3[2]) / 100);
+      const srColor = composite(tokenIn(register, sr[1]), card, Number(sr[2]) / 100);
+      assert.ok(contrast(s3Color, card) >= 3.0, `${label} --series-3 (${s3Color}) on --surface-1 is below 3:1`);
+      assert.ok(contrast(srColor, card) >= 3.0, `${label} --series-rest (${srColor}) on --surface-1 is below 3:1`);
+    }
   });
 });

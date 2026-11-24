@@ -97,4 +97,34 @@ describe("favicon mark", () => {
     const tile = (svg: string) => svg.match(/<rect [^>]*\/>/)?.[0];
     assert.equal(tile(faviconSvg("idle")), tile(shipped));
   });
+
+  it("keeps FAVICON_INK and offline.html aligned with palette.css dark/light registers", () => {
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    while (!existsSync(path.join(dir, "web", "src", "styles", "tokens", "palette.css"))) dir = path.dirname(dir);
+    const palette = readFileSync(path.join(dir, "web", "src", "styles", "tokens", "palette.css"), "utf8");
+    const lightIdx = palette.indexOf('html[data-theme="light"]');
+    const darkReg = palette.slice(0, lightIdx);
+    const lightReg = palette.slice(lightIdx);
+    const tok = (reg: string, name: string) => reg.match(new RegExp(`${name}:\\s*(#[0-9a-f]{6});`))?.[1];
+
+    assert.equal(FAVICON_INK.canvas, tok(darkReg, "--surface-0"));
+    assert.equal(FAVICON_INK.outline, tok(darkReg, "--line-1"));
+    assert.equal(FAVICON_INK.action, tok(darkReg, "--brand-lead"));
+    assert.equal(FAVICON_INK.live, tok(darkReg, "--live"));
+    assert.equal(FAVICON_INK.unlit, tok(darkReg, "--ink-1"));
+
+    const offline = readFileSync(path.join(dir, "web", "public", "offline.html"), "utf8");
+    for (const hex of [
+      tok(darkReg, "--surface-0"),
+      tok(darkReg, "--brand-lead"),
+      tok(darkReg, "--live"),
+      tok(lightReg, "--surface-0"),
+      tok(lightReg, "--brand-lead"),
+      tok(lightReg, "--live"),
+    ]) {
+      assert.ok(hex && offline.includes(hex), `offline.html must include ${hex}`);
+    }
+    assert.ok(offline.includes('d="M12 14 L32 32 L12 50"'), "offline.html must use canonical RelayMark lead chevron");
+    assert.ok(offline.includes('d="M32 14 L52 32 L32 50"'), "offline.html must use canonical RelayMark trailing chevron");
+  });
 });

@@ -16,7 +16,7 @@ import { Field } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Textarea } from "@/components/ui/textarea";
-import { ProjectDescriptionField, ProjectFolderField, ProjectNameField } from "./ProjectFormFields";
+import { ProjectDescriptionField, ProjectFolderField, ProjectGoalField, ProjectNameField } from "./ProjectFormFields";
 import { RosterAgentItem, RosterEmptyOption, RosterTriggerValue } from "./roster/RosterOption";
 
 /** Setup intents share the backend cap (SETUP_INTENT_MAX_LENGTH). */
@@ -70,12 +70,13 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const originLabelId = useId();
   const [mode, setMode] = useState<Mode>(userId ? "describe" : "manual");
   const [name, setName] = useState("");
+  const [goal, setGoal] = useState("");
   const [description, setDescription] = useState("");
   const [intent, setIntent] = useState("");
   const [setupAgentId, setSetupAgentId] = useState(AUTO_SETUP_AGENT);
   // Undefined until the owner picks: the oldest eligible agent is shown and sent.
   const [managerChoice, setManagerChoice] = useState<string | null>();
-  const [computerId, setComputerId] = useState("");
+  const [computerChoice, setComputerChoice] = useState("");
   const [folder, setFolder] = useState("");
   const [folderError, setFolderError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -88,6 +89,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
     () => computers.filter((computer) => computer.capabilities?.includes("project-workspaces")),
     [computers],
   );
+  const computerId = computerChoice || (projectComputers.length === 1 ? projectComputers[0].id : "");
   const selectedComputer = projectComputers.find((computer) => computer.id === computerId);
   const linksFolders = computerLinksFolders(selectedComputer);
   const folderUnavailableKey = folderFieldUnavailableKey(selectedComputer);
@@ -106,7 +108,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   // A choice made for one computer cannot stand on another.
   const managerAgentId = chosenManager && setupAgents.some((agent) => agent.id === chosenManager) ? chosenManager : null;
   const busy = createProjectMutation.isPending || startProjectSetupMutation.isPending;
-  const hasUnsavedChanges = Boolean(name || description || intent || computerId || folder);
+  const hasUnsavedChanges = Boolean(name || goal || description || intent || computerChoice || folder);
   const confirmDiscardChanges = useUnsavedChangesGuard(open && hasUnsavedChanges && !busy);
   const describing = origin === "fresh" && mode === "describe";
   const noSetupAgents = describing && Boolean(selectedComputer) && setupAgents.length === 0;
@@ -135,7 +137,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   function chooseComputer(value: string) {
     if (value !== computerId) setManagerChoice(undefined);
     if (value !== computerId) setFolder("");
-    setComputerId(value);
+    setComputerChoice(value);
     setComputerError(null);
     setFolderError(null);
   }
@@ -150,6 +152,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
     const nextDescription = description.trim();
     const result = await createProjectMutation.mutateAsync({
       name: name.trim(),
+      ...(goal.trim() ? { goal: goal.trim() } : {}),
       ...(nextDescription ? { description: nextDescription } : {}),
       daemonNodeId: computerId,
       managerAgentId: managerAgentId ?? null,
@@ -177,8 +180,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       name: provisionalProjectName(brief, t("project.setup_fallback_name")),
       description: brief,
       daemonNodeId: computerId,
-      managerAgentId: managerAgentId ?? null,
-      ...(workspaceHostPath ? { workspaceHostPath } : {}),
+      managerAgentId: null,
       leadAgentId: null,
       members: [],
     });
@@ -259,22 +261,26 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
                 aria-describedby={intentError ? "project-intent-error" : undefined}
               />
             </Field>
-            <div className="project-setup-basics-grid">
-              <ComputerField
-                computers={projectComputers}
-                value={computerId}
-                error={computerError}
-                triggerRef={computerTriggerRef}
-                onChange={(value) => { chooseComputer(value); setSetupAgentId(AUTO_SETUP_AGENT); }}
-              />
-              <SetupAgentField
-                agents={setupAgents}
-                value={setupAgentId}
-                disabled={!selectedComputer || noSetupAgents}
-                hint={noSetupAgents ? t("project.setup_no_agents") : t("project.setup_agent_hint")}
-                onChange={setSetupAgentId}
-              />
-            </div>
+            <ComputerField
+              computers={projectComputers}
+              value={computerId}
+              error={computerError}
+              triggerRef={computerTriggerRef}
+              onChange={(value) => { chooseComputer(value); setSetupAgentId(AUTO_SETUP_AGENT); }}
+            />
+            {noSetupAgents ? <p className="project-settings-hint">{t("project.setup_no_agents")}</p> : null}
+            {setupAgents.length ? (
+              <details className="project-setup-disclosure">
+                <summary>{t("project.setup_advanced")}</summary>
+                <SetupAgentField
+                  agents={setupAgents}
+                  value={setupAgentId}
+                  disabled={busy}
+                  hint={t("project.setup_agent_hint")}
+                  onChange={setSetupAgentId}
+                />
+              </details>
+            ) : null}
           </>
         ) : (
           <>
@@ -306,11 +312,12 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
               unavailable={folderUnavailable}
               onChange={(value) => { setFolder(value); setFolderError(null); }}
             /> : null}
+            <ProjectGoalField value={goal} onChange={setGoal} />
             <ProjectDescriptionField value={description} onChange={setDescription} />
           </>
         )}
 
-        {selectedComputer && setupAgents.length ? (
+        {!describing && selectedComputer && setupAgents.length ? (
           <ManagerAgentField agents={setupAgents} value={managerAgentId ?? ""} disabled={busy}
             onChange={(value) => setManagerChoice(value || null)} />
         ) : null}
@@ -406,8 +413,7 @@ function SetupAgentField({ agents, value, disabled, hint, onChange }: {
   );
 }
 
-/** The project's manager agent: an open-ended roster, so a roster Select — the
- *  same picker as the setup agent beside it, not a bare native <select>. */
+/** Project Lead selection for manual creation. */
 function ManagerAgentField({ agents, value, disabled, onChange }: {
   agents: UserAgent[];
   value: string;

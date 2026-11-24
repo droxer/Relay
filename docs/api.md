@@ -163,8 +163,9 @@ Automation definitions and their active occurrences.
 Computer. A recorded workspace binding takes precedence. Unbound legacy work
 remains available for the browser to place or resolve from its Threads.
 `scope=project-dashboard&projectId=<id>&today=<YYYY-MM-DD>` returns Project
-issue totals, the overall user's flow usage, and up to five issues to
-review. The dashboard uses `attentionTotal` to count the remaining issues.
+issue totals, the user's flow usage, and up to five issues to review.
+`openTaskCount` excludes done and cancelled Tasks. The Dashboard uses
+`attentionTotal` to count the remaining issues.
 `GET /tasks?view=summary&threadId=<id>` reads one Thread's originating Task,
 work waiting for a reply, active round's Task, and any Tasks that match its
 saved suggestions in the same Project or intake. It includes source
@@ -894,7 +895,7 @@ prompt section (`projects/context.py`), and a daemon mirrors it to
 
 ```text
 GET  /api/v1/projects/{id}/setup   → { setup, candidates }
-POST /api/v1/projects/{id}/setup   { intent, agentId?, revise? } → 202 { project, threadId }
+POST /api/v1/projects/{id}/setup   { mode?, intent?, agentId?, revise? } → 202 { project, threadId }
 ```
 
 The create drawer offers a fresh project (a new workspace) or an existing
@@ -902,6 +903,11 @@ project (a Linked Directory). Existing projects require a folder and are
 configured manually; setup and refinement drafts are unavailable, but plan
 drafts (`mode: "plan"`) are not. `POST …/setup` rejects a setup draft for a
 linked project with `project_setup_fresh_only` (409).
+
+The Project Owner can request a Task plan with `mode: "plan"` once the Project
+has a Project Lead.
+For a new plan, an omitted or blank `intent` uses the Project Goal and
+Description. Setup drafts and revisions require an explicit `intent`.
 
 Setup first creates a project task for drafting, then immediately runs it in a
 linked thread. The proposed brief, roster, and work are applied only after
@@ -915,10 +921,10 @@ last proposal and the owner's note. The run writes
 `.relay/project-setup-<runId>.json`; a daemon advertising `project-setup` reports it as
 `projectSetup` on `run.completed`, and the backend holds it to the shape the
 PATCH accepts (`projects/setup.py`). `project.setup.state` moves
-`drafting` → `proposed` or `failed`, then `applied` or `dismissed` through the
-PATCH's `setupResolution` — applying is the same PATCH that carries the
-accepted name, brief, and roster, so every roster rule runs when it takes
-effect. `GET …/setup` marks each proposed member with an `issue`
+`drafting` → `proposed` or `failed`. A PATCH saves the accepted name, brief,
+and roster. Include `setupResolution: "applied"` in the PATCH when applying
+without Tasks. Use `setupResolution: "dismissed"` to dismiss the draft.
+`GET …/setup` marks each proposed member with an `issue`
 (`agent_not_found`, `agent_wrong_owner`, `agent_disabled`,
 `agent_off_computer`) when Apply would refuse it. Errors:
 `project_setup_unsupported` (daemon too old), `project_setup_no_agents`,
@@ -934,9 +940,9 @@ the setup thread, and closes the replaced draft's task as `done`; applying or
 dismissing a proposal closes its task the same way.
 
 `POST /api/v1/projects/{id}/setup/tasks` creates the selected proposal tasks
-with their prerequisites in the backlog. Applying or retrying a proposal
-never queues these tasks, including requests from older clients carrying
-`queue: true`. The owner starts each task separately through the task controls.
+with their Prerequisites in Backlog. The same transaction marks the draft as
+`applied` for either mode and closes the drafting Task. A retry returns the
+same Tasks. The owner starts each Task separately through the Task controls.
 
 A project run's round result may carry up to three `contextSuggestions`
 (`{ text, evidence? }`). They are kept, attributed to their run, on

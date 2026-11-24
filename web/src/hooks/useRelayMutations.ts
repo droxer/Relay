@@ -14,8 +14,8 @@ import {
   createTask,
   createProject,
   startProjectSetup,
-applySetupTasks,
-setTaskPrerequisites,
+  applySetupTasks,
+  setTaskPrerequisites,
   createTeam,
   deleteSession,
   deleteTask,
@@ -48,7 +48,7 @@ import { TASK_RECORD_QUERY_KEY } from "./useTaskRecord";
 import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
 import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects, projectDirectoryEntry, projectIndexRow } from "../lib/projectDirectory";
-import { PROJECT_DIRECTORY_ENTRY_QUERY_KEY, PROJECT_INDEX_QUERY_KEY, PROJECT_RECORD_QUERY_KEY, projectRecordKey } from "./projectQueries";
+import { PROJECT_DIRECTORY_ENTRY_QUERY_KEY, PROJECT_INDEX_QUERY_KEY, PROJECT_RECORD_QUERY_KEY, projectDirectoryEntryKey, projectRecordKey } from "./projectQueries";
 import type { ProjectIndexRow } from "../types";
 import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteErrorMessage } from "../lib/projectDeletion";
 import { threadLabel } from "../lib/threads";
@@ -57,6 +57,13 @@ import { taskWorkflowSessionQueryKey } from "../lib/workflowRuns";
 import { fetchSessionSnapshot, reconcileSessionSnapshot } from "../lib/sessionSnapshotQuery";
 
 type TokenArg = { token?: string };
+
+type ApplySetupTasksMutation = {
+  projectId: string;
+  input: ApplySetupTasksInput;
+  onTasksCreated?: (tasks: RelayTask[]) => void;
+  onViewTasks?: () => void;
+};
 
 export function useRelayMutations() {
   const queryClient = useQueryClient();
@@ -129,10 +136,13 @@ export function useRelayMutations() {
     }
   };
   const cacheProject = (project: ProjectRecord) => {
+    const entry = projectDirectoryEntry(project);
     queryClient.setQueryData(projectRecordKey(project.id, project.version), { project });
+    // Seed both readers before the index advertises the new version.
+    queryClient.setQueryData(projectDirectoryEntryKey(project.id, project.version), { project: entry });
     queryClient.setQueryData<ProjectListItem[]>(PROJECTS_QUERY_KEY, (current) =>
       current?.some(row => row.id === project.id && row.version > project.version)
-        ? current : current && mergeProjectIntoProjects(current, projectDirectoryEntry(project)));
+        ? current : current && mergeProjectIntoProjects(current, entry));
     queryClient.setQueryData<ProjectIndexRow[]>(PROJECT_INDEX_QUERY_KEY, (current) =>
       current?.some(row => row.id === project.id && row.version > project.version)
         ? current : current && mergeProjectIntoProjects(current, projectIndexRow(project)));
@@ -501,12 +511,22 @@ export function useRelayMutations() {
   // No shared error toast: the setup panel states the failure beside Apply,
   // and a retry creates only the tasks still missing.
   const applySetupTasksMutation = useMutation({
-    mutationFn: ({ projectId, input }: { projectId: string; input: ApplySetupTasksInput }) =>
+    mutationFn: ({ projectId, input }: ApplySetupTasksMutation) =>
       applySetupTasks(projectId, input),
-    onSuccess: ({ project, tasks }) => {
+    onSuccess: async ({ project, tasks }, { onTasksCreated, onViewTasks }) => {
+      await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
       cacheProject(project);
       tasks.forEach(cacheTask);
       void invalidateTasks();
+      void invalidateIssues();
+      if (tasks.length) {
+        onTasksCreated?.(tasks);
+        announce({
+          message: t("project.tasks_created", { count: tasks.length }),
+          tone: "success",
+          ...(onViewTasks ? { action: { label: t("project.view_tasks"), onClick: onViewTasks } } : {}),
+        });
+      }
     },
   });
 

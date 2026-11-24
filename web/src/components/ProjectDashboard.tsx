@@ -1,9 +1,11 @@
 "use client";
 
 import { skipToken, useQuery } from "@tanstack/react-query";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardDescription,
@@ -11,15 +13,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useRelayMutations } from "../hooks/useRelayMutations";
 import {
   PROJECT_ATTENTION_LIMIT,
   projectAttentionIssues,
   projectIssueMetrics,
 } from "../lib/projectDashboard";
 import { taskRef } from "../lib/taskRef";
-import type { ProjectDashboardSummary, RelayTaskListItem } from "../types";
+import type { ProjectDashboardSummary, ProjectRecord, RelayTaskListItem } from "../types";
 import { KpiTile } from "./admin/dashboard/KpiTile";
-import { ICON, NavProjects } from "./icons";
+import { ICON, NavProjects, StatusOk } from "./icons";
+import { ProjectGoalField } from "./ProjectFormFields";
 import { formatDueDate } from "./task-board/BacklogChrome";
 import { WorkspaceEmpty } from "./workspace/WorkspacePrimitives";
 
@@ -33,6 +37,8 @@ interface ProjectDashboardProps {
    *  context suggestions and the plan/refine request. A column beside the
    *  attention list on a wide pane, below it on a narrow one. */
   proposals?: ReactNode;
+  planning?: (empty: boolean) => ReactNode;
+  confirmation?: ReactNode;
   tasks: RelayTaskListItem[];
   summary?: ProjectDashboardSummary;
   onOpenRecord: (taskId: string) => void;
@@ -44,7 +50,7 @@ interface ProjectDashboardProps {
  *  per-stage breakdown used to sit here too; for a project of a handful of
  *  issues they restated these four tiles, so the board's own columns carry
  *  the stages instead. */
-export function ProjectDashboard({ steward, review, proposals, tasks, summary, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
+export function ProjectDashboard({ steward, review, proposals, planning, confirmation, tasks, summary, onOpenRecord, onOpenBoard }: ProjectDashboardProps) {
   const { t } = useTranslation();
   const metrics = useMemo(() => summary?.metrics ?? projectIssueMetrics(tasks), [summary, tasks]);
   const attention = useMemo(() => summary?.attention ?? projectAttentionIssues(tasks, undefined, Infinity), [summary, tasks]);
@@ -69,33 +75,146 @@ export function ProjectDashboard({ steward, review, proposals, tasks, summary, o
   ) : null;
 
   const empty = metrics.total === 0;
+  const plan = planning?.(empty);
   const main = empty ? (
-    /* No issues yet: one note and the way to the board, instead of a rail
-       of zeros. The proposals column stays, since asking the lead for a plan
-       is the natural first step in an empty project. */
-    <div className="project-dashboard-empty">
-      <WorkspaceEmpty
-        title={t("project.dashboard_empty")}
-        hint={t("project.dashboard_empty_hint")}
-        mark={<span className="project-mark" aria-hidden="true"><NavProjects size={ICON.md} /></span>}
-      />
-      <Button type="button" variant="outline" size="dense" onClick={onOpenBoard}>
-        {t("project.dashboard_open_board")}
-      </Button>
-    </div>
+    plan ?? (review ? null : (
+      <div className="project-dashboard-empty">
+        <WorkspaceEmpty
+          title={t("project.dashboard_empty")}
+          hint={t("project.dashboard_empty_hint")}
+          mark={<span className="project-mark" aria-hidden="true"><NavProjects size={ICON.md} /></span>}
+        />
+        <Button type="button" variant="outline" size="dense" onClick={onOpenBoard}>
+          {t("project.dashboard_open_board")}
+        </Button>
+      </div>
+    ))
   ) : (
     <AttentionCard issues={attention} total={summary?.attentionTotal ?? attention.length} onOpenRecord={onOpenRecord} onOpenBoard={onOpenBoard} />
   );
 
   return (
     <div className="project-dashboard">
+      {confirmation}
       {steward}
       {review}
       {empty ? null : <ProgressRail metrics={metrics} />}
       {capacity}
       <div className="project-dashboard-body">
         <div className="project-dashboard-main">{main}</div>
-        {proposals ? <div className="project-dashboard-aside">{proposals}</div> : null}
+        {proposals || (!empty && plan) ? (
+          <div className="project-dashboard-aside">
+            {empty ? null : plan}
+            {proposals}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function ProjectTaskPlanning({ project, empty, onOpenBoard, onAssignLead }: {
+  project: ProjectRecord;
+  empty: boolean;
+  onOpenBoard: () => void;
+  onAssignLead: () => void;
+}) {
+  const { t } = useTranslation();
+  const { startProjectSetupMutation, updateProjectMutation } = useRelayMutations();
+  const [expanded, setExpanded] = useState(false);
+  const [goal, setGoal] = useState("");
+  const [intent, setIntent] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const savedGoal = project.goal?.trim();
+  const needsGoal = empty && !savedGoal;
+  const hasContext = Boolean(savedGoal || project.description?.trim());
+
+  async function start(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !project.leadAgentId || (needsGoal && !goal.trim())) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (needsGoal) {
+        await updateProjectMutation.mutateAsync({
+          projectId: project.id,
+          input: { goal: goal.trim(), expectedVersion: project.version },
+          baseProject: project,
+        });
+      }
+      await startProjectSetupMutation.mutateAsync({
+        projectId: project.id,
+        input: { mode: "plan", ...(intent.trim() ? { intent: intent.trim() } : {}) },
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!empty && !project.leadAgentId) return null;
+  if (!empty && !expanded) {
+    return <Button type="button" variant="outline" size="dense" onClick={() => setExpanded(true)}>{t("project.plan_next_tasks")}</Button>;
+  }
+
+  return (
+    <Card render={<section />} className="project-dashboard-card">
+      <CardHeader>
+        <CardTitle render={<h2 />}>{t(empty ? "project.dashboard_empty" : "project.plan_next_tasks")}</CardTitle>
+        {empty && savedGoal ? <CardDescription className="project-plan-goal">{savedGoal}</CardDescription> : null}
+        {!project.leadAgentId ? <CardDescription>{t("project.plan_assign_lead_hint")}</CardDescription> : null}
+      </CardHeader>
+      <form className="project-setup-group" onSubmit={(event) => void start(event)}>
+        {project.leadAgentId && (needsGoal || !empty) ? (
+          <fieldset className="project-setup-group" disabled={busy}>
+            {needsGoal ? <ProjectGoalField value={goal} onChange={setGoal} /> : (
+              <Field label={t("project.plan_focus")}>
+                <Textarea rows={2} maxLength={4000} value={intent} onChange={(event) => setIntent(event.target.value)}
+                  placeholder={savedGoal || t("project.plan_focus_placeholder")} />
+              </Field>
+            )}
+          </fieldset>
+        ) : null}
+        {error ? <p role="alert" className="text-destructive project-setup-error">{error}</p> : null}
+        <div className="project-plan-actions">
+          {project.leadAgentId ? (
+            <Button type="submit" size="dense" loading={busy}
+              disabled={busy || (needsGoal ? !goal.trim() : !hasContext && !intent.trim())}>
+              {t(empty ? needsGoal ? "project.plan_save_goal" : "project.plan_from_goal" : "project.plan_draft")}
+            </Button>
+          ) : (
+            <Button type="button" size="dense" onClick={onAssignLead}>{t("project.plan_assign_lead")}</Button>
+          )}
+          {empty ? (
+            <Button type="button" variant="ghost" size="dense" onClick={onOpenBoard}>{t("project.plan_create_manually")}</Button>
+          ) : (
+            <Button type="button" variant="ghost" size="dense" disabled={busy} onClick={() => setExpanded(false)}>{t("dialog.cancel")}</Button>
+          )}
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+export function ProjectTasksCreated({ titles, onOpenBoard, onDismiss }: {
+  titles: string[];
+  onOpenBoard: () => void;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  const more = titles.length - 3;
+  return (
+    <div className="project-tasks-created">
+      <StatusOk size={ICON.sm} aria-hidden="true" />
+      <div className="project-tasks-created-copy" role="status">
+        <strong>{t("project.tasks_created", { count: titles.length })}</strong>
+        <p>{titles.slice(0, 3).join(" · ")}{more > 0 ? ` · ${t("project.tasks_created_more", { count: more })}` : ""}</p>
+      </div>
+      <div className="project-plan-actions">
+        <Button type="button" variant="outline" size="dense" onClick={onOpenBoard}>{t("project.view_tasks")}</Button>
+        <Button type="button" variant="ghost" size="dense" onClick={onDismiss}>{t("project.setup_dismiss")}</Button>
       </div>
     </div>
   );

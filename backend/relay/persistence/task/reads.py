@@ -548,6 +548,7 @@ class TaskReadRows(TaskStoreState):
         attention = or_(blocked, overdue)
         stats = select(
             func.count().label("total"),
+            func.count().filter(opened).label("open"),
             func.count().filter(active).label("active"),
             func.count().filter(blocked).label("blocked"),
             func.count().filter(overdue).label("overdue"),
@@ -567,6 +568,7 @@ class TaskReadRows(TaskStoreState):
             rows = conn.execute(read).mappings().all() if counts["attention"] else []
         return {
             "metrics": {key: counts[key] for key in ("total", "active", "blocked", "overdue", "done")},
+            "openTaskCount": counts["open"],
             "attentionTotal": counts["attention"],
             "hasQueuedOrRunning": counts["live"] > 0,
             "attention": [

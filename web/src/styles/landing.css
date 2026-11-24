@@ -9,8 +9,8 @@
 
    Composition: a sticky bar, a hero (copy over a framed screenshot), then
    three sections on one column measure — how it works, the product tour,
-   the principles — and a closing call to action. The system stays flat:
-   planes separate by fill step and hairline, never by shadow.
+   the principles — and a closing call to action. The floating phone frame
+   uses the shared elevation token over the desktop screenshot.
    ===================================================================== */
 
 .landing {
@@ -38,7 +38,7 @@
 .landing-nav {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   border-bottom: 0.5px solid var(--ld-hairline-soft);
   background: var(--ld-canvas);
 }
@@ -97,6 +97,7 @@
 /* An icon button on the bar's link ink; it names the theme it moves to. */
 .landing-theme-toggle {
   display: inline-grid;
+  flex-shrink: 0;
   place-items: center;
   width: var(--control-h-sm);
   height: var(--control-h-sm);
@@ -179,7 +180,7 @@
 
 .landing-hero {
   position: relative;
-  overflow: hidden;
+  overflow-x: clip;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -198,9 +199,11 @@
 }
 
 .landing-runtimes {
-  margin: var(--sp-2) 0 0;
-  font: var(--type-body);
-  color: var(--ld-muted);
+  max-width: var(--measure);
+  margin: 0;
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  color: var(--ink-4);
 }
 
 /* The page's one hero headline — the same --fs-hero clamp as the sign-in
@@ -240,8 +243,6 @@
   width: 100%;
   max-width: var(--ld-measure);
   padding-right: 12%;
-  /* A mask reads alpha only; the canvas token is just an opaque stop. */
-  mask-image: linear-gradient(to bottom, var(--ld-canvas) 70%, transparent);
 }
 
 .landing-shot {
@@ -260,6 +261,10 @@
   height: auto;
 }
 
+.landing-hero-desktop {
+  mask-image: linear-gradient(to bottom, var(--ld-canvas) 72%, transparent);
+}
+
 .landing-hero-desktop .landing-shot {
   border-bottom: 0;
   border-bottom-left-radius: 0;
@@ -273,8 +278,17 @@
   width: 22%;
   padding: var(--sp-1);
   border: 0.5px solid var(--ld-hairline);
-  border-radius: var(--r-3);
+  border-bottom: 0;
+  border-radius: var(--r-3) var(--r-3) 0 0;
   background: var(--ld-canvas);
+  box-shadow: var(--shadow-2);
+  /* Extend the mask above and beside the frame to retain its shadow. */
+  mask: linear-gradient(to bottom, var(--ld-canvas) 88%, transparent)
+    bottom / 100% calc(100% + var(--sp-7)) repeat-x no-clip;
+}
+
+.landing-hero-phone .landing-shot {
+  border-radius: var(--r-2);
 }
 
 /* ---------- Sections -------------------------------------------------- */
@@ -491,6 +505,8 @@
 
 .landing-foot-github {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
   color: var(--ld-muted);
   transition: color var(--t-fast) var(--ease);
@@ -526,9 +542,16 @@
 /* The app-wide tablet tier: the tour stacks copy over picture, and steps
    and principles fold to one column. */
 @media (max-width: 1040px) {
+  .landing-hero {
+    padding-top: var(--sp-8);
+  }
+
   .landing-tour-row,
   .landing-tour-row:nth-child(even) {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-tour-row {
     gap: var(--sp-5);
   }
 
@@ -552,7 +575,15 @@
 @media (max-width: 820px) {
   .landing {
     --ld-gutter: var(--sp-5);
-    --ld-section-gap: calc(var(--sp-8) + var(--sp-6));
+    --ld-section-gap: calc(var(--sp-8) + var(--sp-3));
+  }
+
+  .landing-nav-inner {
+    gap: var(--sp-4);
+  }
+
+  .landing-nav-actions {
+    gap: var(--sp-3);
   }
 
   .landing-nav-links {
@@ -571,14 +602,24 @@
   }
 
   .landing-hero {
-    gap: var(--sp-7);
-    padding-top: var(--sp-8);
+    gap: var(--sp-6);
+    padding-top: var(--sp-6);
+  }
+
+  .landing-hero-copy {
+    gap: var(--sp-3);
+  }
+
+  .landing-ctas {
+    margin-top: var(--sp-1);
   }
 
   .landing-hero-shot {
     max-width: 22rem;
+    max-height: clamp(22rem, 52svh, 29rem);
     padding-right: 0;
-    mask-image: none;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, var(--ld-canvas) 72%, transparent);
   }
 
   .landing-hero-desktop {
@@ -588,10 +629,78 @@
   .landing-hero-phone {
     position: static;
     width: 100%;
+    padding: var(--sp-1) var(--sp-1) 0;
+    background: var(--ld-surface);
+    box-shadow: none;
+    mask: none;
+  }
+
+  .landing-hero-phone .landing-shot {
+    border: 0;
+    border-radius: var(--r-2) var(--r-2) 0 0;
+    box-shadow: none;
+  }
+
+  .landing-section {
+    scroll-margin-top: calc(var(--header-h) + var(--sp-4));
+  }
+
+  .landing-section-head {
+    margin-bottom: var(--sp-5);
+  }
+
+  .landing-steps {
+    gap: var(--sp-5);
+  }
+
+  .landing-step + .landing-step {
+    padding-top: var(--sp-5);
+    border-top: 0.5px solid var(--ld-hairline-soft);
+  }
+
+  .landing-tour {
+    gap: var(--sp-7);
+  }
+
+  .landing-tour-row {
+    gap: var(--sp-4);
+  }
+
+  .landing-tour-row + .landing-tour-row {
+    padding-top: var(--sp-7);
+    border-top: 0.5px solid var(--ld-hairline-soft);
+  }
+
+  .landing-tour-copy {
+    gap: var(--sp-2);
   }
 
   .landing-principles {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-5);
+  }
+
+  .landing-oss {
+    gap: var(--sp-5);
+  }
+
+  .landing-oss-copy {
+    gap: var(--sp-3);
+  }
+
+  .landing-terminal {
+    gap: var(--sp-2);
+    padding: var(--sp-4);
+  }
+
+  .landing-terminal-command {
+    padding-bottom: var(--sp-1);
+    user-select: all;
+  }
+
+  .landing-closer {
+    gap: var(--sp-3);
+    padding-block: var(--sp-8);
   }
 }
 
@@ -600,8 +709,17 @@
     --ld-gutter: var(--sp-4);
   }
 
+  .landing-nav-inner {
+    gap: var(--sp-2);
+    padding-block: var(--sp-2);
+  }
+
   .landing-nav-actions {
-    gap: var(--sp-3);
+    gap: var(--sp-2);
+  }
+
+  .landing-nav .landing-button {
+    padding-inline: var(--sp-3);
   }
 
   /* Three doors do not fit a phone bar without wrapping "Sign in"; GitHub
@@ -617,6 +735,18 @@
   .landing-ctas {
     flex-direction: column;
     align-self: stretch;
+    gap: var(--sp-2);
+  }
+
+  .landing-section-title {
+    font: var(--type-page);
+    letter-spacing: var(--type-page-track);
+  }
+
+  .landing-foot-inner {
+    flex-flow: column nowrap;
+    align-items: flex-start;
+    gap: var(--sp-3);
   }
 
   .landing-foot-github {

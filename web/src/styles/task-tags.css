@@ -82,21 +82,22 @@
 
 /* ── A tag that filters its list (TagToggle, under TagFilterContext) ── */
 
-/* Hover adds a faint tone wash; the active filter strengthens the keyline
-   and wash together. The name remains ink in every state. */
+/* Hover adds the quiet neutral row wash; the active filter uses the shared
+   selection wash and firm neutral edge so the tag's hue stays strictly on the
+   leading "#" and never mimics a coloured status badge. */
 .tag-badge--toggle {
   cursor: pointer;
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
 .tag-badge--toggle:hover {
-  background: color-mix(in srgb, var(--tag-tone) 8%, transparent);
+  background: var(--row-hover);
   color: var(--ink-1);
 }
 
 .tag-badge--toggle[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--tag-tone) 12%, transparent);
-  box-shadow: inset 0 0 0 var(--stroke-w) var(--tag-tone);
+  background: var(--action-soft);
+  box-shadow: inset 0 0 0 var(--stroke-w) var(--line-strong);
   color: var(--ink-1);
 }
 

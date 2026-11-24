@@ -19,10 +19,10 @@ export type FaviconState = "idle" | "running" | "waiting";
  * The colored half identifies activity. Keep the static favicon in sync. */
 export const FAVICON_INK = {
   canvas: "#12171b",
-  outline: "#52606b",
+  outline: "#405361",
   action: "#ff8a3d",
   live: "#91b9f2",
-  unlit: "#f1f5f9",
+  unlit: "#edf2f6",
 } as const;
 
 /** favicon.svg's geometry: a full-bleed tile and two bold chevrons, sized so

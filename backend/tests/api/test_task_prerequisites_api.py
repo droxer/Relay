@@ -510,6 +510,7 @@ def test_project_dashboard_counts_all_issues_and_only_hydrates_five_attention_ro
     hold = store.create_task({**scope, "title": "Held", "status": "blocked", "description": "Large text. " * 2000})
     store.create_task({**scope, "title": "In progress", "status": "running"})
     store.create_task({**scope, "title": "Finished", "status": "done", "dueDate": "2026-11-01"})
+    store.create_task({**scope, "title": "Cancelled", "status": "cancelled", "dueDate": "2026-11-01"})
     store.create_task({**scope, "title": "Ignored Automation", "isRoutine": True})
     store.create_task({**scope, "title": "Ignored run", "sourceRoutineId": hold["id"]})
     result = client.get("/api/v1/tasks", params={
@@ -520,7 +521,8 @@ def test_project_dashboard_counts_all_issues_and_only_hydrates_five_attention_ro
     assert data["tasks"] == []
     assert data["flowPolicy"]["wipLimit"] == 5
     dashboard = data["projectDashboard"]
-    assert dashboard["metrics"] == {"total": 12, "active": 1, "blocked": 1, "overdue": 9, "done": 1}
+    assert dashboard["metrics"] == {"total": 13, "active": 1, "blocked": 1, "overdue": 9, "done": 1}
+    assert dashboard["openTaskCount"] == 11
     assert dashboard["attentionTotal"] == 10
     assert [entry["task"]["title"] for entry in dashboard["attention"]] == ["Held", "Old item 0", "Old item 1", "Old item 2", "Old item 3"]
     assert "description" not in dashboard["attention"][0]["task"]

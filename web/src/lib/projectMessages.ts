@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import type { CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-core";
 import type { AgentName, RelaySession, TokenUsage, Tone } from "../types.js";
 import { permissionInputSummary } from "./permissionRequests.ts";
+import { recoverAntigravityStdout, routeAntigravityToolUpdates } from "./agent-stream/antigravity.ts";
 import { toolInput, toolTarget } from "./agent-stream/builders.ts";
 import { agentMessagePlainText } from "./agent-stream/display.ts";
 
@@ -232,6 +233,14 @@ type RunProjectionState = RunStreams & {
   collaborations: CodexCollaborationEvent[];
   /** Reconcile late output against the stream before adding log recovery text. */
   completedOutput?: { streamed: RunStreams; fallback: RunStreams };
+  /** For a steered Antigravity run, keep the original cuts even when recovery
+   * inserts lines and moves their positions in the rendered stream. */
+  antigravityBlocks?: {
+    indices: readonly number[];
+    offsets: readonly number[];
+    recoveredOffsets?: readonly number[];
+    routing?: ReturnType<typeof routeAntigravityToolUpdates>["routing"];
+  };
 };
 
 function segmentStreams(state: RunProjectionState): { stdout: string; stderr: string } {
@@ -257,8 +266,17 @@ function reconcileCompletedOutput(state: RunProjectionState, agent: AgentName, t
   const completed = state.completedOutput;
   if (!completed) return;
   const output = { ...completed.streamed };
-  applyCompletedLogFallback(output, completed.fallback, agent, t);
-  state.stdoutStart = rebaseOffset(state.stdout, output.stdout, state.stdoutStart);
+  if (agent === "antigravity") {
+    const blocks = state.antigravityBlocks;
+    const recovered = recoverAntigravityStdout(output.stdout, completed.fallback.stdout, blocks?.offsets ?? []);
+    output.stdout = recovered.stdout;
+    output.stderr = appendMissingStream(output.stderr, completed.fallback.stderr);
+    if (blocks) state.antigravityBlocks = { ...blocks, recoveredOffsets: recovered.offsets };
+    state.stdoutStart = recovered.offsets.at(-1) ?? 0;
+  } else {
+    applyCompletedLogFallback(output, completed.fallback, agent, t);
+    state.stdoutStart = rebaseOffset(state.stdout, output.stdout, state.stdoutStart);
+  }
   state.stderrStart = rebaseOffset(state.stderr, output.stderr, state.stderrStart);
   Object.assign(state, output);
 }
@@ -402,6 +420,7 @@ export class ProjectMessagesAccumulator {
     const state = this.runState.get(runId);
     const block = state ? this.out[state.index] : undefined;
     if (!state || block?.kind !== "agent" || !block.streaming) return;
+    const priorIndex = state.index;
     const stdoutStart = lineBoundary(state.stdout, state.stdoutStart);
     const stderrStart = lineBoundary(state.stderr, state.stderrStart);
     this.out[state.index] = {
@@ -428,6 +447,34 @@ export class ProjectMessagesAccumulator {
       attachments: [],
     });
     state.index = this.out.length - 1;
+    if (block.agent === "antigravity") {
+      const previous = state.antigravityBlocks;
+      state.antigravityBlocks = {
+        indices: [...(previous?.indices ?? [priorIndex]), state.index],
+        offsets: [...(previous?.offsets ?? [0]), stdoutStart],
+        routing: previous?.routing,
+      };
+      this.routeAntigravityStdout(state);
+    }
+  }
+
+  private routeAntigravityStdout(state: RunProjectionState): boolean {
+    const blocks = state.antigravityBlocks;
+    if (!blocks) return false;
+    const { routing, stdoutByBlock } = routeAntigravityToolUpdates(
+      state.stdout, blocks.recoveredOffsets ?? blocks.offsets, blocks.routing,
+    );
+    state.antigravityBlocks = { ...blocks, routing };
+    let changed = false;
+    for (const [ordinal, index] of blocks.indices.entries()) {
+      const block = this.out[index];
+      const stdout = stdoutByBlock[ordinal];
+      if (block.kind === "agent" && block.stdout !== stdout) {
+        this.out[index] = { ...block, stdout };
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   private permissionAudit(
@@ -467,13 +514,15 @@ export class ProjectMessagesAccumulator {
       state.completedOutput = { ...completed, streamed: output };
       reconcileCompletedOutput(state, event.agent, t);
     }
+    const routed = this.routeAntigravityStdout(state);
     const block = this.out[index];
     const streams = segmentStreams(state);
+    if (block.kind === "agent" && state.antigravityBlocks) streams.stdout = block.stdout;
     if (block.kind === "agent" && (block.stdout !== streams.stdout || block.stderr !== streams.stderr)) {
       this.out[index] = { ...block, ...streams };
       return true;
     }
-    return created;
+    return created || routed;
   }
 
   private applyEvent(event: RelaySession["events"][number], t: TFunction): boolean {
@@ -576,9 +625,12 @@ export class ProjectMessagesAccumulator {
         this.prompts.delete(event.requestId);
         const audit = this.permissionAudit(event, prompt, t);
         const state = this.runState.get(prompt.runId);
-        const block = state ? this.out[state.index] : undefined;
-        if (block?.kind === "agent") {
-          this.out[state!.index] = { ...block, permissions: [...(block.permissions ?? []), audit] };
+        const blocks = state?.antigravityBlocks;
+        const ordinal = prompt.toolUseId ? blocks?.routing?.tools.get(prompt.toolUseId) : undefined;
+        const index = ordinal === undefined ? state?.index : blocks?.indices[ordinal];
+        const block = index === undefined ? undefined : this.out[index];
+        if (index !== undefined && block?.kind === "agent") {
+          this.out[index] = { ...block, permissions: [...(block.permissions ?? []), audit] };
           return true;
         }
         this.out.push({
@@ -612,12 +664,15 @@ export class ProjectMessagesAccumulator {
           };
           reconcileCompletedOutput(state, event.agent, t);
         }
+        this.routeAntigravityStdout(state);
         const block = this.out[state.index];
         if (block.kind !== "agent") return ensured.created;
+        const streams = segmentStreams(state);
         this.out[state.index] = {
           ...block,
           streaming: false,
-          ...segmentStreams(state),
+          stdout: state.antigravityBlocks ? block.stdout : streams.stdout,
+          stderr: streams.stderr,
           ...(event.tokenUsage ? { tokenUsage: event.tokenUsage } : {}),
           ...(!event.tokenUsage ? { usageUnreported: true } : {}),
           ...(event.outputTruncated ? { outputTruncated: true } : {}),

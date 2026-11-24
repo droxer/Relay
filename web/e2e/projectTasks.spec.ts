@@ -1,4 +1,129 @@
 import { expect, test } from "@playwright/test";
+import type { ProjectRecord, ProjectSetup, RelayTaskSummary } from "../src/types";
+
+for (const mode of ["plan", "setup"] as const) {
+  test(`goal-driven Task creation feedback (${mode})`, async ({ page }, testInfo) => {
+    await page.setViewportSize(mode === "setup" ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    const stamp = "2026-09-01T00:00:00Z";
+    const draft: ProjectSetup = {
+      mode, state: "proposed", draftId: "draft", intent: "Ship pricing", agentId: "lead", threadId: "draft-thread",
+      taskId: "draft-task", startedAt: stamp, finishedAt: stamp,
+      proposal: {
+        ...(mode === "setup" ? { goal: "Ship pricing", context: "Use the existing design system." } : {}),
+        tasks: [
+          { key: "design", title: "Design pricing" },
+          { key: "build", title: "Build pricing", after: ["design"] },
+        ],
+      },
+    };
+    let project: ProjectRecord = {
+      id: "pricing", name: "Pricing launch", goal: "Ship pricing", ownerUserId: "u", computerId: "c", enabled: true,
+      members: [{ agentId: "lead", role: "planner", enabled: true, responsibilities: "Plan the release" }],
+      leadAgentId: "lead", version: 1, workspaceLayout: "project", workspaceSubpath: "projects/pricing",
+      createdAt: stamp, updatedAt: stamp, ...(mode === "setup" ? { setup: draft } : {}),
+    };
+    let tasks: RelayTaskSummary[] = [];
+    let attempts = 0;
+    const starts: unknown[] = [];
+    const patches: unknown[] = [];
+    const applies: unknown[] = [];
+    await page.route("**/api/**", async (route) => {
+      const request = route.request();
+      const { pathname: path, searchParams } = new URL(request.url());
+      const directory = {
+        ...project, view: "directory", goal: undefined, context: undefined, setup: undefined,
+        setupSummary: project.setup && {
+          state: project.setup.state, mode, threadId: draft.threadId, hasProposal: true, proposedTaskCount: 2,
+        },
+      };
+      let status = 200;
+      let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [directory], tasks };
+      if (path.endsWith("/auth/me")) {
+        body = { authenticated: true, user: { id: "u", userId: "u", username: "Owner", role: "user", theme: "light", language: "en" } };
+      } else if (path.endsWith("/projects") && searchParams.get("view") === "index") {
+        body = { projects: [{ id: project.id, name: project.name, enabled: true, version: project.version, memberCount: 1 }] };
+      } else if (path.endsWith("/projects/pricing")) {
+        if (request.method() === "PATCH") {
+          const input = request.postDataJSON();
+          patches.push(input);
+          project = { ...project, context: input.context, version: project.version + 1 };
+        }
+        body = { project: searchParams.get("view") === "directory" ? directory : project };
+      } else if (path.endsWith("/pricing/setup") && request.method() === "POST") {
+        starts.push(request.postDataJSON());
+        project = { ...project, version: project.version + 1, setup: draft };
+        body = { project, threadId: draft.threadId };
+        status = 202;
+      } else if (path.endsWith("/pricing/setup/tasks") && request.method() === "POST") {
+        applies.push(request.postDataJSON());
+        attempts += 1;
+        if (attempts === 1) {
+          status = 409;
+          body = { detail: "Unable to file tasks yet" };
+        } else {
+          tasks = ["Design pricing", "Build pricing"].map((title, index) => ({
+            id: `task_pricing_${index}`, title, projectId: project.id, status: "backlog", workflowStage: "backlog",
+            description: "", priority: "normal", isRoutine: false, linkedSessionIds: [], ownerUserId: "u", createdAt: stamp,
+            updatedAt: stamp, eventCount: 1, activityCount: 0,
+          }));
+          project = { ...project, version: project.version + 1, setup: { ...draft, state: "applied" } };
+          body = { project, tasks: tasks.map(task => ({ ...task, events: [], activity: [] })) };
+        }
+      } else if (path.endsWith("/tasks") && searchParams.get("scope") === "project-dashboard") {
+        body = {
+          tasks: [],
+          projectDashboard: {
+            metrics: { total: tasks.length, active: 0, blocked: 0, overdue: 0, done: 0 },
+            openTaskCount: tasks.length, attentionTotal: 0, hasQueuedOrRunning: false, attention: [],
+          },
+        };
+      }
+      await route.fulfill({ status, json: body });
+    });
+
+    await page.goto("/projects/pricing");
+    if (mode === "plan") {
+      await expect(page.getByText("Ship pricing", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Initialize tasks from goal" }).click();
+      expect(starts).toEqual([{ mode: "plan" }]);
+    }
+    const review = page.getByRole("region", { name: "Project setup" });
+    await expect(review.getByRole("heading", { name: "Proposed tasks (2 of 2 selected)" })).toBeVisible();
+    await expect(review.getByText("After Design pricing")).toBeVisible();
+    await expect(review.getByRole("button", { name: "Open task", exact: true })).toHaveCount(0);
+    const apply = review.getByRole("button", { name: mode === "plan" ? "Create 2 tasks" : "Apply setup & create 2 tasks" });
+    await apply.click();
+    await expect(review.getByRole("alert")).toContainText("Unable to file tasks yet");
+    await expect(apply).toBeEnabled();
+    await expect(page.locator("[data-slot=toast]").getByText("Created 2 tasks in Backlog")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(await review.evaluate((panel) => panel.scrollWidth <= panel.clientWidth + 1)).toBe(true);
+    expect(await apply.evaluate((button) => button.getBoundingClientRect().right <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("review-retry.png"), fullPage: true });
+
+    await apply.click();
+    await expect(review).toHaveCount(0);
+    expect(applies).toEqual(Array(2).fill({
+      draftId: "draft", taskKeys: ["design", "build"], assignedAgentIds: { design: null, build: null },
+    }));
+    if (mode === "setup") {
+      expect(patches).toHaveLength(2);
+      for (const patch of patches) expect(patch).not.toHaveProperty("setupResolution");
+    } else {
+      expect(patches).toHaveLength(0);
+    }
+    const banner = page.locator(".project-tasks-created");
+    await expect(banner.getByText("Created 2 tasks in Backlog")).toBeVisible();
+    await expect(banner.getByText("Design pricing · Build pricing")).toBeVisible();
+    const toast = page.locator("[data-slot=toast]").filter({ hasText: "Created 2 tasks in Backlog" });
+    await expect(toast.getByRole("button", { name: "View tasks" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Tasks", exact: true }).getByText("2", { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("tasks-created.png"), fullPage: true });
+    await (mode === "setup" ? toast : banner).getByRole("button", { name: "View tasks" }).click();
+    await expect(page).toHaveURL(/\/projects\/pricing\?tab=tasks$/);
+    await expect(page.getByRole("link", { name: "Build pricing", exact: true })).toBeVisible();
+  });
+}
 
 for (const mobile of [false, true]) {
   test(`project tabs and issues board (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {

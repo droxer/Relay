@@ -12,6 +12,7 @@ import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
+import { useProjectWorkflowChoices } from "../hooks/useProjectWorkflows";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -176,6 +177,7 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
   const loading = providedTasks === undefined && (waitingForSearch || result.isPending);
   const loadFailed = providedTasks === undefined && !waitingForSearch && result.isError;
   const tasks = providedTasks ?? response?.tasks ?? NO_TASKS;
+  const workflowChoices = useProjectWorkflowChoices(projectId, Boolean(projectId && tasks.some(task => task.assignedWorkflowId && !task.assignedTeamId && !task.assignedAgentId)));
   const backlogTasks = useMemo(() => remote ? tasks : tasks.filter((task) => !task.deletedAt && !task.isRoutine && !task.sourceRoutineId
     && (!projectId || task.projectId === projectId)
     && (!computerId || taskComputer(task, nodes, sessions) === computerId)), [tasks, remote, projectId, computerId, nodes, sessions]);
@@ -292,6 +294,9 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
         imageUrl: team.profileImageUrl,
         ready: teamReady(team),
       };
+    }
+    if (task.assignedWorkflowId && !task.assignedTeamId && !task.assignedAgentId) {
+      return { name: workflowChoices.data?.workflows.find(workflow => workflow.id === task.assignedWorkflowId)?.name, ready: false };
     }
     return {
       name: taskAgentDisplayName(task, logicalAgents, teams),
