@@ -278,7 +278,7 @@ def test_task_collaboration_style_is_validated(monkeypatch) -> None:
         assert "collaborationStyle" not in cleared.json()
 
 
-def test_task_list_summary_view_is_compact_and_keeps_default_contract(
+def test_task_lists_are_compact_and_detail_keeps_history(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -296,12 +296,12 @@ def test_task_list_summary_view_is_compact_and_keeps_default_contract(
         assert updated.status_code == 200
         app.state.task_store.record_activity(task_id, "Summary activity")
 
-        full_list = client.get("/api/v1/tasks?limit=1")
-        assert full_list.status_code == 200
-        full_task = full_list.json()["tasks"][0]
-        assert full_task["id"] == task_id
-        assert len(full_task["events"]) >= 2
-        assert len(full_task["activity"]) == 1
+        page = client.get("/api/v1/tasks?limit=1").raise_for_status().json()
+        assert page["nextCursor"] is None
+        record = page["tasks"][0]
+        assert record["id"] == task_id
+        assert "events" not in record and "activity" not in record
+        assert record["eventCount"] >= 2 and record["activityCount"] == 1
 
         listed = client.get("/api/v1/tasks?view=summary&limit=1")
         assert listed.status_code == 200
@@ -316,6 +316,7 @@ def test_task_list_summary_view_is_compact_and_keeps_default_contract(
         detail = client.get(f"/api/v1/tasks/{task_id}")
         assert detail.status_code == 200
         assert len(detail.json()["events"]) == summary["eventCount"]
+        assert len(detail.json()["activity"]) == summary["activityCount"]
 
 
 def test_task_summary_view_without_limit_preserves_completeness(monkeypatch) -> None:

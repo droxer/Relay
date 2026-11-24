@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from loguru import logger
 
 from ...core.workspace_artifacts import (
     artifact_index_item,
@@ -17,40 +18,26 @@ from ..actors import (
     get_task_header_for_actor,
     request_actor,
 )
-from ..deps import AppContextDep
+from ..deps import AppContext, AppContextDep
 
 router = APIRouter()
 
 
-def occurrence_tasks(
-    ctx: Any, task: dict[str, Any], actor: Actor, *, occurrence_ids: list[str] | None = None,
-    record_view: bool = False,
-) -> list[dict[str, Any]]:
-    """The routine's promoted occurrences the actor may read.
+def occurrence_file_records(ctx: AppContext, task: dict[str, Any], actor: Actor) -> list[dict[str, Any]]:
+    ids = (task.get("occurrenceIds") or []) if task.get("isRoutine") else []
+    return ctx.task_store.task_run_records(actor["userId"], ids, with_timing=False) if ids else []
 
-    A routine never runs itself — the scheduler promotes an occurrence task and
-    that occurrence carries the run. Rolling its records up to the routine is
-    what makes the routine's own surface show what its runs produced. An
-    occurrence that was deleted, or that this actor cannot read, is skipped
-    rather than failing the whole rollup.
-    """
-    if not task.get("isRoutine"):
-        return []
-    occurrences: list[dict[str, Any]] = []
-    for occurrence_id in occurrence_ids if occurrence_ids is not None else task.get("occurrenceIds") or []:
-        try:
-            occurrences.append(get_task_for_actor(ctx.task_store, occurrence_id, actor, record_view=record_view))
-        except HTTPException:
-            continue
-        except Exception:  # noqa: BLE001 - one unreadable occurrence must not block the rest
-            logger.warning(
-                "Unexpected error reading routine occurrence",
-                task_id=task.get("id"),
-                occurrence_id=occurrence_id,
-                exc_info=True,
-            )
-            continue
-    return occurrences
+
+def _rollup_position(cursor: str) -> tuple[datetime, str, int]:
+    try:
+        stamp, task_id, raw_sequence = cursor.split("|")
+        timestamp = datetime.fromisoformat(stamp)
+        sequence = int(raw_sequence)
+        if timestamp.tzinfo is None or not 0 <= sequence <= 2**63 - 1:
+            raise ValueError
+        return timestamp.astimezone(UTC), str(UUID(task_id)), sequence
+    except (ValueError, OverflowError) as error:
+        raise HTTPException(400, "Invalid Automation events cursor.") from error
 
 
 @router.get("/tasks/{task_id}/events")
@@ -61,34 +48,40 @@ def task_events(
     include: str | None = None,
     view: str | None = None,
     before: int | None = Query(default=None, ge=0, le=2**63 - 1),
+    cursor: str | None = Query(default=None, max_length=140),
     limit: int = Query(default=25, ge=1, le=100),
 ) -> dict[str, Any]:
     """The task's event log — the run history behind its current state.
 
     `include=occurrences` additionally folds in the event logs of a routine's
-    promoted occurrences, merged by timestamp, so the routine shows the runs it
-    caused. Each event keeps its own `taskId`, so the caller can still tell the
+    promoted occurrences, in chronological pages. Each event keeps its own
+    `taskId`, so the caller can still tell the
     routine's own entries from an occurrence's. The default answer stays the
     task's own log verbatim — an event-sourced replay must never silently
     receive another task's events.
     """
     actor = request_actor(request, ctx.auth_store)
-    if view == "lifecycle" and include != "occurrences":
+    if include == "occurrences":
+        task = get_task_header_for_actor(ctx.task_store, task_id, actor)
+        events, position = ctx.task_store.task_rollup_event_page(
+            actor["userId"], task_id, include_occurrences=bool(task["isRoutine"]),
+            limit=limit, before=_rollup_position(cursor) if cursor else None,
+        )
+        return {
+            "events": events,
+            "nextCursor": f"{position[0].isoformat()}|{position[1]}|{position[2]}" if position else None,
+        }
+    if view == "lifecycle":
         task = get_task_header_for_actor(ctx.task_store, task_id, actor)
         return {"events": ctx.task_store.task_lifecycle_events(task["id"])}
-    if view == "activity" and include != "occurrences":
+    if view == "activity":
         task = get_task_header_for_actor(ctx.task_store, task_id, actor)
         try:
             return ctx.task_store.task_activity_page(task["id"], limit=limit, before=before)
         except ValueError as error:
             raise HTTPException(400, str(error)) from error
     task = get_task_for_actor(ctx.task_store, task_id, actor)
-    events = list(task["events"])
-    if include == "occurrences":
-        for occurrence in occurrence_tasks(ctx, task, actor):
-            events.extend(occurrence["events"])
-        events.sort(key=lambda event: event.get("timestamp") or "")
-    return {"events": events}
+    return {"events": task["events"]}
 
 
 def newest_artifacts_by_file(
@@ -149,7 +142,7 @@ def task_artifacts(
     sources: list[tuple[str, str]] = [
         (task_id, session_id) for session_id in task.get("linkedSessionIds", [])
     ]
-    for occurrence in occurrence_tasks(ctx, task, actor, record_view=True):
+    for occurrence in occurrence_file_records(ctx, task, actor):
         sources.extend(
             (occurrence["id"], session_id)
             for session_id in occurrence.get("linkedSessionIds", [])

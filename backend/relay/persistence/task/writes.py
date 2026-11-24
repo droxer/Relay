@@ -21,6 +21,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.exc import IntegrityError
+from ..sql import names_no_uuid_row
 from ...core.ids import new_relay_id
 from ...notifications.rules import task_notification_rows
 from ..automation.store import insert_outbox_rows, task_outbox_rows
@@ -266,6 +267,16 @@ class TaskWriteRows(TaskStoreState):
             )
             if claimed.rowcount != 1:
                 raise _TaskWriteConflict(task_id)
+            occurrence_ids = {
+                key for event in events if event.get("type") == "task.occurrence_created"
+                and isinstance(key := event.get("occurrenceId"), str) and not names_no_uuid_row(self.engine, key)
+            }
+            if occurrence_ids and task.get("isRoutine"):
+                conn.execute(update(self.tasks).where(
+                    self.tasks.c.id.in_(occurrence_ids),
+                    self.tasks.c.owner_user_id == task.get("ownerUserId"),
+                    self.tasks.c.automation_id.is_(None),
+                ).values(automation_id=task_pk))
             for offset, event in enumerate(events):
                 conn.execute(
                     insert(self.events).values(

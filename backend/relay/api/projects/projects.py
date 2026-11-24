@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from ...core.ids import new_database_id
+from ...core.project_directory import PROJECT_DIRECTORY_FIELDS
 from ...persistence.project.store import ProjectValidationError, ProjectVersionConflict
 from ...projects.catalog import (
     create_project_payload,
@@ -97,9 +98,9 @@ def list_projects(request: Request, ctx: AppContextDep) -> dict[str, Any] | Resp
     view = request.query_params.get("view")
     if view == "index":
         return private_conditional_json(request, {"projects": ctx.project_store.list_project_index(actor["userId"])})
-    projects = ctx.project_store.list_projects(actor["userId"], include_archived=True)
     if view == "directory":
-        return {"projects": [_project_directory_entry(project) for project in projects]}
+        return {"projects": ctx.project_store.list_project_directory(actor["userId"])}
+    projects = ctx.project_store.list_projects(actor["userId"], include_archived=True)
     if view == "summary":
         return {"projects": [_project_summary(project) for project in projects]}
     return {"projects": projects}
@@ -112,13 +113,6 @@ def _project_summary(project: dict[str, Any]) -> dict[str, Any]:
     if project.get("context") or suggestions:
         summary["contextSummary"] = {"suggestionCount": len(suggestions)}
     return summary
-
-
-PROJECT_DIRECTORY_FIELDS = (
-    "id", "ownerUserId", "name", "computerId", "workspaceLayout", "workspaceSubpath",
-    "leadAgentId", "managerAgentId", "managerThreadId", "enabled", "version",
-    "createdAt", "updatedAt", "archivedAt",
-)
 
 
 def _project_directory_entry(project: dict[str, Any]) -> dict[str, Any]:

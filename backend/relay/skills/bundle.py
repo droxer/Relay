@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from .grants import GRANTS_VERSION, read_grants
@@ -11,58 +12,47 @@ EMPTY_SKILL_BUNDLE: dict[str, Any] = {
 }
 
 
-def resolve_bundle(
-    ctx: Any, agent: dict[str, Any], *, project_id: str | None = None
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-    policy = agent.get("skillPolicy") or {}
-    scoped = (
-        effective_assignments(ctx, agent, project_id=project_id)
-        if hasattr(ctx.skill_store, "list_assignments")
-        else []
-    )
-    managed_legacy = isinstance(policy, dict) and "version" in policy
-    if not managed_legacy and not scoped:
-        return None, []
-    grants = [
-        {
-            "skillId": item["skillId"],
-            "pin": item["pin"],
-            "assignmentMode": item["mode"],
-        }
-        for item in scoped
-    ]
-    if isinstance(policy, dict) and policy.get("version") not in (None, GRANTS_VERSION):
-        skipped = []
-        raw = policy.get("grants", [])
-        for item in raw if isinstance(raw, list) else []:
-            if not isinstance(item, dict) or not isinstance(item.get("skillId"), str):
-                continue
-            skill = ctx.skill_store.get_skill(item["skillId"])
-            skipped.append(
-                _skipped(
-                    item["skillId"],
-                    skill.get("slug") if skill else None,
-                    "unsupported-policy",
-                )
-            )
-    else:
-        skipped = []
-        # Direct v1 agent grants are retained as the compatibility override.
-        direct = {
-            item["skillId"]: {**item, "assignmentMode": "optional"}
-            for item in read_grants(agent)
-        }
-        grants = [item for item in grants if item["skillId"] not in direct]
-        grants.extend(direct.values())
+@dataclass
+class AgentSkillResolution:
+    bundle: dict[str, Any] | None
+    skipped: list[dict[str, Any]]
+    assignments: list[dict[str, Any]]
+    skills: dict[str, dict[str, Any]]
 
+
+def resolve_bundle(
+    ctx: Any, agent: dict[str, Any], *, project_id: str | None = None,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    result = resolve_agent_skills(ctx, agent, project_id=project_id)
+    return result.bundle, result.skipped
+
+
+def resolve_agent_skills(
+    ctx: Any, agent: dict[str, Any], *, project_id: str | None = None, include_files: bool = True,
+) -> AgentSkillResolution:
+    store = ctx.skill_store
+    policy = agent.get("skillPolicy") or {}
+    scoped = effective_assignments(ctx, agent, project_id=project_id) if hasattr(store, "list_assignments") else []
+    if not (isinstance(policy, dict) and "version" in policy) and not scoped:
+        return AgentSkillResolution(None, [], [], {})
+
+    grants = {
+        item["skillId"]: {"skillId": item["skillId"], "pin": item["pin"], "assignmentMode": item["mode"]}
+        for item in scoped
+    }
+    grants.update((item["skillId"], {**item, "assignmentMode": "optional"}) for item in read_grants(agent))
+    unsupported = []
+    if isinstance(policy, dict) and policy.get("version") not in (None, GRANTS_VERSION):
+        raw = policy.get("grants", [])
+        if isinstance(raw, list):
+            unsupported = [item["skillId"] for item in raw if isinstance(item, dict) and isinstance(item.get("skillId"), str)]
+
+    skills = store.get_skills_by_ids(set(grants) | set(unsupported))
+    skipped = [_skipped(key, skills.get(key, {}).get("slug"), "unsupported-policy") for key in unsupported]
     owner = agent.get("supervisorUserId")
-    resolved, seen = [], set()
-    for grant in grants:
-        skill_id = grant["skillId"]
-        if skill_id in seen:
-            continue
-        seen.add(skill_id)
-        skill = ctx.skill_store.get_skill(skill_id)
+    eligible = []
+    for skill_id, grant in grants.items():
+        skill = skills.get(skill_id)
         if not skill:
             skipped.append(
                 _skipped(
@@ -114,7 +104,11 @@ def resolve_bundle(
             if isinstance(pin, dict)
             else None
         )
-        revision = ctx.skill_store.get_revision(revision_id) if revision_id else None
+        eligible.append((skill_id, slug, revision_id, grant))
+    revisions = store.get_revisions_by_ids({key for _, _, key, _ in eligible if key})
+    resolved = []
+    for skill_id, slug, revision_id, grant in eligible:
+        revision = revisions.get(revision_id)
         if not revision or revision.get("skillId") != skill_id:
             skipped.append(
                 _skipped(
@@ -125,7 +119,6 @@ def resolve_bundle(
                 )
             )
             continue
-        files = ctx.skill_store.revision_files(revision_id)
         resolved.append(
             {
                 "skillId": skill_id,
@@ -133,17 +126,20 @@ def resolve_bundle(
                 "slug": slug,
                 "manifestSha256": revision["manifestSha256"],
                 "assignmentMode": grant.get("assignmentMode", "optional"),
-                "files": [
-                    {key: item[key] for key in ("path", "sha256", "bytes")}
-                    for item in files
-                ],
             }
         )
+    if include_files:
+        files = store.revision_files_by_ids({item["revisionId"] for item in resolved})
+        for item in resolved:
+            item["files"] = [
+                {key: file[key] for key in ("path", "sha256", "bytes")}
+                for file in files.get(item["revisionId"], ())
+            ]
     resolved.sort(key=lambda item: (item["slug"], item["skillId"]))
     skipped.sort(
         key=lambda item: (item.get("slug") or "", item["skillId"], item["reason"])
     )
-    return {**_empty_bundle(), "skills": resolved}, skipped
+    return AgentSkillResolution({**_empty_bundle(), "skills": resolved}, skipped, scoped, skills)
 
 
 def _empty_bundle() -> dict[str, Any]:

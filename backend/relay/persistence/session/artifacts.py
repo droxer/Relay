@@ -12,6 +12,7 @@ from itertools import batched
 from typing import Any
 from loguru import logger
 from sqlalchemy import (
+    func,
     insert,
     select,
     update,
@@ -24,6 +25,7 @@ from .reducer import apply_session_event
 from ...core.ids import new_database_id, now_iso
 from ..events import relay_event
 from ..engine import store_transaction
+from ..workspace import workspace_thread_scope
 from .rows import (
     _canonical_database_session_id,
     artifact_snapshot_extension,
@@ -67,7 +69,8 @@ class SessionArtifactRows(SessionStoreState):
 
     def list_artifact_summaries(
         self, *, owner_user_id: str | None = None,
-        workspace_path: str | None = None, limit: int = 200
+        workspace_path: str | None = None, limit: int = 200,
+        project_id: str | None = None, team_id: str | None = None, agent_id: str | None = None,
     ) -> list[dict[str, Any]]:
         # One indexed range read over the per-file projection: regenerated
         # files are already collapsed to their newest record, and no snapshot,
@@ -93,6 +96,10 @@ class SessionArtifactRows(SessionStoreState):
         )
         if owner_user_id is not None:
             statement = statement.where(files.c.owner_user_id == owner_user_id)
+            if project_id or team_id or agent_id:
+                statement = statement.where(*workspace_thread_scope(
+                    sessions, owner_user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+                ))
         if workspace_path is not None:
             statement = statement.where(files.c.workspace_path == workspace_path)
         with store_transaction(self.engine) as conn:
@@ -121,6 +128,18 @@ class SessionArtifactRows(SessionStoreState):
                 }
             )
         return result
+
+    def workspace_artifact_count(
+        self, owner: str, *, project_id: str | None = None,
+        team_id: str | None = None, agent_id: str | None = None,
+    ) -> int:
+        files, sessions = self.workspace_files, self.sessions
+        statement = select(func.count()).select_from(files.join(sessions, sessions.c.id == files.c.session_id)).where(
+            files.c.owner_user_id == owner,
+            *workspace_thread_scope(sessions, owner, project_id=project_id, team_id=team_id, agent_id=agent_id),
+        )
+        with store_transaction(self.engine) as conn:
+            return int(conn.scalar(statement) or 0)
 
     def _new_artifact_record(
         self, session_id: str, payload: dict[str, Any]

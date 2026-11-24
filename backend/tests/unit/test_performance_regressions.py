@@ -258,6 +258,32 @@ def test_scheduler_pages_remain_complete_when_candidates_leave_queue(tmp_path):
     assert all("LIMIT" in sql for sql in queue_queries)
 
 
+def test_scheduler_bounds_capacity_wait_scan_and_resumes_at_next_candidate(tmp_path, monkeypatch):
+    from relay.app import create_app
+    from relay.tasks.dispatch_failure import record_dispatch_failure
+    from relay.tasks.flow import WIP_WAIT_MESSAGE
+
+    monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "1")
+    monkeypatch.setenv("RELAY_TASK_WIP_LIMIT", "1")
+    app = create_app(str(tmp_path), background_mode="external")
+    store = app.state.task_store
+    store.emit_automation_events = False
+    scope = {"computerId": "queue-computer", "assignedAgent": "codex"}
+    store.create_task({**scope, "title": "Active", "status": "running"})
+    for index in range(125):
+        task = store.create_task({**scope, "title": f"Waiting {index}", "status": "queued"})
+        record_dispatch_failure(store, task, code="task_wip_limit", message=WIP_WAIT_MESSAGE)
+    tick = app.state.task_scheduler.tick
+    sql = capture_sql(store)
+    first = asyncio.run(tick())
+    assert first.dispatched == 0 and first.skipped == 100
+    assert len([query for query in sql if query.startswith("SELECT")]) < 25
+    sql.clear()
+    second = asyncio.run(tick())
+    assert second.dispatched == 0 and second.skipped == 25
+    assert len([query for query in sql if query.startswith("SELECT")]) < 25
+
+
 def test_scheduler_shutdown_waits_for_worker(tmp_path, monkeypatch):
     from threading import Event
 

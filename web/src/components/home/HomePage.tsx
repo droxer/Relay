@@ -18,7 +18,7 @@ import { useUserAgents } from "../../hooks/useUserAgents";
 import { hrefForRoute, navigateToAppPath, pathForAppState } from "../../lib/appRoute";
 import { computerName, computerId } from "../../lib/createAgent";
 import { labelForExecutor } from "../../lib/agentDisplayNames";
-import { homeNeedsYouCount, type HomeItem } from "../../lib/homeQueue";
+import type { HomeItem } from "../../lib/homeQueue";
 import { homeProjects, recentlyFinished, runningNow, type HomeProjectRow, type RunningRow } from "../../lib/homeSummary";
 import { taskRef } from "../../lib/taskRef";
 import { formatThreadStamp } from "../../lib/threadStamp";
@@ -38,6 +38,7 @@ export interface HomePageProps {
   userId: string;
   setUser: (user: CurrentUser) => void;
   items: readonly HomeItem[];
+  needsYou: number;
   dataStatus: ProjectCollectionStatus;
   /** Unfinished setup, or null once there is nothing left to set up. */
   setupProgress: HomeSetupProgress | null;
@@ -63,7 +64,7 @@ const MINUTE_MS = 60_000;
 /** Home: what needs the signed-in person, ranked, beside where their work
  *  stands. The queue is computed once by the app shell (it also feeds the
  *  rail's badge) and arrives here as `items`. */
-export function HomePage({ user, userId, setUser, items, tasks, taskProjects, sessions, projects, nodes, onOpenThread, onOpenTaskRecord, dataStatus, setupProgress, onOpenOnboarding, onRefresh, onOpenRoutineRecord }: HomePageProps) {
+export function HomePage({ user, userId, setUser, items, needsYou, tasks, taskProjects, sessions, projects, nodes, onOpenThread, onOpenTaskRecord, dataStatus, setupProgress, onOpenOnboarding, onRefresh, onOpenRoutineRecord }: HomePageProps) {
   const { t, i18n } = useTranslation();
   const now = useMinuteClock();
   const actions = useHomeActions(setUser);
@@ -139,11 +140,10 @@ export function HomePage({ user, userId, setUser, items, tasks, taskProjects, se
     }
   }, [hrefFor, onOpenTaskRecord, onOpenThread]);
 
-  const needs = homeNeedsYouCount(items);
   const name = greetingName(user);
   // An account still setting up has nothing to be caught up on yet.
-  const first = needs
-    ? { tone: "warn", text: t("home.brief.needs", { count: needs }) }
+  const first = needsYou
+    ? { tone: "warn", text: t("home.brief.needs", { count: needsYou }) }
     : setupProgress
       ? { tone: "neutral", text: t("home.brief.setup", { done: setupProgress.done, total: setupProgress.total }) }
       : { tone: "ok", text: t("home.brief.clear") };

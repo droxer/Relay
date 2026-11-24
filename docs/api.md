@@ -130,18 +130,23 @@ on the Project Agent roster. A `collaboration.round.started` manifest with
 deliverables, criteria, and the delegate/return assignment ids in `delegation`.
 The existing thread event stream carries the manifest and attributed runs.
 
-`GET /api/v1/tasks` returns complete task records for compatibility. Browser
-list views may request `GET /api/v1/tasks?view=summary`, which omits `events`
-and `activity` and returns `eventCount`, `activityCount`, and `lastActivity`
-instead. An optional `limit` is clamped to 1–500; omitting it does not silently
-truncate either projection. The summary view accepts `projectId` to select
+`GET /api/v1/tasks` returns up to 25 Task records per page, newest update first.
+Pass `limit` (1–50) to change the page size and `cursor=nextCursor` for the
+next page. List records omit `events`, `activity`, and `occurrenceIds`. Read
+`GET /api/v1/tasks/{id}` for the full Task record.
+`GET /api/v1/tasks?view=summary` includes `eventCount`, `activityCount`, and
+`lastActivity`. The summary view accepts an optional `limit` (1–500) and
+returns the complete scoped summary list when omitted. It accepts `projectId` to select
 only the caller's Tasks in that Project before applying the limit. The Project
 Dashboard uses this scope and still receives the owner's overall flow usage.
-The Home page uses `scope=home` with `view=summary`. It receives fields for
-the action queue, upcoming and ready work, prerequisites, and the five most
-recently finished Tasks. `homeProjects` carries Project totals, progress and
-latest Task updates across the entire account collection. `homeUntriaged`
-carries the intake count and its earliest and latest creation timestamps.
+The Home page uses `scope=home` with `view=summary` and passes its local
+calendar date in `today`. It receives up to 50 candidates per group for
+the action queue, upcoming and ready work, and prerequisites, plus the five
+most recently finished Tasks. `homeProjects` carries Project totals,
+progress and latest Task updates across the entire account collection.
+`homeUntriaged` carries the intake count and its earliest and latest
+creation timestamps. `homeWaitingToStart` counts all personal Tasks in
+Assigned or Queued.
 The Issues list uses `scope=issues` to exclude Automation definitions.
 `view=summary&scope=issues&layout=list` applies Issues filters and ordering
 before returning 50 rows, the clamped `page` and matching total, queue counts,
@@ -236,8 +241,8 @@ require an assigned routable agent/team, a writable project, an online Computer,
 and no outstanding prerequisites; the existing task-start endpoint remains the
 final authority and may answer started, queued, or rejected.
 
-The thread list (`GET /api/v1/threads`) is a summary projection too. Beside a
-thread's open `permissionRequests` it carries `nextSteps` — up to three short
+The browser Thread list uses `GET /api/v1/threads?view=summary`. Beside a
+Thread's open `permissionRequests` it carries `nextSteps` — up to three short
 follow-ups a finished turn suggested, empty once anything else happens — so
 Home can offer them without opening each thread. The summary view
 (`?view=summary`) is paged newest first: `limit` is clamped to 1–200 (default
@@ -409,7 +414,18 @@ POST   /api/v1/admin/chat-integrations/{id}/webhook-secret-rotations
 DELETE /api/v1/admin/managed-nodes/{id}/record
 ```
 
-Full `GET /api/v1/threads` responses remain complete for the authenticated owner.
+`GET /api/v1/threads` returns the authenticated owner's Thread records with
+`eventCount` and execution state. It defaults to 25 records and clamps
+`limit` to 1–50. Pass `nextCursor` back as `cursor` to read older records.
+Use the single-Thread detail or transcript endpoint to read event history
+and completed run logs. The internal Chat conversation list uses the same
+pagination and returns open Threads for the linked owner.
+
+`GET /api/v1/tasks/{id}/events?include=occurrences` returns a merged page of
+the Task's and its Automation occurrences' events, oldest first within the
+page. The first page contains the newest events. The default `limit` is 25
+and the maximum is 100. Pass `nextCursor` back as `cursor` to load older
+events. A null cursor marks the oldest page.
 
 The browser hydrates individual threads with
 `GET /api/v1/threads/{id}?view=transcript&window=compact`. It receives the
@@ -804,17 +820,19 @@ Project workspace reads address the persistent shared project root directly;
 they do not require a Thread. They are live-only and return
 `placement-unavailable` when the bound Computer is offline or lacks
 `workspace-read-shared`. `GET /api/v1/workspace/brief?projectId={id}` returns
-that project's recent Threads, active tasks, active runs, artifacts, and bound
+that project's recent Threads, active Tasks, active runs, artifacts, and bound
 Computer. `projectId`, `agentId`, and `teamId` brief selectors are mutually
-exclusive.
+exclusive. The first page contains up to 20 Threads, 10 active Tasks, and
+12 artifacts. The metrics count the full scope. Pass `threadLimit` (1–100)
+to adjust the Thread page size and `threadCursor=nextThreadCursor` to read
+older Threads.
 
 The Agent and Team Activities tabs use `GET /api/v1/workspace/brief?view=activity`
 with the same scope selectors. The browser passes `threadLimit=20` to receive
 the newest Thread page, active runs, up to ten active Tasks, and a
 `nextThreadCursor` when older Threads exist. Requests with `threadCursor`
 return only the older Thread page and its next cursor. Thread limits are
-clamped to 1–100. Omitting both parameters still returns the complete scoped
-Thread list. An unchanged projection returns `304` after the access check
+clamped to 1–100 and default to 20. An unchanged projection returns `304` after the access check
 when the request carries its ETag.
 
 Projects and Tasks are separate browser destinations. `/projects` opens the
@@ -1840,8 +1858,7 @@ supports `If-None-Match` for revalidation with an in-memory copy.
 ### Personal tag catalog
 
 A person's tags are the names they saved plus every tag on the live Tasks and
-Automations they own — the records `GET /api/v1/tasks` lists, counted in full,
-never one page. Names follow the per-record rules (`core/task_tags.py`: trimmed,
+Automations they own across all pages. Names follow the per-record rules (`core/task_tags.py`: trimmed,
 inner whitespace collapsed, 1–32 characters, no comma; identity is
 case-insensitive). Saved names live in `user_tags`; tags on work stay in the
 task snapshots and change only through new `task.updated` events carrying

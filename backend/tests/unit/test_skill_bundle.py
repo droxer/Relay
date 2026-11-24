@@ -12,14 +12,14 @@ class Store:
         self.files = {}
         self.assignments = []
 
-    def get_skill(self, skill_id):
-        return self.skills.get(skill_id)
+    def get_skills_by_ids(self, skill_ids):
+        return {key: self.skills[key] for key in skill_ids if key in self.skills}
 
-    def get_revision(self, revision_id):
-        return self.revisions.get(revision_id)
+    def get_revisions_by_ids(self, revision_ids):
+        return {key: self.revisions[key] for key in revision_ids if key in self.revisions}
 
-    def revision_files(self, revision_id):
-        return self.files[revision_id]
+    def revision_files_by_ids(self, revision_ids):
+        return {key: self.files[key] for key in revision_ids if key in self.files}
 
     def list_assignments(self, *, targets=None, skill_id=None):
         target_set = set(targets or [])

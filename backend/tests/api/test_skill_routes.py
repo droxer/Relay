@@ -313,6 +313,35 @@ def test_grant_codex_and_merged_agent_view_then_revoke(client):
     assert all(item["source"] != "catalog" for item in detail["skills"])
 
 
+def test_agent_skill_reads_batch_across_grants(client):
+    agent, _ = create_agent(client, executor="codex")
+    ctx = client.app.state.context
+    for index in range(12):
+        skill = client.post("/api/v1/skills", json=bundle(f"batch-{index}")).raise_for_status().json()
+        client.post(f"/api/v1/skills/{skill['id']}/grants", json={"agentIds": [agent["id"]]}).raise_for_status()
+    statements = []
+
+    def observe(_conn, _cursor, sql, *_args):
+        if sql.startswith("SELECT"):
+            statements.append(" ".join(sql.split()))
+
+    event.listen(ctx.skill_store.engine, "before_cursor_execute", observe)
+    try:
+        manifest, skipped = resolve_bundle(ctx, ctx.agent_store.get_agent(agent["id"]))
+        assert len(manifest["skills"]) == 12 and not skipped
+        assert sum("FROM skills " in sql for sql in statements) == 1
+        assert sum("FROM skill_revisions " in sql for sql in statements) == 1
+        assert sum("FROM skill_files " in sql for sql in statements) == 1
+        statements.clear()
+        detail = client.get(f"/api/v1/agents/{agent['id']}").raise_for_status().json()["agent"]
+        assert sum(skill["source"] == "catalog" and skill["available"] for skill in detail["skills"]) == 12
+        assert sum("FROM skills " in sql for sql in statements) == 1
+        assert sum("FROM skill_assignments " in sql for sql in statements) == 1
+        assert not any("FROM skill_files " in sql for sql in statements)
+    finally:
+        event.remove(ctx.skill_store.engine, "before_cursor_execute", observe)
+
+
 @pytest.mark.parametrize("scope", ["user", "agent"])
 def test_scoped_assignment_is_visible_on_agent_skills_page(client, scope):
     agent, _ = create_agent(client)

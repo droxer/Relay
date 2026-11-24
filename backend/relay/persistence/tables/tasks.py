@@ -30,6 +30,9 @@ DISPATCH_NOT_HIGH = "(priority <> 'high')"
 DISPATCH_LOW = "(priority = 'low')"
 DISPATCH_DUE_MISSING = "(due_date IS NULL)"
 DISPATCH_DUE_DATE = "COALESCE(due_date, '9999-12-31')"
+AUTOMATION_RUN_SCHEDULE = "COALESCE(NULLIF(snapshot ->> 'scheduledFor', ''), snapshot ->> 'dueDate', '')"
+AUTOMATION_RUN_CREATED = "COALESCE(snapshot ->> 'createdAt', '')"
+LIVE_AUTOMATION_RUN = "deleted_at IS NULL AND automation_id IS NOT NULL"
 
 
 def dispatch_index_where(dialect: str) -> Any:
@@ -75,6 +78,7 @@ tasks = Table(
     Column("assignee_user_id", entity_uuid_type(), nullable=True),
     Column("due_date", Date, nullable=True),
     Column("is_routine", Boolean, nullable=False, default=False),
+    Column("automation_id", entity_uuid_type(), nullable=True),
     Column("routine_type", Text, nullable=True),
     Column("routine_cadence", Text, nullable=True),
     Column("routine_next_run_date", Date, nullable=True),
@@ -105,6 +109,12 @@ tasks = Table(
     # cover the scheduler's queues, and owner/assignee reads lead with the
     # composite recency indexes.
     Index("ix_tasks_updated_at", "updated_at"),
+    Index(
+        "ix_tasks_live_automation_ledger", "automation_id", "owner_user_id",
+        literal_column(AUTOMATION_RUN_SCHEDULE),
+        literal_column(AUTOMATION_RUN_CREATED), "id",
+        postgresql_where=text(LIVE_AUTOMATION_RUN), sqlite_where=text(LIVE_AUTOMATION_RUN),
+    ),
     Index("ix_tasks_assigned_agent_id", "assigned_agent_id"),
     Index("ix_tasks_assigned_team_id", "assigned_team_id"),
     Index("ix_tasks_project_id", "project_id"),

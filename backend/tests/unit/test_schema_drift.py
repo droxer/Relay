@@ -440,6 +440,53 @@ def test_automation_migrations_preserve_legacy_routines(migrated_schema, monkeyp
     assert restored["events"] == routine["events"]
 
 
+def test_automation_ledger_migration_restores_snapshot_and_event_links(migrated_schema):
+    from relay.persistence.events import relay_event
+    from relay.persistence.task.store import DatabaseTaskStore
+    from relay.security.auth import DatabaseAccountAuthStore
+
+    url, _ = migrated_schema
+    store = DatabaseTaskStore(url)
+    auth = DatabaseAccountAuthStore(url)
+    owner = auth.create_account("owner", "fixture-pass", email="owner@relay.test")["userId"]
+    outsider = auth.create_account("outsider", "fixture-pass", email="outsider@relay.test")["userId"]
+    parent = store.create_task({"title": "Daily", "ownerUserId": owner, "isRoutine": True})["id"]
+    older, newer, foreign = [
+        store.create_task({"title": title, "ownerUserId": user})["id"]
+        for title, user in (("Snapshot only", owner), ("Event only", owner), ("Foreign", outsider))
+    ]
+    store.append_event(parent, relay_event("task.occurrence_created", parent, {
+        "occurrenceId": newer, "scheduledFor": "2026-11-23",
+    }))
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
+    command.downgrade(config, "20261124_0132")
+    with store.engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE tasks SET snapshot = jsonb_set(snapshot, '{occurrenceIds}',
+                jsonb_build_array(CAST(:older AS text), CAST(:foreign AS text), 'invalid-id'))
+            WHERE id = :parent
+        """), {"older": older, "foreign": foreign, "parent": parent})
+
+    command.upgrade(config, "head")
+    first = store.occurrence_positions(parent, owner, limit=1)
+    rest = store.occurrence_positions(parent, owner, before=first[0], limit=5)
+    assert {position[2] for position in first + rest} == {older, newer}
+    assert len(first) == len(rest) == 1
+    assert store.occurrence_positions(parent, outsider, limit=10) == []
+
+    # An old worker can still write after the migration and before it restarts.
+    incoming = store.create_task({"title": "Previous release writer", "ownerUserId": owner})["id"]
+    with store.engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO task_events (id, task_id, sequence, type, timestamp, payload)
+            SELECT :id, :parent, max(sequence) + 1, 'task.occurrence_created', now(),
+                   jsonb_build_object('occurrenceId', CAST(:child AS text))
+            FROM task_events WHERE task_id = :parent
+        """), {"id": str(uuid.uuid4()), "parent": parent, "child": incoming})
+    assert {position[2] for position in store.occurrence_positions(parent, owner, limit=10)} == {older, newer, incoming}
+
+
 def test_schema_review_backfills_derived_columns_and_projections(migrated_schema):
     from relay.persistence.daemon.store import DatabaseDaemonStore
     from relay.persistence.events import relay_event

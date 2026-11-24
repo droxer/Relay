@@ -15,7 +15,7 @@ def assert_workflow_task_owner(registry: RegistryState, request: dict[str, Any],
         return
     if not registry.task_store:
         raise ValueError("workflow_task_store_required")
-    task = registry.task_store.get_task(request["taskId"])
+    task = registry.task_store.get_task_record(request["taskId"])
     if (task.get("deletedAt") or task.get("status") in ("done", "review", "cancelled")
         or task.get("executionOwner") != request_execution_owner(request)
         or task.get("ownerUserId") != session.get("ownerUserId")
@@ -34,7 +34,7 @@ def sync_workflow_task(registry: RegistryState, request: dict[str, Any], session
     status = {"completed": "done", "cancelled": "cancelled", "blocked": "blocked",
               "awaiting_approval": "waiting_for_human", "awaiting_input": "waiting_for_human",
               "ready": "assigned"}[run["status"]]
-    task = registry.task_store.get_task(request["taskId"])
+    task = registry.task_store.get_task_record(request["taskId"])
     if task.get("executionOwner") != request_execution_owner(request):
         return
     waiting_request = None

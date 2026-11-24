@@ -13,10 +13,10 @@ from .workflow_admission import workflow_request_id, workflow_node_ids, workflow
 
 class WorkflowRecoveryMixin(RegistryState):
     def decide_workflow_recovery(self, sid: str, decision: dict[str, Any]) -> dict[str, Any]:
-        with self.dispatch_lock, self.dispatch_scope(workflow_node_ids(self.store.get_session(sid))), resource_transaction(
+        with self.dispatch_lock, self.dispatch_scope(workflow_node_ids(self.store.get_session_header(sid))), resource_transaction(
             self.daemon_store.engine, f"workflow-gate:{sid}",
         ), self.store.mutation_scope(sid):
-            session = self.store.get_session(sid)
+            session = self.store.get_session_header(sid)
             if not session.get("workflowRuns"):
                 raise ValueError("workflow_run_missing")
             run = current_workflow_run(session)
@@ -31,7 +31,7 @@ class WorkflowRecoveryMixin(RegistryState):
                     item.get("status") == "running" for item in session.get("agentRuns", [])
                 ) or self.daemon_store.list_active_runs(session_ids={sid}):
                     raise ValueError("workflow_exit_evidence_required")
-                session = self.store.append_event(sid, relay_event("workflow.recovery_decided", sid, decision))
+                session = self.store.append_event(sid, relay_event("workflow.recovery_decided", sid, decision), hydrate_events=False)
                 run = current_workflow_run(session)
                 self.daemon_store.update_run_request(request["id"], {
                     "assignments": run["assignments"],
@@ -41,12 +41,12 @@ class WorkflowRecoveryMixin(RegistryState):
                     return self.admit_workflow_first_step(sid)
                 sync_workflow_task(self, request, session)
                 return session
-            session = self.store.append_event(sid, relay_event("workflow.recovery_decided", sid, decision))
+            session = self.store.append_event(sid, relay_event("workflow.recovery_decided", sid, decision), hydrate_events=False)
             reason = "Workflow cancelled by owner."
             if not self.cancel_run_request_before_delivery(request["id"], reason):
                 self.cancel_active_run(request["nodeId"], sid, reason, actor_user_id=decision["actorUserId"])
             session = self.store.append_event(sid, relay_event("session.status", sid, {
                 "status": "cancelled", "phase": "cancelled", "actorUserId": decision["actorUserId"],
-            }))
+            }), hydrate_events=False)
             sync_workflow_task(self, request, session)
             return session

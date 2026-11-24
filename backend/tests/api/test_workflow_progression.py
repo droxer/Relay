@@ -439,7 +439,7 @@ def test_question_parks_linked_task_for_its_owner(monkeypatch):
     calls = []
     monkeypatch.setattr("relay.daemon_registry.dispatch.workflow_tasks.SessionController._update_task_status",
                         lambda self, status, message, extra: calls.append(status))
-    registry = type("R", (), {"task_store": type("T", (), {"get_task": lambda self, _id: {"status": "assigned", "executionOwner": None}})(),
+    registry = type("R", (), {"task_store": type("T", (), {"get_task_record": lambda self, _id: {"status": "assigned", "executionOwner": None}})(),
                                "store": None})()
     monkeypatch.setattr("relay.daemon_registry.dispatch.workflow_tasks.request_execution_owner", lambda request: None)
     sync_workflow_task(registry, {"taskId": "task"}, {"id": "s", "workflowRuns": [{"status": "awaiting_input", "currentIndex": 0,

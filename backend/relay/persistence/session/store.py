@@ -26,6 +26,7 @@ from .artifacts import SessionArtifactRows
 from .artifact_indexing import SessionArtifactIndexingRows
 from .attachments import SessionAttachmentRows
 from .reads import SessionReadRows
+from .messages import SessionMessageRows
 from .metrics import SessionMetricRows
 from ..listeners import ChangeListener
 
@@ -39,6 +40,7 @@ class DatabaseSessionStore(
     SessionArtifactIndexingRows,
     SessionAttachmentRows,
     SessionReadRows,
+    SessionMessageRows,
     SessionMetricRows,
 ):
     REQUIRED_SCHEMA_REVISION = "20261103_0109"

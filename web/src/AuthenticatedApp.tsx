@@ -12,8 +12,7 @@ import { WorkRoutePage, showsWorkRoutePage, skipLinkTarget } from "./components/
 import { useRelayData } from "./hooks/useRelayData";
 import { taskRecordQueryOptions } from "./hooks/useTaskRecord";
 import { useThreadTaskContext } from "./hooks/useThreadTaskContext";
-import { useLocationPathname, useProjectTaskRecordId, useProjectTaskScope, useTaskCollectionVisible, useTaskListScope } from "./hooks/useLocationPathname";
-import { useLocationSearch } from "./hooks/useLocationSearch";
+import { useTaskRoute } from "./hooks/useLocationPathname";
 import { useRelayMutations } from "./hooks/useRelayMutations";
 import { useMutationError } from "./hooks/useMutationError";
 import { useAppRouter } from "./hooks/useAppRouter";
@@ -142,15 +141,15 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const recoveryOperationIdsRef = useRef(new Map<string, string>());
 
   const selectedUserToken = tokens[selectedUser];
-  const pathname = useLocationPathname();
-  const search = useLocationSearch();
-  const openingRoute = pathname ? parseAppPath(pathname) : null;
+  const { route: openingRoute, search: scopeSearch, visible: taskListVisible, projectId: taskProjectId, scope: taskScope } = useTaskRoute();
   const surface = openingRoute?.route;
   const workspaceDirectories = Boolean(openingRoute && !openingRoute.notFound
     && ["home", "main", "projects", "backlog", "routine"].includes(openingRoute.route));
   const projectRailVisible = surface === "projects" && !openingRoute?.notFound && !openingRoute?.sessionId && !composingNew;
-  const projectTaskRecordId = useProjectTaskRecordId();
-  const projectTab = projectTaskRecordId ? "tasks" : parseProjectPageTab(new URLSearchParams(search ?? "").get("tab"));
+  const projectTaskRecordId = openingRoute?.projectId && !openingRoute.sessionId && scopeSearch
+    ? scopeSearch.get("task") ?? scopeSearch.get("run") ?? scopeSearch.get("automation")
+    : null;
+  const projectTab = projectTaskRecordId ? "tasks" : parseProjectPageTab(scopeSearch?.get("tab") ?? null);
   const projectOverview = projectRailVisible && Boolean(openingRoute?.projectId);
   const workspaceRosters = workspaceDirectories && !projectRailVisible;
   const agentRosterVisible = workspaceRosters || surface === "agents"
@@ -161,11 +160,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const { agents: logicalAgents, isSuccess: agentsReady, defaultAgentOffers } = useUserAgents(user.userId, true, agentRosterVisible);
   const { teams, isSuccess: teamsReady } = useTeams(user.userId, true, teamRosterVisible);
   const agentSetup = useAgentSetup(user.userId, setupOnly);
-  const taskProjectId = useProjectTaskScope();
-  const taskScope = useTaskListScope();
   const pageOwnsTasks = openingRoute?.route === "backlog" && !openingRoute.sessionId
     || taskScope === "automations" || taskScope === "board" && Boolean(taskProjectId);
-  const taskListVisible = useTaskCollectionVisible();
   const routeRecordId = pageOwnsTasks ? openingRoute?.runId ?? openingRoute?.taskId ?? projectTaskRecordId : null;
   const routeRecord = useQuery({
     ...taskRecordQueryOptions(routeRecordId),
@@ -189,6 +185,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     homeTaskNeedsYou,
     homeTaskProjects,
     homeUntriaged,
+    homeWaitingToStart,
     threadTaskContext,
     projectDashboard,
     projects,
@@ -204,7 +201,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     !taskListVisible || pageOwnsTasks,
     taskProjectId,
     taskScope,
-    { pageOwned: pageOwnsTasks, threadId: openingRoute?.sessionId ?? undefined, projectDirectory: workspaceDirectories && !projectRailVisible });
+    { pageOwned: pageOwnsTasks || !openingRoute || !scopeSearch, threadId: openingRoute?.sessionId ?? undefined, projectDirectory: workspaceDirectories && !projectRailVisible });
   const projectIndex = useQuery({
     ...projectIndexOptions(),
     enabled: projectRailVisible,
@@ -247,17 +244,20 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   // Home's queue, computed once: Home renders it and the rail badges it.
   const homeItems = useMemo(
     () => homeQueue({
-      tasks: homeTaskNeedsYou === undefined ? tasks : [],
+      tasks: taskScope === "home" || homeTaskNeedsYou === undefined ? tasks : [],
       untriaged: homeUntriaged,
+      waitingToStart: homeWaitingToStart,
       sessions,
       nodes: runtimeNodes,
       userId: selectedUser,
       today: homeToday,
       snoozes: user.homeSnoozes,
     }),
-    [homeToday, homeTaskNeedsYou, homeUntriaged, runtimeNodes, selectedUser, sessions, tasks, user.homeSnoozes],
+    [homeToday, homeTaskNeedsYou, homeUntriaged, homeWaitingToStart, runtimeNodes, selectedUser, sessions, tasks, taskScope, user.homeSnoozes],
   );
-  const homeNeedsYou = homeNeedsYouCount(homeItems) + (homeTaskNeedsYou ?? 0);
+  const homeNeedsYou = homeTaskNeedsYou === undefined
+    ? homeNeedsYouCount(homeItems)
+    : homeTaskNeedsYou + homeItems.filter(item => item.tier === "paused").length;
   const onboarding = useOnboarding({
     user,
     setUser,
@@ -809,6 +809,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             tasks={tasks}
             sessions={sessions}
             homeItems={homeItems}
+            homeNeedsYou={homeNeedsYou}
             homeTaskProjects={homeTaskProjects}
             homeStatus={homeStatus}
             homeSetupProgress={homeSetupProgress}

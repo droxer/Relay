@@ -37,6 +37,7 @@ export interface TaskFilesResponse {
 
 export interface TaskEventsResponse {
   events: RelayTaskEvent[];
+  nextCursor?: string | null;
   nextBefore?: number | null;
   previousStatus?: TaskStatus;
 }
@@ -85,8 +86,10 @@ export interface TasksResponse {
   flowPolicy?: { wipLimit: number; scope: "user" };
   flowUsage?: { userId: string; occupied: number };
   tasks: RelayTaskSummary[];
+  nextCursor?: string | null;
   homeProjects?: Record<string, HomeProjectTaskSummary>;
   homeUntriaged?: HomeUntriagedSummary | null;
+  homeWaitingToStart?: number;
   threadTaskContext?: ThreadTaskContext;
   projectDashboard?: ProjectDashboardSummary;
 }

@@ -1,33 +1,24 @@
 from __future__ import annotations
 
-import base64
-import binascii
 import json
 import os
 from datetime import UTC, datetime
-from typing import Any
-from uuid import UUID
+from typing import Any, TypedDict
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from ...core.computer_identity import computer_id as resolve_computer_id
-from ...core.workspace_artifacts import (
-    artifact_index_item,
-    workspace_artifacts,
-)
 from ...security.actor import Actor
 from ..actors import request_actor, request_actor_or_sandbox
 from ..conditional_get import CACHE_CONTROL, etag_matches, request_validator, weak_etag
 from ..deps import AppContext, AppContextDep
+from ..record_cursor import decode_record_cursor, encode_record_cursor
 from .activity import ThreadListActivity, apply_thread_list_activity, read_thread_list_activity
 from .projections import (
     agent_for_workspace,
     agent_supervisor_user_id,
     ensure_sessions_managed_affinity,
-    session_awaits_human,
     session_brief_item,
-    session_uses_agent,
     task_brief_item,
     user_for_workspace_brief,
 )
@@ -37,26 +28,25 @@ router = APIRouter()
 ACTIVE_TASK_STATUSES = frozenset(
     {"assigned", "queued", "running", "waiting_for_human", "review", "blocked"}
 )
-ACTIVE_SESSION_STATUSES = frozenset({"running", "waiting_for_human"})
 _SUMMARY_REPRESENTATION = ("thread-summary-v1", os.environ.get("RAILWAY_GIT_COMMIT_SHA"))
 
 
-def encode_summary_cursor(position: tuple[datetime, str]) -> str:
-    """An opaque token for where the next summary page starts."""
-    updated_at, session_id = position
-    raw = json.dumps({"u": updated_at.isoformat(), "i": session_id}, separators=(",", ":"))
-    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+class WorkspaceScope(TypedDict):
+    agent_id: str | None
+    team_id: str | None
+    project_id: str | None
 
 
-def decode_summary_cursor(cursor: str) -> tuple[datetime, str]:
+def thread_list_position(
+    request: Request, *, summary: bool = False,
+) -> tuple[int, tuple[datetime, str] | None]:
+    default, maximum = (100, 200) if summary else (25, 50)
     try:
-        padded = cursor + "=" * (-len(cursor) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded.encode()))
-        updated_at = datetime.fromisoformat(payload["u"])
-        session_id = str(UUID(payload["i"]))
-    except (ValueError, TypeError, KeyError, binascii.Error) as error:
-        raise HTTPException(400, "cursor is not valid.") from error
-    return updated_at, session_id
+        requested = int(request.query_params.get("limit") or str(default))
+    except ValueError as error:
+        raise HTTPException(400, "limit must be an integer.") from error
+    cursor = request.query_params.get("cursor")
+    return min(max(1, requested), maximum), decode_record_cursor(cursor) if cursor else None
 
 
 @router.get("/threads", response_model=dict[str, Any])
@@ -66,19 +56,13 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any] | Resp
     # Task projections use the same credentials as GET /tasks.
     actor = (request_actor(request, ctx.auth_store) if include_activity
              else request_actor_or_sandbox(request, ctx.auth_store, ctx.registry))
+    limit, before = thread_list_position(request, summary=summary_view)
     if summary_view:
-        try:
-            requested_limit = int(request.query_params.get("limit") or "100")
-        except ValueError as error:
-            raise HTTPException(400, "limit must be an integer.") from error
-        cursor = request.query_params.get("cursor")
-        limit = min(max(1, requested_limit), 200)
-        before = decode_summary_cursor(cursor) if cursor else None
         with ctx.session_store.summary_read_scope():
             stamp = ctx.session_store.summary_page_stamp(owner_user_id=actor["userId"], limit=limit, before=before)
             if stamp is not None:
                 ids, revision = stamp
-                activity = read_thread_list_activity(ctx, actor, ids, include_home_count=not cursor) if include_activity else None
+                activity = read_thread_list_activity(ctx, actor, ids, include_home_count=before is None) if include_activity else None
                 activity_revision = (
                     [sorted(activity[0], key=lambda link: str(link["sessionId"])), sorted(activity[1]), activity[2]]
                     if activity is not None else None
@@ -92,10 +76,12 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any] | Resp
                 payload = _session_summary_page(ctx, actor, limit, before, include_activity, activity)
                 return JSONResponse(payload, headers=headers)
         return _session_summary_page(ctx, actor, limit, before, include_activity)
-    visible = ctx.session_store.list_sessions(owner_user_id=actor["userId"])
+    visible, position = ctx.session_store.list_session_record_page(
+        owner_user_id=actor["userId"], limit=limit, before=before,
+    )
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = ctx.execution_lifecycle.annotate(sessions)
-    return {"sessions": sessions}
+    return {"sessions": sessions, "nextCursor": encode_record_cursor(position) if position else None}
 
 
 def _session_summary_page(
@@ -111,7 +97,7 @@ def _session_summary_page(
         activity = read_thread_list_activity(ctx, actor, [row["id"] for row in rows], include_home_count=before is None)
     return {
         "sessions": rows,
-        "nextCursor": encode_summary_cursor(next_position) if next_position else None,
+        "nextCursor": encode_record_cursor(next_position) if next_position else None,
         **(apply_thread_list_activity(rows, activity) if activity is not None else {}),
     }
 
@@ -164,43 +150,66 @@ def workspace_brief(request: Request, ctx: AppContextDep) -> dict[str, Any] | Re
             return Response(status_code=304, headers=headers)
         response.headers.update(headers)
         return response
-    sessions = [
-        session
-        for session in ctx.session_store.list_session_snapshots(
-            owner_user_id=user_id,
-            project_id=project["id"] if project else None,
-        )
-        if (not agent or session_uses_agent(session, agent["id"]))
-        and (not team or session.get("teamId") == team["id"])
-    ]
-    sessions = ensure_sessions_managed_affinity(ctx, sessions)
-    scoped_session_ids = (
-        {session["id"] for session in sessions} if team or project else set()
+    scope: WorkspaceScope = {
+        "agent_id": agent["id"] if agent else None,
+        "team_id": team["id"] if team else None,
+        "project_id": project["id"] if project else None,
+    }
+    limit, before = _workspace_thread_page(request)
+    sessions, position = ctx.session_store.list_session_summary_page(
+        owner_user_id=user_id, limit=limit, before=before, **scope,
     )
-    nodes = _workspace_nodes(ctx, agent, team, project, user_id, scoped_session_ids)
-    active_runs = [
-        run
-        for node in nodes
-        for run in node.get("activeRuns", [])
-        if (not agent or run.get("logicalAgentId") == agent["id"])
-        and (not team or run.get("sessionId") in scoped_session_ids)
-        and (not project or run.get("sessionId") in scoped_session_ids)
-    ]
-    tasks = [
-        task
-        for task in ctx.task_store.list_task_summaries(user_id=user_id)
-        if (not agent or task.get("assignedAgentId") == agent["id"])
-        and (not team or task.get("assignedTeamId") == team["id"])
-        and (not project or task.get("projectId") == project["id"])
-    ]
+    page = {
+        "sessions": [session_brief_item(session) for session in ensure_sessions_managed_affinity(ctx, sessions)],
+        "nextThreadCursor": encode_record_cursor(position) if position else None,
+    }
+    artifact_scope = ctx.session_store.list_artifact_summaries(owner_user_id=user_id, limit=12, **scope)
+    running = ctx.registry.daemon_store.list_workspace_active_runs(
+        user_id, computer_id=project.get("computerId") if project else None, include_node=True, **scope,
+    )
+    nodes = _workspace_nodes(ctx, agent, team, project, user_id, {run["nodeId"] for run in running})
+    runs = {run["runId"] for run in running}
+    active_runs = sorted(
+        (run for node in nodes for run in node.get("activeRuns", []) if run["runId"] in runs),
+        key=lambda run: run.get("startedAt") or "", reverse=True,
+    )
+    tasks = ctx.task_store.list_task_summaries(
+        user_id=user_id, limit=10, project_id=scope["project_id"],
+        assigned_agent_id=scope["agent_id"], assigned_team_id=scope["team_id"], statuses=ACTIVE_TASK_STATUSES,
+    )
+    task_count, active_task_count = ctx.task_store.workspace_task_counts(user_id, statuses=ACTIVE_TASK_STATUSES, **scope)
+    session_count, active_session_count = ctx.session_store.workspace_thread_counts(user_id, **scope)
     return {
         "userId": user_id,
         **({"agentId": agent["id"]} if agent else {}),
         **({"teamId": team["id"]} if team else {}),
         **({"projectId": project["id"]} if project else {}),
-        **_workspace_brief_lists(nodes, active_runs, sessions, tasks),
+        **page,
+        "nodes": nodes,
+        "activeRuns": active_runs,
+        "tasks": [task_brief_item(task) for task in tasks],
+        "artifacts": artifact_scope,
+        "metrics": {
+            "nodeCount": len(nodes),
+            "activeRunCount": len(active_runs),
+            "sessionCount": session_count,
+            "activeSessionCount": active_session_count,
+            "taskCount": task_count,
+            "activeTaskCount": active_task_count,
+            "artifactCount": ctx.session_store.workspace_artifact_count(user_id, **scope),
+        },
         "generatedAt": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
+
+
+def _workspace_thread_page(request: Request) -> tuple[int, tuple[datetime, str] | None]:
+    raw_limit = request.query_params.get("threadLimit", "20")
+    cursor = request.query_params.get("threadCursor")
+    try:
+        limit = min(max(1, int(raw_limit)), 100)
+    except ValueError as error:
+        raise HTTPException(400, "threadLimit must be an integer.") from error
+    return limit, decode_record_cursor(cursor) if cursor else None
 
 
 def _workspace_activity(
@@ -211,22 +220,15 @@ def _workspace_activity(
     agent_id = agent["id"] if agent else None
     team_id = team["id"] if team else None
     project_id = project["id"] if project else None
-    raw_limit = request.query_params.get("threadLimit")
-    cursor = request.query_params.get("threadCursor")
-    limit = None
-    if raw_limit is not None or cursor:
-        try:
-            limit = min(max(1, int(raw_limit if raw_limit is not None else "20")), 100)
-        except ValueError as error:
-            raise HTTPException(400, "threadLimit must be an integer.") from error
+    limit, before = _workspace_thread_page(request)
     sessions, next_position = ctx.session_store.list_workspace_threads(
         owner_user_id=user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
-        limit=limit, before=decode_summary_cursor(cursor) if cursor else None,
+        limit=limit, before=before,
     )
     page: dict[str, Any] = {"sessions": sessions}
-    if limit is not None:
-        page["nextThreadCursor"] = encode_summary_cursor(next_position) if next_position else None
-    if cursor:
+    if next_position or before or "threadLimit" in request.query_params:
+        page["nextThreadCursor"] = encode_record_cursor(next_position) if next_position else None
+    if before:
         return page
     runs = ctx.registry.daemon_store.list_workspace_active_runs(
         user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
@@ -298,98 +300,14 @@ def _workspace_nodes(
     team: dict[str, Any] | None,
     project: dict[str, Any] | None,
     user_id: str,
-    scoped_session_ids: set[str],
+    active_node_ids: set[str],
 ) -> list[dict[str, Any]]:
-    placements: list[dict[str, Any]] | None = None
-    if agent:
-        placements = ctx.agent_placement_store.list_placements(agent_id=agent["id"])
-    elif team:
-        placements = [
-            placement
-            for agent_id in team.get("memberAgentIds", [])
-            for placement in ctx.agent_placement_store.list_placements(
-                agent_id=agent_id
-            )
-        ]
-    nodes = []
-    for node in ctx.registry.monitor_nodes():
-        active_node_runs = node.get("activeRuns", [])
-        has_authorized_run = (
-            any(run.get("logicalAgentId") == agent["id"] for run in active_node_runs)
-            if agent
-            else any(
-                run.get("sessionId") in scoped_session_ids for run in active_node_runs
-            )
-            if team or project
-            else False
-        )
-        has_placement = placements is not None and any(
-            placement.get("computerId") == resolve_computer_id(node)
-            or (
-                not placement.get("computerId")
-                and placement.get("daemonNodeId") == node["id"]
-            )
-            for placement in placements
-        )
-        include_node = (
-            resolve_computer_id(node) == project.get("computerId")
-            if project
-            else node.get("userId") == user_id
-            if placements is None
-            else has_placement or has_authorized_run
-        )
-        if include_node:
-            nodes.append(node)
-    return nodes
-
-
-def _workspace_brief_lists(
-    nodes: list[dict[str, Any]],
-    active_runs: list[dict[str, Any]],
-    sessions: list[dict[str, Any]],
-    tasks: list[dict[str, Any]],
-) -> dict[str, Any]:
-    artifacts = [
-        artifact_index_item(session, artifact)
-        for session in sessions
-        for artifact in workspace_artifacts(session)
-    ]
-    workspace_sessions = sorted(
-        sessions, key=lambda item: item.get("updatedAt") or "", reverse=True
-    )
-    active_tasks = [
-        task for task in tasks if task.get("status") in ACTIVE_TASK_STATUSES
-    ]
-    recent_artifacts = sorted(
-        artifacts, key=lambda item: item.get("createdAt") or "", reverse=True
-    )[:12]
-    return {
-        "nodes": nodes,
-        "activeRuns": sorted(
-            active_runs, key=lambda item: item.get("startedAt") or "", reverse=True
-        ),
-        "sessions": [session_brief_item(session) for session in workspace_sessions],
-        "tasks": [
-            task_brief_item(task)
-            for task in sorted(
-                active_tasks, key=lambda item: item.get("updatedAt") or "", reverse=True
-            )[:10]
-        ],
-        "artifacts": recent_artifacts,
-        "metrics": {
-            "nodeCount": len(nodes),
-            "activeRunCount": len(active_runs),
-            "sessionCount": len(sessions),
-            "activeSessionCount": len(
-                [
-                    session
-                    for session in sessions
-                    if session.get("status") in ACTIVE_SESSION_STATUSES
-                    or session_awaits_human(session, tasks)
-                ]
-            ),
-            "taskCount": len(tasks),
-            "activeTaskCount": len(active_tasks),
-            "artifactCount": len(artifacts),
-        },
-    }
+    if project:
+        return ctx.registry.monitor_nodes_for_computers({project["computerId"]})
+    if not agent and not team:
+        return ctx.registry.monitor_nodes_for_user(user_id)
+    agents = {agent["id"]} if agent else set((team or {}).get("memberAgentIds", []))
+    placements = ctx.agent_placement_store.list_placements(agent_ids=agents)
+    computers = {placement["computerId"] for placement in placements if placement.get("computerId")}
+    legacy_ids = {placement["daemonNodeId"] for placement in placements if not placement.get("computerId")}
+    return ctx.registry.monitor_nodes_for_computers(computers, legacy_node_ids=legacy_ids | active_node_ids)

@@ -95,6 +95,15 @@ class TaskPrerequisiteRows(TaskStoreState):
             ).scalars()
             return [str(row) for row in rows]
 
+    def prerequisite_summaries(self, owner: str, task_ids: list[str]) -> list[dict[str, Any]]:
+        tasks = self.tasks.c
+        statement = select(
+            tasks.id, tasks.number, tasks.title, tasks.status, tasks.project_id.label("projectId"),
+            tasks.owner_user_id.label("ownerUserId"), tasks.assignee_user_id.label("assigneeUserId"),
+        ).where(tasks.owner_user_id == owner, tasks.deleted_at.is_(None), tasks.status != SATISFIED_STATUS)
+        with store_transaction(self.engine) as conn:
+            return [dict(row) for row in conn.execute(statement.where(tasks.id.in_(task_ids))).mappings()]
+
     def _check_prerequisites(self, conn: Any, task: dict[str, Any]) -> None:
         """Validate the task's new set against its project, under the write
         transaction, before the event is committed."""

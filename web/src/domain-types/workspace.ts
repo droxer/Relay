@@ -64,6 +64,7 @@ export interface WorkspaceBriefResponse {
   nodes: DaemonNodeMonitorRecord[];
   activeRuns: DaemonNodeMonitorRecord["activeRuns"];
   sessions: WorkspaceBriefSession[];
+  nextThreadCursor?: string | null;
   tasks: WorkspaceBriefTask[];
   artifacts: ArtifactIndexItem[];
   metrics: {

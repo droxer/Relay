@@ -87,25 +87,30 @@ def read_manager_tool(ctx: Any, project: dict[str, Any], tool: str, arguments: d
         return {"task": {**task, "events": events[-50:], "url": task_link(project["id"], task["id"]), "revision": task_revision(task)},
                 "coverage": {"totalEvents": len(events), "shownEvents": min(len(events), 50)}}
     if tool == "threads":
-        sessions = ctx.session_store.list_session_snapshots(owner_user_id=project["ownerUserId"], project_id=project["id"])
-        return {"threads": [{"id": s["id"], "taskGoal": s.get("taskGoal"), "url": f"/threads/{s['id']}"} for s in sessions[:100]], "total": len(sessions)}
+        sessions, _ = ctx.session_store.list_workspace_threads(
+            owner_user_id=project["ownerUserId"], project_id=project["id"], limit=100,
+        )
+        total = ctx.session_store.project_thread_count(project["ownerUserId"], project["id"])
+        return {"threads": [{"id": s["id"], "taskGoal": s.get("taskGoal"), "url": f"/threads/{s['id']}"} for s in sessions],
+                "total": total}
     if tool == "thread":
-        thread_id = arguments.get("threadId", "")
-        try:
-            session = ctx.session_store.get_session(thread_id)
-        except KeyError as error:
-            raise ManagerError("thread_not_found", 404) from error
-        if not session or session.get("projectId") != project["id"] or session.get("ownerUserId") != project["ownerUserId"]:
+        thread_id = ctx.session_store.project_thread_id(
+            arguments.get("threadId", ""), project["id"], project["ownerUserId"],
+        )
+        if not thread_id:
             raise ManagerError("thread_not_found", 404)
-        messages = _thread_messages(session, project)
-        cursor = arguments.get("cursor", max(0, len(messages) - 50))
-        if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0:
+        cursor = arguments.get("cursor")
+        if "cursor" in arguments and (not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0):
             raise ManagerError("manager_pagination_invalid", 400)
-        message_page = messages[cursor:cursor + 50]
-        return {"messages": [{**m, "text": m["text"][:8000], "truncated": len(m["text"]) > 8000} for m in message_page],
-                "nextCursor": cursor + 50 if len(messages) > cursor + 50 else None,
-                "previousCursor": max(0, cursor - 50) if cursor else None,
-                "coverage": {"total": len(messages), "shown": len(message_page), "maxMessageChars":8000}, "url": f"/threads/{thread_id}"}
+        page_size, max_chars = 50, 8000
+        messages, total, start = ctx.session_store.thread_message_page(
+            thread_id, include_goal=thread_id != project.get("managerThreadId"),
+            offset=cursor, limit=page_size, max_chars=max_chars,
+        )
+        return {"messages": messages, "nextCursor": start + page_size if total > start + page_size else None,
+                "previousCursor": max(0, start - page_size) if start else None,
+                "coverage": {"total": total, "shown": len(messages), "maxMessageChars": max_chars},
+                "url": f"/threads/{thread_id}"}
     if tool == "tasks":
         cursor = arguments.get("cursor", "")
         limit = arguments.get("limit", 50)
@@ -152,28 +157,3 @@ def read_manager_tool(ctx: Any, project: dict[str, Any], tool: str, arguments: d
             entries.append({f"{kind}Id": entity_id, "sequence": row["sequence"], "event": event, "url": url})
         return {**page, "events": entries, "cutoff": cutoff}
     raise ManagerError("manager_tool_unknown", 400)
-
-
-def _thread_messages(session: dict[str, Any], project: dict[str, Any]) -> list[dict[str, Any]]:
-    """Conversation facts come from events, not a nonexistent messages field."""
-    messages = []
-    if session["id"] != project.get("managerThreadId") and (goal := session.get("taskGoal")):
-        messages.append({"id": f"{session['id']}:goal", "kind": "user", "timestamp": session["createdAt"], "text": goal})
-    output: dict[str, list[str]] = {}
-    complete = set()
-    for event in session.get("events", []):
-        kind = event["type"]
-        if kind == "user.message":
-            messages.append({"id": event["id"], "kind": "user", "timestamp": event["timestamp"], "text": event.get("text", "")})
-        elif kind == "agent.completed":
-            complete.add(event["runId"])
-            messages.append({"id": event["id"], "kind": "agent_report", "timestamp": event["timestamp"],
-                             "runId": event["runId"], "text": event.get("agentLog") or ""})
-        elif kind in ("agent.output", "agent.output.batch"):
-            chunks = [event] if kind == "agent.output" else event.get("entries", [])
-            output.setdefault(event["runId"], []).extend(str(chunk.get("text", "")) for chunk in chunks)
-    for run in session.get("agentRuns", []):
-        if run["id"] not in complete:
-            messages.append({"id": run["id"], "kind": "agent_report", "timestamp": run["startedAt"],
-                             "runId": run["id"], "text": "".join(output.get(run["id"], []))})
-    return sorted(messages, key=lambda m: (m["timestamp"], m["id"]))

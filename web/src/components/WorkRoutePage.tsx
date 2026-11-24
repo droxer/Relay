@@ -76,6 +76,7 @@ interface WorkRoutePageProps {
   tasks: RelayTaskSummary[];
   sessions: RelaySession[];
   homeItems: HomeItem[];
+  homeNeedsYou: number;
   homeTaskProjects?: TasksResponse["homeProjects"];
   homeStatus: ProjectCollectionStatus;
   /** Setup the person has not finished, or null once it is done or hidden. */
@@ -154,6 +155,7 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       userId={props.selectedUser}
       setUser={props.setUser}
       items={props.homeItems}
+      needsYou={props.homeNeedsYou}
       taskProjects={props.homeTaskProjects}
       dataStatus={props.homeStatus}
       setupProgress={props.homeSetupProgress}

@@ -56,6 +56,7 @@ type RelayDataResult = {
   homeTaskNeedsYou?: number;
   homeTaskProjects?: TasksResponse["homeProjects"];
   homeUntriaged?: TasksResponse["homeUntriaged"];
+  homeWaitingToStart?: number;
   threadTaskContext?: TasksResponse["threadTaskContext"];
   projectDashboard?: TasksResponse["projectDashboard"];
   projects: ProjectListItem[];
@@ -70,7 +71,7 @@ type RelayDataResult = {
 
 type RelayCollections = Pick<
   RelayDataResult,
-  "nodes" | "nodesReady" | "nodesStatus" | "refetchNodes" | "sessions" | "sessionsLoading" | "tasks" | "homeTaskProjects" | "homeUntriaged" | "threadTaskContext" | "projectDashboard" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
+  "nodes" | "nodesReady" | "nodesStatus" | "refetchNodes" | "sessions" | "sessionsLoading" | "tasks" | "homeTaskProjects" | "homeUntriaged" | "homeWaitingToStart" | "threadTaskContext" | "projectDashboard" | "projects" | "projectsStatus" | "tasksStatus" | "projectsError" | "homeStatus"
 >;
 
 /* The only fields the app reads off the collection polls, folded into one value.
@@ -97,6 +98,7 @@ function combineRelayCollections(results: UseQueryResult<unknown>[]): RelayColle
     tasks: (Array.isArray(taskData) ? taskData : taskData?.tasks) ?? [],
     homeTaskProjects: Array.isArray(taskData) ? undefined : taskData?.homeProjects,
     homeUntriaged: Array.isArray(taskData) ? undefined : taskData?.homeUntriaged,
+    homeWaitingToStart: Array.isArray(taskData) ? undefined : taskData?.homeWaitingToStart,
     threadTaskContext: Array.isArray(taskData) ? undefined : taskData?.threadTaskContext,
     projectDashboard: Array.isArray(taskData) ? undefined : taskData?.projectDashboard,
     projects: (projectsQuery.data as ProjectListItem[] | undefined) ?? [],
@@ -170,7 +172,7 @@ export function useRelayData(
   const loadingMoreRef = useRef(false);
   const nextSessionCursor = olderCursor === undefined ? headCursor : olderCursor;
 
-  const { nodes, nodesReady, nodesStatus, refetchNodes, sessions, sessionsLoading, tasks, homeTaskProjects, homeUntriaged, threadTaskContext,
+  const { nodes, nodesReady, nodesStatus, refetchNodes, sessions, sessionsLoading, tasks, homeTaskProjects, homeUntriaged, homeWaitingToStart, threadTaskContext,
     projectDashboard, projects, projectsStatus, tasksStatus, projectsError, homeStatus } = useQueries({
     combine: combineRelayCollections,
     queries: [
@@ -231,7 +233,7 @@ export function useRelayData(
           if (!taskListVisible) return 60_000;
           const data = queryClient.getQueryData<RelayTaskSummary[] | TasksResponse>(tasksKey);
           const rows = Array.isArray(data) ? data : data?.tasks;
-          const active = !Array.isArray(data) && data?.projectDashboard?.hasQueuedOrRunning
+          const active = !Array.isArray(data) && (data?.projectDashboard?.hasQueuedOrRunning || (data?.homeWaitingToStart ?? 0) > 0)
             || rows?.some(task => ["assigned", "queued", "running"].includes(task.status));
           return active || computersHaveRuns() ? RELAY_POLL_INTERVALS_MS.tasks : RELAY_POLL_INTERVALS_MS.idleCollections;
         },
@@ -374,10 +376,11 @@ export function useRelayData(
     moreSessionsFailed,
     loadMoreSessions,
     tasks,
-    homeTaskNeedsYou: projectedTasksOnly || taskProjectId || taskThreadId || taskComputerId || taskScope === "automations"
+    homeTaskNeedsYou: projectedTasksOnly || taskProjectId || taskThreadId || taskComputerId || taskScope === "automations" || homeTaskView
       ? homeTaskNeedsYou ?? undefined : undefined,
     homeTaskProjects,
     homeUntriaged,
+    homeWaitingToStart,
     threadTaskContext,
     projectDashboard,
     projects,

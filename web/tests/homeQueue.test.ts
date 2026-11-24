@@ -143,6 +143,11 @@ describe("homeQueue", () => {
     assert.equal(item.kind === "suggested" && item.step, "Add an alert");
   });
 
+  it("uses the full waiting count even when the Home preview omits those tasks", () => {
+    const [item] = queue({ nodes: [node({ id: "dark", online: false })], waitingToStart: 75 });
+    assert.equal(item.kind === "offline" && item.waitingToStart, 75);
+  });
+
   it("hides a snoozed item until its stamp changes", () => {
     const snoozes = [{ key: "task:r", stamp: review.updatedAt }];
 

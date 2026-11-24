@@ -292,6 +292,38 @@ def test_home_projects_count_all_issues_but_load_only_inbox_candidates(project_c
     assert {task["id"] for task in client.get("/api/v1/tasks?view=summary").json()["tasks"]} >= {dormant["id"], finished[0]["id"]}
 
 
+def test_home_limits_each_queue_and_reads_only_projected_fields(project_context):
+    app, client, project = project_context
+    store = app.state.task_store
+    owner = project["ownerUserId"]
+    for index in range(80):
+        store.create_task({
+            "title": f"Blocked {index}", "ownerUserId": owner, "projectId": project["id"],
+            "description": "large details " * 1000, "status": "blocked",
+        })
+    waiting = store.create_task({"title": "Needs review", "ownerUserId": owner, "status": "review"})
+    deadline = store.create_task({"title": "Due this week", "ownerUserId": owner, "dueDate": "2026-11-25"})
+    for index in range(3):
+        store.create_task({"title": f"Queued {index}", "ownerUserId": owner, "status": "queued", "computerId": "test-computer"})
+    sql = []
+
+    def capture(_conn, _cursor, statement, *_args):
+        sql.append(statement)
+
+    event.listen(store.engine, "before_cursor_execute", capture)
+    try:
+        response = client.get("/api/v1/tasks?view=summary&scope=home&today=2026-11-24")
+    finally:
+        event.remove(store.engine, "before_cursor_execute", capture)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert {waiting["id"], deadline["id"]} <= {task["id"] for task in body["tasks"]}
+    assert len(body["tasks"]) <= 52
+    assert body["homeWaitingToStart"] == 3
+    assert body["homeProjects"][project["id"]]["total"] == 80
+    assert not any(statement.startswith("SELECT tasks.snapshot \n") for statement in sql)
+
+
 def test_home_summarizes_untriaged_work_and_keeps_due_intake_rows(project_context):
     app, client, _project = project_context
     store = app.state.task_store
@@ -615,23 +647,33 @@ def test_routine_ledger_pages_by_schedule_and_only_replays_visible_runs(project_
             "task.occurrence_created", routine["id"], {"occurrenceId": occurrence["id"]},
         ))
 
-    replays = []
-    get_task = store.get_task
+    def no_replay(task_id):
+        pytest.fail(f"The ledger replayed Task {task_id}")
 
-    def record_replay(task_id):
-        replays.append(task_id)
-        return get_task(task_id)
-
-    monkeypatch.setattr(store, "get_task", record_replay)
+    monkeypatch.setattr(store, "get_task", no_replay)
+    monkeypatch.setattr(store, "get_task_record", no_replay)
     path = f"/api/v1/tasks/{routine['id']}/runs"
     first = client.get(path, params={"limit": 2}).json()
     assert [row["taskId"] for row in first["runs"]] == [ids[0], ids[2]]
-    assert replays == [ids[0], ids[2]]
-    replays.clear()
     second = client.get(path, params={"limit": 2, "before": first["nextCursor"]}).json()
     assert [row["taskId"] for row in second["runs"]] == [ids[3], ids[1]]
     assert second["nextCursor"] is None
-    assert replays == [ids[3], ids[1]]
+
+    statements = []
+
+    def capture(_conn, _cursor, statement, *_args):
+        if "FROM tasks" in statement or "FROM task_events" in statement:
+            statements.append(statement)
+
+    event.listen(store.engine, "before_cursor_execute", capture)
+    try:
+        client.get(path, params={"limit": 1}).raise_for_status()
+        query_count = len(statements)
+        statements.clear()
+        client.get(path, params={"limit": 4}).raise_for_status()
+        assert len(statements) == query_count == 3
+    finally:
+        event.remove(store.engine, "before_cursor_execute", capture)
 
 
 def test_activity_pages_preserve_status_context_and_skip_task_replay(project_context, monkeypatch):
@@ -882,15 +924,14 @@ def test_list_reuses_prerequisites_already_in_the_task_page(project_context, mon
     dependent = _task(client, project, "Build")
     assert _set(client, dependent, [upstream["id"]]).status_code == 200
     store = app.state.task_store
-    list_summaries = store.list_task_summaries
+    prerequisite_summaries = store.prerequisite_summaries
     extra_reads = []
 
-    def record_lookup(**options):
-        if options.get("task_ids"):
-            extra_reads.append(options["task_ids"])
-        return list_summaries(**options)
+    def record_lookup(owner, task_ids):
+        extra_reads.append(task_ids)
+        return prerequisite_summaries(owner, task_ids)
 
-    monkeypatch.setattr(store, "list_task_summaries", record_lookup)
+    monkeypatch.setattr(store, "prerequisite_summaries", record_lookup)
     path = "/api/v1/tasks?view=summary"
     full = {task["id"]: task for task in client.get(path).json()["tasks"]}
     expected = full[dependent["id"]]["waitingOnSummaries"]

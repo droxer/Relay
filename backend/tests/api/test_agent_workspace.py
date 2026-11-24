@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 
+from uuid import uuid4
+
 from fastapi.testclient import TestClient
 from sqlalchemy import insert
 from relay.app import create_app
@@ -176,12 +178,17 @@ def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
     }
 
     assert client.post("/api/v1/auth/login", json={"username": "alice", "password": "userpass"}).status_code == 200
-    response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
-
-    assert response.status_code == 200, response.text
-    sessions = response.json()["sessions"]
-    assert len(sessions) == 10
-    assert {session["id"] for session in sessions} == created_ids
+    brief_path = f"/api/v1/workspace/brief?agentId={agent['id']}"
+    page = client.get(f"{brief_path}&threadLimit=4").raise_for_status().json()
+    assert page["metrics"]["sessionCount"] == 10
+    found = []
+    while True:
+        assert len(page["sessions"]) <= 4
+        found.extend(session["id"] for session in page["sessions"])
+        if not page["nextThreadCursor"]:
+            break
+        page = client.get(f"{brief_path}&threadLimit=4&threadCursor={page['nextThreadCursor']}").raise_for_status().json()
+    assert len(found) == 10 and set(found) == created_ids
 
     app.state.session_store.create_session({
         "workspacePath": "/workspace", "ownerUserId": ALICE, "taskGoal": "Unrelated work",
@@ -205,7 +212,8 @@ def test_agent_workspace_brief_lists_every_thread_for_workspace_selection(
     assert {session["id"] for session in payload["sessions"]} == created_ids | {participated_id}
     assert next(session for session in payload["sessions"] if session["id"] == participated_id)["runCount"] == 1
     assert set(payload["sessions"][0]) == {"id", "title", "taskGoal", "status", "runCount", "updatedAt"}
-    assert len(activity.content) < len(response.content) // 2
+    full = client.get(brief_path).raise_for_status()
+    assert len(activity.content) < len(full.content) // 2
     assert activity.headers["cache-control"] == "private, no-cache"
     headers = {"If-None-Match": activity.headers["etag"]}
     assert client.get(activity_path, headers=headers).status_code == 304
@@ -318,9 +326,10 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
     client = TestClient(app)
     _bootstrap(client)
     agent = _agent(client)
+    old_runtime_id = str(uuid4())
     app.state.registry.register(
         {
-            "sandboxId": "runtime_old",
+            "sandboxId": old_runtime_id,
             "userId": ALICE,
             "workspaceId": "machine-1",
             "token": "old_token",
@@ -332,16 +341,22 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
     )
     placed = client.post(
         f"/api/v1/admin/agents/{agent['id']}/placements",
-        json={"daemonNodeId": "runtime_old"},
+        json={"daemonNodeId": old_runtime_id},
     )
     assert placed.status_code == 201, placed.text
-    app.state.registry.delete("runtime_old")
+    assert placed.json()["placement"]["computerId"] == f"device:{ALICE}:machine-1"
+    app.state.registry.retire_deleted(old_runtime_id)
+    replacement, _, token = app.state.registry.provision_pending(
+        user_id=ALICE, workspace_path="/workspace", workspace_id="machine-1",
+    )
+    new_runtime_id = replacement["id"]
+    assert new_runtime_id != old_runtime_id and token
     app.state.registry.register(
         {
-            "sandboxId": "runtime_new",
+            "sandboxId": new_runtime_id,
             "userId": ALICE,
             "workspaceId": "machine-1",
-            "token": "new_token",
+            "token": token,
             "nodeLocation": "user-device",
             "protocolVersion": 1,
             "supportedAgents": ["codex"],
@@ -353,4 +368,4 @@ def test_agent_workspace_brief_follows_current_runtime_for_computer(
     response = client.get(f"/api/v1/workspace/brief?agentId={agent['id']}")
 
     assert response.status_code == 200, response.text
-    assert [node["id"] for node in response.json()["nodes"]] == ["runtime_new"]
+    assert [node["id"] for node in response.json()["nodes"]] == [new_runtime_id]

@@ -163,7 +163,7 @@ def test_conversation_mapping_requires_service_token(monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("view", ["chat", "threads"])
-def test_thread_list_scopes_storage_before_reading_history(monkeypatch, view):
+def test_thread_list_scopes_records_without_reading_history(monkeypatch, view):
     from relay.persistence.events import relay_event
 
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -177,7 +177,7 @@ def test_thread_list_scopes_storage_before_reading_history(monkeypatch, view):
         archived = _create_session(client, user_id("alice"))
         app.state.session_store.append_event(archived, relay_event("session.archived", archived, {}))
         _create_session(client, user_id("bob"))
-        original = app.state.session_store.list_sessions
+        original = app.state.session_store.list_session_record_page
 
         def scoped(**kwargs):
             assert kwargs.get("owner_user_id") == user_id("alice"), "history must be scoped in storage"
@@ -185,7 +185,7 @@ def test_thread_list_scopes_storage_before_reading_history(monkeypatch, view):
                 assert kwargs.get("include_archived") is False
             return original(**kwargs)
 
-        monkeypatch.setattr(app.state.session_store, "list_sessions", scoped)
+        monkeypatch.setattr(app.state.session_store, "list_session_record_page", scoped)
         if view == "chat":
             response = client.post("/api/v1/internal/chat/conversation/sessions", headers=CHAT_HEADERS, json=CONVERSATION)
         else:
@@ -194,7 +194,7 @@ def test_thread_list_scopes_storage_before_reading_history(monkeypatch, view):
         assert response.status_code == 200, response.text
         expected = {visible} if view == "chat" else {visible, archived}
         assert {s["id"] for s in response.json()["sessions"]} == expected
-        assert all(s["events"] for s in response.json()["sessions"])
+        assert all("events" not in s and s["eventCount"] for s in response.json()["sessions"])
 
 
 @pytest.mark.parametrize("invalid_owner", [None, "", 123])
@@ -203,7 +203,7 @@ def test_invalid_chat_identity_cannot_turn_into_an_unscoped_list(monkeypatch, tm
     app = create_app(tmp_path)
     monkeypatch.setattr(app.state.chat_store, "resolve_identity", lambda payload: {"userId": invalid_owner})
     queries = []
-    monkeypatch.setattr(app.state.session_store, "list_sessions", lambda **kwargs: queries.append(kwargs) or [])
+    monkeypatch.setattr(app.state.session_store, "list_session_record_page", lambda **kwargs: queries.append(kwargs) or [])
     response = TestClient(app).post(
         "/api/v1/internal/chat/conversation/sessions", headers=CHAT_HEADERS, json=CONVERSATION,
     )

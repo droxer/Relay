@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from loguru import logger
 
+from ...core.home_tasks import HOME_TASK_FIELDS
+from ...security.home_snoozes import normalize_home_snoozes
 from ...tasks.review import task_review
 from ...security.actor import Actor
 from ...tasks.assignment import (
@@ -51,6 +53,7 @@ from .prerequisites import task_with_prerequisite_view, with_waiting_on, with_de
 from .automation_lists import read_automation_page
 from .issues import read_issue_page, task_page_number
 from .thread_tasks import read_thread_tasks
+from ..record_cursor import decode_record_cursor, encode_record_cursor
 from ..connections.routes import connection_errors, service as connection_service
 from ...persistence.engine import store_transaction
 from .payloads import (
@@ -65,17 +68,6 @@ router = APIRouter()
 
 # Explicit limits remain bounded; an omitted limit preserves the complete list.
 TASK_LIST_MAX_LIMIT = 500
-
-# Home uses the same links, waits and assignment as the full Task list but
-# does not render descriptions, schedules, artifact metadata or histories.
-HOME_TASK_FIELDS = frozenset({
-    "id", "number", "title", "priority", "status", "isRoutine", "ownerUserId", "assigneeUserId",
-    "projectId", "computerId", "sourceRoutineId", "linkedSessionIds", "createdAt", "updatedAt",
-    "startedAt", "finishedAt", "dueDate", "scheduledFor", "routineState", "routineNextRunAt",
-    "assignedAgentId", "assignedTeamId", "assignedWorkflowId", "workspaceBinding", "workspaceWaiting", "dispatchClaim",
-    "dispatchOutcome", "prerequisiteTaskIds", "waitingOn", "waitingOnSummaries", "blockerReason", "awaiting",
-})
-
 
 def task_list_limit(raw_limit: str | None) -> int | None:
     if raw_limit is None:
@@ -134,16 +126,28 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             )
         return {"tasks": ctx.task_store.prerequisite_choices(actor["userId"], project["id"])} if project else {"tasks": []}
     if view == "summary" and scope == "home":
-        rows, projects, untriaged = ctx.task_store.home_tasks(actor["userId"])
+        try:
+            raw_today = request.query_params.get("today")
+            today = date.fromisoformat(raw_today) if raw_today else datetime.now(UTC).date()
+        except ValueError as error:
+            raise HTTPException(400, "Invalid calendar date.") from error
+        snoozed = {
+            entry["key"].removeprefix("task:"): entry["stamp"]
+            for entry in normalize_home_snoozes(actor.get("account", {}).get("homeSnoozes"))
+            if entry["key"].startswith("task:")
+        }
+        rows, projects, untriaged, waiting_to_start = ctx.task_store.home_tasks(actor["userId"], today, snoozed)
         tasks = with_dependency_summaries(ctx, actor, with_waiting_on(ctx, [public_task(task) for task in rows]))
         return {
             "tasks": [{"description": "", **{name: value for name, value in task.items() if name in HOME_TASK_FIELDS}}
                       for task in tasks],
             "homeProjects": projects,
             "homeUntriaged": untriaged,
+            "homeWaitingToStart": waiting_to_start,
         }
     summary_view = view == "summary"
     limit = task_list_limit(request.query_params.get("limit"))
+    page: dict[str, Any] = {}
     if summary_view and hasattr(ctx.task_store, "list_task_summaries"):
         computer_id = request.query_params.get("computerId") or None
         if computer_id and "\x00" in computer_id:
@@ -156,12 +160,15 @@ def list_tasks(request: Request, ctx: AppContextDep) -> dict[str, Any]:
             computer_id=computer_id,
         )
     else:
-        tasks = ctx.task_store.list_tasks(
-            user_id=actor["userId"],
-            limit=limit,
+        raw_cursor = request.query_params.get("cursor")
+        tasks, position = ctx.task_store.list_task_record_page(
+            actor["userId"], limit=min(limit or 25, 50),
+            before=decode_record_cursor(raw_cursor) if raw_cursor else None,
         )
+        page["nextCursor"] = encode_record_cursor(position) if position else None
     return {
         "tasks": with_dependency_summaries(ctx, actor, with_waiting_on(ctx, [public_task(task) for task in tasks])),
+        **page,
         **_user_task_flow(ctx, actor["userId"]),
     }
 

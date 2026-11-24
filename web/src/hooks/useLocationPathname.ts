@@ -20,43 +20,19 @@ export function useLocationPathname(): string | null {
   return useSyncExternalStore(subscribeToLocation, snapshot, serverSnapshot);
 }
 
-function taskCollectionSnapshot(): boolean {
-  return needsTaskCollection(parseAppPath(window.location.pathname), new URLSearchParams(window.location.search));
+function locationSnapshot(): string {
+  return window.location.pathname + window.location.search;
 }
 
-/** Subscribe to visibility only so changing board filters never rerenders the shell. */
-export function useTaskCollectionVisible(): boolean {
-  return useSyncExternalStore(subscribeToLocation, taskCollectionSnapshot, () => false);
-}
-
-function taskProjectSnapshot(): string | undefined {
-  const location = parseAppPath(window.location.pathname);
-  if (location.route === "projects" && needsTaskCollection(location, new URLSearchParams(window.location.search))) {
-    return location.projectId ?? undefined;
-  }
-}
-
-export function useProjectTaskScope(): string | undefined {
-  return useSyncExternalStore(subscribeToLocation, taskProjectSnapshot, () => undefined);
-}
-
-function taskListScopeSnapshot() {
-  return taskListScope(parseAppPath(window.location.pathname), new URLSearchParams(window.location.search));
-}
-
-export function useTaskListScope() {
-  return useSyncExternalStore(subscribeToLocation, taskListScopeSnapshot, () => undefined);
-}
-
-function projectTaskRecordSnapshot(): string | null {
-  const location = parseAppPath(window.location.pathname);
-  if (location.projectId && !location.sessionId) {
-    const search = new URLSearchParams(window.location.search);
-    return search.get("task") ?? search.get("run") ?? search.get("automation");
-  }
-  return null;
-}
-
-export function useProjectTaskRecordId(): string | null {
-  return useSyncExternalStore(subscribeToLocation, projectTaskRecordSnapshot, () => null);
+/** Derive Task collection visibility and scope from the same browser address. */
+export function useTaskRoute() {
+  const address = useSyncExternalStore(subscribeToLocation, locationSnapshot, serverSnapshot);
+  const queryStart = address?.indexOf("?") ?? -1;
+  const pathname = queryStart === -1 ? address : address?.slice(0, queryStart);
+  const route = pathname ? parseAppPath(pathname) : null;
+  const search = route ? new URLSearchParams(queryStart === -1 ? undefined : address?.slice(queryStart)) : null;
+  const visible = Boolean(route && search && needsTaskCollection(route, search));
+  const projectId = route?.route === "projects" && visible ? route.projectId ?? undefined : undefined;
+  const scope = route && search ? taskListScope(route, search) : undefined;
+  return { route, search, visible, projectId, scope };
 }

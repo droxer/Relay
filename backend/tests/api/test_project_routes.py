@@ -117,6 +117,8 @@ def test_project_summary_defers_context_to_detail(monkeypatch, tmp_path) -> None
 
 
 def test_project_directory_defers_member_contracts_and_setup_proposals(monkeypatch, tmp_path) -> None:
+    from sqlalchemy import event
+
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(str(tmp_path))
     client = TestClient(app)
@@ -140,8 +142,19 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(monkeypat
     }
     project = app.state.project_store.update_project(project["id"], {"setup": setup}, expected_version=project["version"])
     path = "/api/v1/projects?view=directory"
-    result = client.get(path)
+    statements = []
+
+    def capture(_conn, _cursor, statement, *_args):
+        statements.append(statement)
+
+    engine = app.state.project_store.engine
+    event.listen(engine, "before_cursor_execute", capture)
+    try:
+        result = client.get(path)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture)
     assert result.status_code == 200
+    assert not any(statement.startswith("SELECT projects.snapshot \n") for statement in statements)
     row, = result.json()["projects"]
     assert row["view"] == "directory"
     assert row["id"] == project["id"] and row["version"] == project["version"]

@@ -56,6 +56,32 @@ def test_summary_last_page_has_no_cursor(paged_threads):
     assert sorted(_whole_list(client)) == sorted(created)
 
 
+def test_thread_records_page_without_loading_transcripts(paged_threads):
+    client, _alice, created = paged_threads
+    store = client.app.state.session_store
+    statements = []
+
+    def capture(_conn, _cursor, sql, *_args):
+        statements.append(sql)
+
+    event.listen(store.engine, "before_cursor_execute", capture)
+    try:
+        path = "/api/v1/threads"
+        cursor = None
+        found = []
+        for expected_size in (2, 2, 1):
+            params = {"limit": 2, **({"cursor": cursor} if cursor else {})}
+            page = client.get(path, params=params).json()
+            assert len(page["sessions"]) == expected_size
+            assert all("events" not in row and row["eventCount"] > 0 for row in page["sessions"])
+            found.extend(row["id"] for row in page["sessions"])
+            cursor = page["nextCursor"]
+        assert cursor is None and set(found) == set(created) and len(found) == len(created)
+        assert not any("FROM session_events" in sql for sql in statements)
+    finally:
+        event.remove(store.engine, "before_cursor_execute", capture)
+
+
 def test_thread_summary_reads_linked_computer_liveness_once(paged_threads):
     client, _alice, created = paged_threads
     app = client.app
