@@ -27,10 +27,15 @@ def changed_paths(event_name: str, event: dict) -> list[str] | None:
 def suites(paths: list[str] | None) -> dict[str, bool]:
     common = paths is None or any(
         path.startswith(".github/")
-        or path in {"package.json", "package-lock.json", "Makefile"}
+        or path in {"package.json", "package-lock.json", "Makefile", "tsconfig.options.json"}
         for path in paths
     )
     paths = paths or []
+    web = common or any(
+        path.startswith(("web/", "packages/relay-core/", "tools/vendor/"))
+        or path == "packages/tsconfig.json"
+        for path in paths
+    )
     return {
         "python": common
         or any(
@@ -41,10 +46,19 @@ def suites(paths: list[str] | None) -> dict[str, bool]:
         ),
         "typescript": common
         or any(path.startswith(("packages/", "tools/")) for path in paths),
-        "web": common
+        "web": web,
+        "concurrency": web
         or any(
-            path.startswith(("web/", "packages/relay-core/", "tools/vendor/"))
-            or path == "packages/tsconfig.json"
+            path.startswith(("backend/relay/", "backend/migrations/", "packages/relay-daemon/src/"))
+            or path in {
+                "backend/alembic.ini",
+                "backend/pyproject.toml",
+                "backend/uv.lock",
+                "backend/.python-version",
+                ".python-version",
+                "packages/relay-daemon/package.json",
+                "packages/relay-daemon/tsconfig.json",
+            }
             for path in paths
         ),
     }

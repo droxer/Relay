@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -9,8 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Each default-branch push validates its own diff, so let all of them finish.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CI: "true"
@@ -26,6 +28,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       typescript: ${{ steps.filter.outputs.typescript }}
       web: ${{ steps.filter.outputs.web }}
+      concurrency: ${{ steps.filter.outputs.concurrency }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -88,30 +91,82 @@ jobs:
       - name: Test vendored dependency fixes
         if: needs.changes.outputs.typescript == 'true'
         run: npm run test:security-dependencies
-      - name: Build packages and compile tests
+      - name: Build shared types
+        run: npm run build -w relay-core
+      - name: Build package runtimes and compile tests
+        if: needs.changes.outputs.typescript == 'true'
         run: |
-          npm run build -w relay-core
           npm run build -w relay-daemon
           npm run build -w relay-supervisor
           node tools/build-computer.mjs
           npx tsc -p packages/tsconfig.json
+      - name: Compile web tests
+        if: needs.changes.outputs.typescript != 'true'
+        run: npx tsc -p web/tsconfig.tests.json
       - name: Test TypeScript packages
         if: needs.changes.outputs.typescript == 'true'
         run: node --test dist/packages/relay-core/tests/*.test.js dist/packages/relay-daemon/tests/*.test.js dist/packages/relay-supervisor/tests/*.test.js
-      - name: Build and test web
+      - name: Run web unit and React tests
         if: needs.changes.outputs.web == 'true'
         run: |
-          npm run build -w web
           node --test dist/web/tests/*.test.js
           npm run test:react -w web
+
+  web-build:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || needs.changes.outputs.concurrency == 'true'
+    name: Build web export
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      artifact-id: ${{ steps.export.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w web
+      - uses: actions/upload-artifact@v4
+        id: export
+        with:
+          # Browser job reruns can download the successful build's artifact.
+          name: web-export-${{ github.run_attempt }}
+          path: web/out/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
+
+  web-performance:
+    needs: [changes, web-build]
+    if: needs.changes.outputs.web == 'true'
+    name: Browser performance budgets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.web-build.outputs.artifact-id }}
+          path: web/out/
+          merge-multiple: true
       - name: Check browser performance budgets
-        if: needs.changes.outputs.web == 'true'
         working-directory: web
         run: |
           npx playwright install chromium
           npx playwright test -c playwright.recovery.config.ts performance.spec.ts home.spec.ts --workers=2
       - uses: actions/upload-artifact@v4
-        if: failure() && needs.changes.outputs.web == 'true'
+        if: failure()
         with:
           name: web-performance-traces
           path: web/test-results/
@@ -119,8 +174,8 @@ jobs:
           retention-days: 7
 
   concurrency-e2e:
-    needs: changes
-    if: needs.changes.outputs.web == 'true'
+    needs: [changes, web-build]
+    if: needs.changes.outputs.concurrency == 'true'
     name: Browser/backend/daemon concurrency
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -139,13 +194,23 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - run: npm ci
       - run: uv sync --project backend --locked --extra dev
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.web-build.outputs.artifact-id }}
+          path: web/out/
+          merge-multiple: true
       - name: Install Chromium
         # ubuntu-24.04 already supplies Chromium's native libraries. Avoid
         # re-installing them through APT, whose mirror DNS can be unavailable.
         run: npx playwright install chromium
         working-directory: web
       - name: Exercise real backend and daemon through the browser
-        run: npm run test:e2e:concurrency -w web
+        # CI already has the export. Build the Daemon this server imports and
+        # invoke the same Playwright config as the local npm script.
+        run: |
+          npm run build -w relay-core
+          npm run build -w relay-daemon
+          npm exec -w web -- playwright test -c playwright.concurrency.config.ts
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -156,9 +221,21 @@ jobs:
   python-tests:
     needs: changes
     if: needs.changes.outputs.python == 'true'
-    name: Python tests
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      # Every matrix job gets its own database service. The backup test can
+      # dump that database after the targeted PostgreSQL checks finish.
+      matrix:
+        include:
+          - suite: full
+            name: Python tests
+            timeout: 60
+          - suite: postgres
+            name: PostgreSQL integration tests
+            timeout: 20
     services:
       postgres:
         image: postgres:16
@@ -211,9 +288,11 @@ jobs:
           engine.dispose()
           PY
       - name: Run Python tests including PostgreSQL migrations
+        if: matrix.suite == 'full'
         working-directory: backend
-        run: uv run pytest
+        run: uv run pytest --durations=20
       - name: Check page read budgets on PostgreSQL
+        if: matrix.suite == 'postgres'
         working-directory: backend
         env:
           RELAY_TEST_STORE_BACKEND: postgres
@@ -225,10 +304,14 @@ jobs:
             -k 'many_linked or compact_read or project_access or long_transcript or pages_history or personal_teams or reads_only_one_window or sql_windows or linked_computer_liveness or wait_status_tracks or batches_linked_thread or mapping_round_trip or personal_computer_inventory or sandbox_ui_token_can_manage or reads_its_project' \
             -q -n0
       - name: Exercise daemon connections and report recovery on PostgreSQL
+        if: matrix.suite == 'postgres'
         working-directory: backend
         env:
           RELAY_TEST_STORE_BACKEND: postgres
-        run: |
-          uv run pytest tests/api/test_daemon_connection_e2e.py tests/api/test_daemon_report_e2e.py -q
-          # Dumps the whole server database, so it needs the server to itself.
-          uv run pytest tests/unit/test_database_backup.py -q -n0
+        run: uv run pytest tests/api/test_daemon_connection_e2e.py tests/api/test_daemon_report_e2e.py -q
+      - name: Exercise PostgreSQL backups with exclusive database access
+        if: matrix.suite == 'postgres'
+        working-directory: backend
+        env:
+          RELAY_TEST_STORE_BACKEND: postgres
+        run: uv run pytest tests/unit/test_database_backup.py -q -n0
