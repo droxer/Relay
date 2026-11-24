@@ -155,11 +155,18 @@ export function ComputerCard({
             {node.lastSeenAt && <> <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span></>}
           </p>
           {/* The reader owns this machine, so the fix is theirs to make:
-              name it in the open — the command, not only the badge's hover
-              title — at the sub line's quiet weight, under the name. */}
+              name the update status and the command together on one quiet line
+              under the sub-line instead of repeating it in a header pill. */}
           {hasClientUpdate(node) ? (
             <p className="computer-card-outdated">
-              <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <code className="code" /> }} />
+              <span className="computer-card-outdated-label">
+                <StateMark shape="solid" tone="warn" />
+                <span>{t("computer.client_outdated")}</span>
+              </span>
+              <span className="computer-card-outdated-sep" aria-hidden="true">·</span>
+              <span>
+                <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <code className="code" /> }} />
+              </span>
             </p>
           ) : null}
         </div>

@@ -255,10 +255,28 @@
 /* Supporting text, not a paragraph that out-shouts the name: the body-sm
    rung, one ink step down. */
 .computer-card-outdated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-1-5);
   margin: var(--sp-1) 0 0;
   color: var(--ink-2);
   font: var(--type-body-sm);
   letter-spacing: var(--type-body-sm-track);
+}
+
+.computer-card-outdated-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  color: var(--warn);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  white-space: nowrap;
+}
+
+.computer-card-outdated-sep {
+  color: var(--ink-4);
 }
 
 /* Why the machine is not simply online, and what to do: a quiet inset under
