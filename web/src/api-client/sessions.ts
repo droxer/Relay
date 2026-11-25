@@ -8,6 +8,7 @@ import type {
 } from "../types.ts";
 import { apiJson, fetchWithSession, RelayApiError, RelayApiShapeError, readApiResponse, revisionPath } from "./client.ts";
 import type { PermissionAnswerInput } from "../lib/permissionRequests.ts";
+import type { ThreadKindFilter } from "../lib/threadKindFilter.ts";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { sessionGuard, sessionSummariesGuard } from "./responseShape.ts";
 
@@ -17,13 +18,16 @@ export type SessionHeadCache = { etag?: string; page?: SessionSummariesResponse 
 
 export async function listSessionSummaries(
   signal?: AbortSignal,
-  page?: { limit: number; cursor?: string; includeActivity?: boolean },
+  page?: { limit: number; cursor?: string; includeActivity?: boolean; projectId?: string; query?: string; kind?: ThreadKindFilter },
   headCache?: SessionHeadCache,
 ): Promise<SessionSummariesResponse> {
   const params = new URLSearchParams({ view: "summary" });
   if (page) params.set("limit", String(page.limit));
   if (page?.cursor) params.set("cursor", page.cursor);
   if (page?.includeActivity) params.set("include", "activity");
+  if (page?.projectId) params.set("projectId", page.projectId);
+  if (page?.query) params.set("q", page.query);
+  if (page?.kind && page.kind !== "all") params.set("kind", page.kind);
   const path = `/threads?${params}`;
   if (!headCache) return apiJson(path, { signal, guard: sessionSummariesGuard });
   const cached = headCache.page;

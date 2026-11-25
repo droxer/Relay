@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkspacePage } from "../src/components/ProjectWorkspacePage";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
-import type { CurrentUser, ProjectRecord, RelayTaskListItem } from "../src/types";
+import type { CurrentUser, ProjectRecord, RelayTaskListItem, SessionSummary } from "../src/types";
 
 const automations = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
 vi.mock("../src/components/RoutinesPage", () => ({ RoutinesPage: (props: Record<string, unknown>) => { automations.props = props; return <div data-testid="project-automations" />; } }));
@@ -28,20 +28,23 @@ const task = (id: string, projectId: string | undefined, deletedAt?: string) =>
   ({ id, title: id, projectId, deletedAt, status: "backlog" }) as unknown as RelayTaskListItem;
 
 function renderPage(record: ProjectRecord) {
-  return render(
-    <QueryClientProvider client={new QueryClient()}>
+  const actions = { onOpenThread: vi.fn(), onNewThread: vi.fn(), onRenameThread: vi.fn(), onCloseThread: vi.fn() };
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <DialogProvider>
         <ProjectWorkspacePage
-          project={record} agents={[]} teams={[]} currentUser={user} computers={[]}
+          project={record} agents={[]} currentUser={user} computers={[]}
           tasks={[
             task("mine", "p"), task("other", "q"), task("gone", "p", "2026-09-02"),
             { ...task("run", "p"), sourceRoutineId: "auto" },
           ]}
-          onOpenThread={vi.fn()} onDeleted={vi.fn()} onBack={vi.fn()}
+          {...actions}
+          onDeleted={vi.fn()} onBack={vi.fn()}
         />
       </DialogProvider>
     </QueryClientProvider>,
   );
+  return actions;
 }
 
 beforeEach(() => {
@@ -66,11 +69,89 @@ it("offers no second way to the board when nothing needs attention", () => {
   expect(screen.getByRole("tab", { name: "project.tasks_tab" })).toBeTruthy();
 });
 
+function discussion(id: string, title: string, activity?: SessionSummary["taskActivity"]): SessionSummary {
+  const stamp = "2026-09-01T00:00:00Z";
+  return {
+    id, title, taskGoal: title, projectId: "p", ownerUserId: "fei", status: "completed", phase: "done",
+    workspacePath: "/workspace", artifactCount: 0, runCount: 2, eventCount: 3,
+    createdAt: stamp, updatedAt: stamp,
+    taskActivity: activity ?? { awaitsHuman: false, origin: null },
+  };
+}
+
+it("loads scoped discussion pages and keeps the current rows available when loading more fails", async () => {
+  const head = discussion("first", "Release planning");
+  const older = discussion("older", "Older rollout", {
+    awaitsHuman: true,
+    origin: { kind: "backlog", taskId: "t", title: "Rollout", ref: "#8", status: "review" },
+  });
+  const requests: URL[] = [];
+  let moreFails = true;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const url = new URL(String(input), window.location.origin);
+    if (!url.pathname.endsWith("/threads")) return Response.json({});
+    requests.push(url);
+    if (url.searchParams.has("q") || url.searchParams.has("kind")) return Response.json({ sessions: [], nextCursor: null });
+    if (url.searchParams.get("cursor") === "older") {
+      if (moreFails) return Response.json({ detail: "Unavailable" }, { status: 503 });
+      return Response.json({ sessions: [older], nextCursor: null });
+    }
+    return Response.json({ sessions: [head], nextCursor: "older" });
+  });
+  const actions = renderPage(project());
+  expect(requests).toHaveLength(0);
+  fireEvent.click(screen.getByRole("tab", { name: "project.discussions_tab" }));
+  expect(await screen.findByRole("button", { name: /Release planning/ })).toBeTruthy();
+  expect(Object.fromEntries(requests[0].searchParams)).toMatchObject({ projectId: "p", view: "summary", include: "activity" });
+  expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+  expect(screen.queryByRole("heading", { name: "project.discussions_recent" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "project.discussions_new" }));
+  expect(actions.onNewThread).toHaveBeenCalledWith("p");
+
+  const loadMore = screen.getByRole("button", { name: "project.discussions_load_more" });
+  fireEvent.click(loadMore);
+  expect((await screen.findByRole("alert")).textContent).toContain("project.discussions_load_older_failed");
+  expect(screen.getByRole("button", { name: /Release planning/ })).toBeTruthy();
+  moreFails = false;
+  fireEvent.click(loadMore);
+  const row = await screen.findByRole("button", { name: /Older rollout/ });
+  expect(screen.getByRole("list", { name: "thread.group_needs_you" }).contains(row)).toBe(true);
+  expect(screen.getByRole("heading", { name: "project.discussions_recent" })).toBeTruthy();
+  fireEvent.click(row);
+  expect(actions.onOpenThread).toHaveBeenCalledWith("older");
+  const rowElement = row.closest("li");
+  expect(rowElement?.querySelector("button button")).toBeNull();
+  fireEvent.click(screen.getAllByRole("button", { name: "thread.rename" })[0]);
+  expect(actions.onRenameThread).toHaveBeenCalledWith(expect.objectContaining({ id: "older" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "thread.delete" })[0]);
+  expect(actions.onCloseThread).toHaveBeenCalledWith("older", "Older rollout");
+
+  fireEvent.click(screen.getByRole("button", { name: "thread.kind_filter_chats" }));
+  fireEvent.change(screen.getByRole("searchbox", { name: "project.discussions_search" }), { target: { value: "launch" } });
+  await waitFor(() => expect(requests.at(-1)?.searchParams.get("q")).toBe("launch"));
+  expect(window.location.search).toBe("?tab=discussions&q=launch&kind=chats");
+  expect(await screen.findByText("project.discussions_no_matches")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "project.discussions_new" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "backlog.clear_filters" }));
+  expect(window.location.search).toBe("?tab=discussions");
+});
+
+it("keeps archived discussions readable with no creation action", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=discussions");
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({
+    sessions: [discussion("past", "Archived planning")], nextCursor: null,
+  }));
+  const actions = renderPage(project({ archivedAt: "2026-09-01" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Archived planning/ }));
+  expect(actions.onOpenThread).toHaveBeenCalledWith("past");
+  expect(screen.queryByRole("button", { name: "project.discussions_new" })).toBeNull();
+});
+
 it("has no General tab; a retired ?tab=general link lands on the Dashboard", () => {
   window.history.replaceState({}, "", "/projects/p?tab=general");
   renderPage(project());
   expect(screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/u, ""))).toEqual([
-    "project.dashboard_tab", "project.tasks_tab", "routine.title", "workspace.tab_workspace", "project.members_tab", "project.settings_tab",
+    "project.dashboard_tab", "project.tasks_tab", "project.discussions_tab", "routine.title", "workspace.tab_workspace", "project.members_tab", "project.settings_tab",
   ]);
   expect(screen.getByRole("tab", { name: "project.dashboard_tab", selected: true })).toBeTruthy();
 });

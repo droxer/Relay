@@ -21,6 +21,98 @@
   padding: clamp(var(--sp-5), 4vw, var(--sp-8));
 }
 
+.project-discussions {
+  width: 100%;
+  max-width: 960px;
+}
+
+.project-discussions-toolbar,
+.project-discussions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.project-discussions-toolbar {
+  margin-bottom: var(--sp-4);
+}
+
+.project-discussions-toolbar > .list-filter-search {
+  flex: 1 1 12rem;
+  min-height: var(--control-h-sm);
+  padding-inline: var(--sp-2);
+  border: var(--hairline);
+  border-radius: var(--r-2);
+  background: var(--surface-0);
+}
+
+.project-discussions-toolbar > .thread-kind-filter {
+  flex: 0 1 auto;
+}
+
+.project-discussions .conversation-rows {
+  gap: 0;
+  overflow: hidden;
+  border: var(--hairline);
+  border-radius: var(--r-3);
+}
+
+.project-discussions .conversation-row {
+  border-radius: 0;
+}
+
+.project-discussions .conversation-row + .conversation-row {
+  border-top: var(--hairline);
+}
+
+.project-discussions .conversation-row-inner:focus-visible {
+  outline-offset: -2px;
+}
+
+.project-discussions-empty,
+.project-discussions-more {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+}
+
+.project-discussions-more {
+  margin-top: var(--sp-4);
+}
+
+.project-discussions-more [role="alert"] {
+  color: var(--err);
+}
+
+.project-discussions-skeleton {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border: var(--hairline);
+  border-radius: var(--r-3);
+}
+
+@media (max-width: 820px) {
+  .project-discussions-toolbar > .list-filter-search {
+    flex-basis: 100%;
+    min-height: var(--touch-target);
+  }
+
+  .project-discussions-toolbar > .project-discussions-actions {
+    display: contents;
+  }
+
+  .project-discussions-toolbar .thread-kind-filter-item {
+    padding-inline: var(--sp-1-5);
+  }
+
+  .project-discussions .thread-kind-filter-item,
+  .project-discussions-actions button {
+    min-height: var(--touch-target);
+  }
+}
+
 /* The crew column's heading carries its count, like the team's Members. */
 .project-profile .workspace-dossier-section-title {
   display: flex;

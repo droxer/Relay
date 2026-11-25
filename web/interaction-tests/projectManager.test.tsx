@@ -138,7 +138,9 @@ it('opens separate Lead discussions with their own drafts and the role as the de
  expect(api.open.mock.calls).toEqual([['p'],['p']]);
  expect(invalidate.mock.calls).toEqual([
   [{queryKey:SESSIONS_QUERY_KEY,exact:true}],
+  [{queryKey:['project-discussions','p']}],
   [{queryKey:SESSIONS_QUERY_KEY,exact:true}],
+  [{queryKey:['project-discussions','p']}],
  ]);
  for(const threadId of ['topic-thread','plain-thread']) {
   expect(useComposerTargetStore.getState().threadPicks[threadId]).toBeUndefined();

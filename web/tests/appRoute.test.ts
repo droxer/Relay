@@ -499,6 +499,17 @@ it("keeps the project tasks tab explicit and canonicalizes Dashboard as the defa
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard&status=review"), "/projects/p");
 });
 
+it("keeps search and kind on the project Discussions tab", () => {
+  assert.equal(
+    canonicalBrowserUrl("/projects/p", "?tab=discussion&q=release+plan&kind=chats&task=unrelated"),
+    "/projects/p?tab=discussions&q=release+plan&kind=chats",
+  );
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=discussions&kind=tasks"), "/projects/p?tab=discussions&kind=tasks");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=discussions&kind=all"), "/projects/p?tab=discussions");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=discussions&kind=unknown"), "/projects/p?tab=discussions");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=members&q=release&kind=chats"), "/projects/p?tab=members");
+});
+
 it("keeps the embedded board's filters, sort, and pages on the project tasks tab only", () => {
   const url = new URL(
     canonicalBrowserUrl("/projects/p", "?tab=tasks&q=ship&status=review&priority=high&sort=-due&lanes=backlog.2&project=other"),

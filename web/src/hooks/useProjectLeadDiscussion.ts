@@ -8,6 +8,7 @@ import type { CurrentUser } from "../types";
 import { seedComposerDraft, threadDraftKey } from "./useComposer";
 import { useMutationError } from "./useMutationError";
 import { SESSIONS_QUERY_KEY } from "./useRelayData";
+import { PROJECT_DISCUSSIONS_QUERY_KEY } from "./useProjectDiscussions";
 
 /** Starts a new Project Conversation with an optional unsent topic draft. */
 export function useProjectLeadDiscussion({ projectId, currentUser, onOpenThread }: {
@@ -23,6 +24,7 @@ export function useProjectLeadDiscussion({ projectId, currentUser, onOpenThread 
     onSuccess: ({ threadId }, topic) => {
       if (topic) seedComposerDraft(threadDraftKey(currentUser, threadId), projectLeadTopicPrompt(t, topic));
       void queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
+      void queryClient.invalidateQueries({ queryKey: [...PROJECT_DISCUSSIONS_QUERY_KEY, projectId] });
       onOpenThread(threadId);
     },
     onError: (error) => reportMutationError("Failed to open the Project Lead discussion", error, t("errors.open_project_lead")),

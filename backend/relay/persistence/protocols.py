@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from ..core.issue_listing import IssueListRequest
 from ..core.automation_listing import AutomationListRequest
 from ..core.models import AgentName
+from .workspace import ThreadListFilter
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,8 @@ class SessionStore(Protocol):
     def summary_read_scope(self) -> AbstractContextManager[None]: ...
     def summary_page_stamp(
         self, *, owner_user_id: str, limit: int, before: tuple[datetime, str] | None,
+        project_id: str | None = None,
+        thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[str], list[Any]] | None: ...
     def run_output_sequences(self, session_id: str, run_id: str) -> dict[str, int]: ...
     def read_event_page(
@@ -93,7 +96,8 @@ class SessionStore(Protocol):
     ) -> list[dict[str, Any]]: ...
     def list_session_record_page(
         self, *, owner_user_id: str, limit: int, before: tuple[datetime, str] | None = None,
-        include_archived: bool = True,
+        include_archived: bool = True, project_id: str | None = None,
+        thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[dict[str, Any]], tuple[datetime, str] | None]: ...
     def list_open_sessions_idle_since(self, cutoff: datetime) -> list[dict[str, Any]]: ...
     def list_session_summaries(
@@ -108,6 +112,7 @@ class SessionStore(Protocol):
         project_id: str | None = None,
         team_id: str | None = None,
         agent_id: str | None = None,
+        thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[dict[str, Any]], tuple[datetime, str] | None]: ...
     def list_session_snapshots(
         self, *, owner_user_id: str, project_id: str | None = None

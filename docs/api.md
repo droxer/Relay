@@ -261,6 +261,12 @@ row in the requested page then carries `taskActivity` with an `origin`
 excluding snoozed Tasks. Only Task data visible through `GET /api/v1/tasks`
 is included. Older pages load with the directory's cursor.
 
+`GET /api/v1/threads?projectId=<id>` lists the owner's Threads in that
+Project. The route also accepts archived Projects. Add `q` to search titles and goals.
+Set `kind=chats` for Threads without visible Task links or `kind=tasks` for
+Threads with visible Task links. Both filters apply before pagination. Project
+pages with `include=activity` omit `homeTaskNeedsYou`.
+
 `PATCH /api/v1/auth/preferences` takes any of `theme`, `language`,
 `onboarding`, and `homeSnoozes`, and answers `{user}`. `homeSnoozes` is
 `{"snooze": [{"key", "stamp"}], "unsnooze": ["key"]}`: Home hides an item

@@ -14,6 +14,7 @@ import {
   DEFAULT_PROJECT_PAGE_TAB,
   parseProjectPageTab,
   projectBoardTasks,
+  projectMemberState,
   projectReadOnly,
   PROJECT_PAGE_TABS,
   type ProjectPageTab,
@@ -27,6 +28,7 @@ import type {
   ProjectDashboardSummary,
   RelayTask,
   RelayTaskListItem,
+  RelaySession,
 } from "../types";
 import { ICON, NavBack } from "./icons";
 import { PageHeader } from "./PageHeader";
@@ -47,6 +49,7 @@ import { BacklogPage } from "./BacklogPage";
 import { ProjectDashboard, ProjectTaskPlanning, ProjectTasksCreated } from "./ProjectDashboard";
 import { ProjectContextSuggestions } from "./ProjectContextUpkeep";
 import { ProjectManagerLine } from "./ProjectManagerLine";
+import { ProjectDiscussionsPanel } from "./ProjectDiscussionsPanel";
 import { canonicalBrowserUrl, navigateToAppPath } from "../lib/appRoute";
 import { isProjectDirectoryEntry } from "../lib/projectDirectory";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
@@ -57,6 +60,7 @@ const PROJECT_TAB_LABEL: Record<ProjectPageTab, string> = {
   dashboard: "project.dashboard_tab",
   members: "project.members_tab",
   tasks: "project.tasks_tab",
+  discussions: "project.discussions_tab",
   automations: "routine.title",
   workspace: "workspace.tab_workspace",
   settings: "project.settings_tab",
@@ -66,6 +70,7 @@ const PROJECT_TAB_SUBTITLE: Record<ProjectPageTab, string> = {
   dashboard: "project.dashboard_subtitle",
   members: "project.members_subtitle",
   tasks: "project.tasks_subtitle",
+  discussions: "project.discussions_subtitle",
   automations: "project.automations_subtitle",
   workspace: "project.tasks_workspace_subtitle",
   settings: "project.settings_subtitle",
@@ -80,6 +85,9 @@ export function ProjectWorkspacePage({
   currentUser,
   computers,
   onOpenThread,
+  onNewThread,
+  onRenameThread,
+  onCloseThread,
   onDeleted,
   onBack,
 }: {
@@ -92,6 +100,9 @@ export function ProjectWorkspacePage({
   currentUser: CurrentUser;
   computers: DaemonNodeMonitorRecord[];
   onOpenThread: (sessionId: string) => void;
+  onNewThread: (projectId: string) => void;
+  onRenameThread: (session: RelaySession) => void;
+  onCloseThread: (sessionId: string, title?: string) => void;
   onDeleted: () => void;
   onBack: () => void;
 }) {
@@ -136,7 +147,10 @@ export function ProjectWorkspacePage({
   const canPlan = !membersReadOnly && currentUser.userId === project.ownerUserId;
   const showingSetup = pageTab === "dashboard" && canPlan && setupNeedsAttention(setup);
   const { agents: setupAgents } = useUserAgents(currentUser.userId, true, showingSetup);
-  const lead = useOwnAgentBadge(currentUser.userId, project.leadAgentId, pageTab === "dashboard" && !showingSetup);
+  const lead = useOwnAgentBadge(
+    currentUser.userId, project.leadAgentId,
+    (pageTab === "dashboard" && !showingSetup) || (pageTab === "discussions" && canPlan),
+  );
   const dashboardAgents = showingSetup && setupAgents.length ? setupAgents : agents;
   const managerAgents = lead ? [lead] : dashboardAgents;
   const needsDashboardRecord = pageTab === "dashboard"
@@ -227,6 +241,9 @@ export function ProjectWorkspacePage({
     && Boolean(project.leadAgentId)
     && Boolean(currentUser.userId)
     && currentUser.userId === project.ownerUserId;
+  const leadMember = project.members.find(member => member.agentId === project.leadAgentId);
+  const leadAgent = lead === undefined ? agents.find(agent => agent.id === project.leadAgentId) : lead ?? undefined;
+  const canDiscussWithLead = canDiscuss && leadMember && projectMemberState(leadMember, leadAgent).enabled;
 
   return (
     <Tabs
@@ -351,6 +368,21 @@ export function ProjectWorkspacePage({
             recordTaskId={recordTaskId}
             onOpenRecord={openTaskRecord}
             onOpenThread={(sessionId) => onOpenThread(sessionId)}
+          />
+        </TabsContent>
+        <TabsContent value="discussions" className="project-profile project-discussions-panel">
+          <ProjectDiscussionsPanel
+            key={project.id}
+            projectId={project.id}
+            archived={Boolean(project.archivedAt)}
+            agents={agents}
+            computers={computers}
+            onOpenThread={onOpenThread}
+            onNewThread={canPlan ? () => onNewThread(project.id) : undefined}
+            onRenameThread={onRenameThread}
+            onCloseThread={onCloseThread}
+            onDiscussWithLead={canDiscussWithLead ? leadDiscussion.discuss : undefined}
+            discussing={leadDiscussion.pending}
           />
         </TabsContent>
         <TabsContent value="automations" className="project-tasks-panel">

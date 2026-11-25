@@ -32,7 +32,7 @@ from ..engine import store_transaction
 from .. import sql
 from ..tables.sessions import POSTGRES_QUEUED_THREAD, SQLITE_QUEUED_THREAD
 from ..tables.tasks import tasks
-from ..workspace import workspace_task_scope, workspace_thread_scope
+from ..workspace import ThreadListFilter, workspace_task_scope, workspace_thread_scope
 from ..tables.daemon import active_run_request, run_requests, runs as daemon_runs
 from .rows import (
     _artifact_field_sql,
@@ -72,6 +72,8 @@ class SessionReadRows(SessionStoreState):
 
     def summary_page_stamp(
         self, *, owner_user_id: str, limit: int, before: SummaryPosition | None,
+        project_id: str | None = None,
+        thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[str], list[Any]] | None:
         """Read page identity without expanding its JSON or the execution projection.
 
@@ -97,7 +99,7 @@ class SessionReadRows(SessionStoreState):
         statement = select(
             sessions.c.id, sessions.c.updated_at, sessions.c.version, revision,
             or_(live_request, live_run, legacy_affinity),
-        ).where(sessions.c.owner_user_id == owner_user_id)
+        ).where(*workspace_thread_scope(sessions, owner_user_id, project_id=project_id, thread_filter=thread_filter))
         statement = self._summary_page_scope(statement, before).limit(limit + 1)
         with store_transaction(self.engine) as conn:
             records = conn.execute(statement).all()
@@ -254,7 +256,8 @@ class SessionReadRows(SessionStoreState):
 
     def list_session_record_page(
         self, *, owner_user_id: str, limit: int, before: SummaryPosition | None = None,
-        include_archived: bool = True,
+        include_archived: bool = True, project_id: str | None = None,
+        thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[dict[str, Any]], SummaryPosition | None]:
         """Page owner-visible snapshots without opening the event log."""
         if sql.names_no_uuid_row(self.engine, owner_user_id):
@@ -267,7 +270,7 @@ class SessionReadRows(SessionStoreState):
                    else func.json_remove(snapshot, "$.events", type_=snapshot.type))
         statement = select(
             sessions.c.id, sessions.c.updated_at, sessions.c.version, compact.label("snapshot"),
-        ).where(sessions.c.owner_user_id == owner_user_id)
+        ).where(*workspace_thread_scope(sessions, owner_user_id, project_id=project_id, thread_filter=thread_filter))
         if not include_archived:
             statement = statement.where(snapshot["archived"].as_boolean().is_not(True))
         with store_transaction(self.engine) as conn:
@@ -288,6 +291,7 @@ class SessionReadRows(SessionStoreState):
         project_id: str | None = None,
         team_id: str | None = None,
         agent_id: str | None = None,
+        thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[dict[str, Any]], SummaryPosition | None]:
         """One page of summaries, newest first, and where the next one starts.
 
@@ -361,6 +365,7 @@ class SessionReadRows(SessionStoreState):
         if owner_user_id is not None:
             statement = statement.where(*workspace_thread_scope(
                 self.sessions, owner_user_id, project_id=project_id, team_id=team_id, agent_id=agent_id,
+                thread_filter=thread_filter,
             ))
         page_size = max(1, limit)
         # One extra row says whether another page exists without a COUNT.
@@ -447,8 +452,7 @@ class SessionReadRows(SessionStoreState):
     ) -> tuple[int, int]:
         sessions = self.sessions
         snapshot = sessions.c.snapshot
-        scope = {"project_id": project_id, "team_id": team_id, "agent_id": agent_id}
-        task_scope = workspace_task_scope(tasks, owner, **scope)
+        task_scope = workspace_task_scope(tasks, owner, project_id=project_id, team_id=team_id, agent_id=agent_id)
         waiting = select(tasks.c.id).where(
             *task_scope, tasks.c.status == "waiting_for_human",
             tasks.c.snapshot["waitingSessionId"].as_string() == cast(sessions.c.id, Text),
@@ -469,7 +473,7 @@ class SessionReadRows(SessionStoreState):
             sessions.c.status == "completed", or_(waiting, and_(snapshot["workOutcome"].as_string() == "blocked", ~held)),
         ))
         statement = select(func.count(), func.count().filter(active)).select_from(sessions).where(
-            *workspace_thread_scope(sessions, owner, **scope),
+            *workspace_thread_scope(sessions, owner, project_id=project_id, team_id=team_id, agent_id=agent_id),
         )
         with store_transaction(self.engine) as conn:
             total, active_count = conn.execute(statement).one()

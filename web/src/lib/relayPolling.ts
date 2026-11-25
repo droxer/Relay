@@ -14,6 +14,8 @@ export const RELAY_POLL_INTERVALS_MS = {
       catch the other threads' status changes. */
   sessionsWhileStreaming: 15_000,
   idleCollections: 30_000,
+  projectDiscussionsActive: 3_000,
+  projectDiscussionsIdle: 15_000,
   /** Task status moves on a round's closeout, not at stream rate. */
   tasks: 10_000,
   /** Projects change through the owner's own edits, which invalidate the
