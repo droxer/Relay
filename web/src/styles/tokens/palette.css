@@ -1,6 +1,9 @@
-/* Relay palette — Cool Mist. Blue-charcoal dark surfaces and mist-grey light
-   surfaces, with restrained blue-grey actions. Signal blue is reserved for
-   live work, gold for attention, crimson for failure. Orange remains the mark.
+/* Relay palette — Lunar and Bronze (with Framed Sheet light register).
+   True neutral charcoal dark surfaces (#111111 canvas, #191919 panels) and
+   warm stone-framed light surfaces (#f5f4f2 frame, #ffffff sheets), with
+   near-black/chalk actions. Signal blue is reserved for live work, gold for
+   attention, crimson for failure. Burnished bronze is the brand mark's lead
+   track and the focus/selection signature.
    This is the only file allowed to originate a color.
 
    Breakpoints (reference — custom properties can't drive @media, so this
@@ -65,65 +68,61 @@
    have deleted a live row. Both halves sweep both at-rules now. */
 
 :root {
-  /* Dark register — blue charcoal. Cards and floating surfaces lift in
-     small steps; floating chrome also receives the shared soft shadow. */
-  --surface-0: #12171b; /* blue-charcoal canvas */
-  --surface-1: #1c242a; /* cards and panels */
-  --surface-2: #26313a; /* fills, search, hover */
-  --surface-3: #2b3842; /* floating surfaces and selected segments */
+  /* Dark register — Lunar charcoal (true neutral, never navy or slate).
+     Cards and floating surfaces lift in quiet lightness steps; floating chrome
+     also receives the shared soft shadow. */
+  --surface-0: #111111; /* lunar canvas */
+  --surface-1: #191919; /* cards and panels */
+  --surface-2: #222222; /* fills, search, hover */
+  --surface-3: #282828; /* floating surfaces and selected segments */
 
   /* Zone surfaces — the three-pane shell (rail → list → canvas) reads as a
-     monotonic elevation ladder in BOTH registers. The generic --surface-N
-     indices cannot serve this job: "cards" and "list panel" want the same
-     surface-1 in dark, but the light register's raised-is-lighter ladder then
-     puts the list ABOVE the rail (see the light block). These roles pin the
-     zone order explicitly. Dark: rail is the lightest step, canvas darkest. */
-  /* Literal hexes, between surface-1 and surface-2 here but not in the light
-     register: paletteTokens.test.ts computes contrast from each register's
-     literals, so a role that differs by register stays a literal. */
-  --surface-rail: #222c33;
-  --surface-list: #1c242a;
+     quiet elevation ladder in BOTH registers. Dark: rail sits a subtle step off
+     the canvas so chrome recedes; light: rail and frame share the stone ground
+     while work sits on white sheets (Framed Sheet). */
+  --surface-rail: #161616;
+  --surface-list: #191919;
   /* Group and lane headers sit one step off the canvas. */
-  --surface-band: #222c33;
+  --surface-band: #1e1e1e;
 
   /* Ink — every tier that can carry TEXT clears WCAG 1.4.3 (4.5:1) against
      the worst plane it can land on, which is --surface-3, not the canvas.
-     Soft off-whites balanced against the charcoal canvas so the register reads as
-     one material.
+     Soft chalks balanced against the lunar canvas.
      Each tier is checked against every surface by paletteTokens.test.ts. */
-  --ink-1: #edf2f6; /* headings, emphasis */
-  --ink-2: #d2dde6; /* body */
-  --ink-3: #bacbd7; /* secondary labels — clears AA even on hovered control fills */
-  --ink-4: #a3b5c3; /* timestamps, meta, disabled — clears AA on --surface-3 and 8% control/selection washes */
+  --ink-1: #f2f2f0; /* headings, emphasis */
+  --ink-2: #d6d5d2; /* body */
+  --ink-3: #b8b7b3; /* secondary labels — clears AA even on hovered control fills */
+  --ink-4: #9c9b97; /* timestamps, meta, disabled — clears AA on --surface-3 and 8% control/selection washes */
 
-  /* Cool-grey structural and soft hairlines. */
-  --line-1: #405361; /* structural hairline */
-  --line-2: #364653; /* soft hairline — stays visible on --surface-3 overlays */
+  /* Whisper-quiet structural hairlines (1.29:1 on --surface-1, 1.39:1 on --surface-0). */
+  --line-1: #2e2e2c; /* structural hairline */
+  --line-2: #242422; /* soft hairline */
 
-  /* Restrained blue-grey actions. Signal blue remains exclusive to live
-     execution. Selection uses a quiet wash with a clear ink marker. */
-  --action: #d3e0e9;
-  --action-hover: #e3ebf1;
+  /* Achromatic ink actions: crisp chalk on dark, near-black on light. Signal
+     blue remains exclusive to live execution. Selection uses a quiet wash with
+     a clear bronze signature marker. */
+  --action: #f2f2f0;
+  --action-hover: #ffffff;
   --selection-wash-strength: 8%;
-  --action-soft: color-mix(in srgb, #d3e0e9 8%, transparent);
-  --on-action: #23313b;
+  --action-soft: color-mix(in srgb, #f2f2f0 8%, transparent);
+  --on-action: #111111;
 
-  /* The brand mark's lead chevron — a person handing work on. The logo,
-     the favicon and the email's handoff bar draw with it, and roles.css
-     lends it to --signature: the focus ring and the selected-item bar.
-     It is never a fill, a link, or a status colour. */
-  --brand-lead: #ff8a3d;
+  /* The brand mark's lead baton track — burnished bronze (Lunar and Bronze).
+     The logo, favicon, and email handoff bar draw with it, and roles.css lends
+     it to --signature: the focus ring and the selected-item bar.
+     It is never a status colour or link. */
+  --brand-lead: #c8966e;
 
   /* Status ink retains green, gold and crimson meanings. Every tone clears
      the small-text contrast floor on all content and navigation planes. */
-  --ok: #7adb95;   /* success — lifted for tinted selected states */
-  --warn: #dec371; /* warning — a muted gold, clear of the brand mark's orange */
+  --ok: #70d68e;   /* success — lifted for tinted selected states */
+  --warn: #e0ca5e; /* warning — clear gold, 38° away from bronze --brand-lead */
   /* Ink for the warning BADGE — text on its own 8% tint. The same as --warn
      here; the light register needs it deeper (see there). */
-  --warn-badge: #dec371;
-  --err: #ffabbd;  /* critical — crimson, lifted for the dark canvas */
+  --warn-badge: #e0ca5e;
+  --err: #f59cae;  /* critical — crimson, lifted for the dark canvas */
   /* Dark ink on the lifted critical fill. */
-  --on-err: #23313b;
+  --on-err: #1a1114;
 
   /* Live — work an agent is doing RIGHT NOW. Controls are ink, so this
      signal blue is the one hue that says "an agent is working", and it can
@@ -134,23 +133,12 @@
      Deliberately no --live-wash companion: a wash is a fill, and this colour
      is never a fill. Tint a ring (see live-ring) or an ink, nothing else.
      One static exception: the logo. The app icons and RelayMark's `brand`
-     tone draw the handoff — a --brand-lead chevron and a --live trailing
-     one — so the two accents read as one story in the mark itself. */
-  --live: #91b9f2; /* signal blue — never purple, which reads as generic AI styling */
+     tone draw the handoff — a --brand-lead track and a --live trailing track
+     — so the two accents read as one story in the mark itself. */
+  --live: #82b4f5; /* signal blue — never purple, which reads as generic AI styling */
 
   /* Status MARKS — the same four meanings painted as an AREA: chart bars,
-     donut arcs, progress segments and the legend swatches beside them. The
-     inks above are tuned as text, and text and area want opposite things:
-     these dark inks are pastels (L ~0.8, low chroma) that wash out as fills
-     and blur into each other, while the light inks are deepened past 4.5:1
-     until a filled bar read near-black green and brown. A mark is judged as
-     a graphic — 3:1 against the card plane — and against its neighbours:
-     the set was validated as one palette (dataviz validate_palette.js, all
-     pairs, both registers), with green and crimson pulled apart in
-     lightness so a red-green colour-blind reader still separates done from
-     failed. Warn sits under 3:1 on purpose and is never alone: it is
-     hatched wherever it fills and labelled with its count beside a ring.
-     Small status DOTS stay on the inks; they are glyphs, not areas. */
+     donut arcs, progress segments and the legend swatches beside them. */
   --ok-mark: #3dae69;
   --err-mark: #d2305a;
   --warn-mark: #a98426;
@@ -158,7 +146,7 @@
 
   /* Link ink — wayfinding: anchors in prose. Ink, set apart by its
      underline, never a hue. */
-  --link-ink: #edf2f6;
+  --link-ink: #f2f2f0;
   --link-ink-strong: #ffffff;
 
   /* Code tokens — the ONE place hue is allowed to carry structure rather
@@ -224,23 +212,22 @@
      a hex that nothing proves still matches the register it mirrors, which is
      the exact drift these tokens exist to prevent. Add a tier when something
      paints it. */
-  --dark-canvas: #12171b;
-  --dark-surface: #1c242a;
-  --dark-ink: #edf2f6;
-  --dark-line: color-mix(in srgb, #ffffff 14%, transparent);
-  --dark-action: #d3e0e9;
+  --dark-canvas: #111111;
+  --dark-surface: #191919;
+  --dark-ink: #f2f2f0;
+  --dark-line: color-mix(in srgb, #ffffff 12%, transparent);
+  --dark-action: #f2f2f0;
 
-  --light-canvas: #e9eef2;
-  --light-action: #364b59;
+  --light-canvas: #f5f4f2;
+  --light-action: #181817;
 
   /* Document paper — artifact/file previews assume a white page in every
-     register, matching how the document would print. It is also the brand's
-     canvas value (the source system's canvas white, #ffffff). */
+     register, matching how the document would print. */
   --paper: #ffffff;
 
-  /* Blue-charcoal depth follows the material of the active register. */
-  --elevation-shadow: rgba(8, 16, 23, 0.32);
-  --scrim: rgba(8, 16, 23, 0.6);
+  /* True neutral depth follows the material of the active register. */
+  --elevation-shadow: rgba(0, 0, 0, 0.36);
+  --scrim: rgba(12, 12, 12, 0.56);
 
   /* ----- Register-invariant scales ----- */
 
@@ -594,7 +581,7 @@
   --header-h: 52px; /* compact application header */
   /* How much ink a text-field edge carries (roles.css --field-border): the
      least that clears WCAG 1.4.11's 3:1 on every plane of this register. */
-  --field-border-strength: 42%;
+  --field-border-strength: 36%;
   /* Shared inline gutter for page chrome — route PageHeaders, the thread
      rail, and the chat header/transcript all inset by this one token so the
      content edges of adjacent panes line up instead of each picking its own
@@ -757,18 +744,15 @@
   --track-caps: 0.03em;
 
   /* Families — two vendored faces, each injected by app/layout.tsx as a
-     --font-app-* variable and subset to Latin (2026-11-22):
-     - Space Grotesk (--font-app-sans) carries every interface role: titles,
-       navigation, buttons, conversation text. --font-display is the same
-       stack, kept as a token so display roles stay addressable.
+     --font-app-* variable and subset to Latin:
+     - Switzer (--font-app-sans, variable 300-700) carries every interface role:
+       titles, navigation, buttons, conversation text. --font-display is the
+       same stack, kept as a token so display roles stay addressable.
      - Space Mono (--font-app-mono, Regular only) is code, commands and logs.
      Han falls through --font-cjk, which follows <html lang>: Simplified
-     Chinese faces by default (agent-authored Han under lang="en" never
-     depends on a browser's last-resort substitution), Traditional faces under
-     zh-TW / zh-Hant / zh-HK (override below). Times, token counts and table
-     figures stay in the interface face with tabular numerals (.tabular-nums). */
+     Chinese faces by default, Traditional faces under zh-TW / zh-Hant / zh-HK. */
   --font-cjk: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC";
-  --font-sans: var(--font-app-sans), "Space Grotesk", Arial, "Helvetica Neue", var(--font-cjk), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: var(--font-app-sans), "Switzer", Arial, "Helvetica Neue", var(--font-cjk), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-display: var(--font-sans);
   --font-mono: var(--font-app-mono), "Space Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", var(--font-cjk), monospace;
 
@@ -829,93 +813,68 @@
   --rise: 8px;
 }
 
-/* Light register — mist canvas, blue-grey navigation, near-white cards,
-   and white floating surfaces. Text stays dark enough on the rail too. */
+/* Light register — Framed Sheet: warm stone frame (#f5f4f2), crisp white
+   sheets (#ffffff), whisper-quiet hairlines, and near-black ink actions. */
 html[data-theme="light"] {
-  --field-border-strength: 56%;
-  /* Cool mist separates the canvas, inset fill and raised content. */
-  --surface-0: #e9eef2;
-  --surface-1: #fdfeff;
-  --surface-2: #e2e9ee; /* recessed fill — see the note above */
-  --surface-3: #ffffff; /* top plane: the source system's canvas white */
+  --field-border-strength: 48%;
+  /* Warm stone frame separates chrome from crisp white work sheets. */
+  --surface-0: #f5f4f2;
+  --surface-1: #ffffff;
+  --surface-2: #ecebe8; /* recessed fill — sits below white sheets */
+  --surface-3: #ffffff; /* top plane */
 
-  /* Navigation recedes through two subtle neutral-grey steps. */
-  --surface-rail: #e1e8ed;
-  --surface-list: #f6f9fa;
-  /* Group and lane headers are a recessed plane on the light canvas. */
-  --surface-band: #dee7ed;
+  /* Framed sheet: sidebar and chrome share the stone ground; list sits one step lighter. */
+  --surface-rail: #f5f4f2;
+  --surface-list: #faf9f7;
+  /* Group and lane headers sit on a quiet recessed stone band. */
+  --surface-band: #ecebe8;
 
-  /* Neutral text; every tier clears AA on the recessed fill and 8% control/selection washes. */
-  --ink-1: #141f27; /* blue-charcoal ink */
-  /* ink-4 clears AA on --surface-band plus --control-fill (8%) and --row-hover (4%),
-     and the ramp steps upward in balanced OKLCH lightness rungs (~0.07–0.09). */
-  --ink-2: #273640; /* ink */
-  --ink-3: #3a4b55; /* charcoal */
-  --ink-4: #4d5d66; /* steel, deepened for composited AA */
+  /* Neutral text; every tier clears AA on the recessed fill and 6% selection washes. */
+  --ink-1: #141413; /* charcoal ink */
+  --ink-2: #2b2b29; /* body ink */
+  --ink-3: #484744; /* secondary */
+  --ink-4: #5c5b57; /* timestamps, meta — clears 5.7:1 on --surface-2 */
 
-  /* Cool-grey hairlines, with a visible structural edge on the mist canvas. */
-  --line-1: #b7c3cc; /* hairline */
-  --line-2: #c8d3dc; /* hairline-soft — visible even on recessed --surface-2 */
+  /* Whisper-quiet structural hairlines (1.59:1 on white, 1.44:1 on stone). */
+  --line-1: #ceccc6; /* hairline */
+  --line-2: #e3e1dc; /* hairline-soft */
 
-  /* Blue-charcoal action with white ink; selection is a restrained wash. */
-  --action: #364b59;
-  --action-hover: #475e6d;
+  /* Near-black primary action with white ink; selection is a calm 6% wash. */
+  --action: #181817;
+  --action-hover: #2e2e2c;
   --selection-wash-strength: 6%;
-  --action-soft: color-mix(in srgb, #364b59 6%, transparent);
+  --action-soft: color-mix(in srgb, #181817 6%, transparent);
   --on-action: #ffffff;
-  --brand-lead: #b84400; /* the mark's lead chevron, deepened for paper */
+  --brand-lead: #845734; /* burnished bronze, deepened for paper (5.19:1 min) */
 
-  /* Light status — the same three hues, deepened until each clears 4.5:1 as
-     small text on the worst plane here (--surface-2). The source system's own values
-     measure 3.1 (success), 1.8 (warning), and 4.0 (critical) on white; they
-     are badge-fill colours, not text colours.
-     The warning follows the dark register onto the gold at hue ~86, clear
-     of the brand's orange; the critical red follows it onto crimson.
-     Plain text and selected, tinted badge states clear the 4.5:1 floor. */
-  --ok: #0b6424;   /* success — deepened for tinted selected states */
-  /* Amber at hue ~76 rather than gold at 86: a gold deepened to 4.5:1 turns
-     olive-brown (#705400 read as mud beside the other status inks), while
-     amber holds its colour at the same depth and stays clear of the orange
-     marker (ΔE 0.10). 4.6:1 on --surface-2. */
-  --warn: #8a5e09; /* warning — amber, deepened */
-  /* A badge prints --warn-badge on an 8% tint of itself, and the tint eats
-     contrast: #8a5e09 measured 4.38:1 there. One step deeper clears 4.5:1 on
-     every plain and selected row. Only the badge pays the depth, so glyphs
-     and status text keep the clearer amber above. */
-  --warn-badge: #795209;
-  --err: #ab0d40;  /* critical — crimson, deepened */
-  /* Text on an --err fill — white, as the source system's badge-critical prints it
-     (verified against the critical fill). */
+  /* Light status — deepened until each clears 4.5:1 as small text on --surface-2. */
+  --ok: #12692f;   /* success */
+  --warn: #7b6806; /* warning — gold, 38.6° clear of burnished bronze */
+  --warn-badge: #675604; /* clears 4.5:1 on its own 8% tint over selected rows */
+  --err: #ad1443;  /* critical — crimson */
   --on-err: #ffffff;
 
-  /* Live — signal blue, deepened: 5.4:1 on --surface-2 and 6.2:1 on the
-     canvas, so an elapsed timer set in it is legible. */
-  --live: #2457c5;
+  /* Live — signal blue, deepened (5.51:1 min). */
+  --live: #2356c4;
 
-  /* Light status marks — mid-tones, not the deepened text inks (see the dark
-     block). Validated against --surface-1 as one palette. */
+  /* Light status marks — mid-tones for chart/progress areas. */
   --ok-mark: #2f9a5a;
   --err-mark: #a5123f;
   --warn-mark: #c4950f;
   --live-mark: #3a76e0;
 
   /* Link ink is the ink; the underline marks it. */
-  --link-ink: #141f27;
-  --link-ink-strong: #0b141a;
+  --link-ink: #141413;
+  --link-ink-strong: #000000;
 
-  /* Light code tokens — the same five roles inked for a light page. Deepened,
-     not derived: the dark register's tints measure ~1.5:1 here. Ratios on
-     --surface-2/--surface-0: keyword 5.48/6.26 · string 6.04/6.90 ·
-     number 4.80/5.49 · declaration 7.05/8.05 · attribute 5.54/6.32. */
+  /* Light code tokens — deepened for AA on --surface-2/--surface-0. */
   --code-keyword: #9c4221;
   --code-string: #41601f;
   --code-number: #895e05;
   --code-declaration: #1f4f82;
   --code-attribute: #166b6b;
 
-  /* Light tag tones — the same eight hues deepened until each glyph clears
-     3:1 as a graphic on every plane (including --surface-band and active washes)
-     while staying clear of status hues and purple. */
+  /* Light tag tones — eight hues clearing 3:1 graphic floor on every plane. */
   --tag-1: #297b7d;
   --tag-2: #1a7262;
   --tag-3: #516f22;
@@ -925,9 +884,8 @@ html[data-theme="light"] {
   --tag-7: #a34c7d;
   --tag-8: #246c96;
 
-
-  --elevation-shadow: rgba(37, 60, 80, 0.16);
-  --scrim: rgba(23, 35, 44, 0.24);
+  --elevation-shadow: rgba(20, 20, 20, 0.14);
+  --scrim: rgba(20, 20, 20, 0.24);
 }
 
 /* CJK — the sans and mono stacks are NOT restated here: both end in

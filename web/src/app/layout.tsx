@@ -15,18 +15,19 @@ import { Providers } from "./providers";
 
 // Relay's own faces, vendored and subset to Latin: Han and every other script
 // falls through the stacks in styles/tokens/palette.css to the platform's
-// Simplified / Traditional Chinese faces (chosen by <html lang>). Space
-// Grotesk (wght 300-700) carries every interface role — titles, navigation,
+// Simplified / Traditional Chinese faces (chosen by <html lang>). Switzer
+// (variable wght 300-700) carries every interface role — titles, navigation,
 // buttons, conversation text; Space Mono Regular carries code, commands and
 // logs. next/font sizes a local fallback to each face's metrics, so the swap
 // after first paint does not shift layout.
-const appSans = localFont({
-  src: "./fonts/SpaceGrotesk-Variable-Latin.woff2",
+const Switzer = localFont({
+  src: "./fonts/Switzer-Variable-Latin.woff2",
   variable: "--font-app-sans",
   display: "swap",
   weight: "300 700",
   style: "normal",
 });
+const appSans = Switzer;
 
 const appMono = localFont({
   src: "./fonts/SpaceMono-Regular-Latin.woff2",

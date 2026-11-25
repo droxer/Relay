@@ -142,7 +142,7 @@ describe("ink controls, one brand orange in the mark", () => {
 });
 
 describe("the handoff mark", () => {
-  const strokes = (svg: string) => [...svg.matchAll(/<path [^>]*stroke="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+  const fills = (svg: string) => [...svg.matchAll(/<path [^>]*fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
   const icons = [
     { file: ["web", "public", "favicon.svg"], register: "dark" },
     { file: ["web", "public", "brand", "relay-mark.svg"], register: "dark" },
@@ -153,7 +153,7 @@ describe("the handoff mark", () => {
       const svg = read(...file);
       const tokens = registers[register];
       assert.match(svg, new RegExp(`<rect [^>]*fill="${tokenIn(tokens, "--surface-0")}"`));
-      assert.deepEqual(strokes(svg), [tokenIn(tokens, "--brand-lead"), tokenIn(tokens, "--live")]);
+      assert.deepEqual(fills(svg), [tokenIn(tokens, "--brand-lead"), tokenIn(tokens, "--live")]);
     });
   }
 

@@ -31,7 +31,7 @@ function item(partial: Partial<RelaySession> = {}, extra: Partial<ThreadItem> = 
   } as ThreadItem;
 }
 
-const strokes = (svg: string) => [...svg.matchAll(/<path [^>]*stroke="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
+const pathFills = (svg: string) => [...svg.matchAll(/<path [^>]*fill="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
 
 describe("favicon state", () => {
   it("is idle when nothing runs and nothing waits", () => {
@@ -58,9 +58,9 @@ describe("favicon state", () => {
 describe("favicon mark", () => {
   it("keeps idle tabs colorful and emphasizes the acting half during activity", () => {
     const ink = FAVICON_INK;
-    assert.deepEqual(strokes(faviconSvg("idle")), [ink.action, ink.live]);
-    assert.deepEqual(strokes(faviconSvg("running")), [ink.unlit, ink.live]);
-    assert.deepEqual(strokes(faviconSvg("waiting")), [ink.action, ink.unlit]);
+    assert.deepEqual(pathFills(faviconSvg("idle")), [ink.action, ink.live]);
+    assert.deepEqual(pathFills(faviconSvg("running")), [ink.unlit, ink.live]);
+    assert.deepEqual(pathFills(faviconSvg("waiting")), [ink.action, ink.unlit]);
   });
 
   it("keeps an idle mark legible on its tile", () => {
@@ -91,8 +91,8 @@ describe("favicon mark", () => {
     const geometry = (svg: string) => [...svg.matchAll(/<path [^>]*d="([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(geometry(faviconSvg("idle")), geometry(shipped));
     assert.deepEqual(geometry(shipped), [FAVICON_PATHS.lead, FAVICON_PATHS.trail]);
-    assert.deepEqual(strokes(shipped), [FAVICON_INK.action, FAVICON_INK.live]);
-    assert.deepEqual(strokes(faviconSvg("idle")), strokes(shipped));
+    assert.deepEqual(pathFills(shipped), [FAVICON_INK.action, FAVICON_INK.live]);
+    assert.deepEqual(pathFills(faviconSvg("idle")), pathFills(shipped));
     assert.ok(shipped.includes(`fill="${FAVICON_INK.canvas}"`));
     const tile = (svg: string) => svg.match(/<rect [^>]*\/>/)?.[0];
     assert.equal(tile(faviconSvg("idle")), tile(shipped));
@@ -124,7 +124,7 @@ describe("favicon mark", () => {
     ]) {
       assert.ok(hex && offline.includes(hex), `offline.html must include ${hex}`);
     }
-    assert.ok(offline.includes('d="M12 14 L32 32 L12 50"'), "offline.html must use canonical RelayMark lead chevron");
-    assert.ok(offline.includes('d="M32 14 L52 32 L32 50"'), "offline.html must use canonical RelayMark trailing chevron");
+    assert.ok(offline.includes(`d="${FAVICON_PATHS.lead}"`), "offline.html must use canonical RelayMark lead track");
+    assert.ok(offline.includes(`d="${FAVICON_PATHS.trail}"`), "offline.html must use canonical RelayMark trailing track");
   });
 });

@@ -1,0 +1,18 @@
+Indian Type Foundry — Fontshare Free Font License (ITF FFL)
+
+Typeface: Switzer (Variable, Latin subset)
+Foundry: Indian Type Foundry (https://www.fontshare.com/fonts/switzer)
+Designer: Jérémie Hornus
+
+Switzer is distributed free of charge for personal and commercial use under the
+Indian Type Foundry Free Font License (ITF FFL).
+
+Permitted uses include embedding and self-hosting the font files on websites,
+web applications, desktop and mobile applications, and open-source software
+projects without royalty or seat restrictions.
+
+You may not sell, redistribute, or sublicense the font software itself as a
+standalone product, nor modify the font software and redistribute it under the
+reserved font name "Switzer".
+
+Full license terms: https://www.fontshare.com/licenses/itf-ffl

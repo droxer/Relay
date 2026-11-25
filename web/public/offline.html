@@ -3,41 +3,41 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#12171b" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#e9eef2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f4f2" media="(prefers-color-scheme: light)">
   <title>Relay · Offline</title>
   <style>
     :root {
       color-scheme: dark light;
-      --surface: #12171b;
-      --ink: #edf2f6;
-      --muted: #bacbd7;
-      --action: #d3e0e9;
-      --action-hover: #e3ebf1;
-      --on-action: #23313b;
-      --signature: #ff8a3d;
-      --live: #91b9f2;
+      --surface: #111111;
+      --ink: #f2f2f0;
+      --muted: #b8b7b3;
+      --action: #f2f2f0;
+      --action-hover: #ffffff;
+      --on-action: #111111;
+      --signature: #c8966e;
+      --live: #82b4f5;
       background: var(--surface);
       color: var(--ink);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Switzer", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     @media (prefers-color-scheme: light) {
       :root {
-        --surface: #e9eef2;
-        --ink: #141f27;
-        --muted: #3a4b55;
-        --action: #364b59;
-        --action-hover: #475e6d;
+        --surface: #f5f4f2;
+        --ink: #141413;
+        --muted: #484744;
+        --action: #181817;
+        --action-hover: #2e2e2c;
         --on-action: #ffffff;
-        --signature: #b84400;
-        --live: #2457c5;
+        --signature: #845734;
+        --live: #2356c4;
       }
     }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100svh; display: grid; place-items: center; padding: max(32px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); }
     main { width: 100%; max-width: 400px; }
     svg { display: block; margin-bottom: 32px; }
-    h1 { margin: 0 0 12px; font-size: 28px; font-weight: 600; line-height: 1.2; letter-spacing: -0.03em; }
+    h1 { margin: 0 0 12px; font-size: 28px; font-weight: 600; line-height: 1.2; letter-spacing: -0.04em; }
     p { margin: 0 0 28px; color: var(--muted); font-size: 14px; line-height: 1.6; }
     button { min-height: 44px; padding: 10px 20px; border: 0; border-radius: 6px; font: inherit; font-weight: 500; background: var(--action); color: var(--on-action); cursor: pointer; }
     button:hover { background: var(--action-hover); }
@@ -48,10 +48,8 @@
 <body>
   <main>
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="48" height="48" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
-      <g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 14 L32 32 L12 50" stroke="var(--signature)"/>
-        <path d="M32 14 L52 32 L32 50" stroke="var(--live)"/>
-      </g>
+      <path d="M8 12 H36 L50 26 L42 34 L31 23 H8 Z" fill="var(--signature)"/>
+      <path d="M56 52 H28 L14 38 L22 30 L33 41 H56 Z" fill="var(--live)"/>
     </svg>
     <h1 id="heading">You’re offline</h1>
     <p id="message">Reconnect to open your workspace. Relay needs a connection to load your threads and tasks.</p>

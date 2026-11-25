@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
   <title>Relay</title>
   <!-- Fixed colors remain legible independently of the browser's theme.
-       Keep the subtly outlined tile and paths in sync with faviconState.ts. -->
-  <rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="#12171b" stroke="#405361" stroke-width="1"/>
-  <g fill="none" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M10 12 L30 32 L10 52" stroke="#ff8a3d"/>
-    <path d="M34 12 L54 32 L34 52" stroke="#91b9f2"/>
+       Keep the subtly outlined lunar tile and paths in sync with faviconState.ts. -->
+  <rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="#111111" stroke="#2e2e2c" stroke-width="1"/>
+  <g transform="translate(32 32) scale(0.84) translate(-32 -32)">
+    <path d="M8 12 H36 L50 26 L42 34 L31 23 H8 Z" fill="#c8966e"/>
+    <path d="M56 52 H28 L14 38 L22 30 L33 41 H56 Z" fill="#82b4f5"/>
   </g>
 </svg>

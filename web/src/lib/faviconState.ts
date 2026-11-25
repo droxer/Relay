@@ -5,31 +5,30 @@ import type { ThreadWaitSource } from "./awaitingInput.ts";
 /**
  * What the browser tab's mark says while Relay sits in the background.
  *
- * The favicon is the handoff mark: a person's orange chevron leading an
- * agent's blue one. At rest both halves keep their brand colors. While an
- * agent works, only its blue half stays colored; when a person is needed,
- * only the orange half does.
+ * The favicon is the interlocking baton-handoff mark: a person's burnished
+ * bronze lead track handing off to an agent's signal-blue trailing track. At
+ * rest both halves keep their brand colors. While an agent works, only its
+ * blue half stays colored; when a person is needed, only the bronze half does.
  * A person outranks a run, the same order as the rail's "needs you" group.
  */
 export type FaviconState = "idle" | "running" | "waiting";
 
 /** Fixed tab colors: the browser chrome can differ from the app's theme.
- * Bright orange and blue stay visible at 16px on a charcoal tile with a
- * subtle hairline.
- * The colored half identifies activity. Keep the static favicon in sync. */
+ * Burnished bronze and signal blue stay crisp at 16px on a lunar charcoal tile
+ * with a whisper hairline. Keep the static favicon in sync. */
 export const FAVICON_INK = {
-  canvas: "#12171b",
-  outline: "#405361",
-  action: "#ff8a3d",
-  live: "#91b9f2",
-  unlit: "#edf2f6",
+  canvas: "#111111",
+  outline: "#2e2e2c",
+  action: "#c8966e",
+  live: "#82b4f5",
+  unlit: "#f2f2f0",
 } as const;
 
-/** favicon.svg's geometry: a full-bleed tile and two bold chevrons, sized so
- *  each stroke is 3px and the gap between them stays over 1px at 16px. */
+/** favicon.svg's geometry: two bold 45-degree chamfered relay tracks exchanging
+ *  a diagonal negative-space baton across the center of the 64x64 tile. */
 export const FAVICON_PATHS = {
-  lead: "M10 12 L30 32 L10 52",
-  trail: "M34 12 L54 32 L34 52",
+  lead: "M8 12 H36 L50 26 L42 34 L31 23 H8 Z",
+  trail: "M56 52 H28 L14 38 L22 30 L33 41 H56 Z",
 } as const;
 
 export function faviconState(items: readonly ThreadItem[], tasks: ThreadWaitSource = []): FaviconState {
@@ -44,9 +43,9 @@ export function faviconSvg(state: FaviconState): string {
   const trail = state === "waiting" ? FAVICON_INK.unlit : FAVICON_INK.live;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
     + `<rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="${FAVICON_INK.canvas}" stroke="${FAVICON_INK.outline}" stroke-width="1"/>`
-    + `<g fill="none" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="${FAVICON_PATHS.lead}" stroke="${lead}"/>`
-    + `<path d="${FAVICON_PATHS.trail}" stroke="${trail}"/>`
+    + `<g transform="translate(32 32) scale(0.84) translate(-32 -32)">`
+    + `<path d="${FAVICON_PATHS.lead}" fill="${lead}"/>`
+    + `<path d="${FAVICON_PATHS.trail}" fill="${trail}"/>`
     + `</g></svg>`;
 }
 

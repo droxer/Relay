@@ -60,9 +60,7 @@
   width: calc(var(--control-h) - var(--sp-1));
   height: calc(var(--control-h) - var(--sp-1));
   flex: 0 0 calc(var(--control-h) - var(--sp-1));
-  border: var(--hairline);
-  border-radius: var(--r-3);
-  background: var(--surface-0);
+  border-radius: var(--r-2);
 }
 
 .sidenav-brand-copy {
