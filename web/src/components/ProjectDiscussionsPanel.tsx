@@ -13,6 +13,7 @@ import { threadNodeOffline } from "../lib/threadRuntime";
 import { runningAgentName } from "../lib/threads";
 import type { DaemonNodeMonitorRecord, RelaySession, UserAgent } from "../types";
 import { ActionAdd, ChevronDownIcon, ICON, NavThreads } from "./icons";
+import { ListSkeleton } from "./ListSkeleton";
 import { ThreadRow } from "./ThreadRow";
 import { Button } from "./ui/button";
 import { ButtonGroup, ButtonGroupSeparator } from "./ui/button-group";
@@ -74,7 +75,7 @@ export function ProjectDiscussionsPanel({
   const filtered = query.length > 0 || search.trim().length > 0;
   const empty = discussions.data !== undefined && items.length === 0;
   const newDiscussion = onNewThread ? (
-    <Button type="button" size="dense" onClick={onNewThread}>
+    <Button type="button" size="sm" onClick={onNewThread}>
       <ActionAdd size={ICON.sm} aria-hidden="true" />
       {t("project.discussions_new")}
     </Button>
@@ -87,7 +88,7 @@ export function ProjectDiscussionsPanel({
         <DropdownMenuTrigger
           disabled={discussing}
           render={(
-            <Button type="button" size="icon-dense" aria-label={t("project_manager.quick_topics")}>
+            <Button type="button" size="icon-sm" aria-label={t("project_manager.quick_topics")}>
               <ChevronDownIcon size={ICON.sm} aria-hidden="true" />
             </Button>
           )}
@@ -110,6 +111,7 @@ export function ProjectDiscussionsPanel({
       {(!empty || filtered) && <div className="project-discussions-toolbar">
         <SearchInput
           className="list-filter-search"
+          iconSize={ICON.sm}
           label={t("project.discussions_search")}
           placeholder={t("project.discussions_search")}
           value={search}
@@ -118,29 +120,24 @@ export function ProjectDiscussionsPanel({
         {!empty && actions}
       </div>}
       {discussions.isPending ? (
-        <div className="project-discussions-skeleton" role="status" aria-busy="true">
-          <span className="sr-only">{t("project.discussions_loading")}</span>
-          {[0, 1, 2].map(index => (
-            <div key={index} className="workspace-skeleton workspace-skeleton-line" aria-hidden="true" />
-          ))}
+        <div className="project-discussions-skeleton" aria-busy="true">
+          <ListSkeleton label={t("project.discussions_loading")} rows={3} />
         </div>
       ) : !discussions.data ? (
         <WorkspaceError message={t("project.discussions_load_failed")} onRetry={() => void discussions.refetch()} />
       ) : empty ? (
-        <div className="project-discussions-empty">
-          <WorkspaceEmpty
-            title={t(filtered ? "project.discussions_no_matches" : "project.discussions_empty")}
-            hint={filtered ? undefined : t(archived ? "project.discussions_archived" : onNewThread
-              ? "project.discussions_empty_hint" : "project.discussions_read_only")}
-            mark={<NavThreads size={ICON.md} aria-hidden="true" />}
-            announce
-          />
-          {filtered ? (
-            <Button type="button" variant="outline" size="dense" onClick={() => setSearch("")}>
+        <WorkspaceEmpty
+          title={t(filtered ? "project.discussions_no_matches" : "project.discussions_empty")}
+          hint={filtered ? undefined : t(archived ? "project.discussions_archived" : onNewThread
+            ? "project.discussions_empty_hint" : "project.discussions_read_only")}
+          mark={<NavThreads size={ICON.md} aria-hidden="true" />}
+          actions={filtered ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => setSearch("")}>
               {t("backlog.clear_filters")}
             </Button>
           ) : actions}
-        </div>
+          announce
+        />
       ) : sections.map(({ tone, items, label }) => items.length > 0 && (
         <section key={tone} className="conversation-group" data-tone={tone}>
           {(tone !== "idle" || hasAttentionGroups) && <h2 className="conversation-group-label">{label}</h2>}

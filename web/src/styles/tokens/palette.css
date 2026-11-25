@@ -16,8 +16,9 @@
              in the building, which is why it cannot be a viewport query),
              and where the project dashboard's `project-stages` card folds
              its five stage counts to three columns, and where the `record`
-             run ledger narrows its day column, and where a
-             `project-crew` row drops its state pill under the agent's duty
+             run ledger narrows its day column, where a `project-crew` row
+             drops its state pill under the agent's duty, and where
+             `project-discussions` wraps its search field full-width
      640px   compact — dashboard, admin shell, composer, workspace panes;
              also a CONTAINER tier, where the `artifact-preview` header
              wraps a file's actions under its name, where the

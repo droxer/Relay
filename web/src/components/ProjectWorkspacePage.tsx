@@ -370,7 +370,7 @@ export function ProjectWorkspacePage({
             onOpenThread={(sessionId) => onOpenThread(sessionId)}
           />
         </TabsContent>
-        <TabsContent value="discussions" className="project-profile project-discussions-panel">
+        <TabsContent value="discussions" className="project-discussions-panel">
           <ProjectDiscussionsPanel
             key={project.id}
             projectId={project.id}

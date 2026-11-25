@@ -23,12 +23,14 @@ export function WorkspaceEmpty({
   title,
   hint,
   mark,
+  actions,
   pulse = false,
   announce = false,
 }: {
   title: string;
   hint?: string;
   mark?: ReactNode;
+  actions?: ReactNode;
   pulse?: boolean;
   /** Announce async empty/error results that replace a loading status. */
   announce?: boolean;
@@ -43,6 +45,7 @@ export function WorkspaceEmpty({
       <RelayEmptyState
         title={title}
         hint={hint}
+        actions={actions}
         illustration={
           mark || pulse ? (
             <span className={`relay-empty-avatar${pulse ? " is-pulse" : ""}`}>{mark}</span>
