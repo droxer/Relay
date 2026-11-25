@@ -161,6 +161,14 @@ Review blocked and aging work first, review pending deliveries next, and repleni
 Ready as capacity becomes available. Use the measured cycle times to revise the
 initial SLE and the WIP limit. Kanban does not require a sprint boundary.
 
+### Recover Project workspace dispatches after an update
+
+If a Task failed because its Computer lacked `project-workspace-scope`, update
+the Computer through its normal release path (`relay update` on a personal
+Computer) and confirm it reports the capability. Retry one failed Task before
+retrying the remaining Tasks or Automation occurrences. A retry creates a fresh
+command using the recorded Project workspace binding.
+
 ## Cancelling work and deploying the new states
 
 `PATCH /tasks/{id}` with `status=cancelled` abandons a task without deleting its

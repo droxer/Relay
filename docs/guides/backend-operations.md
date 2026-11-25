@@ -32,6 +32,26 @@ or exit evidence for unresolved stops. The total also depends on the number of
 distinct runs stopped; local regression tests cannot establish that production
 metric.
 
+## Measure control-plane performance
+
+The [control-plane benchmark](../../backend/tests/benchmarks/control_plane.py)
+measures latency, SQL statements, rows returned, and response size for summary,
+Issues, Activity, artifact, and dashboard reads. Use disposable PostgreSQL on
+the local machine. The probe creates scratch schemas and writes its report
+outside the checkout.
+
+```sh
+RELAY_BENCHMARK_DATABASE_URL=postgresql+psycopg://relay@127.0.0.1:5432/relay_test \
+  uv run --project backend --extra dev python backend/tests/benchmarks/control_plane.py \
+  --scales 1 6 --requests 70 --output /tmp/relay-control-plane.json
+```
+
+Use the [heartbeat](../../backend/tests/benchmarks/heartbeat_load.py) and
+[daemon transport](../../backend/tests/benchmarks/daemon_transport.py) probes
+for daemon traffic. Measure provider round trips, connection-pool contention
+across replicas, and queueing separately under the intended deployment load.
+Include full-history endpoints when measuring older clients.
+
 ## Implementation
 
 - Task start/pickup preparation, dispatch preparation and result persistence, routine promotion, and task-file database reads run in worker threads. Each synchronous transaction stays on one thread; HTTP body reads and daemon transport waits stay asynchronous.

@@ -140,5 +140,18 @@ Workflow Team preserves its independent custom definition and historical Runs.
 The composer resolves its opening selection explicitly so retries stay pinned
 even when defaults change.
 
-See [ADR-025](../adr/025-independent-project-workflows.md) for the ownership
-tradeoff and [verification](team-workflows-verification.md) for test evidence.
+See [ADR-025](../adr/025-independent-project-workflows.md) for independent
+Workflows and [ADR-026](../adr/026-team-and-project-workflow-ownership.md) for
+the current Team and Project ownership rules.
+
+## Execution tests
+
+The [Workflow execution tests](../../backend/tests/api/test_workflow_daemon_e2e.py)
+cover ordered steps, gates, retries, cancellation, and backend restart. The
+[Task and Automation tests](../../backend/tests/api/test_task_automation_daemon_e2e.py)
+cover command delivery for standalone and Project work. Both use a real local
+backend and daemon with a deterministic Agent Runtime. The
+[browser tests](../../web/e2e/teamWorkflows.spec.ts) exercise the UI with API
+fixtures. When changing the Workflow UI, check that the editor footer and
+decision controls are reachable at 200% browser zoom and on narrow screens
+in both themes.

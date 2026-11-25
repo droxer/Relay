@@ -5,9 +5,9 @@ This guide deploys Relay as a hosted product: the **web UI on Vercel** and the
 origin models, the settings each one needs, and what deliberately stays off both
 platforms.
 
-To put Cloudflare in front of Railway instead of Vercel — one origin, with
-Cloudflare as CDN, TLS edge, and WAF — see
-[deployment-cloudflare.md](deployment-cloudflare.md).
+For the Cloudflare deployment, see the
+[Railway and Cloudflare architecture](deployment-cloudflare.md#deployment-architecture).
+It covers web hosting, the public API, and the dedicated daemon ingest service.
 
 ## What goes where
 

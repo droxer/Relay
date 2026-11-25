@@ -1,28 +1,59 @@
 # Deploying Relay on Railway behind Cloudflare
 
-This guide puts Cloudflare (DNS, TLS, CDN, WAF) in front of Relay on Railway.
-It replaces the Vercel half of [deployment.md](deployment.md): the web UI is a
-Cloudflare Worker serving the static export from every Cloudflare location
-(or, optionally, its own Railway service) on a sibling subdomain, and the
-browser calls the backend directly (section 8). The backend image does not
-include the web UI.
-Follow [deployment.md § 1](deployment.md#1-railway-postgres--backend) for the
-backend service and Postgres, then come back here.
+Cloudflare routes API traffic at the edge and serves the static web UI by
+default. Railway runs Relay's Python services and PostgreSQL. Follow
+[deployment.md § 1](deployment.md#1-railway-postgres--backend) for the initial
+Railway backend and database setup.
 
+## Deployment architecture
+
+| Hosted entry point | Cloudflare | Railway |
+| --- | --- | --- |
+| `get-relay.cc` | `relay-web` Worker serves the Next.js static export. | With `WEB_HOSTING=railway`, Caddy serves the export from `relay-web` and Cloudflare proxies the web host. |
+| `api.get-relay.cc` | Proxies the public API and runs the `relay-daemon-ingest` routing Worker when ingestion is split out. | `relay-backend` serves login, Tasks, Threads, SSE, and daemon registration, heartbeats, and command polling. |
+| `ingest.get-relay.cc` | DNS-only record for the origin used by the routing Worker. | `relay-daemon-ingest` accepts daemon event and report writes and uses the same PostgreSQL database as `relay-backend`. |
+
+```mermaid
+flowchart LR
+    browser[Browser]
+    daemon[Daemon on a Computer]
+    subgraph edge[Cloudflare]
+        web[relay-web static assets]
+        api[api.get-relay.cc]
+        route[relay-daemon-ingest Worker]
+    end
+    subgraph railway[Railway]
+        backend[relay-backend]
+        ingest[relay-daemon-ingest]
+        db[(PostgreSQL)]
+    end
+    browser -->|Load UI| web
+    browser -->|API and SSE| api
+    daemon --> api
+    api -->|API and daemon control requests| backend
+    api -->|Daemon event and report POSTs| route
+    route -->|ingest.get-relay.cc| ingest
+    backend --> db
+    ingest --> db
 ```
-browser ─┐                ┌──────── Cloudflare (proxied DNS) ────────┐
-         ├─ https ──────▶ │ app.example.com   Worker: static UI      │   (served at the edge, no origin)
-daemons ─┴─ https ──────▶ │ api.example.com   adds X-Relay-Edge      │──▶ Railway: relay backend (1 replica) ─▶ Postgres
-                          │                   caches daemon bundles  │
-                          └──────────────────────────────────────────┘
-```
 
-The examples below use `api.example.com` for the backend. Any hostname works,
-as long as the backend and the UI share one registrable domain.
+The browser loads the UI from the web host and calls the API host directly.
+With `WEB_HOSTING=workers`, the release can retain a previous Railway
+`relay-web` service for rollback. Cloudflare serves the web host while its
+Worker route is active.
 
-[`deploy/deploy.sh`](../../deploy/README.md) automates sections 1–3, 6 (given an
-existing bucket), 8, and 9 through the Railway and Cloudflare APIs. The steps
-below are what it does, and what to do by hand without it.
+Daemon processes run on user devices or on Fly Machines and use the API host
+for every request. Railway also runs `relay-worker` for background jobs, and
+the scripted deployment uses Cloudflare R2 for skill bundles and artifact
+snapshots.
+
+The examples below use `app.example.com`, `api.example.com`, and
+`ingest.example.com`. Use hostnames in the same Cloudflare zone for the
+scripted deployment.
+
+[`deploy/deploy.sh`](../../deploy/README.md) configures Railway services,
+Cloudflare routing, origin protection, caching, and web hosting through both
+platforms' APIs. It uses an existing R2 bucket and verifies the deployment.
 
 ## 1. Domain and TLS
 
@@ -90,6 +121,28 @@ supervisors, and the chat gateway use `RELAY_PUBLIC_BACKEND_URL`, which is the
 Cloudflare hostname, so they pick up the header there. A service calling the
 backend over Railway's private network would be refused — point it at the
 public hostname.
+
+### Daemon ingestion
+
+With `DAEMON_INGEST_DOMAIN` set, the Worker on the API host forwards only
+`POST /api/v1/daemon-nodes/{sandbox_id}/events` and
+`POST /api/v1/daemon-nodes/{sandbox_id}/reports` to the ingest origin. The
+Worker sets `X-Relay-Edge` from its secret binding. Relay also authenticates
+the daemon and records durable report receipts in PostgreSQL.
+
+The ingest service runs the backend image with `RELAY_HTTP_ROLE=daemon-ingest`
+and exposes those two routes and `/healthz`. A separate process and a bounded
+database connection pool reduce competition with browser API requests and
+daemon command polls when output arrives in bursts. The deployed limit is four
+concurrent writes, one per Computer, with up to eight PostgreSQL connections.
+On overload the service returns a retryable `503` and the daemon can replay
+from its outbox.
+
+To return event and report writes to `relay-backend`, clear
+`DAEMON_INGEST_DOMAIN` and run `deploy/deploy.sh cloudflare`. The script removes
+the Worker route. Daemons continue using the same API URL. For rollout and
+origin checks, see the
+[deployment script reference](../../deploy/README.md#isolate-daemon-ingestion).
 
 ## 3. Caching
 
