@@ -56,16 +56,16 @@ describe("favicon state", () => {
 });
 
 describe("favicon mark", () => {
-  it("keeps idle tabs colorful and emphasizes the acting half during activity", () => {
+  it("keeps idle tabs monochrome with a bronze baton and lights the acting side during activity", () => {
     const ink = FAVICON_INK;
-    assert.deepEqual(pathFills(faviconSvg("idle")), [ink.action, ink.live]);
-    assert.deepEqual(pathFills(faviconSvg("running")), [ink.unlit, ink.live]);
-    assert.deepEqual(pathFills(faviconSvg("waiting")), [ink.action, ink.unlit]);
+    assert.deepEqual(pathFills(faviconSvg("idle")), [ink.unlit, ink.action, ink.unlit]);
+    assert.deepEqual(pathFills(faviconSvg("running")), [ink.unlit, ink.live, ink.live]);
+    assert.deepEqual(pathFills(faviconSvg("waiting")), [ink.action, ink.action, ink.unlit]);
   });
 
   it("keeps an idle mark legible on its tile", () => {
-    // WCAG relative luminance: the inactive half stays bright enough to
-    // preserve the silhouette beside the colored activity indicator.
+    // WCAG relative luminance: the rails stay bright enough to preserve the
+    // silhouette beside the colored activity indicator.
     const luminance = (hex: string) => {
       const [r, g, b] = [1, 3, 5].map((i) => {
         const c = parseInt(hex.slice(i, i + 2), 16) / 255;
@@ -90,8 +90,8 @@ describe("favicon mark", () => {
     assert.doesNotMatch(shipped, /prefers-color-scheme/);
     const geometry = (svg: string) => [...svg.matchAll(/<path [^>]*d="([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(geometry(faviconSvg("idle")), geometry(shipped));
-    assert.deepEqual(geometry(shipped), [FAVICON_PATHS.lead, FAVICON_PATHS.trail]);
-    assert.deepEqual(pathFills(shipped), [FAVICON_INK.action, FAVICON_INK.live]);
+    assert.deepEqual(geometry(shipped), [FAVICON_PATHS.top, FAVICON_PATHS.baton, FAVICON_PATHS.bottom]);
+    assert.deepEqual(pathFills(shipped), [FAVICON_INK.unlit, FAVICON_INK.action, FAVICON_INK.unlit]);
     assert.deepEqual(pathFills(faviconSvg("idle")), pathFills(shipped));
     assert.ok(shipped.includes(`fill="${FAVICON_INK.canvas}"`));
     const tile = (svg: string) => svg.match(/<rect [^>]*\/>/)?.[0];
@@ -116,15 +116,16 @@ describe("favicon mark", () => {
     const offline = readFileSync(path.join(dir, "web", "public", "offline.html"), "utf8");
     for (const hex of [
       tok(darkReg, "--surface-0"),
+      tok(darkReg, "--ink-1"),
       tok(darkReg, "--brand-lead"),
-      tok(darkReg, "--live"),
       tok(lightReg, "--surface-0"),
+      tok(lightReg, "--ink-1"),
       tok(lightReg, "--brand-lead"),
-      tok(lightReg, "--live"),
     ]) {
       assert.ok(hex && offline.includes(hex), `offline.html must include ${hex}`);
     }
-    assert.ok(offline.includes(`d="${FAVICON_PATHS.lead}"`), "offline.html must use canonical RelayMark lead track");
-    assert.ok(offline.includes(`d="${FAVICON_PATHS.trail}"`), "offline.html must use canonical RelayMark trailing track");
+    assert.ok(offline.includes(`d="${FAVICON_PATHS.top}"`), "offline.html must use canonical RelayMark top track");
+    assert.ok(offline.includes(`d="${FAVICON_PATHS.baton}"`), "offline.html must use canonical RelayMark center baton");
+    assert.ok(offline.includes(`d="${FAVICON_PATHS.bottom}"`), "offline.html must use canonical RelayMark bottom track");
   });
 });
