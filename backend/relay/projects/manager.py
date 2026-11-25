@@ -53,19 +53,31 @@ def initial_manager_id(ctx: Any, project: dict[str, Any], requested: Any = None)
     return lead if lead in ids else None
 
 
-def _manager_reason(ctx: Any, project: dict[str, Any], agent: dict[str, Any] | None, nodes: list[dict[str, Any]], tools: bool) -> str | None:
-    reason = project_work_error(project) or (
-        "manager_unconfigured" if not project.get("managerAgentId") else
-        "manager_agent_unavailable" if not agent else
-        "project_computer_offline" if not nodes else
-        "project_manager_update_required" if not tools else None
-    )
-    if reason is not None:
+def _manager_reason(
+    ctx: Any,
+    project: dict[str, Any],
+    agent: dict[str, Any] | None,
+    nodes: list[dict[str, Any]],
+    tools: bool,
+) -> str | None:
+    if reason := project_work_error(project):
         return reason
+    if not project.get("managerAgentId"):
+        return "manager_unconfigured"
+    if not agent:
+        return "manager_agent_unavailable"
+    if not nodes:
+        return "project_computer_offline"
+    if not tools:
+        return "project_manager_update_required"
     try:
-        resolve_agent_assignments([{"agentId": project["managerAgentId"], "mode": "action"}],
-            user_id=project["ownerUserId"], is_admin=False, agent_store=ctx.agent_store,
-            placement_store=ctx.agent_placement_store, daemon_nodes=ctx.registry.monitor_nodes(),
+        resolve_agent_assignments(
+            [{"agentId": project["managerAgentId"], "mode": "action"}],
+            user_id=project["ownerUserId"],
+            is_admin=False,
+            agent_store=ctx.agent_store,
+            placement_store=ctx.agent_placement_store,
+            daemon_nodes=ctx.registry.monitor_nodes(),
             session_store=ctx.session_store,
         )
     except AgentRoutingError as error:

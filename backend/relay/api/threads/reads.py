@@ -308,18 +308,29 @@ def _workspace_scope(
     project = _owned_workspace_project(ctx, actor, requested_project_id) if requested_project_id else None
 
     agent = agent_for_workspace(ctx, actor, requested_agent_id)
-    user_id = (
-        project.get("ownerUserId")
-        if project
-        else team.get("ownerUserId")
-        if team
-        else agent_supervisor_user_id(agent)
-        if agent
-        else user_for_workspace_brief(actor, request.query_params.get("userId"))
+    user_id = _workspace_owner_user_id(
+        actor, request, project=project, team=team, agent=agent
     )
     if not user_id:
         raise HTTPException(404, "Agent owner not found.")
     return agent, team, project, user_id
+
+
+def _workspace_owner_user_id(
+    actor: Actor,
+    request: Request,
+    *,
+    project: dict[str, Any] | None,
+    team: dict[str, Any] | None,
+    agent: dict[str, Any] | None,
+) -> str | None:
+    if project:
+        return project.get("ownerUserId")
+    if team:
+        return team.get("ownerUserId")
+    if agent:
+        return agent_supervisor_user_id(agent)
+    return user_for_workspace_brief(actor, request.query_params.get("userId"))
 
 
 def _owned_workspace_project(ctx: AppContext, actor: Actor, project_id: str) -> dict[str, Any]:

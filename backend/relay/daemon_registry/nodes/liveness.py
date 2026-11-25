@@ -471,18 +471,17 @@ class NodeLivenessMixin(RegistryState):
             )
             patch = {"status": "ready", "lastError": None} if revived else {}
             now = now_iso()
+            poll_patch: dict[str, str] = {}
+            if polled:
+                poll_patch = {"lastPollAt": now}
+            elif polled is False:
+                poll_patch = {"lastPollAt": NODE_POLL_DRAINED_AT}
             updated = {
                 **sandbox,
                 **{k: v for k, v in patch.items() if v is not None},
                 "updatedAt": now,
                 "lastSeenAt": now,
-                **(
-                    {"lastPollAt": now}
-                    if polled
-                    else {"lastPollAt": NODE_POLL_DRAINED_AT}
-                    if polled is False
-                    else {}
-                ),
+                **poll_patch,
             }
             if "lastError" in patch and patch["lastError"] is None:
                 updated.pop("lastError", None)
@@ -521,6 +520,20 @@ class NodeLivenessMixin(RegistryState):
                     previous_status=sandbox["status"],
                 )
 
+    @staticmethod
+    def _persisted_node_status(sandbox: dict[str, Any], active_node_ids: set[str]) -> str:
+        # A deletion tombstone stays deleted across backend restarts,
+        # or the daemon on that machine resurrects the node.
+        if sandbox.get("status") == DAEMON_NODE_DELETED_STATUS:
+            return DAEMON_NODE_DELETED_STATUS
+        if sandbox.get("retiredAt"):
+            return "stopped"
+        if sandbox["id"] in active_node_ids:
+            return "running"
+        if sandbox.get("status") == "provisioning":
+            return "provisioning"
+        return "stopped"
+
     def _load_persisted_state(self) -> None:
         nodes = self.daemon_store.list_nodes()
         if nodes:
@@ -529,19 +542,7 @@ class NodeLivenessMixin(RegistryState):
         active_node_ids = {run["nodeId"] for run in active_runs}
         for sandbox in nodes:
             node_location = infer_node_location(sandbox)
-            waiting_status = (
-                # A deletion tombstone stays deleted across backend restarts,
-                # or the daemon on that machine resurrects the node.
-                DAEMON_NODE_DELETED_STATUS
-                if sandbox.get("status") == DAEMON_NODE_DELETED_STATUS
-                else "stopped"
-                if sandbox.get("retiredAt")
-                else "running"
-                if sandbox["id"] in active_node_ids
-                else "provisioning"
-                if sandbox.get("status") == "provisioning"
-                else "stopped"
-            )
+            waiting_status = self._persisted_node_status(sandbox, active_node_ids)
             self.sandboxes[sandbox["id"]] = {
                 **sandbox,
                 **({"nodeLocation": node_location} if node_location else {}),

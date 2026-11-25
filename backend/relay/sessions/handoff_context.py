@@ -26,8 +26,11 @@ def _clip(text: str, limit: int, *, tail: bool = False) -> tuple[str, bool]:
     if len(text) <= limit:
         return text, False
     available = max(0, limit - len(_ELISION))
-    excerpt = (text[-available:] if tail else text[:available]) if available else ""
-    return (_ELISION + excerpt if tail else excerpt + _ELISION), True
+    if not available:
+        return _ELISION, True
+    if tail:
+        return _ELISION + text[-available:], True
+    return text[:available] + _ELISION, True
 
 
 def capture_handoff_context(

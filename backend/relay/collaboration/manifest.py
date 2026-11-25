@@ -21,6 +21,18 @@ _WORKFLOW_ASSIGNMENT_FIELDS = (
 )
 
 
+def _round_strategy(
+    address: dict[str, Any], assignments: list[dict[str, Any]], purpose: str
+) -> str:
+    if address.get("kind") == "members" and len(assignments) == 1:
+        return "direct"
+    if purpose == "discuss":
+        return "room"
+    if purpose == "review":
+        return "review"
+    return "coordinate"
+
+
 def create_round_manifest(
     *,
     source: str,
@@ -32,15 +44,7 @@ def create_round_manifest(
     collaboration_id: str | None = None,
     round_id: str | None = None,
 ) -> dict[str, Any]:
-    strategy = (
-        "direct"
-        if address.get("kind") == "members" and len(assignments) == 1
-        else "room"
-        if purpose == "discuss"
-        else "review"
-        if purpose == "review"
-        else "coordinate"
-    )
+    strategy = _round_strategy(address, assignments, purpose)
     compiled_assignments = compile_assignment_work_graph(
         assignments,
         purpose=purpose,
@@ -276,5 +280,8 @@ def _result_owner_work_item(assignments: list[dict[str, Any]]) -> str | None:
         for assignment in assignments
         if (assignment.get("mode") or "action") != "ask"
     ]
-    owner = writable[-1] if writable else assignments[-1] if assignments else None
-    return owner["workItemId"] if owner else None
+    if writable:
+        return writable[-1]["workItemId"]
+    if assignments:
+        return assignments[-1]["workItemId"]
+    return None

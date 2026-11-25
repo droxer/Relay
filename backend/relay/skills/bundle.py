@@ -94,16 +94,7 @@ def resolve_agent_skills(
                 )
             )
             continue
-        pin = grant.get("pin")
-        revision_id = (
-            skill.get("currentRevisionId")
-            if pin == "latest"
-            else skill.get("stableRevisionId") or skill.get("currentRevisionId")
-            if pin == "stable"
-            else pin.get("revisionId")
-            if isinstance(pin, dict)
-            else None
-        )
+        revision_id = _pinned_revision_id(skill, grant.get("pin"))
         eligible.append((skill_id, slug, revision_id, grant))
     revisions = store.get_revisions_by_ids({key for _, _, key, _ in eligible if key})
     resolved = []
@@ -140,6 +131,16 @@ def resolve_agent_skills(
         key=lambda item: (item.get("slug") or "", item["skillId"], item["reason"])
     )
     return AgentSkillResolution({**_empty_bundle(), "skills": resolved}, skipped, scoped, skills)
+
+
+def _pinned_revision_id(skill: dict[str, Any], pin: Any) -> Any:
+    if pin == "latest":
+        return skill.get("currentRevisionId")
+    if pin == "stable":
+        return skill.get("stableRevisionId") or skill.get("currentRevisionId")
+    if isinstance(pin, dict):
+        return pin.get("revisionId")
+    return None
 
 
 def _empty_bundle() -> dict[str, Any]:

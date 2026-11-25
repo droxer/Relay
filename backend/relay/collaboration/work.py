@@ -45,91 +45,91 @@ WORK_STATE_KEYS = frozenset(
 )
 
 
+_MESSAGE_KINDS = frozenset({"question", "answer", "blocker", "handoff", "decision"})
+_PLAN_ITEM_KEYS = frozenset({"agentId", "objective", "acceptanceCriteria", "expectedOutputs"})
+
+
+def _valid_work_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip()) and len(value) <= 2000
+
+
+def _valid_work_id(value: Any) -> bool:
+    return isinstance(value, str) and bool(value) and len(value) <= 200
+
+
+def _validate_findings(entries: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(entries, list) or len(entries) > 20:
+        return None
+    cleaned: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        target, text = entry.get("workItemId"), entry.get("note")
+        if not _valid_work_id(target) or not _valid_work_text(text):
+            return None
+        cleaned.append({"workItemId": target, "note": text})
+    return cleaned
+
+
+def _validate_messages(entries: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(entries, list) or len(entries) > 20:
+        return None
+    cleaned: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        kind = entry.get("kind")
+        target, text = entry.get("toWorkItemId"), entry.get("text")
+        if kind not in _MESSAGE_KINDS or not _valid_work_text(text):
+            return None
+        if target is not None and not _valid_work_id(target):
+            return None
+        cleaned.append({"kind": kind, "text": text, **({"toWorkItemId": target} if target else {})})
+    return cleaned
+
+
+def _validate_plan(plan: Any) -> list[dict[str, Any]] | None:
+    if not isinstance(plan, list) or len(plan) > MAX_WORK_ITEMS:
+        return None
+    for item in plan:
+        if not isinstance(item, dict) or set(item) - _PLAN_ITEM_KEYS:
+            return None
+        agent_id = item.get("agentId")
+        objective = item.get("objective")
+        if not _valid_work_id(agent_id) or not isinstance(objective, str) or not 1 <= len(objective) <= 4000:
+            return None
+        text_list(item.get("acceptanceCriteria"), "acceptanceCriteria")
+        text_list(item.get("expectedOutputs"), "expectedOutputs")
+    return deepcopy(plan)
+
+
 def validate_work_result(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict) or value.get("status") not in (
-        "done",
-        "continue",
-        "blocked",
-    ):
+    if not isinstance(value, dict) or value.get("status") not in ("done", "continue", "blocked"):
         return None
     try:
         evidence = text_list(value.get("evidence", []), "evidence")
         if value["status"] == "done" and not evidence:
             return None
-        result = {"status": value["status"], "evidence": evidence}
         note = value.get("note", "")
         if not isinstance(note, str) or len(note) > 2000:
             return None
-        result["note"] = note.strip()
+        result: dict[str, Any] = {"status": value["status"], "evidence": evidence, "note": note.strip()}
         if "delegation" in value:
             if value["status"] != "continue" or "plan" in value:
                 return None
             result["delegation"] = delegation_request(value["delegation"])
-        for field in ("findings", "messages"):
-            entries = value.get(field, [])
-            if not isinstance(entries, list) or len(entries) > 20:
-                return None
-            cleaned = []
-            for entry in entries:
-                if not isinstance(entry, dict):
-                    return None
-                if field == "findings":
-                    target, text = entry.get("workItemId"), entry.get("note")
-                    if not isinstance(target, str) or not target or len(target) > 200:
-                        return None
-                    cleaned.append({"workItemId": target, "note": text})
-                else:
-                    target, text = entry.get("toWorkItemId"), entry.get("text")
-                    if entry.get("kind") not in (
-                        "question",
-                        "answer",
-                        "blocker",
-                        "handoff",
-                        "decision",
-                    ):
-                        return None
-                    if target is not None and (
-                        not isinstance(target, str) or not target or len(target) > 200
-                    ):
-                        return None
-                    cleaned.append(
-                        {
-                            "kind": entry["kind"],
-                            "text": text,
-                            **({"toWorkItemId": target} if target else {}),
-                        }
-                    )
-                if not isinstance(text, str) or not text.strip() or len(text) > 2000:
-                    return None
-            result[field] = cleaned
+        findings = _validate_findings(value.get("findings", []))
+        messages = _validate_messages(value.get("messages", []))
+        if findings is None or messages is None:
+            return None
+        result["findings"] = findings
+        result["messages"] = messages
         # Plan semantics are checked against the frozen, authorized roster.
         if "plan" in value:
-            if (
-                not isinstance(value["plan"], list)
-                or len(value["plan"]) > MAX_WORK_ITEMS
-            ):
+            validated_plan = _validate_plan(value["plan"])
+            if validated_plan is None:
                 return None
-            for item in value["plan"]:
-                if not isinstance(item, dict) or set(item) - {
-                    "agentId",
-                    "objective",
-                    "acceptanceCriteria",
-                    "expectedOutputs",
-                }:
-                    return None
-                if (
-                    not isinstance(item.get("agentId"), str)
-                    or not 1 <= len(item["agentId"]) <= 200
-                ):
-                    return None
-                if (
-                    not isinstance(item.get("objective"), str)
-                    or not 1 <= len(item["objective"]) <= 4000
-                ):
-                    return None
-                text_list(item.get("acceptanceCriteria"), "acceptanceCriteria")
-                text_list(item.get("expectedOutputs"), "expectedOutputs")
-            result["plan"] = deepcopy(value["plan"])
+            result["plan"] = validated_plan
         if result["status"] == "done" and result["findings"]:
             return None
         return result

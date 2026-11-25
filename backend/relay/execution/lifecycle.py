@@ -73,87 +73,133 @@ def _parked_workflow_reason(session: dict[str, Any]) -> str | None:
     return None
 
 
+def _parse_lease_window(command: dict[str, Any] | None, now: datetime) -> tuple[bool, float | None]:
+    lease = (command or {}).get("leaseExpiresAt")
+    if not lease:
+        return False, None
+    try:
+        expires = _parse_time(lease)
+        return expires > now, (now - expires).total_seconds()
+    except (ValueError, TypeError):
+        return False, None
+
+
+def _has_running_agent(session: dict[str, Any]) -> bool:
+    return bool(session.get("hasRunningAgent")) or any(
+        run.get("status") == "running" for run in session.get("agentRuns", [])
+    )
+
+
+def _dispatched_command_phase(
+    session: dict[str, Any],
+    state: dict[str, Any],
+    command: dict[str, Any],
+    *,
+    live: bool,
+    computer_online: bool | None,
+) -> tuple[str, str, bool]:
+    command_payload = command.get("command") or {}
+    if state.get(EXECUTION_INTERRUPTED_STATE_KEY):
+        # The daemon restarted and said it will not resume this run;
+        # the lease it was handed before the crash proves nothing.
+        return "recovery_required", "execution_interrupted", False
+    if state.get(EXIT_UNCONFIRMED_STATE_KEY):
+        # The daemon itself says it cannot verify the stopped process
+        # exited; waiting longer will not produce that evidence.
+        return "recovery_required", "termination_unconfirmed", live
+    if state.get(STOP_ACK_LOST_STATE_KEY):
+        return "recovery_required", "execution_lost", live
+    if (state.get("_relay_stop_command_id") or session.get("deletionRequestedAt")) and (
+        live or computer_online is True
+    ):
+        # A daemon stops renewing a run's lease once it holds the
+        # exit report, so a stop in flight on a reachable computer is
+        # still stopping. The stop grace below bounds that wait.
+        return "stopping", "awaiting_termination", live
+    if not live:
+        return "unresponsive", "execution_unconfirmed", live
+    if (
+        command_payload.get("reportRuntimeStartup")
+        and state.get(RUNTIME_STARTED_COMMAND_STATE_KEY) != command["id"]
+    ):
+        return "starting", "runtime_starting", live
+    return "running", "execution_active", live
+
+
+def _request_phase(
+    session: dict[str, Any],
+    request: dict[str, Any],
+    command: dict[str, Any] | None,
+    *,
+    live: bool,
+    computer_online: bool | None,
+) -> tuple[str, str | None, bool, str | None]:
+    state = request.get("state") or {}
+    if state.get("_relay_recovery_required"):
+        return "recovery_required", state.get("_relay_recovery_reason") or "finalization_failed", False, None
+    if request.get("status") == "finalizing" or (command or {}).get("status") in TERMINAL:
+        return "finalizing", "saving_results", False, None
+    if command and command.get("status") == "dispatched":
+        phase, reason, confirmed = _dispatched_command_phase(
+            session, state, command, live=live, computer_online=computer_online
+        )
+        return phase, reason, confirmed, None
+    if (
+        request.get("status") == "prepared"
+        and state.get("_relay_workflow_admission")
+        and not request.get("currentCommandId")
+        and not command
+        and not _has_running_agent(session)
+    ):
+        parked_workflow = _parked_workflow_reason(session)
+        if parked_workflow:
+            return "terminal", parked_workflow, False, parked_workflow
+    return "queued", "awaiting_dispatch", False, None
+
+
+def _terminal_event_outcome(event: dict[str, Any]) -> str:
+    if event["type"] == "run.cancelled":
+        return "cancelled"
+    if event["type"] == "run.completed" and event.get("exitCode") == 0:
+        return "completed"
+    return "failed"
+
+
 def execution_status(session: dict[str, Any], request: dict[str, Any] | None,
                      command: dict[str, Any] | None, *, now: datetime | None = None,
                      computer_online: bool | None = None) -> dict[str, Any]:
     now = now or datetime.now(UTC)
     state = (request or {}).get("state") or {}
     command_payload = (command or {}).get("command") or {}
-    phase, reason = "terminal", None
+    live, lease_dead_for = _parse_lease_window(command, now)
+    phase: str = "terminal"
+    reason: str | None = None
     confirmed = False
-    parked_workflow = None
-    lease = (command or {}).get("leaseExpiresAt")
-    live = False
-    lease_dead_for = None
-    if lease:
-        try:
-            expires = _parse_time(lease)
-            live = expires > now
-            lease_dead_for = (now - expires).total_seconds()
-        except (ValueError, TypeError):
-            pass
+    parked_workflow: str | None = None
     if request:
-        if state.get("_relay_recovery_required"):
-            phase, reason = "recovery_required", state.get("_relay_recovery_reason") or "finalization_failed"
-        elif request.get("status") == "finalizing" or (command or {}).get("status") in TERMINAL:
-            phase, reason = "finalizing", "saving_results"
-        elif command and command.get("status") == "dispatched":
-            confirmed = live
-            if state.get(EXECUTION_INTERRUPTED_STATE_KEY):
-                # The daemon restarted and said it will not resume this run;
-                # the lease it was handed before the crash proves nothing.
-                confirmed = False
-                phase, reason = "recovery_required", "execution_interrupted"
-            elif state.get(EXIT_UNCONFIRMED_STATE_KEY):
-                # The daemon itself says it cannot verify the stopped process
-                # exited; waiting longer will not produce that evidence.
-                phase, reason = "recovery_required", "termination_unconfirmed"
-            elif state.get(STOP_ACK_LOST_STATE_KEY):
-                phase, reason = "recovery_required", "execution_lost"
-            elif (state.get("_relay_stop_command_id") or session.get("deletionRequestedAt")) and (
-                live or computer_online is True
-            ):
-                # A daemon stops renewing a run's lease once it holds the
-                # exit report, so a stop in flight on a reachable computer is
-                # still stopping. The stop grace below bounds that wait.
-                phase, reason = "stopping", "awaiting_termination"
-            elif not live:
-                phase, reason = "unresponsive", "execution_unconfirmed"
-            elif (command_payload.get("reportRuntimeStartup")
-                  and state.get(RUNTIME_STARTED_COMMAND_STATE_KEY) != command["id"]):
-                phase, reason = "starting", "runtime_starting"
-            else:
-                phase, reason = "running", "execution_active"
-        else:
-            if (request.get("status") == "prepared" and state.get("_relay_workflow_admission")
-                    and not request.get("currentCommandId") and not command
-                    and not session.get("hasRunningAgent")
-                    and not any(run.get("status") == "running" for run in session.get("agentRuns", []))):
-                parked_workflow = _parked_workflow_reason(session)
-            if parked_workflow:
-                reason = parked_workflow
-            else:
-                phase, reason = "queued", "awaiting_dispatch"
-    elif session.get("hasRunningAgent") or any(
-        run.get("status") == "running" for run in session.get("agentRuns", [])
-    ):
+        phase, reason, confirmed, parked_workflow = _request_phase(
+            session, request, command, live=live, computer_online=computer_online
+        )
+    elif _has_running_agent(session) and session.get("status") != "cancelled":
         # Legacy records without durable ownership need reconciliation, not a
         # guess based on a completed/failed session label.
-        if session.get("status") != "cancelled":
-            phase, reason = "recovery_required", "orphaned_run"
+        phase, reason = "recovery_required", "orphaned_run"
     # A daemon that died mid-run also stops renewing its lease, so a stopped
     # run can read unresponsive instead of stopping; the grace applies to both.
     if phase in ("stopping", "unresponsive") and _stop_grace_elapsed(session, state, now):
         phase, reason = "recovery_required", "termination_unconfirmed"
-    if (phase == "unresponsive" and computer_online is not True
-            and lease_dead_for is not None
-            and lease_dead_for >= UNRESPONSIVE_RECOVERY_SECONDS):
+    if (
+        phase == "unresponsive"
+        and computer_online is not True
+        and lease_dead_for is not None
+        and lease_dead_for >= UNRESPONSIVE_RECOVERY_SECONDS
+    ):
         phase, reason = "recovery_required", "execution_lost"
     # A late report can restore evidence while the durable recovery flag still
     # says it is missing. Protect that result and offer saving it again.
     if reason == "missing_terminal_evidence" and (
         isinstance(state.get(TERMINAL_EVENT_STATE_KEY), dict)
-        or isinstance(((command or {}).get("command") or {}).get("_terminalEvent"), dict)
+        or isinstance(command_payload.get("_terminalEvent"), dict)
     ):
         reason = "finalization_failed"
     # Lost evidence has nothing to save, so retrying the save only re-marks it.
@@ -456,8 +502,7 @@ class ExecutionLifecycleService:
                 for event in self.registry.daemon_store.terminal_events_for_session(session_id):
                     if event.get("runId") not in running:
                         continue
-                    outcome = "cancelled" if event["type"] == "run.cancelled" else (
-                        "completed" if event["type"] == "run.completed" and event.get("exitCode") == 0 else "failed")
+                    outcome = _terminal_event_outcome(event)
                     session = self.registry.store.append_event(session_id, relay_event("agent.completed", session_id, {
                         "runId": event["runId"], "agent": event["agent"], "status": outcome,
                         "exitCode": event.get("exitCode", 130 if outcome == "cancelled" else 1),

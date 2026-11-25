@@ -90,6 +90,76 @@ def stop_and_send(
     return state
 
 
+def _enqueue_message(
+    store: Any, thread_id: str, state: dict[str, Any], message: dict[str, Any], *, imported: bool
+) -> bool:
+    """Append ``message`` to the queue. Returns False when an identical receipt already exists."""
+    messages = state["messages"]
+    receipt = store.queue_receipt(thread_id, message["id"])
+    original = (receipt or {}).get("queue", {}).get("messages", [])
+    existing = next((m for m in [*messages, *original] if m["id"] == message["id"]), None)
+    if existing:
+        if existing != message:
+            raise ValueError("This message ID already names another message.")
+        return False
+    if len(messages) >= 20:
+        raise ValueError("The queue is full (20 messages).")
+    messages.append(message)
+    if imported:
+        state["paused"] = True
+        state.pop("sendRequested", None)
+    return True
+
+
+def _undo_removed_message(state: dict[str, Any], message_id: str) -> bool:
+    """Restore the most recently removed message. Returns False when nothing matches."""
+    removed = state.get("removed")
+    if not removed or removed["message"]["id"] != message_id:
+        return False
+    messages = state["messages"]
+    if len(messages) >= 20:
+        raise ValueError("The queue is full (20 messages).")
+    if not any(item["id"] == message_id for item in messages):
+        index = next(
+            (i for i, item in enumerate(messages) if item["id"] == removed.get("beforeId")),
+            len(messages),
+        )
+        messages.insert(index, removed["message"])
+    state.pop("removed", None)
+    return True
+
+
+def _remove_or_edit_message(state: dict[str, Any], message_id: str, *, action: str) -> bool:
+    """Remove a queued message (recording undo info for ``remove``). Returns False on no-op."""
+    if state.get("sending") == message_id or _steering(state):
+        raise ValueError("This message is being sent. Wait for it to finish.")
+    messages = state["messages"]
+    picked = next((m for m in messages if m["id"] == message_id), None)
+    if not picked:
+        if action == "edit":
+            raise ValueError("This message was already changed on another device.")
+        return False
+    if action == "remove":
+        index = messages.index(picked)
+        before_id = messages[index + 1]["id"] if index + 1 < len(messages) else None
+        state["removed"] = {
+            "message": picked,
+            "beforeId": before_id,
+            "removedAt": datetime.now(UTC).isoformat(),
+        }
+    state["messages"] = [m for m in messages if m["id"] != message_id]
+    return True
+
+
+def _set_queue_paused(state: dict[str, Any], *, paused: bool) -> None:
+    if not paused and _steering(state):
+        raise ValueError("This message is being sent. Wait for it to finish.")
+    state["paused"] = paused
+    state.pop("error", None)
+    if paused or state.pop("steeringUntil", None):
+        state.pop("sendRequested", None)
+
+
 def change_queue(
     store: Any, thread_id: str, action: str, *, message: dict[str, Any] | None = None, message_id: str = ""
 ) -> dict[str, Any]:
@@ -98,57 +168,22 @@ def change_queue(
         if action != "pause" and (session.get("deletionRequestedAt") or session.get("archived")):
             raise ValueError("This thread is archived or being deleted.")
         state = queue_state(session)
-        messages = state["messages"]
+        changed = True
         if action in ("enqueue", "import"):
             assert message is not None
-            receipt = store.queue_receipt(thread_id, message["id"])
-            original = (receipt or {}).get("queue", {}).get("messages", [])
-            existing = next((m for m in [*messages, *original] if m["id"] == message["id"]), None)
-            if existing:
-                if existing != message:
-                    raise ValueError("This message ID already names another message.")
-                return state
-            if len(messages) >= 20:
-                raise ValueError("The queue is full (20 messages).")
-            messages.append(message)
-            if action == "import":
-                state["paused"] = True
-                state.pop("sendRequested", None)
+            changed = _enqueue_message(store, thread_id, state, message, imported=action == "import")
         elif action == "undo_remove":
-            removed = state.get("removed")
-            if not removed or removed["message"]["id"] != message_id:
-                return state
-            if len(messages) >= 20:
-                raise ValueError("The queue is full (20 messages).")
-            if not any(item["id"] == message_id for item in messages):
-                index = next((i for i, item in enumerate(messages) if item["id"] == removed.get("beforeId")), len(messages))
-                messages.insert(index, removed["message"])
-            state.pop("removed", None)
+            changed = _undo_removed_message(state, message_id)
         elif action == "promote":
             _promote(state, message_id)
         elif action in ("remove", "edit"):
-            if state.get("sending") == message_id or _steering(state):
-                raise ValueError("This message is being sent. Wait for it to finish.")
-            picked = next((m for m in messages if m["id"] == message_id), None)
-            if not picked:
-                if action == "edit":
-                    raise ValueError("This message was already changed on another device.")
-                return state
-            if action == "remove":
-                index = messages.index(picked)
-                state["removed"] = {"message": picked, "beforeId": messages[index + 1]["id"] if index + 1 < len(messages) else None,
-                                    "removedAt": datetime.now(UTC).isoformat()}
-            state["messages"] = [m for m in messages if m["id"] != message_id]
+            changed = _remove_or_edit_message(state, message_id, action=action)
         elif action in ("pause", "resume"):
-            if action == "resume" and _steering(state):
-                raise ValueError("This message is being sent. Wait for it to finish.")
-            state["paused"] = action == "pause"
-            state.pop("error", None)
-            if action == "pause" or state.pop("steeringUntil", None):
-                state.pop("sendRequested", None)
+            _set_queue_paused(state, paused=action == "pause")
         else:
             raise ValueError("Unknown queue action.")
-        _save_queue(store, thread_id, state, message["id"] if message is not None else None)
+        if changed:
+            _save_queue(store, thread_id, state, message["id"] if message is not None else None)
         return state
 
 
@@ -277,9 +312,7 @@ class ThreadQueueDispatcher:
                 state.pop("steeringUntil", None)
             state["sending"] = message["id"]
             state["leaseUntil"] = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
-            store.append_event(
-                thread_id, relay_event("session.queue", thread_id, {"queue": state}), hydrate_events=False
-            )
+            _save_queue(store, thread_id, state)
             return {"message": message, "owner": session["ownerUserId"]}
 
     async def dispatch(self, thread_id: str) -> None:
