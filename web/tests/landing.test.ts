@@ -6,10 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   LANDING_HERO_SHOT,
+  LANDING_PHOTOS,
   LANDING_PRINCIPLES,
   LANDING_SHOT_WIDTHS,
   LANDING_STEPS,
   LANDING_TOUR,
+  LANDING_WORKFLOW_SLICES,
   RELAY_GITHUB_URL,
   RELAY_CLONE_COMMAND,
   landingCtas,
@@ -81,6 +83,15 @@ describe("landingShotSrc", () => {
       }
     }
   });
+
+  it("ships the editorial studio photography in both full and 800w WebP cuts", () => {
+    for (const photo of Object.values(LANDING_PHOTOS)) {
+      const full = path.join(webRoot, "public", photo.src);
+      const small = path.join(webRoot, "public", photo.src.replace(/\.webp$/, "-800w.webp"));
+      assert.ok(existsSync(full), `missing studio photo: ${full}`);
+      assert.ok(existsSync(small), `missing 800w studio photo: ${small}`);
+    }
+  });
 });
 
 describe("landingCtas", () => {
@@ -107,6 +118,7 @@ describe("landing copy", () => {
       ...LANDING_STEPS.flatMap((step) => [step.titleKey, step.bodyKey]),
       ...LANDING_TOUR.flatMap((item) => [item.titleKey, item.bodyKey, item.altKey]),
       ...LANDING_PRINCIPLES.flatMap((item) => [item.titleKey, item.bodyKey]),
+      ...LANDING_WORKFLOW_SLICES.flatMap((slice) => [slice.roleKey, slice.statusKey, slice.summaryKey]),
     ];
     for (const locale of ["en", "zh-CN"]) {
       const file = path.join(webRoot, "src", "i18n", "locales", locale, "translation.json");
@@ -123,5 +135,25 @@ describe("open source links", () => {
   it("points at the public repository over https", () => {
     assert.equal(RELAY_GITHUB_URL, "https://github.com/droxer/Relay");
     assert.equal(RELAY_CLONE_COMMAND, "git clone https://github.com/droxer/Relay.git");
+  });
+});
+
+describe("landing theme and responsive parity", () => {
+  const css = readFileSync(path.join(webRoot, "src", "styles", "landing.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("tunes the hero photography veil and manifesto grid for light theme", () => {
+    assert.match(css, /html\[data-theme="light"\]\s+\.landing-hero-media::after\s*\{/);
+    assert.match(css, /html\[data-theme="light"\]\s+\.landing-manifesto\s*\{/);
+    assert.match(css, /\.landing-bento-photo\s*\{[^}]*background:\s*var\(--dark-canvas\)/s);
+  });
+
+  it("keeps buttons scalable and prevents horizontal overflow across viewports", () => {
+    assert.match(css, /\.landing-button\s*\{[^}]*min-height:\s*var\(--control-h-lg\)/s);
+    assert.doesNotMatch(css, /\.landing-accordion\s*\{[^}]*overflow:\s*hidden/s);
+    assert.match(css, /\.landing-oss-copy\s*\{[^}]*min-width:\s*0;/s);
+    assert.match(css, /\.landing-terminal\s*\{[^}]*min-width:\s*0;/s);
+    for (const tier of ["1040px", "820px", "480px"]) {
+      assert.match(css, new RegExp(`@media \\(max-width: ${tier}\\)`), `missing ${tier} responsive tier`);
+    }
   });
 });
