@@ -10,7 +10,7 @@ import { SITE_NAME, SITE_SHARE_IMAGE, jsonLdScript, siteUrl, softwareJsonLd } fr
 import { SIGNED_IN_HINT_KEY } from "../lib/appStorage";
 import { apiOrigin, relayApiEndpoint } from "../lib/apiOrigin";
 import { earlyAuthProbeScript } from "../lib/earlyAuthProbe";
-import { LANDING_HERO_SHOT, LANDING_HERO_SIZES, landingShotSrc, landingShotSrcSet } from "../lib/landing";
+import { LANDING_PHOTOS } from "../lib/landing";
 import { Providers } from "./providers";
 
 // Relay's own faces, vendored and subset to Latin: Han and every other script
@@ -94,17 +94,9 @@ export const viewport: Viewport = {
   interactiveWidget: "resizes-content",
 };
 
-// The landing page renders client-side, so its hero image is unknown to the
-// HTML until the page's code runs. Name the right cut (theme x language) up
-// front for a visitor who will see it: at `/`, not signed in last time.
-const heroCut = (theme: "dark" | "light", language: string) => [
-  landingShotSrc(LANDING_HERO_SHOT, language, theme),
-  landingShotSrcSet(LANDING_HERO_SHOT, language, theme),
-];
-const heroCuts = JSON.stringify({
-  dark: { en: heroCut("dark", "en"), "zh-CN": heroCut("dark", "zh-CN") },
-  light: { en: heroCut("light", "en"), "zh-CN": heroCut("light", "zh-CN") },
-});
+// Start fetching the public hero while the JavaScript downloads. Share its
+// responsive cuts with the img that renders after hydration.
+const { src: heroSrc, srcSet: heroSrcSet, sizes: heroSizes } = LANDING_PHOTOS.heroDesk;
 
 const themeScript = `(function(){try{
   var root=document.documentElement;
@@ -117,11 +109,10 @@ const themeScript = `(function(){try{
   root.setAttribute("data-theme",r);
   var p=location.pathname;
   if((p==="/"||p==="")&&localStorage.getItem(${JSON.stringify(SIGNED_IN_HINT_KEY)})!=="1"){
-    var h=${heroCuts}[r][l==="zh-CN"||l==="zh-TW"?"zh-CN":"en"];
     var k=document.createElement("link");
-    k.rel="preload";k.as="image";k.href=h[0];
-    k.setAttribute("imagesrcset",h[1]);
-    k.setAttribute("imagesizes",${JSON.stringify(LANDING_HERO_SIZES)});
+    k.rel="preload";k.as="image";k.href=${JSON.stringify(heroSrc)};
+    k.setAttribute("imagesrcset",${JSON.stringify(heroSrcSet)});
+    k.setAttribute("imagesizes",${JSON.stringify(heroSizes)});
     k.setAttribute("fetchpriority","high");
     document.head.appendChild(k);
   }

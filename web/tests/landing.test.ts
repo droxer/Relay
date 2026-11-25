@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  LANDING_HERO_SHOT,
+  LANDING_SHOWCASE_SHOT,
   LANDING_PHOTOS,
   LANDING_PRINCIPLES,
   LANDING_SHOT_WIDTHS,
@@ -61,7 +61,7 @@ describe("landingShotSrc", () => {
   });
 
   it("ships every screenshot the page asks for, in both languages, both themes, and every width", () => {
-    const shots = [LANDING_HERO_SHOT, ...LANDING_TOUR.map((item) => item.shot)];
+    const shots = [LANDING_SHOWCASE_SHOT, ...LANDING_TOUR.map((item) => item.shot)];
     for (const shot of shots) {
       for (const language of ["en", "zh-CN"]) {
         for (const theme of ["dark", "light"] as const) {

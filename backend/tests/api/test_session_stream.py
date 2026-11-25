@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from relay.api.threads.events import _STREAM_FALLBACK_SECONDS
 from relay.app import create_app
 from relay.persistence.events import relay_event
+from starlette.concurrency import run_in_threadpool
 
 
 def _bootstrap_admin(client: TestClient, token: str = "admin_token") -> None:
@@ -112,10 +113,14 @@ def test_mark_done_persists_a_delivery_fence_for_an_active_request(monkeypatch) 
         app = create_app(root)
         client = TestClient(app)
         _bootstrap_admin(client)
-        app.state.registry.register(
+        created = client.post("/api/v1/threads", json={"taskGoal": "finish safely"})
+        assert created.status_code == 201
+        thread = created.json()
+        session_id = thread["id"]
+        node = app.state.registry.register(
             {
                 "sandboxId": "node_admin",
-                "userId": "admin",
+                "userId": thread["ownerUserId"],
                 "token": "node_token",
                 "workspacePath": "/workspace/admin",
                 "protocolVersion": 1,
@@ -124,11 +129,9 @@ def test_mark_done_persists_a_delivery_fence_for_an_active_request(monkeypatch) 
                 "status": "ready",
             }
         )
-        created = client.post("/api/v1/threads", json={"taskGoal": "finish safely"})
-        session_id = created.json()["id"]
         run_request = app.state.daemon_store.create_run_request(
             {
-                "nodeId": "node_admin",
+                "nodeId": node["id"],
                 "sessionId": session_id,
                 "taskGoal": "finish safely",
                 "assignments": [
@@ -312,6 +315,45 @@ def test_session_events_reads_incremental_pages_after_authorization(
         # Authorization uses the compact session header; neither the handshake
         # nor the stream loop rematerializes the full thread event history.
         assert get_session_calls == 0
+
+
+def test_caught_up_stream_waits_without_an_empty_page_read(monkeypatch) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    with TemporaryDirectory() as root:
+        app = create_app(root)
+        client = TestClient(app)
+        _bootstrap_admin(client)
+        created = client.post("/api/v1/threads", json={"taskGoal": "stream new work"})
+        assert created.status_code == 201
+        thread = created.json()
+        session_id = thread["id"]
+        initial_ids = [event["id"] for event in thread["events"]]
+        store = app.state.session_store
+        notifier = app.state.context.control_plane_notifier
+        read_page, wait = store.read_event_page, notifier.wait
+        reads: list[int | None] = []
+        completed = relay_event("session.completed", session_id, {"outcome": "done"})
+
+        def count_page(target, **kwargs):
+            reads.append(kwargs["after_sequence"])
+            return read_page(target, **kwargs)
+
+        async def complete_before_wait(key, version, *, timeout):
+            await run_in_threadpool(store.append_event, session_id, completed, hydrate_events=False)
+            return await wait(key, version, timeout=timeout)
+
+        monkeypatch.setattr(store, "read_event_page", count_page)
+        monkeypatch.setattr(notifier, "wait", complete_before_wait)
+        monkeypatch.setattr("relay.api.threads.events._STREAM_EVENT_PAGE_LIMIT", len(initial_ids))
+        response = client.get(f"/api/v1/threads/{session_id}/events")
+
+        assert response.status_code == 200
+        assert [event["id"] for event in _message_payloads(response.text)] == [
+            *initial_ids, completed["id"],
+        ]
+        assert _parse_sse(response.text)[-1][0] == "done"
+        assert notifier.stats()["woken"] == 1
+        assert reads == [None, len(initial_ids)]
 
 
 def test_session_events_unauthorized_is_forbidden_before_streaming(monkeypatch) -> None:

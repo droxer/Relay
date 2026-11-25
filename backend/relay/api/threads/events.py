@@ -160,7 +160,7 @@ async def session_events(
                 has_news = await _tail_has_news(ctx, session_id, tail)
                 if has_news is None:
                     return
-                events: list[dict[str, Any]] = []
+                read_again = False
                 if has_news:
                     page = await _read_tail_page(ctx, session_id, tail)
                     if page is None:
@@ -170,6 +170,9 @@ async def session_events(
                         yield _sse_frame(event)
                     if events:
                         tail.last_heartbeat = time.monotonic()
+                        # Keep draining a backlog. Also reread the status if
+                        # events arrived between the page's version and row reads.
+                        read_again = page["nextSequence"] != page["version"]
                     finished = _finished_frame(page)
                     if finished is not None:
                         yield finished
@@ -180,9 +183,11 @@ async def session_events(
                     yield frame
                 if timed_out:
                     return
-                if events:
+                if read_again:
                     tail.woken = True
                     continue
+                # The observation predates the page read and frame sends, so
+                # wait still sees a commit that raced with either operation.
                 tail.woken = await notifier.wait(
                     notification_key, observed_version, timeout=_tail_wait_seconds(tail, now)
                 )
