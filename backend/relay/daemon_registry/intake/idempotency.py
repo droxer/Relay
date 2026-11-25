@@ -27,6 +27,7 @@ class RunIdempotencyMixin(NodeBackendState):
         *,
         actor_is_admin: bool = False,
         expected_fingerprint: str | None = None,
+        hydrate: bool = True,
     ) -> dict[str, Any] | None:
         with self.registry.dispatch_lock:
             request = self.registry.daemon_store.get_run_request(
@@ -41,14 +42,14 @@ class RunIdempotencyMixin(NodeBackendState):
                 return None
             if request.get("status") == "prepared":
                 return None
-            session = self.registry.store.get_session(request["sessionId"])
+            session = self.registry.store.get_session_header(request["sessionId"])
             if actor_user_id and not actor_is_admin:
                 assert_session_owned_by_user(
                     self.registry.store, session["id"], actor_user_id
                 )
             self._raise_rejected_recovery(request)
             return self._reconcile_idempotent_participants(
-                request, session, actor_user_id
+                request, session, actor_user_id, hydrate=hydrate,
             )
 
     def idempotent_session_run(
@@ -58,6 +59,7 @@ class RunIdempotencyMixin(NodeBackendState):
         *,
         actor_is_admin: bool = False,
         expected_fingerprint: str | None = None,
+        hydrate: bool = True,
     ) -> dict[str, Any] | None:
         with self.registry.dispatch_lock:
             request = (
@@ -73,13 +75,13 @@ class RunIdempotencyMixin(NodeBackendState):
                 return None
             if request.get("status") == "prepared":
                 return None
-            session = self.registry.store.get_session(request["sessionId"])
+            session = self.registry.store.get_session_header(request["sessionId"])
             if actor_user_id and not actor_is_admin:
                 assert_session_owned_by_user(
                     self.registry.store, session["id"], actor_user_id
                 )
             return self._reconcile_idempotent_participants(
-                request, session, actor_user_id
+                request, session, actor_user_id, hydrate=hydrate,
             )
 
     def _reconcile_idempotent_participants(
@@ -87,13 +89,15 @@ class RunIdempotencyMixin(NodeBackendState):
         run_request: dict[str, Any],
         session: dict[str, Any],
         actor_user_id: str | None,
+        *,
+        hydrate: bool,
     ) -> dict[str, Any]:
         """Repair room admission if dispatch committed before that event did."""
         manifest = (run_request.get("state") or {}).get(
             COLLABORATION_MANIFEST_STATE_KEY
         )
         if not isinstance(manifest, dict) or project_id_for_task_handoff(manifest, run_request.get("taskId")):
-            return session
+            return self.registry.store.get_session(session["id"]) if hydrate else session
         agent_ids = [
             assignment["agentId"]
             for assignment in manifest.get("assignments", [])
@@ -102,9 +106,9 @@ class RunIdempotencyMixin(NodeBackendState):
             and assignment["agentId"]
         ]
         if not agent_ids:
-            return session
+            return self.registry.store.get_session(session["id"]) if hydrate else session
         return SessionController(self.registry.store).record_participants_joined(
-            session["id"], agent_ids, actor_user_id
+            session["id"], agent_ids, actor_user_id, hydrate=hydrate,
         )
 
     @staticmethod
@@ -137,14 +141,14 @@ class RunIdempotencyMixin(NodeBackendState):
             return None
         if existing_request.get("status") == "prepared":
             return None
-        session = self.registry.store.get_session(existing_request["sessionId"])
+        session = self.registry.store.get_session_header(existing_request["sessionId"])
         actor_user_id = request.get("actorUserId")
         if actor_user_id and request.get("actorIsAdmin") is not True:
             assert_session_owned_by_user(
                 self.registry.store, session["id"], actor_user_id
             )
         self._raise_rejected_recovery(existing_request)
-        return session
+        return session if request.get("_hydrateSession") is False else self.registry.store.get_session(session["id"])
 
     @staticmethod
     def _raise_rejected_recovery(request: dict[str, Any]) -> None:

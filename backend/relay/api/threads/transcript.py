@@ -65,19 +65,11 @@ def transcript_projection(session: dict[str, Any], *, compact: bool = False) -> 
     return snapshot
 
 
-def compact_message_snapshot(session: dict[str, Any]) -> dict[str, Any]:
-    events = session["events"]
-    start = len(events)
-    budget = _COMPACT_WINDOW_BYTES
-    for event in reversed(events[-_WINDOW_LIMIT:]):
-        budget -= len(JSONResponse(event).body)
-        if budget < 0 and start < len(events):
-            break
-        start -= 1
-    tail = {**session, "eventStart": start, "eventCount": len(events), "events": events[start:]}
+def compact_message_snapshot(store: SessionStore, session: dict[str, Any]) -> dict[str, Any]:
+    tail = read_transcript_page(store, session, None, compact=True)
     # A message response is merged into the live view, not used as the next
     # snapshot validator. Older transcript pages remain reachable by sequence.
-    return {**transcript_projection(tail, compact=True), "events": tail["events"]}
+    return {**transcript_projection(session, compact=True), **tail}
 
 
 def transcript_response(request: Request, session: dict[str, Any], *, compact: bool = False) -> Response:

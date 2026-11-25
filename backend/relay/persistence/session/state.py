@@ -27,7 +27,9 @@ class SessionStoreState:
         def _delete_attachment_blob(self, key: str) -> None: ...
 
         # Methods one mixin calls on another, declared so each type-checks alone.
-        def _events_for_session(self, conn: Any, session_pk: str) -> list[dict[str, Any]]:
+        def _events_for_session(
+            self, conn: Any, session_pk: str, event_types: tuple[str, ...] | None = None,
+        ) -> list[dict[str, Any]]:
             ...
 
         def _index_workspace_files(self, conn: Any, session_pk: str, session: dict[str, Any], artifacts: list[dict[str, Any]]) -> None:

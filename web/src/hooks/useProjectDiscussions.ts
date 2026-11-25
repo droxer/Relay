@@ -1,30 +1,129 @@
-import { useInfiniteQuery, type Query } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { queryOptions, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData, type Query, type QueryClient } from "@tanstack/react-query";
 import { listSessionSummaries, type SessionHeadCache } from "../api";
 import { THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
+import type { SessionSummariesResponse, SessionSummary } from "../types";
 
 export const PROJECT_DISCUSSIONS_QUERY_KEY = ["project-discussions"] as const;
 const headValidators = new WeakMap<Query, SessionHeadCache>();
 
-export function useProjectDiscussions(projectId: string, query: string) {
+type DiscussionHead = { page: SessionSummariesResponse; displaced: SessionSummary[] };
+
+function discussionPage(projectId: string, query: string) {
+  return { projectId, query, kind: "chats", limit: THREAD_PAGE_SIZE, includeActivity: true } as const;
+}
+
+function projectDiscussionsOptions(projectId: string, query: string) {
   const queryKey = [...PROJECT_DISCUSSIONS_QUERY_KEY, projectId, query] as const;
-  return useInfiniteQuery({
+  return queryOptions({
     queryKey,
-    initialPageParam: "",
-    queryFn: ({ client, signal, pageParam }) => {
-      const entry = pageParam ? undefined : client.getQueryCache().find({ queryKey, exact: true });
+    staleTime: RELAY_POLL_INTERVALS_MS.projectDiscussionsIdle,
+    queryFn: async ({ client, signal }): Promise<DiscussionHead> => {
+      const entry = client.getQueryCache().find({ queryKey, exact: true });
       const cache = entry ? headValidators.get(entry) ?? {} : undefined;
       if (entry && cache) headValidators.set(entry, cache);
-      return listSessionSummaries(signal, {
-        projectId, query, kind: "chats", limit: THREAD_PAGE_SIZE, includeActivity: true, cursor: pageParam || undefined,
-      }, cache);
+      const page = await listSessionSummaries(signal, discussionPage(projectId, query), cache);
+      const historyKey = [...queryKey, "history"] as const;
+      const history = client.getQueryState(historyKey);
+      const previous = client.getQueryData<DiscussionHead>(queryKey);
+      if (!page.nextCursor) {
+        if (history && (history.status !== "pending" || history.fetchStatus !== "idle")) {
+          void client.resetQueries({ queryKey: historyKey, exact: true });
+        }
+        return { page, displaced: [] };
+      }
+      if (!previous || !history || (!history.data && history.fetchStatus === "idle")) {
+        return { page, displaced: [] };
+      }
+      if (previous.page === page) return previous;
+
+      // Keep the continuous loaded range when a refreshed head pushes rows
+      // across the existing history cursor. Rows still inside the new head's
+      // range but absent from it are no longer in the results.
+      const boundary = page.sessions.at(-1);
+      if (!boundary) return { page, displaced: [] };
+      const boundaryTime = Date.parse(boundary.updatedAt);
+      const ids = new Set(page.sessions.map(row => row.id));
+      const displaced = [...previous.page.sessions, ...previous.displaced].filter(row => {
+        const time = Date.parse(row.updatedAt);
+        return !ids.has(row.id) && (time < boundaryTime || (time === boundaryTime && row.id < boundary.id));
+      });
+      return { page, displaced };
     },
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    staleTime: RELAY_POLL_INTERVALS_MS.projectDiscussionsIdle,
+  });
+}
+
+export function usePrefetchProjectDiscussions(projectId: string | null | undefined, query: string) {
+  const client = useQueryClient();
+  useEffect(() => {
+    if (projectId) void client.prefetchQuery(projectDiscussionsOptions(projectId, query));
+  }, [client, projectId, query]);
+}
+
+export function useProjectDiscussions(projectId: string, query: string) {
+  const options = projectDiscussionsOptions(projectId, query);
+  const head = useQuery({
+    ...options,
     refetchInterval: ({ state }) => {
-      const active = state.data?.pages.some(page => page.sessions.some(({ execution }) =>
-        execution && execution.phase !== "terminal" && execution.phase !== "recovery_required"));
+      const active = state.data?.page.sessions.some(({ execution }) =>
+        execution && execution.phase !== "terminal" && execution.phase !== "recovery_required");
       return active ? RELAY_POLL_INTERVALS_MS.projectDiscussionsActive : RELAY_POLL_INTERVALS_MS.projectDiscussionsIdle;
     },
   });
+  const firstCursor = head.data?.page.nextCursor ?? null;
+  const history = useInfiniteQuery({
+    queryKey: [...options.queryKey, "history"],
+    enabled: false,
+    initialPageParam: firstCursor,
+    queryFn: ({ signal, pageParam }) => listSessionSummaries(signal, {
+      ...discussionPage(projectId, query), cursor: pageParam ?? undefined,
+    }),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+  const sessions = useMemo(() => {
+    const seen = new Set<string>();
+    return [
+      ...(head.data?.page.sessions ?? []),
+      ...(head.data?.displaced ?? []),
+      ...(firstCursor ? history.data?.pages.flatMap(page => page.sessions) ?? [] : []),
+    ].filter(row => {
+      if (row.taskActivity?.origin || seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    });
+  }, [firstCursor, head.data, history.data]);
+
+  return {
+    loaded: head.data !== undefined,
+    sessions,
+    isPending: head.isPending,
+    refetch: head.refetch,
+    hasNextPage: Boolean(firstCursor && (!history.data || history.hasNextPage)),
+    isFetchingNextPage: history.isFetchingNextPage,
+    isFetchNextPageError: history.isFetchNextPageError,
+    fetchNextPage: history.fetchNextPage,
+  };
+}
+
+export function removeCachedProjectDiscussion(client: QueryClient, threadId: string, projectId?: string) {
+  const scope = projectId ? [...PROJECT_DISCUSSIONS_QUERY_KEY, projectId] : PROJECT_DISCUSSIONS_QUERY_KEY;
+  const withoutThread = (rows: SessionSummary[]) => rows.filter(row => row.id !== threadId);
+  for (const entry of client.getQueryCache().findAll({ queryKey: scope })) {
+    const key = entry.queryKey;
+    if (key[3] === "history") {
+      // A page started before the mutation may still contain this row.
+      if (entry.state.fetchStatus !== "idle") void client.cancelQueries({ queryKey: key, exact: true });
+      client.setQueryData<InfiniteData<SessionSummariesResponse>>(key, current => current && ({
+        ...current,
+        pages: current.pages.map(page => ({ ...page, sessions: withoutThread(page.sessions) })),
+      }));
+    } else {
+      headValidators.delete(entry);
+      client.setQueryData<DiscussionHead>(key, current => current && ({
+        page: { ...current.page, sessions: withoutThread(current.page.sessions) },
+        displaced: withoutThread(current.displaced),
+      }));
+    }
+  }
 }

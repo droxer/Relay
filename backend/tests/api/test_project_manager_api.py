@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy import event
 from relay.persistence.events import relay_event
 import test_project_setup_api as setup_api
 from test_project_setup_api import _take_command, _complete
@@ -124,6 +125,46 @@ def test_lead_discussion_first_message_preserves_manual_title(managed_env):
     assert client.patch(f"/api/v1/threads/{thread_id}", json={"title": "My plan"}).status_code == 200
     assert _say(client, thread_id, "Discuss the roadmap", planner["id"], "named-first").status_code == 202
     assert client.get(f"/api/v1/threads/{thread_id}").json()["title"] == "My plan"
+
+
+def test_compact_discussion_followup_never_loads_the_full_event_log(managed_env):
+    app, client, node, _, planner, _ = managed_env
+    discussion, command = _start(managed_env)
+    thread_id = discussion["threadId"]
+    store = app.state.session_store
+    for _ in range(170):
+        store.append_event(thread_id, relay_event("agent.output", thread_id, {
+            "runId": command["runId"], "agent": "codex", "stream": "stdout", "text": "x" * 4096,
+        }), hydrate_events=False)
+    _complete(app, node, command, thread_id, agent_log="● Drafted the setup.")
+    full_reads = []
+
+    def observe(_conn, _cursor, statement, *_args):
+        if (
+            "SELECT session_events.payload" in statement
+            and "ORDER BY session_events.sequence" in statement
+            and "session_events.type IN" not in statement
+            and "LIMIT" not in statement
+        ):
+            full_reads.append(statement)
+
+    event.listen(store.engine, "before_cursor_execute", observe)
+    try:
+        url = f"/api/v1/threads/{thread_id}/messages?view=compact"
+        message = {"text": "And then?", "addressAgentIds": [planner["id"]], "idempotencyKey": "compact-followup"}
+        response = client.post(url, json=message)
+        retry = client.post(url, json=message)
+    finally:
+        event.remove(store.engine, "before_cursor_execute", observe)
+    assert response.status_code == retry.status_code == 202, response.text
+    snapshot = response.json()
+    assert snapshot["eventStart"] > 0
+    assert snapshot["eventStart"] + len(snapshot["events"]) == snapshot["eventCount"]
+    assert retry.json()["events"] == snapshot["events"]
+    history = _take_command(app, node)["state"]["prior_conversation"]
+    assert "What should we do next?" in history
+    assert "Drafted the setup." in history
+    assert len(full_reads) == 0
 
 
 def test_lead_discussion_title_is_bounded_and_in_summary(managed_env):

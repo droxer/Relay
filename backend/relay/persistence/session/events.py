@@ -401,17 +401,13 @@ class SessionEventRows(SessionStoreState):
             )
         )
 
-    def _events_for_session(self, conn: Any, session_pk: str) -> list[dict[str, Any]]:
-        rows = (
-            conn.execute(
-                select(self.events.c.payload)
-                .where(self.events.c.session_id == session_pk)
-                .order_by(self.events.c.sequence)
-            )
-            .mappings()
-            .all()
-        )
-        return [row["payload"] for row in rows]
+    def _events_for_session(
+        self, conn: Any, session_pk: str, event_types: tuple[str, ...] | None = None,
+    ) -> list[dict[str, Any]]:
+        statement = select(self.events.c.payload).where(self.events.c.session_id == session_pk)
+        if event_types is not None:
+            statement = statement.where(self.events.c.type.in_(event_types))
+        return list(conn.scalars(statement.order_by(self.events.c.sequence)))
 
     def _sync_run_token_usage(
         self, conn: Any, session_pk: str, session: dict[str, Any], run_id: str

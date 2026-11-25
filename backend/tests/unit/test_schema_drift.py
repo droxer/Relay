@@ -119,6 +119,21 @@ def test_migrated_schema_matches_declared_metadata(
     assert diffs == [], "schema drift:\n" + "\n".join(str(diff) for diff in diffs)
 
 
+def test_project_thread_substring_indexes_are_installed(migrated_schema):
+    url, schema = migrated_schema
+    engine = create_engine(url)
+    try:
+        with engine.connect() as connection:
+            definitions = dict(connection.execute(text("""
+                SELECT indexname, indexdef FROM pg_indexes
+                WHERE schemaname = :schema AND tablename = 'sessions' AND indexdef LIKE '%gin_trgm_ops%'
+            """), {"schema": schema}).tuples().all())
+    finally:
+        engine.dispose()
+    assert set(definitions) == {"ix_sessions_project_title_trgm", "ix_sessions_project_goal_trgm"}
+    assert all("USING gin" in sql and "WHERE (project_id IS NOT NULL)" in sql for sql in definitions.values())
+
+
 def test_dangling_legacy_session_id_is_treated_as_missing(
     migrated_schema: tuple[str, str],
 ) -> None:

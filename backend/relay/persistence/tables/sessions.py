@@ -60,6 +60,12 @@ sessions = Table(
     Index("ix_sessions_owner_recency", "owner_user_id", "updated_at", "id"),
     Index("ix_sessions_project_owner_recency", "project_id", "owner_user_id", "updated_at", "id",
           postgresql_where=text("project_id IS NOT NULL"), sqlite_where=text("project_id IS NOT NULL")),
+    Index("ix_sessions_project_title_trgm", "title", postgresql_using="gin",
+          postgresql_ops={"title": "public.gin_trgm_ops"},
+          postgresql_where=text("project_id IS NOT NULL")).ddl_if(dialect="postgresql"),
+    Index("ix_sessions_project_goal_trgm", "task_goal", postgresql_using="gin",
+          postgresql_ops={"task_goal": "public.gin_trgm_ops"},
+          postgresql_where=text("project_id IS NOT NULL")).ddl_if(dialect="postgresql"),
     Index("ix_sessions_queued_threads", "id",
           postgresql_where=text(POSTGRES_QUEUED_THREAD), sqlite_where=text(SQLITE_QUEUED_THREAD)),
     Index(

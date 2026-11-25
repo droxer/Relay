@@ -13,17 +13,13 @@ from .controller_state import SessionControllerState
 
 class SessionAgentRunMixin(SessionControllerState):
     def record_collaboration_round_started(
-        self, session_id: str, manifest: dict[str, Any]
+        self, session_id: str, manifest: dict[str, Any], *, hydrate: bool = True,
     ) -> dict[str, Any]:
         """Persist the immutable collaboration plan before daemon delivery."""
         round_id = manifest.get("roundId")
-        current = self.store.get_session(session_id)
-        if round_id and any(
-            event.get("type") == "collaboration.round.started"
-            and (event.get("manifest") or {}).get("roundId") == round_id
-            for event in current.get("events", [])
-        ):
-            return current
+        current = self.store.get_session_header(session_id)
+        if round_id and any(item.get("roundId") == round_id for item in current.get("collaborationRounds") or []):
+            return self.store.get_session(session_id) if hydrate else current
         scope = manifest.get("workScope") or {}
         if (
             self.task_execution_owner is not None
@@ -39,10 +35,11 @@ class SessionAgentRunMixin(SessionControllerState):
                 session_id,
                 {"manifest": manifest},
             ),
+            hydrate=hydrate,
         )
 
     def record_agent_started(
-        self, session_id: str, step: dict[str, Any]
+        self, session_id: str, step: dict[str, Any], *, hydrate: bool = True,
     ) -> dict[str, Any]:
         self.active_session_id = session_id
         self._link_task_session(session_id)
@@ -135,6 +132,7 @@ class SessionAgentRunMixin(SessionControllerState):
                     ),
                 },
             ),
+            hydrate=hydrate,
         )
         self._update_task_status(
             "running",

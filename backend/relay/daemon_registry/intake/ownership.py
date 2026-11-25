@@ -102,7 +102,7 @@ def assert_session_owned_by_user(
     store: SessionStore, session_id: str, user_id: str
 ) -> None:
     try:
-        session = store.get_session(session_id)
+        session = store.get_session_header(session_id)
     except Exception as exc:
         raise PermissionError(
             f"Session {session_id} could not be verified for {user_id}."

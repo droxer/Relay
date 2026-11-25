@@ -41,7 +41,7 @@ import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { AUTOMATIONS_PAGE_KEY, COMPUTER_TASKS_QUERY_KEY, HOME_TASKS_QUERY_KEY, ISSUES_PAGE_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY, THREAD_TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { WORKSPACE_ACTIVITY_QUERY_KEY } from "./useWorkspaceActivity";
-import { PROJECT_DISCUSSIONS_QUERY_KEY } from "./useProjectDiscussions";
+import { PROJECT_DISCUSSIONS_QUERY_KEY, removeCachedProjectDiscussion } from "./useProjectDiscussions";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { teamRecordKey, TEAMS_QUERY_KEY } from "./useTeams";
 import { TEAM_WORKFLOW_CHOICES_KEY } from "./useProjectWorkflows";
@@ -158,6 +158,7 @@ export function useRelayMutations() {
     mutationFn: ({ sessionId, title, token }: { sessionId: string; title: string } & TokenArg) =>
       renameSession(sessionId, title, token),
     onSuccess: (session) => {
+      if (session.projectId) removeCachedProjectDiscussion(queryClient, session.id, session.projectId);
       cacheSession(session);
       void invalidateWorkspaceActivity();
     },
@@ -167,6 +168,7 @@ export function useRelayMutations() {
   const deleteSessionMutation = useMutation({
     mutationFn: ({ sessionId, token }: { sessionId: string } & TokenArg) => deleteSession(sessionId, token),
     onSuccess: (execution, { sessionId }) => {
+      if (!execution) removeCachedProjectDiscussion(queryClient, sessionId);
       queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
         execution
           ? (current ?? []).map((session) => session.id === sessionId

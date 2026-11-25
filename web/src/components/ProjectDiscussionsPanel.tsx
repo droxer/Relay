@@ -40,15 +40,7 @@ export function ProjectDiscussionsPanel({
   const [search, setSearch] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value);
   const query = useDebouncedValue(search.trim(), 250);
   const discussions = useProjectDiscussions(projectId, query);
-  const summaries = useMemo(() => {
-    const seen = new Set<string>();
-    return discussions.data?.pages.flatMap(page => page.sessions).filter(row => {
-      if (row.taskActivity?.origin || seen.has(row.id)) return false;
-      seen.add(row.id);
-      return true;
-    }) ?? [];
-  }, [discussions.data]);
-  const sessions = useMemo(() => mergeSessionSummaries([], summaries), [summaries]);
+  const sessions = useMemo(() => mergeSessionSummaries([], discussions.sessions), [discussions.sessions]);
   const items = useMemo(() => {
     const running = new Map(computers.flatMap(node => node.activeRuns.map(run => [run.sessionId, run] as const)));
     const names = new Map(agents.map(agent => [agent.id, agent.displayName]));
@@ -73,7 +65,7 @@ export function ProjectDiscussionsPanel({
     { tone: "idle", items: groups.idle, label: t("project.discussions_recent") },
   ] as const;
   const filtered = query.length > 0 || search.trim().length > 0;
-  const empty = discussions.data !== undefined && items.length === 0;
+  const empty = discussions.loaded && items.length === 0;
   const newDiscussion = onNewThread ? (
     <Button type="button" size="sm" onClick={onNewThread}>
       <ActionAdd size={ICON.sm} aria-hidden="true" />
@@ -123,7 +115,7 @@ export function ProjectDiscussionsPanel({
         <div className="project-discussions-skeleton" aria-busy="true">
           <ListSkeleton label={t("project.discussions_loading")} rows={3} />
         </div>
-      ) : !discussions.data ? (
+      ) : !discussions.loaded ? (
         <WorkspaceError message={t("project.discussions_load_failed")} onRetry={() => void discussions.refetch()} />
       ) : empty ? (
         <WorkspaceEmpty
@@ -165,7 +157,7 @@ export function ProjectDiscussionsPanel({
             type="button"
             variant="outline"
             size="dense"
-            disabled={discussions.isFetching}
+            disabled={discussions.isFetchingNextPage}
             onClick={() => void discussions.fetchNextPage({ cancelRefetch: false })}
           >
             {t(discussions.isFetchingNextPage ? "project.discussions_loading" : "project.discussions_load_more")}

@@ -138,7 +138,7 @@ class RunTargetValidationMixin(NodeBackendState):
                 )
             request = {**request, "sessionId": session_id}
         if request.get("sessionId"):
-            existing = self.registry.store.get_session(request["sessionId"])
+            existing = self.registry.store.get_session_header(request["sessionId"])
             if layout in ("task", "project") and (
                 existing.get("workspaceLayout") != layout
                 or existing.get("workspaceSubpath") != subpath
@@ -227,7 +227,11 @@ class RunTargetValidationMixin(NodeBackendState):
 
     def _existing_session(self, request: dict[str, Any]) -> dict[str, Any] | None:
         session_id = request.get("sessionId")
-        return self.registry.store.get_session(session_id) if session_id else None
+        if not session_id:
+            return None
+        return self.registry.store.get_session_with_events(
+            session_id, ("session.created", "user.message", "human.decision"),
+        )
 
     def _validate_run_assignments(
         self,

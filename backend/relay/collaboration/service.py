@@ -60,7 +60,7 @@ class CollaborationConductor(
         self.ctx = ctx
 
     async def submit(
-        self, intent: MessageIntent | RecoveryIntent | RunIntent, actor: Actor
+        self, intent: MessageIntent | RecoveryIntent | RunIntent, actor: Actor, *, hydrate: bool = True,
     ) -> dict[str, Any]:
         prepared = self._prepare(intent)
         fingerprint = _request_fingerprint(prepared)
@@ -81,6 +81,7 @@ class CollaborationConductor(
                     actor["userId"],
                     actor_is_admin=False,
                     expected_fingerprint=fingerprint,
+                    hydrate=hydrate,
                 )
                 if existing:
                     return existing
@@ -91,10 +92,11 @@ class CollaborationConductor(
                     actor["userId"],
                     actor_is_admin=False,
                     expected_fingerprint=fingerprint,
+                    hydrate=hydrate,
                 )
                 if existing:
                     return existing
-            return await self._submit_prepared(prepared, actor, fingerprint)
+            return await self._submit_prepared(prepared, actor, fingerprint, hydrate=hydrate)
         except TeamDispatchError as error:
             raise CollaborationError(error.code) from error
         except (AgentRoutingError, ComputerNotDispatchableError) as error:
@@ -125,14 +127,17 @@ class CollaborationConductor(
         return _prepare_run(intent)
 
     async def _submit_prepared(
-        self, intent: _PreparedRound, actor: Actor, fingerprint: str
+        self, intent: _PreparedRound, actor: Actor, fingerprint: str, *, hydrate: bool,
     ) -> dict[str, Any]:
         dispatch = await run_in_threadpool(self._prepare_dispatch, intent, actor, fingerprint)
-        dispatched = await self.ctx.backend.run(dispatch.node_id, dispatch.request)
+        request = dispatch.request if hydrate else {**dispatch.request, "_hydrateSession": False}
+        dispatched = await self.ctx.backend.run(dispatch.node_id, request)
         manifest = (dispatch.request.get("collaboration") or {}).get("manifest") or {}
         if dispatch.resolved is None or project_id_for_task_handoff(manifest, dispatch.request.get("taskId")):
             return dispatched
-        return await run_in_threadpool(self._admit_addressed_agents, dispatched, dispatch.resolved, actor)
+        return await run_in_threadpool(
+            self._admit_addressed_agents, dispatched, dispatch.resolved, actor, hydrate=hydrate,
+        )
 
     def _prepare_dispatch(
         self, intent: _PreparedRound, actor: Actor, fingerprint: str
@@ -232,7 +237,9 @@ class CollaborationConductor(
         if not session_id:
             return None
         try:
-            session = self.ctx.session_store.get_session(session_id)
+            session = self.ctx.session_store.get_session_with_events(
+                session_id, ("session.created", "user.message"),
+            )
         except KeyError as error:
             raise CollaborationError("thread_not_found", status=404) from error
         if not session.get("id"):

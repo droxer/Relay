@@ -155,7 +155,7 @@ class RunAdmissionMixin(RegistryState):
                 raise ValueError(
                     "Cannot revive a collaboration request that is not the expired failure."
                 )
-            session = self.store.get_session(existing["sessionId"])
+            session = self.store.get_session_header(existing["sessionId"])
             is_expired_new_session = bool(
                 (existing.get("state") or {}).get(COLLABORATION_NEW_SESSION_STATE_KEY)
                 and session.get("status") == "failed"
@@ -268,7 +268,7 @@ class RunAdmissionMixin(RegistryState):
             request = self.daemon_store.get_run_request(request_id)
             if not request:
                 raise KeyError(request_id)
-            session = self.store.get_session(request["sessionId"])
+            session = self.store.get_session_header(request["sessionId"])
             if session.get("status") in ("completed", "failed", "cancelled"):
                 if request.get("status") == "prepared":
                     self.daemon_store.update_run_request_if_status(
@@ -312,7 +312,7 @@ class RunAdmissionMixin(RegistryState):
                 )
             if request.get("currentCommandId"):
                 return request
-            session = self.store.get_session(request["sessionId"])
+            session = self.store.get_session_header(request["sessionId"])
             if session.get("status") in ("completed", "failed", "cancelled"):
                 raise ValueError(
                     f"cannot activate collaboration request for {session['status']} session"
