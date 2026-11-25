@@ -709,64 +709,56 @@ def _placement_event_row(
     }
 
 
+def _placement_status_result(
+    placement: dict[str, Any],
+    status: str,
+    reason: str | None = None,
+    message: str | None = None,
+) -> dict[str, Any]:
+    conditions = (
+        [{"reason": reason, "message": message}]
+        if reason is not None and message is not None
+        else []
+    )
+    return {**placement, "status": status, "conditions": conditions}
+
+
 def placement_status(
     placement: dict[str, Any],
     agent: dict[str, Any] | None,
     daemon_node: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    conditions: list[dict[str, str]] = []
-    status = "pending"
     if placement.get("desiredState") != "active":
-        status = "offline"
-        conditions.append(
-            {
-                "reason": "placement_not_active",
-                "message": "Placement is not accepting new work.",
-            }
+        return _placement_status_result(
+            placement, "offline", "placement_not_active", "Placement is not accepting new work."
         )
-    elif not agent or agent.get("deletedAt") or not agent.get("enabled", True):
-        status = "incompatible"
-        conditions.append(
-            {
-                "reason": "agent_disabled",
-                "message": "Logical agent is disabled or deleted.",
-            }
+    if not agent or agent.get("deletedAt") or not agent.get("enabled", True):
+        return _placement_status_result(
+            placement, "incompatible", "agent_disabled", "Logical agent is disabled or deleted."
         )
-    elif not daemon_node:
-        status = "offline"
-        conditions.append(
-            {"reason": "node_not_found", "message": "Runtime node is not registered."}
+    if not daemon_node:
+        return _placement_status_result(
+            placement, "offline", "node_not_found", "Runtime node is not registered."
         )
-    elif not daemon_node.get("online") or daemon_node.get("stale"):
-        status = "offline"
-        conditions.append(
-            {"reason": "node_offline", "message": "Runtime node heartbeat is not live."}
+    if not daemon_node.get("online") or daemon_node.get("stale"):
+        return _placement_status_result(
+            placement, "offline", "node_offline", "Runtime node heartbeat is not live."
         )
-    else:
-        executor_kind = placement.get("executorKind")
-        executor_status = (daemon_node.get("agents") or {}).get(executor_kind)
-        if executor_kind in set(daemon_node.get("disabledAgents") or []):
-            status = "incompatible"
-            conditions.append({
-                "reason": "executor_not_ready",
-                "message": f"{executor_kind} is disabled on this runtime node.",
-            })
-        elif executor_kind not in AGENT_NAMES or executor_status != "ready":
-            status = "incompatible"
-            conditions.append(
-                {
-                    "reason": "executor_not_ready",
-                    "message": executor_not_ready_message(
-                        str(executor_kind), executor_status
-                    ),
-                }
-            )
-        elif any(
-            run.get("logicalAgentId") == placement["agentId"]
-            or (run.get("placementId") and run["placementId"] == placement["id"])
-            for run in daemon_node.get("activeRuns") or []
-        ):
-            status = "busy"
-        else:
-            status = "ready"
-    return {**placement, "status": status, "conditions": conditions}
+    executor_kind = placement.get("executorKind")
+    if executor_kind in set(daemon_node.get("disabledAgents") or []):
+        return _placement_status_result(
+            placement, "incompatible", "executor_not_ready",
+            f"{executor_kind} is disabled on this runtime node.",
+        )
+    executor_status = (daemon_node.get("agents") or {}).get(executor_kind)
+    if executor_kind not in AGENT_NAMES or executor_status != "ready":
+        return _placement_status_result(
+            placement, "incompatible", "executor_not_ready",
+            executor_not_ready_message(str(executor_kind), executor_status),
+        )
+    is_busy = any(
+        run.get("logicalAgentId") == placement["agentId"]
+        or (run.get("placementId") and run["placementId"] == placement["id"])
+        for run in daemon_node.get("activeRuns") or []
+    )
+    return _placement_status_result(placement, "busy" if is_busy else "ready")

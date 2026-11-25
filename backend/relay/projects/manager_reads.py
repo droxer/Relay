@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, UTC
-from typing import Any
+from typing import Any, TypeGuard
 from ..core.ids import now_iso
 from ..core.computer_identity import computer_id
 from ..tasks.review import task_review
@@ -65,6 +65,119 @@ def manager_overview(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _is_int(value: Any) -> TypeGuard[int]:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _parse_iso_utc(raw: str) -> datetime:
+    parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    return parsed.replace(tzinfo=parsed.tzinfo or UTC)
+
+
+def _read_task_or_review(
+    ctx: Any, project: dict[str, Any], arguments: dict[str, Any], *, review: bool
+) -> dict[str, Any]:
+    task = scoped_task(ctx, project, arguments.get("taskId", ""))
+    if review:
+        ids = task.get("linkedSessionIds", [])
+        if ids:
+            try:
+                source = ctx.session_store.get_session_header(ids[-1])
+                if source.get("projectId") != project["id"] or source.get("ownerUserId") != project["ownerUserId"]:
+                    raise ManagerError("thread_not_found", 404)
+            except KeyError:
+                pass  # Existing review behavior exposes missing evidence.
+        return task_review(ctx, task)
+    events = task.get("events", [])
+    return {
+        "task": {**task, "events": events[-50:], "url": task_link(project["id"], task["id"]), "revision": task_revision(task)},
+        "coverage": {"totalEvents": len(events), "shownEvents": min(len(events), 50)},
+    }
+
+
+def _read_threads(ctx: Any, project: dict[str, Any]) -> dict[str, Any]:
+    sessions, _ = ctx.session_store.list_workspace_threads(
+        owner_user_id=project["ownerUserId"], project_id=project["id"], limit=100,
+    )
+    total = ctx.session_store.project_thread_count(project["ownerUserId"], project["id"])
+    return {
+        "threads": [{"id": s["id"], "taskGoal": s.get("taskGoal"), "url": f"/threads/{s['id']}"} for s in sessions],
+        "total": total,
+    }
+
+
+def _read_thread_page(ctx: Any, project: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    thread_id = ctx.session_store.project_thread_id(
+        arguments.get("threadId", ""), project["id"], project["ownerUserId"],
+    )
+    if not thread_id:
+        raise ManagerError("thread_not_found", 404)
+    cursor = arguments.get("cursor")
+    if "cursor" in arguments and (not _is_int(cursor) or cursor < 0):
+        raise ManagerError("manager_pagination_invalid", 400)
+    page_size, max_chars = 50, 8000
+    messages, total, start = ctx.session_store.thread_message_page(
+        thread_id, include_goal=thread_id != project.get("managerThreadId"),
+        offset=cursor, limit=page_size, max_chars=max_chars,
+    )
+    return {
+        "messages": messages,
+        "nextCursor": start + page_size if total > start + page_size else None,
+        "previousCursor": max(0, start - page_size) if start else None,
+        "coverage": {"total": total, "shown": len(messages), "maxMessageChars": max_chars},
+        "url": f"/threads/{thread_id}",
+    }
+
+
+def _read_tasks_page(ctx: Any, project: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    cursor = arguments.get("cursor", "")
+    limit = arguments.get("limit", 50)
+    if not isinstance(cursor, str) or not _is_int(limit) or not 1 <= limit <= 100:
+        raise ManagerError("manager_pagination_invalid", 400)
+    page = project_task_page(
+        ctx, project, cursor=cursor, limit=limit,
+        status=arguments.get("status", ""), query=arguments.get("query", ""),
+    )
+    return {**page, "tasks": [_compact(project, t) for t in page["tasks"]], "readAt": now_iso()}
+
+
+def _format_activity_entry(project_id: str, row: dict[str, Any]) -> dict[str, Any]:
+    kind, entity_id, event = row["kind"], row["entityId"], row["event"]
+    if kind == "project":
+        event = {k: event[k] for k in ("id", "type", "timestamp", "patch") if k in event}
+        url = f"/projects/{entity_id}"
+    elif kind == "thread":
+        text = str(event.get("agentLog") or "")
+        event = {k: event[k] for k in ("id", "type", "timestamp", "runId", "agent", "logicalAgentId", "exitCode") if k in event}
+        event.update(agentLog=text[:8000], reportTruncated=len(text) > 8000, evidenceKind="agent_report")
+        url = f"/threads/{entity_id}"
+    else:
+        url = task_link(project_id, entity_id)
+    return {f"{kind}Id": entity_id, "sequence": row["sequence"], "event": event, "url": url}
+
+
+def _read_activity_page(ctx: Any, project: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    cutoff = arguments.get("cutoff") or now_iso()
+    since = arguments.get("since", "")
+    try:
+        cutoff_at = _parse_iso_utc(cutoff)
+        since_at = _parse_iso_utc(since) if since else None
+        if since_at and since_at > cutoff_at:
+            raise ValueError("Reversed time range")
+    except (ValueError, TypeError, AttributeError) as error:
+        raise ManagerError("manager_time_invalid", 400) from error
+    cursor = arguments.get("cursor", 0)
+    limit = arguments.get("limit", 50)
+    if not _is_int(cursor) or cursor < 0 or not _is_int(limit) or not 1 <= limit <= 50:
+        raise ManagerError("manager_pagination_invalid", 400)
+    page = ctx.project_store.project_activity_page(
+        project["id"], project["ownerUserId"],
+        since=since_at, cutoff=cutoff_at, cursor=cursor, limit=limit,
+    )
+    entries = [_format_activity_entry(project["id"], row) for row in page["events"]]
+    return {**page, "events": entries, "cutoff": cutoff}
+
+
 def read_manager_tool(ctx: Any, project: dict[str, Any], tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
     for key in ("taskId", "threadId", "query", "status", "since", "cutoff"):
         if key in arguments and (not isinstance(arguments[key], str) or len(arguments[key]) > 500):
@@ -72,88 +185,13 @@ def read_manager_tool(ctx: Any, project: dict[str, Any], tool: str, arguments: d
     if tool == "overview":
         return manager_overview(ctx, project)
     if tool in ("task", "review"):
-        task = scoped_task(ctx, project, arguments.get("taskId", ""))
-        if tool == "review":
-            ids = task.get("linkedSessionIds", [])
-            if ids:
-                try:
-                    source = ctx.session_store.get_session_header(ids[-1])
-                    if source.get("projectId") != project["id"] or source.get("ownerUserId") != project["ownerUserId"]:
-                        raise ManagerError("thread_not_found", 404)
-                except KeyError:
-                    pass  # Existing review behavior exposes missing evidence.
-            return task_review(ctx, task)
-        events = task.get("events", [])
-        return {"task": {**task, "events": events[-50:], "url": task_link(project["id"], task["id"]), "revision": task_revision(task)},
-                "coverage": {"totalEvents": len(events), "shownEvents": min(len(events), 50)}}
+        return _read_task_or_review(ctx, project, arguments, review=tool == "review")
     if tool == "threads":
-        sessions, _ = ctx.session_store.list_workspace_threads(
-            owner_user_id=project["ownerUserId"], project_id=project["id"], limit=100,
-        )
-        total = ctx.session_store.project_thread_count(project["ownerUserId"], project["id"])
-        return {"threads": [{"id": s["id"], "taskGoal": s.get("taskGoal"), "url": f"/threads/{s['id']}"} for s in sessions],
-                "total": total}
+        return _read_threads(ctx, project)
     if tool == "thread":
-        thread_id = ctx.session_store.project_thread_id(
-            arguments.get("threadId", ""), project["id"], project["ownerUserId"],
-        )
-        if not thread_id:
-            raise ManagerError("thread_not_found", 404)
-        cursor = arguments.get("cursor")
-        if "cursor" in arguments and (not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0):
-            raise ManagerError("manager_pagination_invalid", 400)
-        page_size, max_chars = 50, 8000
-        messages, total, start = ctx.session_store.thread_message_page(
-            thread_id, include_goal=thread_id != project.get("managerThreadId"),
-            offset=cursor, limit=page_size, max_chars=max_chars,
-        )
-        return {"messages": messages, "nextCursor": start + page_size if total > start + page_size else None,
-                "previousCursor": max(0, start - page_size) if start else None,
-                "coverage": {"total": total, "shown": len(messages), "maxMessageChars": max_chars},
-                "url": f"/threads/{thread_id}"}
+        return _read_thread_page(ctx, project, arguments)
     if tool == "tasks":
-        cursor = arguments.get("cursor", "")
-        limit = arguments.get("limit", 50)
-        if not isinstance(cursor, str) or not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
-            raise ManagerError("manager_pagination_invalid", 400)
-        page = project_task_page(ctx, project, cursor=cursor, limit=limit,
-                                 status=arguments.get("status", ""), query=arguments.get("query", ""))
-        return {**page, "tasks": [_compact(project, t) for t in page["tasks"]], "readAt": now_iso()}
+        return _read_tasks_page(ctx, project, arguments)
     if tool == "activity":
-        cutoff = arguments.get("cutoff") or now_iso()
-        since = arguments.get("since", "")
-        try:
-            cutoff_at = datetime.fromisoformat(cutoff.replace("Z", "+00:00"))
-            cutoff_at = cutoff_at.replace(tzinfo=cutoff_at.tzinfo or UTC)
-            since_at = None
-            if since:
-                since_at = datetime.fromisoformat(since.replace("Z", "+00:00"))
-                since_at = since_at.replace(tzinfo=since_at.tzinfo or UTC)
-            if since_at and since_at > cutoff_at:
-                raise ValueError("Reversed time range")
-        except (ValueError, TypeError, AttributeError) as error:
-            raise ManagerError("manager_time_invalid", 400) from error
-        cursor = arguments.get("cursor", 0)
-        limit = arguments.get("limit", 50)
-        if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0:
-            raise ManagerError("manager_pagination_invalid", 400)
-        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
-            raise ManagerError("manager_pagination_invalid", 400)
-        page = ctx.project_store.project_activity_page(project["id"], project["ownerUserId"],
-            since=since_at, cutoff=cutoff_at, cursor=cursor, limit=limit)
-        entries = []
-        for row in page["events"]:
-            kind, entity_id, event = row["kind"], row["entityId"], row["event"]
-            if kind == "project":
-                event = {k: event[k] for k in ("id", "type", "timestamp", "patch") if k in event}
-                url = f"/projects/{entity_id}"
-            elif kind == "thread":
-                text = str(event.get("agentLog") or "")
-                event = {k: event[k] for k in ("id", "type", "timestamp", "runId", "agent", "logicalAgentId", "exitCode") if k in event}
-                event.update(agentLog=text[:8000], reportTruncated=len(text) > 8000, evidenceKind="agent_report")
-                url = f"/threads/{entity_id}"
-            else:
-                url = task_link(project["id"], entity_id)
-            entries.append({f"{kind}Id": entity_id, "sequence": row["sequence"], "event": event, "url": url})
-        return {**page, "events": entries, "cutoff": cutoff}
+        return _read_activity_page(ctx, project, arguments)
     raise ManagerError("manager_tool_unknown", 400)

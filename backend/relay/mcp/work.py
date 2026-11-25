@@ -179,42 +179,78 @@ def stop_project_task(ctx: Any, grant: dict[str, Any], arguments: dict[str, Any]
         }
 
 
-def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """Never trust a supplied projectId over the stored record's Project."""
-    definition = next(tool for tool in tool_definitions() if TOOL_OPERATIONS[tool.name] == operation)
-    try:
-        validate(arguments, definition.inputSchema)
-    except ValidationError as error:
-        raise McpError(400, "Invalid work tool arguments.") from error
-    automation = "automation" in operation
-    kind = "automation" if automation else "task"
-    project_id = arguments.get("projectId", grant.get("workspaceProjectId"))
-    if operation in ("tasks", "automations"):
-        if not isinstance(arguments.get("cursor", ""), str):
-            raise McpError(400, "Invalid work cursor.")
-        _scope(ctx, grant, project_id, write=False)
-        page = ctx.task_store.work_page(
-            grant["ownerUserId"], project_id=project_id, automation=automation,
-            computer_id=grant.get("computerId") if project_id is None else None,
-            **{key: arguments[key] for key in ("status", "query", "cursor", "limit") if key in arguments},
+def _list_work(
+    ctx: Any, grant: dict[str, Any], project_id: str | None, arguments: dict[str, Any], *, automation: bool, kind: str
+) -> dict[str, Any]:
+    if not isinstance(arguments.get("cursor", ""), str):
+        raise McpError(400, "Invalid work cursor.")
+    _scope(ctx, grant, project_id, write=False)
+    page = ctx.task_store.work_page(
+        grant["ownerUserId"], project_id=project_id, automation=automation,
+        computer_id=grant.get("computerId") if project_id is None else None,
+        **{key: arguments[key] for key in ("status", "query", "cursor", "limit") if key in arguments},
+    )
+    return {
+        kind + "s": [without_legacy_fields(task) for task in page["tasks"]],
+        "total": page["total"],
+        "nextCursor": page["nextCursor"],
+    }
+
+
+def _read_work(
+    ctx: Any, grant: dict[str, Any], task: dict[str, Any], *, operation: str, kind: str
+) -> dict[str, Any]:
+    if operation == "review" and task.get("linkedSessionIds"):
+        try:
+            source = ctx.session_store.get_session_header(task["linkedSessionIds"][-1])
+        except KeyError:
+            source = None
+        if source and (
+            source.get("ownerUserId") != grant["ownerUserId"]
+            or source.get("projectId") != task.get("projectId")
+        ):
+            raise McpError(404, "thread_not_found")
+    return task_review(ctx, task) if operation == "review" else {kind: _public(task)}
+
+
+def _assert_assignment_unchanged(task: dict[str, Any], body: dict[str, Any]) -> None:
+    # MCP speaks for an Agent, even when its token carries the owner's
+    # authority. That authority is not consent to replace an already selected
+    # Agent or Workflow. Check the locked, current record before applying any
+    # part of the patch (including a clear or switching to a Team/Workflow).
+    if task.get("assignedAgentId") and (
+        ("assignedAgentId" in body and body["assignedAgentId"] != task["assignedAgentId"])
+        or body.get("assignedTeamId")
+        or body.get("assignedWorkflowId")
+    ):
+        raise McpError(
+            409,
+            "task_assignment_approval_required: Keep the assigned Agent. "
+            "Ask the owner to change the assignment in Relay; for Project Tasks, "
+            "you may stage a proposal for owner approval. No changes were applied.",
         )
-        return {kind + "s": [without_legacy_fields(task) for task in page["tasks"]],
-                "total": page["total"], "nextCursor": page["nextCursor"]}
-    task = None
-    if not operation.startswith("create_"):
-        task = _record(ctx, grant, arguments[f"{kind}Id"], project_id, automation=automation)
-        project_id = task.get("projectId")
-    if operation in ("task", "automation", "review"):
-        assert task is not None
-        if operation == "review" and task.get("linkedSessionIds"):
-            try:
-                source = ctx.session_store.get_session_header(task["linkedSessionIds"][-1])
-            except KeyError:
-                source = None
-            if source and (source.get("ownerUserId") != grant["ownerUserId"]
-                           or source.get("projectId") != task.get("projectId")):
-                raise McpError(404, "thread_not_found")
-        return task_review(ctx, task) if operation == "review" else {kind: _public(task)}
+    if task.get("assignedWorkflowId") and (
+        ("assignedWorkflowId" in body and body["assignedWorkflowId"] != task["assignedWorkflowId"])
+        or body.get("assignedAgentId")
+        or body.get("assignedTeamId")
+    ):
+        raise McpError(
+            409,
+            "task_assignment_approval_required: Ask the owner to change the assigned Workflow in Relay.",
+        )
+
+
+def _write_work(
+    ctx: Any,
+    grant: dict[str, Any],
+    operation: str,
+    arguments: dict[str, Any],
+    *,
+    task: dict[str, Any] | None,
+    project_id: str | None,
+    automation: bool,
+    kind: str,
+) -> dict[str, Any]:
     # Serialize with dispatch and Project changes, and re-read the record and
     # lead inside the transaction before any domain mutation is made.
     actor: Actor = {"userId": grant["ownerUserId"], "isAdmin": False}
@@ -247,26 +283,7 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
                 ))
             else:
                 assert task is not None
-                # MCP speaks for an Agent, even when its token carries the
-                # owner's authority. That authority is not consent to replace
-                # an already selected Agent. Check the locked, current record
-                # before applying any part of the patch (including a clear or
-                # a Team assignment, which would implicitly clear the Agent).
-                if task.get("assignedAgentId") and (
-                    ("assignedAgentId" in body and body["assignedAgentId"] != task["assignedAgentId"])
-                    or body.get("assignedTeamId") or body.get("assignedWorkflowId")
-                ):
-                    raise McpError(
-                        409,
-                        "task_assignment_approval_required: Keep the assigned Agent. "
-                        "Ask the owner to change the assignment in Relay; for Project Tasks, "
-                        "you may stage a proposal for owner approval. No changes were applied.",
-                    )
-                if task.get("assignedWorkflowId") and (
-                    ("assignedWorkflowId" in body and body["assignedWorkflowId"] != task["assignedWorkflowId"])
-                    or body.get("assignedAgentId") or body.get("assignedTeamId")
-                ):
-                    raise McpError(409, "task_assignment_approval_required: Ask the owner to change the assigned Workflow in Relay.")
+                _assert_assignment_unchanged(task, body)
                 task = update_task(ctx, actor, task, TaskPatchRequest(
                     body=body, reader=READER, requested_assignee=None, move_project=None,
                     reload=lambda: _record(ctx, grant, arguments[f"{kind}Id"], project_id, automation=automation, write=True),
@@ -283,3 +300,28 @@ def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict
         raise McpError(409, error.code) from error
     except ConnectionError as error:
         raise McpError(error.status, error.code) from error
+
+
+def invoke_work(ctx: Any, grant: dict[str, Any], operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Never trust a supplied projectId over the stored record's Project."""
+    definition = next(tool for tool in tool_definitions() if TOOL_OPERATIONS[tool.name] == operation)
+    try:
+        validate(arguments, definition.inputSchema)
+    except ValidationError as error:
+        raise McpError(400, "Invalid work tool arguments.") from error
+    automation = "automation" in operation
+    kind = "automation" if automation else "task"
+    project_id = arguments.get("projectId", grant.get("workspaceProjectId"))
+    if operation in ("tasks", "automations"):
+        return _list_work(ctx, grant, project_id, arguments, automation=automation, kind=kind)
+    task = None
+    if not operation.startswith("create_"):
+        task = _record(ctx, grant, arguments[f"{kind}Id"], project_id, automation=automation)
+        project_id = task.get("projectId")
+    if operation in ("task", "automation", "review"):
+        assert task is not None
+        return _read_work(ctx, grant, task, operation=operation, kind=kind)
+    return _write_work(
+        ctx, grant, operation, arguments,
+        task=task, project_id=project_id, automation=automation, kind=kind,
+    )
