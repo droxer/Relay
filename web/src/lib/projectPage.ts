@@ -6,7 +6,7 @@ import type {
   WorkspaceBriefResponse,
 } from "../types.js";
 
-export type ProjectPageTab = "dashboard" | "members" | "tasks" | "automations" | "workspace" | "settings";
+export type ProjectPageTab = "dashboard" | "members" | "tasks" | "discussions" | "automations" | "workspace" | "settings";
 export type ProjectCollectionStatus = "loading" | "error" | "ready";
 type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "ready";
 
@@ -17,8 +17,8 @@ type ProjectOverviewState = "hidden" | "loading" | "error" | "not-found" | "read
    "general" (folded into Members and Settings) — are unknown, so they land
    here. Members is the Collaboration tab: the crew and the workflows it runs
    share one surface, so a retired ?tab=workflows link lands on it. */
-export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "tasks", "automations", "workspace", "members", "settings"];
-export const PROJECT_PAGE_TAB_ALIASES: Readonly<Record<string, ProjectPageTab>> = { workflows: "members" };
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["dashboard", "tasks", "discussions", "automations", "workspace", "members", "settings"];
+export const PROJECT_PAGE_TAB_ALIASES: Readonly<Record<string, ProjectPageTab>> = { discussion: "discussions", workflows: "members" };
 export const DEFAULT_PROJECT_PAGE_TAB: ProjectPageTab = "dashboard";
 
 /** Backend roster cap — the add-member affordance hides at the limit. */

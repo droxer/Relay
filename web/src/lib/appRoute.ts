@@ -2,6 +2,7 @@ import { shouldReloadOnNavigation } from "./buildFreshness.ts";
 import { CHANNELS_ENABLED } from "./features.ts";
 import { requestNavigation } from "./navigationGuard.ts";
 import { DEFAULT_PROJECT_PAGE_TAB, parseProjectPageTab, PROJECT_PAGE_TAB_ALIASES, PROJECT_PAGE_TABS } from "./projectPage.ts";
+import { parseThreadKindFilter } from "./threadKindFilter.ts";
 import { readConnectionResult } from "../domain-types/connections.ts";
 import type { TaskListScope } from "../domain-types/tasks.ts";
 import {
@@ -554,6 +555,11 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
     // written only when it is not the default.
     const impliedTab = tab === "tasks" && source.has("task") ? "tasks" : DEFAULT_PROJECT_PAGE_TAB;
     if (tab !== impliedTab) target.set("tab", tab);
+    if (tab === "discussions") {
+      copyParam(source, target, "q");
+      const kind = parseThreadKindFilter(source.get("kind"));
+      if (kind !== "all") target.set("kind", kind);
+    }
     if (tab === "automations") {
       copyFilterParams("routines", source, target);
       copySortParams("routines", source, target);

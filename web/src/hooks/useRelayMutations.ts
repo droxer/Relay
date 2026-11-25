@@ -41,6 +41,7 @@ import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { AUTOMATIONS_PAGE_KEY, COMPUTER_TASKS_QUERY_KEY, HOME_TASKS_QUERY_KEY, ISSUES_PAGE_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY, THREAD_TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { WORKSPACE_ACTIVITY_QUERY_KEY } from "./useWorkspaceActivity";
+import { PROJECT_DISCUSSIONS_QUERY_KEY } from "./useProjectDiscussions";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { teamRecordKey, TEAMS_QUERY_KEY } from "./useTeams";
 import { TEAM_WORKFLOW_CHOICES_KEY } from "./useProjectWorkflows";
@@ -113,6 +114,7 @@ export function useRelayMutations() {
     // A compact response can need history reads after the write has succeeded.
     // The detail or stream will retry if those reads fail.
     void reconcileSessionSnapshot(queryClient, session).catch(() => undefined);
+    if (session.projectId) void queryClient.invalidateQueries({ queryKey: [...PROJECT_DISCUSSIONS_QUERY_KEY, session.projectId] });
   };
   const cacheTask = (task: RelayTask) => {
     const summary = taskSummaryFromTask(task);
@@ -172,6 +174,7 @@ export function useRelayMutations() {
             : session)
           : (current ?? []).filter((session) => session.id !== sessionId));
       void invalidateSessions();
+      void queryClient.invalidateQueries({ queryKey: PROJECT_DISCUSSIONS_QUERY_KEY });
       void invalidateTasks();
       void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY] });
       void invalidateWorkspaceActivity();

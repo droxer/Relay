@@ -100,16 +100,18 @@ export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discu
 }
 
 /** Discuss, and beside it the everyday questions that start one. */
-function LeadDiscussActions({ onDiscuss, discussing }: {
+export function LeadDiscussActions({ onDiscuss, discussing, label }: {
   onDiscuss: (topic?: ProjectLeadTopic) => void;
   discussing: boolean;
+  label?: string;
 }) {
   const { t } = useTranslation();
+  const actionLabel = label ?? t("project_manager.discuss");
   return (
-    <span className="project-manager-line-discuss" role="group" aria-label={t("project_manager.discuss")}>
+    <span className="project-manager-line-discuss" role="group" aria-label={actionLabel}>
       <Button type="button" variant="outline" size="dense" disabled={discussing} aria-busy={discussing || undefined} onClick={() => onDiscuss()}>
         <NavThreads size={ICON.sm} aria-hidden="true" />
-        {t("project_manager.discuss")}
+        {actionLabel}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger

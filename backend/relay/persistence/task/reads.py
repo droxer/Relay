@@ -377,7 +377,7 @@ class TaskReadRows(TaskStoreState):
         parent = tasks.alias("parent_routine")
         waiting_session = tasks.c.snapshot["waitingSessionId"].as_string()
         source_routine = tasks.c.snapshot["sourceRoutineId"].as_string()
-        filters = _live_owned_tasks(tasks, user_id)
+        filters = workspace_task_scope(tasks, user_id)
         # Rank narrow link rows first so only the winning Tasks need snapshot
         # fields and parent titles. A Thread can have many historical links.
         ranked = (

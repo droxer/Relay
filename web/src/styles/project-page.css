@@ -21,6 +21,150 @@
   padding: clamp(var(--sp-5), 4vw, var(--sp-8));
 }
 
+.project-discussions {
+  container: project-discussions / inline-size;
+  width: 100%;
+  min-width: 0;
+  max-width: 960px;
+}
+
+.project-discussions-toolbar,
+.project-discussions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.project-discussions-toolbar {
+  margin-bottom: var(--sp-4);
+}
+
+.project-discussions-actions,
+.project-discussions-actions > .project-manager-line-discuss,
+.project-discussions .conversation-group {
+  min-width: 0;
+}
+
+.project-discussions-actions > .project-manager-line-discuss {
+  max-width: 100%;
+}
+
+.project-discussions-actions .project-manager-line-discuss > button:first-child {
+  min-width: 0;
+  height: auto;
+  white-space: normal;
+}
+
+.project-discussions-toolbar > .list-filter-search {
+  flex: 1 1 12rem;
+  min-height: var(--control-h-sm);
+  padding-inline: var(--sp-2);
+  border: var(--hairline);
+  border-radius: var(--r-2);
+  background: var(--surface-0);
+}
+
+.project-discussions-toolbar > .list-filter-search:focus-within {
+  border-color: var(--ink-4);
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
+}
+
+.project-discussions-toolbar > .list-filter-search input:focus-visible {
+  outline: none;
+}
+
+.project-discussions-toolbar > .thread-kind-filter {
+  flex: 0 1 auto;
+}
+
+.project-discussions .thread-kind-filter-item {
+  white-space: nowrap;
+}
+
+.project-discussions .conversation-rows {
+  gap: 0;
+  overflow: hidden;
+  border: var(--hairline);
+  border-radius: var(--r-3);
+}
+
+.project-discussions .conversation-row {
+  border-radius: 0;
+}
+
+.project-discussions .conversation-row + .conversation-row {
+  border-top: var(--hairline);
+}
+
+.project-discussions .conversation-row-inner:focus-visible {
+  outline-offset: -2px;
+}
+
+.project-discussions-empty,
+.project-discussions-more {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+}
+
+.project-discussions-empty .project-discussions-actions {
+  justify-content: center;
+}
+
+.project-discussions-more {
+  margin-top: var(--sp-4);
+}
+
+.project-discussions-more [role="alert"] {
+  color: var(--err);
+}
+
+.project-discussions-skeleton {
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border: var(--hairline);
+  border-radius: var(--r-3);
+}
+
+@container project-discussions (max-width: 640px) {
+  .project-discussions-toolbar > .list-filter-search {
+    flex-basis: 100%;
+  }
+}
+
+@container project-discussions (max-width: 480px) {
+  .project-discussions-toolbar > .project-discussions-actions {
+    flex-basis: 100%;
+  }
+
+  .project-discussions-actions > .project-manager-line-discuss {
+    flex: 0 1 auto;
+  }
+
+  .project-discussions-toolbar .thread-kind-filter-item {
+    padding-inline: var(--sp-1-5);
+  }
+}
+
+@media (max-width: 820px), (pointer: coarse) {
+  .project-discussions-toolbar > .list-filter-search,
+  .project-discussions .thread-kind-filter-item,
+  .project-discussions-actions button,
+  .project-discussions-empty > button,
+  .project-discussions-more > button,
+  .project-discussions .conversation-more-btn {
+    min-height: var(--touch-target);
+  }
+
+  .project-discussions .thread-kind-filter-item,
+  .project-discussions .conversation-more-btn {
+    min-width: var(--touch-target);
+  }
+}
+
 /* The crew column's heading carries its count, like the team's Members. */
 .project-profile .workspace-dossier-section-title {
   display: flex;

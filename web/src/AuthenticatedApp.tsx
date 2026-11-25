@@ -890,7 +890,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onSelectProject={selectProject}
             onNewThread={startNewThread}
             onRenameThread={(session) => void renameThread(session)}
-            onCloseThread={(id) => void deleteThread(id)}
+            onCloseThread={(id, title) => void deleteThread(id, title)}
             activeAgent={activeAgent}
             logicalAgents={logicalAgents}
             selectableLogicalAgents={effectiveSelectableLogicalAgents}

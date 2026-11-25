@@ -8,11 +8,15 @@ import type { AdminView } from "../src/components/admin/AdminViewToggle";
 import type { CurrentUser } from "../src/types";
 
 import { configurePersonalQueryCache } from "../src/lib/personalQueryCache";
+import { emptyDashboardWork } from "./dashboardWorkFixture";
 
 function show(section: AdminView = "users", waitlist = true, responseFor?: (url: URL) => object | undefined) {
   const requests = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://localhost");
-    return Response.json(responseFor?.(url) ?? (url.pathname.endsWith("/admin/users") ? {
+    const response = responseFor?.(url);
+    if (response) return Response.json(response);
+    if (url.pathname === "/api/v1/admin/dashboard/work") return Response.json(emptyDashboardWork);
+    return Response.json(url.pathname.endsWith("/admin/users") ? {
       users: [], nodes: [], page: { page: 1, total: 0 }, userCount: 0, displayOrder: [],
       counts: { all: 0, running: 0, ready: 0, failed: 0, idle: 0, unassigned: 0 },
     } : {
@@ -20,7 +24,7 @@ function show(section: AdminView = "users", waitlist = true, responseFor?: (url:
       nodes: [], entries: [], total: 0, counts: { waiting: 0, invited: 0, joined: 0, declined: 0 },
       topUsers: [], dailyCounts: [],
       bands: Object.fromEntries(["waiting", "invited", "joined", "declined"].map(status => [status, { entries: [], total: 0 }])),
-    }));
+    });
   });
   vi.stubGlobal("fetch", requests);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -57,8 +61,10 @@ it("opens Waitlist without fetching the Computer inventory", async () => {
 
 it("opens the Dashboard without requesting the full user directory", async () => {
   const { client, paths } = show("dashboard");
+  await screen.findByText("admin.v2.dash_work_conversations_project");
   await waitFor(() => expect(client.isFetching()).toBe(0));
   expect(paths()).toContain("/api/v1/admin/dashboard/sessions");
+  expect(paths()).toContain("/api/v1/admin/dashboard/work");
   expect(paths()).not.toContain("/api/v1/admin/users");
 });
 

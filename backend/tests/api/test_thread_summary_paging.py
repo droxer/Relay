@@ -56,6 +56,88 @@ def test_summary_last_page_has_no_cursor(paged_threads):
     assert sorted(_whole_list(client)) == sorted(created)
 
 
+@pytest.mark.parametrize("view", ["summary", "records"])
+def test_project_thread_pages_are_owner_scoped(paged_threads, view):
+    client, _alice, _created = paged_threads
+    app = client.app
+    owner = user_id("alice")
+    projects = app.state.project_store
+    project = projects.create_project(owner, {"name": "Discussion", "computerId": "local", "members": []})
+    foreign = projects.create_project(user_id("bob"), {"name": "Private", "computerId": "local", "members": []})
+    discussions = SessionController(app.state.session_store, owner_user_id=owner, project_id=project["id"])
+    older = discussions.create_session("First discussion", ["human"])["id"]
+    newer = discussions.create_session("Second discussion", ["human"])["id"]
+    # Even this owner's Threads cannot make somebody else's Project readable.
+    SessionController(app.state.session_store, owner_user_id=owner, project_id=foreign["id"]).create_session(
+        "Wrong project", ["human"],
+    )
+    SessionController(app.state.session_store, owner_user_id=user_id("bob"), project_id=project["id"]).create_session(
+        "Wrong owner", ["human"],
+    )
+    projects.archive_project(project["id"], expected_version=project["version"])
+    first_id, second_id = [thread_id for thread_id in _whole_list(client) if thread_id in {older, newer}]
+    path = "/api/v1/threads"
+    params = {"limit": 1, "view": view, "include": "activity", "projectId": project["id"]}
+    first = client.get(path, params=params)
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert [row["id"] for row in body["sessions"]] == [first_id]
+    assert body["nextCursor"]
+    assert "homeTaskNeedsYou" not in body
+    second = client.get(path, params={**params, "cursor": body["nextCursor"]})
+    assert second.status_code == 200, second.text
+    assert [row["id"] for row in second.json()["sessions"]] == [second_id]
+    assert second.json()["nextCursor"] is None
+
+    if view == "summary":
+        assert body["sessions"][0]["taskActivity"] == {"origin": None, "awaitsHuman": False}
+        validator = {"If-None-Match": first.headers["etag"]}
+        assert client.get(path, params=params, headers=validator).status_code == 304
+        assert client.get(path, params={**params, "projectId": foreign["id"]}, headers=validator).status_code == 403
+        empty = projects.create_project(owner, {"name": "Empty", "computerId": "local", "members": []})
+        empty_page = client.get(path, params={**params, "projectId": empty["id"]}, headers=validator)
+        assert empty_page.status_code == 200 and empty_page.json()["sessions"] == []
+        discussions.rename_session(first_id, "Updated discussion")
+        refreshed = client.get(path, params=params, headers=validator)
+        assert refreshed.status_code == 200
+        assert refreshed.json()["sessions"][0]["title"] == "Updated discussion"
+    assert client.get(path, params={**params, "projectId": foreign["id"]}).status_code == 403
+    assert client.get(path, params={**params, "projectId": new_database_id()}).status_code == 404
+    assert client.get(path, params={**params, "projectId": ""}).status_code == 400
+
+
+def test_project_thread_filters_run_before_paging_and_use_visible_task_links(paged_threads):
+    client, _alice, _created = paged_threads
+    app = client.app
+    owner = user_id("alice")
+    project = app.state.project_store.create_project(owner, {"name": "Launch", "computerId": "local", "members": []})
+    controller = SessionController(app.state.session_store, owner_user_id=owner, project_id=project["id"])
+    issue = controller.create_session("Review the 50% rollout", ["human"])["id"]
+    chat = controller.create_session("Review the 500-user rollout", ["human"])["id"]
+    controller.rename_session(chat, "Deployment")
+    tasks = app.state.task_store
+    task = tasks.create_task({"title": "Rollout", "ownerUserId": owner, "projectId": project["id"]})
+    tasks.link_session(task["id"], issue)
+    private = tasks.create_task({"title": "Private", "ownerUserId": user_id("bob")})
+    tasks.link_session(private["id"], chat)
+    params = {"projectId": project["id"], "view": "summary", "include": "activity", "limit": 1}
+    path = "/api/v1/threads"
+
+    matches = client.get(path, params={**params, "q": "50%", "kind": "tasks"})
+    assert matches.status_code == 200, matches.text
+    body = matches.json()
+    assert [row["id"] for row in body["sessions"]] == [issue]
+    assert body["sessions"][0]["taskActivity"]["origin"]["taskId"] == task["id"]
+    assert body["nextCursor"] is None
+
+    chats = client.get(path, params={**params, "q": "500-USER", "kind": "chats"})
+    assert chats.status_code == 200, chats.text
+    assert [row["id"] for row in chats.json()["sessions"]] == [chat]
+    assert chats.json()["sessions"][0]["taskActivity"]["origin"] is None
+    assert client.get(path, params={**params, "q": "50%", "kind": "chats"}).json()["sessions"] == []
+    assert client.get(path, params={**params, "kind": "invalid"}).status_code == 400
+
+
 def test_thread_records_page_without_loading_transcripts(paged_threads):
     client, _alice, created = paged_threads
     store = client.app.state.session_store

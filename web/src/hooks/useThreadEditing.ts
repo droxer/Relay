@@ -39,11 +39,11 @@ export function useThreadEditing({ threads, ownerId, activeSessionId, token, onA
     }
   }
 
-  async function deleteThread(sessionId: string) {
+  async function deleteThread(sessionId: string, title?: string) {
     const view = retainThreadDispatchView();
     try {
       const session = threads.find((s) => s.id === sessionId);
-      const label = session ? (session.title?.trim() || session.taskGoal) : sessionId;
+      const label = title ?? (session ? (session.title?.trim() || session.taskGoal) : sessionId);
       const ok = await confirm({
         title: t("thread.delete_confirm", { name: label }),
         message: t("thread.delete_message"),
