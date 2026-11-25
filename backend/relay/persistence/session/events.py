@@ -28,6 +28,7 @@ from ..automation.store import record_session_outbox
 from .reducer import SNAPSHOT_NEUTRAL_SESSION_EVENTS, apply_session_event
 from ...core.ids import new_database_id
 from ..engine import publish_database_notification, store_transaction
+from ..events import relay_event
 from .rows import (
     compact_session_snapshot,
     session_event_cursor_expression,
@@ -77,6 +78,20 @@ class SessionEventRows(SessionStoreState):
             if event.get("type") == "session.deletion_requested" and (row["snapshot"] or {}).get("deletionRequestedAt"):
                 return row["snapshot"]
             sequence = int(row["version"] or 0)
+            snapshot = row["snapshot"] or {}
+            title = None
+            if event.get("type") == "user.message" and snapshot.get("projectLeadDiscussion"):
+                words = str(event.get("text") or "").split()
+                if words:
+                    prior = list(conn.execute(
+                        select(self.events.c.type).where(
+                            self.events.c.session_id == session_pk,
+                            self.events.c.type.in_(["user.message", "session.renamed"]),
+                        ).limit(3)
+                    ).scalars())
+                    if prior == ["session.renamed"]:
+                        text = " ".join(words)
+                        title = text if len(text) <= 80 else text[:79].rstrip() + "…"
             conn.execute(
                 insert(self.events).values(
                     **session_event_to_row(session_pk, sequence, event)
@@ -84,17 +99,26 @@ class SessionEventRows(SessionStoreState):
             )
             session = apply_session_event(
                 compact_session_snapshot(
-                    row["snapshot"] or {}, event_count=sequence + 1
+                    snapshot, event_count=sequence + 1
                 ),
                 event,
                 retain_event=False,
             )
+            if title:
+                renamed = relay_event("session.renamed", session_id, {"title": title})
+                conn.execute(insert(self.events).values(
+                    **session_event_to_row(session_pk, sequence + 1, renamed)
+                ))
+                session = apply_session_event(
+                    compact_session_snapshot(session, event_count=sequence + 2),
+                    renamed, retain_event=False,
+                )
             conn.execute(
                 update(self.sessions)
                 .where(self.sessions.c.id == session_pk)
                 .values(
                     **session_to_row(
-                        session, version=sequence + 1, database_id=session_pk
+                        session, version=sequence + 1 + int(title is not None), database_id=session_pk
                     )
                 )
             )
