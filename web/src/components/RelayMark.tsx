@@ -4,18 +4,17 @@ type RelayMarkProps = {
   className?: string;
   size?: number;
   /** `ink` (default): register ink, for marks that sit inside working UI —
-   *  transcript phase separators and generic empty states. `brand`: the
-   *  baton handoff in colour, for the places Relay introduces itself. */
+   *  transcript phase separators and generic empty states. `brand`: monochrome
+   *  tracks bridged by the burnished-bronze relay baton, for the places Relay
+   *  introduces itself. */
   tone?: "ink" | "brand";
 };
 
 export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMarkProps) {
-  // Two interlocking 45-degree chamfered relay tracks passing a diagonal
-  // negative-space baton across the center exchange zone. The brand tone is
-  // the logo's one sanctioned static use of --live: the lead track is a person
-  // handing work on (--brand-lead, burnished bronze) and the trailing track an
-  // agent carrying it forward (--live, signal blue).
+  // Swiss Baton Cascade: three precision sheared tracks with the staggered
+  // center relay baton highlighted in burnished bronze (--brand-lead).
   const isBrand = tone === "brand";
+  const trackFill = isBrand ? "var(--ink-1)" : "currentColor";
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -27,15 +26,13 @@ export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMark
       focusable="false"
       shapeRendering="geometricPrecision"
     >
+      <path d="M14 12 H48 L43 22 H9 Z" fill={trackFill} />
       <path
-        d="M8 12 H36 L50 26 L42 34 L31 23 H8 Z"
-        fill={isBrand ? "var(--brand-lead)" : "var(--ink-1)"}
-      />
-      <path
-        d="M56 52 H28 L14 38 L22 30 L33 41 H56 Z"
-        fill={isBrand ? "var(--live)" : "currentColor"}
+        d="M21 27 H55 L50 37 H16 Z"
+        fill={isBrand ? "var(--brand-lead)" : "currentColor"}
         opacity={isBrand ? undefined : 0.45}
       />
+      <path d="M14 42 H48 L43 52 H9 Z" fill={trackFill} />
     </svg>
   );
 }
