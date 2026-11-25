@@ -1,15 +1,17 @@
 # Deploying to Railway and Cloudflare
 
-`deploy.sh` automates [docs/guides/deployment-cloudflare.md](../docs/guides/deployment-cloudflare.md):
-it provisions Relay on Railway, puts Cloudflare in front of it, deploys, and
-checks the result. It calls the Railway GraphQL API and the Cloudflare v4 API
+`deploy.sh` provisions Relay on Railway, sets up Cloudflare routing, and
+verifies the release. For the service boundaries and request paths, see the
+[deployment architecture](../docs/guides/deployment-cloudflare.md#deployment-architecture).
+The script calls the Railway GraphQL API and the Cloudflare v4 API
 directly, so it needs only `curl`, `jq`, `openssl`, `git`, `python3`, and
 `docker` (to build the web export) — no `railway` or `wrangler` CLI.
 
 | Host | Serves | Runs on |
 | --- | --- | --- |
 | `get-relay.cc` | web UI (static export) | Cloudflare Worker `relay-web` |
-| `api.get-relay.cc` | API, SSE, daemons, install script (`backend/Dockerfile`) | Railway `relay-backend` |
+| `api.get-relay.cc` | API, SSE, daemon control requests, install script | Railway `relay-backend` |
+| `ingest.get-relay.cc` | Daemon event and report writes forwarded by the Worker on the API host | Railway `relay-daemon-ingest` |
 | — | Procrastinate background jobs (`backend/Dockerfile`) | Railway `relay-worker` |
 | — | database | Railway `Postgres` (template) |
 | — | skill files and artifact snapshots | Cloudflare R2 |
@@ -54,9 +56,9 @@ Railway settings.
 
 ```bash
 deploy/deploy.sh up          # everything below, in order
-deploy/deploy.sh railway     # project, Postgres, API/worker services, variables, custom domains
+deploy/deploy.sh railway     # project, Postgres, services, variables, custom domains
 deploy/deploy.sh cloudflare  # DNS records, TLS Full (strict), origin-lock header, cache rules, speed settings
-deploy/deploy.sh release     # deploy the API, then the background worker, then publish the UI
+deploy/deploy.sh release     # deploy the services and publish the UI for the configured hosting mode
 deploy/deploy.sh verify      # probe the live hostnames
 deploy/deploy.sh mail        # check the invite email token and sender (also run by verify)
 deploy/deploy.sh agent-ids   # read Computer ID migration status from backend startup logs
@@ -130,12 +132,11 @@ and the remote source never runs on this machine). The Docker build sets
 `RELAY_BUILD_ID` to the full release commit SHA, so `/version.json` and the
 client identify that release even when web sources have not changed. Compare
 `buildId` with the release SHA; it is not a base36 timestamp for these releases.
-A failed local build starts
-no API deployment. It then deploys the API and background worker. Once both
-deployments succeed, it uploads the export through
-the Workers direct-upload API (`workers_deploy.py`; files Cloudflare already
-holds are skipped) together with `deploy/workers/worker.js` and
-`deploy/workers/_headers` read from that same commit,
+A successful local build starts the API and background worker deployments,
+followed by the daemon ingest deployment when configured. After those services
+are ready, the release uploads the export through the Workers direct-upload API
+(`workers_deploy.py` skips files Cloudflare already holds). It includes
+`deploy/workers/worker.js` and `deploy/workers/_headers` from the same commit,
 then routes `get-relay.cc/*` to the Worker. A failed backend leaves the
 previous UI in place. The Worker redirects `/install.sh` to the API origin
 (its `RELAY_API_ORIGIN` binding), so the published
@@ -200,25 +201,12 @@ the hostname in your local deployment config and use an updated checkout.
 Run `deploy/deploy.sh release` for an existing deployment or
 `deploy/deploy.sh up` for a new deployment.
 
-Daemons connect to `API_DOMAIN`. A Cloudflare Worker forwards daemon event
-and report POSTs to the ingestion service and sends other daemon requests
-to the API origin.
-
-The ingestion service runs `relay serve` with `RELAY_HTTP_ROLE=daemon-ingest`.
-It exposes the two write routes and `/healthz`. The origin is DNS-only and
-requires the shared edge header on the write routes. The Worker stores that
-header value as a secret binding. Relay still checks each daemon credential
-and records durable report receipts with their effects in PostgreSQL.
-
-The hosted service allows four concurrent requests, one per Computer, and
-opens up to eight PostgreSQL connections. Requests over the limit receive a
-retryable 503 and can replay from the daemon outbox. The release probes the
-new origin and its edge lock before installing the Worker route. Daemon
-ingestion has its own status and restart target.
-
-To route traffic back to the API, clear `DAEMON_INGEST_DOMAIN` and run
-`deploy/deploy.sh cloudflare`. This removes the owned Worker route and keeps
-the service and its DNS record available for a later rollout.
+The release probes the origin's health, checks its edge lock, and checks that
+requests to the browser API return `404` before installing the Worker route.
+`deploy/deploy.sh status` includes the ingest service when configured. Use
+`deploy/deploy.sh restart daemon-ingest` to restart it independently. See the
+[daemon ingestion guide](../docs/guides/deployment-cloudflare.md#daemon-ingestion)
+for routing, limits, and how to return writes to the main API.
 
 ### Upgrade from the combined service
 
