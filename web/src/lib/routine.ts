@@ -56,6 +56,7 @@ export type RoutineListState =
   | "due"
   | "listening"
   | "on_demand"
+  | "completed"
   | "scheduled"
   | "paused";
 
@@ -76,9 +77,8 @@ export function routineState(
   if (!next && triggers.some((trigger) => trigger.kind !== "schedule")) return "listening";
   /* A Run-now-only automation watches for nothing; "Listening" would say it does. */
   if (triggers.length === 0) return "on_demand";
-  // A completed one-off has no future automatic run, but Run now still works.
   if (!next && triggers.every((trigger) => trigger.kind === "schedule" && "once" in trigger.schedule.repeat)) {
-    return "on_demand";
+    return triggers.length === 1 && routine.hasCompletedOccurrence ? "completed" : "on_demand";
   }
   if (next && Date.parse(next) <= now.getTime()) return "due";
   return "scheduled";
@@ -101,6 +101,7 @@ export const ROUTINE_STATE_ORDER: readonly RoutineListState[] = [
   "scheduled",
   "listening",
   "on_demand",
+  "completed",
   "paused",
 ];
 

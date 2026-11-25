@@ -28,6 +28,7 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
     routineState: input.routineState,
     routinePauseReason: input.routinePauseReason,
     routineNextRunAt: input.routineNextRunAt,
+    hasCompletedOccurrence: input.hasCompletedOccurrence,
     assignedAgent: input.assignedAgent,
     assignedAgentId: input.assignedAgentId,
     sourceRoutineId: input.sourceRoutineId,
@@ -42,6 +43,7 @@ function task(input: Partial<RelayTask> & { id: string; title: string }): RelayT
 }
 
 const DAILY = [{ kind: "schedule" as const, schedule: { timezone: "UTC", repeat: { every: "day" as const, at: "09:00" } } }];
+const ONCE = { kind: "schedule", schedule: { timezone: "UTC", repeat: { once: "2026-01-01T09:00" } } } satisfies NonNullable<RelayTask["routineTriggers"]>[number];
 const NOW = new Date("2026-06-24T12:00:00Z");
 const PAST = "2026-06-24T09:00:00Z";
 const FUTURE = "2026-06-25T09:00:00Z";
@@ -92,6 +94,7 @@ describe("filterRoutineTasks", () => {
       automation("scheduled"),
       automation("listening", { routineTriggers: [{ kind: "webhook" }], routineNextRunAt: undefined }),
       automation("on_demand", { routineTriggers: [], routineNextRunAt: undefined }),
+      automation("completed", { routineTriggers: [ONCE], routineNextRunAt: undefined, hasCompletedOccurrence: true }),
       automation("paused", { routineState: "paused_by_relay", routinePauseReason: "rate_limited" }),
     ];
 
@@ -138,10 +141,14 @@ describe("routineState", () => {
     assert.equal(routineState(automation("s"), none, NOW), "scheduled");
   });
 
-  it("shows an exhausted one-off as on demand, retaining listening for mixed triggers", () => {
-    const once = { kind: "schedule" as const, schedule: { timezone: "UTC", repeat: { once: "2026-01-01T09:00" } } };
-    assert.equal(routineState(automation("finished", { routineTriggers: [once], routineNextRunAt: undefined }), none, NOW), "on_demand");
-    assert.equal(routineState(automation("mixed", { routineTriggers: [once, { kind: "webhook" }], routineNextRunAt: undefined }), none, NOW), "listening");
+  it("marks a one-off completed after a finished run, while preserving other triggers", () => {
+    const exhausted = automation("once", { routineTriggers: [ONCE], routineNextRunAt: undefined });
+    const finished = { ...exhausted, hasCompletedOccurrence: true };
+    assert.equal(routineState(exhausted, none, NOW), "on_demand");
+    assert.equal(routineState(finished, none, NOW), "completed");
+    assert.equal(routineState(finished, new Set([finished.id]), NOW), "running");
+    assert.equal(routineState({ ...finished, routineNextRunAt: FUTURE }, none, NOW), "scheduled");
+    assert.equal(routineState({ ...finished, routineTriggers: [ONCE, { kind: "webhook" }] }, none, NOW), "listening");
   });
 
   it("calls a schedule plus an event trigger scheduled while a run is coming", () => {

@@ -302,8 +302,9 @@ assignment access, and broadcast events are scoped to work visible to that owner
 Creating an active automation, changing its triggers while active, or resuming
 it rejects an expired one-off with 400 naming
 `routineTriggers[index].schedule.repeat.once`. A paused draft may retain a
-past date, and an already-active, completed one-off remains editable. With no
-future firing it appears as On demand; Run now remains available.
+past date, and an already-active, completed one-off remains editable. An active
+automation with a single one-off schedule, no next run, and a finished run in
+`done` appears as Completed in the list and record. Run now remains available.
 
 `routineState` is `active`, `paused`, or `paused_by_relay`. A paused automation
 carries `routinePauseReason`: `rate_limited`, `failing`, `no_target`, or

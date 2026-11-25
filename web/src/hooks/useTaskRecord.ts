@@ -5,6 +5,7 @@ import { getTask, RelayApiError } from "../api";
 import type { PrivateResponseCache } from "../api-client/client";
 import { useTaskQueryRevision } from "./useTaskQueryRevision";
 import { taskRecordPollIntervalMs } from "../lib/relayPolling";
+import type { RoutineListState } from "../lib/routine";
 import type { RelayTaskListItem } from "../types";
 
 export const TASK_RECORD_QUERY_KEY = "task-record";
@@ -45,6 +46,7 @@ export function useTaskRecord(
   placeholder?: RelayTaskListItem,
   dependentIds?: readonly string[],
   compactList = false,
+  automationState?: RoutineListState,
 ): {
   task: RelayTaskListItem | undefined;
   isPending: boolean;
@@ -62,12 +64,21 @@ export function useTaskRecord(
   const eventCount = placeholder && "eventCount" in placeholder && typeof placeholder.eventCount === "number"
     ? placeholder.eventCount
     : undefined;
-  const listStamp = placeholder ? taskListRevision(placeholder, eventCount, dependentIds ?? []) : undefined;
+  const taskStamp = placeholder ? taskListRevision(placeholder, eventCount, dependentIds ?? []) : undefined;
+  const listStamp = placeholder?.isRoutine
+    ? JSON.stringify([taskStamp, automationState, placeholder.hasCompletedOccurrence]) : taskStamp;
   const record = query.isPlaceholderData ? undefined : query.data;
   // Prerequisites and dependents can change without a new event on this Task.
   const matchesRevision = Boolean(placeholder && record && record.updatedAt === placeholder.updatedAt
     && eventCount !== undefined && "eventCount" in record && record.eventCount === eventCount
-    && (placeholder.isRoutine || (record.waitingOn && record.unblocks
+    && (placeholder.isRoutine ? (
+      (automationState === undefined || (
+        (automationState === "running") === Boolean(record.hasRunningOccurrence)
+        && (automationState === "running" || (automationState === "completed") === Boolean(record.hasCompletedOccurrence))
+      ))
+      && (placeholder.hasCompletedOccurrence === undefined
+        || placeholder.hasCompletedOccurrence === Boolean(record.hasCompletedOccurrence))
+    ) : (record.waitingOn && record.unblocks
       && taskListRevision(record, eventCount, [...record.unblocks].sort()) === listStamp)));
   useTaskQueryRevision(TASK_RECORD_QUERY_KEY, taskId, listStamp, query.isFetching, matchesRevision);
 

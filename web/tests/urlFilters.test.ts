@@ -63,6 +63,7 @@ describe("canonical filter params", () => {
       canonicalBrowserUrl("/routines", "?trigger=none&state=due"),
       "/automations?trigger=none&state=due",
     );
+    assert.equal(canonicalBrowserUrl("/automations", "?state=completed"), "/automations?state=completed");
   });
 
   it("drops the retired automation type and cadence filters", () => {

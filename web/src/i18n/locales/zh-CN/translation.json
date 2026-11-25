@@ -1331,7 +1331,8 @@
       "scheduled": "已排期",
       "paused": "已暂停",
       "listening": "监听中",
-      "on_demand": "按需"
+      "on_demand": "按需",
+      "completed": "已完成"
     },
     "meta": "自动化状态",
     "no_activity": "暂无运行记录。",

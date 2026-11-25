@@ -145,9 +145,16 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
   const loading = allTasks === undefined && (waitingForSearch || result.isPending);
   const loadFailed = allTasks === undefined && !waitingForSearch && result.isError;
   const received = allTasks ?? response?.tasks ?? NO_TASKS;
-  const tasks = useMemo(() => remote ? received : received.filter(task => !task.deletedAt
-    && (!projectId || task.projectId === projectId)
-    && (!computerId || taskComputer(task, nodes, sessions) === computerId)), [received, remote, projectId, computerId, nodes, sessions]);
+  const tasks = useMemo(() => {
+    if (remote) return received;
+    const scoped = received.filter(task => !task.deletedAt
+      && (!projectId || task.projectId === projectId)
+      && (!computerId || taskComputer(task, nodes, sessions) === computerId));
+    const completed = new Set(scoped.filter(task => !task.isRoutine && task.status === "done")
+      .map(task => task.sourceRoutineId));
+    return scoped.map(task => task.isRoutine && completed.has(task.id)
+      ? { ...task, hasCompletedOccurrence: true } : task);
+  }, [received, remote, projectId, computerId, nodes, sessions]);
   const routineTasks = useMemo(() => tasks.filter(task => task.isRoutine), [tasks]);
   const routineCount = response?.automationCount ?? routineTasks.length;
   const tagOptions = useMemo(() => resultTags ? collectTags([{ tags: resultTags }]) : collectTags(routineTasks),
