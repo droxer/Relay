@@ -79,11 +79,11 @@ function discussion(id: string, title: string, activity?: SessionSummary["taskAc
   };
 }
 
-it("loads scoped discussion pages and keeps the current rows available when loading more fails", async () => {
+it("requests chats on every Project Discussions page and preserves rows when pagination fails", async () => {
   const head = discussion("first", "Release planning");
   const older = discussion("older", "Older rollout", {
     awaitsHuman: true,
-    origin: { kind: "backlog", taskId: "t", title: "Rollout", ref: "#8", status: "review" },
+    origin: null,
   });
   const requests: URL[] = [];
   let moreFails = true;
@@ -91,7 +91,7 @@ it("loads scoped discussion pages and keeps the current rows available when load
     const url = new URL(String(input), window.location.origin);
     if (!url.pathname.endsWith("/threads")) return Response.json({});
     requests.push(url);
-    if (url.searchParams.has("q") || url.searchParams.has("kind")) return Response.json({ sessions: [], nextCursor: null });
+    if (url.searchParams.has("q")) return Response.json({ sessions: [], nextCursor: null });
     if (url.searchParams.get("cursor") === "older") {
       if (moreFails) return Response.json({ detail: "Unavailable" }, { status: 503 });
       return Response.json({ sessions: [older], nextCursor: null });
@@ -102,7 +102,8 @@ it("loads scoped discussion pages and keeps the current rows available when load
   expect(requests).toHaveLength(0);
   fireEvent.click(screen.getByRole("tab", { name: "project.discussions_tab" }));
   expect(await screen.findByRole("button", { name: /Release planning/ })).toBeTruthy();
-  expect(Object.fromEntries(requests[0].searchParams)).toMatchObject({ projectId: "p", view: "summary", include: "activity" });
+  expect(Object.fromEntries(requests[0].searchParams)).toMatchObject({ projectId: "p", view: "summary", include: "activity", kind: "chats" });
+  expect(screen.queryByRole("button", { name: "thread.kind_filter_chats" })).toBeNull();
   expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
   expect(screen.queryByRole("heading", { name: "project.discussions_recent" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "project.discussions_new" }));
@@ -126,14 +127,35 @@ it("loads scoped discussion pages and keeps the current rows available when load
   fireEvent.click(screen.getAllByRole("button", { name: "thread.delete" })[0]);
   expect(actions.onCloseThread).toHaveBeenCalledWith("older", "Older rollout");
 
-  fireEvent.click(screen.getByRole("button", { name: "thread.kind_filter_chats" }));
   fireEvent.change(screen.getByRole("searchbox", { name: "project.discussions_search" }), { target: { value: "launch" } });
   await waitFor(() => expect(requests.at(-1)?.searchParams.get("q")).toBe("launch"));
-  expect(window.location.search).toBe("?tab=discussions&q=launch&kind=chats");
+  expect(window.location.search).toBe("?tab=discussions&q=launch");
+  expect(requests.every(url => url.searchParams.get("kind") === "chats")).toBe(true);
   expect(await screen.findByText("project.discussions_no_matches")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "project.discussions_new" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "backlog.clear_filters" }));
   expect(window.location.search).toBe("?tab=discussions");
+});
+
+it("shows a single creation action and no search box when the Project has no chats", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=discussions");
+  const taskRun = discussion("task-run", "A task run", {
+    awaitsHuman: true,
+    origin: { kind: "backlog", taskId: "t", title: "Rollout", ref: "#8", status: "review" },
+  });
+  const automationRun = discussion("automation-run", "An automation run", {
+    awaitsHuman: false,
+    origin: { kind: "routine", taskId: "r", title: "Daily report", ref: "#9", status: "done" },
+  });
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({
+    sessions: [taskRun, automationRun], nextCursor: null,
+  }));
+  const actions = renderPage(project());
+  expect(await screen.findByText("project.discussions_empty")).toBeTruthy();
+  expect(screen.queryByRole("searchbox", { name: "project.discussions_search" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /A task run|An automation run/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "project.discussions_new" }));
+  expect(actions.onNewThread).toHaveBeenCalledWith("p");
 });
 
 it("keeps archived discussions readable with no creation action", async () => {

@@ -11,10 +11,6 @@ export const THREAD_KIND_FILTER_ALL: ThreadKindFilter = "all";
 
 export const THREAD_KIND_FILTERS: readonly ThreadKindFilter[] = ["all", "tasks", "chats"];
 
-export function parseThreadKindFilter(value: string | null): ThreadKindFilter {
-  return value === "chats" || value === "tasks" ? value : THREAD_KIND_FILTER_ALL;
-}
-
 export function applyThreadKindFilter<T extends KindScoped>(filter: ThreadKindFilter, threads: readonly T[]): T[] {
   if (filter === THREAD_KIND_FILTER_ALL) return [...threads];
   return threads.filter((item) => Boolean(item.origin) === (filter === "tasks"));

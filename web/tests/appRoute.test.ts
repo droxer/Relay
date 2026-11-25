@@ -499,12 +499,12 @@ it("keeps the project tasks tab explicit and canonicalizes Dashboard as the defa
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=dashboard&status=review"), "/projects/p");
 });
 
-it("keeps search and kind on the project Discussions tab", () => {
+it("keeps search and drops legacy kind on the project Discussions tab", () => {
   assert.equal(
     canonicalBrowserUrl("/projects/p", "?tab=discussion&q=release+plan&kind=chats&task=unrelated"),
-    "/projects/p?tab=discussions&q=release+plan&kind=chats",
+    "/projects/p?tab=discussions&q=release+plan",
   );
-  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=discussions&kind=tasks"), "/projects/p?tab=discussions&kind=tasks");
+  assert.equal(canonicalBrowserUrl("/projects/p", "?tab=discussions&kind=tasks"), "/projects/p?tab=discussions");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=discussions&kind=all"), "/projects/p?tab=discussions");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=discussions&kind=unknown"), "/projects/p?tab=discussions");
   assert.equal(canonicalBrowserUrl("/projects/p", "?tab=members&q=release&kind=chats"), "/projects/p?tab=members");

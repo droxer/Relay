@@ -43,9 +43,8 @@ type ThreadRowProps = {
       line when the row has status or context to add. "nested" — a project
       folder's single-line sub-row: status icon + title + stamp. */
   layout?: "full" | "nested";
-  /** In a project's Discussions list, show run counts and the linked work
-      instead of repeating the project name in every row. */
-  discussionRuns?: number;
+  /** The Project's Discussions list already supplies the Project context. */
+  discussion?: boolean;
   /** The rail's minute clock. The stamp reads it instead of Date.now() so the
       memoized row re-renders once a minute to keep "3m ago" honest, and never
       merely because its parent did. */
@@ -55,7 +54,7 @@ type ThreadRowProps = {
 /* Memoized: the rail mounts dozens of rows and its parents re-render for
    reasons no row cares about. Every prop is stable when unchanged — items are
    carried forward by reuseThreadItems, handlers by useStableCallback. */
-export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingInTranscript, onSelect, onRename, onClose, tone: suppliedTone, layout = "full", discussionRuns, now }: ThreadRowProps) {
+export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingInTranscript, onSelect, onRename, onClose, tone: suppliedTone, layout = "full", discussion = false, now }: ThreadRowProps) {
   const { t, i18n } = useTranslation();
   /* No hover on touch, so the hover-revealed pencil and cross would sit on
      every row for good — two small targets that cost the title a third of
@@ -89,7 +88,6 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
     : activePhase ? t(`thread.execution_${activePhase}`)
     : item.origin?.status ? t(`backlog.statuses.${item.origin.status}`)
     : tone === "attn" ? t("thread.group_needs_you") : t("thread.group_idle");
-  const discussion = discussionRuns !== undefined;
   const projectName = discussion ? undefined : item.projectName ?? session.projectId;
   const projectLabel = projectName ? t("thread.project_indicator", { name: projectName }) : "";
   // A backlog task's thread inside a project already carries the project
@@ -99,8 +97,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
   const originLabel = item.origin && showOrigin
     ? t(item.origin.kind === "routine" ? "thread.origin_routine" : "thread.origin_backlog", { title: item.origin.title })
     : "";
-  const runs = discussionRuns ? t("workspace.session_runs", { count: discussionRuns }) : "";
-  const rowLabel = [label, projectLabel, originLabel, offlineLabel, stateLabel, runs, stamp].filter(Boolean).join(" · ");
+  const rowLabel = [label, projectLabel, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
   const deleteEnabled = canDeleteThread(item);
 
   // Live activity names the agent or the input it needs. Only linked work
@@ -134,9 +131,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
           ? { tone: "err", text: t("thread.statuses.failed") }
           : hasLifecycle && session.status === "cancelled"
             ? { tone: "idle", text: t("thread.statuses.cancelled") }
-            : discussion && item.origin?.status
-              ? { tone: "idle", text: stateLabel }
-              : null;
+            : null;
 
   // Where the work lives, in words: its project, else the task or automation
   // that started it. One fact, never both — a project task's thread already
@@ -151,7 +146,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
   const context = projectName ?? originContext;
   const contextLabel = projectName ? projectLabel : originLabel;
   const visibleStatus = runStartingInTranscript && status?.tone === "run" ? null : status;
-  const { subline } = threadRowMeta({ layout, hasStatus: Boolean(visibleStatus), hasContext: Boolean(context || runs) });
+  const { subline } = threadRowMeta({ layout, hasStatus: Boolean(visibleStatus), hasContext: Boolean(context) });
 
   function handleClose() {
     if (discussion) onClose?.(session.id, label);
@@ -222,7 +217,6 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
                   {context}
                 </span>
               ) : null}
-              {runs && <span>{runs}</span>}
             </span>
           ) : null}
         </span>

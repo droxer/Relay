@@ -2,13 +2,12 @@ import { useInfiniteQuery, type Query } from "@tanstack/react-query";
 import { listSessionSummaries, type SessionHeadCache } from "../api";
 import { THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
-import type { ThreadKindFilter } from "../lib/threadKindFilter";
 
 export const PROJECT_DISCUSSIONS_QUERY_KEY = ["project-discussions"] as const;
 const headValidators = new WeakMap<Query, SessionHeadCache>();
 
-export function useProjectDiscussions(projectId: string, query: string, kind: ThreadKindFilter) {
-  const queryKey = [...PROJECT_DISCUSSIONS_QUERY_KEY, projectId, query, kind] as const;
+export function useProjectDiscussions(projectId: string, query: string) {
+  const queryKey = [...PROJECT_DISCUSSIONS_QUERY_KEY, projectId, query] as const;
   return useInfiniteQuery({
     queryKey,
     initialPageParam: "",
@@ -17,7 +16,7 @@ export function useProjectDiscussions(projectId: string, query: string, kind: Th
       const cache = entry ? headValidators.get(entry) ?? {} : undefined;
       if (entry && cache) headValidators.set(entry, cache);
       return listSessionSummaries(signal, {
-        projectId, query, kind, limit: THREAD_PAGE_SIZE, includeActivity: true, cursor: pageParam || undefined,
+        projectId, query, kind: "chats", limit: THREAD_PAGE_SIZE, includeActivity: true, cursor: pageParam || undefined,
       }, cache);
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
