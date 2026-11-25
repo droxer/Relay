@@ -85,7 +85,7 @@ class AssignmentDeliveryMixin(RegistryState):
         validate_logical_assignment: bool = True,
     ) -> dict[str, Any]:
         assert_workflow_runtime_supported(run_request)
-        session = self.store.get_session(run_request["sessionId"])
+        session = self.store.get_session_header(run_request["sessionId"])
         if session.get("deletionRequestedAt"):
             self.cancel_run_request_before_delivery(run_request["id"], "Thread deletion requested.")
             return self.daemon_store.get_run_request(run_request["id"]) or run_request
@@ -276,7 +276,10 @@ class AssignmentDeliveryMixin(RegistryState):
     ) -> dict[str, Any]:
         """Build the full ``run.start`` command; raises ``_DeliveryRefused``."""
         state = _persisted_agent_state(run_request["state"])
-        session_snapshot = self.store.get_session(run_request["sessionId"])
+        session_snapshot = self.store.get_session_with_events(run_request["sessionId"], (
+            "session.created", "session.completed", "user.message", "user.live_message",
+            "agent.completed", "human.decision",
+        ))
         workspace_layout = session_snapshot.get("workspaceLayout") or "node-root"
         _check_workspace_support(
             sandbox, workspace_layout, session_snapshot.get("workspaceSubpath")
@@ -621,6 +624,7 @@ class AssignmentDeliveryMixin(RegistryState):
         controller.record_agent_started(
             run_request["sessionId"],
             _agent_started_payload(command, assignment, sandbox, role),
+            hydrate=False,
         )
 
     def _run_request_command_link(self, command: dict[str, Any]) -> dict[str, Any]:

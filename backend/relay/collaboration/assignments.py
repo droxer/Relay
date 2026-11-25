@@ -144,6 +144,8 @@ class AssignmentsMixin(ConductorState):
         session: dict[str, Any],
         assignments: list[dict[str, Any]],
         actor: Actor,
+        *,
+        hydrate: bool,
     ) -> dict[str, Any]:
         """Grow the room to include agents this round addressed into it.
 
@@ -163,12 +165,14 @@ class AssignmentsMixin(ConductorState):
         if not newcomers:
             return session
         return SessionController(self.ctx.session_store).record_participants_joined(
-            session_id, newcomers, actor["userId"]
+            session_id, newcomers, actor["userId"], hydrate=hydrate,
         )
 
     def _backfill_runtime_affinity(
         self, session: dict[str, Any] | None
     ) -> dict[str, Any] | None:
+        if not session or session.get("computerId"):
+            return session
         nodes = self.ctx.registry.monitor_nodes()
         return persist_legacy_session_computer_id(
             session,

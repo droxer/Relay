@@ -104,7 +104,9 @@ class RunIntentMixin(NodeBackendState):
         images = request.get("messageAttachments") or []
         if images:
             self.registry.store.bind_attachments([image["id"] for image in images], session_id, actor_user_id or "")
-        current_session = self.registry.store.get_session(session_id)
+        current_session = self.registry.store.get_session_with_events(
+            session_id, ("session.created", "user.message"),
+        )
         continues_task = (
             existing_session is not None
             and manifest is not None
@@ -116,11 +118,7 @@ class RunIntentMixin(NodeBackendState):
             dispatch_task_goal = latest_user_turn_text(
                 current_session, fallback_goal=dispatch_task_goal,
             ) or dispatch_task_goal
-        if round_id and any(
-            event.get("type") == "collaboration.round.started"
-            and (event.get("manifest") or {}).get("roundId") == round_id
-            for event in current_session.get("events", [])
-        ):
+        if round_id and any(item.get("roundId") == round_id for item in current_session.get("collaborationRounds") or []):
             return (
                 latest_user_turn_text(current_session)
                 if request.get("decision")
@@ -144,7 +142,7 @@ class RunIntentMixin(NodeBackendState):
             and request["taskGoal"] == existing_session.get("taskGoal")
         )
         if continues_task:
-            controller.continue_session(session_id)
+            controller.continue_session(session_id, hydrate=False)
         elif existing_session and is_decision_dispatch:
             dispatch_task_goal = latest_user_turn_text(existing_session) or request["taskGoal"]
         elif existing_session and request.get("_resumedPreparedNewThread") is not True:
@@ -167,8 +165,9 @@ class RunIntentMixin(NodeBackendState):
                     actor_user_id=actor_user_id,
                     message_id=message_id,
                     attachments=images,
+                    hydrate=False,
                 )
-            controller.continue_session(session_id)
+            controller.continue_session(session_id, hydrate=False)
         if decision:
             self._record_run_decision(
                 controller,
@@ -179,7 +178,7 @@ class RunIntentMixin(NodeBackendState):
                 actor_user_id=actor_user_id,
             )
         if manifest:
-            controller.record_collaboration_round_started(session_id, manifest)
+            controller.record_collaboration_round_started(session_id, manifest, hydrate=False)
         return dispatch_task_goal
 
     @staticmethod

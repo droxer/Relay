@@ -16,7 +16,7 @@ from ...collaboration.errors import CollaborationError
 from ...collaboration.service import CollaborationConductor
 from ...collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..deps import AppContextDep
-from ..actors import get_session_for_actor, get_session_header_for_actor, request_actor
+from ..actors import get_session_header_for_actor, request_actor
 from ..bodies import json_body, string_field
 from ..schemas import ThreadMessageBody, openapi_body, parse_request_body
 from .lifecycle import steer_thread_queue
@@ -134,7 +134,7 @@ async def submit_thread_message(
     text = body.message_text()
     purpose = body.purpose()
     supplied_address_agent_ids = body.supplied_address_agent_ids()
-    session = await run_in_threadpool(get_session_for_actor, ctx.session_store, thread_id, actor)
+    session = await run_in_threadpool(get_session_header_for_actor, ctx.session_store, thread_id, actor)
     mention_owner_id = (
         session.get("ownerUserId") if actor["isAdmin"] else actor["userId"]
     )
@@ -161,6 +161,7 @@ async def submit_thread_message(
             style = validate_collaboration_style(style, "style")
         except CollaborationStyleError as error:
             raise HTTPException(400, {"code": "style_invalid", "message": str(error)}) from error
+    compact = request.query_params.get("view") == "compact"
     try:
         session = await CollaborationConductor(ctx).submit(
             MessageIntent(
@@ -177,10 +178,11 @@ async def submit_thread_message(
                 approve=body.approve is True,
             ),
             actor,
+            hydrate=not compact,
         )
         execution = await run_in_threadpool(ctx.execution_lifecycle.status, session)
-        if request.query_params.get("view") == "compact":
-            session = await run_in_threadpool(compact_message_snapshot, session)
+        if compact:
+            session = await run_in_threadpool(compact_message_snapshot, ctx.session_store, session)
         return {**session, "execution": execution}
     except CollaborationError as error:
         if error.status == 409:

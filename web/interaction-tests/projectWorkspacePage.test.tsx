@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkspacePage } from "../src/components/ProjectWorkspacePage";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
+import { removeCachedProjectDiscussion, usePrefetchProjectDiscussions } from "../src/hooks/useProjectDiscussions";
 import type { CurrentUser, ProjectRecord, RelayTaskListItem, SessionSummary } from "../src/types";
 
 const automations = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
@@ -27,10 +28,10 @@ const project = (overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
 const task = (id: string, projectId: string | undefined, deletedAt?: string) =>
   ({ id, title: id, projectId, deletedAt, status: "backlog" }) as unknown as RelayTaskListItem;
 
-function renderPage(record: ProjectRecord) {
+function renderPage(record: ProjectRecord, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   const actions = { onOpenThread: vi.fn(), onNewThread: vi.fn(), onRenameThread: vi.fn(), onCloseThread: vi.fn() };
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <DialogProvider>
         <ProjectWorkspacePage
           project={record} agents={[]} currentUser={user} computers={[]}
@@ -135,6 +136,73 @@ it("requests chats on every Project Discussions page and preserves rows when pag
   expect(screen.queryByRole("button", { name: "project.discussions_new" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "backlog.clear_filters" }));
   expect(window.location.search).toBe("?tab=discussions");
+});
+
+it("refreshes only the first Discussions page and keeps loaded history when a row moves up", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=discussions");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const cursors: (string | null)[] = [];
+  const first = discussion("first", "Original head");
+  const older = { ...discussion("older", "Older discussion"), updatedAt: "2026-08-01T00:00:00Z" };
+  let refreshed = false;
+  let waitingForHead: Promise<Response> | undefined;
+  const updatedHead = () => Response.json({
+    sessions: [{ ...older, title: "Updated discussion", updatedAt: "2026-09-02T00:00:00Z" }], nextCursor: "new-head",
+  });
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const url = new URL(String(input), window.location.origin);
+    if (!url.pathname.endsWith("/threads")) return Response.json({});
+    const cursor = url.searchParams.get("cursor");
+    cursors.push(cursor);
+    if (cursor === "history-1") return Response.json({ sessions: [older], nextCursor: "history-2" });
+    if (cursor === "history-2") return Response.json({ sessions: [discussion("oldest", "Oldest discussion")], nextCursor: null });
+    if (refreshed) return waitingForHead ?? updatedHead();
+    return Response.json({ sessions: [first], nextCursor: "history-1" });
+  });
+  renderPage(project(), client);
+  fireEvent.click(await screen.findByRole("button", { name: "project.discussions_load_more" }));
+  expect(await screen.findByRole("button", { name: /Older discussion/ })).toBeTruthy();
+  refreshed = true;
+  await client.invalidateQueries({ queryKey: ["project-discussions", "p"] });
+  expect(await screen.findByRole("button", { name: /Updated discussion/ })).toBeTruthy();
+  expect(screen.getByRole("button", { name: /Original head/ })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Older discussion/ })).toBeNull();
+  expect(cursors).toEqual([null, "history-1", null]);
+  let respondToHead!: (response: Response) => void;
+  waitingForHead = new Promise(resolve => { respondToHead = resolve; });
+  const refreshing = client.invalidateQueries({ queryKey: ["project-discussions", "p"] });
+  await waitFor(() => expect(cursors).toHaveLength(4));
+  fireEvent.click(screen.getByRole("button", { name: "project.discussions_load_more" }));
+  expect(await screen.findByRole("button", { name: /Oldest discussion/ })).toBeTruthy();
+  expect(cursors.at(-1)).toBe("history-2");
+  respondToHead(updatedHead());
+  await refreshing;
+  removeCachedProjectDiscussion(client, "oldest", "p");
+  await waitFor(() => expect(screen.queryByRole("button", { name: /Oldest discussion/ })).toBeNull());
+  expect(screen.getByRole("button", { name: /Original head/ })).toBeTruthy();
+});
+
+it("shares the filtered Discussions request started before the Project page mounts", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=discussions&q=rollout");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let respond!: (response: Response) => void;
+  const waiting = new Promise<Response>(resolve => { respond = resolve; });
+  const requests: URL[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+    const url = new URL(String(input), window.location.origin);
+    if (!url.pathname.endsWith("/threads")) return Response.json({});
+    requests.push(url);
+    return waiting;
+  });
+  renderHook(() => usePrefetchProjectDiscussions("p", "rollout"), {
+    wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(requests[0].searchParams.get("q")).toBe("rollout");
+  renderPage(project(), client);
+  respond(Response.json({ sessions: [discussion("rollout", "Rollout planning")], nextCursor: null }));
+  expect(await screen.findByRole("button", { name: /Rollout planning/ })).toBeTruthy();
+  expect(requests).toHaveLength(1);
 });
 
 it("shows a single creation action and no search box when the Project has no chats", async () => {

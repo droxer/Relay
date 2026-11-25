@@ -132,11 +132,25 @@ class SessionReadRows(SessionStoreState):
             return list(conn.scalars(statement.order_by(self.sessions.c.id).limit(limit)))
 
     def get_session(self, session_id: str) -> dict[str, Any]:
+        return self._read_session(session_id, None)
+
+    def get_session_with_events(
+        self, session_id: str, event_types: tuple[str, ...],
+    ) -> dict[str, Any]:
+        """Read the Thread with the event types needed for execution.
+
+        eventCount still describes the durable sequence.
+        """
+        return self._read_session(session_id, event_types)
+
+    def _read_session(
+        self, session_id: str, event_types: tuple[str, ...] | None,
+    ) -> dict[str, Any]:
         session_pk = _canonical_database_session_id(session_id)
         with store_transaction(self.engine) as conn:
             row = (
                 conn.execute(
-                    select(self.sessions.c.id, self.sessions.c.snapshot).where(
+                    select(self.sessions.c.id, self.sessions.c.snapshot, self.sessions.c.version).where(
                         self.sessions.c.id == session_pk
                     )
                 )
@@ -145,8 +159,11 @@ class SessionReadRows(SessionStoreState):
             )
             if not row:
                 raise KeyError(session_id)
-            events = self._events_for_session(conn, row["id"])
-        return hydrate_session_logs(with_project_lead_discussion(row["snapshot"] or {}), events)
+            events = self._events_for_session(conn, row["id"], event_types)
+        session = hydrate_session_logs(with_project_lead_discussion(row["snapshot"] or {}), events)
+        if event_types is not None:
+            session["eventCount"] = int(row["version"] or 0)
+        return session
 
     def get_session_header(self, session_id: str, *, for_update: bool = False) -> dict[str, Any]:
         """Read snapshot fields without loading the event log.

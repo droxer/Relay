@@ -54,7 +54,7 @@ def _take_command(app, node) -> dict:
     return command
 
 
-def _complete(app, node, command, thread_id, *, proposal=None, exit_code=0):
+def _complete(app, node, command, thread_id, *, proposal=None, exit_code=0, agent_log="Drafted the setup."):
     response = TestClient(app).post(
         f"/api/v1/daemon-nodes/{node['id']}/events",
         json={
@@ -65,7 +65,7 @@ def _complete(app, node, command, thread_id, *, proposal=None, exit_code=0):
             "runId": command["runId"],
             "agent": command["agent"],
             "exitCode": exit_code,
-            "agentLog": "Drafted the setup.",
+            "agentLog": agent_log,
             **({"projectSetup": proposal} if proposal is not None else {}),
         },
         headers={"Authorization": f"Bearer token_{node['id']}"},

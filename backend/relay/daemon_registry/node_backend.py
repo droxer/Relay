@@ -192,6 +192,10 @@ class ServerDaemonNodeBackend(
 
     def _run_sync(self, sandbox_id: str, request: dict[str, Any]) -> dict[str, Any]:
         request = self._normalize_run_request(sandbox_id, request)
+        read_result = (
+            self.registry.store.get_session_header if request.get("_hydrateSession") is False
+            else self.registry.store.get_session
+        )
         node_ids = [
             sandbox_id,
             *(
@@ -307,10 +311,10 @@ class ServerDaemonNodeBackend(
                 run_request, request.get("idempotencyFingerprint")
             )
             if run_request.get("status") != "prepared":
-                return self.registry.store.get_session(run_request["sessionId"])
+                return read_result(run_request["sessionId"])
             request = self._resume_prepared_request(request, run_request)
             session_id = run_request["sessionId"]
-            current_session = self.registry.store.get_session(session_id)
+            current_session = self.registry.store.get_session_header(session_id)
             self._validate_source_ownership(run_request, current_session)
             run_request = self.registry.ensure_task_execution_claim(run_request)
 
@@ -338,7 +342,7 @@ class ServerDaemonNodeBackend(
                 task_goal=dispatch_task_goal,
                 active_runs=active_runs_by_node[run_request["nodeId"]],
             )
-            return self.registry.store.get_session(session_id)
+            return read_result(session_id)
 
     def cancel_run(
         self,

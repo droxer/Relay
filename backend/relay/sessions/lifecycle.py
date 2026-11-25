@@ -114,11 +114,11 @@ class SessionLifecycleMixin(SessionControllerState):
         )
         return session
 
-    def continue_session(self, session_id: str) -> dict[str, Any]:
+    def continue_session(self, session_id: str, *, hydrate: bool = True) -> dict[str, Any]:
         """Reopen a terminal Thread for another round."""
-        current = self.store.get_session(session_id)
+        current = self.store.get_session_header(session_id)
         if current.get("status") not in ("completed", "failed", "cancelled"):
-            return current
+            return self.store.get_session(session_id) if hydrate else current
         return self._append(
             session_id,
             relay_event(
@@ -126,6 +126,7 @@ class SessionLifecycleMixin(SessionControllerState):
                 session_id,
                 {"status": "running", "phase": "continued"},
             ),
+            hydrate=hydrate,
         )
 
     def archive_session(self, session_id: str) -> dict[str, Any]:

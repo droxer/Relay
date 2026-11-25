@@ -74,6 +74,7 @@ import { navigateToAppPath } from "./lib/appRoute";
 import { taskCreateIntent } from "./lib/taskCreateIntent";
 import { parseProjectPageTab, queryCollectionStatus, showThreadChrome } from "./lib/projectPage";
 import { projectDirectoryEntryOptions, projectIndexOptions, projectRecordOptions } from "./hooks/projectQueries";
+import { usePrefetchProjectDiscussions } from "./hooks/useProjectDiscussions";
 import { RELAY_POLL_INTERVALS_MS } from "./lib/relayPolling";
 import { useNotifications } from "./hooks/useNotifications";
 import { computerManagementDestination, notificationHref, type NotificationTarget } from "./lib/notifications";
@@ -223,6 +224,10 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   });
   const selectedProjectQuery = needsProjectRecord ? selectedProjectRecord : projectEntry;
   const selectedProject = selectedProjectQuery.data?.project ?? projectEntry.data?.project ?? null;
+  usePrefetchProjectDiscussions(
+    projectRailVisible && projectTab === "discussions" && !selectedProject ? openingRoute?.projectId : undefined,
+    scopeSearch?.get("q")?.trim() ?? "",
+  );
   useRosterAvailabilityRefresh(nodes, nodesReady);
   const localNodes = useLocalDaemonNodes(
     user.role === "admin" && canUseLocalControlPanel()

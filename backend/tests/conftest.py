@@ -23,6 +23,7 @@ def postgres_extensions():
             # before releasing the lock or allowing any schema migration.
             connection.execute(text("SELECT pg_advisory_xact_lock(hashtext('relay.tests.extensions'))"))
             connection.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"))
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public"))
     finally:
         engine.dispose()
 
