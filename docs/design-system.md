@@ -226,8 +226,8 @@ Ink chooses, hue reports, and the two never trade places:
 |---|---|---|
 | the primary action fill (default `Button`, one per view) | focus ring (`--focus-outline`) | composer running indicator |
 | selection wash (`--action-soft`) | the selected-row accent bar, active nav marker | task + backlog running rows |
-| checked checkbox / radio / switch, current pager page | lead chevron of the brand mark | agent stream activity, busy header |
-| | | thread pulse, streaming rail node, trailing chevron of the brand mark |
+| checked checkbox / radio / switch, current pager page | center baton of the brand mark | agent stream activity, busy header |
+| | | thread pulse, streaming rail node, active run tab mark |
 | | | status pill on a running agent/node (TonePill `live`), the running status icon, running row accents |
 
 The other hues are meanings too: `--warn` gold is a person needed (a question,
@@ -275,17 +275,15 @@ deliberate — a reader who takes the rule literally will file them as bugs:
 
 - **Link ink is wayfinding, not decoration**: anchors in prose (`--link`) are
   ink, told apart by their underline — never a fill, a status, or a hue.
-- **The brand mark and `--signature` are the one orange.** `favicon.svg` (a fixed charcoal tile with a subtle `--line-1` hairline; the signed-in app highlights
-  the acting chevron and keeps both brand colors when idle), `relay-mark.svg` (the same
+- **The brand mark and `--signature` are the one bronze.** `favicon.svg` (a fixed lunar charcoal tile with a subtle `--line-1` hairline; the signed-in app lights the upper track and baton in `--brand-lead` when waiting for a person, or the baton and lower track in `--live` while an agent runs), `relay-mark.svg` (the same
   badge, shared with the PWA and opaque Apple/Android launcher variants), the
   wordmark `relay-logo.svg` (follows the viewer's scheme), and `RelayMark`'s
-  `tone="brand"` (side nav, sign-in, landing, empty transcript) draw a
-  `--brand-lead` lead chevron and a `--live` trailing chevron; the email carries
-  the same pair as its handoff bar. Inside the app, `--signature` lends
+  `tone="brand"` (side nav, sign-in, landing, empty transcript) draw the three-bar
+  Swiss Baton Cascade — monochrome `--ink-1` tracks bridged by a staggered
+  `--brand-lead` burnished-bronze baton. Inside the app, `--signature` lends
   `--brand-lead` to two thin-line jobs only: the focus ring (`--focus-outline`)
   and the selected-item marker bar (`--accent-bar`, `.rail-row`). It is never a
-  fill, a link, or a status colour, and the mark is the one static use of the
-  live blue: it depicts the handoff, it does not report a run. `RelayMark`
+  fill, a link, or a status colour. `RelayMark`
   inside working UI (transcript phase separators, generic empty states) keeps
   the default ink tone.
 - **Identity marks are neutral.** Agents and teams render as neutral class
