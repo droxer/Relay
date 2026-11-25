@@ -92,6 +92,7 @@ def test_each_manager_discussion_is_a_separate_project_thread(managed_env):
     assert not command.get("taskId")
     _complete(app, node, command, result["threadId"])
     transcript = client.get(f"/api/v1/threads/{result['threadId']}").json()
+    assert transcript["title"] == "What should we do next?"
     assert any(event.get("text") == "What should we do next?" for event in transcript["events"])
     response = client.post(f"/api/v1/projects/{project['id']}/manager/conversation")
     assert response.status_code == 200, response.text
@@ -112,7 +113,27 @@ def test_each_manager_discussion_is_a_separate_project_thread(managed_env):
     assert app.state.project_store.get_project(project["id"])["version"] == project["version"]
     second = _say(client, result["threadId"], "And now?", planner["id"], "manager-second")
     assert second.status_code == 202, second.text
+    assert client.get(f"/api/v1/threads/{result['threadId']}").json()["title"] == "What should we do next?"
     assert _take_command(app, node)["state"]["project_manager"]["agentId"] == planner["id"]
+
+
+def test_lead_discussion_first_message_preserves_manual_title(managed_env):
+    _, client, node, project, planner, _ = managed_env
+    _ready(managed_env[0], node)
+    thread_id = client.post(f"/api/v1/projects/{project['id']}/manager/conversation").json()["threadId"]
+    assert client.patch(f"/api/v1/threads/{thread_id}", json={"title": "My plan"}).status_code == 200
+    assert _say(client, thread_id, "Discuss the roadmap", planner["id"], "named-first").status_code == 202
+    assert client.get(f"/api/v1/threads/{thread_id}").json()["title"] == "My plan"
+
+
+def test_lead_discussion_title_is_bounded_and_in_summary(managed_env):
+    _, client, _, _, _, _ = managed_env
+    discussion, _ = _start(managed_env, text="  项目计划\n" + "长" * 100)
+    title = "项目计划 " + "长" * 74 + "…"
+    thread = client.get(f"/api/v1/threads/{discussion['threadId']}").json()
+    assert thread["title"] == title
+    summaries = client.get("/api/v1/threads", params={"view": "summary"}).json()["sessions"]
+    assert next(row for row in summaries if row["id"] == discussion["threadId"])["title"] == title
 
 
 @pytest.mark.parametrize("legacy", [False, True])
