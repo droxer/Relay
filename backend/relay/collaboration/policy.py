@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from .models import COLLABORATION_MANIFEST_STATE_KEY
+from .styles import collaboration_snapshot
 from .work import (
     MAX_REPAIRS,
     QUESTION_NOTE,
@@ -228,7 +229,8 @@ def next_work_transition(
         and not prior.get(REPAIR_NOTE_STATE_KEY)
     )
     if work_result is None or work_result.get("status") != "done":
-        style = (assignment.get("teamSnapshot") or {}).get("collaborationStyle")
+        snapshot = collaboration_snapshot(assignment.get("teamSnapshot"), assignment.get("projectSnapshot"))
+        style = snapshot.get("collaborationStyle")
         may_inspect = (
             work_result is None
             and next_index < len(assignments)

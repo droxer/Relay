@@ -394,7 +394,7 @@ test("Project Tasks can choose a custom workflow from a larger Team", async ({ p
   await page.getByRole("option", { name: "Assign later", exact: true }).click();
   await page.getByRole("radio", { name: "Workflow", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
-  await expect(page.getByRole("option", { name: /^Pipeline/ })).toHaveCount(0);
+  await expect(page.getByRole("option", { name: /^Pipeline/ })).toBeEnabled();
   await page.getByRole("option", { name: /^Project delivery/ }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_project");
@@ -418,6 +418,24 @@ for (const mobile of [false, true]) {
     expect(sends[0].teamId).toBeUndefined();
     expect(await page.locator("body").evaluate(el => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
   });
+
+  test(`Project presets start from the Project roster (${mobile ? "phone" : "desktop"})`, async ({ page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+    const { sends } = await fixture(page, false, "light", 1, false, false, false, false);
+    await page.goto("/projects/project?tab=members");
+    const library = page.getByRole("region", { name: /^Workflows/ });
+    await expect(library.getByRole("button", { name: /^Start run for / })).toHaveCount(3);
+    await library.getByRole("button", { name: "Start run for Pipeline", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Start workflow" });
+    await expect(dialog.getByRole("combobox", { name: "Team (optional)" })).toHaveCount(0);
+    await dialog.getByRole("textbox", { name: /^Goal/ }).fill("Release by Pipeline");
+    const submitted = page.waitForRequest(request =>
+      request.method() === "POST" && decodeURIComponent(new URL(request.url()).pathname).endsWith("/workflows/preset:pipeline/runs"));
+    await dialog.getByRole("button", { name: "Start run", exact: true }).click();
+    await submitted;
+    await expect.poll(() => sends[0]).toEqual({ requestId: expect.any(String), projectId: "project", taskGoal: "Release by Pipeline" });
+    expect(await page.locator("body").evaluate(el => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  });
 }
 
 
@@ -432,7 +450,7 @@ test("a Project Task selects an independent workflow with no Teams", async ({ pa
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("radio", { name: "Workflow", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
-  await page.getByRole("option", { name: "Release", exact: true }).click();
+  await option(page, "Release").click();
   await expect(page.getByRole("combobox", { name: "Team (optional)", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_release");

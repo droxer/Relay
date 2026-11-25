@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { Markdown } from "../LazyMarkdown";
 import type { AgentTeam, RelayTaskListItem } from "../../types";
-import { defaultWorkflowId, explicitTaskWorkflowId } from "../../lib/workflowSelection";
+import { defaultWorkflowId, explicitTaskWorkflowId, projectWorkflowName } from "../../lib/workflowSelection";
 import { useWorkflowName } from "../workflow/WorkflowSelect";
 import { isWorkflowTeam } from "../../lib/workflowTeamDraft";
 import { taskAcceptancePolicy } from "../../lib/taskBoardForm";
@@ -80,7 +80,8 @@ export function TaskRecordDefinition({
     value: t("workflow.step_count", { count: team.workflowStepCount ?? team.workflowSteps?.length ?? 0 }),
   });
   if (!task.assignedTeamId && task.assignedWorkflowId) rows.push({
-    key: "workflow", label: t("workflow.select_workflow"), value: workflowLabel ?? t("workflow.assigned_workflow"),
+    key: "workflow", label: t("workflow.select_workflow"),
+    value: projectWorkflowName(task.assignedWorkflowId, t, workflowLabel) ?? t("workflow.assigned_workflow"),
   });
   rows.push(
     { key: "created", label: t("record.created"), value: recordTimestamp(task.createdAt, locale), meta: true },

@@ -11,7 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { AgentTeam, UserAgent, Workflow } from "../../types";
+import type { AgentTeam, UserAgent } from "../../types";
+import type { ProjectWorkflowOption } from "../../lib/workflowSelection";
 import { teamAvailability } from "../../lib/taskAssignment";
 import { agentLabel } from "../../lib/plan";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
@@ -32,6 +33,7 @@ import {
   type TeamView,
 } from "../roster/RosterOption";
 import { rosterLabel, useRosterTabs, type RosterTab } from "../roster/RosterTabs";
+import { ProjectWorkflowOptionLabel } from "../workflow/ProjectWorkflowSelect";
 
 const NO_ASSIGNMENT = "__none__";
 const NAV_AGENTS = "__nav_agents__";
@@ -167,7 +169,7 @@ export function AssignmentSelect({
   describedBy?: string;
   autoFocus?: boolean;
   hideTeams?: boolean;
-  workflows?: Pick<Workflow, "id" | "name">[];
+  workflows?: ProjectWorkflowOption[];
   workflowMessage?: string;
   onOpenChange?: (open: boolean) => void;
   /** A list row's compact trigger: the row's own assignee chip, named by
@@ -249,7 +251,9 @@ export function AssignmentSelect({
             </>
           ) : roster.tab === "workflows" ? (
             <>
-              {workflows?.map(workflow => <SelectItem key={workflow.id} value={`workflow:${workflow.id}`}>{workflow.name}</SelectItem>)}
+              {workflows?.map(workflow => <SelectItem key={workflow.id} value={`workflow:${workflow.id}`} disabled={Boolean(workflow.issue)}>
+                <ProjectWorkflowOptionLabel option={workflow} />
+              </SelectItem>)}
               {workflowMessage ? <RosterEmptyOption value="__workflow_status__" label={workflowMessage} disabled /> : null}
             </>
           ) : (

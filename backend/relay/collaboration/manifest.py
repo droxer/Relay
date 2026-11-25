@@ -1,6 +1,6 @@
 """Round manifests: the pure contract a collaboration round is compiled into.
 
-Builds the manifest and its work graph from assignments and a team snapshot.
+Builds the manifest and its work graph from assignments and their snapshots.
 No IO, so the conductor that plans a round and the registry that adopts a lead
 plan compile it the same way.
 """
@@ -12,7 +12,7 @@ from typing import Any
 from ..core.ids import new_relay_id
 from ..core.project_roles import round_manager_context
 from ..core.team_workflows import is_workflow_team
-from .styles import LEAD_LED
+from .styles import LEAD_LED, collaboration_snapshot
 from .templates import STYLE_POLICIES
 from .workflow_compilation import workflow_work_graph
 
@@ -74,8 +74,9 @@ def create_round_manifest(
     ]
     completion_kind = "synthesize" if strategy in ("room", "review") else "all_required"
     result_owner = _result_owner_work_item(compiled_assignments)
-    style = (team_snapshot or {}).get("collaborationStyle")
-    fallback_from = (team_snapshot or {}).get("styleFallbackFrom")
+    snapshot = collaboration_snapshot(team_snapshot, project_snapshot)
+    style = snapshot.get("collaborationStyle")
+    fallback_from = snapshot.get("styleFallbackFrom")
     manager = round_manager_context(project_snapshot, compiled_assignments)
     return {
         "contract": {
@@ -210,9 +211,8 @@ def _work_owner_agent_id(assignment: dict[str, Any]) -> str:
 def _work_kind(assignment: dict[str, Any]) -> str:
     # Pipeline's last specialist also reports the aggregate result; it still
     # owns its role's work rather than a separate synthesis-only turn.
-    if assignment.get("synthesizer") is True and (
-        assignment.get("teamSnapshot") or {}
-    ).get("collaborationStyle") != "pipeline":
+    snapshot = collaboration_snapshot(assignment.get("teamSnapshot"), assignment.get("projectSnapshot"))
+    if assignment.get("synthesizer") is True and snapshot.get("collaborationStyle") != "pipeline":
         return "synthesis"
     mode = assignment.get("mode") or "action"
     role = assignment.get("role")

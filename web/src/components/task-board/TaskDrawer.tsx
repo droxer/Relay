@@ -14,7 +14,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { ProjectWorkflowSelect } from "../workflow/ProjectWorkflowSelect";
 import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
 import { WorkflowSelect } from "../workflow/WorkflowSelect";
-import { workflowSelectionIssue } from "../../lib/workflowSelection";
+import { projectWorkflowOptions, projectWorkflowSelectionIssue, workflowSelectionIssue } from "../../lib/workflowSelection";
 import { useKeyChange } from "../../hooks/useKeyChange";
 import { AssignmentKindSwitch, type AssignmentKind } from "./AssignmentKindSwitch";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -326,10 +326,10 @@ export function TaskDrawer({
   const projectAgentIds = project?.members.filter(member => member.enabled).map(member => member.agentId);
   const teamWorkflowIssue = workflowSelectionIssue(selectedTeam,
     form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
-  const independentWorkflow = workflowQuery.data?.workflows?.find(item => item.id === form.assignedWorkflowId);
-  const workflowIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : Boolean(form.assignedWorkflowId
-    && (!project || !independentWorkflow?.enabled || independentWorkflow.projectId !== project?.id || workflowQuery.isError
-      || !independentWorkflow.stepAgentIds.every(id => projectAgentIds?.includes(id))));
+  const projectWorkflows = project ? projectWorkflowOptions(project, workflowQuery.isError ? [] : workflowQuery.data?.workflows) : [];
+  const projectWorkflowIssue = form.assignedWorkflowId
+    ? projectWorkflowSelectionIssue(form.assignedWorkflowId, projectWorkflows) : null;
+  const workflowIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : projectWorkflowIssue;
 
 
   // A saved task can reference an agent/team that has since been deleted or is
@@ -381,11 +381,11 @@ export function TaskDrawer({
         ) : undefined}
         alternate={offersWorkflow && assignmentKind === "workflow" ? (
           <ProjectWorkflowSelect triggerId={assignmentFieldId}
-            workflows={(workflowQuery.data?.workflows ?? []).filter(item => item.projectId === project?.id && item.enabled && item.stepAgentIds.every(id => projectAgentIds?.includes(id)))}
+            workflows={projectWorkflows}
             value={form.assignedWorkflowId || ""}
             onChange={id => updateBase({ assignedWorkflowId: id, assignedAgentId: "", assignedAgent: "", assignedTeamId: "", collaborationStyle: null })}
             disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
-            issue={Boolean(workflowIssue)} onRetry={() => void workflowQuery.refetch()} />
+            issue={projectWorkflowIssue} onRetry={() => void workflowQuery.refetch()} />
         ) : undefined}
         onSelect={(selection) => {
           if (selection.kind === "none") {

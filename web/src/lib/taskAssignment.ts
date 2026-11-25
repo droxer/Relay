@@ -3,6 +3,7 @@ import { isLogicalAgentRoutable } from "./agentDisplayNames.ts";
 import { isWorkflowTeam } from "./workflowTeamDraft.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
 import type { TaskAssignmentSelection } from "./taskBoardForm.ts";
+import { projectWorkflowName } from "./workflowSelection.ts";
 
 /** Can this agent/team be offered for a task assigned to `assigneeUserId`?
  *
@@ -219,6 +220,6 @@ export function taskAssigneeLabel(
 ): string {
   if (task.assignedTeamId) return resolvedName || t("backlog.assignment_unavailable_team");
   if (task.assignedAgentId) return resolvedName || t("backlog.assignment_unavailable_agent");
-  if (task.assignedWorkflowId) return resolvedName || t("workflow.assigned_workflow");
+  if (task.assignedWorkflowId) return projectWorkflowName(task.assignedWorkflowId, t, resolvedName) || t("workflow.assigned_workflow");
   return task.assignedAgent || t("backlog.unassigned");
 }

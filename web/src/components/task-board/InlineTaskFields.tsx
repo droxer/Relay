@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
+import { predefinedStyle, projectWorkflowOptions, projectWorkflowSelectionIssue } from "../../lib/workflowSelection";
 import { useTranslation } from "react-i18next";
 import { enUS, zhCN, zhTW } from "react-day-picker/locale";
 import { cn } from "@/lib/utils";
@@ -214,9 +215,7 @@ function InlineAssigneeOptions({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  const projectAgents = new Set(project?.members.filter(member => member.enabled).map(member => member.agentId));
-  const workflows = workflowQuery?.data?.workflows.filter(workflow => workflow.projectId === project?.id && workflow.enabled
-    && workflow.stepAgentIds.every(id => projectAgents.has(id))) ?? [];
+  const workflows = project ? projectWorkflowOptions(project, workflowQuery?.data?.workflows) : undefined;
   const chip = (
     <TaskAssignee task={task} ready={display.ready} agentDisplayName={display.name} agentImageUrl={display.imageUrl} />
   );
@@ -242,7 +241,12 @@ function InlineAssigneeOptions({
   const selectedAgent = !selectedTeam && task.assignedAgentId
     ? options.agents.find((agent) => agent.id === task.assignedAgentId)
     : undefined;
-  const staleAssignment = Boolean((task.assignedTeamId && !options.teams.some(team => team.id === task.assignedTeamId)) || (task.assignedAgentId && !options.agents.some(agent => agent.id === task.assignedAgentId)) || (project && task.assignedWorkflowId && workflowQuery?.isSuccess && !workflows.some(workflow => workflow.id === task.assignedWorkflowId)));
+  const staleWorkflow = workflows && task.assignedWorkflowId
+    && (predefinedStyle(task.assignedWorkflowId) || workflowQuery?.isSuccess)
+    && projectWorkflowSelectionIssue(task.assignedWorkflowId, workflows);
+  const staleAssignment = Boolean(staleWorkflow
+    || (task.assignedTeamId && !options.teams.some(team => team.id === task.assignedTeamId))
+    || (task.assignedAgentId && !options.agents.some(agent => agent.id === task.assignedAgentId)));
   const value = task.assignedTeamId
     ? `team:${task.assignedTeamId}`
     : task.assignedAgentId ? `agent:${task.assignedAgentId}`
@@ -254,7 +258,7 @@ function InlineAssigneeOptions({
       agents={options.agents}
       teams={options.teams}
       hideTeams={Boolean(project)}
-      workflows={project ? workflows : undefined}
+      workflows={workflows}
       workflowMessage={workflowQuery?.isPending ? t("workflow.loading") : workflowQuery?.isError ? t("workflow.load_failed") : undefined}
       onOpenChange={onAssignmentOpenChange}
       selectedAgent={selectedAgent}

@@ -9,6 +9,7 @@ from relay.projects.runtime import (
     project_runtime_node,
     project_thread_assignments,
     project_runtime_snapshot,
+    project_styled_assignments,
     resolve_project_task_assignments,
 )
 
@@ -71,6 +72,25 @@ def test_project_roster_runs_lead_first_then_keeps_configured_order() -> None:
         "reviewer",
         "tester",
         "builder",
+    ]
+
+
+def test_project_preset_accepts_legacy_placements_and_uses_project_roles():
+    project = _project()
+    reviewer, *_, builder = project["members"]
+    project["members"] = [reviewer, {key: value for key, value in builder.items() if key != "role"}]
+    agents = SimpleNamespace(get_agent=lambda agent_id: {
+        "id": agent_id, "supervisorUserId": "alice", "defaultRole": "implementer",
+    })
+    placements = SimpleNamespace(list_placements=lambda *, agent_id: [{
+        "agentId": agent_id, "desiredState": "active", "daemonNodeId": "legacy-node",
+    }])
+    assignments, _ = project_styled_assignments(
+        project, style="pipeline", agent_store=agents, placement_store=placements,
+        daemon_nodes=[{"id": "legacy-node", "userId": "alice", "workspaceId": "main"}],
+    )
+    assert [(item["agentId"], item["role"]) for item in assignments] == [
+        ("builder", "implementer"), ("reviewer", "reviewer"),
     ]
 
 

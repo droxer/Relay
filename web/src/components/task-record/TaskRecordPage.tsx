@@ -29,7 +29,7 @@ import { TaskRecordDefinition } from "./TaskRecordDefinition";
 import { RecordPrerequisites } from "./RecordPrerequisites";
 import { useUserAgents } from "../../hooks/useUserAgents";
 import { useWorkflowName } from "../../hooks/useProjectWorkflows";
-import { teamWorkflowName } from "../../lib/workflowSelection";
+import { predefinedStyle, teamWorkflowName } from "../../lib/workflowSelection";
 import { useTeams } from "../../hooks/useTeams";
 import { taskAgentDisplayName, taskAssigneeLabel } from "../../lib/taskAssignment";
 import type { HistoryNameResolver } from "./taskHistoryLabel";
@@ -138,7 +138,8 @@ export function TaskRecordPage({
   const { teams, isSuccess: teamsReady, error: teamsError } = useTeams(currentUser.userId);
   const assignedTeam = teams.find((team) => team.id === task.assignedTeamId);
   const cachedWorkflowName = teamWorkflowName(assignedTeam, task.assignedWorkflowId);
-  const fetchWorkflowName = tab === "definition" && !cachedWorkflowName && (!task.assignedTeamId || teamsReady || teamsError);
+  const fetchWorkflowName = tab === "definition" && !predefinedStyle(task.assignedWorkflowId)
+    && !cachedWorkflowName && (!task.assignedTeamId || teamsReady || teamsError);
   const workflowName = useWorkflowName(fetchWorkflowName ? task.assignedWorkflowId : undefined, task.projectId);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
   const historyNames = useMemo<HistoryNameResolver>(() => ({

@@ -93,7 +93,10 @@ WORK_FIELDS = {
     "tags": {"type": "array", "maxItems": 50, "items": {"type": "string", "maxLength": 100}},
     "assignedAgentId": _NULLABLE_TEXT,
     "assignedTeamId": _NULLABLE_TEXT,
-    "assignedWorkflowId": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+    "assignedWorkflowId": {
+        "type": ["string", "null"], "minLength": 1, "maxLength": 128,
+        "description": "A Project Custom Workflow ID or preset:build_review, preset:pipeline, or preset:lead_led.",
+    },
     "status": {"enum": ["backlog", "assigned", "blocked", "cancelled"]},
     "blockerReason": {"type": "string", "maxLength": 2000},
 }

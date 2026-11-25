@@ -396,7 +396,7 @@ class TaskDispatcher:
             team_snapshot=self.team_snapshot,
         )
         if (
-            self.task.get("assignedAgentId") or self.task.get("assignedTeamId")
+            self.task.get("assignedAgentId") or self.task.get("assignedTeamId") or self.task.get("assignedWorkflowId")
         ) and self.task.get("status") == "backlog":
             self._mark_assigned_if_backlog()
         self.agent_first = any(item.get("agentId") for item in self.run_assignments)
@@ -511,7 +511,7 @@ class TaskDispatcher:
         if self.task.get("status") == "backlog":
             self._mark_assigned_if_backlog()
             self.temporary_group_status = not bool(
-                self.task.get("assignedAgentId") or self.task.get("assignedTeamId")
+                self.task.get("assignedAgentId") or self.task.get("assignedTeamId") or self.task.get("assignedWorkflowId")
             )
         # Routing can yield after Backlog becomes Ready. The scheduler may
         # already have admitted the Task and released its dispatch claim.
@@ -599,7 +599,7 @@ class TaskDispatcher:
                     purpose="accomplish",
                     address=(
                         {"kind": "room"}
-                        if self.task.get("assignedTeamId")
+                        if self.task.get("assignedTeamId") or (self.project_snapshot or {}).get("collaborationStyle")
                         else {
                             "kind": "members",
                             "agentIds": [
