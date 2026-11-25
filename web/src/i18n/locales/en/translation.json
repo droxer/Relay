@@ -2537,6 +2537,7 @@
     "create_role_required": "Choose a role.",
     "create_name_label": "Agent name",
     "create_name_placeholder": "e.g. Researcher",
+    "edit_name_hint": "Leave blank to generate a name.",
     "create_submit": "Create agent",
     "create_creating": "Creating…",
     "create_error": "Could not create the agent: {{message}}",

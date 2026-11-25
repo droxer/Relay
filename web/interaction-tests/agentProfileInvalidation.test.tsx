@@ -43,3 +43,18 @@ it("refreshes only the agent, admin agent, and team lists after a profile edit",
   expect(invalidated(keys.adminUsers)).toBe(false);
   client.clear();
 });
+
+it("allows clearing the name and sends it for generation", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const agent = { id: "b", displayName: "Ada", instructions: "Build things", enabled: true, executorKind: "codex", placements: [] } as unknown as UserAgent;
+  vi.mocked(updateOwnUserAgent).mockResolvedValue({ agent: { ...agent, displayName: "Generated" } } as never);
+  const client = new QueryClient();
+  render(<QueryClientProvider client={client}><AgentProfilePanel agent={agent} canEditMeta /></QueryClientProvider>);
+
+  fireEvent.click(screen.getByRole("button", { name: "agents_page.edit_profile" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "admin.v2.agent_name" }), { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "agents_page.save_profile" }));
+
+  await waitFor(() => expect(updateOwnUserAgent).toHaveBeenCalledWith("b", { displayName: "" }));
+  client.clear();
+});

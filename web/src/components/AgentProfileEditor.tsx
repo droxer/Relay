@@ -60,9 +60,8 @@ export function AgentProfileEditor({
   const savedPersonality = saved.instructions.trim();
   const hasCustomPersonality = savedPersonality.length > 0;
   const dirty = profileDraftDirty(saved, draft);
-  const nameError = draft.name.trim().length === 0 ? t("admin.v2.edit_user_name_required") : null;
   const modelProblem = modelIdProblem(draft.model);
-  const canSave = dirty && !nameError && !modelProblem;
+  const canSave = dirty && !modelProblem;
   // With nothing pinned there is nothing to change on an outdated daemon; a
   // pinned model stays editable so the owner can reset it to the default.
   const modelLocked = !modelContext.canSelectModel && !saved.model;
@@ -74,7 +73,8 @@ export function AgentProfileEditor({
   const helpId = useId();
   const roleLabelId = useId();
   const modelLabelId = useId();
-  const nameErrorId = useId();
+  const nameLabelId = useId();
+  const nameHintId = useId();
   const modelErrorId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -149,7 +149,7 @@ export function AgentProfileEditor({
           }}
         >
           <div className="agent-profile-fields">
-            <Field label={t("admin.v2.agent_name")} error={nameError ?? undefined} errorId={nameErrorId}>
+            <Field label={t("admin.v2.agent_name")} labelId={nameLabelId} hint={<span id={nameHintId}>{t("agents_page.edit_name_hint")}</span>}>
               <Input
                 ref={nameRef}
                 name="agent-profile-name"
@@ -159,8 +159,9 @@ export function AgentProfileEditor({
                 maxLength={64}
                 value={draft.name}
                 onChange={(event) => update({ name: event.target.value })}
-                aria-invalid={Boolean(nameError) || undefined}
-                aria-describedby={nameError ? nameErrorId : undefined}
+                placeholder={t("agents_page.create_name_placeholder")}
+                aria-labelledby={nameLabelId}
+                aria-describedby={nameHintId}
                 disabled={saving}
               />
             </Field>

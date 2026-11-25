@@ -135,5 +135,19 @@ def test_create_agent_rejects_a_non_string_display_name(tmp_path: Path) -> None:
         store.create_agent("alice", {"displayName": 42, "executorKind": "claude"})
 
 
+def test_edit_blank_name_generates_unique_name_and_records_it(tmp_path: Path) -> None:
+    store = _make_store(tmp_path)
+    agent = store.create_agent("alice", {"displayName": "Original", "executorKind": "claude", "defaultRole": "implementer"})
+    other = store.create_agent("alice", {"executorKind": "codex", "defaultRole": "implementer"})
+
+    updated = store.update_agent(agent["id"], {"displayName": "  "})
+
+    assert updated["displayName"] in AGENT_NAME_POOL
+    assert updated["displayName"].casefold() != other["displayName"].casefold()
+    assert store.get_agent(agent["id"])["displayName"] == updated["displayName"]
+    assert store.events(agent["id"])[-1]["patch"]["displayName"] == updated["displayName"]
+    assert store.update_agent(agent["id"], {"instructions": "Updated"})["displayName"] == updated["displayName"]
+
+
 def test_agent_name_literal_matches_agent_names_tuple() -> None:
     assert set(get_args(AgentName)) == set(AGENT_NAMES)
