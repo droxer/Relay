@@ -141,7 +141,7 @@ def _plan_creation(
     creates_thread = body.get("createSession") is True or isinstance(
         body.get("assignments"), list
     )
-    assigned = bool(assignment.agent_id or assignment.team_id)
+    assigned = bool(assignment.agent_id or assignment.team_id or body.get("assignedWorkflowId"))
     scope = {
         **routine, "projectId": project and project["id"],
         "computerId": request.reader.string(body, "computerId"),

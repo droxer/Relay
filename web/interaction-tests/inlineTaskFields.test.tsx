@@ -195,8 +195,18 @@ it("replaces a stale Project Team with a Project Workflow", async () => {
     agents={[]} teams={[]} display={{ ready: false }} onChange={onChange} />);
   fireEvent.click(screen.getByRole("combobox", { name: "backlog.assignment_reselect" }));
   fireEvent.click(screen.getByRole("radio", { name: /workflow.workflows/ }));
-  fireEvent.click(screen.getByRole("option", { name: "Ship workflow" }));
+  fireEvent.click(screen.getByRole("option", { name: /Ship workflow/ }));
   expect(onChange).toHaveBeenCalledWith({ kind: "workflow", id: "w" });
+});
+
+it("selects a predefined Project Workflow from the inline assignment", () => {
+  const onChange = vi.fn();
+  const project = { id: "project-1", members: [{ agentId: "a", enabled: true }], leadAgentId: "a" } as ProjectRecord;
+  render(<InlineAssignee task={{ ...base, assignedWorkflowId: "preset:pipeline" }} project={project}
+    agents={[]} teams={[]} display={{ ready: false }} onChange={onChange} />);
+  expect(screen.getByRole("combobox").textContent).toContain("collab_style.pipeline");
+  fireEvent.click(screen.getByRole("option", { name: /collab_style.lead_led/ }));
+  expect(onChange).toHaveBeenCalledWith({ kind: "workflow", id: "preset:lead_led" });
 });
 
 it("marks a stale assignment in its cell without spelling the sentence into the row", () => {

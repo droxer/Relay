@@ -1,6 +1,6 @@
-"""Team collaboration styles: the one place a style is chosen and slots filled.
+"""Predefined Workflow styles: how rosters fill slots and order turns.
 
-A style decides which team members take a turn in an accomplish round and in
+A style decides which members take a turn in an accomplish round and in
 what order. Everything after that — work gates, repair, delivery — is shared.
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import Any
 
 from ..core.workflow_selection import selected_workflow_id, predefined_style
 
-# Solo is an internal one-member fallback, never a selectable team style.
+# Solo is an internal one-member fallback.
 COLLABORATION_STYLES: tuple[str, ...] = ("build_review", "pipeline", "lead_led")
 DEFAULT_COLLABORATION_STYLE = "build_review"
 LEAD_LED = "lead_led"
@@ -33,6 +33,12 @@ ROLE_STAGE: dict[str, int] = {
 # Specialists hand their work to the builders; Build and review never casts
 # one as the reviewer, and a team of them is better served by Pipeline.
 SPECIALIST_ROLES = frozenset({"researcher", "designer", "writer", "devops", "operations"})
+
+
+def collaboration_snapshot(
+    team_snapshot: dict[str, Any] | None, project_snapshot: dict[str, Any] | None
+) -> dict[str, Any]:
+    return team_snapshot or project_snapshot or {}
 
 
 def role_stage(role: str | None) -> int:

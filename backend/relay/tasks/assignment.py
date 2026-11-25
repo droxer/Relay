@@ -12,7 +12,9 @@ from ..core.team_workflows import is_workflow_team
 from ..projects.workflow import validate_project_workflow
 from ..core.workflow_selection import selected_workflow_id, predefined_style
 from ..core.computer_identity import computer_id
-from ..projects.runtime import project_task_assignment_error, project_computer_assignment_error
+from ..projects.runtime import (
+    project_task_assignment_error, project_computer_assignment_error, project_workflow_members,
+)
 from ..projects.access import ProjectAccessError, project_for_owner
 from ..security.actor import Actor
 from .requests import TaskRequestError
@@ -122,7 +124,11 @@ def validate_project_task_assignment(
         project,
         assigned_agent_id=assigned_agent_id,
         assigned_team_id=assigned_team_id,
-        workflow_id=task.get("assignedWorkflowId") if assigned_team_id == task.get("assignedTeamId") else None,
+        workflow_id=(
+            task.get("assignedWorkflowId")
+            if not assigned_agent_id and assigned_team_id == task.get("assignedTeamId")
+            else None
+        ),
     )
 
 
@@ -149,6 +155,7 @@ def validate_project_assignment(
         raise TaskRequestError(400, "project_team_assignment_forbidden")
     if workflow_id or (team and predefined_style(selected_workflow_id(team, {'projectId': project['id']})) is None):
         team = validate_task_workflow(ctx, {"assignedTeamId": assigned_team_id,
+                                           "assignedAgentId": assigned_agent_id,
                                            "assignedWorkflowId": workflow_id,
                                            "projectId": project["id"], "ownerUserId": project["ownerUserId"]})
     if code := project_computer_assignment_error(
@@ -263,10 +270,25 @@ def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | N
         raise TaskRequestError(403, 'workflow_owner_required')
     try:
         workflow_id = selected_workflow_id(team, task)
-        if predefined_style(workflow_id) is not None:
-            if not team:
+        style = predefined_style(workflow_id)
+        if style is not None:
+            if team:
+                if task.get('projectId'):
+                    raise TaskRequestError(400, 'project_team_assignment_forbidden')
+                return team
+            project_id = task.get('projectId')
+            if not project_id:
                 raise ValueError('workflow_team_required')
-            return team
+            if task.get('assignedAgentId'):
+                raise ValueError('workflow_agent_conflict')
+            project = owned_project(ctx, project_id, task.get('ownerUserId') or '')
+            assert project is not None
+            project_workflow_members(
+                project, style=style, agent_store=ctx.agent_store,
+                placement_store=ctx.agent_placement_store,
+                daemon_nodes=ctx.registry.monitor_nodes(),
+            )
+            return None
         definition = ctx.workflow_store.get_workflow(workflow_id)
         if not definition:
             raise ValueError('workflow_not_found')

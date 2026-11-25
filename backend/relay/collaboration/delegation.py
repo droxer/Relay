@@ -38,7 +38,11 @@ def compile_delegation(
     count = sum(bool(item.get("delegatedByAgentId")) for item in assignments)
     if requester.get("delegatedByAgentId") or count >= MAX_DELEGATIONS:
         raise ValueError("Nested delegation is unavailable; at most two delegations are allowed per round.")
-    if requester.get("mode", "action") != "action" or requester.get("teamSnapshot"):
+    if (
+        requester.get("mode", "action") != "action"
+        or requester.get("teamSnapshot")
+        or (requester.get("projectSnapshot") or {}).get("collaborationStyle")
+    ):
         raise ValueError("Direct delegation requires an individual action round.")
     target = next((item for item in candidates if item["agentId"] == request["agentId"]), None)
     if not target or target["agentId"] == requester["agentId"] or (

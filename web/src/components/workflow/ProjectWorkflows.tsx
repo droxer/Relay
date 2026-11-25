@@ -3,9 +3,10 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { startProjectWorkflow } from "../../api";
+import { RelayApiError } from "../../api-client/client";
 import { useTeams } from "../../hooks/useTeams";
 import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
-import { workflowOptions } from "../../lib/workflowSelection";
+import { projectWorkflowOptions, workflowOptions } from "../../lib/workflowSelection";
 import type { WorkflowPreview, AgentTeam, ProjectListItem, UserAgent } from "../../types";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -17,6 +18,7 @@ import { ActionAdd, ActionStart, ICON } from "../icons";
 import { WorkflowStepSummary } from "./WorkflowStepSummary";
 import { workflowProcessMeta } from "./processMeta";
 import { WorkflowEditorForPreview } from "./WorkflowEditor";
+import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
 
 type Props = {
   project: ProjectListItem;
@@ -26,13 +28,17 @@ type Props = {
   onOpenThread: (sessionId: string) => void;
 };
 
+type StartWorkflow = { kind: "predefined"; id: string; name: string }
+  | { kind: "steps"; id: string; name: string; preview: WorkflowPreview };
+
 export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThread }: Props) {
   const { t } = useTranslation();
   const { teams } = useTeams(userId);
   const query = useProjectWorkflows(project.id);
   const workflows = useMemo(() => query.data?.workflows ?? [], [query.data]);
   const [editing, setEditing] = useState<{ workflow: WorkflowPreview | null } | null>(null);
-  const [starting, setStarting] = useState<WorkflowPreview | null>(null);
+  const [starting, setStarting] = useState<StartWorkflow | null>(null);
+  const presets = projectWorkflowOptions(project).filter(workflow => workflow.kind === "predefined");
   const canManage = Boolean(userId) && userId === project.ownerUserId && !readOnly;
   const canCreate = canManage && project.members.some(member => member.enabled);
   const agentName = (id: string) => agents.find(agent => agent.id === id)?.displayName ?? t("project.member_unavailable");
@@ -42,12 +48,30 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
   return <section className="project-general-section workflow-project-library" aria-labelledby="project-workflows-title">
     {/* The tab's lede already says what a workflow is; the head only counts. */}
     <div className="workflow-library-head">
-      <h2 id="project-workflows-title" className="workspace-dossier-section-title">{t("workflow.section_title")} <span className="tnum">{workflows.length}</span></h2>
+      <h2 id="project-workflows-title" className="workspace-dossier-section-title">{t("workflow.section_title")} <span className="tnum">{presets.length + workflows.length}</span></h2>
       {canManage ? <Button type="button" variant="default" size="dense" disabled={!canCreate} onClick={() => setEditing({ workflow: null })}>
         <ActionAdd size={ICON.sm} aria-hidden="true" />{t("workflow.create")}
       </Button> : null}
     </div>
     {canManage && !canCreate ? <p className="workflow-editor-note">{t("workflow.project_agents_needed")} <a className="record-inline-action" href={`/projects/${encodeURIComponent(project.id)}?tab=members`}>{t("workflow.manage_agents")}</a></p> : null}
+    <ul className="workflow-team-list">
+      {presets.map(({ id, template, issue }) => {
+        const name = t(`collab_style.${template}`);
+        return <li key={id} className="workflow-team-row" data-kind="predefined">
+          <div className="workflow-library-main">
+            <div className="workflow-team-row-name"><PredefinedWorkflowIcon style={template} /><h3 className="workflow-library-name">{name}</h3></div>
+            <p className="workflow-library-meta">{t(`collab_style.${template}_hint`)}</p>
+            {canManage && issue === "project_lead_required" ? <p className="workflow-library-meta">{t("workflow.project_lead_required")}</p> : null}
+          </div>
+          {canManage ? <div className="workflow-team-actions">
+            <Button type="button" variant="outline" size="dense" aria-label={t("workflow.start_named", { name })}
+              disabled={Boolean(issue)} onClick={() => setStarting({ kind: "predefined", id, name })}>
+              <ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}
+            </Button>
+          </div> : null}
+        </li>;
+      })}
+    </ul>
     {query.isPending ? <p className="workflow-teams-state" aria-busy="true">{t("workflow.loading")}</p>
       : query.isError ? <div className="workflow-teams-state" role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="outline" size="dense" onClick={() => void query.refetch()}>{t("workspace.retry")}</Button></div>
       : workflows.length === 0 ? <div className="workflow-project-empty"><h3>{t("workflow.project_empty_title")}</h3><p>{t("workflow.project_empty_body")}</p></div>
@@ -64,7 +88,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
               </div>
               {canManage ? <div className="workflow-team-actions">
                 <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>
-                <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting(workflow)}><ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}</Button>
+                <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting({ kind: "steps", id: workflow.id, name: workflow.name, preview: workflow })}><ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}</Button>
               </div> : null}
             </div>
             <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={agentName} agentImage={id => agents.find(agent => agent.id === id)?.profileImageUrl} />
@@ -74,7 +98,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
       </ul>}
     {canManage ? <>
       <WorkflowEditorForPreview open={editing !== null} project={project} workflow={editing?.workflow ?? null} teams={teams} agents={agents} onClose={() => setEditing(null)} />
-      <WorkflowRunStarter key={starting?.id ?? "closed"} workflow={starting} teams={starting ? linkedTeams(starting) : []} project={project} onClose={() => setStarting(null)} onStarted={sid => { setStarting(null); onOpenThread(sid); }} />
+      <WorkflowRunStarter key={starting?.id ?? "closed"} workflow={starting} teams={starting?.kind === "steps" ? linkedTeams(starting.preview) : []} project={project} onClose={() => setStarting(null)} onStarted={sid => { setStarting(null); onOpenThread(sid); }} />
     </> : null}
   </section>;
 }
@@ -95,7 +119,7 @@ function newRequestId(): string {
 function WorkflowRunStarter({
   workflow, project, teams, onClose, onStarted,
 }: {
-  workflow: WorkflowPreview | null;
+  workflow: StartWorkflow | null;
   teams: AgentTeam[];
   project: ProjectListItem;
   onClose: () => void;
@@ -107,14 +131,8 @@ function WorkflowRunStarter({
   const [goal, setGoal] = useState("");
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [opened, setOpened] = useState<{ teamId: string | null; requestId: string }>(() => ({ teamId: null, requestId: newRequestId() }));
-  if (workflow && opened.teamId !== workflow.id) {
-    setOpened({ teamId: workflow.id, requestId: newRequestId() });
-    setGoal("");
-    setTeamId("");
-    setFailure(null);
-  }
-  const firstGated = workflow?.workflowSteps?.[0]?.requiresApproval === true;
+  const [requestId] = useState(newRequestId);
+  const firstGated = workflow?.kind === "steps" && workflow.preview.workflowSteps[0]?.requiresApproval === true;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -126,12 +144,16 @@ function WorkflowRunStarter({
     setPending(true);
     setFailure(null);
     try {
-      const session = await startProjectWorkflow(workflow.id, { requestId: opened.requestId, taskGoal: goal.trim(), ...(teamId ? { teamId } : {}) });
+      const session = await startProjectWorkflow(workflow.id, {
+        requestId, taskGoal: goal.trim(),
+        ...(workflow.kind === "predefined" ? { projectId: project.id } : teamId ? { teamId } : {}),
+      });
       announce({ message: firstGated ? t("workflow.started_gated") : t("workflow.started"), tone: "success" });
-      setOpened({ teamId: null, requestId: newRequestId() });
       onStarted(session.id);
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : String(error));
+      const code = error instanceof RelayApiError ? error.code : undefined;
+      setFailure(code === "project_lead_required" || code === "project_roster_invalid"
+        ? t(`workflow.${code}`) : error instanceof Error ? error.message : String(error));
     } finally {
       setPending(false);
     }
@@ -149,12 +171,12 @@ function WorkflowRunStarter({
       bodyClassName="adm-drawer-body--column"
     >
       <form className="workflow-editor" onSubmit={(event) => void submit(event)} noValidate>
-        <Field label={t("workflow.optional_team")} wrapper="div" hint={t("workflow.independent_run_hint")}>
+        {workflow?.kind === "steps" ? <Field label={t("workflow.optional_team")} wrapper="div" hint={t("workflow.independent_run_hint")}>
           <Select value={teamId || "independent"} disabled={pending} onValueChange={value => setTeamId(value === "independent" ? "" : value ?? "")}>
             <SelectTrigger className="w-full" aria-label={t("workflow.optional_team")}><SelectValue>{teamId ? teams.find(team => team.id === teamId)?.name : t("workflow.independent")}</SelectValue></SelectTrigger>
             <SelectContent><SelectItem value="independent">{t("workflow.independent")}</SelectItem>{teams.map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)}</SelectContent>
           </Select>
-        </Field>
+        </Field> : null}
         <Field label={t("workflow.goal")} hint={t("workflow.goal_hint")} error={failure ?? undefined} errorId="workflow-run-goal-error">
           <Textarea
             rows={5}

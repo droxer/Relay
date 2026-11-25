@@ -18,10 +18,10 @@ const project = { id: "p", name: "Project P", enabled: true, ownerUserId: "owner
 const agent = { id: "a", displayName: "Ada", executorKind: "codex", enabled: true, supervisorUserId: "owner", placements: [{ computerId: "c", desiredState: "active" }] } as UserAgent;
 const workflow: ProjectWorkflowChoice = { id: "w", name: "Ship workflow", projectId: "p", enabled: true, stepAgentIds: ["a"] };
 
-function mount(initial: TaskBoardFormState) {
+function mount(initial: TaskBoardFormState, custom = [workflow, { ...workflow, id: "foreign", projectId: "q", name: "Foreign workflow" }]) {
   const submit = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-  client.setQueryData(["workflows", "choices", "p"], { workflows: [workflow, { ...workflow, id: "foreign", projectId: "q", name: "Foreign workflow" }] });
+  client.setQueryData(["workflows", "choices", "p"], { workflows: custom });
   function Editor() {
     const [form, setForm] = useState(initial);
     return <TaskDrawer open form={form} projects={[project]} logicalAgents={[agent]} teams={[]} saving={false}
@@ -38,8 +38,8 @@ it.each(["backlog", "routine"] as const)("repairs a saved stale Workflow in the 
   fireEvent.submit(container.querySelector("form")!);
   expect(submit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("combobox", { name: "workflow.select_workflow" }));
-  expect(screen.queryByRole("option", { name: "Foreign workflow" })).toBeNull();
-  fireEvent.click(screen.getByRole("option", { name: "Ship workflow" }));
+  expect(screen.queryByRole("option", { name: /Foreign workflow/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /Ship workflow/ }));
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   expect(screen.queryByText("workflow.optional_team")).toBeNull();
   fireEvent.submit(container.querySelector("form")!);
@@ -60,7 +60,7 @@ it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never b
   expect(screen.queryByText("backlog.assign_later")).toBeNull();
   fireEvent.click(screen.getByRole("combobox", { name: "workflow.select_workflow" }));
   expect(screen.queryByRole("option", { name: "workflow.project_default_agents" })).toBeNull();
-  fireEvent.click(screen.getByRole("option", { name: "Ship workflow" }));
+  fireEvent.click(screen.getByRole("option", { name: /Ship workflow/ }));
   expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("Ship workflow");
 
   // Back to Agent drops the workflow rather than keeping both.
@@ -68,6 +68,17 @@ it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never b
   await waitFor(() => expect(screen.queryByRole("combobox", { name: "workflow.select_workflow" })).toBeNull());
   fireEvent.click(workflowKind);
   await waitFor(() => expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("workflow.choose"));
+});
+
+it.each(["backlog", "routine"] as const)("saves a predefined Workflow in a Project with no custom definitions (%s)", async variant => {
+  const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
+  const { container, submit } = mount({ ...form, title: "Work", projectId: "p" }, []);
+  fireEvent.click(screen.getByRole("radio", { name: "backlog.assignment_kind_workflow" }));
+  expect(screen.getByRole<HTMLButtonElement>("option", { name: /collab_style.lead_led/ }).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("option", { name: /collab_style.pipeline/ }));
+  expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("collab_style.pipeline");
+  fireEvent.submit(container.querySelector("form")!);
+  expect(submit).toHaveBeenCalledOnce();
 });
 
 it("opens a saved Workflow assignment on the Workflow side", () => {

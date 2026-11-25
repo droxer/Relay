@@ -269,7 +269,7 @@ def _resolve_assignment(
     if agent_id and team_id:
         raise TaskRequestError(400, "task_agent_and_team_conflict")
     validate_project_task_assignment(
-        ctx, effective,
+        ctx, {**effective, "assignedWorkflowId": None} if "assignedWorkflowId" in body else effective,
         assigned_agent_id=agent_id or (current.get("assignedAgentId") if "computerId" in body and "assignedAgentId" not in body else None),
         assigned_team_id=team_id or (current.get("assignedTeamId") if "computerId" in body and "assignedTeamId" not in body else None)
     )
@@ -378,7 +378,9 @@ def _plan_next_assignment(
         raise TaskRequestError(409, "task_execution_active")
     if following.changed or request.move_project or "assignedWorkflowId" in request.body or "computerId" in request.body:
         validate_task_workflow(ctx, {**effective, **following.patch})
-    has_target = bool(effective.get("projectId") or following.agent_id or following.team_id)
+    workflow_id = following.patch.get("assignedWorkflowId", current.get("assignedWorkflowId"))
+    has_assignment = bool(following.agent_id or following.team_id or workflow_id)
+    has_target = bool(effective.get("projectId") or has_assignment)
     next_is_routine = routine.get("isRoutine", current.get("isRoutine"))
     if (
         next_is_routine
@@ -393,9 +395,9 @@ def _plan_next_assignment(
             request.move_project,
             assigned_agent_id=following.agent_id,
             assigned_team_id=following.team_id,
-            workflow_id=following.patch.get("assignedWorkflowId", current.get("assignedWorkflowId")),
+            workflow_id=workflow_id,
         )
-    clear_requested = following.changed and not (following.agent_id or following.team_id)
+    clear_requested = following.changed and not has_assignment
     # Clearing stays allowed: it is how a legacy Ready intake issue goes back
     # to Backlog (just below).
     if (
@@ -403,7 +405,7 @@ def _plan_next_assignment(
         and not clear_requested
         and (
             following.status == "assigned"
-            or (following.changed and (following.agent_id or following.team_id))
+            or (following.changed and has_assignment)
         )
     ):
         raise TaskRequestError(409, ISSUE_NEEDS_PROJECT)

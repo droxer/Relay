@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkflows } from "../src/components/workflow/ProjectWorkflows";
@@ -35,10 +35,30 @@ it("creates a Project definition with no Teams or Team fields", async () => {
 it("starts a Project Workflow independently when there are no Teams", async () => {
   const open = vi.fn();
   mount(<ProjectWorkflows project={project} agents={agents} userId="owner" readOnly={false} onOpenThread={open} />);
-  fireEvent.click(await screen.findByRole("button", { name: "workflow.start" }));
+  const custom = (await screen.findByRole("heading", { name: "Release" })).closest("li")!;
+  fireEvent.click(within(custom).getByRole("button", { name: "workflow.start" }));
   fireEvent.change(screen.getByRole("textbox", { name: /workflow.goal/ }), { target: { value: "Ship release" } });
   fireEvent.click(screen.getAllByRole("button", { name: "workflow.start" }).at(-1)!);
   await waitFor(() => expect(startProjectWorkflow).toHaveBeenCalledWith("w", { requestId: expect.any(String), taskGoal: "Ship release" }));
+  await waitFor(() => expect(open).toHaveBeenCalledWith("run"));
+});
+
+it("starts a predefined Workflow even when the custom catalog fails", async () => {
+  vi.mocked(listWorkflowPreviews).mockRejectedValue(new Error("Offline catalog"));
+  const open = vi.fn();
+  mount(<ProjectWorkflows project={{ ...project, leadAgentId: null }} agents={agents} userId="owner" readOnly={false} onOpenThread={open} />);
+  await screen.findByText("workflow.load_failed");
+  const lead = screen.getByRole("heading", { name: "collab_style.lead_led" }).closest("li")!;
+  expect(lead.textContent).toContain("workflow.project_lead_required");
+  expect(within(lead).getByRole<HTMLButtonElement>("button", { name: "workflow.start_named" }).disabled).toBe(true);
+  const pipeline = screen.getByRole("heading", { name: "collab_style.pipeline" }).closest("li")!;
+  fireEvent.click(within(pipeline).getByRole("button", { name: "workflow.start_named" }));
+  expect(screen.queryByRole("combobox", { name: "workflow.optional_team" })).toBeNull();
+  fireEvent.change(screen.getByRole("textbox", { name: /workflow.goal/ }), { target: { value: "Ship from Project" } });
+  fireEvent.click(screen.getAllByRole("button", { name: "workflow.start" }).at(-1)!);
+  await waitFor(() => expect(startProjectWorkflow).toHaveBeenCalledWith("preset:pipeline", {
+    requestId: expect.any(String), projectId: "p", taskGoal: "Ship from Project",
+  }));
   await waitFor(() => expect(open).toHaveBeenCalledWith("run"));
 });
 

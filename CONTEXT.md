@@ -160,12 +160,15 @@ without an assigned Team. Direct Workflow Runs may name an eligible Team. Using 
 A Project is selected for execution; its enabled Agents and Computer constrain
 the actual participants. Team-owned steps also require membership in their Team.
 Removing a Team's reference to a Project Workflow preserves that definition.
-A **Predefined Workflow** assigns work by Team roles: Build → Review, Pipeline,
-or Lead-led. Lead-led lets the lead plan and delegate during a Run. Predefined
-Workflows require a Team.
+A **Predefined Workflow** assigns work by Team roles or by the roles of enabled
+Project Agents: Build → Review, Pipeline, or Lead-led. Build → Review can run
+with a single builder when it cannot fill the review role. Pipeline orders
+participants by role, and the last participant summarizes the result. Lead-led
+uses the enabled Project Lead in a Project to plan, delegate, and synthesize
+the result. A lone Lead completes the work in one turn.
 A Team chooses a predefined **Default Workflow** and may choose a custom default
 for each Project. A Task or Automation inherits the applicable Team default or
-selects a Workflow explicitly. An explicit Custom Workflow needs no Team.
+selects a Workflow explicitly. A Project can run either kind directly.
 Incompatible selections are refused rather than replaced with another process.
 _Avoid_: Collaboration style (a compatibility name for a Predefined Workflow),
 Workflow Team (a legacy representation combining roster and process)
@@ -266,7 +269,7 @@ _Avoid_: Workspace, Agent home
 **Project**:
 A user-owned collaboration boundary with one persistent workspace, an
 ordered roster of Project Agents, and any number of Project Conversations.
-Project Tasks and Automations may be assigned to enabled Project Agents or Project-owned Workflows, without a Team. Standalone Tasks and Automations may be assigned to Agents or ordinary Teams regardless of Project membership. Eligibility is checked again when work is dispatched.
+Project Tasks and Automations may be assigned to enabled Project Agents, Project-owned Custom Workflows, or Predefined Workflows, without a Team. Standalone Tasks and Automations may be assigned to Agents or ordinary Teams regardless of Project membership. Eligibility is checked again when work is dispatched.
 Project, Task, Automation, and Thread records are private to their owning User;
 an Account's admin role and a Task's assignee do not grant access to another
 User's records. Administrative hardware and account management are separate

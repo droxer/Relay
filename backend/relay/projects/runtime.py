@@ -3,11 +3,14 @@ from __future__ import annotations
 from typing import Any
 from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, project_member_ids
 
-from ..collaboration.styles import resolve_collaboration_style
+from ..collaboration.styles import LEAD_LED, pipeline_order, resolve_collaboration_style
+from ..collaboration.templates import SOLO_BRIEF, StyleTurn, compile_style
 from ..core.computer_identity import computer_id
-from ..core.role_charters import role_charter
+from ..core.role_charters import COORDINATOR_CHARTER, role_charter
+from ..core.workflow_selection import predefined_style, workflow_id_for_style
+from ..agents.location import agent_placed_on_computer
 from ..agents.routing import resolve_agent_assignments
-from ..teams.dispatch import TeamDispatchError, team_agents, team_member_assignments
+from ..teams.dispatch import TeamDispatchError, team_agents, team_assignment_phase, team_member_assignments
 from ..core.workspace_capabilities import required_workspace_capabilities
 from ..core.daemon_capabilities import has_capability
 
@@ -88,6 +91,95 @@ def project_task_assignment_error(
     return None
 
 
+def project_workflow_members(
+    project: dict[str, Any], *, style: str, agent_store: Any, placement_store: Any,
+    daemon_nodes: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Resolve the enabled Project Agents available to the Workflow."""
+    project_computer_id = project["computerId"]
+    node_ids = {node["id"] for node in daemon_nodes if computer_id(node) == project_computer_id}
+    members = {}
+    for member in project.get("members", []):
+        if not member.get("enabled", True):
+            continue
+        agent_id = member["agentId"]
+        agent = agent_store.get_agent(agent_id)
+        if (
+            not agent or agent.get("deletedAt") or not agent.get("enabled", True)
+            or agent.get("supervisorUserId") != project["ownerUserId"]
+            or not agent_placed_on_computer(
+                agent_id, project_computer_id, node_ids=node_ids, placement_store=placement_store,
+            )
+        ):
+            continue
+        role = member.get("role") or agent.get("defaultRole") or "implementer"
+        members[agent_id] = {**member, "id": agent_id, "defaultRole": role, "role": role}
+    if not members:
+        raise ProjectDispatchError("project_roster_invalid", permanent=True)
+    if style == LEAD_LED and project.get("leadAgentId") not in members:
+        raise ProjectDispatchError("project_lead_required", permanent=True)
+    return members
+
+
+def project_styled_assignments(
+    project: dict[str, Any], *, style: str, agent_store: Any, placement_store: Any,
+    daemon_nodes: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    members = project_workflow_members(
+        project, style=style, agent_store=agent_store, placement_store=placement_store,
+        daemon_nodes=daemon_nodes,
+    )
+    agents = list(members.values())
+    lead_id = project.get("leadAgentId")
+    snapshot = {
+        **project_runtime_snapshot(project),
+        "workflowId": workflow_id_for_style(style),
+        "workflowKind": "predefined",
+    }
+    if style == LEAD_LED:
+        assert isinstance(lead_id, str)
+        lead = members[lead_id]
+        specialists = pipeline_order([agent for agent in agents if agent["id"] != lead_id])
+        turns = [
+            StyleTurn(
+                lead, lead["role"], "action", not specialists,
+                COORDINATOR_CHARTER if specialists else SOLO_BRIEF,
+            ),
+            *(StyleTurn(agent, agent["role"], "action", False, role_charter(agent["role"]))
+              for agent in specialists),
+        ]
+        if specialists:
+            turns.append(StyleTurn(
+                lead, lead["role"], "action", True,
+                "Review the required contributions against the goal and synthesize one final result.",
+            ))
+    else:
+        compiled = compile_style(style, agents, lead_id, role_brief=role_charter)
+        style = compiled.style
+        turns = list(compiled.turns)
+        if compiled.fallback_from:
+            snapshot["styleFallbackFrom"] = compiled.fallback_from
+    snapshot["collaborationStyle"] = style
+    if len(turns) > 1:
+        snapshot["workContractVersion"] = 1
+    assignments = []
+    for index, turn in enumerate(turns):
+        coordinator = style == LEAD_LED and index == 0
+        agent_id = turn.agent["id"]
+        assignments.append({
+            "agentId": agent_id,
+            "role": turn.role,
+            "mode": turn.mode,
+            "phase": team_assignment_phase(turn.role, turn.mode, coordinator),
+            "coordinator": coordinator,
+            "synthesizer": turn.synthesizer,
+            "required": True,
+            "brief": " ".join([turn.brief, *_member_details(turn.agent, lead=agent_id == lead_id)]),
+            "projectSnapshot": snapshot,
+        })
+    return assignments, snapshot
+
+
 def resolve_project_task_assignments(
     task: dict[str, Any],
     *,
@@ -109,22 +201,27 @@ def resolve_project_task_assignments(
         # team assignment predates this scope rule and must be reassigned
         # before it can run, without enqueueing any daemon command.
         raise ProjectDispatchError("project_team_assignment_forbidden", permanent=True)
-    members = [
-        member for member in project.get("members", []) if member.get("enabled", True)
-    ]
-    member_ids = [member.get("agentId") for member in members]
-    lead_agent_id = project.get("leadAgentId")
     # Only an unassigned task falls back to the project's full roster.
-    names_runner = task.get("assignedAgentId") or task.get("assignedTeamId")
-    if not names_runner and (not members or lead_agent_id not in member_ids):
+    workflow_id = task.get("assignedWorkflowId")
+    names_runner = task.get("assignedAgentId") or workflow_id
+    if not names_runner and project.get("leadAgentId") not in project_member_ids(project):
         raise ProjectDispatchError("project_roster_invalid", permanent=True)
+    style = predefined_style(workflow_id) if workflow_id else None
+    if style:
+        if task.get("assignedAgentId"):
+            raise ProjectDispatchError("workflow_agent_conflict", permanent=True)
+        assignments, snapshot = project_styled_assignments(
+            project, style=style, agent_store=agent_store, placement_store=placement_store,
+            daemon_nodes=daemon_nodes,
+        )
+    else:
+        snapshot = project_runtime_snapshot(project)
+        assignments = _project_task_assignments(
+            task, project, snapshot, agent_store=agent_store, team_store=team_store
+        )
     node = project_runtime_node(project, daemon_nodes)
     if node is None:
         raise ProjectDispatchError("project_computer_offline")
-    snapshot = project_runtime_snapshot(project)
-    assignments = _project_task_assignments(
-        task, project, snapshot, agent_store=agent_store, team_store=team_store
-    )
     return (
         resolve_agent_assignments(
             assignments,
@@ -346,12 +443,15 @@ def _phase(role: str) -> str:
 
 
 def _member_brief(member: dict[str, Any], *, lead: bool) -> str:
+    return " ".join([role_charter(member.get("role")), *_member_details(member, lead=lead)])
+
+
+def _member_details(member: dict[str, Any], *, lead: bool) -> list[str]:
     parts = [
-        role_charter(member.get("role")),
         *([f"Project lead: {PROJECT_MANAGER_RESPONSIBILITIES}"] if lead else []),
     ]
-    if member["responsibilities"] != parts[0]:
+    if member.get("responsibilities") and member["responsibilities"] != role_charter(member.get("role")):
         parts.append(f"Responsibilities: {member['responsibilities']}.")
     if member.get("instructions"):
         parts.append(f"Project instructions: {member['instructions']}")
-    return " ".join(parts)
+    return parts

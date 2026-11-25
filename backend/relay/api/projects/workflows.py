@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from ...persistence.sql import names_no_uuid_row
+from ...core.workflow_selection import PREDEFINED_WORKFLOWS
 from ...core.workflows import (
     apply_workflow_step_changes, project_workflow_definition, workflow_preview,
     workflow_step_agent_ids, workflow_step_changes,
@@ -45,11 +46,14 @@ def list_workflows(
     view = request.query_params.get('view')
     definitions = ctx.workflow_store.list_workflows(owner, project_id=projectId, project_only=view == 'choices')
     if view == 'choices':
-        return private_conditional_json(request, {'workflows': [
-            {**{key: definition[key] for key in ('id', 'name', 'projectId', 'enabled')},
-             'stepAgentIds': workflow_step_agent_ids(definition)}
-            for definition in definitions
-        ]})
+        return private_conditional_json(request, {
+            'workflows': [
+                {**{key: definition[key] for key in ('id', 'name', 'projectId', 'enabled')},
+                 'stepAgentIds': workflow_step_agent_ids(definition)}
+                for definition in definitions
+            ],
+            **({'predefinedWorkflows': PREDEFINED_WORKFLOWS} if projectId else {}),
+        })
     if view == 'preview':
         return private_conditional_json(request, {
             'view': 'preview', 'workflows': [workflow_preview(definition) for definition in definitions],

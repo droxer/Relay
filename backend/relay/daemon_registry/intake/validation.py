@@ -184,7 +184,7 @@ class RunTargetValidationMixin(NodeBackendState):
         if (
             not request.get("taskId") or not request.get("projectId")
             or len(assignments) != 1 or manifest.get("teamSnapshot") or manifest.get("workflow")
-            or manifest.get("projectSetup") or "delegationCandidates" in manifest
+            or manifest.get("style") or manifest.get("projectSetup") or "delegationCandidates" in manifest
             or assignments[0].get("mode", "action") != "action"
             or not assignments[0].get("agentId")
         ):
@@ -243,8 +243,10 @@ class RunTargetValidationMixin(NodeBackendState):
             node_id = assignment.get("daemonNodeId") or sandbox_id
             node = self.registry.get(node_id)
             assert node is not None
-            if (assignment.get("teamSnapshot") or {}).get("workContractVersion") == 1 and not has_capability(node, DAEMON_CAPABILITY_WORK_RESULTS):
-                raise ValueError("This team requires a daemon with work-results support. Upgrade the daemon before dispatch.")
+            snapshot = assignment.get("teamSnapshot") or assignment.get("projectSnapshot") or {}
+            if snapshot.get("workContractVersion") == 1 and not has_capability(node, DAEMON_CAPABILITY_WORK_RESULTS):
+                scope = "team" if assignment.get("teamSnapshot") else "Project Workflow"
+                raise ValueError(f"This {scope} requires a daemon with work-results support. Upgrade the daemon before dispatch.")
             if assignment.get("agentId"):
                 self._validate_logical_assignment(assignment)
             if not self.registry.is_live(node_id):
