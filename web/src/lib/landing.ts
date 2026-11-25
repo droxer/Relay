@@ -15,13 +15,14 @@ export const RELAY_START_COMMAND = "make backend && make daemon";
     Each ships English and zh-CN cuts in both themes. */
 export type LandingShot = "home" | "home-mobile" | "threads" | "projects" | "issues" | "routines" | "teams";
 
-export const LANDING_HERO_SHOT: LandingShot = "home";
+export const LANDING_SHOWCASE_SHOT: LandingShot = "home";
 
 /** Editorial studio photographs under public/landing/ (1600w + 800w WebP). */
 export const LANDING_PHOTOS = {
   heroDesk: {
     src: "/landing/hero-desk.webp",
     srcSet: "/landing/hero-desk-800w.webp 800w, /landing/hero-desk.webp 1600w",
+    sizes: "(min-width: 1041px) 46vw, 100vw",
     width: 1600,
     height: 900,
   },
@@ -48,7 +49,7 @@ export const LANDING_SHOT_WIDTHS = [800, LANDING_SHOT_SIZE.width] as const;
 /** How wide a shot renders, for `sizes`: the showcase spans the page measure
     (72rem), a tour shot two thirds of it beside its copy until the rows stack
     at 1040px. Slight overestimates only ever pick the sharper cut. */
-export const LANDING_HERO_SIZES = "(min-width: 72rem) 72rem, 100vw";
+export const LANDING_SHOWCASE_SIZES = "(min-width: 72rem) 72rem, 100vw";
 export const LANDING_TOUR_SIZES = "(min-width: 1041px) 48rem, 100vw";
 
 export function landingShotSrc(

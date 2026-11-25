@@ -884,6 +884,50 @@ test("scrolling toward older messages fetches one history page without moving th
   }
 });
 
+for (const viewport of [{ width: 390, height: 800 }, { width: 1920, height: 900 }]) {
+  test(`the landing hero starts before JavaScript at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.route("**/api/**", route => route.fulfill({ json: { authenticated: false, waitlistEnabled: false } }));
+    const imageRequests: string[] = [];
+    page.on("request", request => {
+      const { pathname } = new URL(request.url());
+      if (pathname.startsWith("/landing/")) imageRequests.push(pathname);
+    });
+    let releaseScripts = () => {};
+    let scriptRequested = false;
+    const scripts = new Promise<void>(resolve => { releaseScripts = resolve; });
+    await page.route("**/_next/static/**/*.js", async route => {
+      scriptRequested = true;
+      await scripts;
+      await route.continue();
+    });
+
+    const heroPath = viewport.width === 390 ? "/landing/hero-desk-800w.webp" : "/landing/hero-desk.webp";
+    try {
+      await page.goto("/", { waitUntil: "commit" });
+      await expect.poll(() => scriptRequested).toBe(true);
+      await expect.poll(() => imageRequests).toEqual([heroPath]);
+    } finally {
+      releaseScripts();
+    }
+
+    const hero = page.locator('img[src="/landing/hero-desk.webp"]');
+    await expect.poll(() => hero.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    const phone = page.getByRole("img", { name: /Relay Home on a phone/ });
+    await phone.scrollIntoViewIfNeeded();
+    await expect.poll(() => phone.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    expect(imageRequests.filter(path => path.startsWith("/landing/hero-desk"))).toEqual([heroPath]);
+    if (viewport.width === 390) {
+      const desktopRequests = imageRequests.filter(path => path.startsWith("/landing/home")
+        && !path.startsWith("/landing/home-mobile"));
+      expect(desktopRequests).toEqual([]);
+    } else {
+      const desktop = page.getByRole("img", { name: /Relay Home with an Up next queue/ });
+      await expect.poll(() => desktop.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    }
+  });
+}
+
 test("the eager bundle ships no markdown pipeline, syntax grammars or unused locales", async ({ page, request }) => {
   const html = await (await request.get("/")).text();
   const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"(?![^>]*noModule)/gi)].map((match) => match[1]);

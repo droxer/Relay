@@ -6,12 +6,12 @@ import { useWaitlistEnabled } from "../../hooks/useAuthStatus";
 import { useResolvedTheme } from "../../hooks/useResolvedTheme";
 import type { Theme } from "../../lib/appStorage";
 import {
-  LANDING_HERO_SHOT,
-  LANDING_HERO_SIZES,
   LANDING_PHONE_SHOT_SIZE,
   LANDING_PHOTOS,
   LANDING_PRINCIPLES,
   LANDING_SHOT_SIZE,
+  LANDING_SHOWCASE_SHOT,
+  LANDING_SHOWCASE_SIZES,
   LANDING_STEPS,
   LANDING_SUPPORTED_RUNTIMES,
   LANDING_TOUR,
@@ -140,9 +140,8 @@ function splitHeadlineLines(headline: string): [string, string] | [string] {
   return [words.slice(0, midpoint).join(" "), words.slice(midpoint).join(" ")];
 }
 
-/** A real screenshot of the product in the visitor's language, square-cropped
-    on a flat surface. Only the workspace lead loads eagerly. */
-function Shot({ shot, alt, priority = false }: { shot: LandingShot; alt: string; priority?: boolean }) {
+/** A screenshot of the product in the visitor's language and theme. */
+function Shot({ shot, alt }: { shot: LandingShot; alt: string }) {
   const { i18n } = useTranslation();
   const theme = useResolvedTheme();
   const phone = shot === "home-mobile";
@@ -153,12 +152,11 @@ function Shot({ shot, alt, priority = false }: { shot: LandingShot; alt: string;
       <img
         src={landingShotSrc(shot, i18n.language, theme)}
         srcSet={phone ? undefined : landingShotSrcSet(shot, i18n.language, theme)}
-        sizes={phone ? undefined : priority ? LANDING_HERO_SIZES : LANDING_TOUR_SIZES}
+        sizes={phone ? undefined : shot === LANDING_SHOWCASE_SHOT ? LANDING_SHOWCASE_SIZES : LANDING_TOUR_SIZES}
         alt={alt}
         width={size.width}
         height={size.height}
-        loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
+        loading="lazy"
         decoding="async"
       />
     </figure>
@@ -411,7 +409,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                   className="landing-hero-photo"
                   src={LANDING_PHOTOS.heroDesk.src}
                   srcSet={LANDING_PHOTOS.heroDesk.srcSet}
-                  sizes="(min-width: 1041px) 46vw, 100vw"
+                  sizes={LANDING_PHOTOS.heroDesk.sizes}
                   width={LANDING_PHOTOS.heroDesk.width}
                   height={LANDING_PHOTOS.heroDesk.height}
                   alt="Desktop workstation computer and laptop running Relay locally"
@@ -578,10 +576,10 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                 <p className="landing-cr-body">{t(LANDING_STEPS[2].bodyKey)}</p>
                 <div className="landing-cr-breakout">
                   <div className="landing-workspace-desktop">
-                    <Shot shot={LANDING_HERO_SHOT} alt={t("landing.hero_alt")} priority />
+                    <Shot shot={LANDING_SHOWCASE_SHOT} alt={t("landing.hero_alt")} />
                   </div>
                   <div className="landing-workspace-phone">
-                    <Shot shot="home-mobile" alt={t("landing.hero_mobile_alt")} priority />
+                    <Shot shot="home-mobile" alt={t("landing.hero_mobile_alt")} />
                   </div>
                 </div>
               </li>
