@@ -141,16 +141,15 @@ describe("open source links", () => {
 describe("landing theme and responsive parity", () => {
   const css = readFileSync(path.join(webRoot, "src", "styles", "landing.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-  it("tunes the hero photography veil and manifesto grid for light theme", () => {
-    assert.match(css, /html\[data-theme="light"\]\s+\.landing-hero-media::after\s*\{/);
-    assert.match(css, /html\[data-theme="light"\]\s+\.landing-manifesto\s*\{/);
-    assert.match(css, /\.landing-bento-photo\s*\{[^}]*background:\s*var\(--dark-canvas\)/s);
+  it("tunes the accent tiles for light theme and pins the split stage tones", () => {
+    assert.match(css, /html\[data-theme="light"\]\s+\.landing-tile-accent/);
+    assert.match(css, /\.landing-split-input\s*\{[^}]*background:\s*var\(--dark-surface\)/s);
+    assert.match(css, /\.landing-split-output\s*\{[^}]*background:\s*var\(--light-canvas\)/s);
   });
 
   it("keeps buttons scalable and prevents horizontal overflow across viewports", () => {
     assert.match(css, /\.landing-button\s*\{[^}]*min-height:\s*var\(--control-h-lg\)/s);
-    assert.doesNotMatch(css, /\.landing-accordion\s*\{[^}]*overflow:\s*hidden/s);
-    assert.match(css, /\.landing-oss-copy\s*\{[^}]*min-width:\s*0;/s);
+    assert.match(css, /\.landing-oss-note\s*\{[^}]*min-width:\s*0;/s);
     assert.match(css, /\.landing-terminal\s*\{[^}]*min-width:\s*0;/s);
     for (const tier of ["1040px", "820px", "480px"]) {
       assert.match(css, new RegExp(`@media \\(max-width: ${tier}\\)`), `missing ${tier} responsive tier`);

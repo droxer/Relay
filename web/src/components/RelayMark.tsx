@@ -5,16 +5,16 @@ type RelayMarkProps = {
   size?: number;
   /** `ink` (default): register ink, for marks that sit inside working UI —
    *  transcript phase separators and generic empty states. `brand`: the
-   *  handoff in colour, for the places Relay introduces itself. */
+   *  baton handoff in colour, for the places Relay introduces itself. */
   tone?: "ink" | "brand";
 };
 
 export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMarkProps) {
-  // The brand tone is the logo's one sanctioned static use of --live, the
-  // same carve-out the app icons take: the lead chevron is a person handing
-  // work on (--brand-lead), the trailing chevron an agent carrying it on
-  // (--live). The app icons and the wordmark draw this same geometry.
-  // Everywhere else blue still means work in progress and always moves.
+  // Two interlocking 45-degree chamfered relay tracks passing a diagonal
+  // negative-space baton across the center exchange zone. The brand tone is
+  // the logo's one sanctioned static use of --live: the lead track is a person
+  // handing work on (--brand-lead, burnished bronze) and the trailing track an
+  // agent carrying it forward (--live, signal blue).
   const isBrand = tone === "brand";
   return (
     <svg
@@ -27,19 +27,15 @@ export function RelayMark({ className, size = ICON.xl, tone = "ink" }: RelayMark
       focusable="false"
       shapeRendering="geometricPrecision"
     >
-      <g
-        fill="none"
-        strokeWidth="7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 14 L32 32 L12 50" stroke={isBrand ? "var(--brand-lead)" : "var(--ink-1)"} />
-        <path
-          d="M32 14 L52 32 L32 50"
-          stroke={isBrand ? "var(--live)" : "currentColor"}
-          opacity={isBrand ? undefined : 0.45}
-        />
-      </g>
+      <path
+        d="M8 12 H36 L50 26 L42 34 L31 23 H8 Z"
+        fill={isBrand ? "var(--brand-lead)" : "var(--ink-1)"}
+      />
+      <path
+        d="M56 52 H28 L14 38 L22 30 L33 41 H56 Z"
+        fill={isBrand ? "var(--live)" : "currentColor"}
+        opacity={isBrand ? undefined : 0.45}
+      />
     </svg>
   );
 }

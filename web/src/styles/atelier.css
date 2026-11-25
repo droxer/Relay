@@ -37,7 +37,7 @@
    ================================================================= */
 
 :root {
-  --surface-header-bg: color-mix(in srgb, var(--surface-0) 92%, var(--surface-3));
+  --surface-header-bg: var(--surface-1);
 }
 
 /* ── Shared primitives (one grammar for every route) ───────── */
@@ -46,7 +46,7 @@
 .chat-header,
 .page-header {
   position: relative;
-  border-bottom: var(--hairline);
+  border-bottom: var(--hairline-soft);
   background: var(--surface-header-bg);
 }
 
@@ -82,6 +82,36 @@ html[data-theme="dark"] .surface-header,
 html[data-theme="dark"] .chat-header,
 html[data-theme="dark"] .page-header {
   --surface-header-bg: var(--surface-0);
+}
+
+/* ── Framed Sheet — warm stone light frame around crisp white sheets ──
+   In the light register, the shell and sidenav share the tinted stone ground
+   (--surface-0 / --surface-rail) with no rule between them, and the work
+   canvas sits inside as a crisp white sheet inset 8px from the right and
+   bottom edges with a single hairline edge and no shadow. On phones (<=820px)
+   the frame collapses so the sheet fills the viewport edge to edge. */
+html[data-theme="light"] .sidenav-panel {
+  border-right-color: transparent;
+}
+
+html[data-theme="light"] .home-page,
+html[data-theme="light"] .sec-shell,
+html[data-theme="light"] .backlog-page,
+html[data-theme="light"] .routine-page,
+html[data-theme="light"] .workspace-page,
+html[data-theme="light"] .computer-page {
+  margin: var(--sp-2) var(--sp-2) var(--sp-2) 0;
+  height: calc(100% - var(--sp-4));
+  border: var(--hairline);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+}
+
+html[data-theme="light"] .home-page .page-header,
+html[data-theme="light"] .backlog-page .page-header,
+html[data-theme="light"] .routine-page .page-header,
+html[data-theme="light"] .computer-page .page-header {
+  --surface-header-bg: var(--surface-1);
 }
 
 /* ── Work routes — paper cards + neutral segments ───────────── */
@@ -122,8 +152,20 @@ html[data-theme="dark"] .page-header {
 /* The login screen owns its entire look in login.css (theme-aliased
    --lg-* ramp, serif headline, underline inputs) — do not re-wash it here. */
 
-/* Mobile — same header grammar, no extra chrome */
+/* Mobile — same header grammar, no extra chrome; collapse framed sheet edge-to-edge */
 @media (max-width: 820px) {
+  html[data-theme="light"] .home-page,
+  html[data-theme="light"] .sec-shell,
+  html[data-theme="light"] .backlog-page,
+  html[data-theme="light"] .routine-page,
+  html[data-theme="light"] .workspace-page,
+  html[data-theme="light"] .computer-page {
+    margin: 0;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
   .mobile-topbar {
     border-bottom: var(--hairline);
     background: var(--surface-header-bg);

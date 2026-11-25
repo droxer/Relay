@@ -126,11 +126,8 @@
    design); the --lg-* ramp is a colour alias, not a type fork. */
 .login-headline {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-hero);
-  font-weight: 500;
-  line-height: var(--leading-display);
-  letter-spacing: var(--track-display);
+  font: var(--type-display);
+  letter-spacing: var(--type-display-track);
   color: var(--lg-ink);
   /* text-wrap: balance comes from the shared heading rule in a11y.css. */
 }
@@ -183,21 +180,17 @@
   display: grid;
   place-items: center;
   padding: var(--sp-8) var(--sp-7);
-  /* The elevated tier itself: across half a viewport the two planes have
-     to separate on fill alone, with the hairline as a seam rather than as
-     the whole boundary. */
-  background: var(--lg-elevated);
-  border-left: 0.5px solid var(--lg-hairline-soft);
-  /* A 1px inner left highlight — edge refraction where the two halves meet,
-     not elevation; the cover stays flat (no drop shadow). */
-  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--lg-ink) 6%, transparent);
+  /* Framed sheet separation: crisp panel surface on the canvas ground, no
+     heavy box or shadow. */
+  background: var(--surface-1);
+  border-left: var(--hairline-soft);
 }
 
 .login-panel-inner {
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
-  width: min(100%, 340px);
+  width: min(100%, 360px);
 }
 
 /* A title with its supporting sentence: they read as one heading, so they

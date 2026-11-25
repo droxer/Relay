@@ -138,7 +138,7 @@ export function DesignSystemSpecimen() {
             </button>
           </div>
         </div>
-        <Markdown variant="document" text={"# Document preview\n\nDocuments use a comfortable reading size. 文档正文使用清晰易读的字号。\n\n## Section heading\n\nA consistent hierarchy makes this easier to scan.\n\n### Details\n\nSmaller sections remain as readable as body text."} />
+        <Markdown variant="document" text={"## Document preview\n\nDocuments use a comfortable reading size. 文档正文使用清晰易读的字号。\n\n### Section heading\n\nA consistent hierarchy makes this easier to scan.\n\n#### Details\n\nSmaller sections remain as readable as body text."} />
       </div>
     </Section>
 
@@ -341,7 +341,7 @@ export function DesignSystemSpecimen() {
     {/* ---- Card slots ---- */}
     <section className="flex flex-col gap-3">
       <h2 className="m-0 text-base font-bold text-ink">Card</h2>
-      <div className="flex flex-wrap items-start gap-4">
+      <div className="flex flex-wrap items-stretch gap-4">
         <Card className="w-72">
           <CardHeader>
             <CardTitle>Card title</CardTitle>
@@ -353,9 +353,11 @@ export function DesignSystemSpecimen() {
         </Card>
         <Card className="w-72" variant="interactive">
           <CardHeader><CardTitle>Interactive</CardTitle><CardDescription>Hairline strengthens on hover.</CardDescription></CardHeader>
+          <CardContent className="text-sm text-body">Selectable record surface.</CardContent>
         </Card>
         <Card className="w-72" padding="compact">
-          <CardHeader><CardTitle>Compact padding</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Compact padding</CardTitle><CardDescription>Tighter inner inset for dense rows.</CardDescription></CardHeader>
+          <CardContent className="text-sm text-body">Compact record body.</CardContent>
         </Card>
       </div>
     </section>

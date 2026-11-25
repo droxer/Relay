@@ -20,7 +20,7 @@ const readWebSource = (rel: string) => readFileSync(path.join(repoRoot, "web", "
 
 describe("local typography assets", () => {
   const VENDORED = [
-    ["SpaceGrotesk-Variable-Latin.woff2", "OFL-SpaceGrotesk.txt"],
+    ["Switzer-Variable-Latin.woff2", "ITF-FFL-Switzer.txt"],
     ["SpaceMono-Regular-Latin.woff2", "OFL-SpaceMono.txt"],
   ] as const;
 
@@ -172,12 +172,12 @@ describe("application typography roles", () => {
     }
   });
 
-  it("wires Space Grotesk for the interface, Space Mono for technical text, CJK by language", () => {
+  it("wires Switzer for the interface, Space Mono for technical text, CJK by language", () => {
     const layout = readWebSource("app/layout.tsx");
     const palette = readWebSource("styles/tokens/palette.css");
 
     for (const [face, variable] of [
-      ["SpaceGrotesk-Variable-Latin.woff2", "--font-app-sans"],
+      ["Switzer-Variable-Latin.woff2", "--font-app-sans"],
       ["SpaceMono-Regular-Latin.woff2", "--font-app-mono"],
     ]) {
       assert.match(layout, new RegExp(`src:\\s*["']\\./fonts/${face.replace(/\./g, "\\.")}["']`));
@@ -185,11 +185,11 @@ describe("application typography roles", () => {
     }
     assert.match(layout, /className=\{`\$\{appSans\.variable\} \$\{appMono\.variable\}`\}/);
 
-    // Space Grotesk, then Arial / Helvetica Neue, then the language's CJK
+    // Switzer, then Arial / Helvetica Neue, then the language's CJK
     // faces, then the system faces; the color-emoji faces close the stack.
     assert.match(
       palette,
-      /--font-sans:\s*var\(--font-app-sans\),\s*"Space Grotesk",\s*Arial,\s*"Helvetica Neue",\s*var\(--font-cjk\),\s*system-ui,/,
+      /--font-sans:\s*var\(--font-app-sans\),\s*"Switzer",\s*Arial,\s*"Helvetica Neue",\s*var\(--font-cjk\),\s*system-ui,/,
     );
     assert.match(palette, /--font-sans:[^;]*sans-serif,\s*"Apple Color Emoji",\s*"Segoe UI Emoji",\s*"Segoe UI Symbol",\s*"Noto Color Emoji";/);
     assert.match(palette, /--font-mono:\s*var\(--font-app-mono\),\s*"Space Mono",\s*ui-monospace,[^;]*var\(--font-cjk\),\s*monospace;/);

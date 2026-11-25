@@ -80,9 +80,7 @@ describe("Relay palette tokens", () => {
     }
   });
 
-  it("tunes --action per register: pale mist on blue charcoal, blue charcoal on mist", () => {
-    // eveland alignment (2026-10-23): the action is the ink, so each register
-    // declares its own plate, hover and ink.
+  it("tunes --action per register: chalk on lunar charcoal, near-black on warm stone", () => {
     for (const name of ["--action", "--action-hover", "--on-action"]) {
       assert.match(darkRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `dark register is missing ${name}`);
       assert.match(lightRegister, new RegExp(`${name}:\\s*#[0-9a-f]{6};`), `light register is missing ${name}`);
@@ -91,14 +89,13 @@ describe("Relay palette tokens", () => {
     const brightness = (hex: string) => contrast(hex, "#000000");
     const darkFill = brightness(tokenIn(darkRegister, "--action"));
     const lightFill = brightness(tokenIn(lightRegister, "--action"));
-    assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter blue-grey");
-    // Hover lifts: brighter on dark; on paper a near-black plate can only
-    // lift toward grey, as eveland's button does.
+    assert.ok(darkFill > lightFill * 2, "the dark register's action must be the lighter chalk ink");
+    // Hover lifts: brighter on dark; on paper a near-black plate lifts toward charcoal.
     assert.ok(brightness(tokenIn(darkRegister, "--action-hover")) > darkFill);
     assert.ok(brightness(tokenIn(lightRegister, "--action-hover")) > lightFill);
     for (const register of [darkRegister, lightRegister]) {
       const [r, g, b] = channels(tokenIn(register, "--action"));
-      assert.ok(b > g && g > r && b - r <= 50, "--action is a restrained blue-grey, distinct from signal blue");
+      assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 16, "--action stays achromatic neutral ink");
     }
     assert.match(lightRegister, /--action-soft:\s*color-mix\(in srgb, #[0-9a-f]{6} \d+%, transparent\);/);
     for (const [label, register] of [["dark", darkRegister], ["light", lightRegister]] as const) {
@@ -545,13 +542,12 @@ describe("composited control contrast", () => {
 });
 
 describe("surface ladder", () => {
-  it("keeps both themes' large surfaces in the restrained Cool Mist family", () => {
-    // Materials lean cool without becoming saturated status-blue surfaces.
+  it("keeps both themes' large surfaces in true neutral Lunar charcoal and warm stone", () => {
+    // True neutral darks (never navy or slate) and low-chroma warm stone light surfaces.
     for (const register of [darkRegister, lightRegister]) {
       for (const name of ["--surface-0", "--surface-1", "--surface-2", "--surface-3", "--surface-rail", "--surface-list", "--line-1", "--line-2"]) {
         const [r, g, b] = channels(tokenIn(register, name));
-        assert.ok(b - r <= 40, `${name} must remain a low-chroma material`);
-        assert.ok(b >= g && g >= r, `${name} must lean cool`);
+        assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 12, `${name} must remain a true neutral/stone material`);
       }
     }
   });
@@ -776,7 +772,7 @@ describe("accent primary and neutral CTA palette", () => {
       for (const fill of ["--action", "--action-hover"]) {
         const hex = tokenIn(register, fill);
         const [r, g, b] = channels(hex);
-        assert.ok(b > g && g > r && b - r <= 50, `${fill} must stay blue-grey`);
+        assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 16, `${fill} must stay achromatic neutral ink`);
         assert.ok(contrast(ink, hex) >= 4.5, `${fill} must keep its label legible`);
       }
     }

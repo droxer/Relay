@@ -6,27 +6,27 @@
 
 ## Overview
 
-Relay uses **Cool Mist**, selected on 2026-11-10: low-saturation mist-grey-blue
-light surfaces, blue-charcoal dark surfaces, rounded controls and soft floating
-elevation, with the brand's orange drawn as a signature line on focus and
-selection. The executable source of truth is `web/src/styles/tokens/`; this
-is the canonical specification. [DESIGN.md](../DESIGN.md) is an entry point to
-this document. Cool Mist supersedes the previous black/white, 4/6/8px, flat-only
-visual direction. The [source-system appendix](#appendix--the-source-system)
-records historical inspiration, not an alternative component specification.
+Relay uses **Lunar and Bronze** (dark) paired with **Framed Sheet** (light),
+selected on 2026-11-25: true neutral charcoal dark surfaces (`#111111` canvas,
+`#191919` panels) and warm stone-framed light surfaces (`#f5f4f2` frame,
+`#ffffff` inset work sheets), with burnished bronze (`#c8966e` dark / `#845734`
+light) drawn as the brand mark's lead relay track and `--signature` focus and
+selection marker. The executable source of truth is `web/src/styles/tokens/`;
+this is the canonical specification. [DESIGN.md](../DESIGN.md) is an entry point
+to this document.
 
-- **Materials stay quiet; status stays distinct.** Blue-grey surfaces, text and
-  controls have restrained chroma. Signal blue means live execution; green,
-  gold and crimson retain success, attention and failure meanings. Baton orange
-  is the brand mark's lead chevron and, as `--signature`, the one line that
-  marks focus and selection: the focus ring, the selected-row bar and the
-  rail and nav markers. It is never a fill, a link or a status colour. The
-  brand geometry is unchanged; static assets follow the current palette.
-- **One primary action per view.** `--primary` reads `--action`: a pale-mist
-  plate with dark ink in dark mode, a blue-charcoal plate with white ink in
-  light mode. Secondary actions use outline or ghost treatments.
+- **Materials stay quiet; status stays distinct.** True neutral charcoal and
+  warm stone surfaces keep chrome calm. Signal blue (`--live`) means live
+  execution; green, gold and crimson retain success, attention and failure
+  meanings. Burnished bronze (`--brand-lead`) is the interlocking relay-track
+  mark's lead track and, as `--signature`, the one line that marks focus and
+  selection: the focus ring, the selected-row bar and the rail and nav markers.
+  It is never a fill, a link or a status colour.
+- **One primary action per view.** `--primary` reads `--action`: a chalk plate
+  (`#f2f2f0`) with lunar ink in dark mode, a near-black plate (`#181817`) with
+  white ink in light mode. Secondary actions use outline or ghost treatments.
 - **Selection stays calm.** `--action-soft` is an 8% action wash in dark and
-  6% in light, accompanied by the orange `--signature` marker. Links use the
+  6% in light, accompanied by the bronze `--signature` marker. Links use the
   text ramp; underlines distinguish links from ordinary text.
 - **Meta recedes.** The ink ramp spends its range: timestamps and metadata
   (`--ink-4`) sit well below body text while still clearing 4.5:1 on the
@@ -37,14 +37,14 @@ records historical inspiration, not an alternative component specification.
   after mixing with their background, at rest and on hover. Disabled controls
   retain their separate opacity contract.
 - **Tool-grade corners.** Micro details use 4px (`--r-1`), controls and rows
-  6px (`--r-2`), containers 10px (`--r-3`). Ordinary content
-  stays flat. Floating chrome uses the shared hairline plus soft shadow.
-  Full radii remain reserved for circles and capsules.
-- **Keep the existing type and interaction system.** Space Grotesk serves
-  every interface role, with Simplified or Traditional Chinese faces chosen by
-  `<html lang>`; Space Mono is technical text only. Weight tiers are
-  400/500/600. Spacing, control heights, touch targets, motion,
-  workflows and layout are unchanged by this palette refinement.
+  6px (`--r-2`), containers 10px (`--r-3`). Ordinary content stays flat.
+  Floating chrome uses the shared hairline plus soft shadow. Full radii remain
+  reserved for circles and capsules.
+- **Switzer + Space Mono typography.** Vendored **Switzer** (variable 300–700)
+  serves every interface role, with Simplified or Traditional Chinese faces
+  chosen by `<html lang>`; **Space Mono** is technical text only. Weight tiers
+  are 400/500/600. Spacing, control heights, touch targets, motion, workflows
+  and layout stay on the shared token scales.
 
 Review both themes when changing tokens. The concept preview's C variant
 reads the production palette and role files; it is not a substitute for
