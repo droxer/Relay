@@ -327,3 +327,41 @@ describe("team and workflow tokens", () => {
     assert.doesNotMatch(picker, /label=\{t\("project\.lead_badge"\)\}/);
   });
 });
+
+describe("project discussions tokens and styles", () => {
+  const styles = readWeb("src/styles/project-page.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const panel = readWeb("src/components/ProjectDiscussionsPanel.tsx");
+  const page = readWeb("src/components/ProjectWorkspacePage.tsx");
+
+  it("aligns the Discussions tab to the shared page gutter", () => {
+    assert.match(page, /<TabsContent value="discussions" className="project-discussions-panel">/);
+    assert.match(styles, /\.project-discussions-panel\s*\{[^}]*padding:[^;]*var\(--page-gutter\)/s);
+  });
+
+  it("keeps discussion rows on the shared rail hover and avoids focus-clipping overflow", () => {
+    assert.doesNotMatch(styles, /\.project-discussions\s+\.conversation-row-inner:hover\b/);
+    assert.doesNotMatch(styles, /\.project-discussions\s+\.conversation-rows\s*\{[^}]*overflow:\s*hidden/s);
+    assert.doesNotMatch(styles, /\.project-discussions\s+\.conversation-row-inner:focus-visible\s*\{[^}]*outline-offset:\s*-\d+px/s);
+  });
+
+  it("uses field-border contrast on search and matches toolbar controls on --control-h-sm", () => {
+    assert.match(styles, /\.project-discussions-toolbar\s*>\s*\.list-filter-search\s*\{[^}]*var\(--field-border\)/s);
+    assert.match(styles, /\.project-discussions-toolbar\s*>\s*\.list-filter-search:hover\s*\{[^}]*var\(--field-border-hover\)/s);
+    assert.doesNotMatch(styles, /\.project-discussions-toolbar\s*>\s*\.list-filter-search:focus-within\s*\{[^}]*border-color:/s);
+    assert.match(panel, /<SearchInput[\s\S]*?iconSize=\{ICON\.sm\}/);
+    assert.match(panel, /<Button type="button" size="sm" onClick=\{onNewThread\}>/);
+    assert.match(panel, /<Button type="button" size="icon-sm" aria-label=\{t\("project_manager\.quick_topics"\)\}>/);
+    assert.match(styles, /\.project-discussions\s+\[data-slot="button-group-separator"\]\s*\{[^}]*var\(--on-action\)/s);
+  });
+
+  it("scopes coarse touch sizing out of desktop viewports and preserves the a11y overflow-button exception", () => {
+    assert.doesNotMatch(styles, /@media\s*\(max-width:\s*820px\)\s*,\s*\(pointer:\s*coarse\)/);
+    assert.doesNotMatch(styles, /\.project-discussions\s+\.conversation-more-btn\b/);
+  });
+
+  it("reuses ListSkeleton, WorkspaceEmpty actions, and explicit alert typography", () => {
+    assert.match(panel, /<ListSkeleton\b/);
+    assert.match(panel, /<WorkspaceEmpty[\s\S]*?actions=/);
+    assert.match(styles, /\.project-discussions-more\s+\[role="alert"\]\s*\{[^}]*margin:\s*0;[^}]*font:\s*var\(--type-body-sm\);[^}]*letter-spacing:\s*var\(--type-body-sm-track\);/s);
+  });
+});

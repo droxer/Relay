@@ -21,9 +21,14 @@
   padding: clamp(var(--sp-5), 4vw, var(--sp-8));
 }
 
+.project-discussions-panel {
+  padding: var(--sp-5) var(--page-gutter) var(--sp-7);
+}
+
 .project-discussions {
   container: project-discussions / inline-size;
   display: grid;
+  align-content: start;
   gap: var(--sp-5);
   width: 100%;
   min-width: 0;
@@ -37,6 +42,14 @@
   gap: var(--sp-2);
 }
 
+/* Primary split-button divider: sits between two --action plates, so it reads
+   from --on-action rather than --control-track and runs full height without
+   exposing canvas notches at the top and bottom edges. */
+.project-discussions [data-slot="button-group-separator"] {
+  margin-block: 0;
+  background: color-mix(in srgb, var(--on-action) 25%, transparent);
+}
+
 .project-discussions .conversation-group {
   min-width: 0;
 }
@@ -45,17 +58,25 @@
   margin-top: 0;
 }
 
+.project-discussions .conversation-group-label {
+  padding: 0 0 var(--sp-2);
+}
+
 .project-discussions-toolbar > .list-filter-search {
   flex: 1 1 14rem;
   min-height: var(--control-h-sm);
   padding-inline: var(--sp-2);
-  border: var(--hairline);
+  border: var(--sp-hairline) solid var(--field-border);
   border-radius: var(--r-2);
-  background: var(--surface-0);
+  background: var(--surface-1);
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.project-discussions-toolbar > .list-filter-search:hover {
+  border-color: var(--field-border-hover);
 }
 
 .project-discussions-toolbar > .list-filter-search:focus-within {
-  border-color: var(--ink-4);
   outline: var(--focus-outline);
   outline-offset: var(--focus-offset);
 }
@@ -64,9 +85,10 @@
   outline: none;
 }
 
+/* No overflow: hidden — outer focus rings on rows and row actions must not be
+   clipped; the end rows carry the card's inner corner radius instead. */
 .project-discussions .conversation-rows {
   gap: 0;
-  overflow: hidden;
   border: var(--hairline);
   border-radius: var(--r-3);
 }
@@ -75,29 +97,37 @@
   border-radius: 0;
 }
 
+.project-discussions .conversation-row:first-child {
+  border-start-start-radius: calc(var(--r-3) - var(--sp-hairline));
+  border-start-end-radius: calc(var(--r-3) - var(--sp-hairline));
+}
+
+.project-discussions .conversation-row:last-child {
+  border-end-start-radius: calc(var(--r-3) - var(--sp-hairline));
+  border-end-end-radius: calc(var(--r-3) - var(--sp-hairline));
+}
+
 .project-discussions .conversation-row + .conversation-row {
   border-top: var(--hairline);
 }
 
 .project-discussions .conversation-row-inner {
+  min-height: calc(var(--sp-3) * 2 + var(--sp-5));
   padding: var(--sp-3) var(--sp-4);
-  transition: background var(--t-fast) var(--ease);
 }
 
-.project-discussions .conversation-row-inner:hover {
-  background: var(--surface-1);
+/* Discussion rows lead with the compact icon-only ThreadStatusBadge rather
+   than the 8px task pip, so the status subline hangs under the title text. */
+.project-discussions .conversation-subline {
+  padding-inline-start: calc(var(--chip-h-compact) + var(--sp-2));
 }
 
 .project-discussions .conversation-row-actions {
   top: var(--sp-3);
-  inset-inline-end: var(--sp-3);
+  right: auto;
+  inset-inline-end: var(--sp-4);
 }
 
-.project-discussions .conversation-row-inner:focus-visible {
-  outline-offset: -2px;
-}
-
-.project-discussions-empty,
 .project-discussions-more {
   display: grid;
   justify-items: center;
@@ -105,13 +135,13 @@
 }
 
 .project-discussions-more [role="alert"] {
+  margin: 0;
   color: var(--err);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .project-discussions-skeleton {
-  display: grid;
-  gap: var(--sp-4);
-  padding: var(--sp-4);
   border: var(--hairline);
   border-radius: var(--r-3);
 }
@@ -122,19 +152,9 @@
   }
 }
 
-@media (max-width: 820px), (pointer: coarse) {
-  .project-discussions-toolbar > .list-filter-search,
-  .project-discussions-toolbar button,
-  .project-discussions-empty button,
-  .project-discussions-more > button,
-  .project-discussions .conversation-more-btn {
+@media (pointer: coarse) {
+  .project-discussions-toolbar > .list-filter-search {
     min-height: var(--touch-target);
-  }
-
-  .project-discussions-toolbar button,
-  .project-discussions-empty button,
-  .project-discussions .conversation-more-btn {
-    min-width: var(--touch-target);
   }
 }
 

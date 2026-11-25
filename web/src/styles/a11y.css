@@ -261,7 +261,8 @@
      spilled out past its hairline border. The selector restates the floor
      rule's :not() chain only to outrank it; the rule it answers is at the top
      of this block. */
-  .backlog-filter-search-wrap .backlog-filter-search:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
+  .backlog-filter-search-wrap .backlog-filter-search:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .project-discussions-toolbar > .list-filter-search input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]) {
     min-height: 0;
   }
 
