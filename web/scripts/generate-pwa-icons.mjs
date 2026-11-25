@@ -23,7 +23,7 @@ const square = (scale) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" v
   + `<g transform="translate(32 32) scale(${scale}) translate(-32 -32)">${mark}</g></svg>`);
 await sharp(square(1)).resize(180, 180).removeAlpha().png()
   .toFile(new URL("apple-touch-icon.png", publicDir).pathname);
-await sharp(square(0.70)).resize(512, 512).removeAlpha().png()
+await sharp(square(0.84)).resize(512, 512).removeAlpha().png()
   .toFile(new URL("icon-maskable-512.png", output).pathname);
 
 // PNG-backed ICO entries cover browsers and clients that request /favicon.ico.

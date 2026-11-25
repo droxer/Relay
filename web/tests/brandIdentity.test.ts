@@ -149,11 +149,15 @@ describe("the handoff mark", () => {
   ] as const;
 
   for (const { file, register } of icons) {
-    it(`${file.at(-1)} draws its register's canvas, --brand-lead lead and --live trail`, () => {
+    it(`${file.at(-1)} draws its register's canvas, monochrome rails, and --brand-lead baton`, () => {
       const svg = read(...file);
       const tokens = registers[register];
       assert.match(svg, new RegExp(`<rect [^>]*fill="${tokenIn(tokens, "--surface-0")}"`));
-      assert.deepEqual(fills(svg), [tokenIn(tokens, "--brand-lead"), tokenIn(tokens, "--live")]);
+      assert.deepEqual(fills(svg), [
+        tokenIn(tokens, "--ink-1"),
+        tokenIn(tokens, "--brand-lead"),
+        tokenIn(tokens, "--ink-1"),
+      ]);
     });
   }
 
@@ -161,10 +165,10 @@ describe("the handoff mark", () => {
   // faviconState.test.ts covers shipped/runtime parity and contrast; a
   // light-register media-query assertion would contradict that contract.
 
-  it("colours the wordmark's chevrons from both registers", () => {
+  it("colours the wordmark's tracks and baton from both registers", () => {
     const svg = read("web", "public", "brand", "relay-logo.svg");
     for (const register of Object.values(registers)) {
-      for (const name of ["--brand-lead", "--live"]) {
+      for (const name of ["--ink-1", "--brand-lead"]) {
         assert.ok(svg.includes(tokenIn(register, name)), `relay-logo.svg is missing ${name} ${tokenIn(register, name)}`);
       }
     }
@@ -181,11 +185,11 @@ describe("the handoff mark", () => {
     }
   });
 
-  it("gives RelayMark a brand tone of --brand-lead and --live, used where Relay introduces itself", () => {
+  it("gives RelayMark a brand tone of --ink-1 and --brand-lead, used where Relay introduces itself", () => {
     const mark = read("web", "src", "components", "RelayMark.tsx");
     assert.match(mark, /tone\?: "ink" \| "brand"/);
+    assert.match(mark, /var\(--ink-1\)/);
     assert.match(mark, /var\(--brand-lead\)/);
-    assert.match(mark, /var\(--live\)/);
     for (const surface of ["SideNav.tsx", "AuthCanvas.tsx", "landing/LandingScreen.tsx"]) {
       assert.match(read("web", "src", "components", surface), /<RelayMark [^>]*tone="brand"/, `${surface} must show the brand mark`);
     }
