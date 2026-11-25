@@ -6,8 +6,9 @@ from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import Connection, and_, or_, select
+from sqlalchemy import Connection, and_, case, or_, select
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.expression import Exists
 
 from ...automations.model import TRIGGER_KINDS, triggers_of
 from ...core.automation_listing import (
@@ -16,6 +17,7 @@ from ...core.automation_listing import (
     AutomationListRequest,
     AutomationRow,
     automation_window,
+    is_one_off,
 )
 from .. import sql
 from ..engine import store_transaction
@@ -27,6 +29,13 @@ from .state import TaskStoreState
 
 
 class TaskAutomationPages(TaskStoreState):
+    def _completed_occurrence(self, owner: str, automation_id: Any) -> Exists:
+        runs = self.tasks.alias("completed_runs")
+        return select(runs.c.id).where(
+            runs.c.automation_id == automation_id, runs.c.owner_user_id == owner,
+            runs.c.deleted_at.is_(None), runs.c.status == "done",
+        ).exists()
+
     def _automation_occurrence_statuses(self, owner: str) -> Select[Any]:
         tasks = self.tasks
         source = tasks.c.snapshot["sourceRoutineId"].as_string()
@@ -58,6 +67,11 @@ class TaskAutomationPages(TaskStoreState):
             tasks.c.routine_state, tasks.c.routine_next_run_at.label("next_run"),
             tasks.c.assignee_user_id.label("assignee"), tasks.c.assigned_agent_id.label("agent_id"),
             snapshot["routineTriggers"].label("routineTriggers"), snapshot["tags"].label("tags"),
+            case(
+                (and_(tasks.c.routine_state == "active", tasks.c.routine_has_schedule.is_(True),
+                      tasks.c.routine_next_run_at.is_(None)), self._completed_occurrence(request.owner, tasks.c.id)),
+                else_=False,
+            ).label("has_completed_occurrence"),
         ]
         if request.search:
             columns.append(tasks.c.description)
@@ -112,7 +126,10 @@ class TaskAutomationPages(TaskStoreState):
                 live = self._automation_occurrence_statuses(owner).where(
                     source == task["id"], tasks.c.status.in_(RUNNING_OCCURRENCE_STATUSES),
                 )
-                return {"hasRunningOccurrence": bool(conn.scalar(select(live.exists())))}
+                context = {"hasRunningOccurrence": bool(conn.scalar(select(live.exists())))}
+                if task.get("routineState") == "active" and not task.get("routineNextRunAt") and is_one_off(triggers_of(task)):
+                    context["hasCompletedOccurrence"] = bool(conn.scalar(select(self._completed_occurrence(owner, task["id"]))))
+                return context
             parent = conn.execute(select(tasks.c.id, tasks.c.title).where(
                 tasks.c.id == parent_id, tasks.c.owner_user_id == owner,
                 tasks.c.deleted_at.is_(None), tasks.c.is_routine.is_(True),

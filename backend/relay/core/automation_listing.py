@@ -9,7 +9,7 @@ from typing import Any
 
 from .task_listing import task_list_assignee, task_list_text_order, task_list_window
 
-AUTOMATION_LIST_STATES = ("running", "due", "scheduled", "listening", "on_demand", "paused")
+AUTOMATION_LIST_STATES = ("running", "due", "scheduled", "listening", "on_demand", "completed", "paused")
 AUTOMATION_LIST_SORTS = ("title", "priority", "assignee", "nextRun")
 LIVE_OCCURRENCE_STATUSES = ("assigned", "queued", "running", "review")
 RUNNING_OCCURRENCE_STATUSES = ("running", "review")
@@ -44,6 +44,13 @@ def _next_run(row: AutomationRow) -> datetime | None:
     return value.replace(tzinfo=UTC) if value is not None and value.tzinfo is None else value
 
 
+def is_one_off(triggers: Sequence[Mapping[str, Any]]) -> bool:
+    match triggers:
+        case [{"kind": "schedule", "schedule": {"repeat": {"once": _}}}]:
+            return True
+    return False
+
+
 def _state(row: AutomationRow, running: bool, now: datetime) -> str:
     if running:
         return "running"
@@ -53,6 +60,8 @@ def _state(row: AutomationRow, running: bool, now: datetime) -> str:
     next_run = _next_run(row)
     if next_run is None and any(trigger.get("kind") != "schedule" for trigger in triggers):
         return "listening"
+    if next_run is None and is_one_off(triggers) and row["has_completed_occurrence"]:
+        return "completed"
     if not triggers or (next_run is None and all("once" in trigger["schedule"]["repeat"] for trigger in triggers)):
         return "on_demand"
     if next_run is not None and next_run <= now:

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, event, update
 
 from relay.app import create_app
+from relay.automations.service import automation_service
 from relay.persistence.events import relay_event, relay_task_event
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
 from user_ids import user_id
@@ -580,7 +583,7 @@ def test_automation_page_filters_before_paging_and_carries_run_context(project_c
     data = response.json()
     assert data["automationCount"] == 33
     assert data["page"] == {"page": 1, "total": 33}
-    assert data["counts"] == {"paused": 28, "running": 1, "due": 1, "scheduled": 1, "listening": 1, "on_demand": 1}
+    assert data["counts"] == {"paused": 28, "running": 1, "due": 1, "scheduled": 1, "listening": 1, "on_demand": 1, "completed": 0}
     assert data["hasLiveRuns"] is True
     assert len(data["tasks"]) == 25 and len(response.content) < 18_000
     assert all(row["description"] == "" and row["linkedSessionIds"] == [] for row in data["tasks"])
@@ -607,6 +610,46 @@ def test_automation_page_filters_before_paging_and_carries_run_context(project_c
     store.update_task(run["id"], {"status": "done"})
     changed = client.get(f"{path}?view=record", headers=headers)
     assert changed.status_code == 200 and changed.json()["hasRunningOccurrence"] is False
+
+
+def test_once_automation_shows_completed_after_its_run_finishes(project_context):
+    app, client, project = project_context
+    store = app.state.task_store
+    routine = store.create_task({
+        "title": "One-time job", "ownerUserId": project["ownerUserId"], "projectId": project["id"],
+        "isRoutine": True, "routineState": "active",
+        "routineNextRunAt": "2000-01-01T09:00:00Z",
+        "routineTriggers": [{"kind": "schedule", "schedule": {
+            "timezone": "UTC", "repeat": {"once": "2000-01-01T09:00"},
+        }}],
+    })
+    params = {"view": "summary", "scope": "automations", "layout": "list", "projectId": project["id"]}
+    path = f"/api/v1/tasks/{routine['id']}?view=record"
+
+    def list_state():
+        response = client.get("/api/v1/tasks", params=params)
+        assert response.status_code == 200, response.text
+        return response.json()["states"][routine["id"]]
+
+    assert list_state() == "due"
+    service = automation_service(app.state.automation_store, app.state.context)
+    assert service.tick(datetime(2000, 1, 1, 9, tzinfo=UTC)) == 1
+    [run_id] = store.get_task(routine["id"])["occurrenceIds"]
+    assert list_state() == "on_demand"
+    store.update_task(run_id, {"status": "running"})
+    assert list_state() == "running"
+    detail = client.get(path)
+    assert detail.json()["hasRunningOccurrence"] is True
+    store.update_task(run_id, {"status": "done"})
+    assert service.tick(datetime(2000, 1, 2, tzinfo=UTC)) == 0
+    assert list_state() == "completed"
+    filtered = client.get("/api/v1/tasks", params={**params, "state": "completed"}).json()
+    assert filtered["states"] == {routine["id"]: "completed"}
+    assert filtered["counts"]["completed"] == 1
+    refreshed = client.get(path, headers={"If-None-Match": detail.headers["etag"]})
+    assert refreshed.status_code == 200
+    assert refreshed.json()["hasCompletedOccurrence"] is True
+    assert refreshed.json()["hasRunningOccurrence"] is False
 
 
 def test_automation_page_bounds_legacy_computer_placement(project_context):

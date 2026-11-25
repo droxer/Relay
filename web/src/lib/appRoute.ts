@@ -411,7 +411,7 @@ const LIST_FILTER_PARAMS: Record<string, Record<string, ReadonlySet<string> | nu
     agent: null,
     assignee: null,
     trigger: new Set(["schedule", "task_event", "run_event", "webhook", "none"]),
-    state: new Set(["running", "due", "scheduled", "listening", "on_demand", "paused"]),
+    state: new Set(["running", "due", "scheduled", "listening", "on_demand", "completed", "paused"]),
   },
 };
 

@@ -80,15 +80,17 @@ export function TaskRecordView({
   const dependentIds = useMemo(() => tasks
     .filter((task) => !task.deletedAt && task.prerequisiteTaskIds?.includes(recordId))
     .map((task) => task.id).sort(), [tasks, recordId]);
-  const { task, isPending, notFound, error } = useTaskRecord(recordId, placeholder, dependentIds, compactList);
+  const { task, isPending, notFound, error } = useTaskRecord(
+    recordId, placeholder, dependentIds, compactList, automationStates?.[recordId],
+  );
   const parent = useMemo(
     () => (runId ? tasks.find((candidate) => candidate.id === taskId) : undefined),
     [runId, taskId, tasks],
   );
   const running = useMemo(() => {
     const ids = runningRoutineIds(tasks);
-    if (task && (automationStates?.[task.id] === "running"
-      || !automationStates?.[task.id] && task.hasRunningOccurrence)) ids.add(task.id);
+    if (task && (task.hasRunningOccurrence ?? automationStates?.[task.id] === "running")) ids.add(task.id);
+    if (task?.hasRunningOccurrence === false) ids.delete(task.id);
     return ids;
   }, [tasks, task, automationStates]);
   const parentRoutine = runId ? (task?.routineParent?.id === taskId ? task.routineParent

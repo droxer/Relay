@@ -1363,7 +1363,8 @@
       "scheduled": "Scheduled",
       "paused": "Paused",
       "listening": "Listening",
-      "on_demand": "On demand"
+      "on_demand": "On demand",
+      "completed": "Completed"
     },
     "meta": "Automation status",
     "no_activity": "No runs yet.",

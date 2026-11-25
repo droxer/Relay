@@ -2,7 +2,7 @@ import { createElement } from "react";
 import type { RoutineListState } from "../lib/routine";
 import {
   AutomationAll, AutomationRunning, AutomationDue, AutomationScheduled,
-  AutomationListening, AutomationOnDemand, AutomationPaused, ICON,
+  AutomationListening, AutomationOnDemand, AutomationPaused, ICON, StatusOk,
 } from "./icons";
 
 const STATE_ICON = {
@@ -12,6 +12,7 @@ const STATE_ICON = {
   scheduled: AutomationScheduled,
   listening: AutomationListening,
   on_demand: AutomationOnDemand,
+  completed: StatusOk,
   paused: AutomationPaused,
 } satisfies Record<RoutineListState | "all", typeof AutomationAll>;
 

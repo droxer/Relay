@@ -224,6 +224,7 @@
 
 .routine-state-icon[data-state="running"]:not([data-empty="true"]) { color: var(--live); }
 .routine-state-icon[data-state="due"]:not([data-empty="true"]) { color: var(--warn); }
+.routine-state-icon[data-state="completed"]:not([data-empty="true"]) { color: var(--ok); }
 .routine-state-icon[data-state="paused"] { color: var(--ink-3); }
 
 .routine-state {
@@ -235,6 +236,7 @@
 
 .routine-state[data-state="running"] { --state-accent: var(--live); color: var(--ink-1); }
 .routine-state[data-state="due"] { --state-accent: var(--warn); }
+.routine-state[data-state="completed"] { --state-accent: var(--ok); }
 .routine-state[data-state="scheduled"] { --state-accent: var(--ink-3); }
 
 .routine-state[data-state="paused"] {
