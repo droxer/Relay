@@ -2,9 +2,9 @@ import type {
   AgentName,
   CollaborationStyle,
   RelaySession,
-  RelayTask,
+  RelayTask as CoreTask,
   RelayTaskEvent,
-  RelayTaskListItem,
+  RelayTaskListItem as CoreTaskListItem,
   RelayTaskSummary,
   RoutineOccurrenceTriggerKind,
   RoutineState,
@@ -16,6 +16,9 @@ import type {
 import type { ArtifactIndexItem, ProducedFile } from "./artifacts.ts";
 import type { RunInput } from "./sessions.ts";
 import type { WorkspaceFileEntry } from "./workspace.ts";
+
+export type RelayTask = CoreTask & { hasCompletedOccurrence?: boolean };
+export type RelayTaskListItem = CoreTaskListItem & Pick<RelayTask, "hasCompletedOccurrence">;
 
 export type TaskLiveStatus =
   | "ok"

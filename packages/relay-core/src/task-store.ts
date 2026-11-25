@@ -205,7 +205,6 @@ export interface RelayTask {
   routineParent?: { id: string; title: string };
   /** Whether an Automation currently has an occurrence running or in review. */
   hasRunningOccurrence?: boolean;
-  hasCompletedOccurrence?: boolean;
   /**
    * API-only: the folder this task's deliverables live in, relative to the
    * workspace its rounds share — `artifacts`, one automation run's
