@@ -6,22 +6,19 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useProjectDiscussions } from "../hooks/useProjectDiscussions";
 import { useQueueClock } from "../hooks/useQueueClock";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
-import type { ProjectLeadTopic } from "../lib/projectLeadTopics";
+import { PROJECT_LEAD_TOPICS, projectLeadTopicLabel, type ProjectLeadTopic } from "../lib/projectLeadTopics";
 import { mergeSessionSummaries } from "../lib/sessionPollMerge";
 import { groupThreads } from "../lib/threadGroups";
-import { parseThreadKindFilter } from "../lib/threadKindFilter";
 import { threadNodeOffline } from "../lib/threadRuntime";
 import { runningAgentName } from "../lib/threads";
 import type { DaemonNodeMonitorRecord, RelaySession, UserAgent } from "../types";
-import { ActionAdd, ICON, NavThreads } from "./icons";
-import { LeadDiscussActions } from "./ProjectManagerLine";
+import { ActionAdd, ChevronDownIcon, ICON, NavThreads } from "./icons";
 import { ThreadRow } from "./ThreadRow";
 import { Button } from "./ui/button";
+import { ButtonGroup, ButtonGroupSeparator } from "./ui/button-group";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { SearchInput } from "./ui/search-input";
-import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group";
 import { WorkspaceEmpty, WorkspaceError } from "./workspace/WorkspacePrimitives";
-
-const DISCUSSION_KINDS = ["all", "chats", "tasks"] as const;
 
 export function ProjectDiscussionsPanel({
   projectId, archived, agents, computers, onOpenThread, onNewThread, onRenameThread,
@@ -40,19 +37,17 @@ export function ProjectDiscussionsPanel({
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useUrlSearchState("q", "", (value) => value ?? "", (value) => value);
-  const [kind, setKind] = useUrlSearchState("kind", "all", parseThreadKindFilter, (value) => value);
   const query = useDebouncedValue(search.trim(), 250);
-  const discussions = useProjectDiscussions(projectId, query, kind);
+  const discussions = useProjectDiscussions(projectId, query);
   const summaries = useMemo(() => {
     const seen = new Set<string>();
     return discussions.data?.pages.flatMap(page => page.sessions).filter(row => {
-      if (seen.has(row.id)) return false;
+      if (row.taskActivity?.origin || seen.has(row.id)) return false;
       seen.add(row.id);
       return true;
     }) ?? [];
   }, [discussions.data]);
   const sessions = useMemo(() => mergeSessionSummaries([], summaries), [summaries]);
-  const counts = useMemo(() => new Map(summaries.map(row => [row.id, row.runCount])), [summaries]);
   const items = useMemo(() => {
     const running = new Map(computers.flatMap(node => node.activeRuns.map(run => [run.sessionId, run] as const)));
     const names = new Map(agents.map(agent => [agent.id, agent.displayName]));
@@ -63,7 +58,6 @@ export function ProjectDiscussionsPanel({
         runningAgent: run?.agent,
         runningAgentName: runningAgentName(session, run, names),
         nodeOffline: threadNodeOffline(session, agents, computers),
-        origin: session.taskActivity?.origin ?? undefined,
         taskAwaitsHuman: session.taskActivity?.awaitsHuman,
       };
     });
@@ -77,23 +71,43 @@ export function ProjectDiscussionsPanel({
     { tone: "queued", items: groups.queued, label: t("thread.group_queued") },
     { tone: "idle", items: groups.idle, label: t("project.discussions_recent") },
   ] as const;
-  const filtered = query.length > 0 || kind !== "all";
+  const filtered = query.length > 0 || search.trim().length > 0;
   const empty = discussions.data !== undefined && items.length === 0;
-  const actions = onNewThread ? (
-    <div className="project-discussions-actions">
-      <Button type="button" size="dense" onClick={onNewThread}>
-        <ActionAdd size={ICON.sm} aria-hidden="true" />
-        {t("project.discussions_new")}
-      </Button>
-      {onDiscussWithLead && (
-        <LeadDiscussActions onDiscuss={onDiscussWithLead} discussing={discussing} label={t("project.discussions_with_lead")} />
-      )}
-    </div>
+  const newDiscussion = onNewThread ? (
+    <Button type="button" size="dense" onClick={onNewThread}>
+      <ActionAdd size={ICON.sm} aria-hidden="true" />
+      {t("project.discussions_new")}
+    </Button>
   ) : null;
+  const actions = newDiscussion && onDiscussWithLead ? (
+    <ButtonGroup aria-label={t("project.discussions_new")}>
+      {newDiscussion}
+      <ButtonGroupSeparator />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={discussing}
+          render={(
+            <Button type="button" size="icon-dense" aria-label={t("project_manager.quick_topics")}>
+              <ChevronDownIcon size={ICON.sm} aria-hidden="true" />
+            </Button>
+          )}
+        />
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onDiscussWithLead()}>{t("project.discussions_with_lead")}</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {PROJECT_LEAD_TOPICS.map(topic => (
+            <DropdownMenuItem key={topic} onClick={() => onDiscussWithLead(topic)}>
+              {projectLeadTopicLabel(t, topic)}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </ButtonGroup>
+  ) : newDiscussion;
 
   return (
-    <div className="project-discussions" data-density="compact">
-      <div className="project-discussions-toolbar">
+    <div className="project-discussions">
+      {(!empty || filtered) && <div className="project-discussions-toolbar">
         <SearchInput
           className="list-filter-search"
           label={t("project.discussions_search")}
@@ -101,20 +115,8 @@ export function ProjectDiscussionsPanel({
           value={search}
           onChange={(event) => setSearch(event.currentTarget.value)}
         />
-        <ToggleGroup
-          className="thread-kind-filter"
-          aria-label={t("thread.kind_filter_label")}
-          value={[kind]}
-          onValueChange={(next) => { if (next[0]) setKind(next[0]); }}
-        >
-          {DISCUSSION_KINDS.map(value => (
-            <ToggleGroupItem key={value} value={value} className="thread-kind-filter-item">
-              {t(value === "tasks" ? "project.discussions_task_runs" : `thread.kind_filter_${value}`)}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
         {!empty && actions}
-      </div>
+      </div>}
       {discussions.isPending ? (
         <div className="project-discussions-skeleton" role="status" aria-busy="true">
           <span className="sr-only">{t("project.discussions_loading")}</span>
@@ -134,7 +136,7 @@ export function ProjectDiscussionsPanel({
             announce
           />
           {filtered ? (
-            <Button type="button" variant="outline" size="dense" onClick={() => { setSearch(""); setKind("all"); }}>
+            <Button type="button" variant="outline" size="dense" onClick={() => setSearch("")}>
               {t("backlog.clear_filters")}
             </Button>
           ) : actions}
@@ -147,7 +149,7 @@ export function ProjectDiscussionsPanel({
               <ThreadRow
                 key={item.session.id}
                 item={item}
-                discussionRuns={counts.get(item.session.id) ?? 0}
+                discussion
                 selected={false}
                 tone={tone}
                 now={now}
