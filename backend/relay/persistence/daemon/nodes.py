@@ -517,10 +517,10 @@ class NodeRows(DaemonStoreState):
         trim = func.btrim if self.engine.dialect.name == "postgresql" else func.trim
         workspace_id = trim(cols.workspace_id, _WORKSPACE_ID_WHITESPACE)
         predicates = [
-            *(cols.id.in_(batch) for batch in batched(sorted(direct), 250)),
-            *(cols.managed_node_id.in_(batch) for batch in batched(sorted(managed), 250)),
+            *(cols.id.in_(batch) for batch in batched(sorted(direct), 250, strict=False)),
+            *(cols.managed_node_id.in_(batch) for batch in batched(sorted(managed), 250, strict=False)),
             *(tuple_(cols.user_id, workspace_id).in_(batch) & cols.managed_node_id.is_(None)
-              for batch in batched(sorted(devices), 250)),
+              for batch in batched(sorted(devices), 250, strict=False)),
         ]
         if not predicates:
             return []

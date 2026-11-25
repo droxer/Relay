@@ -42,7 +42,7 @@ class NodeObservationRows(DaemonStoreState):
         with store_transaction(self.engine) as conn:
             return {
                 str(node_id): {"status": status, "lastSeenAt": format_db_time(seen)}
-                for batch in batched(ids, 500)
+                for batch in batched(ids, 500, strict=False)
                 for node_id, status, seen in conn.execute(statement.where(nodes.id.in_(batch)))
             }
 

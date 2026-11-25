@@ -326,7 +326,7 @@ class DatabaseAgentPlacementStore:
             else:
                 rows = [
                     row
-                    for batch in batched(sorted(agent_ids), 500)
+                    for batch in batched(sorted(agent_ids), 500, strict=False)
                     for row in conn.execute(statement.where(self.placements.c.agent_id.in_(batch))).mappings()
                 ]
         return sorted(

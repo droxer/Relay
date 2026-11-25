@@ -51,7 +51,7 @@ def task_with_prerequisite_view(
     if include_summaries and task.get("projectId") and task.get("ownerUserId") and not task.get("isRoutine"):
         ids = dict.fromkeys([*(task.get("prerequisiteTaskIds") or []), *dependents])
         viewed["prerequisiteSummaries"] = [
-            row for batch in batched(ids, 500) for row in ctx.task_store.prerequisite_choices(
+            row for batch in batched(ids, 500, strict=False) for row in ctx.task_store.prerequisite_choices(
                 task["ownerUserId"], task["projectId"], list(batch),
             )
         ]

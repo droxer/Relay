@@ -1,6 +1,6 @@
 default_stages: [pre-commit]
 default_language_version:
-  python: python3.12
+  python: python3.14
 exclude: '^(\.claude/|\.codegraph/|\.cursor/|\.git/|\.next/|\.oci/|\.pytest_cache/|\.relay/|\.ruff_cache/|\.uv-cache/|__pycache__/|backend/\.venv/|dist/|node_modules/|packages/\.relay/|web/\.next/|web/out/)'
 
 repos:

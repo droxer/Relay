@@ -62,7 +62,7 @@ class SessionArtifactRows(SessionStoreState):
         with store_transaction(self.engine) as conn:
             found = {
                 row["id"]: {**row, "artifacts": row["artifacts"] or []}
-                for batch in batched(sorted(set(canonical_ids.values())), 500)
+                for batch in batched(sorted(set(canonical_ids.values())), 500, strict=False)
                 for row in conn.execute(statement.where(sessions.id.in_(batch))).mappings()
             }
         return {key: found[canonical] for key, canonical in canonical_ids.items() if canonical in found}

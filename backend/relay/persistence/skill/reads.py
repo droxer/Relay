@@ -31,7 +31,7 @@ class SkillReadRows(SkillStoreState):
         if not ids:
             return results
         with store_transaction(self.engine) as conn:
-            for batch in batched(ids, 500):
+            for batch in batched(ids, 500, strict=False):
                 selected = conn.execute(select(skills.c.id, skills.c.snapshot).where(skills.c.id.in_(batch)))
                 results.update(self._read_projections(conn, selected))
         return results
@@ -67,7 +67,7 @@ class SkillReadRows(SkillStoreState):
         with store_transaction(self.engine) as conn:
             return {
                 str(row["id"]): _revision_dict(row)
-                for batch in batched(ids, 500)
+                for batch in batched(ids, 500, strict=False)
                 for row in conn.execute(select(revisions).where(revisions.c.id.in_(batch))).mappings()
             }
 
@@ -100,7 +100,7 @@ class SkillReadRows(SkillStoreState):
         )
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         with store_transaction(self.engine) as conn:
-            for batch in batched(ids, 500):
+            for batch in batched(ids, 500, strict=False):
                 for key, path, sha256, size in conn.execute(statement.where(files.c.revision_id.in_(batch))):
                     grouped[str(key)].append({"path": path, "sha256": sha256, "bytes": size})
         # Match _validate_files' ordering used to hash the published manifest.

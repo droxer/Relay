@@ -3,7 +3,7 @@ name = "relay"
 version = "0.1.0"
 description = "Relay backend control plane in Python"
 license = { text = "Apache-2.0" }
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
   "croniter>=6.0.0",
   "fastapi>=0.128.0",
@@ -66,13 +66,13 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 120
 extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 # Correctness-first: pyflakes, syntax/IO errors, bugbear, async blocking calls,
-# blind excepts (each needs a reason), and py312 idioms that ruff can autofix.
+# blind excepts (each needs a reason), and Python idioms that ruff can autofix.
 select = ["E4", "E7", "E9", "F", "B", "PLE", "ASYNC", "BLE", "UP017", "UP035", "UP012"]
 ignore = [
   "B008",  # FastAPI's Depends()/Body() defaults are the framework idiom.
@@ -82,7 +82,7 @@ ignore = [
 "tests/**" = ["B011", "B017", "BLE001", "ASYNC"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 files = ["relay"]
 ignore_missing_imports = true
 warn_unused_ignores = true
