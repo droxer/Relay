@@ -118,7 +118,7 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         with store_transaction(self.engine) as conn:
             rows = (
                 conn.execute(statement).mappings().all() if project_ids is None else [
-                    row for batch in batched(sorted(project_ids), 500)
+                    row for batch in batched(sorted(project_ids), 500, strict=False)
                     for row in conn.execute(statement.where(self.projects.c.id.in_(batch))).mappings()
                 ]
             )
@@ -189,7 +189,11 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         columns = self.projects.c
         statement = select(columns.id).where(columns.owner_user_id == owner_user_id, columns.archived_at.is_(None))
         with store_transaction(self.engine) as conn:
-            return {str(key) for batch in batched(ids, 500) for key in conn.scalars(statement.where(columns.id.in_(batch)))}
+            return {
+                str(key)
+                for batch in batched(ids, 500, strict=False)
+                for key in conn.scalars(statement.where(columns.id.in_(batch)))
+            }
 
     def agent_has_active_project(self, agent_id: str, *, exclude_computer_id: str | None = None) -> bool:
         if names_no_uuid_row(self.engine, agent_id):

@@ -7,7 +7,7 @@ service commands, data layout, and test organization.
 
 - Node.js 22.19 or newer
 - npm
-- Python 3.12 or newer
+- Python 3.14 (`uv python install 3.14`)
 - uv
 - PostgreSQL — sessions, tasks, events, and artifacts always live in the
   database; see [Backend Database Migrations](#backend-database-migrations)

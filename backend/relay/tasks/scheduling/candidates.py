@@ -44,7 +44,7 @@ class DispatchCandidates:
         candidates = islice(self._dispatchable_tasks(), budget)
         scanned = 0
         last = None
-        for page in batched(candidates, self._dispatch_page_size):
+        for page in batched(candidates, self._dispatch_page_size, strict=False):
             last = dict(page[-1])
             scanned += len(page)
             task_ids = {key for candidate in page if isinstance(key := candidate.get("id"), str)}

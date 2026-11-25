@@ -46,7 +46,7 @@
 
 ## 快速开始
 
-你需要 Node.js 22.19+、npm、Python 3.12+、[uv](https://docs.astral.sh/uv/) 和 PostgreSQL。使用默认的 BoxLite 沙箱还需要 Docker、硬件虚拟化支持，以及所需智能体的凭据。
+你需要 Node.js 22.19+、npm、Python 3.14、[uv](https://docs.astral.sh/uv/) 和 PostgreSQL。使用默认的 BoxLite 沙箱还需要 Docker、硬件虚拟化支持，以及所需智能体的凭据。
 
 以下命令均在仓库根目录执行。
 

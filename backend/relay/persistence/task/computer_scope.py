@@ -30,7 +30,7 @@ def linked_computers(conn: Connection, owner: str, session_ids: set[str]) -> dic
     snapshot = sessions.c.snapshot
     session_nodes: dict[str, str] = {}
     identities: dict[str, str] = {}
-    for ids in batched((key for key in session_ids if not sql.names_no_uuid_row(conn.engine, key)), 500):
+    for ids in batched((key for key in session_ids if not sql.names_no_uuid_row(conn.engine, key)), 500, strict=False):
         rows = conn.execute(select(
             sessions.c.id, snapshot["computerId"].as_string().label("computer"),
             snapshot["daemonNodeId"].as_string().label("node"),
@@ -42,7 +42,7 @@ def linked_computers(conn: Connection, owner: str, session_ids: set[str]) -> dic
                 session_nodes[row["id"]] = row["node"]
     node_ids = set(session_nodes.values())
     node_computers: dict[str, str] = {}
-    for ids in batched((key for key in node_ids if not sql.names_no_uuid_row(conn.engine, key)), 500):
+    for ids in batched((key for key in node_ids if not sql.names_no_uuid_row(conn.engine, key)), 500, strict=False):
         rows = conn.execute(select(
             nodes.c.id, nodes.c.user_id.label("userId"), nodes.c.workspace_id.label("workspaceId"),
             nodes.c.managed_node_id.label("managedNodeId"),

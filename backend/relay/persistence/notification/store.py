@@ -58,7 +58,7 @@ def _insert_notices(conn: Any, rows: list[dict[str, Any]], *, replace_data: bool
         else:
             values.setdefault(notice_id, notice)
     dialect_insert = postgresql_insert if conn.dialect.name == "postgresql" else sqlite_insert
-    for batch in batched(sorted(values), 100):
+    for batch in batched(sorted(values), 100, strict=False):
         statement = dialect_insert(notifications).values([values[notice_id] for notice_id in batch])
         if replace_data:
             statement = statement.on_conflict_do_update(

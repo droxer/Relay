@@ -46,7 +46,7 @@ Current UI, dark theme, demo data. Regenerate with [`capture.mjs`](script/readme
 
 ## Quick start
 
-You need Node.js 22.19+, npm, Python 3.12+, [uv](https://docs.astral.sh/uv/), and PostgreSQL. For the default BoxLite sandbox, you also need Docker, hardware virtualization, and credentials for the agents you plan to use.
+You need Node.js 22.19+, npm, Python 3.14, [uv](https://docs.astral.sh/uv/), and PostgreSQL. For the default BoxLite sandbox, you also need Docker, hardware virtualization, and credentials for the agents you plan to use.
 
 Run the following commands from the repository root.
 

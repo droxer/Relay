@@ -52,7 +52,7 @@ class TaskOccurrenceReads(TaskStoreState):
                 self._inline_history().label("inline_events"),
             )
         with store_transaction(self.engine) as conn:
-            for batch in batched(ids, 500):
+            for batch in batched(ids, 500, strict=False):
                 stale = {}
                 for row in conn.execute(statement.where(tasks.c.id.in_(batch))).mappings():
                     if row["stale_snapshot"] is not None:

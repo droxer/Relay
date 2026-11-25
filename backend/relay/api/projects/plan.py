@@ -133,7 +133,7 @@ def _link_prerequisites(
     requested_ids = {task_id for task in chosen for task_id in task.get("afterTaskIds") or []}
     project_task_ids = {
         task["id"]
-        for batch in batched(sorted(requested_ids), 500)
+        for batch in batched(sorted(requested_ids), 500, strict=False)
         for task in ctx.task_store.list_task_summaries(
             user_id=project["ownerUserId"], project_id=project["id"], task_ids=list(batch),
         )

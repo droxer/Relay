@@ -107,8 +107,8 @@ ask the user whether to run `codegraph init -i`.
 - Generated outputs: `dist/`, `packages/*/dist/`, `web/out/`, `web/.next/`,
   `node_modules/`, `.oci/`, and `.relay/` directories at any workspace level.
 
-Node.js 22.19 or newer is required for the TypeScript packages. Python 3.12 or
-newer and `uv` are required for the backend.
+Node.js 22.19 or newer is required for the TypeScript packages. Python 3.14 and
+`uv` are required for the backend.
 
 ## Commands
 
