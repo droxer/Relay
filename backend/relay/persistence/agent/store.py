@@ -216,6 +216,13 @@ class DatabaseAgentStore:
         current = self.get_agent(agent_id)
         if not current or current.get("deletedAt"):
             raise KeyError(agent_id)
+        if "displayName" in patch and (
+            patch["displayName"] is None
+            or isinstance(patch["displayName"], str) and not patch["displayName"].strip()
+        ):
+            patch = {**patch, "displayName": generate_agent_name(
+                taken=_name_taken(self, current["supervisorUserId"])
+            )}
         updated, normalized, event_type = _updated_agent(
             agent_id, current, patch, self._ensure_unique_name
         )

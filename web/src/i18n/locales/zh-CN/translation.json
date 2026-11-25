@@ -2471,6 +2471,7 @@
     "create_role_required": "请选择角色。",
     "create_name_label": "智能体名称",
     "create_name_placeholder": "例如：研究助手",
+    "edit_name_hint": "留空将自动生成名称。",
     "create_submit": "创建智能体",
     "create_creating": "正在创建…",
     "create_error": "创建智能体失败：{{message}}",

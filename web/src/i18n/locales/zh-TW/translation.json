@@ -2471,6 +2471,7 @@
     "create_role_required": "請選擇角色。",
     "create_name_label": "智慧體名稱",
     "create_name_placeholder": "例如：研究助手",
+    "edit_name_hint": "留空將自動產生名稱。",
     "create_submit": "建立智慧體",
     "create_creating": "正在建立…",
     "create_error": "建立智慧體失敗：{{message}}",
