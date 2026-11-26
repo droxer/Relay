@@ -27,19 +27,22 @@ function agentTurn(overrides: Partial<Extract<DerivedMessage, { kind: "agent" }>
   } as DerivedMessage;
 }
 
-it("shows the runtime beside the agent name, not in the run receipt", () => {
-  render(<DialogProvider><MessageBlock message={agentTurn()} sessionId="s" logicalAgentNames={{ "agent-1": "Reviewer" }} /></DialogProvider>);
+it("shows the recorded role and level beside the Agent name", () => {
+  render(<DialogProvider><MessageBlock message={agentTurn({ role: "reviewer", roleLevel: "senior" })}
+    sessionId="s" logicalAgentNames={{ "agent-1": "Reviewer" }} /></DialogProvider>);
 
   const header = screen.getByText("Reviewer").closest("header")!;
-  expect(within(header).getByText("Claude")).toBeTruthy();
+  expect(within(header).getByText("role_levels.senior · admin.v2.agent_role.reviewer")).toBeTruthy();
+  expect(within(header).queryByText("Claude")).toBeNull();
   const receipt = screen.getByRole("region", { name: "thread.receipt.label" });
   expect(within(receipt).queryByText("Claude")).toBeNull();
   expect(within(receipt).queryByText("thread.receipt.runtime")).toBeNull();
 });
 
-it("does not repeat the runtime when the agent is named by its runtime", () => {
-  render(<DialogProvider><MessageBlock message={agentTurn({ agentId: undefined })} sessionId="s" /></DialogProvider>);
+it("shows a recorded legacy role without treating the runtime as the Agent's name", () => {
+  render(<DialogProvider><MessageBlock message={agentTurn({ agentId: undefined, role: "reviewer" })} sessionId="s" /></DialogProvider>);
 
-  const header = screen.getAllByText("Claude")[0].closest("header")!;
-  expect(within(header).getAllByText("Claude")).toHaveLength(1);
+  const header = screen.getByText("backlog.agent").closest("header")!;
+  expect(within(header).getByText("admin.v2.agent_role.reviewer")).toBeTruthy();
+  expect(within(header).queryByText("Claude")).toBeNull();
 });

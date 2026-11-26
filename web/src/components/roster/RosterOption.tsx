@@ -5,12 +5,10 @@ import { useTranslation } from "react-i18next";
 import { SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { AgentTeam, UserAgent, LogicalAgentAvailability } from "../../types";
-import { agentModel } from "../../lib/agentModels";
 import { teamAvailability } from "../../lib/taskAssignment";
 import { AgentStateBadge } from "../AgentStateBadge";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
-import { runtimeLabel } from "../../lib/runtimeLabel";
 import { agentRoleLabel, type AgentRoleIdentity } from "../../lib/agentRoleLabel";
 
 /* The rows every roster picker draws: one identity line per agent or team,
@@ -24,7 +22,7 @@ import { agentRoleLabel, type AgentRoleIdentity } from "../../lib/agentRoleLabel
 // references an agent/team no longer present in the fetched roster (deleted or
 // scoped out) instead of leaking a raw `agent:<id>` value.
 export type AgentView = Pick<UserAgent, "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">
-  & AgentRoleIdentity & Partial<Pick<UserAgent, "modelPolicy">>;
+  & AgentRoleIdentity;
 export type TeamView = Pick<AgentTeam, "name" | "profileImageUrl" | "members" | "lead" | "enabled" | "workflowSteps" | "workflowStepCount">;
 
 // Status is carried by the glyph's corner pip (the designed agent-state
@@ -72,31 +70,17 @@ export function RosterTeamMark({ team }: { team: TeamView }) {
   );
 }
 
-/** Agent CLI names are a fixed ASCII enum ("claude", "codex") rendered as the
- *  product names they are. This used to be `text-transform: capitalize` in
- *  roster-select.css, but that selector also caught the translated team
- *  member-count line and the empty-option label — copy that must NOT be
- *  title-cased, and would be wrong to title-case in German or French. Doing it
- *  here keeps it on the one string that is a proper noun. */
-const executorLabel = runtimeLabel;
-
 /** One roster row: mark, name, and the one-line descriptor under it. */
 export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamView }) {
   const { t } = useTranslation();
   if (agent) {
-    const model = agentModel(agent);
     const role = agentRoleLabel(agent, t);
     return (
       <span className="roster-option">
         <RosterAgentMark agent={agent} />
         <span className="roster-option-copy">
           <span translate="no">{agent.displayName}</span>
-          <span>
-            {role ? <>{role}{" · "}</> : null}
-            <span translate="no">{executorLabel(agent.executorKind)}</span>
-            {" · "}
-            {model ? <span translate="no">{model}</span> : t("agents_page.model_default")}
-          </span>
+          {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
         </span>
       </span>
     );
@@ -132,7 +116,7 @@ export function RosterAgentItem({ value, agent, children, ...itemProps }: { valu
   const { t } = useTranslation();
   const role = agentRoleLabel(agent, t);
   return (
-    <SelectItem value={value} label={[agent.displayName, role, agent.executorKind].filter(Boolean).join(" · ")} {...itemProps}>
+    <SelectItem value={value} label={role ? `${agent.displayName} · ${role}` : agent.displayName} {...itemProps}>
       {children ?? <RosterOption agent={agent} />}
     </SelectItem>
   );

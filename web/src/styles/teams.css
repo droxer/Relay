@@ -296,11 +296,6 @@
   min-width: 0;
 }
 
-.team-member-row-main .agent-meta {
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-
 .team-member-row-name {
   overflow: hidden;
   color: var(--ink-1);
@@ -541,11 +536,6 @@
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);
   white-space: nowrap;
-}
-
-.team-work-member-identity .agent-meta {
-  flex-wrap: nowrap;
-  overflow: hidden;
 }
 
 .team-work-member-name > strong {

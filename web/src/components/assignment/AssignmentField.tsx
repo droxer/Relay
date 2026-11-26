@@ -14,7 +14,7 @@ import {
 import type { AgentTeam, UserAgent } from "../../types";
 import type { ProjectWorkflowOption } from "../../lib/workflowSelection";
 import { teamAvailability } from "../../lib/taskAssignment";
-import { agentLabel } from "../../lib/plan";
+import { agentRoleLabel } from "../../lib/agentRoleLabel";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
 import { navigateToAppPath } from "../../lib/appRoute";
 import { AvatarStack } from "../AvatarStack";
@@ -80,6 +80,12 @@ function AssignmentSummary({
   const ready = availability === "ready";
   const leadName = team?.lead?.displayName;
   const name = agent?.displayName ?? team?.name ?? "";
+  const description = agent
+    ? agentRoleLabel(agent, t)
+    : t("backlog.team_descriptor", {
+        count: team?.members.length ?? 0,
+        lead: leadName ?? t("backlog.team_no_lead"),
+      });
   const statusLabel = availability ? t(`status.${availability}`, { defaultValue: availability }) : "";
   return (
     <span
@@ -103,14 +109,7 @@ function AssignmentSummary({
         <span className="task-assignment-summary-head">
           <span className="task-assignment-summary-title">{name}</span>
         </span>
-        <span className="task-assignment-summary-meta">
-          {agent
-            ? t("backlog.agent_descriptor", { executor: agentLabel(agent.executorKind) })
-            : t("backlog.team_descriptor", {
-                count: team?.members.length ?? 0,
-                lead: leadName ?? t("backlog.team_no_lead"),
-              })}
-        </span>
+        {description ? <span className="task-assignment-summary-meta">{description}</span> : null}
         {team && team.members.length > 0 ? (
           <AvatarStack
             className="task-assignment-roster"

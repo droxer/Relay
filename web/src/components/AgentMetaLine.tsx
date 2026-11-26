@@ -5,29 +5,7 @@ import { activePlacements, describeAgentPlacements } from "../lib/agentPlacement
 import { agentLabel } from "../lib/plan";
 import type { AgentName, AgentPlacementRoute } from "../types";
 
-/**
- * The one line that annotates an agent, in plain words: which runtime it is,
- * and which computers it runs on. No vendor or ownership glyphs — the words
- * already say it, and a glyph per fact cluttered every roster row.
- *
- * Three surfaces drew this by hand — the agent roster row, the team profile's
- * member list, and the team member picker — and they had drifted apart on
- * every property that makes it legible:
- *
- *   - the roster showed `[vendor glyph] claude`, both team surfaces showed a
- *     bare `claude` with no glyph at all, so the same agent had a picture on
- *     one screen and none two rows later;
- *   - the roster sat on the compact metadata rung (--fs-1 mono), the team
- *     copies a rung larger at --fs-2, so the team line read heavier than the
- *     agent name it annotates;
- *   - the roster listed every computer in route order, the team copies only
- *     the first, without saying more existed;
- *   - the roster filtered `removed` placements, the team copies did not, so a
- *     torn-down computer lingered in a team after leaving the roster.
- *
- * `TeamMemberOption` even carried the comment "The meta line matches the agent
- * roster". This component is what makes that true.
- */
+/** Runtime, model, and active placements for an Agents list row. */
 export function AgentMetaLine({
   executorKind,
   placements,

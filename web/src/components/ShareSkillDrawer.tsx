@@ -5,7 +5,7 @@ import { assignSkill, revokeSkillAssignment } from "../api";
 import type { AgentTeam, UserAgent, SkillDetail } from "../types";
 import { USER_AGENT_RECORD_QUERY_KEY } from "../hooks/useUserAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
-import { labelForExecutor } from "../lib/agentDisplayNames";
+import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Drawer } from "@/components/ui/Drawer";
@@ -187,7 +187,7 @@ export function ShareSkillDrawer({
                   onToggle={() => toggle(`agent:${agent.id}`)}
                   label={agent.displayName}
                   mark={<RosterAgentMark agent={agent} />}
-                  meta={labelForExecutor(agent.executorKind)}
+                  meta={agentRoleLabel(agent, t)}
                 />
               ))}
             </div>

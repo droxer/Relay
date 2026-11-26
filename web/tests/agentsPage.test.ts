@@ -5,16 +5,6 @@ import { describe, it } from "node:test";
 
 const read = (path: string) => readFile(resolve("web", path), "utf8");
 
-/**
- * The agent meta line — `[vendor glyph] runtime · [ownership glyph] computers`.
- *
- * The roster row, the team profile's member list, and the team member picker
- * each drew this by hand and had drifted on every property that makes it
- * legible: the team pair dropped the vendor glyph entirely, sat a type rung
- * larger, showed only the first computer, and kept `removed` placements the
- * roster had already filtered out. These tests fail if a surface grows its own
- * copy again.
- */
 describe("agent meta line", () => {
   it("names the runtime and every active computer in plain words", async () => {
     const source = await read("src/components/AgentMetaLine.tsx");
@@ -31,19 +21,9 @@ describe("agent meta line", () => {
     assert.match(source, /describeAgentPlacements\(activePlacements\(placements\)\)/);
   });
 
-  it("is the one component every agent-bearing surface renders", async () => {
-    for (const path of [
-      "src/components/AgentsPage.tsx",
-      // The team record draws its members through the shared member card.
-      "src/components/TeamMemberCard.tsx",
-      "src/components/TeamMemberPicker.tsx",
-    ]) {
-      const source = await read(path);
-      assert.match(source, /<AgentMetaLine\b/, path);
-      // No surface may re-derive the line's parts for itself.
-      assert.doesNotMatch(source, /agentLabel\(/, path);
-      assert.doesNotMatch(source, /<NodeOwnershipIcon\b/, path);
-    }
+  it("shows the Runtime and model on the Agents list", async () => {
+    const source = await read("src/components/AgentsPage.tsx");
+    assert.match(source, /<AgentMetaLine\b[\s\S]*?executorKind=\{agent\.executorKind\}[\s\S]*?model=\{agentModel\(agent\)\}/);
   });
 
   it("keeps the meta line on one type rung across surfaces", async () => {

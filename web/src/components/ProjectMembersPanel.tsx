@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { agentLabel } from "../lib/plan";
+import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { MAX_PROJECT_MEMBERS, orderedProjectMembers, projectMemberState } from "../lib/projectPage";
 import type { UserAgent, ProjectMember, ProjectListItem, ProjectMemberSummary } from "../types";
 import { AgentStateBadge } from "./AgentStateBadge";
@@ -69,8 +69,7 @@ export function ProjectMembersPanel({
   );
 }
 
-/** One agent as one row: who (name, lead mark), what they are (role,
- *  runtime) on one quiet line, and what they own. Only an
+/** One Agent as one row: name, lead mark, role, level, and responsibility. An
  *  exceptional state — disabled, unavailable — earns a pill. Instructions
  *  live in the editor; the whole row opens it. */
 function ProjectMemberRow({
@@ -87,11 +86,10 @@ function ProjectMemberRow({
   const { t } = useTranslation();
   const { available, enabled, availability } = projectMemberState(member, agent);
   const name = agent?.displayName || t("project.member_unavailable");
-  const meta = [
-    t(`project.roles.${member.role}`),
-    member.roleLevel ? t(`role_levels.${member.roleLevel}`, { defaultValue: member.roleLevel }) : null,
-    agent ? agentLabel(agent.executorKind) : null,
-  ].filter(Boolean).join(" · ");
+  const role = agentRoleLabel({
+    defaultRole: member.role,
+    roleLevel: member.roleLevel ?? agent?.roleLevel,
+  }, t);
   const state = !available
     ? <TonePill tone="warn" label={t("project.member_missing")} />
     : !member.enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null;
@@ -109,7 +107,7 @@ function ProjectMemberRow({
           <strong>{name}</strong>
           {lead ? <LeadBadge /> : null}
         </span>
-        <span className="project-member-row-meta">{meta}</span>
+        {role ? <span className="project-member-row-meta">{role}</span> : null}
         {"responsibilities" in member && typeof member.responsibilities === "string" && member.responsibilities ? (
           <span className="project-member-row-duty">{member.responsibilities}</span>
         ) : null}

@@ -811,8 +811,6 @@
   white-space: nowrap;
 }
 
-/* The name gives way first: a long agent name truncates before the runtime
-   beside it does. */
 .msg-speaker-name {
   min-width: 0;
   overflow: hidden;
@@ -821,25 +819,6 @@
 
 .msg-speaker .agent-role-label {
   min-width: 0;
-}
-
-/* Runtime as plain meta beside the name — glyph plus label in --ink-3, the
-   same grammar as .agent-meta-runtime on the agents page — not a boxed chip
-   that would outweigh the name it annotates. */
-.msg-speaker-runtime {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  align-self: center;
-  gap: var(--sp-1);
-  color: var(--ink-3);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-}
-
-.msg-speaker-runtime > svg {
-  display: block;
-  flex: none;
 }
 
 .msg-speaker-slot {

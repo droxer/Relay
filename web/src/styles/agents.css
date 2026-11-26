@@ -220,15 +220,7 @@
   color: var(--ink-2);
 }
 
-/* ── The agent meta line ─────────────────────────────────────────────────
-   `runtime · computer, computer` in plain words — the one
-   annotation under an agent's name, shared by the roster row, the team
-   profile's member list, and the team member picker (<AgentMetaLine>).
-
-   It used to be three hand-written copies. The team pair dropped the vendor
-   glyph entirely, sat a type rung larger at --fs-2, showed only the first
-   computer, and kept `removed` placements the roster had already filtered —
-   so the same agent read four different ways depending on the screen. */
+/* Runtime and model metadata on the Agents list. */
 .agent-meta {
   display: flex;
   align-items: center;
