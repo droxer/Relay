@@ -1,11 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Relay" shape-rendering="geometricPrecision">
   <title>Relay</title>
-  <!-- Fixed colors remain legible independently of the browser's theme.
-       Keep the lunar tile and Swiss baton cascade paths in sync with faviconState.ts. -->
-  <rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="#111111" stroke="#2e2e2c" stroke-width="1"/>
+  <!-- Dark register by default, light register under prefers-color-scheme: light
+       (browser tabs follow the OS scheme). Keep in sync with faviconState.ts. -->
+  <style>@media (prefers-color-scheme: light){.tile{fill:#f5f4f2;stroke:#ceccc6}.unlit{fill:#141413}.action{fill:#845734}}</style>
+  <rect class="tile" x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="#111111" stroke="#2e2e2c" stroke-width="1"/>
   <g transform="translate(32 32) scale(0.84) translate(-32 -32)">
-    <path d="M14 12 H48 L43 22 H9 Z" fill="#f2f2f0"/>
-    <path d="M21 27 H55 L50 37 H16 Z" fill="#c8966e"/>
-    <path d="M14 42 H48 L43 52 H9 Z" fill="#f2f2f0"/>
+    <path class="unlit" d="M14 12 H48 L43 22 H9 Z" fill="#f2f2f0"/>
+    <path class="action" d="M21 27 H55 L50 37 H16 Z" fill="#c8966e"/>
+    <path class="unlit" d="M14 42 H48 L43 52 H9 Z" fill="#f2f2f0"/>
   </g>
 </svg>

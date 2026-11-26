@@ -161,9 +161,23 @@ describe("the handoff mark", () => {
     });
   }
 
-  // The favicon intentionally uses one fixed tile in either viewer scheme.
-  // faviconState.test.ts covers shipped/runtime parity and contrast; a
-  // light-register media-query assertion would contradict that contract.
+  it("adapts favicon.svg and relay-mark.svg to the light register under prefers-color-scheme: light", () => {
+    for (const file of [["web", "public", "favicon.svg"], ["web", "public", "brand", "relay-mark.svg"]] as const) {
+      const style = read(...file).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? "";
+      const light = style.split("prefers-color-scheme: light")[1] ?? "";
+      for (const name of ["--surface-0", "--line-1", "--ink-1", "--brand-lead"]) {
+        assert.ok(light.includes(tokenIn(registers.light, name)), `${file.at(-1)} light scheme is missing ${name}`);
+      }
+    }
+  });
+
+  it("remaps RelayMark on the inverted landing wordmark tile in both registers", () => {
+    assert.equal(tokenIn(registers.dark, "--brand-lead-on-action"), tokenIn(registers.light, "--brand-lead"));
+    assert.equal(tokenIn(registers.light, "--brand-lead-on-action"), tokenIn(registers.dark, "--brand-lead"));
+    const tile = readStyle("landing.css").match(/\.landing-tile-wordmark \{([^}]*)\}/)?.[1] ?? "";
+    assert.match(tile, /--ink-1:\s*var\(--on-action\);/);
+    assert.match(tile, /--brand-lead:\s*var\(--brand-lead-on-action\);/);
+  });
 
   it("colours the wordmark's tracks and baton from both registers", () => {
     const svg = read("web", "public", "brand", "relay-logo.svg");

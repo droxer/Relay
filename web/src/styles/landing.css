@@ -1404,6 +1404,10 @@
 }
 
 .landing-tile-wordmark {
+  /* Inverted --action plate: remap RelayMark's ink and bronze to the opposite
+     register so the tracks and baton stay legible in both dark and light themes. */
+  --ink-1: var(--on-action);
+  --brand-lead: var(--brand-lead-on-action);
   flex-direction: row;
   align-items: center;
   justify-content: center;

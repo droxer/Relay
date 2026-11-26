@@ -14,7 +14,7 @@ import type { ThreadWaitSource } from "./awaitingInput.ts";
  */
 export type FaviconState = "idle" | "running" | "waiting";
 
-/** Fixed tab colors: the browser chrome can differ from the app's theme.
+/** Dark-scheme tab colors (the default; see FAVICON_INK_LIGHT for light).
  * Monochrome ink, burnished bronze, and signal blue stay crisp at 16px on a
  * lunar charcoal tile with a whisper hairline. Keep favicon.svg in sync. */
 export const FAVICON_INK = {
@@ -38,17 +38,39 @@ export function faviconState(items: readonly ThreadItem[], tasks: ThreadWaitSour
   return groups.running.length > 0 ? "running" : "idle";
 }
 
+/** Light-scheme counterparts, mirroring palette.css's light register. Tab
+ * chrome follows the browser/OS scheme, so the SVG swaps registers itself. */
+export const FAVICON_INK_LIGHT = {
+  canvas: "#f5f4f2",
+  outline: "#ceccc6",
+  action: "#845734",
+  live: "#2356c4",
+  unlit: "#141413",
+} as const;
+
+const FAVICON_LIGHT_CSS = "@media (prefers-color-scheme: light){"
+  + `.tile{fill:${FAVICON_INK_LIGHT.canvas};stroke:${FAVICON_INK_LIGHT.outline}}`
+  + `.unlit{fill:${FAVICON_INK_LIGHT.unlit}}`
+  + `.action{fill:${FAVICON_INK_LIGHT.action}}`
+  + `.live{fill:${FAVICON_INK_LIGHT.live}}`
+  + "}";
+
+type FaviconRole = "unlit" | "action" | "live";
+
 /** At rest, monochrome rails flank the bronze baton; active states light the acting side. */
 export function faviconSvg(state: FaviconState): string {
-  const top = state === "waiting" ? FAVICON_INK.action : FAVICON_INK.unlit;
-  const baton = state === "running" ? FAVICON_INK.live : FAVICON_INK.action;
-  const bottom = state === "running" ? FAVICON_INK.live : FAVICON_INK.unlit;
+  const roles: Record<"top" | "baton" | "bottom", FaviconRole> = {
+    top: state === "waiting" ? "action" : "unlit",
+    baton: state === "running" ? "live" : "action",
+    bottom: state === "running" ? "live" : "unlit",
+  };
+  const track = (key: keyof typeof roles) =>
+    `<path class="${roles[key]}" d="${FAVICON_PATHS[key]}" fill="${FAVICON_INK[roles[key]]}"/>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
-    + `<rect x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="${FAVICON_INK.canvas}" stroke="${FAVICON_INK.outline}" stroke-width="1"/>`
+    + `<style>${FAVICON_LIGHT_CSS}</style>`
+    + `<rect class="tile" x="0.5" y="0.5" width="63" height="63" rx="13.5" fill="${FAVICON_INK.canvas}" stroke="${FAVICON_INK.outline}" stroke-width="1"/>`
     + `<g transform="translate(32 32) scale(0.84) translate(-32 -32)">`
-    + `<path d="${FAVICON_PATHS.top}" fill="${top}"/>`
-    + `<path d="${FAVICON_PATHS.baton}" fill="${baton}"/>`
-    + `<path d="${FAVICON_PATHS.bottom}" fill="${bottom}"/>`
+    + track("top") + track("baton") + track("bottom")
     + `</g></svg>`;
 }
 
