@@ -93,12 +93,13 @@ const pencil = () => document.querySelector<HTMLButtonElement>(".team-work-membe
 it("reads as a summary and edits one member in place", async () => {
   const saved: TeamMemberConfigPatch[] = [];
   const card = (expectedOutputs: string[]) => (
-    <TeamMemberCard member={{ id: "qa", displayName: "Checker", executorKind: "codex", defaultRole: "reviewer", availability: "ready" }}
+    <TeamMemberCard member={{ id: "qa", displayName: "Checker", executorKind: "codex", defaultRole: "reviewer", roleLevel: "senior", availability: "ready" }}
       config={{ responsibility: "Review the diff", expectedOutputs }} lead={false} canEdit
       onSave={async (fields) => { saved.push(fields); return true; }} />
   );
   const view = render(card(["Findings list"]));
   // Read mode: the summary, no form controls.
+  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.reviewer")).toBeTruthy();
   expect(screen.getByText("Review the diff")).toBeTruthy();
   expect(screen.getByText("Findings list")).toBeTruthy();
   // A reviewer is required by default.

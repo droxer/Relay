@@ -136,7 +136,7 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(
     created = client.post("/api/v1/projects", json={
         "name": "Directory", "context": "Full context", "description": "Full description", "goal": "Full goal",
         "daemonNodeId": node["id"], "leadAgentId": agent["id"], "members": [{
-            "agentId": agent["id"], "role": "implementer", "enabled": True,
+            "agentId": agent["id"], "role": "implementer", "roleLevel": "senior", "enabled": True,
             "responsibilities": "Write the release plan", "instructions": "Private instructions",
         }],
     })
@@ -167,7 +167,7 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(
     assert row["id"] == project["id"] and row["version"] == project["version"]
     assert row["leadAgentId"] == agent["id"]
     assert row["members"] == [{
-        "agentId": agent["id"], "role": "implementer", "enabled": True, "projectManager": True,
+        "agentId": agent["id"], "role": "implementer", "roleLevel": "senior", "enabled": True, "projectManager": True,
     }]
     assert row["setupSummary"] == {
         "state": "proposed", "mode": "plan", "threadId": "setup-thread", "hasProposal": proposal is not None,
@@ -241,7 +241,7 @@ def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp
     added = client.patch(compact_path, json={
         "expectedVersion": edited["version"],
         "memberChange": {"op": "add", "agentId": new_member, "fields": {
-            "role": "implementer", "responsibilities": "Build", "instructions": "Run the tests",
+            "role": "implementer", "roleLevel": "junior", "responsibilities": "Build", "instructions": "Run the tests",
         }},
     })
     assert added.status_code == 200, added.text
@@ -251,31 +251,49 @@ def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp
     assert receipt["version"] == after_add["version"]
     assert receipt["memberChanges"] == [{
         "op": "add", "agentId": new_member,
-        "fields": {"role": "implementer", "responsibilities": "Build", "instructions": "Run the tests", "enabled": True},
+        "fields": {"role": "implementer", "roleLevel": "junior", "responsibilities": "Build",
+                   "instructions": "Run the tests", "enabled": True},
     }]
     assert [member["agentId"] for member in after_add["members"]] == [lead, reviewer, new_member]
+    assert after_add["members"][2]["roleLevel"] == "junior"
+    promoted = client.patch(compact_path, json={
+        "expectedVersion": after_add["version"],
+        "memberChange": {"op": "update", "agentId": new_member, "fields": {"roleLevel": "senior"}},
+    })
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["projectMemberUpdate"]["memberChanges"] == [
+        {"op": "update", "agentId": new_member, "fields": {"roleLevel": "senior"}},
+    ]
+    after_promotion = client.get(path).json()["project"]
+    assert after_promotion["members"] == [
+        *after_add["members"][:2], {**after_add["members"][2], "roleLevel": "senior"},
+    ]
+    directory, = client.get("/api/v1/projects?view=directory").json()["projects"]
+    assert [(member["agentId"], member.get("roleLevel")) for member in directory["members"]] == [
+        (lead, None), (reviewer, None), (new_member, "senior"),
+    ]
 
     removed = client.patch(compact_path, json={
-        "expectedVersion": after_add["version"], "leadAgentId": new_member,
+        "expectedVersion": after_promotion["version"], "leadAgentId": new_member,
         "memberChange": {"op": "remove", "agentId": lead},
     })
     assert removed.status_code == 200, removed.text
     after_remove = client.get(path).json()["project"]
     assert after_remove["managerAgentId"] == after_remove["leadAgentId"] == new_member
-    assert after_remove["members"] == [base["members"][1], {**after_add["members"][2], "projectManager": True}]
+    assert after_remove["members"] == [base["members"][1], {**after_promotion["members"][2], "projectManager": True}]
     assert removed.json()["projectMemberUpdate"]["memberChanges"] == [
         {"op": "remove", "agentId": lead},
         {"op": "update", "agentId": new_member, "fields": {"projectManager": True}},
     ]
     cleared = client.patch(compact_path, json={
         "expectedVersion": after_remove["version"],
-        "memberChange": {"op": "update", "agentId": new_member, "fields": {"instructions": None}},
+        "memberChange": {"op": "update", "agentId": new_member, "fields": {"instructions": None, "roleLevel": None}},
     })
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["projectMemberUpdate"]["memberChanges"] == [
-        {"op": "update", "agentId": new_member, "fields": {"instructions": None}},
+        {"op": "update", "agentId": new_member, "fields": {"instructions": None, "roleLevel": None}},
     ]
-    assert "instructions" not in client.get(path).json()["project"]["members"][1]
+    assert not {"instructions", "roleLevel"} & client.get(path).json()["project"]["members"][1].keys()
 
     reassigned = client.patch(compact_path, json={
         "expectedVersion": cleared.json()["projectMemberUpdate"]["version"], "leadAgentId": reviewer,

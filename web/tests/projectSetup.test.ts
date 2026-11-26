@@ -32,7 +32,7 @@ const proposal: ProjectSetupProposal = {
   leadAgentId: "gone",
   members: [
     { agentId: "gone", role: "planner", responsibilities: "Plan", issue: "agent_not_found" },
-    { agentId: "ada", role: "planner", responsibilities: "Own the plan" },
+    { agentId: "ada", role: "planner", roleLevel: "senior", responsibilities: "Own the plan" },
     { agentId: "bo", role: "implementer", responsibilities: "Build pages", instructions: "Mobile first" },
   ],
   tasks: [
@@ -73,6 +73,7 @@ describe("setup drafts", () => {
     assert.equal(input.description, undefined, "an unchanged brief is not resent");
     assert.equal(input.setupResolution, "applied");
     assert.deepEqual(input.members?.map((m) => m.agentId), ["ada", "bo"]);
+    assert.deepEqual(input.members?.map((m) => m.roleLevel), ["senior", undefined]);
     assert.equal(input.members?.[1].instructions, "Mobile first");
     assert.equal(input.leadAgentId, "ada");
   });

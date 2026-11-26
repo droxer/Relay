@@ -56,6 +56,7 @@ export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discu
   const agent = agents.find((candidate) => candidate.id === member.agentId);
   const { available, enabled, availability } = projectMemberState(member, agent);
   const name = agent?.displayName || t("project.member_unavailable");
+  const roleLevel = member.roleLevel ?? (agent as Pick<UserAgent, "roleLevel"> | undefined)?.roleLevel;
   const href = `/agents/${encodeURIComponent(member.agentId)}`;
   const openAgent = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
@@ -79,6 +80,12 @@ export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discu
         <span className="project-manager-line-role">
           {label}
           <span aria-hidden="true"> · </span>
+          {roleLevel ? (
+            <>
+              {t(`role_levels.${roleLevel}`, { defaultValue: roleLevel })}
+              <span aria-hidden="true"> · </span>
+            </>
+          ) : null}
           {t(`project.roles.${member.role}`)}
         </span>
       </span>

@@ -136,6 +136,8 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         setup = snapshot["setup"]
         proposal = setup["proposal"]
         proposed_tasks = proposal["tasks"]
+        # The roster rows and snapshot share the same member order.
+        role_level = snapshot["members"].op("->")(members.c.position)["roleLevel"].as_string()
         setup_fields = ("state", "mode", "threadId")
         fields = tuple(key for key in PROJECT_DIRECTORY_FIELDS if key != "managerAgentId")
         with store_transaction(self.engine) as conn:
@@ -158,7 +160,8 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                 proposal.as_string().not_in(("", "{}")).label("has_proposal"),
                 proposed_task_count.label("proposed_task_count"),
                 *(setup[key].label(f"setup_{key}") for key in setup_fields),
-                members.c.agent_id, members.c.role, members.c.enabled.label("member_enabled"),
+                members.c.agent_id, members.c.role, role_level.label("member_role_level"),
+                members.c.enabled.label("member_enabled"),
             ).select_from(projects.outerjoin(members, members.c.project_id == projects.c.id)).where(
                 projects.c.owner_user_id == owner_user_id,
             ).order_by(projects.c.name_key, projects.c.id, members.c.position)
@@ -179,7 +182,10 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                         }
                     directory[project_id] = project
                 if row["agent_id"] is not None:
-                    project["members"].append({"agentId": row["agent_id"], "role": row["role"], "enabled": row["member_enabled"]})
+                    member = {"agentId": row["agent_id"], "role": row["role"], "enabled": row["member_enabled"]}
+                    if row["member_role_level"] is not None:
+                        member["roleLevel"] = row["member_role_level"]
+                    project["members"].append(member)
         return [project_with_manager(project) for project in directory.values()]
 
     def live_owned_project_ids(self, owner_user_id: str, project_ids: Collection[str]) -> set[str]:

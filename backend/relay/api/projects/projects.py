@@ -120,7 +120,7 @@ def _project_directory_entry(project: dict[str, Any]) -> dict[str, Any]:
     result = {key: project[key] for key in PROJECT_DIRECTORY_FIELDS if key in project}
     result["view"] = "directory"
     result["members"] = [
-        {key: member[key] for key in ("agentId", "role", "enabled", "projectManager") if key in member}
+        {key: member[key] for key in ("agentId", "role", "roleLevel", "enabled", "projectManager") if key in member}
         for member in project["members"]
     ]
     if suggestions := project.get("contextSuggestions"):

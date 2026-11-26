@@ -77,6 +77,7 @@
 .agent-identity-copy {
   display: grid;
   min-width: 0;
+  text-align: start;
 }
 
 .agent-role-label {
@@ -90,6 +91,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Form selects showing a two-line agent identity (name + role/level) grow
+   past the single-line control height instead of clipping the role line. */
+[data-slot="select-trigger"]:not(.chat-agent-select):has(.roster-trigger .agent-role-label) {
+  height: auto;
+  min-height: var(--control-h);
+  padding-block: var(--sp-1-5);
 }
 
 /* A surface that already announces the same activity beside the trigger (the

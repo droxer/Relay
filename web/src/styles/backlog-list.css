@@ -31,7 +31,7 @@
 .task-col-ref { width: 76px; min-width: 76px; white-space: nowrap; }
 .task-col-priority { width: 104px; }
 .task-col-due { width: 150px; }
-.task-col-assignee { width: 172px; }
+.task-col-assignee { width: 204px; min-width: 204px; }
 .task-col-actions { width: 176px; text-align: right; }
 /* The title is the one flexible track. Its link truncates with an ellipsis,
    but under auto table layout a nowrap cell's min-content is the WHOLE title,
@@ -316,6 +316,7 @@ tr[data-routine-state="paused"] .backlog-row-title,
 /* The assignee trigger wears the row's own chip, so it gives up the select's
    chevron and stays as wide as the column allows, truncating the name. */
 .inline-field--assignee { max-width: 100%; min-width: 0; justify-content: flex-start; }
+.inline-field--assignee:has(.agent-role-label) { height: auto; min-height: var(--control-h-2xs); padding-block: var(--sp-0-5); }
 .inline-field--assignee > svg { display: none; }
 .inline-field--static { cursor: default; }
 

@@ -3,8 +3,9 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AGENT_ROLE_OPTIONS } from "../types";
-import type { AgentName, AgentRoleLevel, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
+import type { AgentName, AgentRole, AgentRoleLevel, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
 import { teamMemberConfigPatch } from "../lib/teamForm";
+import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { LeadBadge } from "./LeadBadge";
 import { TonePill } from "./StatusPill";
@@ -24,7 +25,7 @@ type TeamCardMember = {
   profileImageUrl?: string | null;
   enabled?: boolean;
   availability?: LogicalAgentAvailability;
-  defaultRole?: string;
+  defaultRole?: AgentRole;
   roleLevel?: AgentRoleLevel | null;
 };
 
@@ -58,6 +59,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
   const { t } = useTranslation();
   const role = effectiveRoleOf(member, config);
   const roleLevel = config.roleLevel ?? member.roleLevel;
+  const roleLabel = agentRoleLabel({ defaultRole: role, roleLevel }, t);
   const availability = member.enabled === false ? "offline" : member.availability;
   return (
     <header className="team-work-member-head">
@@ -72,12 +74,9 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
         <span className="team-work-member-name">
           <strong id={nameId}>{member.displayName}</strong>
           {lead ? <LeadBadge /> : null}
-          {role ? (
-            <span className="team-work-member-role">
-              {[
-                t(`team_work.role_${role}`),
-                roleLevel ? t(`role_levels.${roleLevel}`, { defaultValue: roleLevel }) : null,
-              ].filter(Boolean).join(" · ")}
+          {roleLabel ? (
+            <span className="team-work-member-role" title={roleLabel}>
+              {roleLabel}
             </span>
           ) : null}
           {member.enabled === false ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
