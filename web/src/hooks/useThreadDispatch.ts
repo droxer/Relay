@@ -245,6 +245,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
 
   async function dispatchMessage(message: PendingDirectMessage, operationKey?: string, initialTarget?: UserAgent | null) {
     if (useRelayStore.getState().selectedUser !== selectedUser) return false;
+    const isInitial = !!operationKey;
     const sessionId = message.kind === "append" ? message.sessionId : undefined;
     const goal = message.kind === "append" ? message.input.text : message.input.taskGoal;
     const action = message.kind === "append" ? message : { kind: "create" as const };
@@ -253,10 +254,10 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     useRelayStore.getState().setComposingNew(creatingSession);
     let sendKey = threadSendKey(selectedUser, sessionId, useRelayStore.getState().threadDraftId);
     if (useThreadSendStore.getState().operations[sendKey]?.dispatching) return false;
-    pending.save(message);
     if (creatingSession && draftComputerId) syncThreadUrl(null, true, activeProject?.id, undefined, draftComputerId);
     else syncThreadUrl(sendThreadSessionId(action), true, activeProject?.id);
     const dispatchId = useThreadSendStore.getState().beginSend(sendKey, { id: message.id, text: goal }, creatingSession);
+    pending.save(message, isInitial);
     const view = retainThreadDispatchView();
     if (operationKey) {
       messageOperationIdsRef.current.delete(operationKey);
@@ -302,9 +303,9 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       useThreadSendStore.getState().dropPendingMessage(sendKey, dispatchId);
       // A definite rejection leaves the text editable. With an ambiguous
       // outcome, retain the entire request for a same-ID retry.
-      if (operationKey && messageDefinitelyRejected(error)) {
+      if (messageDefinitelyRejected(error)) {
         pending.clear(message.id);
-        messageOperationIdsRef.current.set(operationKey, message.id);
+        if (operationKey) messageOperationIdsRef.current.set(operationKey, message.id);
         if (view.isCurrent() && !composerRef.current?.getText().trim()) composerRef.current?.setText(message.text);
         else restoreComposerDraft(threadDraftKey({ username: selectedUser }, sessionId), message.text);
       }
@@ -315,12 +316,15 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       );
       return false;
     } finally {
+      if (isInitial) pending.finishInitial(message.id);
       view.release();
       useThreadSendStore.getState().endDispatch(sendKey, dispatchId);
     }
   }
 
-  const messageRetry: ThreadMessageRetry | null = saved && saved.kind !== "enqueue" && selectedUser && !projectDispatchDisabled
+  const messageRetry: ThreadMessageRetry | null = saved && saved.kind !== "enqueue"
+    && !(pendingBusy && pending.initial)
+    && selectedUser && !projectDispatchDisabled
     && (!requestedThreadId || requestedThreadId === activeSession?.id)
     ? {
       text: saved.kind === "append" ? saved.input.text : saved.input.taskGoal,

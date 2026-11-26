@@ -85,7 +85,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const state = query.data?.messages ? query.data : EMPTY_THREAD_QUEUE;
   const activeKey = useRef(queueKey);
   useLayoutEffect(() => { activeKey.current = queueKey; }, [queueKey]);
-  const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress, clearRejected = false) => {
+  const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress) => {
     // The account's mutation cache owns the lock, so navigating away and back
     // to this Thread cannot start a second write while its first is pending.
     if (!threadId || client.isMutating({ mutationKey: [...THREAD_QUEUE_QUERY_KEY, threadId, "change"], exact: true })) return false;
@@ -94,7 +94,9 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
       if (activeKey.current === queueKey) setError(null);
       return true;
     } catch (cause) {
-      if (clearRejected && id && messageDefinitelyRejected(cause)) clearPendingThreadMessage(queueKey, "queue", id);
+      if (action === "enqueue" && id && messageDefinitelyRejected(cause)) {
+        clearPendingThreadMessage(queueKey, "queue", id);
+      }
       if (activeKey.current === queueKey) setError(queueErrorKey(cause));
       return false;
     }
@@ -120,13 +122,17 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     return () => { stopped = true; };
   }, [threadId, queueKey, change]);
 
-  async function sendEnqueue(message: PendingQueueMessage, clearRejected = false) {
+  async function sendEnqueue(message: PendingQueueMessage, initial = false) {
     if (!threadId || client.isMutating({ mutationKey, exact: true })) return false;
     const { id, text, addressAgentIds, addressTeamId } = message;
-    delivery.save(message);
-    const accepted = await change("enqueue", id, text, { addressAgentIds, addressTeamId }, clearRejected);
-    if (accepted) unsaved.current.delete(queueKey);
-    return accepted;
+    delivery.save(message, initial);
+    try {
+      const accepted = await change("enqueue", id, text, { addressAgentIds, addressTeamId });
+      if (accepted) unsaved.current.delete(queueKey);
+      return accepted;
+    } finally {
+      if (initial) delivery.finishInitial(id);
+    }
   }
 
   async function enqueue(text: string, address: QueueAddress = {}) {
@@ -144,6 +150,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
 
   const saved = delivery.message;
   const messageRetry: ThreadMessageRetry | null = threadId && saved?.kind === "enqueue"
+    && !(pending && delivery.initial)
     ? {
       text: saved.text,
       busy: pending,

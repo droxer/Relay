@@ -291,3 +291,37 @@ it("assigns a new ID to the same text deliberately sent after recovery", async (
   expect(replay).toBe(first);
   expect(next).not.toBe(first);
 });
+
+it("hides the retry slip during a normal in-flight send and clears it when a manual retry is definitely rejected", async () => {
+  sessionStorage.clear();
+  const { deps, reject, session, dispatch } = setup(true);
+  useRelayStore.getState().openSession(session.id);
+  const { result } = renderHook(() => useThreadDispatch(deps));
+
+  let firstSend!: Promise<boolean>;
+  act(() => { firstSend = result.current.sendMessage(); });
+  // Initial in-flight send must not flash the unconfirmed retry slip.
+  expect(result.current.messageRetry).toBeNull();
+  // Mirror the real composer, which clears its text when dispatch begins.
+  deps.composerRef.current = { ...deps.composerRef.current!, getText: () => "" };
+
+  await act(async () => {
+    reject(new RelayApiError("Computer temporarily unavailable", 409, "node_not_accepting_commands"));
+    expect(await firstSend).toBe(false);
+  });
+  expect(result.current.messageRetry).toMatchObject({ text: "do work", busy: false });
+
+  let rejectRetry!: (error: unknown) => void;
+  dispatch.mockImplementationOnce(() => new Promise((_resolve, rejectFn) => { rejectRetry = rejectFn; }));
+  let retrySend!: Promise<boolean>;
+  act(() => { retrySend = result.current.messageRetry!.retry(); });
+  // Manual retry keeps the slip visible in its busy state.
+  expect(result.current.messageRetry).toMatchObject({ text: "do work", busy: true });
+
+  await act(async () => {
+    rejectRetry(new RelayApiError("Forbidden", 403, "forbidden"));
+    expect(await retrySend).toBe(false);
+  });
+  expect(result.current.messageRetry).toBeNull();
+  expect(deps.composerRef.current?.setText).toHaveBeenCalledWith("do work");
+});

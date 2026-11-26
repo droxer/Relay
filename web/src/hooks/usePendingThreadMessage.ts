@@ -22,6 +22,12 @@ export type ThreadMessageRetry = {
 const listeners = new Set<() => void>();
 // Keep recovery available in the current page if the browser refuses storage.
 const volatile = new Map<string, string | null>();
+// Hide the retry slip during an initial in-flight send so normal sends do not flash it.
+const initialSendIds = new Set<string>();
+
+function notify() {
+  for (const listener of listeners) listener();
+}
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -42,7 +48,7 @@ function write(key: string, value: string | null) {
   } catch {
     volatile.set(key, value);
   }
-  for (const listener of listeners) listener();
+  notify();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,18 +81,38 @@ function storageKey(scope: string, channel: "direct" | "queue"): string {
   return `relay-web.pending-message:${channel}:${scope}`;
 }
 
+function viewSnapshot(key: string): string | null {
+  const raw = snapshot(key);
+  if (raw === null) return null;
+  const parsed = parse(raw);
+  return parsed && initialSendIds.has(parsed.id) ? `1:${raw}` : `0:${raw}`;
+}
+
 export function clearPendingThreadMessage(scope: string, channel: "direct" | "queue", id: string) {
+  const hadInitial = initialSendIds.delete(id);
   const key = storageKey(scope, channel);
   if (parse(snapshot(key))?.id === id) write(key, null);
+  else if (hadInitial) notify();
+}
+
+export function finishInitialThreadMessage(id: string) {
+  if (initialSendIds.delete(id)) notify();
 }
 
 export function usePendingThreadMessage(scope: string, channel: "direct" | "queue") {
   const key = storageKey(scope, channel);
-  const raw = useSyncExternalStore(subscribe, () => snapshot(key), () => null);
+  const view = useSyncExternalStore(subscribe, () => viewSnapshot(key), () => null);
+  const raw = view ? view.slice(2) : null;
   return {
     message: parse(raw),
+    initial: view?.startsWith("1:") ?? false,
     read: () => parse(snapshot(key)),
-    save: (message: PendingDirectMessage | PendingQueueMessage) => write(key, JSON.stringify(message)),
+    save: (message: PendingDirectMessage | PendingQueueMessage, initial = false) => {
+      if (initial) initialSendIds.add(message.id);
+      else initialSendIds.delete(message.id);
+      write(key, JSON.stringify(message));
+    },
+    finishInitial: (id: string) => finishInitialThreadMessage(id),
     clear: (id: string) => clearPendingThreadMessage(scope, channel, id),
   };
 }
