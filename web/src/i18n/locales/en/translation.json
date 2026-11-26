@@ -2884,10 +2884,10 @@
   },
   "next_steps": {
     "title": "Suggested next",
-    "hint": "Click a suggestion to send it, or Adopt to save it as a task in {{destination}}.",
+    "hint": "Click a suggestion to send it, or Later to create a task in {{destination}}.",
     "no_project": "Issues (no project)",
-    "adopt": "Adopt",
-    "adopt_label": "Adopt as a task: {{step}}",
+    "adopt": "Later",
+    "adopt_label": "Create a task for later: {{step}}",
     "confirm_label": "Create a task from this suggestion",
     "confirm": "Create a backlog task in {{destination}}? It won't start until you assign it.",
     "create": "Create task",
