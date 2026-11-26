@@ -149,7 +149,7 @@
   white-space: nowrap;
 }
 
-.roster-option-copy > span:last-child {
+.roster-option-copy > span + span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -2,8 +2,8 @@
 
 import { forwardRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { TeamMemberChoice } from "../types";
-import { AgentMetaLine } from "./AgentMetaLine";
+import type { AgentTeam, TeamMemberChoice } from "../types";
+import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { LeadBadge } from "./LeadBadge";
 import { ActionAdd, ActionRemove, ICON } from "./icons";
@@ -41,6 +41,7 @@ export function removeTeamMember(current: TeamMembership, agentId: string): Team
    the team itself. */
 export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
   agents: TeamMemberChoice[];
+  memberConfigs?: AgentTeam["memberConfigs"];
   value: TeamMembership;
   onChange: (next: TeamMembership) => void;
   disabled?: boolean;
@@ -52,7 +53,7 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
   /** Replaces the generic "no agents" line — team setup says why the list is
    *  empty (no computer picked yet, or nobody placed on it). */
   emptyHint?: string;
-}>(function TeamMemberPicker({ agents, value, onChange, disabled = false, legendHidden = false, error, errorId, emptyHint }, ref) {
+}>(function TeamMemberPicker({ agents, memberConfigs, value, onChange, disabled = false, legendHidden = false, error, errorId, emptyHint }, ref) {
   const { t } = useTranslation();
   const members = useMemo(
     () => value.memberIds
@@ -87,6 +88,11 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
           {members.map((agent) => {
             const lead = agent.id === value.leadId;
             const availability = effectiveAgentAvailability(agent);
+            const config = memberConfigs?.[agent.id];
+            const role = agentRoleLabel({
+              defaultRole: config?.role ?? agent.defaultRole,
+              roleLevel: config?.roleLevel ?? agent.roleLevel,
+            }, t);
             return (
               <li key={agent.id} className="team-member-row">
                 <AgentStateBadge
@@ -98,7 +104,7 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
                 />
                 <span className="team-member-row-main">
                   <span className="team-member-row-name" translate="no">{agent.displayName}</span>
-                  <AgentMetaLine executorKind={agent.executorKind} placements={agent.placements} />
+                  {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
                 </span>
                 {lead ? (
                   <LeadBadge />

@@ -60,10 +60,10 @@ it("moves focus into the new roster after a tab click", () => {
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "Team One" }));
 });
 
-it.each(["task assignment", "conversation"] as const)("shows each agent's model in the %s roster", async (surface) => {
+it.each(["task assignment", "conversation"] as const)("uses Agent roles and levels in the %s roster", async (surface) => {
   const ada: UserAgent = {
     id: "ada", displayName: "Ada", executorKind: "codex", enabled: true, availability: "ready",
-    modelPolicy: { model: "provider/custom-model" }, skillPolicy: {}, toolPolicy: {},
+    defaultRole: "planner", modelPolicy: { model: "provider/custom-model" }, skillPolicy: {}, toolPolicy: {},
     placements: [], version: 1, createdAt: "2026-11-26T00:00:00Z", updatedAt: "2026-11-26T00:00:00Z",
   };
   const bob: UserAgent = { ...ada, id: "bob", displayName: "Bob", modelPolicy: {}, defaultRole: "reviewer", roleLevel: "senior" };
@@ -77,8 +77,10 @@ it.each(["task assignment", "conversation"] as const)("shows each agent's model 
   expect(trigger.textContent).toContain("role_levels.senior · admin.v2.agent_role.reviewer");
   trigger.focus();
   fireEvent.keyDown(trigger, { key: "ArrowDown" });
-  const pinned = await screen.findByRole("option", { name: /Ada.*Codex · provider\/custom-model/ });
-  expect(screen.getByRole("option", { name: /Bob.*role_levels\.senior · admin\.v2\.agent_role\.reviewer · Codex · agents_page\.model_default/ })).toBeTruthy();
+  const pinned = await screen.findByRole("option", { name: /Ada.*admin\.v2\.agent_role\.planner/ });
+  const senior = screen.getByRole("option", { name: /Bob.*role_levels\.senior · admin\.v2\.agent_role\.reviewer/ });
+  expect(pinned.textContent).not.toMatch(/Codex|provider\/custom-model/);
+  expect(senior.textContent).not.toMatch(/Codex|agents_page\.model_default/);
   act(() => pinned.focus());
   fireEvent.keyDown(pinned, { key: "Enter" });
   expect(onPick).toHaveBeenCalledWith(surface === "task assignment" ? { kind: "agent", id: ada.id } : ada);

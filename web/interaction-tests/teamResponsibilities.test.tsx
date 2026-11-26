@@ -33,6 +33,17 @@ it("lists only the team's members, with the lead marked on its own row", () => {
   expect(screen.getByLabelText("teams.add_member")).toBeTruthy();
 });
 
+it("shows the member's configured role and level in the picker", () => {
+  render(<TeamMemberPicker
+    agents={ROSTER}
+    memberConfigs={{ lead: { role: "reviewer", roleLevel: "senior" } }}
+    value={{ memberIds: ["lead"], leadId: "lead" }}
+    onChange={() => {}}
+  />);
+  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.reviewer")).toBeTruthy();
+  expect(screen.queryByText("Claude")).toBeNull();
+});
+
 it("moves the lead from the row and hands it on when the lead is removed", () => {
   render(<PickerHarness initial={{ memberIds: ["lead", "builder"], leadId: "lead" }} />);
   fireEvent.click(screen.getByRole("button", { name: "teams.make_lead_named" }));

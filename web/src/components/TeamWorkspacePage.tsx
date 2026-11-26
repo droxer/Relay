@@ -319,6 +319,7 @@ function TeamProfile({
                 <TeamMemberPicker
                   ref={membersRef}
                   agents={computerAgents}
+                  memberConfigs={memberConfigs}
                   value={{ memberIds, leadId }}
                   onChange={changeMembership}
                   disabled={busy || !roster.isSuccess}

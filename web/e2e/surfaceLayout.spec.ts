@@ -454,7 +454,7 @@ for (const [language, currentRole, historicRole] of [
     const agent = {
       id: "ada", displayName: "Ada", executorKind: "claude", availability: "ready",
       defaultRole: "reviewer", roleLevel: "senior", enabled: true, version: 1,
-      modelPolicy: {}, skillPolicy: {}, toolPolicy: {},
+      modelPolicy: { model: "provider/layout-model" }, skillPolicy: {}, toolPolicy: {},
       computerId: "node:layout", supervisorUserId: "review-user",
       placements: [{ id: "placement", daemonNodeId: "layout", computerId: "node:layout", desiredState: "active", status: "ready" }],
     };
@@ -473,16 +473,25 @@ for (const [language, currentRole, historicRole] of [
     for (const [identity, value] of [[picker, currentRole], [page.locator(".msg-speaker"), historicRole]] as const) {
       const label = identity.getByText(value, { exact: true });
       await expect(label).toBeVisible();
+      await expect(identity).not.toContainText(/Claude|provider\/layout-model/);
       await expect.poll(() => label.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
     }
     expect(await overhang(page, ".chat-agent-select")).toBeLessThanOrEqual(0);
     await picker.press("ArrowDown");
     const option = page.getByRole("option").filter({ hasText: currentRole });
     await expect(option).toBeVisible();
+    await expect(option).not.toContainText(/Claude|provider\/layout-model/);
     await option.press("Enter");
     await expect(picker).toContainText(currentRole);
     await page.locator(".composer-textarea").pressSequentially("@");
     await expect(page.locator(".mention-popup").getByRole("option").filter({ hasText: currentRole })).toBeVisible();
+
+    await page.route("**/api/v1/agents/ada", (route) => route.fulfill({ json: { agent } }));
+    await page.goto("/agents");
+    const row = page.locator(".agents-roster-row").filter({ hasText: "Ada" });
+    await expect(row).toContainText("provider/layout-model");
+    await row.getByRole("button").click();
+    await expect(page.locator(".record-band")).toContainText("provider/layout-model");
     await page.context().close();
   });
 }

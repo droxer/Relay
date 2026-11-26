@@ -3,9 +3,8 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AGENT_ROLE_OPTIONS } from "../types";
-import type { AgentName, AgentPlacementRoute, AgentRoleLevel, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
+import type { AgentName, AgentRoleLevel, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
 import { teamMemberConfigPatch } from "../lib/teamForm";
-import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { LeadBadge } from "./LeadBadge";
 import { TonePill } from "./StatusPill";
@@ -27,7 +26,6 @@ type TeamCardMember = {
   availability?: LogicalAgentAvailability;
   defaultRole?: string;
   roleLevel?: AgentRoleLevel | null;
-  placements?: AgentPlacementRoute[];
 };
 
 /* A member's team role. Every save records one; a team saved before roles
@@ -49,11 +47,7 @@ function isRequired(config: TeamMemberConfig) {
   return config.required ?? true;
 }
 
-/* Who the member is: avatar with readiness pip; name with the team role they
-   play
-   and the lead star; then the shared <AgentMetaLine> — runtime and the
-   computers it runs on, the one meta line every agent surface renders. Same
-   head grammar as the project crew tiles. */
+/* Team member identity uses the role and level configured for this Team. */
 function TeamMemberCardHead({ member, config, lead, nameId, side }: {
   member: TeamCardMember;
   config: TeamMemberConfig;
@@ -88,7 +82,6 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
           ) : null}
           {member.enabled === false ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
         </span>
-        <AgentMetaLine executorKind={member.executorKind} placements={member.placements ?? []} showComputers={false} />
       </span>
       {side}
     </header>

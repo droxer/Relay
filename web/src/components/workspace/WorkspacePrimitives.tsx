@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { agentLabel } from "../../lib/plan";
 import { compactDate, compactDueDate, taskAssigneeName } from "../../lib/workspaceFormat";
 import type { WorkspaceActivityResponse, WorkspaceBriefSession, WorkspaceBriefTask } from "../../types";
 import { PriorityBadge } from "../PriorityBadge";
@@ -254,10 +253,7 @@ export function WorkspaceActivities({
                 <li key={run.runId}>
                   <ActivityRow
                     title={run.taskGoal}
-                    meta={[
-                      agentLabel(run.agent),
-                      compactDate(run.startedAt, i18n.language),
-                    ].filter(Boolean).join(" · ")}
+                    meta={compactDate(run.startedAt, i18n.language)}
                     onClick={() => onOpenThread(run.sessionId)}
                   />
                 </li>

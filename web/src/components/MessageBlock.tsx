@@ -15,7 +15,7 @@ import type { AutomationOpening as AutomationOpeningParts } from "../lib/automat
 import { MessageTurnActions } from "./MessageTurnActions";
 import type { AgentName } from "../types";
 import { AGENT_NAMES } from "../types";
-import { imageForAgentRun, labelForAgentRun, labelForExecutor } from "../lib/agentDisplayNames";
+import { imageForAgentRun, labelForExecutor } from "../lib/agentDisplayNames";
 import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
@@ -233,13 +233,13 @@ export const MessageBlock = memo(function MessageBlock({
   }
 
   if (message.kind === "agent") {
-    const agentName = labelForAgentRun(message, logicalAgentNames, agentDisplayNames);
+    const logicalName = message.agentId ? logicalAgentNames?.[message.agentId] : undefined;
+    const agentName = logicalName ?? t("backlog.agent");
     const role = agentRoleLabel({
       defaultRole: message.role ?? runIdentity?.role,
       roleLevel: message.roleLevel ?? runIdentity?.roleLevel,
     }, t);
     const receipt = runReceipt(message);
-    const runtime = labelForExecutor(message.agent);
     return (
       <article
         className={`msg msg-agent ${message.streaming ? "streaming" : ""} ${grouped ? "grouped" : ""}`}
@@ -256,19 +256,9 @@ export const MessageBlock = memo(function MessageBlock({
             fallback={<IdentityMark kind="agent" />}
           />
         </span>
-        {/* The runtime rides beside the name — vendor glyph plus label, in
-            meta ink — so who answered and what ran it read as one line. A
-            legacy turn named by its runtime alone skips the repeat. */}
-        <header className="msg-speaker" translate="no">
-          <span className="msg-speaker-name">{agentName}</span>
+        <header className="msg-speaker">
+          <span className="msg-speaker-name" translate={logicalName ? "no" : undefined}>{agentName}</span>
           {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
-          {runtime !== agentName ? (
-            <span className="msg-speaker-runtime" title={`${t("thread.receipt.runtime")}: ${runtime}`}>
-              <span className="sr-only">{t("thread.receipt.runtime")}: </span>
-              <AgentMark agent={message.agent} size={ICON.xs} />
-              <span className="msg-speaker-runtime-label">{runtime}</span>
-            </span>
-          ) : null}
           {slotLabel ? <span className="msg-speaker-slot">{t(slotLabel)}</span> : null}
         </header>
         <MsgTime value={message.timestamp} />
