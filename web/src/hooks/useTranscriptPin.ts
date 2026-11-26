@@ -28,6 +28,8 @@ interface TranscriptPin {
   onScroll: () => void;
   /** Re-pin to the bottom — call after sending, or when opening a thread. */
   pinToBottom: () => void;
+  /** True when the reader has scrolled meaningfully above the latest output. */
+  scrolledUp: boolean;
   /**
    * The reader's place away from the bottom: `hold` records it — call before
    * inserting turns above it; `keep` sizes newly mounted turns and undoes any
@@ -40,6 +42,8 @@ export type ReadingPosition = { hold: () => void; keep: () => void };
 
 /** Slack for "at the bottom", in px: a rounding error must not unpin the view. */
 const BOTTOM_EPSILON = 24;
+/** Distance above the bottom before offering the jump-to-latest control. */
+const JUMP_THRESHOLD = 160;
 
 export function useTranscriptPin(
   messageCount: number,
@@ -47,6 +51,11 @@ export function useTranscriptPin(
 ): TranscriptPin {
   const elementRef = useRef<HTMLDivElement | null>(null);
   const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const [scrolledUpState, setScrolledUpState] = useState<{
+    sessionId: string | undefined;
+    value: boolean;
+  }>({ sessionId, value: false });
+  const scrolledUp = scrolledUpState.sessionId === sessionId && scrolledUpState.value;
   const ref = useCallback((node: HTMLDivElement | null) => {
     elementRef.current = node;
     setElement(node);
@@ -75,7 +84,14 @@ export function useTranscriptPin(
     // That event must not turn off following just because the bottom moved.
     if (atBottom.current && top === lastPinnedTop.current) return;
     lastPinnedTop.current = undefined;
-    atBottom.current = el.scrollHeight - top - el.clientHeight < BOTTOM_EPSILON;
+    const distanceFromBottom = el.scrollHeight - top - el.clientHeight;
+    atBottom.current = distanceFromBottom < BOTTOM_EPSILON;
+    const nextScrolledUp = distanceFromBottom > JUMP_THRESHOLD;
+    setScrolledUpState((prev) => (
+      prev.sessionId === sessionId && prev.value === nextScrolledUp
+        ? prev
+        : { sessionId, value: nextScrolledUp }
+    ));
     if (atBottom.current) {
       anchor.current = null;
       return;
@@ -85,9 +101,9 @@ export function useTranscriptPin(
     // new one, or the shift is recorded as where the reader already was.
     restoreTranscriptAnchor(el, anchor.current);
     anchor.current = captureTranscriptAnchor(el);
-  }, []);
+  }, [sessionId]);
 
-  const pinToBottom = useCallback(() => {
+  const scrollToBottom = useCallback(() => {
     atBottom.current = true;
     const el = elementRef.current;
     if (el) {
@@ -98,6 +114,15 @@ export function useTranscriptPin(
     }
   }, []);
 
+  const pinToBottom = useCallback(() => {
+    scrollToBottom();
+    setScrolledUpState((prev) => (
+      prev.sessionId === sessionId && !prev.value
+        ? prev
+        : { sessionId, value: false }
+    ));
+  }, [scrollToBottom, sessionId]);
+
   useEffect(() => {
     atBottom.current = true;
     anchor.current = null;
@@ -106,8 +131,8 @@ export function useTranscriptPin(
   // The DOM node is written through the ref; `element` (its state twin) is in
   // the deps only so attaching a node re-runs the pin.
   useEffect(() => {
-    if (atBottom.current) pinToBottom();
-  }, [element, messageCount, pinToBottom, sessionId]);
+    if (atBottom.current) scrollToBottom();
+  }, [element, messageCount, scrollToBottom, sessionId]);
 
   useEffect(() => {
     const el = element;
@@ -115,17 +140,17 @@ export function useTranscriptPin(
     if (!el || !content || typeof ResizeObserver === "undefined") return;
     // Runs after layout and before paint, so a shift is undone unseen.
     const observer = new ResizeObserver(() => {
-      if (atBottom.current) pinToBottom();
+      if (atBottom.current) scrollToBottom();
       else keepReadingPosition();
     });
     observer.observe(content);
     return () => observer.disconnect();
-  }, [element, keepReadingPosition, pinToBottom]);
+  }, [element, keepReadingPosition, scrollToBottom]);
 
   const readingPosition = useMemo(
     () => ({ hold: holdReadingPosition, keep: keepReadingPosition }),
     [holdReadingPosition, keepReadingPosition],
   );
 
-  return { ref, onScroll, pinToBottom, readingPosition };
+  return { ref, onScroll, pinToBottom, scrolledUp, readingPosition };
 }

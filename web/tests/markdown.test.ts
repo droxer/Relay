@@ -243,7 +243,7 @@ describe("markdown component wiring", () => {
   });
 
   it("passes the live flag from the stream into the renderer", () => {
-    assert.match(readWeb("src/components/AgentStream.tsx"), /<StreamingMarkdown text=\{visibleText\} live \/>/);
+    assert.match(readWeb("src/components/AgentStream.tsx"), /<StreamingMarkdown text=\{visibleText\} live(?:\s+[^>]*)?\s*\/>/);
   });
 
   it("carries .md-body on the transcript wrapper", () => {

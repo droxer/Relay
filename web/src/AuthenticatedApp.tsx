@@ -892,6 +892,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             transcriptRef={transcript.ref}
             composerRef={composerRef}
             onTranscriptScroll={transcript.onScroll}
+            transcriptScrolledUp={transcript.scrolledUp}
+            onJumpToBottom={transcript.pinToBottom}
             readingPosition={transcript.readingPosition}
             onSelectThread={openThread}
             onSelectProject={selectProject}

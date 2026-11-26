@@ -55,12 +55,29 @@ type AgentStreamProps = {
   collaborations: CodexCollaborationEvent[];
   /** How this run's permission prompts closed; each shows on its tool line. */
   permissions?: PermissionAudit[];
+  /** Known logical agent names to emphasize inline when teammates `@mention` each other. */
+  mentionNames?: readonly string[];
+  /** Lowercased -> canonical display name map for clickable mentions. */
+  mentionableNames?: ReadonlyMap<string, string>;
+  /** Called when an eligible `@Agent` pill is clicked in the reply. */
+  onMentionClick?: (displayName: string) => void;
   pickupFrom?: string;
 };
 
 const NO_AUDITS: ReadonlyMap<string, PermissionAudit> = new Map();
 
-export function AgentStream({ agent, stdout, stderr, streaming, collaborations, permissions, pickupFrom }: AgentStreamProps) {
+export function AgentStream({
+  agent,
+  stdout,
+  stderr,
+  streaming,
+  collaborations,
+  permissions,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
+  pickupFrom,
+}: AgentStreamProps) {
   const { t } = useTranslation();
   // Settling can append a completed-log fallback that overlaps live output;
   // rebuild once at that boundary so the final transcript is canonical.
@@ -140,6 +157,9 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
           key={item.key}
           segment={item.segment}
           audit={audits.bySegment.get(item.key)}
+          mentionNames={mentionNames}
+          mentionableNames={mentionableNames}
+          onMentionClick={onMentionClick}
           live={item.index === liveTextIndex}
           streaming={streaming}
           last={item.index === segments.length - 1}
@@ -156,13 +176,33 @@ export function AgentStream({ agent, stdout, stderr, streaming, collaborations, 
 const SegmentView = memo(function SegmentView({
   segment,
   audit,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
   live = false,
   streaming = false,
   last = false,
-}: { segment: AgentSegment; audit?: PermissionAudit; live?: boolean; streaming?: boolean; last?: boolean }) {
+}: {
+  segment: AgentSegment;
+  audit?: PermissionAudit;
+  mentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+  live?: boolean;
+  streaming?: boolean;
+  last?: boolean;
+}) {
   const { t } = useTranslation();
   if (segment.kind === "text") {
-    return <TextSegment text={segment.text} live={live} />;
+    return (
+      <TextSegment
+        text={segment.text}
+        live={live}
+        mentionNames={mentionNames}
+        mentionableNames={mentionableNames}
+        onMentionClick={onMentionClick}
+      />
+    );
   }
   if (segment.kind === "thinking") {
     // Only the trailing block of a running stream is still being written; every
@@ -203,7 +243,15 @@ const SegmentView = memo(function SegmentView({
       </div>
     );
   }
-  return <RawSegment text={segment.text} streaming={streaming && last} />;
+  return (
+    <RawSegment
+      text={segment.text}
+      streaming={streaming && last}
+      mentionNames={mentionNames}
+      mentionableNames={mentionableNames}
+      onMentionClick={onMentionClick}
+    />
+  );
 });
 
 // A run of tool calls and commands, folded behind a one-line summary ("Used 2
@@ -314,13 +362,42 @@ const ThinkingSegment = memo(function ThinkingSegment({ text, live }: { text: st
 // so it renders as Markdown rather than as a monospace dump with its own ```
 // fences left showing. The block keeps its frame so it still reads as
 // unrecognised output rather than as ordinary prose.
-function RawSegment({ text, streaming }: { text: string; streaming: boolean }) {
+function RawSegment({
+  text,
+  streaming,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  streaming: boolean;
+  mentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
   return (
     <div className="agent-raw">
       <div className="md-body agent-prose">
         {/* Raw output never rendered in live mode; it only borrows the
             per-block parse while it is still growing. */}
-        {streaming ? <StreamingMarkdown text={text} live={false} /> : <MarkdownContent text={text} />}
+        {streaming
+          ? (
+            <StreamingMarkdown
+              text={text}
+              live={false}
+              mentionNames={mentionNames}
+              mentionableNames={mentionableNames}
+              onMentionClick={onMentionClick}
+            />
+          )
+          : (
+            <MarkdownContent
+              text={text}
+              inlineMentionNames={mentionNames}
+              mentionableNames={mentionableNames}
+              onMentionClick={onMentionClick}
+            />
+          )}
       </div>
     </div>
   );
@@ -328,8 +405,28 @@ function RawSegment({ text, streaming }: { text: string; streaming: boolean }) {
 
 // One top-level block of streamed Markdown. Memoized on its text, so a
 // frame that only grows the tail block leaves every earlier block's parse alone.
-const MarkdownBlock = memo(function MarkdownBlock({ text, live }: { text: string; live: boolean }) {
-  return <MarkdownContent text={text} live={live} />;
+const MarkdownBlock = memo(function MarkdownBlock({
+  text,
+  live,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  live: boolean;
+  mentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
+  return (
+    <MarkdownContent
+      text={text}
+      live={live}
+      inlineMentionNames={mentionNames}
+      mentionableNames={mentionableNames}
+      onMentionClick={onMentionClick}
+    />
+  );
 });
 
 // Streamed Markdown renders block by block: re-parsing the whole reply on every
@@ -346,7 +443,19 @@ const MarkdownBlock = memo(function MarkdownBlock({ text, live }: { text: string
 // back to a single parse (see TextSegment / RawSegment), so the final document
 // gets the same `-1` suffixes as before; only mid-stream `#` links can land on
 // the first of two equal headings.
-function StreamingMarkdown({ text, live }: { text: string; live: boolean }) {
+function StreamingMarkdown({
+  text,
+  live,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  live: boolean;
+  mentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
   // One splitter per stream: a frame that appends to the text resumes the
   // scan at the line that was still open, instead of reading the whole
   // reply again. Any other text (a reset, a rewrite) starts the scan over.
@@ -355,7 +464,14 @@ function StreamingMarkdown({ text, live }: { text: string; live: boolean }) {
   // Index keys are the right identity: a streamed prefix only grows, so block
   // N stays block N and keeps its memoized parse.
   return blocks.map((block, index) => (
-    <MarkdownBlock key={index} text={block} live={live && index === blocks.length - 1} />
+    <MarkdownBlock
+      key={index}
+      text={block}
+      live={live && index === blocks.length - 1}
+      mentionNames={mentionNames}
+      mentionableNames={mentionableNames}
+      onMentionClick={onMentionClick}
+    />
   ));
 }
 
@@ -427,11 +543,49 @@ function PermissionLine({ audit }: { audit: PermissionAudit }) {
 // and announcement hooks are only for the text still being written, and a
 // settled segment — every earlier one in a long turn — must not pay for them
 // or re-render when they tick.
-function TextSegment({ text, live }: { text: string; live: boolean }) {
-  return live ? <LiveTextSegment text={text} /> : <SettledTextSegment text={text} />;
+function TextSegment({
+  text,
+  live,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  live: boolean;
+  mentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
+  return live
+    ? (
+      <LiveTextSegment
+        text={text}
+        mentionNames={mentionNames}
+        mentionableNames={mentionableNames}
+        onMentionClick={onMentionClick}
+      />
+    )
+    : (
+      <SettledTextSegment
+        text={text}
+        mentionNames={mentionNames}
+        mentionableNames={mentionableNames}
+        onMentionClick={onMentionClick}
+      />
+    );
 }
 
-const SettledTextSegment = memo(function SettledTextSegment({ text }: { text: string }) {
+const SettledTextSegment = memo(function SettledTextSegment({
+  text,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  mentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
   return (
     <div className="agent-text">
       {/* `md-body` is not optional decoration: every markdown element rule
@@ -439,19 +593,34 @@ const SettledTextSegment = memo(function SettledTextSegment({ text }: { text: st
           styles/markdown.css is scoped to it. Without it the transcript
           renders unstyled — headings collapse to body-sized plain text. */}
       <div className="md-body agent-prose">
-        <MarkdownContent text={text} />
+        <MarkdownContent
+          text={text}
+          inlineMentionNames={mentionNames}
+          mentionableNames={mentionableNames}
+          onMentionClick={onMentionClick}
+        />
       </div>
     </div>
   );
 });
 
-function LiveTextSegment({ text }: { text: string }) {
+function LiveTextSegment({
+  text,
+  mentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  mentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
   const visibleText = useSmoothStreamingText(text, true);
   const announcement = useDebouncedStreamingAnnouncement(text, true);
   return (
     <div className="agent-text is-live">
       <div className="md-body agent-prose" aria-hidden>
-        <StreamingMarkdown text={visibleText} live />
+        <StreamingMarkdown text={visibleText} live mentionNames={mentionNames} mentionableNames={mentionableNames} onMentionClick={onMentionClick} />
       </div>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {announcement}

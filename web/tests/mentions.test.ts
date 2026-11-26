@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 import {
   activeMentionQuery,
   applyMention,
+  extractLeadingMentionTokens,
   mentionCandidates,
   mentionSegments,
   parseMentions,
   replaceAddressRun,
+  splitInlineMentions,
+  splitLeadingMentionPrefix,
   type MentionCandidate,
 } from "../src/lib/mentions.js";
 import type { UserAgent } from "../src/types.js";
@@ -228,5 +231,73 @@ describe("mentionSegments", () => {
     const text = "@Lead go";
     const segments = mentionSegments(text, parseMentions(text, candidates).mentions);
     assert.equal(segments[0].text, "@Lead");
+  });
+});
+
+describe("extractLeadingMentionTokens & splitLeadingMentionPrefix", () => {
+  const names = ["Lead", "Support Bot", "Frigg"];
+
+  it("extracts leading @agent tokens longest-first and case-insensitively", () => {
+    assert.deepEqual(extractLeadingMentionTokens("@Support Bot @lead check this", names), [
+      "@Support Bot",
+      "@lead",
+    ]);
+    assert.deepEqual(extractLeadingMentionTokens("@Frigg", names), ["@Frigg"]);
+    assert.deepEqual(extractLeadingMentionTokens("ask @Frigg later", names), []);
+    assert.deepEqual(extractLeadingMentionTokens("@Unknown hi", names), []);
+  });
+
+  it("splits only the matched leading mention tokens from the paragraph head", () => {
+    const tokens = extractLeadingMentionTokens("@Frigg @Lead 帮我看看", names);
+    assert.deepEqual(splitLeadingMentionPrefix("@Frigg @Lead 帮我看看", tokens), [
+      { text: "@Frigg", mention: true },
+      { text: " ", mention: false },
+      { text: "@Lead", mention: true },
+      { text: " 帮我看看", mention: false },
+    ]);
+  });
+
+  it("leaves non-matching text untouched", () => {
+    assert.deepEqual(splitLeadingMentionPrefix("plain body", ["@Frigg"]), [
+      { text: "plain body", mention: false },
+    ]);
+  });
+});
+
+describe("splitInlineMentions", () => {
+  const names = ["Ada", "Support Bot", "Frigg"];
+
+  it("emphasizes @agent mentions anywhere in prose, longest-first and punctuation-safe", () => {
+    assert.deepEqual(
+      splitInlineMentions("Synced with @Support Bot, and asked @frigg。Thanks @Ada!", names),
+      [
+        { text: "Synced with ", mention: false },
+        { text: "@Support Bot", mention: true },
+        { text: ", and asked ", mention: false },
+        { text: "@frigg", mention: true },
+        { text: "。Thanks ", mention: false },
+        { text: "@Ada", mention: true },
+        { text: "!", mention: false },
+      ],
+    );
+  });
+
+  it("ignores emails and partial identifier prefixes", () => {
+    assert.deepEqual(
+      splitInlineMentions("Contact dev@Ada.com or @Adam instead of @Ada", names),
+      [
+        { text: "Contact dev@Ada.com or @Adam instead of ", mention: false },
+        { text: "@Ada", mention: true },
+      ],
+    );
+  });
+
+  it("returns plain text when no known agent is mentioned", () => {
+    assert.deepEqual(splitInlineMentions("No mentions here", names), [
+      { text: "No mentions here", mention: false },
+    ]);
+    assert.deepEqual(splitInlineMentions("Ping @Unknown", names), [
+      { text: "Ping @Unknown", mention: false },
+    ]);
   });
 });

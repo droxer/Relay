@@ -116,8 +116,9 @@
   min-width: 0;
   /* Capped against the rail's compact type (see the density block in
      composer.css): the same name fits in fewer pixels at --type-label,
-     so the cap comes in with it rather than leaving a 280px plate half-empty. */
-  max-width: min(232px, 40vw);
+     so the cap comes in with it rather than leaving a 280px plate half-empty.
+     56vw keeps role + level readable on narrow phones without mid-word wraps. */
+  max-width: min(232px, 56vw);
 }
 
 .chat-agent-select[data-availability="unavailable"] {
@@ -244,6 +245,53 @@
 .transcript-history {
   align-self: center;
   text-align: center;
+}
+
+/* Floating jump-to-latest control anchored inside the transcript scroller.
+   Zero layout height so it never alters scrollHeight or pushes content. */
+.transcript-jump-anchor {
+  position: sticky;
+  bottom: var(--sp-3);
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.transcript-jump-bottom {
+  pointer-events: auto;
+  transform: translateY(-100%);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  height: var(--control-h-xs);
+  padding: 0 var(--sp-3);
+  border: var(--hairline);
+  border-radius: var(--r-full);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-2);
+  color: var(--ink-2);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+  cursor: pointer;
+  transition:
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+
+.transcript-jump-bottom:hover {
+  border-color: var(--line-strong);
+  color: var(--ink-1);
+}
+
+.transcript-jump-live {
+  width: var(--dot-sm);
+  height: var(--dot-sm);
+  border-radius: var(--r-full);
+  background: var(--live);
 }
 
 /* The new-thread landing centres the composer itself: equal flexible rows
@@ -567,16 +615,15 @@
   gap: var(--sp-1);
 }
 
-/* A soft fill and no hairline: the side already says whose turn it is, so the
-   bubble only needs enough tone to hold its words together. All four corners
-   take the container radius — the old squared "tail" corner pointed at an
-   avatar that is no longer there. */
+/* A soft fill with a quiet hairline edge: the side already says whose turn it
+   is, and the hairline keeps the bubble crisp across both registers. */
 .msg-user .turn-body {
   width: fit-content;
   max-width: min(85%, 42rem);
   gap: var(--sp-1);
   padding: var(--sp-2) var(--sp-4);
   background: var(--surface-2);
+  border: var(--hairline-soft);
   border-radius: var(--r-3);
 }
 
@@ -595,6 +642,37 @@
   font-weight: 400;
   line-height: var(--leading-transcript);
   word-break: break-word;
+}
+
+/* Addressed `@Agent` tokens inside a sent user turn: semibold emphasis on a
+   subtle ink wash so routing intent stands out at a glance without adding hue. */
+.msg-mention {
+  display: inline;
+  padding: 0 var(--sp-1-5);
+  border-radius: var(--r-1);
+  background: var(--control-fill);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
+  color: var(--ink-1);
+  font-weight: 600;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.msg-mention-interactive {
+  border: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.msg-mention-interactive:hover {
+  background: var(--control-fill-hover);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-drag);
 }
 
 /* An automation run's opening turn (AutomationOpening). Nobody typed it, so
@@ -778,19 +856,22 @@
   letter-spacing: var(--type-meta-track);
 }
 
-.msg-user > .msg-time {
+.msg-user-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
   padding-inline-end: var(--sp-1);
   opacity: 0;
   transition: opacity var(--t-fast) var(--ease);
 }
 
-.msg-user:hover > .msg-time,
-.msg-user:focus-within > .msg-time {
+.msg-user:hover > .msg-user-foot,
+.msg-user:focus-within > .msg-user-foot {
   opacity: 1;
 }
 
 @media (hover: none) {
-  .msg-user > .msg-time { opacity: 1; }
+  .msg-user-foot { opacity: 1; }
 }
 
 /* Speaker line: the agent's name on its turn's header row, beside the mark.

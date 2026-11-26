@@ -14,9 +14,120 @@ import {
   type MarkdownVariant,
 } from "../lib/markdown";
 import { omit } from "../lib/omit";
-import { MarkdownModeProvider } from "./markdown/context";
+import { splitInlineMentions, splitLeadingMentionPrefix } from "../lib/mentions";
+import { MarkdownModeProvider, useMarkdownMode } from "./markdown/context";
 import { MarkdownFence } from "./markdown/MarkdownFence";
 import { MarkdownTable } from "./markdown/MarkdownTable";
+
+function renderMentionSegments(
+  segments: Array<{ text: string; mention: boolean }>,
+  keyPrefix = "",
+  mentionableNames?: ReadonlyMap<string, string>,
+  onMentionClick?: (displayName: string) => void,
+): ReactNode {
+  return segments.map((segment, index) => {
+    if (!segment.mention) return segment.text;
+    const targetName = mentionableNames?.get(segment.text.slice(1).toLowerCase());
+    if (onMentionClick && targetName) {
+      return (
+        <button
+          key={`${keyPrefix}${index}`}
+          type="button"
+          className="msg-mention msg-mention-interactive"
+          translate="no"
+          onClick={() => onMentionClick(targetName)}
+        >
+          {segment.text}
+        </button>
+      );
+    }
+    return (
+      <span key={`${keyPrefix}${index}`} className="msg-mention" translate="no">
+        {segment.text}
+      </span>
+    );
+  });
+}
+
+function highlightParagraphMentions(
+  children: ReactNode,
+  tokens: readonly string[],
+  mentionableNames?: ReadonlyMap<string, string>,
+  onMentionClick?: (displayName: string) => void,
+): ReactNode {
+  if (typeof children === "string") {
+    const segments = splitLeadingMentionPrefix(children, tokens);
+    return segments.some((segment) => segment.mention)
+      ? renderMentionSegments(segments, "", mentionableNames, onMentionClick)
+      : children;
+  }
+  if (Array.isArray(children) && children.length > 0 && typeof children[0] === "string") {
+    const segments = splitLeadingMentionPrefix(children[0], tokens);
+    if (!segments.some((segment) => segment.mention)) return children;
+    return [renderMentionSegments(segments, "m-", mentionableNames, onMentionClick), ...children.slice(1)];
+  }
+  return children;
+}
+
+function highlightInlineMentions(
+  children: ReactNode,
+  names: readonly string[],
+  mentionableNames?: ReadonlyMap<string, string>,
+  onMentionClick?: (displayName: string) => void,
+): ReactNode {
+  if (typeof children === "string") {
+    if (!children.includes("@")) return children;
+    const segments = splitInlineMentions(children, names);
+    return segments.some((segment) => segment.mention)
+      ? renderMentionSegments(segments, "", mentionableNames, onMentionClick)
+      : children;
+  }
+  if (Array.isArray(children)) {
+    let changed = false;
+    const next = children.map((child, index) => {
+      if (typeof child !== "string" || !child.includes("@")) return child;
+      const segments = splitInlineMentions(child, names);
+      if (!segments.some((segment) => segment.mention)) return child;
+      changed = true;
+      return renderMentionSegments(segments, `i-${index}-`, mentionableNames, onMentionClick);
+    });
+    return changed ? next : children;
+  }
+  return children;
+}
+
+function MarkdownParagraph({
+  children,
+  node,
+  ...props
+}: ComponentProps<"p"> & { node?: { position?: { start?: { line?: number } } } }) {
+  const { leadingMentions, inlineMentionNames, mentionableNames, onMentionClick } = useMarkdownMode();
+  let content = children;
+  if (leadingMentions?.length && node?.position?.start?.line === 1) {
+    content = highlightParagraphMentions(content, leadingMentions, mentionableNames, onMentionClick);
+  } else if (inlineMentionNames?.length) {
+    content = highlightInlineMentions(content, inlineMentionNames, mentionableNames, onMentionClick);
+  }
+  return <p {...props}>{content}</p>;
+}
+
+function MarkdownListItem({ children, ...props }: ComponentProps<"li">) {
+  const { inlineMentionNames, mentionableNames, onMentionClick } = useMarkdownMode();
+  const rest = omit(props as Record<string, unknown>, "node") as ComponentProps<"li">;
+  const content = inlineMentionNames?.length
+    ? highlightInlineMentions(children, inlineMentionNames, mentionableNames, onMentionClick)
+    : children;
+  return <li {...rest}>{content}</li>;
+}
+
+function MarkdownBlockquote({ children, ...props }: ComponentProps<"blockquote">) {
+  const { inlineMentionNames, mentionableNames, onMentionClick } = useMarkdownMode();
+  const rest = omit(props as Record<string, unknown>, "node") as ComponentProps<"blockquote">;
+  const content = inlineMentionNames?.length
+    ? highlightInlineMentions(children, inlineMentionNames, mentionableNames, onMentionClick)
+    : children;
+  return <blockquote {...rest}>{content}</blockquote>;
+}
 
 type CodeProps = { className?: string; children?: ReactNode };
 
@@ -56,6 +167,9 @@ const REHYPE_PLUGINS: MarkdownOptions["rehypePlugins"] = [
 // the `pre` component. Sniffing newlines in `code` instead would misrender
 // single-line fences as inline chips and multi-line code spans as blocks.
 const MARKDOWN_COMPONENTS: Components = {
+  p: MarkdownParagraph,
+  li: MarkdownListItem,
+  blockquote: MarkdownBlockquote,
   pre: ({ children }) => {
     const code = isValidElement<CodeProps>(children)
       ? (children as ReactElement<CodeProps>)
@@ -134,8 +248,25 @@ export function Markdown({ text, variant = "chat" }: { text: string; variant?: M
  *  text, so a parent re-render with the same text must not repeat it. Streamed
  *  output renders as one of these per block (lib/markdownBlocks), so settled
  *  blocks skip the parse while only the growing tail re-runs it. */
-export const MarkdownContent = memo(function MarkdownContent({ text, live = false }: { text: string; live?: boolean }) {
-  const mode = useMemo(() => ({ live }), [live]);
+export const MarkdownContent = memo(function MarkdownContent({
+  text,
+  live = false,
+  leadingMentions,
+  inlineMentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  live?: boolean;
+  leadingMentions?: readonly string[];
+  inlineMentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
+  const mode = useMemo(
+    () => ({ live, leadingMentions, inlineMentionNames, mentionableNames, onMentionClick }),
+    [live, leadingMentions, inlineMentionNames, mentionableNames, onMentionClick],
+  );
   return (
     <MarkdownModeProvider value={mode}>
       <ReactMarkdown
