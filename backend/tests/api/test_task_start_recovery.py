@@ -250,3 +250,172 @@ def test_failed_admitted_task_reuses_original_thread(setup, trigger):
     current = app.state.task_store.get_task(task["id"])
     assert current["linkedSessionIds"] == [session_id]
     assert current["workspaceBinding"] == binding
+
+
+@pytest.mark.parametrize("project_task", [False, True])
+def test_owner_can_complete_every_task_status(setup, project_task):
+    app, client, node, agent, project = setup
+    placement = {"projectId": project["id"]} if project_task else {"computerId": computer_id(node)}
+    other = TestClient(app)
+    for status in ("backlog", "assigned", "queued", "running", "waiting_for_human",
+                   "blocked", "cancelled", "review", "done"):
+        response = client.post("/api/v1/tasks", json={
+            "title": f"Complete from {status}", "assignedAgentId": agent["id"], **placement,
+        })
+        assert response.status_code == 201, response.text
+        task_id = response.json()["id"]
+        app.state.task_store.update_task(task_id, {"status": status})
+        url = f"/api/v1/tasks/{task_id}"
+        assert other.patch(url, json={"status": "done"}).status_code == 401
+        if status == "backlog":
+            assert other.post("/api/v1/auth/login", json={
+                "username": "admin", "password": "kestrel-vault-7719",
+            }).status_code == 200
+            assert other.patch(url, json={"status": "done"}).status_code == 403
+            assert other.post("/api/v1/auth/logout").status_code == 200
+        result = client.patch(url, json={"status": "done"})
+        assert result.status_code == 200, result.text
+        task = result.json()
+        assert task["workflowStage"] == task["status"] == "done"
+        assert task["finishedAt"]
+        assert task["events"][-1]["type"] == "task.status"
+        assert task["events"][-1]["actorUserId"] == ALICE
+        repeated = client.patch(url, json={"status": "done"}).json()
+        assert repeated["events"] == task["events"]
+        assert client.get(url).json()["finishedAt"] == task["finishedAt"]
+
+
+@pytest.mark.parametrize("terminal", ["undelivered", "run.completed", "run.failed", "run.cancelled", "late_start"])
+def test_manual_completion_settles_only_undelivered_work_before_daemon_exit(setup, terminal):
+    app, client, node, agent, project = setup
+    task = client.post("/api/v1/tasks", json={
+        "title": "Stop working", "projectId": project["id"], "assignedAgentId": agent["id"],
+    }).json()
+    url = f"/api/v1/tasks/{task['id']}"
+    started = client.post(f"{url}/runs", json={}).json()
+    assert started["dispatch"]["state"] == "started"
+    registry = app.state.registry
+    token = f"token_{node['id']}"
+    sid = started["session"]["id"]
+    if terminal != "undelivered":
+        [command] = registry.take_commands(node["id"], token)
+        event = {key: command[key] for key in ("runId", "sessionId", "agent", "leaseId")}
+        event["commandId"] = command["id"]
+        if terminal != "late_start":
+            registry.handle_event(node["id"], {**event, "type": "run.executing"}, token)
+    response = client.patch(url, json={"status": "done"})
+    assert response.status_code == 200, response.text
+    done = response.json()
+    assert done["status"] == "done"
+    active = registry.daemon_store.active_run_request_for_task(task["id"])
+    commands = registry.take_commands(node["id"], token)
+    if terminal == "undelivered":
+        assert active is None
+        assert commands == []
+    else:
+        assert active["sessionId"] == sid
+        assert [cmd["type"] for cmd in commands] == ["run.cancel"]
+        assert commands[0]["commandId"] == command["id"]
+        assert app.state.session_store.get_session_header(sid)["status"] == "running"
+        if terminal == "late_start":
+            registry.handle_event(node["id"], {**event, "type": "run.executing"}, token)
+            terminal = "run.completed"
+        registry.handle_event(node["id"], {
+            **event, "type": terminal, "exitCode": 0 if terminal == "run.completed" else 1,
+            "roundResult": {"status": "blocked", "question": "Continue?"},
+        }, token)
+        assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+        assert app.state.session_store.get_session_header(sid)["status"] == "cancelled"
+    assert app.state.task_store.get_task(task["id"])["events"] == done["events"]
+    assert not any(event["type"] == "session.execution_reconciled"
+                   for event in app.state.session_store.get_session(sid)["events"])
+
+
+def test_completion_between_dispatch_claim_and_admission_supersedes_start(setup, monkeypatch):
+    app, client, _, agent, project = setup
+    task = client.post("/api/v1/tasks", json={
+        "title": "Dispatch races completion", "projectId": project["id"], "assignedAgentId": agent["id"],
+    }).json()
+    url = f"/api/v1/tasks/{task['id']}"
+    original = app.state.backend.run
+
+    async def complete_then_admit(*args, **kwargs):
+        assert app.state.task_store.get_task(task["id"]).get("dispatchClaim")
+        result = await asyncio.to_thread(client.patch, url, json={"status": "done"})
+        assert result.status_code == 200, result.text
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(app.state.backend, "run", complete_then_admit)
+    started = client.post(f"{url}/runs", json={})
+    assert started.status_code == 202, started.text
+    assert started.json()["dispatch"]["code"] == "dispatch_superseded"
+    final = app.state.task_store.get_task(task["id"])
+    assert final["status"] == "done"
+    assert "dispatchClaim" not in final
+    assert final["linkedSessionIds"] == task["linkedSessionIds"]
+    assert app.state.registry.daemon_store.active_run_request_for_task(task["id"]) is None
+
+
+@pytest.mark.parametrize("operation", ["pickup", "routing"])
+def test_completion_supersedes_start_before_a_dispatch_is_claimed(setup, monkeypatch, operation):
+    from relay.api.tasks import runs
+    from relay.tasks.dispatch import TaskDispatcher
+
+    app, client, node, agent, project = setup
+    task = client.post("/api/v1/tasks", json={"title": "Close during routing", "projectId": project["id"]}).json()
+    url = f"/api/v1/tasks/{task['id']}"
+    if operation == "pickup":
+        original = runs.logical_agent_for_assignment
+
+        def complete_during_assignment(*args, **kwargs):
+            assert client.patch(url, json={"status": "done"}).status_code == 200
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(runs, "logical_agent_for_assignment", complete_during_assignment)
+        response = client.post(f"{url}/pickups", json={"agentId": agent["id"]})
+        assert response.status_code == 409, response.text
+    else:
+        original_resolve = TaskDispatcher._resolve_project_assignments
+
+        def complete_during_routing(dispatcher):
+            assert client.patch(url, json={"status": "done"}).status_code == 200
+            return original_resolve(dispatcher)
+
+        monkeypatch.setattr(TaskDispatcher, "_resolve_project_assignments", complete_during_routing)
+        response = client.post(f"{url}/runs", json={})
+        assert response.json()["session"] is None, response.text
+    assert app.state.task_store.get_task(task["id"])["status"] == "done"
+    assert app.state.registry.take_commands(node["id"], f"token_{node['id']}") == []
+
+
+def test_completion_and_daemon_failure_on_different_replicas(setup, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    app, client, node, agent, project = setup
+    replica = create_app(str(tmp_path))
+    registry = replica.state.registry
+    response = client.post("/api/v1/tasks", json={
+        "title": "Two writers", "projectId": project["id"], "assignedAgentId": agent["id"],
+    })
+    url = f"/api/v1/tasks/{response.json()['id']}"
+    assert client.post(f"{url}/runs", json={}).json()["dispatch"]["state"] == "started"
+    token = f"token_{node['id']}"
+    [command] = registry.take_commands(node["id"], token)
+    event = {key: command[key] for key in ("runId", "sessionId", "agent", "leaseId")}
+    event["commandId"] = command["id"]
+    registry.handle_event(node["id"], {**event, "type": "run.executing"}, token)
+    ready = Barrier(2)
+
+    def report_exit():
+        ready.wait(timeout=10)
+        registry.handle_event(node["id"], {**event, "type": "run.failed", "exitCode": 1, "error": "stopped"}, token)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        exit_result = pool.submit(report_exit)
+        ready.wait(timeout=10)
+        result = client.patch(url, json={"status": "done"})
+        exit_result.result(timeout=15)
+    assert result.status_code == 200, result.text
+    assert client.get(url).json()["status"] == "done"
+    assert app.state.registry.daemon_store.active_run_request_for_task(response.json()["id"]) is None

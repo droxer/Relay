@@ -21,6 +21,7 @@ from ...agents.routing import (
     AgentRoutingError,
     resolve_legacy_session_computer_id,
 )
+from ...tasks.execution import require_open_execution
 from ...tasks.workspace import recorded_task_session_id, recorded_task_workspace, resolve_task_workspace
 from ...agents.delegation import delegation_candidates
 from ...core.project_roles import project_member_ids
@@ -108,6 +109,7 @@ class RunTargetValidationMixin(NodeBackendState):
             not in (task.get("ownerUserId"), task.get("assigneeUserId"))
         ):
             raise PermissionError("Task belongs to another user.")
+        require_open_execution(task)
         binding = recorded_task_workspace(
             task, self.registry.store, self.registry.monitor_nodes()
         )

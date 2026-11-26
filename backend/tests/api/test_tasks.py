@@ -1546,7 +1546,8 @@ def test_claimed_task_rejects_status_and_assignment_updates(monkeypatch) -> None
         second = _create_agent(client, ALICE, executor_kind="claude")
         project = project_for_agents(client.app.state.project_store, ALICE, [first, second])
 
-        for patch in ({"status": "done"}, {"assignedAgentId": second["id"]}):
+        for patch in ({"status": "cancelled"}, {"assignedAgentId": second["id"]},
+                      {"status": "done", "assignedAgentId": second["id"]}):
             task = client.post(
                 "/api/v1/tasks",
                 json={

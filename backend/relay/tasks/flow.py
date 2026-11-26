@@ -143,6 +143,8 @@ def validate_manual_transition(
         return
     if active:
         raise ValueError("task_execution_active")
+    if target == "done" and not task.get("isRoutine"):
+        return
     if current == "cancelled" and target not in ("assigned", "backlog"):
         raise ValueError("task_reopen_required")
     if target == "cancelled" and (current == "done" or task.get("isRoutine")):

@@ -3024,6 +3024,7 @@
     "sub": "Manage your computers, skills, and display preferences."
   },
   "record": {
+    "mark_done_confirm": "Mark this task done? Any active work will be asked to stop.",
     "detail_label": "Record: {{title}}",
     "record_label": "Record details",
     "sections": "Record sections",

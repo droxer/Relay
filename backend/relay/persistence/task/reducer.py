@@ -207,6 +207,14 @@ def _apply_task_status(task: dict[str, Any], event: dict[str, Any]) -> None:
     if event["status"] == "cancelled" and task["status"] != "cancelled":
         # Fence late closeout even after a person reopens this task.
         task["cancelledExecutionRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
+    if event["status"] == "done" and event.get("manualCompletion"):
+        task["manuallyCompletedExecutionRevision"] = (task.get("executionOwner") or {}).get("revision", 0)
+        task.pop("dispatchClaim", None)
+        task.pop("dispatchRetry", None)
+        task.pop("continuationSessionId", None)
+        result = task.get("lastRoundResult") or {}
+        if result.get("status") == "continue":
+            task["lastRoundResult"] = {**result, "consumed": True}
     apply_flow_status(task, event)
     task["status"] = event["status"]
     if event["status"] != "running":

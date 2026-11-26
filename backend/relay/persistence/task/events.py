@@ -253,6 +253,8 @@ def task_update_events(
             }
         if payload.get("actorUserId"):
             status_payload["actorUserId"] = payload["actorUserId"]
+            if payload["status"] == "done":
+                status_payload["manualCompletion"] = True
         events.append(relay_task_event("task.status", task_id, status_payload))
     return events
 
