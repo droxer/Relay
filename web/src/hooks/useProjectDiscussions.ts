@@ -1,9 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { queryOptions, useInfiniteQuery, useQuery, useQueryClient, type InfiniteData, type Query, type QueryClient } from "@tanstack/react-query";
-import { listSessionSummaries, type SessionHeadCache } from "../api";
+import { queryOptions, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type Query, type QueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { listSessionSummaries, setDiscussionPin, type SessionHeadCache } from "../api";
 import { THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
-import type { SessionSummariesResponse, SessionSummary } from "../types";
+import type { RelaySession, SessionSummariesResponse, SessionSummary } from "../types";
+import { useMutationError } from "./useMutationError";
 
 export const PROJECT_DISCUSSIONS_QUERY_KEY = ["project-discussions"] as const;
 const headValidators = new WeakMap<Query, SessionHeadCache>();
@@ -46,8 +48,10 @@ function projectDiscussionsOptions(projectId: string, query: string) {
       const boundaryTime = Date.parse(boundary.updatedAt);
       const ids = new Set(page.sessions.map(row => row.id));
       const displaced = [...previous.page.sessions, ...previous.displaced].filter(row => {
+        if (ids.has(row.id)) return false;
+        if (Boolean(row.discussionPinned) !== Boolean(boundary.discussionPinned)) return !row.discussionPinned;
         const time = Date.parse(row.updatedAt);
-        return !ids.has(row.id) && (time < boundaryTime || (time === boundaryTime && row.id < boundary.id));
+        return time < boundaryTime || (time === boundaryTime && row.id < boundary.id);
       });
       return { page, displaced };
     },
@@ -108,7 +112,23 @@ export function useProjectDiscussions(projectId: string, query: string) {
 
 export function removeCachedProjectDiscussion(client: QueryClient, threadId: string, projectId?: string) {
   const scope = projectId ? [...PROJECT_DISCUSSIONS_QUERY_KEY, projectId] : PROJECT_DISCUSSIONS_QUERY_KEY;
-  const withoutThread = (rows: SessionSummary[]) => rows.filter(row => row.id !== threadId);
+  updateCachedDiscussions(client, scope, rows => rows.filter(row => row.id !== threadId));
+}
+
+export function applyProjectDiscussionDeletions(
+  client: QueryClient, results: ReadonlyMap<string, RelaySession["execution"]>,
+) {
+  const requestedAt = new Date().toISOString();
+  updateCachedDiscussions(client, PROJECT_DISCUSSIONS_QUERY_KEY, rows => rows.flatMap(row => {
+    if (!results.has(row.id)) return [row];
+    const execution = results.get(row.id);
+    return execution ? [{ ...row, execution, deletionRequestedAt: row.deletionRequestedAt ?? requestedAt }] : [];
+  }));
+}
+
+function updateCachedDiscussions(
+  client: QueryClient, scope: readonly string[], update: (rows: SessionSummary[]) => SessionSummary[],
+) {
   for (const entry of client.getQueryCache().findAll({ queryKey: scope })) {
     const key = entry.queryKey;
     if (key[3] === "history") {
@@ -116,14 +136,34 @@ export function removeCachedProjectDiscussion(client: QueryClient, threadId: str
       if (entry.state.fetchStatus !== "idle") void client.cancelQueries({ queryKey: key, exact: true });
       client.setQueryData<InfiniteData<SessionSummariesResponse>>(key, current => current && ({
         ...current,
-        pages: current.pages.map(page => ({ ...page, sessions: withoutThread(page.sessions) })),
+        pages: current.pages.map(page => ({ ...page, sessions: update(page.sessions) })),
       }));
     } else {
       headValidators.delete(entry);
       client.setQueryData<DiscussionHead>(key, current => current && ({
-        page: { ...current.page, sessions: withoutThread(current.page.sessions) },
-        displaced: withoutThread(current.displaced),
+        page: { ...current.page, sessions: update(current.page.sessions) },
+        displaced: update(current.displaced),
       }));
     }
   }
+}
+
+export function useProjectDiscussionPin(projectId: string) {
+  const client = useQueryClient();
+  const { t } = useTranslation();
+  const { reportMutationError } = useMutationError();
+  const scope = [...PROJECT_DISCUSSIONS_QUERY_KEY, projectId] as const;
+  return useMutation({
+    mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) => setDiscussionPin(id, pinned),
+    onSuccess: async () => {
+      // A pin can move across pages. Old history cursors can skip the row in
+      // its new position, so subsequent pages must start at the new head.
+      await client.cancelQueries({ queryKey: scope });
+      await client.resetQueries({ queryKey: scope, predicate: entry => entry.queryKey[3] === "history" });
+      await client.invalidateQueries({ queryKey: scope });
+    },
+    onError: (error, { pinned }) => reportMutationError(
+      "Failed to update discussion pin", error, t(pinned ? "project.discussions_pin_failed" : "project.discussions_unpin_failed"),
+    ),
+  });
 }

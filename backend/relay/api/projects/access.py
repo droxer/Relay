@@ -6,8 +6,18 @@ from fastapi import HTTPException
 
 from ...core.computer_identity import computer_id
 from ...projects.runtime import project_work_error
+from ...security.actor import Actor
 from ..deps import AppContextDep
 from ...projects.access import ProjectAccessError, project_for_owner as owned_project
+
+
+def owned_workspace_project(ctx: AppContextDep, actor: Actor, project_id: str) -> dict[str, Any]:
+    project = ctx.project_store.get_project(project_id)
+    if not project:
+        raise HTTPException(404, "Project not found.")
+    if project.get("ownerUserId") != actor["userId"]:
+        raise HTTPException(403, "Cannot read another user's project workspace.")
+    return project
 
 
 def project_for_owner(

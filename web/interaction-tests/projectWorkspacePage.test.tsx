@@ -1,4 +1,4 @@
-import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ProjectWorkspacePage } from "../src/components/ProjectWorkspacePage";
@@ -29,7 +29,10 @@ const task = (id: string, projectId: string | undefined, deletedAt?: string) =>
   ({ id, title: id, projectId, deletedAt, status: "backlog" }) as unknown as RelayTaskListItem;
 
 function renderPage(record: ProjectRecord, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
-  const actions = { onOpenThread: vi.fn(), onNewThread: vi.fn(), onRenameThread: vi.fn(), onCloseThread: vi.fn() };
+  const actions = {
+    onOpenThread: vi.fn(), onNewThread: vi.fn(), onRenameThread: vi.fn(), onCloseThread: vi.fn(),
+    onDeleteDiscussions: vi.fn().mockResolvedValue([]),
+  };
   render(
     <QueryClientProvider client={client}>
       <DialogProvider>
@@ -123,9 +126,11 @@ it("requests chats on every Project Discussions page and preserves rows when pag
   expect(actions.onOpenThread).toHaveBeenCalledWith("older");
   const rowElement = row.closest("li");
   expect(rowElement?.querySelector("button button")).toBeNull();
-  fireEvent.click(screen.getAllByRole("button", { name: "thread.rename" })[0]);
+  fireEvent.click(within(rowElement!).getByRole("button", { name: "thread.more_actions" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "thread.rename" }));
   expect(actions.onRenameThread).toHaveBeenCalledWith(expect.objectContaining({ id: "older" }));
-  fireEvent.click(screen.getAllByRole("button", { name: "thread.delete" })[0]);
+  fireEvent.click(within(rowElement!).getByRole("button", { name: "thread.more_actions" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "thread.delete" }));
   expect(actions.onCloseThread).toHaveBeenCalledWith("older", "Older rollout");
 
   fireEvent.change(screen.getByRole("searchbox", { name: "project.discussions_search" }), { target: { value: "launch" } });
@@ -136,6 +141,59 @@ it("requests chats on every Project Discussions page and preserves rows when pag
   expect(screen.queryByRole("button", { name: "project.discussions_new" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "backlog.clear_filters" }));
   expect(window.location.search).toBe("?tab=discussions");
+});
+
+it("pins and unpins a discussion from its row menu", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=discussions");
+  let pinned = false;
+  const newer = discussion("new", "New discussion");
+  const older = { ...discussion("old", "Old discussion"), updatedAt: "2026-08-01T00:00:00Z" };
+  const writes: boolean[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, options) => {
+    const url = new URL(String(input), window.location.origin);
+    if (url.pathname.endsWith("/threads/old/discussion-pin")) {
+      expect(options?.method).toBe("PUT");
+      pinned = JSON.parse(String(options?.body)).pinned;
+      writes.push(pinned);
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname.endsWith("/threads")) {
+      return Response.json({ sessions: [newer, { ...older, discussionPinned: pinned }] });
+    }
+    return Response.json({});
+  });
+  renderPage(project());
+
+  const row = (await screen.findByRole("button", { name: /Old discussion/ })).closest("li")!;
+  fireEvent.click(within(row).getByRole("button", { name: "thread.more_actions" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "project.discussions_pin" }));
+  const pins = await screen.findByRole("list", { name: "project.discussions_pinned" });
+  expect(within(pins).getByRole("button", { name: /Old discussion/ })).toBeTruthy();
+  expect(screen.getAllByRole("list")[0]).toBe(pins);
+
+  fireEvent.click(within(pins).getByRole("button", { name: "thread.more_actions" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "project.discussions_unpin" }));
+  await waitFor(() => expect(screen.queryByRole("list", { name: "project.discussions_pinned" })).toBeNull());
+  expect(writes).toEqual([true, false]);
+});
+
+it("selects only deletable discussions and keeps failed rows selected for retry", async () => {
+  window.history.replaceState({}, "", "/projects/p?tab=discussions");
+  const pending = { ...discussion("pending", "Pending deletion"), deletionRequestedAt: "2026-09-02T00:00:00Z" };
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({
+    sessions: [discussion("first", "First"), discussion("second", "Second"), pending],
+  }));
+  const actions = renderPage(project());
+  actions.onDeleteDiscussions.mockResolvedValueOnce(["first"]);
+  fireEvent.click(await screen.findByRole("button", { name: "project.discussions_select" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "project.discussions_select_all" }));
+  const rows = screen.getAllByRole("checkbox", { name: "project.discussions_select_row" });
+  expect(rows).toHaveLength(2);
+  expect(rows.every(row => row.getAttribute("aria-checked") === "true")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "project.discussions_delete_selected" }));
+  await waitFor(() => expect(rows[0].getAttribute("aria-checked")).toBe("false"));
+  expect(rows[1].getAttribute("aria-checked")).toBe("true");
+  expect(actions.onDeleteDiscussions).toHaveBeenCalledWith(["first", "second"]);
 });
 
 it("refreshes only the first Discussions page and keeps loaded history when a row moves up", async () => {

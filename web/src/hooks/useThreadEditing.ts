@@ -21,7 +21,7 @@ interface ThreadEditingInput {
     failed mutation surfaces through the mutation's own onError toast. */
 export function useThreadEditing({ threads, ownerId, activeSessionId, token, onActiveThreadDeleted, t }: ThreadEditingInput) {
   const { prompt, confirm } = useDialogs();
-  const { renameSessionMutation, deleteSessionMutation } = useRelayMutations();
+  const { renameSessionMutation, deleteSessionMutation, deleteDiscussionsMutation } = useRelayMutations();
 
   async function renameThread(session: RelaySession) {
     const current = session.title?.trim() || session.taskGoal;
@@ -61,5 +61,28 @@ export function useThreadEditing({ threads, ownerId, activeSessionId, token, onA
     }
   }
 
-  return { renameThread, deleteThread };
+  async function deleteDiscussions(ids: readonly string[]): Promise<readonly string[]> {
+    if (!ids.length) return [];
+    const view = retainThreadDispatchView();
+    try {
+      const ok = await confirm({
+        title: t("project.discussions_delete_confirm", { count: ids.length }),
+        message: t("project.discussions_delete_message"),
+        confirmLabel: t("thread.stop_and_delete"),
+        tone: "danger",
+      });
+      if (!ok) return [];
+      const { accepted } = await deleteDiscussionsMutation.mutateAsync({ ids, token });
+      for (const [id, pending] of accepted) {
+        if (pending) continue;
+        if (ownerId) removeSessionDetail(ownerId, id);
+        if (activeSessionId === id && view.isCurrent()) onActiveThreadDeleted();
+      }
+      return [...accepted.keys()];
+    } finally {
+      view.release();
+    }
+  }
+
+  return { renameThread, deleteThread, deleteDiscussions };
 }

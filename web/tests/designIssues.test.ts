@@ -359,6 +359,10 @@ describe("project discussions tokens and styles", () => {
     assert.doesNotMatch(styles, /\.project-discussions\s+\.conversation-more-btn\b/);
   });
 
+  it("keeps the discussion selection bar visible below a confirmation dialog", () => {
+    assert.match(styles, /\.project-discussions\s+\.task-selection-bar\s*\{[^}]*z-index:\s*var\(--z-drawer\);[^}]*display:\s*flex;/s);
+  });
+
   it("reuses ListSkeleton, WorkspaceEmpty actions, and explicit alert typography", () => {
     assert.match(panel, /<ListSkeleton\b/);
     assert.match(panel, /<WorkspaceEmpty[\s\S]*?actions=/);

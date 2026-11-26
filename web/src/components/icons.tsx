@@ -67,6 +67,8 @@ import {
   PanelRight,
   Paperclip,
   Pencil,
+  Pin,
+  PinOff,
   Minus,
   ArrowLeftRight,
   CornerDownRight,
@@ -409,6 +411,8 @@ export const ActionAdd = withStandardStroke(Plus, "ActionAdd");
 export const ActionImport = withStandardStroke(Download, "ActionImport");
 export const ActionSubtract = withStandardStroke(Minus, "ActionSubtract");
 export const ActionEdit = withStandardStroke(Pencil, "ActionEdit");
+export const ActionPin = withStandardStroke(Pin, "ActionPin");
+export const ActionUnpin = withStandardStroke(PinOff, "ActionUnpin");
 export const ActionToggle = withStandardStroke(Power, "ActionToggle");
 
 // Admin page glyphs — node/user management and channel setup.

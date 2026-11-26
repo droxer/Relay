@@ -440,6 +440,8 @@ export interface RelaySession {
   projectId?: string;
   /** This Project Conversation defaults to the current Project Lead. */
   projectLeadDiscussion?: true;
+  /** Whether this Thread is pinned in its Project's Discussions. */
+  discussionPinned?: boolean;
   /** Relative directory below the Computer's configured workspace root. */
   workspaceSubpath?: string;
   /** Daemon node selected as this thread's immutable runtime boundary. */
@@ -768,6 +770,7 @@ export type RelayEvent =
       timestamp: string;
       title: string;
     }
+  | { id: string; type: "session.discussion_pin_changed"; sessionId: string; timestamp: string; pinned: boolean }
   | { id: string; type: "workflow.started"; sessionId: string; timestamp: string; assignments: WorkflowAssignment[]; actorUserId?: string }
   | ({ id: string; type: "workflow.gate_decided"; sessionId: string; timestamp: string; kind: "approve" | "reject"; actorUserId: string } & WorkflowAttemptBinding)
   | ({ id: string; type: "workflow.step_finished"; sessionId: string; timestamp: string; terminalEvent: Record<string, unknown> } & WorkflowAttemptBinding)
@@ -892,6 +895,10 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
 
   for (const event of events) {
     session.events.push(event);
+    if (event.type === "session.discussion_pin_changed") {
+      session.discussionPinned = event.pinned;
+      continue;
+    }
     session.updatedAt = event.timestamp;
     if (event.type === "session.queue") {
       session.messageQueue = event.queue;

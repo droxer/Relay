@@ -32,7 +32,7 @@ from ..engine import store_transaction
 from .. import sql
 from ..tables.sessions import POSTGRES_QUEUED_THREAD, SQLITE_QUEUED_THREAD
 from ..tables.tasks import tasks
-from ..workspace import ThreadListFilter, workspace_task_scope, workspace_thread_scope
+from ..workspace import ThreadListFilter, ThreadSummaryPosition, workspace_task_scope, workspace_thread_scope
 from ..tables.daemon import active_run_request, run_requests, runs as daemon_runs
 from .rows import (
     _artifact_field_sql,
@@ -71,7 +71,7 @@ class SessionReadRows(SessionStoreState):
             yield
 
     def summary_page_stamp(
-        self, *, owner_user_id: str, limit: int, before: SummaryPosition | None,
+        self, *, owner_user_id: str, limit: int, before: ThreadSummaryPosition | None,
         project_id: str | None = None,
         thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[str], list[Any]] | None:
@@ -100,7 +100,7 @@ class SessionReadRows(SessionStoreState):
             sessions.c.id, sessions.c.updated_at, sessions.c.version, revision,
             or_(live_request, live_run, legacy_affinity),
         ).where(*workspace_thread_scope(sessions, owner_user_id, project_id=project_id, thread_filter=thread_filter))
-        statement = self._summary_page_scope(statement, before).limit(limit + 1)
+        statement = self._summary_page_scope(statement, before, thread_filter).limit(limit + 1)
         with store_transaction(self.engine) as conn:
             records = conn.execute(statement).all()
         page = records[:limit]
@@ -109,11 +109,20 @@ class SessionReadRows(SessionStoreState):
         ids = [str(row[0]) for row in page]
         return ids, [[tuple(row[:-1]) for row in page], len(records) > limit]
 
-    def _summary_page_scope(self, statement: Any, before: SummaryPosition | None) -> Any:
+    def _summary_page_scope(
+        self, statement: Any, before: ThreadSummaryPosition | None, thread_filter: ThreadListFilter | None = None,
+    ) -> Any:
         position = self.sessions.c.updated_at
         thread_id = self.sessions.c.id
+        if thread_filter and thread_filter.kind == "chats":
+            pinned = self.sessions.c.snapshot["discussionPinned"].as_boolean().is_(True)
+            if before is not None:
+                # Cursors issued before pinning was introduced start in the unpinned group.
+                before_pinned = before[2] if len(before) == 3 else False
+                statement = statement.where(tuple_(pinned, position, thread_id) < (before_pinned, before[0], before[1]))
+            return statement.order_by(pinned.desc(), position.desc(), thread_id.desc())
         if before is not None:
-            statement = statement.where(tuple_(position, thread_id) < before)
+            statement = statement.where(tuple_(position, thread_id) < (before[0], before[1]))
         return statement.order_by(position.desc(), thread_id.desc())
 
     def queue_receipt(self, thread_id: str, message_id: str) -> dict[str, Any] | None:
@@ -304,18 +313,13 @@ class SessionReadRows(SessionStoreState):
         *,
         owner_user_id: str | None = None,
         limit: int = 100,
-        before: SummaryPosition | None = None,
+        before: ThreadSummaryPosition | None = None,
         project_id: str | None = None,
         team_id: str | None = None,
         agent_id: str | None = None,
         thread_filter: ThreadListFilter | None = None,
-    ) -> tuple[list[dict[str, Any]], SummaryPosition | None]:
-        """One page of summaries, newest first, and where the next one starts.
-
-        Keyset on ``(updated_at, id)`` — the order the list is shown in — so a
-        thread that moves to the top between page loads is never served twice
-        and none is skipped. The position is ``None`` on the last page.
-        """
+    ) -> tuple[list[dict[str, Any]], ThreadSummaryPosition | None]:
+        """Page newest first within each group, with pinned Project discussions first."""
         # Project JSON fields in SQL: completed run logs never cross the wire.
         fields = (
             "daemonNodeId",
@@ -364,6 +368,7 @@ class SessionReadRows(SessionStoreState):
             self.sessions.c.version,
             self.sessions.c.updated_at.label(_POSITION_COLUMN),
             *(self.sessions.c.snapshot[field].label(field) for field in fields),
+            self.sessions.c.snapshot["discussionPinned"].as_boolean().label("discussionPinned"),
             # The newest run is the live one; a Task's workflow started again
             # appends its run to the same thread.
             literal_column(
@@ -386,15 +391,18 @@ class SessionReadRows(SessionStoreState):
             ))
         page_size = max(1, limit)
         # One extra row says whether another page exists without a COUNT.
-        statement = self._summary_page_scope(statement, before).limit(page_size + 1)
+        statement = self._summary_page_scope(statement, before, thread_filter).limit(page_size + 1)
         with store_transaction(self.engine) as conn:
             rows = conn.execute(statement).mappings().all()
         page = rows[:page_size]
-        position = (
-            (page[-1][_POSITION_COLUMN], str(page[-1]["id"]))
-            if len(rows) > page_size
-            else None
-        )
+        position: ThreadSummaryPosition | None = None
+        if len(rows) > page_size:
+            last = page[-1]
+            record_position = (last[_POSITION_COLUMN], str(last["id"]))
+            position = (
+                (*record_position, last["discussionPinned"] is True)
+                if thread_filter and thread_filter.kind == "chats" else record_position
+            )
         hidden = {"version", _POSITION_COLUMN}
         return [
             with_project_lead_discussion({

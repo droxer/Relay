@@ -62,6 +62,12 @@
   padding: 0 0 var(--sp-2);
 }
 
+.project-discussions [data-tone="pinned"] .conversation-group-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 .project-discussions-toolbar > .list-filter-search {
   flex: 1 1 14rem;
   min-height: var(--control-h-sm);
@@ -123,9 +129,45 @@
 }
 
 .project-discussions .conversation-row-actions {
-  top: var(--sp-3);
-  right: auto;
-  inset-inline-end: var(--sp-4);
+  position: static;
+  flex: none;
+  align-self: center;
+  padding-inline-end: var(--sp-2);
+}
+
+.project-discussions .conversation-row:hover .conversation-stamp,
+.project-discussions .conversation-row:focus-within .conversation-stamp {
+  opacity: 1;
+}
+
+.project-discussions-select-all,
+.discussion-row-selection {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-inline-start: var(--sp-4);
+}
+
+.project-discussions-select-all {
+  min-height: var(--control-h-sm);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.discussion-row-selection {
+  flex: none;
+  min-width: calc(var(--sp-4) * 2);
+}
+
+.discussion-row-selection + .conversation-row-inner {
+  padding-inline-start: var(--sp-2);
+}
+
+.project-discussions .task-selection-bar {
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
 }
 
 .project-discussions-more {

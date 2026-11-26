@@ -266,6 +266,11 @@ Project. The route also accepts archived Projects. Add `q` to search titles and 
 Set `kind=chats` for Threads without visible Task links or `kind=tasks` for
 Threads with visible Task links. Both filters apply before pagination. Project
 pages with `include=activity` omit `homeTaskNeedsYou`.
+Project chat summaries return `discussionPinned` and page through pinned
+discussions first, with newest updates first within each group. The Project
+owner can call `PUT /api/v1/threads/{id}/discussion-pin` with
+`{"pinned": true}` or `{"pinned": false}`. The call returns 204 and preserves
+the discussion's activity timestamp.
 
 `PATCH /api/v1/auth/preferences` takes any of `theme`, `language`,
 `onboarding`, and `homeSnoozes`, and answers `{user}`. `homeSnoozes` is

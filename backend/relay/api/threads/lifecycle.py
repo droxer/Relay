@@ -10,6 +10,7 @@ from ...collaboration.live_queue import send_live_message
 from ...collaboration.queue import change_queue, stop_and_send
 from ...core.computer_identity import computer_id as resolve_computer_id
 from ...execution.session_deletion import delete_thread
+from ...persistence.events import relay_event
 from ...core.daemon_records import (
     TERMINAL_CLAIM_EXPIRES_STATE_KEY,
     TERMINAL_CLAIM_ID_STATE_KEY,
@@ -37,6 +38,7 @@ from ..bodies import JsonBodyDep, assignment_list, string_field
 from ..deps import AppContext, AppContextDep
 from ..projects.access import (
     ensure_project_node_matches,
+    owned_workspace_project,
     project_for_owner,
     project_session_fields,
 )
@@ -322,6 +324,38 @@ def update_session(
             raise HTTPException(400, "archived currently supports only true.")
         result = controller.archive_session(session_id)
     return result
+
+
+@router.put("/threads/{session_id}/discussion-pin", status_code=204)
+def set_discussion_pin(
+    session_id: str, request: Request, ctx: AppContextDep, *, _request_body: JsonBodyDep,
+) -> Response:
+    actor = request_actor(request, ctx.auth_store)
+    pinned = _request_body.get("pinned")
+    if not isinstance(pinned, bool) or len(_request_body) != 1:
+        raise HTTPException(400, "pinned must be a boolean.")
+    store = ctx.session_store
+    try:
+        with store.mutation_scope(session_id):
+            session = get_session_header_for_actor(store, session_id, actor)
+            project_id = session.get("projectId")
+            if not project_id:
+                raise HTTPException(409, "Only Project discussions can be pinned.")
+            owned_workspace_project(ctx, actor, project_id)
+            if session.get("deletionRequestedAt"):
+                raise HTTPException(409, "The discussion is pending deletion.")
+            thread_id = session["id"]
+            links, _ = ctx.task_store.thread_list_task_links([thread_id], actor["userId"])
+            if links:
+                raise HTTPException(409, "Only Project discussions can be pinned.")
+            if bool(session.get("discussionPinned")) != pinned:
+                store.append_event(
+                    thread_id, relay_event("session.discussion_pin_changed", thread_id, {"pinned": pinned}),
+                    hydrate_events=False,
+                )
+    except KeyError:
+        raise HTTPException(404, "Session not found.") from None
+    return Response(status_code=204)
 
 
 @router.post("/threads/{session_id}/cancellations", status_code=202)

@@ -318,6 +318,13 @@ export function renameSession(sessionId: string, title: string, token?: string):
   });
 }
 
+export function setDiscussionPin(sessionId: string, pinned: boolean): Promise<void> {
+  return apiJson<void>(`/threads/${encodeURIComponent(sessionId)}/discussion-pin`, {
+    method: "PUT",
+    body: { pinned },
+  });
+}
+
 export async function uploadThreadImage(file: File, signal?: AbortSignal): Promise<import("relay-core").ThreadImageAttachment> {
   // WebKit can send an empty body for picker-backed Files (bug 319985).
   // Send buffered bytes directly, bypassing File/Blob resolution in the

@@ -157,6 +157,7 @@ type ThreadsViewProps = {
   onNewThread: (projectId?: string | null) => void;
   onRenameThread: (session: RelaySession) => void;
   onCloseThread: (sessionId: string, title?: string) => void;
+  onDeleteDiscussions: (ids: readonly string[]) => Promise<readonly string[]>;
   activeAgent: AgentName;
   logicalAgents: UserAgent[];
   /** Who recovery (rerun / handoff) may reach — a team thread's own roster. */
@@ -279,6 +280,7 @@ export function ThreadsView({
   onNewThread,
   onRenameThread,
   onCloseThread,
+  onDeleteDiscussions,
   activeAgent,
   logicalAgents,
   selectableLogicalAgents,
@@ -622,6 +624,7 @@ export function ThreadsView({
             onNewThread={onNewThread}
             onRenameThread={onRenameThread}
             onCloseThread={onCloseThread}
+            onDeleteDiscussions={onDeleteDiscussions}
             onDeleted={() => onSelectProject(null)}
             onBack={() => onSelectProject(null)}
           />

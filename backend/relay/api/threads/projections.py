@@ -80,6 +80,7 @@ def session_brief_item(session: dict[str, Any]) -> dict[str, Any]:
         "teamId": session.get("teamId"),
         "projectId": session.get("projectId"),
         **({"projectLeadDiscussion": True} if session.get("projectLeadDiscussion") else {}),
+        **({"discussionPinned": bool(session.get("discussionPinned"))} if session.get("projectId") else {}),
         "workspaceLayout": session.get("workspaceLayout"),
         "workspaceSubpath": session.get("workspaceSubpath"),
         "computerId": session.get("computerId"),

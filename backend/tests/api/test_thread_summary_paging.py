@@ -6,7 +6,7 @@ from sqlalchemy import event, select, update
 
 from relay.app import create_app
 from relay.core.ids import new_database_id
-from relay.persistence.events import relay_task_event
+from relay.persistence.events import relay_event, relay_task_event
 from relay.sessions.controller import SessionController
 from test_tasks import _bootstrap_admin, _create_account, _login
 from user_ids import user_id
@@ -162,6 +162,74 @@ def test_thread_records_page_without_loading_transcripts(paged_threads):
         assert not any("FROM session_events" in sql for sql in statements)
     finally:
         event.remove(store.engine, "before_cursor_execute", capture)
+
+
+def test_project_discussion_pins_persist_and_sort_before_paging(paged_threads):
+    client, _alice, _created = paged_threads
+    app = client.app
+    owner = user_id("alice")
+    project = app.state.project_store.create_project(owner, {"name": "Launch", "computerId": "local", "members": []})
+    controller = SessionController(app.state.session_store, owner_user_id=owner, project_id=project["id"])
+    older = controller.create_session("Old release discussion", ["human"])
+    newer = controller.create_session("New release discussion", ["human"])
+    latest = controller.create_session("Latest discussion", ["human"])
+    for offset, thread in enumerate((older, newer, latest)):
+        thread["updatedAt"] = f"2026-01-01T00:00:0{offset}Z"
+        app.state.session_store.append_event(thread["id"], relay_event("session.renamed", thread["id"], {
+            "title": thread["taskGoal"], "timestamp": thread["updatedAt"],
+        }))
+    path = "/api/v1/threads"
+    params = {"projectId": project["id"], "view": "summary", "kind": "chats", "limit": 1}
+    before = client.get(path, params=params)
+    assert before.json()["sessions"][0]["id"] == latest["id"]
+
+    for thread in (older, newer, older):
+        response = client.put(f'{path}/{thread["id"]}/discussion-pin', json={"pinned": True})
+        assert response.status_code == 204, response.text
+    first = client.get(path, params=params, headers={"If-None-Match": before.headers["etag"]})
+    assert first.status_code == 200
+    assert first.json()["sessions"][0]["id"] == newer["id"]
+    assert first.json()["sessions"][0]["discussionPinned"] is True
+    second = client.get(path, params={**params, "cursor": first.json()["nextCursor"]}).json()
+    assert second["sessions"][0]["id"] == older["id"]
+    assert second["sessions"][0]["updatedAt"] == older["updatedAt"]
+    third = client.get(path, params={**params, "cursor": second["nextCursor"]}).json()
+    assert third["sessions"][0]["id"] == latest["id"]
+    assert third["nextCursor"] is None
+    assert client.get(path, params={**params, "q": "old"}).json()["sessions"][0]["id"] == older["id"]
+
+    pin_path = f'{path}/{older["id"]}/discussion-pin'
+    detail = app.state.session_store.get_session(older["id"])
+    assert sum(e["type"] == "session.discussion_pin_changed" for e in detail["events"]) == 1
+    assert client.put(pin_path, json={"pinned": False}).status_code == 204
+    rows = client.get(path, params={**params, "limit": 3}).json()["sessions"]
+    assert [row["id"] for row in rows] == [newer["id"], latest["id"], older["id"]]
+    assert rows[-1]["discussionPinned"] is False
+
+
+def test_project_discussion_pins_require_a_project_owned_discussion(paged_threads):
+    client, _alice, created = paged_threads
+    app = client.app
+    owner = user_id("alice")
+    project = app.state.project_store.create_project(owner, {"name": "Launch", "computerId": "local", "members": []})
+    controller = SessionController(app.state.session_store, owner_user_id=owner, project_id=project["id"])
+    discussion = controller.create_session("Release discussion", ["human"])["id"]
+    linked = controller.create_session("Task run", ["human"])["id"]
+    task_store = app.state.task_store
+    task = task_store.create_task({"title": "Release", "ownerUserId": owner, "projectId": project["id"]})
+    task_store.link_session(task["id"], linked)
+    foreign = SessionController(app.state.session_store, owner_user_id=user_id("bob"), project_id=project["id"])
+    foreign_id = foreign.create_session("Private discussion", ["human"])["id"]
+
+    def pin(thread_id, value=True):
+        return client.put(f"/api/v1/threads/{thread_id}/discussion-pin", json={"pinned": value})
+
+    assert pin(discussion, "true").status_code == 400
+    assert pin(created[0]).status_code == 409
+    assert pin(linked).status_code == 409
+    assert pin(foreign_id).status_code == 403
+    client.cookies.clear()
+    assert pin(discussion).status_code == 401
 
 
 def test_thread_summary_reads_linked_computer_liveness_once(paged_threads):

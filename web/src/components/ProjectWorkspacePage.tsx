@@ -88,6 +88,7 @@ export function ProjectWorkspacePage({
   onNewThread,
   onRenameThread,
   onCloseThread,
+  onDeleteDiscussions,
   onDeleted,
   onBack,
 }: {
@@ -103,6 +104,7 @@ export function ProjectWorkspacePage({
   onNewThread: (projectId: string) => void;
   onRenameThread: (session: RelaySession) => void;
   onCloseThread: (sessionId: string, title?: string) => void;
+  onDeleteDiscussions: (ids: readonly string[]) => Promise<readonly string[]>;
   onDeleted: () => void;
   onBack: () => void;
 }) {
@@ -381,6 +383,7 @@ export function ProjectWorkspacePage({
             onNewThread={canPlan ? () => onNewThread(project.id) : undefined}
             onRenameThread={onRenameThread}
             onCloseThread={onCloseThread}
+            onDeleteDiscussions={onDeleteDiscussions}
             onDiscussWithLead={canDiscussWithLead ? leadDiscussion.discuss : undefined}
             discussing={leadDiscussion.pending}
           />

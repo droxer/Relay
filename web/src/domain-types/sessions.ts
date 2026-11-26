@@ -33,6 +33,7 @@ export interface SessionSummary {
   teamId?: string;
   projectId?: string;
   projectLeadDiscussion?: RelaySession["projectLeadDiscussion"];
+  discussionPinned?: RelaySession["discussionPinned"];
   workspaceLayout?: "node-root" | "thread" | "project" | "task";
   workspaceSubpath?: string;
   computerId?: string;

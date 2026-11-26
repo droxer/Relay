@@ -33,6 +33,10 @@ them, including queued follow-ups. After a handover, the next message to the
 role reaches the new Lead in the same Thread, with its conversation history.
 The owner can still select or mention individual Agents.
 
+In the Project's **Discussions** tab, the row menu lets the owner pin, unpin,
+or delete a discussion. **Select** lets them delete several discussions with
+one confirmation. If a deletion fails, that discussion stays selected for retry.
+
 The role reads live Project records, updates the backlog, assigns work, reviews
 evidence, starts and stops Task execution, manages Automations, and saves
 reusable Workflows through Relay MCP. The Lead can also stage batch Task changes.
