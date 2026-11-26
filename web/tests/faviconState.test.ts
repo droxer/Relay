@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { FAVICON_INK, FAVICON_PATHS, faviconState, faviconSvg } from "../src/lib/faviconState.js";
+import { FAVICON_INK, FAVICON_INK_LIGHT, FAVICON_PATHS, faviconState, faviconSvg } from "../src/lib/faviconState.js";
 import type { ThreadItem } from "../src/lib/threads.js";
 import type { RelaySession } from "../src/types.js";
 
@@ -77,17 +77,24 @@ describe("favicon mark", () => {
       const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
       return (hi + 0.05) / (lo + 0.05);
     };
-    assert.ok(contrast(FAVICON_INK.unlit, FAVICON_INK.canvas) >= 12);
-    for (const hue of [FAVICON_INK.unlit, FAVICON_INK.action, FAVICON_INK.live]) {
-      assert.ok(contrast(hue, FAVICON_INK.canvas) >= 4.5, `${hue} on ${FAVICON_INK.canvas}`);
+    for (const ink of [FAVICON_INK, FAVICON_INK_LIGHT]) {
+      assert.ok(contrast(ink.unlit, ink.canvas) >= 12, `${ink.unlit} on ${ink.canvas}`);
+      for (const hue of [ink.unlit, ink.action, ink.live]) {
+        assert.ok(contrast(hue, ink.canvas) >= 4.5, `${hue} on ${ink.canvas}`);
+      }
     }
   });
 
-  it("draws one register, whatever the viewer's color scheme", () => {
+  it("adapts to the viewer's color scheme with a dark default", () => {
     let dir = path.dirname(fileURLToPath(import.meta.url));
     while (!existsSync(path.join(dir, "web", "public", "favicon.svg"))) dir = path.dirname(dir);
     const shipped = readFileSync(path.join(dir, "web", "public", "favicon.svg"), "utf8");
-    assert.doesNotMatch(shipped, /prefers-color-scheme/);
+    assert.match(shipped, /prefers-color-scheme: light/);
+    for (const hex of [FAVICON_INK_LIGHT.canvas, FAVICON_INK_LIGHT.outline, FAVICON_INK_LIGHT.unlit, FAVICON_INK_LIGHT.action]) {
+      assert.ok(shipped.includes(hex), `favicon.svg light register must include ${hex}`);
+      assert.ok(faviconSvg("idle").includes(hex), `faviconSvg light register must include ${hex}`);
+    }
+    assert.ok(faviconSvg("running").includes(FAVICON_INK_LIGHT.live));
     const geometry = (svg: string) => [...svg.matchAll(/<path [^>]*d="([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(geometry(faviconSvg("idle")), geometry(shipped));
     assert.deepEqual(geometry(shipped), [FAVICON_PATHS.top, FAVICON_PATHS.baton, FAVICON_PATHS.bottom]);
@@ -96,6 +103,10 @@ describe("favicon mark", () => {
     assert.ok(shipped.includes(`fill="${FAVICON_INK.canvas}"`));
     const tile = (svg: string) => svg.match(/<rect [^>]*\/>/)?.[0];
     assert.equal(tile(faviconSvg("idle")), tile(shipped));
+    assert.deepEqual(
+      [...shipped.matchAll(/<path class="(\w+)"/g)].map((m) => m[1]),
+      [...faviconSvg("idle").matchAll(/<path class="(\w+)"/g)].map((m) => m[1]),
+    );
   });
 
   it("keeps FAVICON_INK and offline.html aligned with palette.css dark/light registers", () => {
@@ -112,6 +123,12 @@ describe("favicon mark", () => {
     assert.equal(FAVICON_INK.action, tok(darkReg, "--brand-lead"));
     assert.equal(FAVICON_INK.live, tok(darkReg, "--live"));
     assert.equal(FAVICON_INK.unlit, tok(darkReg, "--ink-1"));
+
+    assert.equal(FAVICON_INK_LIGHT.canvas, tok(lightReg, "--surface-0"));
+    assert.equal(FAVICON_INK_LIGHT.outline, tok(lightReg, "--line-1"));
+    assert.equal(FAVICON_INK_LIGHT.action, tok(lightReg, "--brand-lead"));
+    assert.equal(FAVICON_INK_LIGHT.live, tok(lightReg, "--live"));
+    assert.equal(FAVICON_INK_LIGHT.unlit, tok(lightReg, "--ink-1"));
 
     const offline = readFileSync(path.join(dir, "web", "public", "offline.html"), "utf8");
     for (const hex of [

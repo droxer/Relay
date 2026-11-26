@@ -112,6 +112,10 @@
      it to --signature: the focus ring and the selected-item bar.
      It is never a status colour or link. */
   --brand-lead: #c8966e;
+  /* Burnished bronze for an inverted --action plate (chalk in dark, near-black
+     in light): mirrors the opposite register's --brand-lead so RelayMark keeps
+     AA contrast on .landing-tile-wordmark in both themes. */
+  --brand-lead-on-action: #845734;
 
   /* Status ink retains green, gold and crimson meanings. Every tone clears
      the small-text contrast floor on all content and navigation planes. */
@@ -846,6 +850,7 @@ html[data-theme="light"] {
   --action-soft: color-mix(in srgb, #181817 6%, transparent);
   --on-action: #ffffff;
   --brand-lead: #845734; /* burnished bronze, deepened for paper (5.19:1 min) */
+  --brand-lead-on-action: #c8966e; /* dark-register bronze for the near-black --action plate */
 
   /* Light status — deepened until each clears 4.5:1 as small text on --surface-2. */
   --ok: #12692f;   /* success */
