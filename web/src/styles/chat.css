@@ -644,14 +644,13 @@
   word-break: break-word;
 }
 
-/* Addressed `@Agent` tokens inside a sent user turn: semibold emphasis on a
-   subtle ink wash so routing intent stands out at a glance without adding hue. */
+/* Addressed `@Agent` tokens inside a sent turn: semibold emphasis on a
+   subtle borderless ink wash so routing intent stands out without adding hue. */
 .msg-mention {
   display: inline;
   padding: 0 var(--sp-1-5);
   border-radius: var(--r-1);
   background: var(--control-fill);
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
   color: var(--ink-1);
   font-weight: 600;
   box-decoration-break: clone;
@@ -665,14 +664,11 @@
   line-height: inherit;
   vertical-align: baseline;
   cursor: pointer;
-  transition:
-    background var(--t-fast) var(--ease),
-    box-shadow var(--t-fast) var(--ease);
+  transition: background var(--t-fast) var(--ease);
 }
 
 .msg-mention-interactive:hover {
   background: var(--control-fill-hover);
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-drag);
 }
 
 /* An automation run's opening turn (AutomationOpening). Nobody typed it, so
