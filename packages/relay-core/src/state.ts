@@ -13,8 +13,9 @@ export interface ProjectSetupBrief {
   file: string;
   intent: string;
   goal?: string;
-  candidates: Array<{ agentId: string; name: string; executorKind?: string; defaultRole?: string; personality?: string }>;
+  candidates: Array<{ agentId: string; name: string; executorKind?: string; defaultRole?: string; roleLevel?: string; personality?: string }>;
   roles: string[];
+  roleLevels?: string[];
   previousProposal?: Record<string, unknown>;
   /** `plan` drafts only the next tasks of a project that has its crew. */
   mode?: "setup" | "plan";
@@ -61,6 +62,8 @@ export interface AgentState {
   runtime_session_id?: string;
   /** The job this run is doing within its team, e.g. "reviewer". */
   agent_role?: string;
+  /** Optional seniority level for the role, e.g. "junior" or "senior". */
+  agent_role_level?: string;
   /** Concrete scope owned by this member within the shared team goal. */
   assignment_brief?: string;
   /** The project this run works in: name, goal, crew, and standing context,

@@ -3,12 +3,13 @@
  * as one draft, saved together in one PATCH. Every field compares trimmed so
  * stray whitespace never reads as an unsaved change.
  */
-import type { AgentRole } from "../types.ts";
+import type { AgentRole, AgentRoleLevel } from "../types.ts";
 import { agentModel, modelPolicyFor } from "./agentModels.ts";
 
 export interface AgentProfileDraft {
   name: string;
   role: AgentRole | "";
+  roleLevel: AgentRoleLevel | "";
   /** The pinned model id, or "" for the runtime default. */
   model: string;
   instructions: string;
@@ -17,6 +18,7 @@ export interface AgentProfileDraft {
 export interface AgentProfilePatch {
   displayName?: string;
   defaultRole?: AgentRole;
+  roleLevel?: AgentRoleLevel | null;
   modelPolicy?: { model?: string };
   instructions?: string;
 }
@@ -24,6 +26,7 @@ export interface AgentProfilePatch {
 interface DraftSource {
   displayName: string;
   defaultRole?: AgentRole | null;
+  roleLevel?: AgentRoleLevel | null;
   modelPolicy?: Record<string, unknown>;
   instructions?: string | null;
 }
@@ -32,6 +35,7 @@ export function profileDraftOf(agent: DraftSource): AgentProfileDraft {
   return {
     name: agent.displayName,
     role: agent.defaultRole ?? "",
+    roleLevel: agent.roleLevel ?? "",
     model: agentModel(agent),
     instructions: agent.instructions ?? "",
   };
@@ -45,6 +49,7 @@ export function profileDraftPatch(saved: AgentProfileDraft, draft: AgentProfileD
   return {
     ...(name !== saved.name.trim() ? { displayName: name } : {}),
     ...(draft.role && draft.role !== saved.role ? { defaultRole: draft.role } : {}),
+    ...(draft.roleLevel !== saved.roleLevel ? { roleLevel: draft.roleLevel || null } : {}),
     ...(model !== saved.model.trim() ? { modelPolicy: modelPolicyFor(model) } : {}),
     ...(instructions !== saved.instructions.trim() ? { instructions } : {}),
   };

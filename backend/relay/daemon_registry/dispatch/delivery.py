@@ -13,7 +13,7 @@ from ...collaboration.models import (
     project_id_for_task_handoff,
 )
 from ...core.ids import new_database_id, new_relay_id, now_iso
-from ...core.models import AGENT_NAMES
+from ...core.models import AGENT_NAMES, AGENT_ROLE_LEVELS
 from ...core.runtime_status import executor_not_ready_message
 from ...core.next_steps import NEXT_STEPS_RELATIVE_PATH
 from ...core.project_roles import project_member_ids
@@ -331,6 +331,9 @@ class AssignmentDeliveryMixin(RegistryState):
         role = effective_role_for_assignment(sandbox, assignment)
         if role:
             state = {**state, "agent_role": role}
+        role_level = assignment.get("roleLevel")
+        if role_level in AGENT_ROLE_LEVELS:
+            state = {**state, "agent_role_level": role_level}
         workspace_task = self._workspace_task(run_request, session_snapshot)
         task_yolo = False
         thread_owner = session_snapshot.get("ownerUserId")

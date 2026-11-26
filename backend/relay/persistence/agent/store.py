@@ -17,7 +17,7 @@ from ...core.agent_delegation import delegation_agent_ids
 from ...core.computer_identity import is_provisional_computer_id
 from ...core.ids import new_database_id, now_iso
 from ...core.model_policy import normalize_model_policy, policy_model
-from ...core.models import AGENT_NAMES, AGENT_ROLES
+from ...core.models import AGENT_NAMES, AGENT_ROLE_LEVELS, AGENT_ROLES
 from ...core.preset_avatars import current_preset_avatar_url, validate_profile_image_url
 from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
@@ -33,6 +33,7 @@ AGENT_PATCH_FIELDS = frozenset(
         "toolPolicy",
         "modelPolicy",
         "defaultRole",
+        "roleLevel",
         "enabled",
         "compatibilityKey",
         "delegationAgentIds",
@@ -479,6 +480,9 @@ def _new_agent(
         raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
     if default_role not in AGENT_ROLES:
         raise ValueError(f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.")
+    role_level = _optional_string(payload, "roleLevel")
+    if role_level is not None and role_level not in AGENT_ROLE_LEVELS:
+        raise ValueError(f"roleLevel must be one of: {', '.join(AGENT_ROLE_LEVELS)}.")
     agent_id = new_database_id()
     profile_image_url = validate_profile_image_url(
         "agents", agent_id, payload.get("profileImageUrl")
@@ -490,6 +494,7 @@ def _new_agent(
         "displayName": display_name,
         "executorKind": executor_kind,
         "defaultRole": default_role,
+        **({"roleLevel": role_level} if role_level else {}),
         **(
             {"computerId": _optional_string(payload, "computerId")}
             if _optional_string(payload, "computerId")
@@ -573,6 +578,16 @@ def _normalize_agent_runtime_patch(patch: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(role, str) or role.strip() not in AGENT_ROLES:
             raise ValueError(f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.")
         normalized["defaultRole"] = role.strip()
+    if "roleLevel" in patch:
+        level = patch["roleLevel"]
+        if level is None or (isinstance(level, str) and not level.strip()):
+            normalized["roleLevel"] = None
+        elif isinstance(level, str) and level.strip() in AGENT_ROLE_LEVELS:
+            normalized["roleLevel"] = level.strip()
+        else:
+            raise ValueError(
+                f"roleLevel must be one of: {', '.join(AGENT_ROLE_LEVELS)}."
+            )
     if "instructions" in patch:
         normalized["instructions"] = (
             patch["instructions"].strip()

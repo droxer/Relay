@@ -3,7 +3,7 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AGENT_ROLE_OPTIONS } from "../types";
-import type { AgentName, AgentPlacementRoute, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
+import type { AgentName, AgentPlacementRoute, AgentRoleLevel, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
 import { teamMemberConfigPatch } from "../lib/teamForm";
 import { AgentMetaLine } from "./AgentMetaLine";
 import { AgentStateBadge } from "./AgentStateBadge";
@@ -16,6 +16,7 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RoleSelectItems } from "./agents/RoleSelectItems";
+import { AgentRoleLevelSelect } from "./agents/AgentRoleLevelSelect";
 
 type TeamCardMember = {
   id: string;
@@ -25,6 +26,7 @@ type TeamCardMember = {
   enabled?: boolean;
   availability?: LogicalAgentAvailability;
   defaultRole?: string;
+  roleLevel?: AgentRoleLevel | null;
   placements?: AgentPlacementRoute[];
 };
 
@@ -61,6 +63,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
 }) {
   const { t } = useTranslation();
   const role = effectiveRoleOf(member, config);
+  const roleLevel = config.roleLevel ?? member.roleLevel;
   const availability = member.enabled === false ? "offline" : member.availability;
   return (
     <header className="team-work-member-head">
@@ -75,7 +78,14 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
         <span className="team-work-member-name">
           <strong id={nameId}>{member.displayName}</strong>
           {lead ? <LeadBadge /> : null}
-          {role ? <span className="team-work-member-role">{t(`team_work.role_${role}`)}</span> : null}
+          {role ? (
+            <span className="team-work-member-role">
+              {[
+                t(`team_work.role_${role}`),
+                roleLevel ? t(`role_levels.${roleLevel}`, { defaultValue: roleLevel }) : null,
+              ].filter(Boolean).join(" · ")}
+            </span>
+          ) : null}
           {member.enabled === false ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
         </span>
         <AgentMetaLine executorKind={member.executorKind} placements={member.placements ?? []} showComputers={false} />
@@ -119,6 +129,14 @@ function TeamMemberContractFields({ config, lead, idBase, disabled, onChange }: 
             <RoleSelectItems label={(role) => t(`team_work.role_${role}`)} />
           </SelectContent>
         </Select>
+      </Field>
+      <Field label={t("role_levels.label")} labelId={`${idBase}-role-level`} optional={t("admin.v2.optional")} wrapper="div">
+        <AgentRoleLevelSelect
+          value={config.roleLevel ?? ""}
+          onChange={(roleLevel) => update({ roleLevel: roleLevel || undefined })}
+          labelledBy={`${idBase}-role-level`}
+          disabled={disabled}
+        />
       </Field>
       <Field label={t("team_work.responsibility")}>
         <Textarea

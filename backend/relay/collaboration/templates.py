@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from ..core.role_charters import ROLE_CHARTERS
+from ..core.role_charters import ROLE_CHARTERS, ROLE_LEVEL_CHARTERS
 from .styles import StyleSlots, fill_build_review_slots, pipeline_order
 
 # Who takes a step: the Build → Review builder or reviewer slot, or every
@@ -179,6 +179,9 @@ def _template_turns(
             own_role = agent.get("defaultRole")
             closing = step.closing and index == last
             brief = step.brief if step.brief is not None else role_brief(own_role)
+            level_note = ROLE_LEVEL_CHARTERS.get(agent.get("roleLevel") or "")
+            if level_note:
+                brief = f"{brief} {level_note}"
             turns.append(
                 StyleTurn(
                     agent=agent,

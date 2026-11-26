@@ -56,6 +56,11 @@ def with_member_roles(
         role = agent.get("defaultRole") if agent else None
         if not role:
             continue
+        role_level = agent.get("roleLevel") if agent else None
         base = config if isinstance(config, dict) else {}
-        result[agent_id] = {**base, "role": role}
+        result[agent_id] = {
+            **base,
+            "role": role,
+            **({"roleLevel": role_level} if role_level and "roleLevel" not in base else {}),
+        }
     return result

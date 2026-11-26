@@ -24,16 +24,22 @@ AGENT_NAMES: tuple[str, ...] = get_args(AgentName)
 # Pipeline round takes them in.
 AGENT_ROLES: tuple[str, ...] = (
     "researcher",
+    "product_manager",
+    "data",
     "planner",
     "designer",
     "implementer",
     "fixer",
     "tester",
+    "security",
+    "performance",
     "writer",
     "devops",
     "operations",
     "reviewer",
 )
+AGENT_ROLE_LEVELS: tuple[str, ...] = ("junior", "senior")
+AgentRoleLevel = Literal["junior", "senior"]
 # Version 2 adds ordered run.output.batch delivery. Keep version 1 accepted so
 # existing daemons can finish upgrading with their legacy run.output events.
 DAEMON_NODE_PROTOCOL_VERSION = 2

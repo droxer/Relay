@@ -46,7 +46,7 @@ router = APIRouter()
 # different computer or runtime is a different coworker, so it should be a new
 # agent, not an edit. The role is the agent's own default; a team may assign
 # its member a different one.
-AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy", "defaultRole", "delegationAgentIds"})
+AGENT_META_FIELDS = frozenset({"displayName", "instructions", "modelPolicy", "defaultRole", "roleLevel", "delegationAgentIds"})
 
 
 @router.post("/agents", status_code=201)

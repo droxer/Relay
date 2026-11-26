@@ -1,4 +1,4 @@
-import type { AgentName, AgentRole, CollaborationStyle, DaemonAgentSkill, WorkflowStepDefinition } from "relay-core";
+import type { AgentName, AgentRole, AgentRoleLevel, CollaborationStyle, DaemonAgentSkill, WorkflowStepDefinition } from "relay-core";
 
 export type LogicalAgentAvailability = "ready" | "busy" | "pending" | "offline";
 
@@ -38,15 +38,24 @@ export type AgentPlacementRoute = Pick<AgentPlacement,
     keeps this list honest. */
 export const AGENT_ROLE_OPTIONS: readonly AgentRole[] = [
   "researcher",
+  "product_manager",
+  "data",
   "planner",
   "designer",
   "implementer",
   "fixer",
   "tester",
+  "security",
+  "performance",
   "writer",
   "devops",
   "operations",
   "reviewer",
+];
+
+export const AGENT_ROLE_LEVEL_OPTIONS: readonly AgentRoleLevel[] = [
+  "junior",
+  "senior",
 ];
 
 /** Why an agent cannot currently run, derived live on every read — never
@@ -73,6 +82,8 @@ export interface UserAgent {
   /** The job this agent does on a team, e.g. "reviewer". Shapes its prompt and,
       for a reviewer, makes it review a round instead of redoing the work. */
   defaultRole?: AgentRole;
+  /** Optional seniority level for the role ("junior" or "senior"). */
+  roleLevel?: AgentRoleLevel | null;
   skillPolicy: Record<string, unknown>;
   toolPolicy: Record<string, unknown>;
   modelPolicy: Record<string, unknown>;
@@ -106,6 +117,7 @@ export interface CreateAgentInput {
   computerId: string;
   executorKind: AgentName;
   defaultRole: AgentRole;
+  roleLevel?: AgentRoleLevel;
   displayName?: string;
   instructions?: string;
   /** Omitted (or `{}`) runs the runtime's default model. */
@@ -143,6 +155,7 @@ export interface DefaultAgentOffer {
 
 export interface TeamMemberSummary {
   defaultRole?: AgentRole;
+  roleLevel?: AgentRoleLevel | null;
   id: string;
   displayName: string;
   profileImageUrl?: string | null;
@@ -162,6 +175,7 @@ export interface TeamMemberChoicesResponse {
 
 export interface TeamMemberConfig {
   role?: AgentRole;
+  roleLevel?: AgentRoleLevel;
   responsibility?: string;
   required?: boolean;
   participation?: "always" | "on_request";

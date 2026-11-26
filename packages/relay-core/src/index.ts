@@ -286,6 +286,7 @@ export {
   nowIso,
   relayEvent,
   type AgentRole,
+  type AgentRoleLevel,
   type AgentRun,
   type HumanDecision,
   type HumanDecisionKind,

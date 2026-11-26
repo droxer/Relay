@@ -8,17 +8,31 @@ const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
 // Mirrors ROLE_STAGE and SPECIALIST_ROLES in backend/relay/collaboration/styles.py.
 const STAGE: Record<string, number> = {
   researcher: 0,
+  product_manager: 0,
+  data: 0,
   planner: 1,
   designer: 2,
   implementer: 3,
   fixer: 3,
   tester: 4,
+  security: 4,
+  performance: 4,
   writer: 4,
   devops: 4,
   operations: 4,
   reviewer: 5,
 };
-const SPECIALIST_ROLES = new Set(["researcher", "designer", "writer", "devops", "operations"]);
+const SPECIALIST_ROLES = new Set([
+  "researcher",
+  "product_manager",
+  "data",
+  "designer",
+  "security",
+  "performance",
+  "writer",
+  "devops",
+  "operations",
+]);
 const stageOf = (role: string | undefined) => STAGE[role ?? ""] ?? STAGE.implementer;
 export interface SlotMember { id: string; role?: string; onRequest?: boolean }
 type Slot = { slot: "builder" | "reviewer" | "member" | "lead"; memberId: string };

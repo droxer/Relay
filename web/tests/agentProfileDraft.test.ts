@@ -12,7 +12,7 @@ const agent = {
 describe("agent profile draft", () => {
   it("starts from the saved agent and has nothing to save", () => {
     const saved = profileDraftOf(agent);
-    assert.deepEqual(saved, { name: "Ada", role: "implementer", model: "gpt-5", instructions: "Build things" });
+    assert.deepEqual(saved, { name: "Ada", role: "implementer", roleLevel: "", model: "gpt-5", instructions: "Build things" });
     assert.deepEqual(profileDraftPatch(saved, saved), {});
     assert.equal(profileDraftDirty(saved, saved), false);
   });
@@ -25,12 +25,18 @@ describe("agent profile draft", () => {
 
   it("patches only the changed fields, trimmed, in one request", () => {
     const saved = profileDraftOf(agent);
-    const draft = { ...saved, name: " Ada Two ", role: "reviewer" as const, instructions: "  Review  " };
+    const draft = { ...saved, name: " Ada Two ", role: "reviewer" as const, roleLevel: "senior" as const, instructions: "  Review  " };
     assert.deepEqual(profileDraftPatch(saved, draft), {
       displayName: "Ada Two",
       defaultRole: "reviewer",
+      roleLevel: "senior",
       instructions: "Review",
     });
+  });
+
+  it("clears a role level back to standard with null", () => {
+    const saved = profileDraftOf({ ...agent, roleLevel: "junior" as const });
+    assert.deepEqual(profileDraftPatch(saved, { ...saved, roleLevel: "" }), { roleLevel: null });
   });
 
   it("clears a pinned model back to the runtime default", () => {
@@ -40,7 +46,7 @@ describe("agent profile draft", () => {
 
   it("treats a missing role, model, and instructions as empty", () => {
     const saved = profileDraftOf({ displayName: "Bo" });
-    assert.deepEqual(saved, { name: "Bo", role: "", model: "", instructions: "" });
+    assert.deepEqual(saved, { name: "Bo", role: "", roleLevel: "", model: "", instructions: "" });
     // An agent without a role keeps none until one is picked.
     assert.deepEqual(profileDraftPatch(saved, saved), {});
   });

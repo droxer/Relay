@@ -89,6 +89,7 @@ function ProjectMemberRow({
   const name = agent?.displayName || t("project.member_unavailable");
   const meta = [
     t(`project.roles.${member.role}`),
+    member.roleLevel ? t(`role_levels.${member.roleLevel}`, { defaultValue: member.roleLevel }) : null,
     agent ? agentLabel(agent.executorKind) : null,
   ].filter(Boolean).join(" · ");
   const state = !available

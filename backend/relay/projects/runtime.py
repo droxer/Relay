@@ -120,7 +120,14 @@ def project_workflow_members(
         ):
             continue
         role = member.get("role") or agent.get("defaultRole") or "implementer"
-        members[agent_id] = {**member, "id": agent_id, "defaultRole": role, "role": role}
+        role_level = member.get("roleLevel") or agent.get("roleLevel")
+        members[agent_id] = {
+            **member,
+            "id": agent_id,
+            "defaultRole": role,
+            "role": role,
+            **({"roleLevel": role_level} if role_level else {}),
+        }
     if not members:
         raise ProjectDispatchError("project_roster_invalid", permanent=True)
     if style == LEAD_LED and project.get("leadAgentId") not in members:
@@ -152,7 +159,7 @@ def project_styled_assignments(
                 lead, lead["role"], "action", not specialists,
                 COORDINATOR_CHARTER if specialists else SOLO_BRIEF,
             ),
-            *(StyleTurn(agent, agent["role"], "action", False, role_charter(agent["role"]))
+            *(StyleTurn(agent, agent["role"], "action", False, role_charter(agent["role"], agent.get("roleLevel")))
               for agent in specialists),
         ]
         if specialists:
@@ -177,6 +184,7 @@ def project_styled_assignments(
         assignments.append({
             "agentId": agent_id,
             "role": turn.role,
+            **({"roleLevel": turn.agent["roleLevel"]} if turn.agent.get("roleLevel") else {}),
             "mode": turn.mode,
             "phase": team_assignment_phase(turn.role, turn.mode, coordinator),
             "coordinator": coordinator,
@@ -331,6 +339,7 @@ def project_member_assignments(
         {
             "agentId": member["agentId"],
             "role": member["role"],
+            **({"roleLevel": member["roleLevel"]} if member.get("roleLevel") else {}),
             "mode": mode,
             "phase": "discussion" if mode == "ask" else _phase(member["role"]),
             "coordinator": member["agentId"] == project["leadAgentId"],
@@ -411,9 +420,11 @@ def _outside_agent_assignment(
     """An agent off the roster, working in the project workspace on its own role."""
     agent = agent_store.get_agent(agent_id) or {}
     role = agent.get("defaultRole") or "implementer"
+    role_level = agent.get("roleLevel")
     return {
         "agentId": agent_id,
         "role": role,
+        **({"roleLevel": role_level} if role_level else {}),
         "mode": mode,
         "phase": "discussion" if mode == "ask" else _phase(role),
         "coordinator": coordinator,
@@ -451,7 +462,10 @@ def _phase(role: str) -> str:
 
 
 def _member_brief(member: dict[str, Any], *, lead: bool) -> str:
-    return " ".join([role_charter(member.get("role")), *_member_details(member, lead=lead)])
+    return " ".join([
+        role_charter(member.get("role"), member.get("roleLevel")),
+        *_member_details(member, lead=lead),
+    ])
 
 
 def _member_details(member: dict[str, Any], *, lead: bool) -> list[str]:

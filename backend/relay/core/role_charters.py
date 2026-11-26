@@ -52,11 +52,36 @@ ROLE_CHARTERS: dict[str, str] = {
         "its source, what remains uncertain, and the options the findings imply. Do not "
         "design or implement; hand off evidence the next member can act on."
     ),
+    "product_manager": (
+        "Clarify user needs, product scope, priority, and measurable acceptance criteria "
+        "before implementation starts. Separate must-haves from non-goals and surface "
+        "open product trade-offs clearly. Do not write production code; hand off a clear "
+        "outcome contract the team can build and verify against."
+    ),
+    "data": (
+        "Analyze metrics, schemas, logs, and datasets to surface quantitative evidence "
+        "for the round. Verify data quality, definitions, and edge cases, and report "
+        "findings with reproducible queries or methods. Do not change application "
+        "behaviour; hand off trustworthy measurements and recommendations."
+    ),
     "designer": (
         "Decide how the person will experience the result before it is built: the flow, the "
         "interface, the states, and the edge cases. Match the product's existing design "
         "language and state the choices a builder must honour. Do not implement; hand off a "
         "design the builder can follow without guessing."
+    ),
+    "security": (
+        "Audit the change and its surrounding surface for security risks: authentication, "
+        "authorization, injection, data exposure, secrets handling, and dependency or "
+        "configuration weaknesses. Report each vulnerability with its severity, exploit "
+        "path, affected files, and concrete remediation. Do not rewrite unrelated features; "
+        "focus on security verification and hardening guidance."
+    ),
+    "performance": (
+        "Evaluate and optimize latency, throughput, memory, query cost, and resource "
+        "efficiency for the change. Measure before and after with reproducible benchmarks "
+        "or profiling evidence, identify the real bottlenecks, and state trade-offs. Do not "
+        "add premature optimizations without measurement or alter product behaviour."
     ),
     "writer": (
         "Turn the round's result into the documentation its reader needs — what it does, how "
@@ -76,6 +101,19 @@ ROLE_CHARTERS: dict[str, str] = {
     ),
 }
 
+ROLE_LEVEL_CHARTERS: dict[str, str] = {
+    "junior": (
+        "Operate at a Junior level: stick closely to well-scoped requirements and existing "
+        "patterns, verify assumptions early by asking when architecture or scope is "
+        "unclear, and rely on senior teammates or reviewers for major design trade-offs."
+    ),
+    "senior": (
+        "Operate at a Senior level: own ambiguous problems and architectural trade-offs, "
+        "proactively anticipate edge cases, security, and performance risks, unblock "
+        "teammates with clear rationale, and hold a high bar for verification and quality."
+    ),
+}
+
 COORDINATOR_CHARTER = (
     "Coordinate the round: split the goal into parts each member can own without "
     "overlap, say what done means for each, and keep the shared work coherent as it "
@@ -89,6 +127,8 @@ UNASSIGNED_CHARTER = (
 )
 
 
-def role_charter(role: str | None) -> str:
-    """The charter for `role`, or the neutral brief for a member without one."""
-    return ROLE_CHARTERS.get(role or "", UNASSIGNED_CHARTER)
+def role_charter(role: str | None, level: str | None = None) -> str:
+    """The charter for `role`, optionally qualified by seniority `level`."""
+    base = ROLE_CHARTERS.get(role or "", UNASSIGNED_CHARTER)
+    level_note = ROLE_LEVEL_CHARTERS.get(level or "")
+    return f"{base} {level_note}" if level_note else base

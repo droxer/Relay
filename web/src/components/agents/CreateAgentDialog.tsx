@@ -13,9 +13,10 @@ import { ComputerSelect } from "../ComputerSelect";
 import { USER_AGENT_RECORD_QUERY_KEY, USER_AGENTS_QUERY_KEY } from "../../hooks/useUserAgents";
 import { agentLabel } from "../../lib/plan";
 import { AGENT_NAMES } from "../../types";
-import type { AgentName, AgentRole, UserAgent } from "../../types";
+import type { AgentName, AgentRole, AgentRoleLevel, UserAgent } from "../../types";
 import { AgentMark } from "../AgentMark";
 import { AgentRoleSelect } from "./AgentRoleSelect";
+import { AgentRoleLevelSelect } from "./AgentRoleLevelSelect";
 import { randomPresetAvatar } from "../../lib/presetAvatars";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -63,6 +64,8 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
   const [computerId, setComputerId] = useState("");
   const [pickedExecutorKind, setExecutorKind] = useState<AgentName | "">("");
   const [defaultRole, setDefaultRole] = useState<AgentRole | "">("");
+  const [roleLevel, setRoleLevel] = useState<AgentRoleLevel | "">("");
+  const roleLevelLabelId = useId();
   // A model belongs to the selected computer and runtime.
   const [modelPick, setModelPick] = useState<{ kind: AgentName | ""; model: string }>({ kind: "", model: "" });
   const [displayName, setDisplayName] = useState("");
@@ -106,6 +109,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
     setComputerId("");
     setExecutorKind("");
     setDefaultRole("");
+    setRoleLevel("");
     setModelPick({ kind: "", model: "" });
     setDisplayName("");
     setProfileImageUrl(randomPresetAvatar("agents"));
@@ -174,6 +178,7 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
         computerId,
         executorKind,
         defaultRole,
+        ...(roleLevel ? { roleLevel } : {}),
         ...(model.trim() ? { modelPolicy: modelPolicyFor(model) } : {}),
         displayName: displayName.trim() || undefined,
         profileImageUrl,
@@ -322,6 +327,20 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
             disabled={isBusy}
             error={Boolean(fieldErrors.defaultRole)}
             errorId="create-agent-role-error"
+          />
+        </Field>
+
+        <Field
+          label={t("role_levels.label")}
+          labelId={roleLevelLabelId}
+          optional={t("admin.v2.optional")}
+          wrapper="div"
+        >
+          <AgentRoleLevelSelect
+            value={roleLevel}
+            onChange={setRoleLevel}
+            labelledBy={roleLevelLabelId}
+            disabled={isBusy}
           />
         </Field>
 
