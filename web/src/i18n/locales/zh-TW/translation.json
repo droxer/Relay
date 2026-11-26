@@ -1198,6 +1198,7 @@
     "fact_workspace": "工作目錄",
     "fact_id": "電腦 ID",
     "fact_unset": "未上報",
+    "daemon_version": "Relay Daemon {{version}}",
     "runtime_detail_unavailable": "此電腦尚未安裝該執行環境。",
     "runtime_detail_unresponsive": "就緒檢查逾時。請檢查此電腦上的執行環境。",
     "runtime_detail_failed": "就緒檢查失敗。請展開原始診斷查看詳情。",

@@ -17,6 +17,7 @@ import { ComputerConnectionNotice } from "./ComputerConnectionNotice";
 import { ComputerReportCleanup } from "./ComputerReportCleanup";
 import { computerConnection, connectionNeedsNotice, type ComputerConnection } from "../../lib/computerConnection";
 import { HostOsBadge } from "./HostOsBadge";
+import { DaemonVersion } from "./DaemonVersion";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -152,6 +153,7 @@ export function ComputerCard({
               items. */}
           <p className="computer-card-sub">
             <span>{t(`admin.v2.node_sandbox_${sandbox}`)}</span>
+            {" "}<DaemonVersion node={node} t={t} />
             {node.lastSeenAt && <> <span>{t("computer.last_seen", { time: formatRelativeTime(node.lastSeenAt, t) })}</span></>}
           </p>
           {/* The reader owns this machine, so the fix is theirs to make:

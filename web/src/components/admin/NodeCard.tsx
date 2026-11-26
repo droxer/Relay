@@ -11,6 +11,7 @@ import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { TonePill } from "../StatusPill";
 import { ClientOutdatedBadge } from "../computer/ClientOutdatedBadge";
 import { HostOsBadge } from "../computer/HostOsBadge";
+import { DaemonVersion } from "../computer/DaemonVersion";
 import { isNodeOnline } from "../../lib/adminHelpers";
 import { computerName } from "../../lib/computerNodes";
 
@@ -77,6 +78,7 @@ export function NodeCard({
               <NodePresence node={node} t={t} withLabel />
             )}
             <HostOsBadge node={node} />
+            <DaemonVersion node={node} t={t} />
             {/* Work counts ride on the status line rather than in the
                 footer, where a queue count wrapped onto a line of its own
                 and lifted that card's runtimes out of line with its row. */}
