@@ -24,21 +24,10 @@ from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata, names_no_uuid_row
 from ..tables import agents as agents_tables
 
-AGENT_PATCH_FIELDS = frozenset(
-    {
-        "displayName",
-        "profileImageUrl",
-        "instructions",
-        "skillPolicy",
-        "toolPolicy",
-        "modelPolicy",
-        "defaultRole",
-        "roleLevel",
-        "enabled",
-        "compatibilityKey",
-        "delegationAgentIds",
-    }
-)
+AGENT_PATCH_FIELDS = frozenset({
+    "displayName", "profileImageUrl", "instructions", "skillPolicy", "toolPolicy",
+    "modelPolicy", "defaultRole", "roleLevel", "enabled", "compatibilityKey", "delegationAgentIds",
+})
 PLACEMENT_RELEVANT_AGENT_FIELDS = frozenset(
     {"instructions", "skillPolicy", "toolPolicy", "modelPolicy"}
 )
@@ -480,9 +469,7 @@ def _new_agent(
         raise ValueError(f"executorKind must be one of: {', '.join(AGENT_NAMES)}.")
     if default_role not in AGENT_ROLES:
         raise ValueError(f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.")
-    role_level = _optional_string(payload, "roleLevel")
-    if role_level is not None and role_level not in AGENT_ROLE_LEVELS:
-        raise ValueError(f"roleLevel must be one of: {', '.join(AGENT_ROLE_LEVELS)}.")
+    role_level = _role_level(payload.get("roleLevel"))
     agent_id = new_database_id()
     profile_image_url = validate_profile_image_url(
         "agents", agent_id, payload.get("profileImageUrl")
@@ -579,15 +566,7 @@ def _normalize_agent_runtime_patch(patch: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.")
         normalized["defaultRole"] = role.strip()
     if "roleLevel" in patch:
-        level = patch["roleLevel"]
-        if level is None or (isinstance(level, str) and not level.strip()):
-            normalized["roleLevel"] = None
-        elif isinstance(level, str) and level.strip() in AGENT_ROLE_LEVELS:
-            normalized["roleLevel"] = level.strip()
-        else:
-            raise ValueError(
-                f"roleLevel must be one of: {', '.join(AGENT_ROLE_LEVELS)}."
-            )
+        normalized["roleLevel"] = _role_level(patch["roleLevel"])
     if "instructions" in patch:
         normalized["instructions"] = (
             patch["instructions"].strip()
@@ -791,6 +770,14 @@ def _required_string(payload: dict[str, Any], field: str) -> str:
 def _optional_string(payload: dict[str, Any], field: str) -> str | None:
     value = payload.get(field)
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _role_level(value: Any) -> str | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if isinstance(value, str) and value.strip() in AGENT_ROLE_LEVELS:
+        return value.strip()
+    raise ValueError(f"roleLevel must be one of: {', '.join(AGENT_ROLE_LEVELS)}.")
 
 
 def _policy(payload: dict[str, Any], field: str) -> dict[str, Any]:
