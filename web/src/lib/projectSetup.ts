@@ -1,5 +1,6 @@
 import type {
   ProjectRole,
+  ProjectRoleLevel,
   ApplySetupTasksInput,
   ProjectRecord,
   ProjectListItem,
@@ -18,6 +19,7 @@ const PROVISIONAL_NAME_MAX = 60;
 export interface SetupMemberDraft {
   agentId: string;
   role: ProjectRole;
+  roleLevel?: ProjectRoleLevel;
   responsibilities: string;
   instructions?: string;
   include: boolean;
@@ -82,6 +84,7 @@ export function setupDraftFromProposal(proposal: ProjectSetupProposal, project: 
   const members = (proposal.members ?? []).map((member) => ({
     agentId: member.agentId,
     role: member.role,
+    ...(member.roleLevel ? { roleLevel: member.roleLevel } : {}),
     responsibilities: member.responsibilities,
     ...(member.instructions ? { instructions: member.instructions } : {}),
     include: !member.issue,
@@ -119,9 +122,10 @@ export function setupApplyInput(
 ): UpdateProjectInput {
   const kept = draft.members.filter(memberKept);
   const managerId = effectiveLead(draft.members, draft.leadAgentId);
-  const members = kept.map(({ agentId, role, responsibilities, instructions }) => ({
+  const members = kept.map(({ agentId, role, roleLevel, responsibilities, instructions }) => ({
     agentId,
     role,
+    ...(roleLevel ? { roleLevel } : {}),
     responsibilities: responsibilities.trim(),
     ...(instructions?.trim() ? { instructions: instructions.trim() } : {}),
     enabled: true,

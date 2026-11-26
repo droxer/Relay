@@ -76,6 +76,9 @@ it.each([
   const teamKey = [TEAMS_QUERY_KEY, "owner"];
   client.setQueryData(teamKey, { teams: [] });
   render(<QueryClientProvider client={client}><AgentProfilePanel agent={agent} canEditMeta /></QueryClientProvider>);
+  if (savedLevel) {
+    expect(screen.getByText(`role_levels.${savedLevel} · admin.v2.agent_role.reviewer`)).toBeTruthy();
+  }
 
   fireEvent.click(screen.getByRole("button", { name: "agents_page.edit_profile" }));
   fireEvent.click(screen.getByRole("option", { name: `role_levels.${selection}` }));

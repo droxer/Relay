@@ -261,6 +261,7 @@ def test_own_agent_roster_projects_fields_and_reads_configuration_on_demand(clie
 
     record = client.get(path)
     assert record.status_code == 200 and record.json()["agent"]["instructions"] == instructions
+    assert record.json()["agent"]["roleLevel"] == "senior"
     assert record.headers["Cache-Control"] == "no-store"
     headers = {"If-None-Match": record.headers["ETag"]}
     unchanged = client.get(path, headers=headers)
@@ -268,6 +269,10 @@ def test_own_agent_roster_projects_fields_and_reads_configuration_on_demand(clie
     assert client.patch(path, json={"instructions": "Check the fox fixture instead."}).status_code == 200
     changed = client.get(path, headers=headers)
     assert changed.status_code == 200 and changed.json()["agent"]["instructions"] == "Check the fox fixture instead."
+    assert client.patch(path, json={"roleLevel": "junior"}).status_code == 200
+    assert client.get(path).json()["agent"]["roleLevel"] == "junior"
+    assert client.patch(path, json={"roleLevel": None}).status_code == 200
+    assert client.get(path).json()["agent"].get("roleLevel") is None
     assert client.get("/api/v1/agents", params={"view": "matches", "q": "quokka"}).json() == {"agentIds": []}
     assert client.get("/api/v1/agents/not-an-agent-id").status_code == 404
     assert TestClient(client.app).get(path).status_code == 401

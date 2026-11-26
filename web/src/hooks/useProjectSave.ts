@@ -43,9 +43,12 @@ export function useProjectSave(mutate: Save, memberNames: Record<string, string>
       }
       const { project: latest } = await getProject(base.id);
       const { patch, conflicts } = rebaseProjectEdit(base, input, latest, memberNames);
-      const details = conflicts.map(({ field, member, saved, draft }) => (
-        `${member ? `${member} · ` : ""}${t(`project.${field}`)}: ${saved} → ${draft}`
-      )).join("\n");
+      const details = conflicts.map(({ field, member, saved, draft }) => {
+        const label = field === "roleLevel" ? t("role_levels.label") : t(`project.${field}`);
+        const displayLevel = (value: string) => t(`role_levels.${value || "standard"}`);
+        const change = field === "roleLevel" ? `${displayLevel(saved)} → ${displayLevel(draft)}` : `${saved} → ${draft}`;
+        return `${member ? `${member} · ` : ""}${label}: ${change}`;
+      }).join("\n");
       const accepted = await confirm({
         title: t("project.edit_conflict_title"),
         message: [t("project.edit_conflict_message"), details].filter(Boolean).join("\n\n"),

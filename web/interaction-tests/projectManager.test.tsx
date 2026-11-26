@@ -50,9 +50,9 @@ it.each([false,true])('keeps the Project Lead visible on the dashboard with task
 
 it('names the Project Lead on the dashboard and offers no discussion unless asked',()=>{
  const onManage=vi.fn();
- wrap(<ProjectManagerLine project={managed()} agents={[ada]} onManage={onManage} />);
+ wrap(<ProjectManagerLine project={managed({roleLevel:'senior'})} agents={[ada]} onManage={onManage} />);
  const line=screen.getByRole('group',{name:'project.roles.project_manager'});
- expect(line.textContent).toContain('project.roles.reviewer');
+ expect(line.textContent).toContain('role_levels.senior · project.roles.reviewer');
  expect(screen.queryByRole('button',{name:'project_manager.discuss'})).toBeNull();
  expect(api.get).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('link',{name:'Ada'}));

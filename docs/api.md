@@ -781,6 +781,10 @@ return `project_version_conflict`. Duplicate live names return
 disabled, or removed; adding or reactivating a member and changing the lead
 require readiness. Execution validates the selected members again.
 
+Project Agents may have a `roleLevel` of `junior` or `senior`. The Project
+detail and directory views include it when set. To use the Agent's own level
+again, send `fields.roleLevel: null` in a `memberChange` update.
+
 A project task with `assignedAgentId` runs only that enabled project member.
 Without an explicit assignee it runs the enabled roster, lead first.
 

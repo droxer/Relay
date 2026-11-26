@@ -492,6 +492,67 @@ for (const [language, currentRole, historicRole] of [
     await expect(row).toContainText("provider/layout-model");
     await row.getByRole("button").click();
     await expect(page.locator(".record-band")).toContainText("provider/layout-model");
+    await expect(page.locator(".agent-dossier .workspace-dossier-field-value")).toHaveText(currentRole);
+    await page.context().close();
+  });
+}
+
+for (const [theme, language, roleText] of [
+  ["dark", "en", "Senior · Code Reviewer"],
+  ["light", "zh-CN", "高级 · 代码评审员"],
+] as const) {
+  test(`Agent role and level fit task tables and assignment selects (${theme}, ${language})`, async ({ browser }) => {
+    const agent = {
+      id: "ada", displayName: "Ada Lovelace", executorKind: "claude", availability: "ready",
+      defaultRole: "reviewer", roleLevel: "senior", enabled: true, version: 1,
+      modelPolicy: {}, skillPolicy: {}, toolPolicy: {},
+      computerId: "node:layout", supervisorUserId: "review-user",
+      placements: [{ id: "placement", daemonNodeId: "layout", computerId: "node:layout", desiredState: "active", status: "ready" }],
+    };
+    const project = {
+      id: "proj-role", name: "Role Layout", ownerUserId: USER.id, computerId: "node:layout",
+      enabled: true, leadAgentId: agent.id, version: 1, workspaceLayout: "project", workspaceSubpath: "projects/role",
+      createdAt: stamp, updatedAt: stamp,
+      members: [{ agentId: agent.id, role: "reviewer", roleLevel: "senior", responsibilities: "Review UI", enabled: true }],
+    };
+    const assignedTask = { ...task, projectId: project.id, status: "assigned", assignedAgentId: agent.id, assignedAgent: "claude" };
+    const page = await openPage(browser, "/projects/proj-role", false, undefined, undefined, {
+      user: { ...USER, theme, language }, agents: [agent], projects: [project], tasks: [assignedTask],
+    });
+    await page.route("**/api/v1/projects/proj-role", (route) => route.fulfill({ json: { project } }));
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expect(page.locator(".project-manager-line-role")).toContainText(roleText);
+
+    await page.getByRole("tab", { name: language === "zh-CN" ? /任务/ : /Tasks/ }).click();
+    const inlineBtn = page.locator(".inline-field--assignee").first();
+    await expect(inlineBtn).toContainText(roleText);
+    const inlineFit = await inlineBtn.evaluate((btn) => {
+      const copy = btn.querySelector(".agent-identity-copy")!.getBoundingClientRect();
+      const role = btn.querySelector<HTMLElement>(".agent-role-label")!;
+      const box = btn.getBoundingClientRect();
+      return {
+        roleClipped: role.scrollWidth > role.clientWidth + 1,
+        overT: Math.round(box.top - copy.top),
+        overB: Math.round(copy.bottom - box.bottom),
+      };
+    });
+    expect(inlineFit.roleClipped).toBe(false);
+    expect(inlineFit.overT).toBeLessThanOrEqual(0);
+    expect(inlineFit.overB).toBeLessThanOrEqual(0);
+
+    await page.getByRole("button", { name: language === "zh-CN" ? "新建任务" : "New task" }).first().click();
+    const trigger = page.locator('.task-assignment-field [data-slot="select-trigger"]');
+    await trigger.click();
+    await page.getByRole("option", { name: /Ada Lovelace/ }).click();
+    await expect(trigger).toContainText(roleText);
+    const triggerFit = await trigger.evaluate((btn) => {
+      const copy = btn.querySelector(".agent-identity-copy")!.getBoundingClientRect();
+      const box = btn.getBoundingClientRect();
+      return { overT: Math.round(box.top - copy.top), overB: Math.round(copy.bottom - box.bottom) };
+    });
+    expect(triggerFit.overT).toBeLessThanOrEqual(0);
+    expect(triggerFit.overB).toBeLessThanOrEqual(0);
     await page.context().close();
   });
 }
