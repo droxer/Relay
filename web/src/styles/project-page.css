@@ -1212,10 +1212,6 @@ button.project-member-row:hover .project-member-row-open {
   color: var(--ink-1);
 }
 
-.project-setup-role {
-  min-width: 9rem;
-}
-
 .project-setup-disclosure {
   min-width: 0;
 }

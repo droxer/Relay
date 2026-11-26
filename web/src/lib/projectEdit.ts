@@ -1,4 +1,4 @@
-import type { ProjectMember, ProjectMemberChange, ProjectRecord, UpdateProjectInput } from "../types";
+import type { ProjectMemberChange, ProjectRecord, UpdateProjectInput } from "../types";
 
 interface ProjectEditConflict {
   field: string;
@@ -10,14 +10,14 @@ interface ProjectEditConflict {
 export class ProjectEditError extends Error {}
 
 const projectFields = ["name", "description", "goal", "context", "leadAgentId", "enabled"] as const;
-const memberFields = ["role", "roleLevel", "responsibilities", "instructions", "enabled"] as const;
+const memberFields = ["responsibilities", "instructions", "enabled"] as const;
 const labels: Record<string, string> = {
   leadAgentId: "member_make_lead", enabled: "member_enabled",
 };
 
-function normalizeMember(member: NonNullable<UpdateProjectInput["members"]>[number]): ProjectMember {
-  const { instructions, roleLevel, ...rest } = member;
-  return { ...rest, enabled: member.enabled ?? true, ...(roleLevel ? { roleLevel } : {}), ...(instructions ? { instructions } : {}) };
+function normalizeMember(member: NonNullable<UpdateProjectInput["members"]>[number]) {
+  const { agentId, responsibilities, instructions, enabled = true } = member;
+  return { agentId, responsibilities, enabled, ...(instructions ? { instructions } : {}) };
 }
 
 /** The member editor works with a roster draft for validation and rebasing.
@@ -33,17 +33,15 @@ export function projectMemberPatch(base: ProjectRecord, input: UpdateProjectInpu
   if (!desired) {
     if (previous) patch.memberChange = { op: "remove", agentId };
   } else if (!previous) {
-    const { role, roleLevel, responsibilities, instructions, enabled } = normalizeMember(desired);
+    const { responsibilities, instructions, enabled } = normalizeMember(desired);
     patch.memberChange = {
       op: "add", agentId, fields: {
-        role, responsibilities, enabled, ...(roleLevel ? { roleLevel } : {}), ...(instructions ? { instructions } : {}),
+        responsibilities, enabled, ...(instructions ? { instructions } : {}),
       },
     };
   } else {
     const next = normalizeMember(desired);
     const fields: Extract<ProjectMemberChange, { op: "update" }>["fields"] = {
-      ...(next.role !== previous.role ? { role: next.role } : {}),
-      ...(next.roleLevel !== (previous.roleLevel ?? undefined) ? { roleLevel: next.roleLevel ?? null } : {}),
       ...(next.responsibilities.trim() !== previous.responsibilities.trim() ? { responsibilities: next.responsibilities } : {}),
       ...(next.enabled !== previous.enabled ? { enabled: next.enabled } : {}),
       ...((next.instructions?.trim() ?? "") !== (previous.instructions?.trim() ?? "") ? { instructions: next.instructions ?? null } : {}),
@@ -88,7 +86,7 @@ export function rebaseProjectEdit(base: ProjectRecord, input: UpdateProjectInput
     goal: project.goal ?? "",
     context: project.context ?? "",
   });
-  const desiredProject = withDescription({ ...base, ...input } as ProjectRecord);
+  const desiredProject = withDescription({ ...base, ...input, members: base.members });
   const mergedProject = mergeFields(withDescription(base), desiredProject, withDescription(latest), projectFields);
   for (const field of projectFields) {
     if (field in input) Object.assign(patch, { [field]: mergedProject[field] });

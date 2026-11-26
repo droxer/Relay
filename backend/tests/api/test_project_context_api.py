@@ -14,7 +14,7 @@ def briefed_project(monkeypatch, tmp_path):
     client = TestClient(app)
     _bootstrap(client)
     node = _register_computer(app, "node_alice_context", "context-computer")
-    lead = _agent(client, app, node, "Lead", "codex")
+    lead = _agent(client, app, node, "Lead", "codex", role="planner")
     _login_alice(client)
     created = client.post("/api/v1/projects", json={
         "name": "Website launch",

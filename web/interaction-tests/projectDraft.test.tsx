@@ -31,7 +31,7 @@ function editor(members = [lead], member: typeof lead | null = lead, leadAgentId
   const onClose = vi.fn();
   const view = render(<ProjectMemberEditor open member={member as any}
     project={{ id: "p", version: 1, name: "Project", computerId: "c", members, leadAgentId } as any}
-    agents={[{ id: "a", displayName: "Alice", executorKind: "codex", enabled: true, placements: [{ computerId: "c", desiredState: "active" }] }] as any}
+    agents={[{ id: "a", displayName: "Alice", defaultRole: "planner", roleLevel: "senior", executorKind: "codex", enabled: true, placements: [{ computerId: "c", desiredState: "active" }] }] as any}
     computers={[]} onClose={onClose} />);
   return { ...view, onClose };
 }
@@ -39,18 +39,21 @@ function editor(members = [lead], member: typeof lead | null = lead, leadAgentId
 it("assigns the first added agent as lead by default", async () => {
   editor([], null, null);
   fireEvent.change(screen.getByRole("combobox", { name: "project.member_agent" }), { target: { value: "a" } });
+  expect(screen.getAllByRole("combobox")).toHaveLength(1);
   fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "Build" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
   expect(mutateAsync.mock.calls[0][0].input).toEqual({
     expectedVersion: 1, leadAgentId: "a",
-    memberChange: { op: "add", agentId: "a", fields: { role: "implementer", responsibilities: "Build", enabled: true } },
+    memberChange: { op: "add", agentId: "a", fields: { responsibilities: "Build", enabled: true } },
   });
 });
 
 it("sends only the changed responsibility even with long instructions on the roster", async () => {
   const member = { ...lead, instructions: "Keep this private to the member. ".repeat(100) };
   editor([member, { ...other, instructions: "Keep their instructions too. ".repeat(100) }], member);
+  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.planner")).toBeTruthy();
+  expect(screen.queryByRole("combobox")).toBeNull();
   fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "Ship the release" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));
   await waitFor(() => expect(mutateAsync).toHaveBeenCalledExactlyOnceWith({

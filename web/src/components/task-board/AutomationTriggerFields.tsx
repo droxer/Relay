@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
 import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
-import { agentRoleLabel, withProjectAgentRole } from "../../lib/agentRoleLabel";
+import { agentRoleLabel } from "../../lib/agentRoleLabel";
 import type { AgentTeam, UserAgent, ProjectListItem, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
 
 const ANY = "__any__";
@@ -67,7 +67,6 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   const filtersLabelId = useId();
   if (trigger.kind === "schedule" || trigger.kind === "webhook") return null;
   const filters = trigger.filters ?? {};
-  const project = projects.find((item) => item.id === filters.projectId);
   const setFilter = (key: keyof RoutineTriggerFilters, value: string) =>
     onChange({ ...trigger, filters: { ...filters, [key]: value === ANY ? undefined : value } });
   const choice = (key: keyof RoutineTriggerFilters, label: string, options: FilterChoice[]) => (
@@ -106,7 +105,7 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
             value: agent.id,
             label: agent.displayName,
             mark: <RosterAgentMark agent={agent} />,
-            role: agentRoleLabel(withProjectAgentRole(agent, project), t),
+            role: agentRoleLabel(agent, t),
           })))}
           {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name, mark: <RosterTeamMark team={team} /> })))}
           {/* Any + three priorities: a fixed set, so it reads as segments

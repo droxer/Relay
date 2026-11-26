@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RelayApiError } from "../../api-client/client";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
+import { agentRoleLabel, projectMemberRole } from "../../lib/agentRoleLabel";
 import { projectPresetParticipants, type PREDEFINED_WORKFLOWS } from "../../lib/workflowSelection";
 import type { ProjectListItem, UserAgent } from "../../types";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ type Props = {
 };
 
 /** Chooses which enabled Project Agents take part in one Predefined Workflow.
- *  Roles stay on the roster; the Lead always joins Lead-led. */
+ *  The Lead always joins Lead-led. */
 export function PredefinedWorkflowEditor({ project, template, agents, onClose }: Props) {
   const { t } = useTranslation();
   return <Drawer
@@ -88,7 +89,10 @@ function EditorForm({ project, template, agents, onClose }: Props & { template: 
               })} />
             <WorkflowAgentFace imageUrl={agent?.profileImageUrl} />
             <span className="workflow-preset-choice-name">{name}</span>
-            <span className="workflow-library-meta">{t(`project.roles.${member.role}`)}{isLocked ? ` · ${t("workflow.preset_lead_locked")}` : ""}</span>
+            <span className="workflow-library-meta">{[
+              agentRoleLabel(projectMemberRole(agent, member), t),
+              isLocked ? t("workflow.preset_lead_locked") : undefined,
+            ].filter(Boolean).join(" · ")}</span>
           </label>
         </li>;
       })}

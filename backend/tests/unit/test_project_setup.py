@@ -25,7 +25,7 @@ def test_proposal_is_held_to_the_shape_the_patch_accepts() -> None:
     assert proposal["name"] == "Launch"
     assert len(proposal["goal"]) == 280
     assert [m["agentId"] for m in proposal["members"]] == ["a", "b"]
-    assert proposal["members"][1]["role"] == "implementer"
+    assert proposal["members"][1] == {"agentId": "b", "responsibilities": "Build"}
     assert proposal["leadAgentId"] == "a", "an unknown lead falls back to the first member"
     assert proposal["tasks"] == [{"key": "task-1", "title": "One"}], "an unkeyed task is keyed by position"
     assert "unknown" not in proposal

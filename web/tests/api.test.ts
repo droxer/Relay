@@ -646,7 +646,6 @@ describe("project mutations", () => {
         leadAgentId: "agent-1",
         members: [{
           agentId: "agent-1",
-          role: "planner",
           responsibilities: "Ship",
         }],
       });
@@ -663,7 +662,6 @@ describe("project mutations", () => {
         leadAgentId: "agent-1",
         members: [{
           agentId: "agent-1",
-          role: "planner",
           responsibilities: "Ship",
         }],
       },
@@ -681,7 +679,7 @@ describe("project mutations", () => {
     } as ProjectRecord;
     const input = {
       expectedVersion: 3, leadAgentId: "agent-2", memberChange: { op: "add" as const, agentId: "agent-2",
-        fields: { role: "planner" as const, responsibilities: "Plan", enabled: true } },
+        fields: { responsibilities: "Plan", enabled: true } },
     };
     const calls: Array<{ url: string; method?: string; body: unknown }> = [];
     const original = globalThis.fetch;
@@ -691,7 +689,7 @@ describe("project mutations", () => {
         id: "project/1", baseVersion: 3, version: 4, leadAgentId: "agent-2", managerAgentId: "agent-2", updatedAt: "2026-11-20T00:00:00Z",
         memberChanges: [
           { op: "update", agentId: "agent-1", fields: { projectManager: null } },
-          { op: "add", agentId: "agent-2", fields: { ...input.memberChange.fields, projectManager: true } },
+          { op: "add", agentId: "agent-2", fields: { ...input.memberChange.fields, role: "planner", projectManager: true } },
         ],
       } });
     }) as typeof fetch;
@@ -702,7 +700,7 @@ describe("project mutations", () => {
       assert.deepEqual(project.members, [
         { agentId: "agent-1", role: "implementer", responsibilities: "Build", instructions: "Long instructions", enabled: true },
         kept,
-        { agentId: "agent-2", ...input.memberChange.fields, projectManager: true },
+        { agentId: "agent-2", ...input.memberChange.fields, role: "planner", projectManager: true },
       ]);
       assert.equal(project.members[1], kept);
       assert.equal(base.members[0].projectManager, true);

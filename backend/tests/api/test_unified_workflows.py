@@ -43,6 +43,9 @@ def test_team_catalog_and_predefined_default(monkeypatch):
 @pytest.mark.parametrize('scheduled', [False, True])
 def test_task_selects_its_project_workflow(monkeypatch, scheduled):
     with unified_world(monkeypatch) as (app, client, _, _, project, payload):
+        agent_id = payload["workflowSteps"][0]["agentId"]
+        profile = client.patch(f"/api/v1/agents/{agent_id}", json={"defaultRole": "tester", "roleLevel": "senior"})
+        assert profile.status_code == 200, profile.text
         workflow = client.post('/api/v1/workflows', json={
             'name': 'Delivery', 'projectId': project['id'],
             'workflowSteps': [{**payload['workflowSteps'][0], 'requiresApproval': True}],
@@ -66,6 +69,8 @@ def test_task_selects_its_project_workflow(monkeypatch, scheduled):
             assert session is not None, response.text
         assert session['workflowRuns'][0]['teamSnapshot']['workflowId'] == workflow['id']
         assert session['workflowRuns'][0]['status'] == 'awaiting_approval'
+        entry, = session['workflowRuns'][0]['assignments']
+        assert (entry['role'], entry['roleLevel']) == ('tester', 'senior')
         assert not session.get('teamId')
 
 

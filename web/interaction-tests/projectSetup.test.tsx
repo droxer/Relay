@@ -21,7 +21,7 @@ vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
   applySetupTasksMutation: { isPending: false, mutateAsync: applyTasks },
 }) }));
 const agents = [
-  { id: "ada", displayName: "Ada", executorKind: "claude", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
+  { id: "ada", displayName: "Ada", defaultRole: "planner", roleLevel: "senior", executorKind: "claude", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
   { id: "bo", displayName: "Bo", executorKind: "codex", availability: "ready", enabled: true, placements: [{ computerId: "device:alice:mac", desiredState: "active" }] },
 ];
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents }) }));
@@ -217,7 +217,7 @@ const proposedSetup: ProjectSetup = {
   proposal: {
     name: "Spring launch", goal: "Ship by Friday", context: "Use Next.js.", leadAgentId: "ada",
     members: [
-      { agentId: "ada", role: "planner", responsibilities: "Own the plan" },
+      { agentId: "ada", role: "reviewer", roleLevel: "junior", responsibilities: "Own the plan" },
       { agentId: "bo", role: "implementer", responsibilities: "Build pages" },
     ],
     tasks: [
@@ -240,12 +240,20 @@ function renderPanel(setup: ProjectSetup = proposedSetup) {
 it("saves the brief and roster while leaving the draft open to file tasks", async () => {
   getProjectSetup.mockResolvedValue({ setup: proposedSetup, candidates: [] });
   renderPanel();
+  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.planner")).toBeTruthy();
+  fireEvent.change(screen.getByRole("textbox", { name: "project.instructions · Ada", hidden: true }), {
+    target: { value: "Confirm owners before applying" },
+  });
   fireEvent.click(screen.getByRole("button", { name: "project.setup_apply_tasks" }));
   await waitFor(() => expect(applyTasks).toHaveBeenCalled());
   const input = update.mock.calls[0][0].input;
   expect(input).toMatchObject({ expectedVersion: 3, name: "Spring launch", goal: "Ship by Friday", leadAgentId: "ada" });
   expect(input).not.toHaveProperty("setupResolution");
   expect(input.members.map((m: { agentId: string }) => m.agentId)).toEqual(["ada", "bo"]);
+  expect(input.members[0]).toEqual({
+    agentId: "ada", responsibilities: "Own the plan", instructions: "Confirm owners before applying",
+    enabled: true, projectManager: true,
+  });
   expect(applyTasks).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p", input: {
     draftId: "setup_1", taskKeys: ["sitemap", "pages"], assignedAgentIds: { sitemap: "bo", pages: null },
   } }));

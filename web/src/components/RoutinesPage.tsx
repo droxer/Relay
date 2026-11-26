@@ -351,7 +351,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       name: taskAgentDisplayName(task, logicalAgents, teams),
       imageUrl: task.assignedTeamId ? undefined : logicalAgents.find((agent) => agent.id === task.assignedAgentId)?.profileImageUrl,
       ready: agentReadyForTask(task, nodes, logicalAgents),
-      agentRole: taskAssigneeRole(task, logicalAgents, projects.find((project) => project.id === task.projectId)),
+      agentRole: taskAssigneeRole(task, logicalAgents),
     };
   }
 

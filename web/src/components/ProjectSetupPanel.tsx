@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getProjectSetup, RelayApiError } from "../api";
 import { useRelayMutations } from "../hooks/useRelayMutations";
+import { agentRoleLabel } from "../lib/agentRoleLabel";
 import {
   effectiveLead,
   keptMemberIds,
@@ -17,14 +18,12 @@ import {
   type SetupMemberDraft,
   type SetupTaskDraft,
 } from "../lib/projectSetup";
-import { AGENT_ROLE_OPTIONS, type ProjectRole, type RelayTask, type UserAgent, type ProjectRecord, type ProjectSetup } from "../types";
+import type { RelayTask, UserAgent, ProjectRecord, ProjectSetup } from "../types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { RoleSelectItems } from "./agents/RoleSelectItems";
 import { Textarea } from "@/components/ui/textarea";
 import { RosterAgentMark } from "./roster/RosterOption";
 import { ProjectContextField, ProjectDescriptionField, ProjectGoalField } from "./ProjectFormFields";
@@ -456,6 +455,7 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
   const blocked = Boolean(member.issue);
   const inactive = blocked || !member.include;
   const issueId = `setup-member-issue-${member.agentId}`;
+  const role = agentRoleLabel(agent, t);
   return (
     <li className="project-setup-item" data-excluded={member.include ? undefined : ""}>
       <div className="project-setup-member-head">
@@ -469,17 +469,7 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
           {agent ? <RosterAgentMark agent={agent} /> : null}
           <strong translate="no">{name}</strong>
         </label>
-        <Select value={member.role} disabled={inactive} onValueChange={(value) => {
-          const role = AGENT_ROLE_OPTIONS.find((option) => option === value);
-          if (role) onChange({ role });
-        }}>
-          <SelectTrigger className="project-setup-role" aria-label={`${t("project.role")} · ${name}`}>
-            <SelectValue>{(value: ProjectRole) => t(`project.roles.${value}`)}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <RoleSelectItems label={(role) => t(`project.roles.${role}`)} />
-          </SelectContent>
-        </Select>
+        {role ? <span className="project-settings-hint">{role}</span> : null}
         <label className="project-member-flag">
           <Checkbox checked={lead} disabled={inactive} onCheckedChange={(value) => { if (value === true) onMakeLead(); }} />
           <span>{t("project.setup_member_lead")}</span>
@@ -488,20 +478,34 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
       {blocked ? (
         <p id={issueId} className="project-settings-hint text-destructive">{t(`project.setup_issue.${member.issue}`)}</p>
       ) : (
-        <details className="project-setup-disclosure">
-          <summary>{t("project.responsibilities")}
-            <span className="project-setup-preview">{member.responsibilities}</span>
-          </summary>
-          <Textarea
-            name={`setup-responsibilities-${member.agentId}`}
-            aria-label={`${t("project.responsibilities")} · ${name}`}
-            rows={2}
-            maxLength={4000}
-            disabled={!member.include}
-            value={member.responsibilities}
-            onChange={(event) => onChange({ responsibilities: event.target.value })}
-          />
-        </details>
+        <>
+          <details className="project-setup-disclosure">
+            <summary>{t("project.responsibilities")}
+              <span className="project-setup-preview">{member.responsibilities}</span>
+            </summary>
+            <Textarea
+              name={`setup-responsibilities-${member.agentId}`}
+              aria-label={`${t("project.responsibilities")} · ${name}`}
+              rows={2}
+              maxLength={4000}
+              disabled={!member.include}
+              value={member.responsibilities}
+              onChange={(event) => onChange({ responsibilities: event.target.value })}
+            />
+          </details>
+          <details className="project-setup-disclosure">
+            <summary>{t("project.instructions")}</summary>
+            <Textarea
+              name={`setup-instructions-${member.agentId}`}
+              aria-label={`${t("project.instructions")} · ${name}`}
+              rows={2}
+              maxLength={8000}
+              disabled={!member.include}
+              value={member.instructions ?? ""}
+              onChange={(event) => onChange({ instructions: event.target.value })}
+            />
+          </details>
+        </>
       )}
     </li>
   );

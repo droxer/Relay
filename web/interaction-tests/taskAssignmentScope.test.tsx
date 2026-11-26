@@ -48,14 +48,14 @@ it.each(["backlog", "routine"] as const)("repairs a saved stale Workflow in the 
   expect(submit).toHaveBeenCalledOnce();
 });
 
-it.each(["backlog", "routine"] as const)("shows the Project Role and Role Level when assigning a %s", variant => {
+it.each(["backlog", "routine"] as const)("shows the Agent's profile role and level when assigning a %s", variant => {
   const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
   mount({ ...form, title: "Work", projectId: "p" });
   const choice = screen.getByRole("option", { name: /Ada/ });
-  expect(choice.textContent).toContain("role_levels.junior · admin.v2.agent_role.reviewer");
+  expect(choice.textContent).toContain("role_levels.senior · admin.v2.agent_role.implementer");
   fireEvent.click(choice);
   expect(screen.getByLabelText("backlog.assignment_label").textContent)
-    .toContain("role_levels.junior · admin.v2.agent_role.reviewer");
+    .toContain("role_levels.senior · admin.v2.agent_role.implementer");
 });
 
 it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never both, in a new %s", async variant => {

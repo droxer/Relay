@@ -368,7 +368,7 @@ function projectSetupPrelude(setup: ProjectSetupBrief): string {
     "You are drafting this project's setup for its owner to review. Do not start the project's work and do not create project files; the owner applies your proposal.",
     `The owner's intent: ${setup.intent}`,
     `Agents you may staff (only these, by agentId): ${JSON.stringify(setup.candidates)}`,
-    `Allowed roles: ${setup.roles.join(", ")}. Choose a lead among the members; prefer a planner.`,
+    "Choose a lead among the members; prefer an Agent whose existing role is planner. Each Agent keeps its existing role and level.",
     ...(setup.previousProposal
       ? [`Your previous proposal, to revise per the owner's note: ${JSON.stringify(setup.previousProposal)}`]
       : []),
@@ -377,7 +377,7 @@ function projectSetupPrelude(setup: ProjectSetupBrief): string {
     "The context is the standing brief every future run will read: conventions, constraints, what done means. Keep it specific to this project; do not restate generic advice.",
     "Propose up to 8 first tasks that are bounded, verifiable, and in a sensible order.",
     TASK_ORDER_RULE,
-    `When you stop, write \`${setup.file}\` as JSON: {"goal": "<one-line outcome>", "name": "<2-5 word name derived from the goal>", "description": "<a few sentences>", "context": "<markdown brief>", "leadAgentId": "<agentId>", "members": [{"agentId": "<agentId>", "role": "<role>", "responsibilities": "<outcome contract>", "instructions": "<optional project-specific guidance>"}], "tasks": [${PROPOSED_TASK_SHAPE}], "rationale": "<why this crew and plan>"}.`,
+    `When you stop, write \`${setup.file}\` as JSON: {"goal": "<one-line outcome>", "name": "<2-5 word name derived from the goal>", "description": "<a few sentences>", "context": "<markdown brief>", "leadAgentId": "<agentId>", "members": [{"agentId": "<agentId>", "responsibilities": "<outcome contract>", "instructions": "<optional project-specific guidance>"}], "tasks": [${PROPOSED_TASK_SHAPE}], "rationale": "<why this crew and plan>"}.`,
     "Use valid JSON with double quotes. If the intent is too vague to staff, still write your best proposal and say what you assumed in the rationale; end your reply by asking the owner what to change.",
   ].join("\n");
 }

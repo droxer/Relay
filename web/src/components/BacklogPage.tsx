@@ -454,7 +454,7 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
                 onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
                 agentDisplayName: assignment.name,
                 agentImageUrl: assignment.imageUrl,
-                agentRole: taskAssigneeRole(task, logicalAgents, currentProject),
+                agentRole: taskAssigneeRole(task, logicalAgents),
                 ready: assignment.ready,
                 onOpen: () => onOpenRecord(task.id),
               };

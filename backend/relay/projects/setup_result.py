@@ -10,7 +10,6 @@ import re
 from typing import Any
 
 from ..core.ids import now_iso
-from ..core.models import AGENT_ROLE_LEVELS, AGENT_ROLES
 from ..core.project_roles import upgrade_member
 
 
@@ -86,9 +85,8 @@ def generated_setup_name(project: dict[str, Any], setup: dict[str, Any]) -> str 
 def normalize_setup_proposal(raw: Any, *, mode: str = "setup") -> dict[str, Any] | None:
     """Hold an agent-written proposal to the shape the PATCH accepts.
 
-    Lenient where an agent is merely sloppy (an unknown role becomes
-    implementer, overlong text is clipped, a member without responsibilities
-    is dropped) and empty-handed where there is nothing usable. A plan
+    Overlong text is clipped and a member without responsibilities is
+    dropped. A proposed member carries only Project-specific fields. A plan
     proposal keeps only its tasks and rationale: planning never restaffs.
     """
     if not isinstance(raw, dict):
@@ -135,14 +133,10 @@ def _proposal_members(raw: Any) -> list[dict[str, Any]]:
             continue
         seen.add(agent_id)
         item = upgrade_member(item)
-        role = item.get("role") if item.get("role") in AGENT_ROLES else "implementer"
-        role_level = item.get("roleLevel") if item.get("roleLevel") in AGENT_ROLE_LEVELS else None
         instructions = _clip(item.get("instructions"), _LIMITS["instructions"])
         members.append(
             {
                 "agentId": agent_id,
-                "role": role,
-                **({"roleLevel": role_level} if role_level else {}),
                 "responsibilities": responsibilities,
                 **({"instructions": instructions} if instructions else {}),
                 **({"projectManager": True} if item.get("projectManager") is True else {}),

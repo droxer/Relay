@@ -452,7 +452,7 @@ function IssuesPageView({
                   onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
                   agentDisplayName: context.agentDisplayName,
                   agentImageUrl: context.agentImageUrl,
-                  agentRole: taskAssigneeRole(task, logicalAgents, context.project),
+                  agentRole: taskAssigneeRole(task, logicalAgents),
                   ready: context.ready,
                   onOpen: () => onOpenRecord(task.id),
                 };
