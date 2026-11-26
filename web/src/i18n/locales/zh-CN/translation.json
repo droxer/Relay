@@ -2813,10 +2813,10 @@
   },
   "next_steps": {
     "title": "建议的下一步",
-    "hint": "点击建议直接发送；点“采纳”可将其保存为 {{destination}} 中的任务。",
+    "hint": "点击建议直接发送；点“稍后”可在 {{destination}} 中新建任务。",
     "no_project": "议题（无项目）",
-    "adopt": "采纳",
-    "adopt_label": "采纳为任务：{{step}}",
+    "adopt": "稍后",
+    "adopt_label": "稍后处理，新建任务：{{step}}",
     "confirm_label": "根据此建议新建任务",
     "confirm": "在 {{destination}} 中新建一个待办任务？分配后才会开始执行。",
     "create": "新建任务",

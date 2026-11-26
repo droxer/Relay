@@ -2813,10 +2813,10 @@
   },
   "next_steps": {
     "title": "建議的下一步",
-    "hint": "點擊建議直接傳送；點「採納」可將其儲存為 {{destination}} 中的任務。",
+    "hint": "點擊建議直接傳送；點「稍後」可在 {{destination}} 中新建任務。",
     "no_project": "議題（無專案）",
-    "adopt": "採納",
-    "adopt_label": "採納為任務：{{step}}",
+    "adopt": "稍後",
+    "adopt_label": "稍後處理，新增任務：{{step}}",
     "confirm_label": "根據此建議新建任務",
     "confirm": "在 {{destination}} 中新建一個待辦任務？指派後才會開始執行。",
     "create": "新建任務",
