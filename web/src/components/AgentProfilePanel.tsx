@@ -105,24 +105,15 @@ export function AgentProfilePanel({
     });
   }, [agent.id, confirm, t, onDirtyChange]);
 
-  async function patchAgent(patch: Parameters<typeof updateUserAgent>[1]) {
-    if (canManage) {
-      return updateUserAgent(agent.id, patch);
-    }
-    return updateOwnUserAgent(agent.id, {
-      ...(patch.displayName !== undefined ? { displayName: patch.displayName } : {}),
-      ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}),
-      ...(patch.modelPolicy !== undefined ? { modelPolicy: patch.modelPolicy } : {}),
-      ...(patch.defaultRole !== undefined ? { defaultRole: patch.defaultRole } : {}),
-      ...(patch.delegationAgentIds !== undefined ? { delegationAgentIds: patch.delegationAgentIds } : {}),
-    });
+  function patchAgent(patch: Parameters<typeof updateOwnUserAgent>[1]) {
+    return canManage ? updateUserAgent(agent.id, patch) : updateOwnUserAgent(agent.id, patch);
   }
 
   /* The agent lists an edit or delete actually changes, and nothing else.
      Invalidated rather than patched from the response: the lists resolve
      node-reported fields (availability, models, skills, binding status) on
-     read, which the PATCH responses do not all carry. Teams embed each
-     member's name, avatar, and availability, so they refresh too. */
+     read, which the PATCH responses do not all carry. Teams embed member
+     identity and availability, so they refresh when those fields change. */
   function invalidateAgentLists(refreshTeams = true) {
     void queryClient.invalidateQueries({ queryKey: ADMIN_AGENTS_KEY, exact: true });
     // Roster rows and any cached searches reflect identity changes.
@@ -138,7 +129,8 @@ export function AgentProfilePanel({
       queryClient.setQueryData(queryKey, { agent: updated });
     }
     invalidateAgentLists(updated.displayName !== agent.displayName || updated.profileImageUrl !== agent.profileImageUrl
-      || updated.enabled !== agent.enabled || updated.defaultRole !== agent.defaultRole || updated.availability !== agent.availability);
+      || updated.enabled !== agent.enabled || updated.defaultRole !== agent.defaultRole
+      || (updated.roleLevel ?? null) !== (agent.roleLevel ?? null) || updated.availability !== agent.availability);
     onAgentUpdated?.(updated);
   }
 
@@ -175,7 +167,7 @@ export function AgentProfilePanel({
     setSaving(true);
     setError(null);
     try {
-      const result = await patchAgent({ enabled: !agent.enabled });
+      const result = await updateUserAgent(agent.id, { enabled: !agent.enabled });
       if (!result) return;
       applyAgentUpdate(result.agent);
     } catch (err) {

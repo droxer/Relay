@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import { AgentProfilePanel } from "../src/components/AgentProfilePanel";
 import { updateOwnUserAgent } from "../src/api";
+import { TEAMS_QUERY_KEY } from "../src/hooks/useTeams";
 import type { UserAgent } from "../src/types";
 
 vi.mock("../src/api", async (importOriginal) => ({
@@ -55,5 +56,32 @@ it("saves the agent's own role with the rest of the profile form", async () => {
   fireEvent.click(screen.getByRole("button", { name: "agents_page.save_profile" }));
 
   await waitFor(() => expect(updateOwnUserAgent).toHaveBeenCalledWith("r", { defaultRole: "reviewer" }));
+  client.clear();
+});
+
+it.each([
+  { savedLevel: undefined, selection: "senior", expectedLevel: "senior" },
+  { savedLevel: "junior", selection: "standard", expectedLevel: null },
+] as const)("saves a level-only change to $selection and refreshes the Team roster", async ({ savedLevel, selection, expectedLevel }) => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  vi.mocked(updateOwnUserAgent).mockClear();
+  const agent: UserAgent = {
+    id: "r", displayName: "Rue", instructions: "Check things", defaultRole: "reviewer", roleLevel: savedLevel,
+    executorKind: "codex", enabled: true, availability: "ready", placements: [],
+    modelPolicy: {}, skillPolicy: {}, toolPolicy: {}, version: 1,
+    createdAt: "2026-11-26T00:00:00Z", updatedAt: "2026-11-26T00:00:00Z",
+  };
+  vi.mocked(updateOwnUserAgent).mockResolvedValue({ agent: { ...agent, roleLevel: expectedLevel } });
+  const client = new QueryClient();
+  const teamKey = [TEAMS_QUERY_KEY, "owner"];
+  client.setQueryData(teamKey, { teams: [] });
+  render(<QueryClientProvider client={client}><AgentProfilePanel agent={agent} canEditMeta /></QueryClientProvider>);
+
+  fireEvent.click(screen.getByRole("button", { name: "agents_page.edit_profile" }));
+  fireEvent.click(screen.getByRole("option", { name: `role_levels.${selection}` }));
+  fireEvent.click(screen.getByRole("button", { name: "agents_page.save_profile" }));
+
+  await waitFor(() => expect(updateOwnUserAgent).toHaveBeenCalledWith(agent.id, { roleLevel: expectedLevel }));
+  await waitFor(() => expect(client.getQueryState(teamKey)?.isInvalidated).toBe(true));
   client.clear();
 });
