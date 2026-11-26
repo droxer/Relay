@@ -258,24 +258,24 @@ def annotate_setup(
     if not setup or not (setup.get("proposal") or {}).get("members"):
         return setup
     proposal = setup["proposal"]
-    members = [
-        {
-            **member,
-            **(
-                {"issue": issue}
-                if (issue := _member_issue(project, member["agentId"], agent_store, placement_store))
-                else {}
-            ),
-        }
-        for member in proposal["members"]
-    ]
+    members = []
+    for member in proposal["members"]:
+        agent_id = member["agentId"]
+        agent = agent_store.get_agent(agent_id)
+        entry = {key: value for key, value in member.items() if key not in {"role", "roleLevel", "issue"}}
+        if issue := _member_issue(project, agent_id, agent, placement_store):
+            entry["issue"] = issue
+        if agent and agent.get("supervisorUserId") == project["ownerUserId"]:
+            entry["role"] = agent.get("defaultRole") or "implementer"
+            if agent.get("roleLevel"):
+                entry["roleLevel"] = agent["roleLevel"]
+        members.append(entry)
     return {**setup, "proposal": {**proposal, "members": members}}
 
 
 def _member_issue(
-    project: dict[str, Any], agent_id: str, agent_store: Any, placement_store: Any
+    project: dict[str, Any], agent_id: str, agent: dict[str, Any] | None, placement_store: Any
 ) -> str | None:
-    agent = agent_store.get_agent(agent_id)
     if not agent or agent.get("deletedAt"):
         return "agent_not_found"
     if agent.get("supervisorUserId") != project["ownerUserId"]:

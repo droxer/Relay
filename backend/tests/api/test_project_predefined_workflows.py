@@ -12,20 +12,27 @@ from test_workflow_progression import finish
 
 
 @pytest.mark.parametrize(
-    "style,lead_role,order,kinds",
+    "style,lead_role,member_role,order,kinds",
     [
-        ("build_review", "reviewer", (1, 0), ("implementation", "synthesis")),
-        ("pipeline", "tester", (1, 0), ("implementation", "verification")),
-        ("lead_led", "planner", (0, 1, 0), ("coordination", "implementation", "synthesis")),
-        ("build_review", "implementer", (0,), ("synthesis",)),
-        ("lead_led", "planner", (0,), ("synthesis",)),
+        ("build_review", "reviewer", "implementer", (1, 0), ("implementation", "synthesis")),
+        ("build_review", "tester", "fixer", (1, 0), ("implementation", "synthesis")),
+        ("pipeline", "tester", "implementer", (1, 0), ("implementation", "verification")),
+        ("lead_led", "planner", "implementer", (0, 1, 0), ("coordination", "implementation", "synthesis")),
+        ("build_review", "fixer", "implementer", (0,), ("synthesis",)),
+        ("lead_led", "planner", "implementer", (0,), ("synthesis",)),
     ],
 )
-def test_project_preset_runs_on_its_roster(monkeypatch, style, lead_role, order, kinds):
+def test_project_preset_runs_on_its_roster(monkeypatch, style, lead_role, member_role, order, kinds):
     with unified_world(monkeypatch) as (app, client, node, _, project, payload):
         lead, member = project["members"]
+        updated_agent = client.patch(f"/api/v1/agents/{lead['agentId']}", json={"defaultRole": lead_role})
+        assert updated_agent.status_code == 200, updated_agent.text
+        updated_member = client.patch(f"/api/v1/agents/{member['agentId']}", json={
+            "defaultRole": member_role, "roleLevel": "senior",
+        })
+        assert updated_member.status_code == 200, updated_member.text
         app.state.project_store.update_project(project["id"], {
-            "members": [{**lead, "role": lead_role}, {**member, "enabled": len(order) > 1}],
+            "members": [lead, {**member, "enabled": len(order) > 1}],
         }, expected_version=project["version"])
         workflow_id = f"preset:{style}"
         catalog = client.get(f"/api/v1/workflows?view=choices&projectId={project['id']}").json()
@@ -60,6 +67,9 @@ def test_project_preset_runs_on_its_roster(monkeypatch, style, lead_role, order,
             command, = take(registry, node)
             assert command["sessionId"] == session["id"]
             assert command["logicalAgentId"] == payload["memberAgentIds"][member_index]
+            assert command["state"]["agent_role"] == (lead_role, member_role)[member_index]
+            if member_index == 1:
+                assert command["state"]["agent_role_level"] == "senior"
             assert command["state"]["work_kind"] == kind
             work = {"status": "done", "evidence": ["Verified in the Project workspace"]}
             if kind == "coordination":

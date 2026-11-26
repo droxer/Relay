@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { AgentTeam, ProjectListItem, UserAgent } from "../types.js";
+import type { AgentTeam, ProjectMemberSummary, UserAgent } from "../types.js";
 
 export type AgentRoleIdentity = Pick<UserAgent, "defaultRole" | "roleLevel">;
 
@@ -9,9 +9,12 @@ export function agentRoleLabel(identity: AgentRoleIdentity | undefined, t: TFunc
   return identity.roleLevel ? `${t(`role_levels.${identity.roleLevel}`)} · ${role}` : role;
 }
 
-export function withProjectAgentRole(agent: UserAgent, project?: Pick<ProjectListItem, "members"> | null): UserAgent {
-  const member = project?.members.find((item) => item.agentId === agent.id && item.enabled);
-  return member ? { ...agent, defaultRole: member.role, roleLevel: member.roleLevel ?? agent.roleLevel } : agent;
+export function projectMemberRole(
+  agent: AgentRoleIdentity | undefined | null, member?: Partial<Pick<ProjectMemberSummary, "role" | "roleLevel">> | null,
+): AgentRoleIdentity | undefined {
+  if (agent?.defaultRole) return agent;
+  if (member?.role) return { defaultRole: member.role, roleLevel: member.roleLevel ?? undefined };
+  return undefined;
 }
 
 export function withTeamAgentRole(agent: UserAgent, team?: AgentTeam): UserAgent {

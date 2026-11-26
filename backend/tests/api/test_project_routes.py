@@ -63,7 +63,7 @@ def _register_computer(
     )
 
 
-def _agent(client: TestClient, app, node: dict, name: str, executor: str) -> dict:
+def _agent(client: TestClient, app, node: dict, name: str, executor: str, *, role: str = "implementer") -> dict:
     # Declaring an agent whose computer is already live auto-places it, so no
     # separate placement call is needed here.
     response = client.post(
@@ -72,7 +72,7 @@ def _agent(client: TestClient, app, node: dict, name: str, executor: str) -> dic
             "supervisorUserId": ALICE,
             "displayName": name,
             "executorKind": executor,
-            "defaultRole": "implementer",
+            "defaultRole": role,
             "computerId": computer_id(node),
         },
     )
@@ -133,6 +133,7 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(
     node = _register_computer(app, "node_alice_directory", "directory-machine")
     agent = _agent(client, app, node, "Directory engineer", "codex")
     _login_alice(client)
+    assert client.patch(f"/api/v1/agents/{agent['id']}", json={"roleLevel": "senior"}).status_code == 200
     created = client.post("/api/v1/projects", json={
         "name": "Directory", "context": "Full context", "description": "Full description", "goal": "Full goal",
         "daemonNodeId": node["id"], "leadAgentId": agent["id"], "members": [{
@@ -195,6 +196,44 @@ def test_project_directory_defers_member_contracts_and_setup_proposals(
     assert TestClient(app).get(detail_path, headers={"If-None-Match": detail.headers["etag"]}).status_code == 401
 
 
+def test_project_roster_reads_the_current_agent_profile(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    _bootstrap(client)
+    node = _register_computer(app, "node_alice_profile", "profile-machine")
+    agent_id = _agent(client, app, node, "Architect", "codex", role="planner")["id"]
+    _login_alice(client)
+    profile_path = f"/api/v1/agents/{agent_id}"
+    assert client.patch(profile_path, json={"roleLevel": "senior"}).status_code == 200
+    response = client.post("/api/v1/projects", json={
+        "name": "Agent profile", "daemonNodeId": node["id"], "leadAgentId": agent_id,
+        "members": [{"agentId": agent_id, "responsibilities": "Plan", "instructions": "Check scope"}],
+    })
+    assert response.status_code == 201, response.text
+    project = response.json()["project"]
+    member, = project["members"]
+    assert (member["role"], member["roleLevel"]) == ("planner", "senior")
+    path = f"/api/v1/projects/{project['id']}"
+    # An older snapshot can still carry a role and level selected in this Project.
+    app.state.project_store.update_project(project["id"], {
+        "members": [{**member, "role": "devops", "roleLevel": "junior"}],
+    }, expected_version=project["version"])
+    previous = client.get(path)
+    assert previous.json()["project"]["members"] == [member]
+    assert client.patch(profile_path, json={"defaultRole": "reviewer", "roleLevel": None}).status_code == 200
+    current = client.get(path, headers={"If-None-Match": previous.headers["etag"]})
+    assert current.status_code == 200
+    saved = current.json()["project"]
+    assert saved["version"] == previous.json()["project"]["version"]
+    expected = {key: value for key, value in member.items() if key != "roleLevel"}
+    assert saved["members"] == [{**expected, "role": "reviewer"}]
+    for url in (f"{path}?view=directory", "/api/v1/projects?view=directory", "/api/v1/projects?view=summary"):
+        data = client.get(url).json()
+        projected, = (data["projects"][0] if "projects" in data else data["project"])["members"]
+        assert projected["role"] == "reviewer" and "roleLevel" not in projected
+
+
 def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     app = create_app(str(tmp_path))
@@ -202,9 +241,10 @@ def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp
     _bootstrap(client)
     node = _register_computer(app, "node_alice_member_patch", "member-patch-machine")
     lead = _agent(client, app, node, "Lead engineer", "codex")["id"]
-    reviewer = _agent(client, app, node, "Reviewer", "codex")["id"]
+    reviewer = _agent(client, app, node, "Reviewer", "codex", role="reviewer")["id"]
     new_member = _agent(client, app, node, "Builder", "codex")["id"]
     _login_alice(client)
+    assert client.patch(f"/api/v1/agents/{new_member}", json={"roleLevel": "junior"}).status_code == 200
     created = client.post("/api/v1/projects", json={
         "name": "Member edits", "daemonNodeId": node["id"], "leadAgentId": lead,
         "members": [
@@ -241,7 +281,7 @@ def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp
     added = client.patch(compact_path, json={
         "expectedVersion": edited["version"],
         "memberChange": {"op": "add", "agentId": new_member, "fields": {
-            "role": "implementer", "roleLevel": "junior", "responsibilities": "Build", "instructions": "Run the tests",
+            "responsibilities": "Build", "instructions": "Run the tests",
         }},
     })
     assert added.status_code == 200, added.text
@@ -258,12 +298,12 @@ def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp
     assert after_add["members"][2]["roleLevel"] == "junior"
     promoted = client.patch(compact_path, json={
         "expectedVersion": after_add["version"],
-        "memberChange": {"op": "update", "agentId": new_member, "fields": {"roleLevel": "senior"}},
+        "memberChange": {"op": "update", "agentId": new_member, "fields": {"role": "tester", "roleLevel": "senior"}},
     })
     assert promoted.status_code == 200, promoted.text
-    assert promoted.json()["projectMemberUpdate"]["memberChanges"] == [
-        {"op": "update", "agentId": new_member, "fields": {"roleLevel": "senior"}},
-    ]
+    assert promoted.json()["projectMemberUpdate"]["memberChanges"] == []
+    assert client.get(path).json()["project"]["members"] == after_add["members"]
+    assert client.patch(f"/api/v1/agents/{new_member}", json={"roleLevel": "senior"}).status_code == 200
     after_promotion = client.get(path).json()["project"]
     assert after_promotion["members"] == [
         *after_add["members"][:2], {**after_add["members"][2], "roleLevel": "senior"},
@@ -291,9 +331,10 @@ def test_project_member_changes_preserve_the_rest_of_the_roster(monkeypatch, tmp
     })
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["projectMemberUpdate"]["memberChanges"] == [
-        {"op": "update", "agentId": new_member, "fields": {"instructions": None, "roleLevel": None}},
+        {"op": "update", "agentId": new_member, "fields": {"instructions": None}},
     ]
-    assert not {"instructions", "roleLevel"} & client.get(path).json()["project"]["members"][1].keys()
+    saved_member = client.get(path).json()["project"]["members"][1]
+    assert "instructions" not in saved_member and saved_member["roleLevel"] == "senior"
 
     reassigned = client.patch(compact_path, json={
         "expectedVersion": cleared.json()["projectMemberUpdate"]["version"], "leadAgentId": reviewer,
@@ -312,8 +353,8 @@ def test_user_creates_and_updates_computer_bound_project(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap(client)
         computer = _register_computer(app, "node_alice_a", "machine-a")
-        lead = _agent(client, app, computer, "Lead", "codex")
-        reviewer = _agent(client, app, computer, "Reviewer", "claude")
+        lead = _agent(client, app, computer, "Lead", "codex", role="planner")
+        reviewer = _agent(client, app, computer, "Reviewer", "claude", role="reviewer")
         _login_alice(client)
 
         created = client.post(
@@ -1152,8 +1193,8 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
         client = TestClient(app)
         _bootstrap(client)
         computer = _register_computer(app, "node_alice_a", "machine-a")
-        lead = _agent(client, app, computer, "Lead", "codex")
-        reviewer = _agent(client, app, computer, "Reviewer", "claude")
+        lead = _agent(client, app, computer, "Lead", "codex", role="implementer")
+        reviewer = _agent(client, app, computer, "Reviewer", "claude", role="reviewer")
         _login_alice(client)
         created = client.post(
             "/api/v1/projects",
@@ -1164,8 +1205,8 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
                 "members": [
                     {
                         "agentId": lead["id"],
-                        "role": role,
-                        "roleLevel": "senior",
+                        "role": "implementer",
+                        "roleLevel": "junior",
                         "responsibilities": "先定义边界与实现顺序",
                         "instructions": "不要直接跳过计划阶段。",
                     },
@@ -1179,6 +1220,8 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
         )
         assert created.status_code == 201, created.text
         project = created.json()["project"]
+        profile_path = f"/api/v1/agents/{lead['id']}"
+        assert client.patch(profile_path, json={"defaultRole": role, "roleLevel": "senior"}).status_code == 200
         task = client.post(
             "/api/v1/tasks",
             json={"title": "Ship project", "projectId": project["id"]},
@@ -1191,6 +1234,7 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
         assert result["dispatch"]["state"] == "started"
         assert result["session"]["projectId"] == project["id"]
         assert result["session"]["workspaceLayout"] == "project"
+        assert client.patch(profile_path, json={"defaultRole": "tester", "roleLevel": None}).status_code == 200
         [command] = app.state.registry.take_commands(
             computer["id"], f"token_{computer['id']}"
         )
@@ -1321,8 +1365,8 @@ def test_scheduler_dispatches_assigned_project_task(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap(client)
         computer = _register_computer(app, "node_alice_a", "machine-a")
-        lead = _agent(client, app, computer, "Lead", "codex")
-        reviewer = _agent(client, app, computer, "Reviewer", "claude")
+        lead = _agent(client, app, computer, "Lead", "codex", role="planner")
+        reviewer = _agent(client, app, computer, "Reviewer", "claude", role="reviewer")
         _login_alice(client)
         project = client.post(
             "/api/v1/projects",

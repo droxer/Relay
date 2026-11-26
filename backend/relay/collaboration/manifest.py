@@ -223,6 +223,8 @@ def _work_kind(assignment: dict[str, Any]) -> str:
         return "review"
     if assignment.get("coordinator") is True:
         return "coordination"
+    if snapshot.get("workflowKind") == "predefined" and snapshot.get("collaborationStyle") == "build_review":
+        return "implementation"
     if role == "reviewer":
         return "review"
     if role == "tester":

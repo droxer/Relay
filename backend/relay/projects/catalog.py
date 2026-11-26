@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.computer_identity import computer_id
-from ..core.models import AGENT_ROLE_LEVELS, AGENT_ROLES
-from ..core.project_roles import upgrade_member
+from ..core.project_roles import member_with_agent_role, upgrade_member
 from ..persistence.project.store import ProjectValidationError, ProjectVersionConflict
 from ..agents.location import agent_placed_on_computer
 from ..core.project_predefined_workflows import PredefinedWorkflowChangeError, apply_workflow_change
@@ -18,7 +17,7 @@ PROJECT_INSTRUCTIONS_MAX_LENGTH = 8_000
 PROJECT_DESCRIPTION_MAX_LENGTH = 4_000
 PROJECT_GOAL_MAX_LENGTH = 280
 PROJECT_CONTEXT_MAX_LENGTH = 8_000
-EDITABLE_MEMBER_FIELDS = frozenset({"role", "roleLevel", "responsibilities", "instructions", "enabled"})
+MEMBER_INPUT_FIELDS = frozenset({"role", "roleLevel", "responsibilities", "instructions", "enabled"})
 
 
 def create_project_payload(
@@ -257,7 +256,7 @@ def _apply_member_change(members: list[dict[str, Any]], change: Any) -> list[dic
         return [*members[:index], *members[index + 1:]]
 
     fields = change.get("fields")
-    if set(change) != {"op", "agentId", "fields"} or not isinstance(fields, dict) or not fields or fields.keys() - EDITABLE_MEMBER_FIELDS:
+    if set(change) != {"op", "agentId", "fields"} or not isinstance(fields, dict) or not fields or fields.keys() - MEMBER_INPUT_FIELDS:
         raise ProjectValidationError("project_member_change_invalid")
     if operation == "add":
         if index is not None:
@@ -300,12 +299,15 @@ def validate_project_roster(
         member["agentId"]: member
         for member in (previous_project or {}).get("members", [])
     }
-    for member in members:
+    for index, member in enumerate(members):
         agent = agent_store.get_agent(member["agentId"])
         if not agent or agent.get("deletedAt"):
             raise ProjectValidationError("project_member_not_found")
         if agent.get("supervisorUserId") != owner_user_id:
             raise ProjectValidationError("project_member_wrong_owner")
+        members[index] = member_with_agent_role(
+            member, agent.get("defaultRole") or "implementer", agent.get("roleLevel"),
+        )
         previous = previous_members.get(member["agentId"])
         newly_enabled = member["enabled"] and previous and not previous.get("enabled", True)
         newly_lead = (
@@ -333,7 +335,7 @@ def validate_project_roster(
 def _normalize_member(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ProjectValidationError("project_member_invalid")
-    allowed = EDITABLE_MEMBER_FIELDS | {"agentId", "projectManager"}
+    allowed = MEMBER_INPUT_FIELDS | {"agentId", "projectManager"}
     if set(value) - allowed:
         raise ProjectValidationError("project_member_invalid")
     value = upgrade_member(value)
@@ -341,22 +343,11 @@ def _normalize_member(value: Any) -> dict[str, Any]:
     if not isinstance(project_manager, bool):
         raise ProjectValidationError("project_member_invalid")
     agent_id = _required_text(value.get("agentId"), "project_member_not_found")
-    role = _required_text(value.get("role"), "project_role_invalid")
-    if role not in AGENT_ROLES:
-        raise ProjectValidationError("project_role_invalid")
-    raw_role_level = value.get("roleLevel")
-    role_level: str | None = None
-    if raw_role_level is not None and raw_role_level != "":
-        if not isinstance(raw_role_level, str) or raw_role_level.strip() not in AGENT_ROLE_LEVELS:
-            raise ProjectValidationError("project_role_level_invalid")
-        role_level = raw_role_level.strip()
     enabled = value.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ProjectValidationError("project_member_invalid")
     member: dict[str, Any] = {
         "agentId": agent_id,
-        "role": role,
-        **({"roleLevel": role_level} if role_level else {}),
         "responsibilities": _required_text(
             value.get("responsibilities"),
             "project_responsibilities_required",

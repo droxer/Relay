@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { agentRoleLabel } from "../lib/agentRoleLabel";
+import { agentRoleLabel, projectMemberRole } from "../lib/agentRoleLabel";
 import { MAX_PROJECT_MEMBERS, orderedProjectMembers, projectMemberState } from "../lib/projectPage";
 import type { UserAgent, ProjectMember, ProjectListItem, ProjectMemberSummary } from "../types";
 import { AgentStateBadge } from "./AgentStateBadge";
@@ -86,10 +86,7 @@ function ProjectMemberRow({
   const { t } = useTranslation();
   const { available, enabled, availability } = projectMemberState(member, agent);
   const name = agent?.displayName || t("project.member_unavailable");
-  const role = agentRoleLabel({
-    defaultRole: member.role,
-    roleLevel: member.roleLevel ?? agent?.roleLevel,
-  }, t);
+  const role = agentRoleLabel(projectMemberRole(agent, member), t);
   const state = !available
     ? <TonePill tone="warn" label={t("project.member_missing")} />
     : !member.enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null;

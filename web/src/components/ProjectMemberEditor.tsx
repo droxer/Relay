@@ -5,11 +5,10 @@ import { useTranslation } from "react-i18next";
 import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { agentRoleLabel, projectMemberRole } from "../lib/agentRoleLabel";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentsEligibleForProject } from "../lib/projectPage";
 import {
-  type ProjectRole,
-  type ProjectRoleLevel,
   type DaemonNodeMonitorRecord,
   type UserAgent,
   type ProjectMember,
@@ -21,8 +20,6 @@ import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { Field } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RoleSelectItems } from "./agents/RoleSelectItems";
-import { AgentRoleLevelSelect } from "./agents/AgentRoleLevelSelect";
 import { Textarea } from "@/components/ui/textarea";
 import { RosterAgentItem, RosterTriggerValue } from "./roster/RosterOption";
 import { rosterLabel, useRosterTabs, type RosterTab } from "./roster/RosterTabs";
@@ -33,8 +30,6 @@ import {
 
 type MemberDraft = {
   agentId: string;
-  role: ProjectRole;
-  roleLevel: ProjectRoleLevel | "";
   responsibilities: string;
   instructions: string;
   enabled: boolean;
@@ -43,8 +38,6 @@ type MemberDraft = {
 
 const EMPTY_DRAFT: MemberDraft = {
   agentId: "",
-  role: "implementer",
-  roleLevel: "",
   responsibilities: "",
   instructions: "",
   enabled: true,
@@ -59,8 +52,6 @@ function draftKey(draft: MemberDraft): string {
 function rosterPayload(project: ProjectRecord) {
   return project.members.map((member) => ({
     agentId: member.agentId,
-    role: member.role,
-    ...(member.roleLevel ? { roleLevel: member.roleLevel } : {}),
     responsibilities: member.responsibilities,
     ...(member.instructions ? { instructions: member.instructions } : {}),
     enabled: member.enabled,
@@ -93,8 +84,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
   const [draft, setDraft] = useState<MemberDraft>(() => member
     ? {
         agentId: member.agentId,
-        role: member.role,
-        roleLevel: member.roleLevel ?? "",
         responsibilities: member.responsibilities,
         instructions: member.instructions ?? "",
         enabled: member.enabled,
@@ -110,8 +99,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
   const projectSave = useProjectSave(updateProjectMutation.mutateAsync, Object.fromEntries(agents.map((agent) => [agent.id, agent.displayName])));
   const [initialDraftKey] = useState(() => draftKey(draft));
   const agentLabelId = useId();
-  const roleLabelId = useId();
-  const roleLevelLabelId = useId();
 
   const runtimeNodeId = useMemo(
     () => computers.find((computer) => stableComputerId(computer) === project.computerId)?.id ?? "",
@@ -130,6 +117,8 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     () => agents.find((agent) => agent.id === member?.agentId) ?? null,
     [agents, member],
   );
+  const selectedAgent = member ? editingAgent : candidates.find((agent) => agent.id === draft.agentId);
+  const role = agentRoleLabel(projectMemberRole(editingAgent, member), t);
   // Project membership is an agent roster only — a member is one agent with a
   // role, never a whole team — so the shared picker renders no tab strip here.
   const rosterTabs: RosterTab<"agents">[] = [
@@ -147,14 +136,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     setLeadError(null);
     setAgentError(null);
     setResponsibilitiesError(null);
-  }
-
-  function pickAgent(agentId: string | null) {
-    const agent = agents.find((candidate) => candidate.id === agentId);
-    patch({
-      agentId: agentId ?? "",
-      ...(agent ? { role: agent.defaultRole ?? "implementer", roleLevel: agent.roleLevel ?? "" } : {}),
-    });
   }
 
   async function requestClose() {
@@ -177,8 +158,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     }
     const payload = {
       agentId: draft.agentId,
-      role: draft.role,
-      ...(draft.roleLevel ? { roleLevel: draft.roleLevel } : {}),
       responsibilities: draft.responsibilities.trim(),
       ...(draft.instructions.trim() ? { instructions: draft.instructions.trim() } : {}),
       enabled: draft.enabled,
@@ -200,7 +179,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     setLeadError(null);
     const result = await projectSave.save(baseProject, {
       expectedVersion: baseProject.version, leadAgentId, members,
-    }, draft.agentId);
+    }, draft.agentId, selectedAgent);
     if (result) onClose();
   }
 
@@ -247,7 +226,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
             <Field label={t("project.member_agent")} labelId={agentLabelId} wrapper="div" error={agentError ?? undefined} errorId="project-member-agent-error">
               <Select
                 value={draft.agentId}
-                onValueChange={pickAgent}
+                onValueChange={(agentId) => patch({ agentId: agentId ?? "" })}
                 onOpenChange={(open) => { if (open) roster.resetTab(); }}
               >
                 <SelectTrigger
@@ -285,24 +264,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
 
         {member || draft.agentId ? (
           <>
-            <Field label={t("project.role")} labelId={roleLabelId} wrapper="div">
-              <Select value={draft.role} onValueChange={(value) => patch({ role: value as ProjectRole })}>
-                <SelectTrigger className="w-full" aria-labelledby={roleLabelId}>
-                  <SelectValue>{(value: ProjectRole) => t(`project.roles.${value}`)}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <RoleSelectItems label={(role) => t(`project.roles.${role}`)} />
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label={t("role_levels.label")} labelId={roleLevelLabelId} optional={t("admin.v2.optional")} wrapper="div">
-              <AgentRoleLevelSelect
-                value={draft.roleLevel}
-                onChange={(roleLevel) => patch({ roleLevel })}
-                labelledBy={roleLevelLabelId}
-                disabled={busy}
-              />
-            </Field>
+            {role ? <Field label={t("project.role")} wrapper="div"><span>{role}</span></Field> : null}
             <Field label={t("project.responsibilities")} error={responsibilitiesError ?? undefined} errorId="project-member-responsibilities-error">
               <Textarea
                 ref={responsibilitiesRef}

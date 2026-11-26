@@ -538,7 +538,7 @@ def test_project_creation_accepts_manager_choice_without_executing(setup_env):
     crew=[{'agentId':builder['id'],'role':'reviewer','responsibilities':'Review','enabled':True}]
     led=client.post('/api/v1/projects',json={'name':'Led','daemonNodeId':node['id'],'members':crew,'leadAgentId':builder['id']}).json()['project']
     assert led['managerAgentId'] == builder['id']
-    assert led['members'][0]['role'] == 'reviewer'
+    assert led['members'][0]['role'] == builder['defaultRole']
     open_role=client.post('/api/v1/projects',json={'name':'Open role','daemonNodeId':node['id'],'members':crew,'leadAgentId':builder['id'],'managerAgentId':None}).json()['project']
     assert open_role['managerAgentId'] == builder['id']
     assert not app.state.session_store.list_sessions()
@@ -572,7 +572,7 @@ def test_project_lead_management_preserves_execution_and_global_agent_roles(setu
     assert 'projectManager' not in saved['members'][0]
     assert saved['members'][1]['projectManager'] is True
     assert saved['leadAgentId'] == builder['id']
-    assert app.state.agent_store.get_agent(planner['id'])['defaultRole'] == 'implementer'
+    assert app.state.agent_store.get_agent(planner['id'])['defaultRole'] == 'planner'
     reviewer=client.patch(f"/api/v1/projects/{project['id']}",json={
         'expectedVersion':saved['version'],'leadAgentId':builder['id'],'members':[
             {'agentId':planner['id'],'role':'reviewer','projectManager':True,'responsibilities':'Review and manage','enabled':True},
@@ -580,7 +580,7 @@ def test_project_lead_management_preserves_execution_and_global_agent_roles(setu
         ],
     })
     assert reviewer.status_code == 200,reviewer.text
-    assert reviewer.json()['project']['members'][0]['role'] == 'reviewer'
+    assert reviewer.json()['project']['members'][0]['role'] == 'planner'
     assert reviewer.json()['project']['managerAgentId'] == builder['id']
     duplicate=client.patch(f"/api/v1/projects/{project['id']}",json={
         'expectedVersion':reviewer.json()['project']['version'],'leadAgentId':builder['id'],
@@ -802,7 +802,8 @@ def test_a_setup_draft_by_the_manager_keeps_its_own_workflow(managed_env):
 
 def test_changing_only_the_lead_transfers_management_tools(managed_env):
     _, client, _, project, former, successor = managed_env
-    _join(managed_env, successor, role="reviewer")
+    assert client.patch(f"/api/v1/agents/{successor['id']}", json={"defaultRole": "reviewer"}).status_code == 200
+    _join(managed_env, successor)
     current = client.get(f"/api/v1/projects/{project['id']}").json()["project"]
     response = client.patch(f"/api/v1/projects/{project['id']}", json={
         "expectedVersion": current["version"], "leadAgentId": successor["id"],

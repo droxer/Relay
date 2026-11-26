@@ -37,6 +37,16 @@ def upgrade_members(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [upgrade_member(member) for member in members]
 
 
+def member_with_agent_role(
+    member: dict[str, Any], role: str, role_level: str | None,
+) -> dict[str, Any]:
+    return {
+        **{key: value for key, value in member.items() if key != "roleLevel"},
+        "role": role,
+        **({"roleLevel": role_level} if role_level else {}),
+    }
+
+
 def is_project_manager(member: dict[str, Any]) -> bool:
     return member.get("projectManager") is True or member.get("role") == LEGACY_PROJECT_MANAGER_ROLE
 

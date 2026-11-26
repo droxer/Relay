@@ -37,7 +37,7 @@ export interface ProjectSetupProposal {
   leadAgentId?: string;
   members?: Array<{
     agentId: string;
-    role: ProjectRole;
+    role?: ProjectRole;
     roleLevel?: ProjectRoleLevel;
     responsibilities: string;
     instructions?: string;
@@ -201,8 +201,6 @@ export interface CreateProjectInput {
   leadAgentId?: string | null;
   members: Array<{
     agentId: string;
-    role: ProjectRole;
-    roleLevel?: ProjectRoleLevel | null;
     responsibilities: string;
     instructions?: string;
     enabled?: boolean;
@@ -229,7 +227,7 @@ export interface UpdateProjectInput {
   resolveContextSuggestions?: string[];
 }
 
-type ProjectMemberFields = Pick<ProjectMember, "role" | "roleLevel" | "responsibilities" | "enabled"> & { instructions?: string | null };
+type ProjectMemberFields = Pick<ProjectMember, "responsibilities" | "enabled"> & { instructions?: string | null };
 
 export type ProjectMemberChange =
   | { op: "add"; agentId: string; fields: ProjectMemberFields }

@@ -75,12 +75,13 @@ def test_project_roster_runs_lead_first_then_keeps_configured_order() -> None:
     ]
 
 
-def test_project_preset_accepts_legacy_placements_and_uses_project_roles():
+def test_project_preset_accepts_legacy_placements_and_uses_agent_profiles():
     project = _project()
     reviewer, *_, builder = project["members"]
-    project["members"] = [reviewer, {key: value for key, value in builder.items() if key != "role"}]
+    project["members"] = [{**reviewer, "role": "implementer", "roleLevel": "junior"}, builder]
     agents = SimpleNamespace(get_agent=lambda agent_id: {
-        "id": agent_id, "supervisorUserId": "alice", "defaultRole": "implementer",
+        "id": agent_id, "supervisorUserId": "alice",
+        "defaultRole": "reviewer" if agent_id == "reviewer" else "implementer",
     })
     placements = SimpleNamespace(list_placements=lambda *, agent_id: [{
         "agentId": agent_id, "desiredState": "active", "daemonNodeId": "legacy-node",
@@ -92,6 +93,7 @@ def test_project_preset_accepts_legacy_placements_and_uses_project_roles():
     assert [(item["agentId"], item["role"]) for item in assignments] == [
         ("builder", "implementer"), ("reviewer", "reviewer"),
     ]
+    assert "roleLevel" not in assignments[1]
 
 
 def test_disabled_project_is_a_transient_dispatch_failure() -> None:

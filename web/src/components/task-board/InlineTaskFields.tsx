@@ -219,7 +219,7 @@ function InlineAssigneeOptions({
   const workflows = project ? projectWorkflowOptions(project, workflowQuery?.data?.workflows) : undefined;
   const chip = (
     <TaskAssignee task={task} ready={display.ready} agentDisplayName={display.name} agentImageUrl={display.imageUrl}
-      agentRole={taskAssigneeRole(task, agents, project)} />
+      agentRole={taskAssigneeRole(task, agents)} />
   );
   // A read-only chip takes the same inline-field box as the trigger, so a
   // column mixing editable and read-only rows keeps one left edge.

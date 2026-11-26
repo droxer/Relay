@@ -64,8 +64,12 @@ def compile_workflow(
         resolved_member = members.get(step["agentId"])
         if resolved_member is None:
             raise ValueError("workflow_roster_assignee_missing")
+        role = resolved_member.get("agentDefaultRole") or resolved_member.get("role")
+        level = resolved_member.get("roleLevel")
         compiled.append({
             **deepcopy({key: resolved_member[key] for key in _ROUTING_FIELDS if key in resolved_member}),
+            **({"role": role} if snapshot.get("projectId") and role else {}),
+            **({"roleLevel": level} if snapshot.get("projectId") and level else {}),
             "workflowRunId": run_id,
             "workflowStepId": step["id"],
             "workflowAttempt": 1,

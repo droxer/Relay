@@ -353,7 +353,8 @@ describe("prompts", () => {
     assert.match(prompt, /Do not start the project's work/);
     assert.match(prompt, /The owner's intent: Launch the marketing site/);
     assert.match(prompt, /"agentId":"agent-1"/);
-    assert.match(prompt, /Allowed roles: implementer, planner/);
+    assert.match(prompt, /Each Agent keeps its existing role and level/);
+    assert.match(prompt, /"members": \[\{"agentId": "<agentId>", "responsibilities":/);
     assert.match(prompt, /Settle the goal first/);
     assert.match(prompt, /name the project after that goal/);
     assert.match(prompt, /\{"goal": "[^"]*", "name": "[^"]*derived from the goal>"/, "the goal is written before the name derived from it");

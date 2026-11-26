@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 from ..core.project_predefined_workflows import selected_agent_ids
-from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, project_member_ids
+from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, member_with_agent_role, project_member_ids
 
 from ..collaboration.styles import LEAD_LED, pipeline_order, resolve_collaboration_style
 from ..collaboration.templates import SOLO_BRIEF, StyleTurn, compile_style
@@ -119,14 +119,11 @@ def project_workflow_members(
             )
         ):
             continue
-        role = member.get("role") or agent.get("defaultRole") or "implementer"
-        role_level = member.get("roleLevel") or agent.get("roleLevel")
+        role = agent.get("defaultRole") or "implementer"
         members[agent_id] = {
-            **member,
+            **member_with_agent_role(member, role, agent.get("roleLevel")),
             "id": agent_id,
             "defaultRole": role,
-            "role": role,
-            **({"roleLevel": role_level} if role_level else {}),
         }
     if not members:
         raise ProjectDispatchError("project_roster_invalid", permanent=True)
@@ -150,6 +147,11 @@ def project_styled_assignments(
         "workflowId": workflow_id_for_style(style),
         "workflowKind": "predefined",
     }
+    snapshot["members"] = [
+        member_with_agent_role(member, profile["role"], profile.get("roleLevel"))
+        if (profile := members.get(member["agentId"])) else member
+        for member in snapshot["members"]
+    ]
     if style == LEAD_LED:
         assert isinstance(lead_id, str)
         lead = members[lead_id]
@@ -183,7 +185,7 @@ def project_styled_assignments(
         agent_id = turn.agent["id"]
         assignments.append({
             "agentId": agent_id,
-            "role": turn.role,
+            "role": turn.agent["role"],
             **({"roleLevel": turn.agent["roleLevel"]} if turn.agent.get("roleLevel") else {}),
             "mode": turn.mode,
             "phase": team_assignment_phase(turn.role, turn.mode, coordinator),

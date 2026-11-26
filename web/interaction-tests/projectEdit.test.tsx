@@ -8,33 +8,19 @@ const base = { id: "p", version: 1, name: "Project", enabled: true, members: [a,
 const latest = (patch: Partial<ProjectRecord> = {}): ProjectRecord => ({ ...base, version: 2, ...patch });
 const input = (patch: Partial<UpdateProjectInput> = {}): UpdateProjectInput => ({ expectedVersion: 1, members: base.members, leadAgentId: "a", ...patch });
 
-describe("project member Role Level", () => {
-  it("sends the level when adding a Project Agent", () => {
+describe("project member profile fields", () => {
+  it("sends only Project fields when adding an Agent", () => {
     const member = { ...a, agentId: "c", roleLevel: "senior" } satisfies ProjectMember;
     expect(projectMemberPatch(base, input({ members: [a, b, member] }), member.agentId).memberChange).toEqual({
-      op: "add", agentId: "c", fields: { role: a.role, roleLevel: "senior", responsibilities: a.responsibilities, enabled: true },
+      op: "add", agentId: "c", fields: { responsibilities: a.responsibilities, enabled: true },
     });
   });
 
-  it.each(["senior", null] as const)("sends a level-only update to %s", (roleLevel) => {
-    const original = { ...base, members: [{ ...a, roleLevel: "junior" }, b] } satisfies ProjectRecord;
-    const desired = { ...a, ...(roleLevel ? { roleLevel } : {}) };
-    expect(projectMemberPatch(original, input({ members: [desired, b] }), a.agentId).memberChange).toEqual({
-      op: "update", agentId: "a", fields: { roleLevel },
-    });
-  });
-
-  it("keeps a level-only edit when retrying after a concurrent responsibility change", () => {
-    const current = latest({ members: [{ ...a, responsibilities: "Ship" }, b] });
-    const { patch, conflicts } = rebaseProjectEdit(base, input({ members: [{ ...a, roleLevel: "senior" }, b] }), current);
-    expect(patch.members?.[0]).toEqual({ ...a, roleLevel: "senior", responsibilities: "Ship" });
-    expect(conflicts).toEqual([]);
-  });
-
-  it("keeps a concurrent level change when the draft leaves it alone", () => {
-    const current = latest({ members: [{ ...a, roleLevel: "junior" }, b] });
-    const { patch, conflicts } = rebaseProjectEdit(base, input({ members: [{ ...a, responsibilities: "Ship" }, b] }), current);
-    expect(patch.members?.[0]).toEqual({ ...a, roleLevel: "junior", responsibilities: "Ship" });
+  it("rebases a Project edit without sending concurrent profile changes", () => {
+    const current = latest({ members: [{ ...a, role: "reviewer", roleLevel: "junior" }, b] });
+    const desired = { ...a, responsibilities: "Ship" };
+    const { patch, conflicts } = rebaseProjectEdit(base, input({ members: [desired, b] }), current);
+    expect(patch.members?.[0]).toEqual({ agentId: "a", enabled: true, responsibilities: "Ship" });
     expect(conflicts).toEqual([]);
   });
 });
@@ -42,7 +28,7 @@ describe("project member Role Level", () => {
 describe("project edit reconciliation", () => {
   it("preserves removal of an unedited sibling", () => {
     const result = rebaseProjectEdit(base, input({ members: [{ ...a, responsibilities: "My edit" }, b] }), latest({ members: [a] }));
-    expect(result.patch.members).toEqual([{ ...a, responsibilities: "My edit" }]);
+    expect(result.patch.members).toEqual([{ agentId: "a", enabled: true, responsibilities: "My edit" }]);
   });
   it("keeps a concurrent lead change when this draft only edits responsibilities", () => {
     const result = rebaseProjectEdit(base, input({ members: [{ ...a, responsibilities: "My edit" }, b] }), latest({ leadAgentId: "b" }));
@@ -52,15 +38,16 @@ describe("project edit reconciliation", () => {
   it("does not replace a newer name when the name was unedited", () => {
     expect(rebaseProjectEdit(base, { expectedVersion: 1, name: base.name }, latest({ name: "New name" })).patch.name).toBe("New name");
   });
-  it("clears instructions intentionally while preserving a concurrently changed role", () => {
+  it("clears instructions even when the profile role changed concurrently", () => {
     const original = { ...base, members: [{ ...a, instructions: "Old instructions" }, b] };
     const result = rebaseProjectEdit(original, input(), latest({ members: [{ ...a, instructions: "Old instructions", role: "reviewer" }, b] }));
-    expect(result.patch.members?.[0]).toEqual({ ...a, role: "reviewer" });
+    expect(result.patch.members?.[0]).toEqual({ agentId: "a", enabled: true, responsibilities: "Build" });
   });
   it("adds a new member without dropping concurrent additions", () => {
     const c = { ...a, agentId: "c" };
     const d = { ...a, agentId: "d" };
-    expect(rebaseProjectEdit(base, input({ members: [a, b, c] }), latest({ members: [a, b, d] })).patch.members).toEqual([a, b, d, c]);
+    expect(rebaseProjectEdit(base, input({ members: [a, b, c] }), latest({ members: [a, b, d] })).patch.members?.map((member) => member.agentId))
+      .toEqual(["a", "b", "d", "c"]);
   });
   it("rejects an agent added concurrently", () => {
     const c = { ...a, agentId: "c" };

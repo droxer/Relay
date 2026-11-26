@@ -778,7 +778,7 @@ The selected Computer must advertise `project-workspaces`; every enabled member
 must be an enabled agent with an active placement on that Computer. A project
 may start with an empty roster and `leadAgentId: null`; adding members requires
 an enabled lead from that roster. Removing the last member clears the lead.
-A project has at most 32 members. Names and function titles are limited to 120
+A project has at most 32 members. Names are limited to 120
 characters, responsibilities to 4,000 characters, and optional project
 instructions to 8,000 characters. Updates use optimistic versions; stale writes
 return `project_version_conflict`. Duplicate live names return
@@ -786,9 +786,12 @@ return `project_version_conflict`. Duplicate live names return
 disabled, or removed; adding or reactivating a member and changing the lead
 require readiness. Execution validates the selected members again.
 
-Project Agents may have a `roleLevel` of `junior` or `senior`. The Project
-detail and directory views include it when set. To use the Agent's own level
-again, send `fields.roleLevel: null` in a `memberChange` update.
+Project responses display each Agent's profile `defaultRole` as `role` and
+include its `roleLevel` when set. Send `responsibilities` and optional
+`instructions` to set the Agent's work in this Project. Project writes accept
+older `role` and `roleLevel` fields for compatibility and derive the values
+from the Agent profile. Profile changes apply to existing Project memberships
+and new rounds. Admitted rounds keep their recorded assignments.
 
 A project task with `assignedAgentId` runs only that enabled project member.
 Without an explicit assignee it runs the enabled roster, lead first.

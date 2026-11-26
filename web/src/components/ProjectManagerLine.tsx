@@ -3,6 +3,7 @@
 import type { MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { navigateToAppPath } from "../lib/appRoute";
+import { agentRoleLabel, projectMemberRole } from "../lib/agentRoleLabel";
 import { PROJECT_LEAD_TOPICS, projectLeadTopicLabel, type ProjectLeadTopic } from "../lib/projectLeadTopics";
 import { projectMemberState } from "../lib/projectPage";
 import type { AgentBadge, ProjectListItem, UserAgent } from "../types";
@@ -25,7 +26,7 @@ import {
  *  comes from the project and agents the page already has. */
 export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discussing = false }: {
   project: ProjectListItem;
-  agents: readonly (AgentBadge & Pick<UserAgent, "deletedAt">)[];
+  agents: readonly (AgentBadge & Pick<UserAgent, "deletedAt" | "defaultRole" | "roleLevel">)[];
   /** Opens where the role is assigned; absent when the viewer cannot edit. */
   onManage?: () => void;
   /** Opens the lead Thread, with a topic's question drafted when one is
@@ -56,7 +57,7 @@ export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discu
   const agent = agents.find((candidate) => candidate.id === member.agentId);
   const { available, enabled, availability } = projectMemberState(member, agent);
   const name = agent?.displayName || t("project.member_unavailable");
-  const roleLevel = member.roleLevel ?? (agent as Pick<UserAgent, "roleLevel"> | undefined)?.roleLevel;
+  const role = agentRoleLabel(projectMemberRole(agent, member), t);
   const href = `/agents/${encodeURIComponent(member.agentId)}`;
   const openAgent = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
@@ -79,14 +80,7 @@ export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discu
         <a className="project-manager-line-name" href={href} onClick={openAgent}>{name}</a>
         <span className="project-manager-line-role">
           {label}
-          <span aria-hidden="true"> · </span>
-          {roleLevel ? (
-            <>
-              {t(`role_levels.${roleLevel}`, { defaultValue: roleLevel })}
-              <span aria-hidden="true"> · </span>
-            </>
-          ) : null}
-          {t(`project.roles.${member.role}`)}
+          {role ? <><span aria-hidden="true"> · </span>{role}</> : null}
         </span>
       </span>
       {!enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null}

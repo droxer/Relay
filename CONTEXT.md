@@ -103,7 +103,7 @@ handles infrastructure and deployment. Build and review reserves the reviewer
 slot for other roles. Each role carries a charter
 (`backend/relay/core/role_charters.py`) saying what it delivers and what it
 leaves to the others. An optional **Role Level** (`roleLevel`: `junior` or
-`senior`) qualifies any role's seniority on an Agent, Project Agent, or Team
+`senior`) qualifies an Agent Role's seniority on a Logical Agent or Team
 member, enriching both display and the role's prompt charter without changing
 Pipeline stage order. A round's lead is a coordinator, not a role. An agent has
 its own role (and optional level), chosen at setup and editable on its profile;
@@ -298,10 +298,10 @@ the project's folder — the folder is the directory, never the Project itself.
 _Avoid_: Project path, mount, external workspace
 
 **Project Agent**:
-A Logical Agent enlisted in a Project with a project-specific role and
-responsibilities. The role is an orchestration directive (pipeline stage and
-phase); the responsibilities are the agent's outcome contract in prose. A
-Project Agent is not a human Project Member.
+A Logical Agent enlisted in a Project with Project-specific responsibilities
+and optional instructions. The Agent's profile supplies its Agent Role and
+Role Level for display and new runs, including the Pipeline stage and phase.
+Each round records the identity it used in its snapshot.
 _Avoid_: Project Member, collaborator
 
 **Project Conversation**:

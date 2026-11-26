@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getProject, RelayApiError } from "../api";
 import { useDialogs } from "../components/ui/DialogProvider";
+import type { AgentRoleIdentity } from "../lib/agentRoleLabel";
 import { projectMemberPatch, ProjectEditError, rebaseProjectEdit } from "../lib/projectEdit";
 import type { ProjectRecord, UpdateProjectInput } from "../types";
 
@@ -17,7 +18,7 @@ export function useProjectSave(mutate: Save, memberNames: Record<string, string>
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function save(base: ProjectRecord, input: UpdateProjectInput, editedAgentId?: string) {
+  async function save(base: ProjectRecord, input: UpdateProjectInput, editedAgentId?: string, addedAgent?: AgentRoleIdentity | null) {
     if (locked.current) return null;
     locked.current = true;
     setPending(true);
@@ -31,7 +32,13 @@ export function useProjectSave(mutate: Save, memberNames: Record<string, string>
       } catch (cause) {
         if (!patch.memberChange || !(cause instanceof RelayApiError)
           || cause.status !== 400 || cause.code !== "project_patch_unsupported") throw cause;
-        return mutate({ projectId: record.id, input: draft });
+        const members = draft.members?.map((member) => {
+          const saved = record.members.find((item) => item.agentId === member.agentId);
+          const role = saved?.role ?? addedAgent?.defaultRole ?? "implementer";
+          const roleLevel = saved ? saved.roleLevel : addedAgent?.roleLevel;
+          return { ...member, role, ...(roleLevel ? { roleLevel } : {}) };
+        });
+        return mutate({ projectId: record.id, input: { ...draft, members } });
       }
     }
 
@@ -43,12 +50,9 @@ export function useProjectSave(mutate: Save, memberNames: Record<string, string>
       }
       const { project: latest } = await getProject(base.id);
       const { patch, conflicts } = rebaseProjectEdit(base, input, latest, memberNames);
-      const details = conflicts.map(({ field, member, saved, draft }) => {
-        const label = field === "roleLevel" ? t("role_levels.label") : t(`project.${field}`);
-        const displayLevel = (value: string) => t(`role_levels.${value || "standard"}`);
-        const change = field === "roleLevel" ? `${displayLevel(saved)} → ${displayLevel(draft)}` : `${saved} → ${draft}`;
-        return `${member ? `${member} · ` : ""}${label}: ${change}`;
-      }).join("\n");
+      const details = conflicts.map(({ field, member, saved, draft }) =>
+        `${member ? `${member} · ` : ""}${t(`project.${field}`)}: ${saved} → ${draft}`,
+      ).join("\n");
       const accepted = await confirm({
         title: t("project.edit_conflict_title"),
         message: [t("project.edit_conflict_message"), details].filter(Boolean).join("\n\n"),

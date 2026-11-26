@@ -26,12 +26,13 @@ from ..db_time import format_db_time, parse_db_time
 from ..engine import create_all_tables, shared_engine, store_transaction
 from ..sql import metadata as shared_metadata, names_no_uuid_row
 from ..tables import projects as projects_tables
+from ..tables.agents import agents as agents_table
 from ..tables.sessions import sessions as sessions_table
 from ..tables.tasks import tasks as tasks_table
 from ...core.workspace_layout import LINKED_WORKSPACE_PREFIX
 from .manager import ManagerRows
 from .tool_reads import ProjectToolReads
-from ...core.project_roles import project_with_manager
+from ...core.project_roles import member_with_agent_role, project_with_manager
 
 PROJECT_NAME_MAX_LENGTH = 120
 # A project that links an existing directory on its computer names it under
@@ -79,6 +80,7 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                         **_event_row(project["id"], 0, event)
                     )
                 )
+                project, = self._with_agent_roles(conn, [project])
         except IntegrityError as error:
             if _is_name_conflict(error):
                 raise ProjectValidationError("project_name_taken") from error
@@ -93,7 +95,10 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
             statement = statement.with_for_update()
         with store_transaction(self.engine) as conn:
             row = conn.execute(statement).mappings().first()
-        return project_with_manager(dict(row["snapshot"])) if row else None
+            if not row:
+                return None
+            project, = self._with_agent_roles(conn, [project_with_manager(dict(row["snapshot"]))])
+            return project
 
     def list_projects(
         self,
@@ -123,10 +128,36 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                     for row in conn.execute(statement.where(self.projects.c.id.in_(batch))).mappings()
                 ]
             )
-        return sorted(
-            (project_with_manager(dict(row["snapshot"])) for row in rows),
-            key=lambda project: (project["name"].casefold(), project["id"]),
+            records = self._with_agent_roles(conn, [project_with_manager(dict(row["snapshot"])) for row in rows])
+        return sorted(records, key=lambda project: (project["name"].casefold(), project["id"]))
+
+    def _with_agent_roles(self, conn: Any, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        # Project history keeps its recorded roster. Live reads project current
+        # Agent identity onto a copy and leave the event snapshots untouched.
+        agent_ids = {member["agentId"] for project in records for member in project["members"]}
+        if not agent_ids:
+            return records
+        agents = agents_table.c
+        statement = select(
+            agents.id, agents.supervisor_user_id,
+            agents.snapshot["defaultRole"].as_string(), agents.snapshot["roleLevel"].as_string(),
         )
+        profiles = {
+            (str(owner_id), str(agent_id)): (role or "implementer", level)
+            for batch in batched(
+                sorted(agent_id for agent_id in agent_ids if not names_no_uuid_row(self.engine, agent_id)),
+                500, strict=False,
+            )
+            for agent_id, owner_id, role, level in conn.execute(statement.where(agents.id.in_(batch)))
+        }
+        return [{
+            **project,
+            "members": [
+                member_with_agent_role(member, *profile)
+                if (profile := profiles.get((project["ownerUserId"], member["agentId"]))) else member
+                for member in project["members"]
+            ],
+        } for project in records]
 
     def list_project_directory(self, owner_user_id: str) -> list[dict[str, Any]]:
         """Read directory metadata and roster roles without transferring Project text or proposals."""
@@ -136,8 +167,13 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         setup = snapshot["setup"]
         proposal = setup["proposal"]
         proposed_tasks = proposal["tasks"]
-        # The roster rows and snapshot share the same member order.
-        role_level = snapshot["members"].op("->")(members.c.position)["roleLevel"].as_string()
+        agents = agents_table.c
+        historical_level = snapshot["members"].op("->")(members.c.position)["roleLevel"].as_string()
+        role = case(
+            (agents.id.is_(None), members.c.role),
+            else_=func.coalesce(agents.snapshot["defaultRole"].as_string(), "implementer"),
+        )
+        role_level = case((agents.id.is_(None), historical_level), else_=agents.snapshot["roleLevel"].as_string())
         setup_fields = ("state", "mode", "threadId")
         fields = tuple(key for key in PROJECT_DIRECTORY_FIELDS if key != "managerAgentId")
         with store_transaction(self.engine) as conn:
@@ -160,9 +196,11 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                 proposal.as_string().not_in(("", "{}")).label("has_proposal"),
                 proposed_task_count.label("proposed_task_count"),
                 *(setup[key].label(f"setup_{key}") for key in setup_fields),
-                members.c.agent_id, members.c.role, role_level.label("member_role_level"),
+                members.c.agent_id, role.label("role"), role_level.label("member_role_level"),
                 members.c.enabled.label("member_enabled"),
-            ).select_from(projects.outerjoin(members, members.c.project_id == projects.c.id)).where(
+            ).select_from(projects.outerjoin(members, members.c.project_id == projects.c.id).outerjoin(
+                agents_table, (agents.id == members.c.agent_id) & (agents.supervisor_user_id == projects.c.owner_user_id),
+            )).where(
                 projects.c.owner_user_id == owner_user_id,
             ).order_by(projects.c.name_key, projects.c.id, members.c.position)
             directory: dict[str, dict[str, Any]] = {}
@@ -540,7 +578,8 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                         raise ProjectVersionConflict(project_id)
                     result = mutate(current)
                     if result is None:
-                        return current
+                        project, = self._with_agent_roles(conn, [current])
+                        return project
                     project, payload = result
                     sequence = int(row["event_version"])
                     claimed = conn.execute(
@@ -560,6 +599,7 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
                             **_event_row(row["id"], sequence, event)
                         )
                     )
+                    project, = self._with_agent_roles(conn, [project])
                 return project
             except _ProjectWriteConflict:
                 if attempt == 2:

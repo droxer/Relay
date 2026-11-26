@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import type { AgentName, AgentTeam, ProjectListItem, RelaySession, UserAgent } from "../types";
 import { preferredRoutableAgent } from "../lib/agentDisplayNames";
-import { withProjectAgentRole, withTeamAgentRole } from "../lib/agentRoleLabel";
+import { withTeamAgentRole } from "../lib/agentRoleLabel";
 import { mentionCandidates } from "../lib/mentions";
 import { threadRoundTeam } from "../lib/messageRouting";
 import { projectThreadRoster } from "../lib/taskAssignment";
@@ -54,8 +54,7 @@ export function useComposerRouting({
   );
   const effectiveSelectableLogicalAgents = useMemo(() => {
     if (activeProject) {
-      return addressableThreadAgents(logicalAgents, projectThreadRoster(activeProject, logicalAgents))
-        .map((agent) => withProjectAgentRole(agent, activeProject));
+      return addressableThreadAgents(logicalAgents, projectThreadRoster(activeProject, logicalAgents));
     }
     if (activeTeamRoster) {
       return addressableThreadAgents(selectableLogicalAgents, activeTeamRoster)
