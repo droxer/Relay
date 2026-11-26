@@ -14,6 +14,7 @@ import {
 import { AgentSelect, type ProjectRoomOption } from "./AgentSelect";
 import { ComposerContextLine } from "./ComposerContext";
 import { useComposer } from "../../hooks/useComposer";
+import type { ThreadMessageRetry } from "../../hooks/usePendingThreadMessage";
 import { useMentionAutocomplete } from "../../hooks/useMentionAutocomplete";
 import { parseMentions, replaceAddressRun, type MentionCandidate } from "../../lib/mentions";
 import { MentionHighlight } from "./MentionHighlight";
@@ -105,6 +106,8 @@ const ComposerView = forwardRef<ComposerHandle, {
    *  while staging a new thread, where the footer picker chooses the target. */
   mentionCandidates?: MentionCandidate[];
   onSend: (style?: CollaborationStyle, intent?: ThreadMessageInput["intent"], options?: ComposerDispatchOptions) => void | Promise<boolean | void>;
+  messageRetry?: ThreadMessageRetry | null;
+  queueMessageRetry?: ThreadMessageRetry | null;
   onCancelRun: () => void;
   /** Takes a draft written while the run is going. Without it, the box
    *  cannot send until the run ends. */
@@ -123,7 +126,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   projectRoomSelected = false, onProjectRoomPicked, readOnly = false,
   runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange,
   running, permissionMode, permissionModePending, onPermissionModeChange,
-  mentionCandidates = [], onSend, onCancelRun, onQueue, queuePending = false,
+  mentionCandidates = [], onSend, messageRetry, queueMessageRetry, onCancelRun, onQueue, queuePending = false,
   prompt, queue, placeholder,
 }, ref) {
   const { t } = useTranslation();
@@ -217,12 +220,13 @@ const ComposerView = forwardRef<ComposerHandle, {
   const sending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const sendPending = submitting || queuePending;
+  const hasUnconfirmedSend = Boolean(messageRetry || queueMessageRetry);
   // One answer to "can this draft be sent?", read by both the button's
   // `disabled` and the keyboard path. They were written separately and had
   // already drifted: the button also refused a staged thread with no computer
   // picked, but `triggerSend` did not, so the keyboard shortcut dispatched a round with no
   // runtime — the very bypass the mention comment below was added to close.
-  const cannotSendAsWritten = readOnly
+  const cannotSendAsWritten = hasUnconfirmedSend || readOnly
     || imageInput.busy
     || (!!uploadUnavailableReason && imageInput.images.length > 0)
     || (!composerText.trim() && !imageInput.images.length)
@@ -230,7 +234,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   const cannotSend = cannotSendAsWritten || parsed.blocked;
   // A draft written mid-run waits in the queue. Text only: an image is an
   // upload bound to this box, so a draft carrying one waits here instead.
-  const canQueue = running && !!onQueue && !readOnly && !!composerText.trim() && !imageInput.images.length && !imageInput.busy;
+  const canQueue = !hasUnconfirmedSend && running && !!onQueue && !readOnly && !!composerText.trim() && !imageInput.images.length && !imageInput.busy;
   const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false, userMessageId?: string): Promise<boolean> => {
     if (sending.current || queuePending || !mounted.current) return false;
     const enqueue = !literal && canQueue ? onQueue : undefined;
@@ -277,6 +281,21 @@ const ComposerView = forwardRef<ComposerHandle, {
     } catch {
       // Dispatch owns error reporting; preserve the override for retry.
       return false;
+    } finally {
+      sending.current = false;
+      if (mounted.current) setSubmitting(false);
+    }
+  };
+
+  const retryDelivery = async (message: ThreadMessageRetry) => {
+    if (sending.current || message.busy) return;
+    sending.current = true;
+    setSubmitting(true);
+    try {
+      if (await message.retry() && mounted.current && !imageInput.busy && imageInput.images.length
+        && imageInput.images.every(image => message.attachmentIds?.includes(image.id))) {
+        imageInput.clear();
+      }
     } finally {
       sending.current = false;
       if (mounted.current) setSubmitting(false);
@@ -375,10 +394,24 @@ const ComposerView = forwardRef<ComposerHandle, {
 
   return (
     <form className="composer" onSubmit={(e) => { e.preventDefault(); triggerSend(); }}>
-      {prompt || queue ? (
+      {prompt || queue || hasUnconfirmedSend ? (
         <div className="composer-dock">
           {prompt}
           {queue}
+          {([["direct", messageRetry], ["queue", queueMessageRetry]] as const).map(([kind, message]) => message ? (
+            <div className="composer-slip" key={kind}>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <div className="min-w-0 flex-1 text-sm">
+                  <p className="font-medium" role="status">{t(message.busy ? "composer.sending" : "composer.unconfirmed_send")}</p>
+                  <p className="truncate">{message.text}</p>
+                </div>
+                <Button type="button" size="xs" variant="outline" disabled={readOnly || sendPending || message.busy}
+                  onClick={() => void retryDelivery(message)}>{t("composer.retry_send")}</Button>
+                <Button type="button" size="xs" variant="ghost" disabled={sendPending || message.busy}
+                  onClick={message.dismiss}>{t("composer.dismiss_send")}</Button>
+              </div>
+            </div>
+          ) : null)}
         </div>
       ) : null}
       <div className="composer-input-wrap" data-running={running || undefined}>

@@ -3,11 +3,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { useThreadQueue } from "../src/hooks/useThreadQueue";
-import { apiJson } from "../src/api-client/client";
+import { apiJson, RelayApiError } from "../src/api-client/client";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 import { THREAD_QUEUE_QUERY_KEY } from "../src/lib/threadQueue";
 
-vi.mock("../src/api-client/client", () => ({ apiJson: vi.fn() }));
+vi.mock("../src/api-client/client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/api-client/client")>(), apiJson: vi.fn(),
+}));
 vi.mock("../src/api-client/sessions", () => ({ cancelRun: vi.fn(async () => ({})) }));
 let saved: { messages: { id: string; text: string }[]; paused: boolean };
 beforeEach(() => {
@@ -164,6 +166,7 @@ it("persists the selected Agents and treats a changed target as a new retry inte
   });
   await act(async () => { await hook.result.current.enqueue("Continue", { addressAgentIds: ["selected"] }); });
   await act(async () => { await hook.result.current.enqueue("Continue", { addressAgentIds: ["selected"] }); });
+  act(() => hook.result.current.messageRetry?.dismiss());
   await act(async () => { await hook.result.current.enqueue("Continue", { addressTeamId: "crew" }); });
   expect(posts[0]).toMatchObject({ text: "Continue", addressAgentIds: ["selected"] });
   expect(posts[0].id).toBe(posts[1].id);
@@ -306,4 +309,70 @@ it("keeps the enqueue locked and consumes the saved draft when the composer remo
   expect(sessionStorage.getItem(draftKey)).toBeNull();
   reopened.unmount();
   first.client.clear();
+});
+
+it("reuses the original enqueue after a lost receipt and reload", async () => {
+  const original = open();
+  await waitFor(() => expect(original.client.isFetching()).toBe(0));
+  const reply = vi.mocked(apiJson).getMockImplementation()!;
+  let firstPost = true;
+  const posts: unknown[] = [];
+  vi.mocked(apiJson).mockImplementation(async (path, options) => {
+    if (options?.method !== "POST") return reply(path, options);
+    posts.push(options.body);
+    const accepted = await reply(path, options);
+    if (firstPost) {
+      firstPost = false;
+      throw new TypeError("Receipt lost");
+    }
+    return accepted;
+  });
+  await act(async () => {
+    expect(await original.result.current.enqueue("Keep going", { addressAgentIds: ["selected"] })).toBe(false);
+  });
+  original.unmount();
+  original.client.clear();
+
+  const reloaded = open();
+  expect(reloaded.result.current.messageRetry?.text).toBe("Keep going");
+  await act(async () => { expect(await reloaded.result.current.messageRetry!.retry()).toBe(true); });
+  expect(posts).toHaveLength(2);
+  expect(posts[1]).toEqual(posts[0]);
+  expect(saved.messages).toHaveLength(1);
+  expect(reloaded.result.current.messageRetry).toBeNull();
+});
+
+it("hides the retry slip during an initial in-flight enqueue and clears it when a manual retry is definitely rejected", async () => {
+  const hook = open();
+  await waitFor(() => expect(hook.client.isFetching()).toBe(0));
+  const reply = vi.mocked(apiJson).getMockImplementation()!;
+  let rejectPost!: (error: unknown) => void;
+  vi.mocked(apiJson).mockImplementation((path, options) => {
+    if (options?.method !== "POST") return reply(path, options);
+    return new Promise((_resolve, reject) => { rejectPost = reject; });
+  });
+
+  let initialSend!: Promise<boolean>;
+  act(() => { initialSend = hook.result.current.enqueue("Keep going"); });
+  await waitFor(() => expect(hook.result.current.pending).toBe(true));
+  // Initial in-flight enqueue must not flash the unconfirmed retry slip.
+  expect(hook.result.current.messageRetry).toBeNull();
+
+  await act(async () => {
+    rejectPost(new RelayApiError("Computer temporarily unavailable", 409, "node_not_accepting_commands"));
+    expect(await initialSend).toBe(false);
+  });
+  expect(hook.result.current.messageRetry).toMatchObject({ text: "Keep going", busy: false });
+
+  let retrySend!: Promise<boolean>;
+  act(() => { retrySend = hook.result.current.messageRetry!.retry(); });
+  await waitFor(() => expect(hook.result.current.pending).toBe(true));
+  expect(hook.result.current.messageRetry).toMatchObject({ text: "Keep going", busy: true });
+
+  await act(async () => {
+    rejectPost(new RelayApiError("Forbidden", 403, "forbidden"));
+    expect(await retrySend).toBe(false);
+  });
+  expect(hook.result.current.messageRetry).toBeNull();
+  expect(hook.result.current.error).toBe("queue.errors.forbidden");
 });

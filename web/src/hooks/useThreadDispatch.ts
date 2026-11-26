@@ -20,6 +20,8 @@ import { projectRoomAgentIds } from "../lib/taskAssignment";
 import { retainThreadDispatchView } from "../lib/threadDispatchView";
 import { threadSendKey, useThreadSendStore } from "../lib/threadSendStore";
 import { restoreComposerDraft, threadDraftKey } from "./useComposer";
+import { messageDefinitelyRejected } from "../api-client/client";
+import { usePendingThreadMessage, type PendingDirectMessage, type ThreadMessageRetry } from "./usePendingThreadMessage";
 
 type Mutations = ReturnType<typeof useRelayMutations>;
 type Transcript = ReturnType<typeof useTranscriptPin>;
@@ -60,6 +62,8 @@ export interface ThreadDispatchDeps {
 
   /* --- where it runs ---------------------------------------------------- */
   selectedUser: string;
+  draftComputerId?: string | null;
+  requestedThreadId?: string | null;
   fallbackNode: Parameters<typeof threadCancelNodeId>[0]["fallbackNode"];
   selectedThreadNodeId: ThreadTargets["selectedThreadNodeId"];
   selectedToken: string | undefined;
@@ -82,7 +86,7 @@ export interface ThreadDispatchDeps {
 
   /* --- navigation (thread selection, composer target and send state are
          written straight to their stores) ------------------------------- */
-  syncThreadUrl: (sessionId: string | null, replace?: boolean, projectId?: string | null) => void;
+  syncThreadUrl: (sessionId: string | null, replace?: boolean, projectId?: string | null, taskId?: string | null, computerId?: string | null) => void;
   navigateToRoute: (route: AppRoute) => void;
 
   /* --- reporting -------------------------------------------------------- */
@@ -98,7 +102,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     effectiveSelectableLogicalAgents,
     composerLogicalAgents = effectiveSelectableLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedUser, fallbackNode, selectedThreadNodeId, selectedToken, tokens,
+    selectedUser, draftComputerId, requestedThreadId, fallbackNode, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -107,13 +111,23 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     reportMutationError, t,
   } = deps;
 
+  const composingNew = useRelayStore((state) => state.composingNew);
+  const activeThreadId = composingNew || activeSession?.archived ? undefined : activeSession?.id;
+  const pending = usePendingThreadMessage(JSON.stringify([
+    selectedUser,
+    activeThreadId ? ["thread", activeThreadId] : ["draft", activeProject?.id ?? null, draftComputerId ?? null],
+  ]), "direct");
+  const saved = pending.message;
+  const pendingSendKey = threadSendKey(selectedUser, activeThreadId, useRelayStore((state) => state.threadDraftId));
+  const pendingBusy = useThreadSendStore((state) => !!state.operations[pendingSendKey]?.dispatching);
+
   async function sendMessage(
     requestedStyle?: import("../types").CollaborationStyle,
     intent: import("../types").ThreadMessageInput["intent"] = "accomplish",
     { literal = false, questionId, approve = false, attachmentIds = [], userMessageId: queuedMessageId }: import("../components/composer/Composer").ComposerDispatchOptions = {},
   ) {
     const raw = composerRef.current?.getText().trim() ?? "";
-    if ((!raw && !attachmentIds.length) || !selectedUser || threadRunning || projectDispatchDisabled) return false;
+    if ((!raw && !attachmentIds.length) || !selectedUser || threadRunning || projectDispatchDisabled || pending.read()) return false;
     if (requiresRuntimeSelection && !selectedThreadNodeId) {
       reportMutationError("Computer required", null, t("errors.thread_computer_required"));
       return false;
@@ -130,9 +144,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     // open one. composingNew forces a fresh owner-scoped session here.
     const action = composingNew ? { kind: "create" as const } : chooseSendAction({ activeSessionId: activeSession?.id ?? null, session: activeSession });
     const sessionId = action.kind === "append" ? action.sessionId : undefined;
-    const creatingSession = suppressActiveSessionDuringPendingSend(action);
-    let sendKey = threadSendKey(selectedUser, sessionId, threadDraftId);
-    if (useThreadSendStore.getState().operations[sendKey]?.dispatching) return false;
+    const sendKey = threadSendKey(selectedUser, sessionId, threadDraftId);
+    if (sessionId !== activeThreadId || useThreadSendStore.getState().operations[sendKey]?.dispatching) return false;
     // A team picked while staging a new thread turns the message into a team
     // thread: no single-agent routing, the backend expands the roster.
     const pendingTeam = action.kind === "create" && pendingThreadTeamId
@@ -186,13 +199,6 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     if (!sessionId && !pendingTeam) {
       newThreadAgentIds = messageAddress.addressAgentIds;
     }
-    // The empty list (or an archived Thread) can create without an explicit
-    // New Thread click. Establish its draft before routing to /threads/new,
-    // so the route and this operation retain the same identity.
-    if (creatingSession && !composingNew) {
-      useRelayStore.getState().setComposingNew(true);
-      sendKey = threadSendKey(selectedUser, undefined, useRelayStore.getState().threadDraftId);
-    }
     // Echo the turn immediately. For a continued session we mint the message id
     // here and hand it to the backend so the persisted event reconciles by id.
     const messageOperationKey = threadMessageOperationKey({
@@ -206,59 +212,66 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       questionId,
       approve,
     });
-    const retainedMessageId = messageOperationKey
-      ? messageOperationIdsRef.current.get(messageOperationKey)
-      : null;
+    const retainedMessageId = messageOperationIdsRef.current.get(messageOperationKey);
     const userMessageId = queuedMessageId ?? retainedMessageId ?? `evt_${crypto.randomUUID()}`;
-    if (messageOperationKey && !retainedMessageId) {
-      messageOperationIdsRef.current.set(messageOperationKey, userMessageId);
-    }
-    // While creating a fresh thread, keep suppressing the previous active
-    // thread so the optimistic user turn does not appear in the wrong transcript.
-    if (!creatingSession) useRelayStore.getState().setComposingNew(false);
-    // Keep the URL on the originating Thread (or its staged draft).
-    // The URL must name the thread this turn belongs to: a create stays on
-    // /threads/new (so composingNew survives) and a continued send stays on
-    // its own path. The bare /threads route parses as neither, which reset
-    // composingNew and rendered the new turn inside the previously active
-    // thread until the create resolved and snapped the view back.
-    syncThreadUrl(sendThreadSessionId(action), true, activeProject?.id);
-    const dispatchId = useThreadSendStore.getState().beginSend(sendKey, { id: userMessageId, text: goal }, creatingSession);
+    const message: PendingDirectMessage = sessionId
+      ? { kind: "append", id: userMessageId, text: raw, sessionId, input: { ...threadMessageInput({
+          text: goal,
+          intent,
+          addressAgentIds: messageAddress.addressAgentIds,
+          addressTeamId: addressedTeamId,
+          userMessageId,
+          workflowId: roundTeam.teamId && requestedStyle ? `preset:${requestedStyle}` : undefined,
+          questionId,
+          approve,
+        }), attachmentIds } }
+      : { kind: "create", id: userMessageId, text: raw, input: {
+          taskGoal: goal,
+          attachmentIds,
+          userMessageId,
+          idempotencyKey: userMessageId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          ...(!activeProject && selectedThreadNodeId ? { daemonNodeId: selectedThreadNodeId } : {}),
+          ...(activeProject
+            ? newThreadAgentIds!.length
+              ? { assignments: newThreadAgentIds!.map((agentId) => ({ agentId })) }
+              : {}
+            : pendingTeam
+            ? { teamId: pendingTeam.id, workflowId: requestedStyle ? `preset:${requestedStyle}` : defaultWorkflowId(pendingTeam) }
+            : { assignments: newThreadAgentIds!.map((agentId) => ({ agentId })) }),
+        } };
+    return dispatchMessage(message, messageOperationKey, activeTarget);
+  }
+
+  async function dispatchMessage(message: PendingDirectMessage, operationKey?: string, initialTarget?: UserAgent | null) {
+    if (useRelayStore.getState().selectedUser !== selectedUser) return false;
+    const isInitial = !!operationKey;
+    const sessionId = message.kind === "append" ? message.sessionId : undefined;
+    const goal = message.kind === "append" ? message.input.text : message.input.taskGoal;
+    const action = message.kind === "append" ? message : { kind: "create" as const };
+    const creatingSession = suppressActiveSessionDuringPendingSend(action);
+    // Establish the draft before routing so the URL and transcript agree.
+    useRelayStore.getState().setComposingNew(creatingSession);
+    let sendKey = threadSendKey(selectedUser, sessionId, useRelayStore.getState().threadDraftId);
+    if (useThreadSendStore.getState().operations[sendKey]?.dispatching) return false;
+    if (creatingSession && draftComputerId) syncThreadUrl(null, true, activeProject?.id, undefined, draftComputerId);
+    else syncThreadUrl(sendThreadSessionId(action), true, activeProject?.id);
+    const dispatchId = useThreadSendStore.getState().beginSend(sendKey, { id: message.id, text: goal }, creatingSession);
+    pending.save(message, isInitial);
     const view = retainThreadDispatchView();
-    composerRef.current?.clear();
+    if (operationKey) {
+      messageOperationIdsRef.current.delete(operationKey);
+      composerRef.current?.clear();
+    }
     transcript.pinToBottom();
     try {
-      const done = sessionId
-        ? await submitThreadMessageMutation.mutateAsync({
-            sessionId,
-            input: { ...threadMessageInput({
-              text: goal,
-              intent,
-              addressAgentIds: messageAddress.addressAgentIds,
-              addressTeamId: addressedTeamId,
-              userMessageId,
-              workflowId: roundTeam.teamId && requestedStyle ? `preset:${requestedStyle}` : undefined,
-              questionId,
-              approve,
-            }), attachmentIds },
-          })
-        : await runLogicalAgentsMutation.mutateAsync({
-            taskGoal: goal,
-            attachmentIds,
-            userMessageId,
-            idempotencyKey: userMessageId,
-            ...(activeProject ? { projectId: activeProject.id } : {}),
-            ...(!activeProject && selectedThreadNodeId ? { daemonNodeId: selectedThreadNodeId } : {}),
-            ...(activeProject
-              ? newThreadAgentIds!.length
-                ? { assignments: newThreadAgentIds!.map((agentId) => ({ agentId })) }
-                : {}
-              : pendingTeam
-              ? { teamId: pendingTeam.id, workflowId: requestedStyle ? `preset:${requestedStyle}` : defaultWorkflowId(pendingTeam) }
-              : {
-                  assignments: newThreadAgentIds!.map((agentId) => ({ agentId })),
-                }),
-          });
+      const done = message.kind === "append"
+        ? await submitThreadMessageMutation.mutateAsync({ sessionId: message.sessionId, input: message.input })
+        : await runLogicalAgentsMutation.mutateAsync(message.input);
+      if (!done?.id || (sessionId && done.id !== sessionId)) {
+        throw new Error("Missing Thread message acknowledgement");
+      }
+      pending.clear(message.id);
       // A staged team became the new thread's own team; a team picked in a
       // started thread stays the target for its next round too.
       if (view.isCurrent()) {
@@ -267,8 +280,9 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       }
       // A new single-agent thread starts on the agent it was created with, so
       // coming back to it later still names that agent.
-      if (!sessionId && !pendingTeam && !activeProject && activeTarget) {
-        useComposerTargetStore.getState().rememberThreadPick(done.id, { kind: "agent", agent: { id: activeTarget.id, executorKind: activeTarget.executorKind } });
+      if (message.kind === "create" && !message.input.teamId && !message.input.projectId) {
+        const target = initialTarget ?? composerLogicalAgents.find((agent) => agent.id === message.input.assignments?.[0]?.agentId);
+        if (target) useComposerTargetStore.getState().rememberThreadPick(done.id, { kind: "agent", agent: { id: target.id, executorKind: target.executorKind } });
       }
       const stopRequested = useThreadSendStore.getState().operations[sendKey]?.stopRequested;
       const acceptedKey = threadSendKey(selectedUser, done.id);
@@ -279,9 +293,6 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         useRelayStore.getState().openSession(done.id);
         syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id);
       }
-      if (messageOperationKey) {
-        messageOperationIdsRef.current.delete(messageOperationKey);
-      }
       if (stopRequested) {
         // Dispatch has accepted the run; cancelling earlier could only cancel
         // the previous turn (or have no thread ID at all).
@@ -290,11 +301,14 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       return true;
     } catch (error) {
       useThreadSendStore.getState().dropPendingMessage(sendKey, dispatchId);
-      // The composer was cleared optimistically; a rejected dispatch (busy
-      // node, offline runtime) is retryable, so hand the text back — exactly
-      // as typed, mention included — instead of making the author retype it.
-      if (view.isCurrent() && !composerRef.current?.getText().trim()) composerRef.current?.setText(raw);
-      else restoreComposerDraft(threadDraftKey({ username: selectedUser }, sessionId), raw);
+      // A definite rejection leaves the text editable. With an ambiguous
+      // outcome, retain the entire request for a same-ID retry.
+      if (messageDefinitelyRejected(error)) {
+        pending.clear(message.id);
+        if (operationKey) messageOperationIdsRef.current.set(operationKey, message.id);
+        if (view.isCurrent() && !composerRef.current?.getText().trim()) composerRef.current?.setText(message.text);
+        else restoreComposerDraft(threadDraftKey({ username: selectedUser }, sessionId), message.text);
+      }
       reportMutationError(
         "Failed to send message",
         error,
@@ -302,10 +316,32 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       );
       return false;
     } finally {
+      if (isInitial) pending.finishInitial(message.id);
       view.release();
       useThreadSendStore.getState().endDispatch(sendKey, dispatchId);
     }
   }
+
+  const messageRetry: ThreadMessageRetry | null = saved && saved.kind !== "enqueue"
+    && !(pendingBusy && pending.initial)
+    && selectedUser && !projectDispatchDisabled
+    && (!requestedThreadId || requestedThreadId === activeSession?.id)
+    ? {
+      text: saved.kind === "append" ? saved.input.text : saved.input.taskGoal,
+      busy: pendingBusy,
+      attachmentIds: saved.input.attachmentIds,
+      retry: async () => {
+        if (pending.read()?.id !== saved.id) return false;
+        if (saved.kind === "append" && saved.sessionId !== activeThreadId) return false;
+        return dispatchMessage(saved);
+      },
+      dismiss: () => {
+        if (pending.read()?.id !== saved.id || pendingBusy) return;
+        pending.clear(saved.id);
+        if (!composerRef.current?.getText().trim()) composerRef.current?.setText(saved.text);
+      },
+    }
+    : null;
 
   async function cancelActiveRun() {
     const key = threadSendKey(selectedUser, activeSession?.id, useRelayStore.getState().threadDraftId);
@@ -517,5 +553,5 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   }
 
 
-  return { sendMessage, cancelActiveRun, sendDecision, retryAgentMessage, resumeAgentMessage, sendHandoff };
+  return { sendMessage, messageRetry, cancelActiveRun, sendDecision, retryAgentMessage, resumeAgentMessage, sendHandoff };
 }

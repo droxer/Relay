@@ -5,6 +5,7 @@ import { act, renderHook } from "@testing-library/react";
 import { expect, it } from "vitest";
 import type { TFunction } from "i18next";
 import { setup } from "./threadDispatchSetup";
+import { RelayApiError } from "../src/api-client/client";
 import { useThreadDispatch } from "../src/hooks/useThreadDispatch";
 import { useThreadTranscript } from "../src/hooks/useThreadTranscript";
 import { useComposerTargetStore } from "../src/lib/composerTargetStore";
@@ -85,7 +86,7 @@ it("a late rejection leaves B's composer and concurrent send untouched", async (
   rerender({ ...deps, activeSession: other });
   const key = threadSendKey("alice", other.id);
   act(() => { useThreadSendStore.getState().beginSend(key, { id: "B-message", text: "B" }); });
-  await act(async () => { reject(new Error("offline")); await sending; });
+  await act(async () => { reject(new RelayApiError("Computer unavailable", 409, "node_offline")); await sending; });
   expect(deps.composerRef.current?.setText).not.toHaveBeenCalled();
   expect(useThreadSendStore.getState().operations[key]).toMatchObject({ dispatching: true, pendingUserMessage: { text: "B" } });
   expect(useRelayStore.getState().activeSessionId).toBe(other.id);
@@ -214,7 +215,7 @@ it.each([false, true])("restores a rejected send to A's draft after leaving (ret
     hook.rerender({ activeSession: session });
     act(() => hook.result.current.composer.setComposerText("A's newer draft"));
   }
-  await act(async () => { reject(new Error("offline")); await sending; });
+  await act(async () => { reject(new RelayApiError("Computer unavailable", 409, "node_offline")); await sending; });
   if (!returnBeforeFailure) {
     expect(hook.result.current.composer.composerText).toBe("B's draft");
     act(() => useRelayStore.getState().openSession(session.id));
@@ -223,4 +224,104 @@ it.each([false, true])("restores a rejected send to A's draft after leaving (ret
   expect(hook.result.current.composer.composerText).toBe(returnBeforeFailure
     ? "keep this message\n\nA's newer draft"
     : "keep this message");
+});
+
+it.each([false, true])("replays the original request after reload when its receipt was lost (existing=%s)", async (existing) => {
+  sessionStorage.clear();
+  const first = setup(existing);
+  if (existing) useRelayStore.getState().openSession(first.session.id);
+  const initial = renderHook(() => useThreadDispatch(first.deps));
+  let sent!: Promise<boolean>;
+  act(() => { sent = initial.result.current.sendMessage(undefined, "accomplish", { attachmentIds: ["image-1"] }); });
+  const originalRequest = first.dispatch.mock.calls[0][0];
+  initial.unmount();
+
+  const second = setup(existing);
+  if (existing) useRelayStore.getState().openSession(second.session.id);
+  second.deps.composerLogicalAgents = [];
+  const reloaded = renderHook(() => useThreadDispatch(second.deps));
+  expect(reloaded.result.current.messageRetry?.text).toBe("do work");
+  act(() => { sent = reloaded.result.current.messageRetry!.retry(); });
+  expect(second.dispatch.mock.calls[0][0]).toEqual(originalRequest);
+  await act(async () => { second.accept(second.session); expect(await sent).toBe(true); });
+  expect(reloaded.result.current.messageRetry).toBeNull();
+
+  // The old page's abandoned request settling cannot restore a cleared delivery.
+  await act(async () => { first.reject(new TypeError("Connection closed")); });
+});
+
+it("scopes the saved request to its Account and Thread", async () => {
+  sessionStorage.clear();
+  const { deps, reject, session } = setup(true);
+  const otherThread = { ...session, id: "thread-2" };
+  useRelayStore.getState().openSession(session.id);
+  const hook = renderHook((props) => useThreadDispatch(props), { initialProps: deps });
+  let sent!: Promise<boolean>;
+  act(() => { sent = hook.result.current.sendMessage(); });
+  await act(async () => {
+    reject(new TypeError("Connection closed"));
+    expect(await sent).toBe(false);
+  });
+
+  hook.rerender({ ...deps, activeSession: otherThread });
+  expect(hook.result.current.messageRetry).toBeNull();
+  hook.rerender({ ...deps, selectedUser: "bob" });
+  expect(hook.result.current.messageRetry).toBeNull();
+  hook.rerender(deps);
+  expect(hook.result.current.messageRetry?.text).toBe("do work");
+  act(() => hook.result.current.messageRetry?.dismiss());
+});
+
+it("assigns a new ID to the same text deliberately sent after recovery", async () => {
+  sessionStorage.clear();
+  const { deps, reject, session, dispatch } = setup(true);
+  useRelayStore.getState().openSession(session.id);
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  let sent!: Promise<boolean>;
+  act(() => { sent = result.current.sendMessage(); });
+  await act(async () => {
+    reject(new TypeError("Connection closed"));
+    expect(await sent).toBe(false);
+  });
+  dispatch.mockResolvedValue(session);
+  await act(async () => { expect(await result.current.messageRetry!.retry()).toBe(true); });
+  await act(async () => { expect(await result.current.sendMessage()).toBe(true); });
+
+  const [first, replay, next] = dispatch.mock.calls.map(([request]) => request.input.userMessageId);
+  expect(replay).toBe(first);
+  expect(next).not.toBe(first);
+});
+
+it("hides the retry slip during a normal in-flight send and clears it when a manual retry is definitely rejected", async () => {
+  sessionStorage.clear();
+  const { deps, reject, session, dispatch } = setup(true);
+  useRelayStore.getState().openSession(session.id);
+  const { result } = renderHook(() => useThreadDispatch(deps));
+
+  let firstSend!: Promise<boolean>;
+  act(() => { firstSend = result.current.sendMessage(); });
+  // Initial in-flight send must not flash the unconfirmed retry slip.
+  expect(result.current.messageRetry).toBeNull();
+  // Mirror the real composer, which clears its text when dispatch begins.
+  deps.composerRef.current = { ...deps.composerRef.current!, getText: () => "" };
+
+  await act(async () => {
+    reject(new RelayApiError("Computer temporarily unavailable", 409, "node_not_accepting_commands"));
+    expect(await firstSend).toBe(false);
+  });
+  expect(result.current.messageRetry).toMatchObject({ text: "do work", busy: false });
+
+  let rejectRetry!: (error: unknown) => void;
+  dispatch.mockImplementationOnce(() => new Promise((_resolve, rejectFn) => { rejectRetry = rejectFn; }));
+  let retrySend!: Promise<boolean>;
+  act(() => { retrySend = result.current.messageRetry!.retry(); });
+  // Manual retry keeps the slip visible in its busy state.
+  expect(result.current.messageRetry).toMatchObject({ text: "do work", busy: true });
+
+  await act(async () => {
+    rejectRetry(new RelayApiError("Forbidden", 403, "forbidden"));
+    expect(await retrySend).toBe(false);
+  });
+  expect(result.current.messageRetry).toBeNull();
+  expect(deps.composerRef.current?.setText).toHaveBeenCalledWith("do work");
 });

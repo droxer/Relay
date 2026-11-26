@@ -3,10 +3,11 @@ import { useTranslation } from "react-i18next";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ComposerHandle } from "../components/composer/Composer";
 import { clearComposerDraft, restoreComposerDraft } from "./useComposer";
-import { apiJson } from "../api-client/client";
+import { apiJson, messageDefinitelyRejected } from "../api-client/client";
 import { cacheThreadQueue, EMPTY_THREAD_QUEUE, newestQueue, THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress, type QueueState } from "../lib/threadQueue";
 import { isThreadStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
+import { clearPendingThreadMessage, usePendingThreadMessage, type PendingQueueMessage, type ThreadMessageRetry } from "./usePendingThreadMessage";
 
 /** The message on its way out: claimed for a new turn, or handed to the live run and not yet answered. */
 function outgoingMessageId(state: QueueState, now = Date.now()): string | undefined {
@@ -40,22 +41,28 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const error = errorState?.key === queueKey ? errorState.message : null;
   const setError = useCallback((message: string | null) => setErrorState({ key: queueKey, message }), [queueKey]);
   const unsaved = useRef(new Map<string, QueuedMessage>());
+  const delivery = usePendingThreadMessage(queueKey, "queue");
   const key = [...THREAD_QUEUE_QUERY_KEY, threadId ?? null];
   const mutationKey = [...key, "change"];
   const pending = useIsMutating({ mutationKey, exact: true }) > 0;
   const { mutateAsync: mutateQueue } = useMutation({
     mutationKey,
+    networkMode: "always",
     mutationFn: ({ threadId, action, id, text, address }: QueueChange) => apiJson<QueueState>(
       `/threads/${encodeURIComponent(threadId)}/queue?view=versioned`,
       { method: "POST", body: { action, id, text, ...address }, retryMessageDelivery: action === "enqueue" && !!id },
     ),
-    onSuccess: async (updated, { threadId, queueKey, action, text }) => {
+    onSuccess: async (updated, { threadId, queueKey, action, text, id }) => {
+      if (!Array.isArray(updated?.messages)) throw new Error("Missing Thread queue acknowledgement");
       const queryKey = [...THREAD_QUEUE_QUERY_KEY, threadId];
       // A GET started before this write can still carry a pre-mutation queue.
       // Publish the receipt immediately. Later polls reconcile other writers.
       await client.cancelQueries({ queryKey, exact: true });
       cacheThreadQueue(client, threadId, updated);
-      if (action === "enqueue" && text !== undefined) clearComposerDraft(queueKey, text);
+      if (action === "enqueue" && id && text !== undefined) {
+        clearPendingThreadMessage(queueKey, "queue", id);
+        clearComposerDraft(queueKey, text);
+      }
     },
   });
   const path = `/threads/${encodeURIComponent(threadId ?? "")}/queue?view=versioned`;
@@ -87,6 +94,9 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
       if (activeKey.current === queueKey) setError(null);
       return true;
     } catch (cause) {
+      if (action === "enqueue" && id && messageDefinitelyRejected(cause)) {
+        clearPendingThreadMessage(queueKey, "queue", id);
+      }
       if (activeKey.current === queueKey) setError(queueErrorKey(cause));
       return false;
     }
@@ -112,16 +122,47 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     return () => { stopped = true; };
   }, [threadId, queueKey, change]);
 
-  const enqueue = useCallback(async (text: string, address: QueueAddress = {}) => {
-    const previous = unsaved.current.get(queueKey);
+  async function sendEnqueue(message: PendingQueueMessage, initial = false) {
+    if (!threadId || client.isMutating({ mutationKey, exact: true })) return false;
+    const { id, text, addressAgentIds, addressTeamId } = message;
+    delivery.save(message, initial);
+    try {
+      const accepted = await change("enqueue", id, text, { addressAgentIds, addressTeamId });
+      if (accepted) unsaved.current.delete(queueKey);
+      return accepted;
+    } finally {
+      if (initial) delivery.finishInitial(id);
+    }
+  }
+
+  async function enqueue(text: string, address: QueueAddress = {}) {
+    const saved = delivery.read();
+    const previous = saved?.kind === "enqueue" ? saved : unsaved.current.get(queueKey);
     const sameAddress = JSON.stringify([previous?.addressAgentIds, previous?.addressTeamId])
       === JSON.stringify([address.addressAgentIds, address.addressTeamId]);
-    const message = previous?.text === text && sameAddress ? previous : { text, ...address, id: `q_${crypto.randomUUID()}` };
+    const sameMessage = previous?.text === text && sameAddress;
+    if (saved && !sameMessage) return false;
+    const id = sameMessage ? previous.id : `q_${crypto.randomUUID()}`;
+    const message = { kind: "enqueue" as const, text, ...address, id };
     unsaved.current.set(queueKey, message);
-    const accepted = await change("enqueue", message.id, text, address);
-    if (accepted) unsaved.current.delete(queueKey);
-    return accepted;
-  }, [change, queueKey]);
+    return sendEnqueue(message, !saved);
+  }
+
+  const saved = delivery.message;
+  const messageRetry: ThreadMessageRetry | null = threadId && saved?.kind === "enqueue"
+    && !(pending && delivery.initial)
+    ? {
+      text: saved.text,
+      busy: pending,
+      retry: async () => delivery.read()?.id === saved.id && sendEnqueue(saved),
+      dismiss: () => {
+        if (client.isMutating({ mutationKey, exact: true }) || delivery.read()?.id !== saved.id) return;
+        delivery.clear(saved.id);
+        unsaved.current.delete(queueKey);
+        setError(null);
+      },
+    }
+    : null;
   const remove = useCallback((id: string) => { void change("remove", id); }, [change]);
   const undoRemove = useCallback(() => { if (state.removed) void change("undo_remove", state.removed.message.id); }, [change, state.removed]);
   const edit = useCallback(async (id: string) => {
@@ -140,7 +181,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
       void client.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
     }
   }, [change, running, client]);
-  return { messages: state.messages, enqueue, steer, edit, remove,
+  return { messages: state.messages, enqueue, messageRetry, steer, edit, remove,
     removedAt: state.removed?.removedAt, undoRemove,
     pending, paused: state.paused, sending: outgoingMessageId(state), waiting: awaitsPerson && !running,
     error: error ? t(error) : state.error ? t("queue.errors.dispatch") : query.isError ? t("queue.errors.unavailable") : null,

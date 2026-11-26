@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, it } from "node:test";
 import { logout } from "../src/api-client/auth.ts";
-import { RelayApiError } from "../src/api-client/client.ts";
+import { messageDefinitelyRejected, RelayApiError } from "../src/api-client/client.ts";
 import { runLogicalAgents, submitThreadMessage } from "../src/api-client/sessions.ts";
 
 const originalFetch = globalThis.fetch;
@@ -124,5 +124,29 @@ it("does not retry rejected sends or sends without stable operation IDs", async 
   };
   await assert.rejects(runLogicalAgents({ taskGoal: message.text, userMessageId: message.userMessageId }), TypeError);
   await assert.rejects(submitThreadMessage("thread", { text: message.text, intent: message.intent }), TypeError);
+  assert.equal(attempts, 2);
+});
+
+it("retries when the Computer temporarily stops accepting commands", async () => {
+  const bodies: string[] = [];
+  globalThis.fetch = async (_url, init) => {
+    bodies.push(String(init?.body));
+    return bodies.length === 1
+      ? Response.json({ detail: { code: "node_not_accepting_commands" } }, { status: 409 })
+      : Response.json({ id: "thread" }, { status: 202 });
+  };
+  assert.equal((await submitThreadMessage("thread", message)).id, "thread");
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1], bodies[0]);
+});
+
+it("keeps delivery unconfirmed if a rejection follows a lost receipt", async () => {
+  let attempts = 0;
+  globalThis.fetch = async () => {
+    if (attempts++ === 0) throw new TypeError("Connection closed");
+    return new Response(null, { status: 401 });
+  };
+  await assert.rejects(submitThreadMessage("thread", message), (error) =>
+    error instanceof RelayApiError && error.status === 401 && !messageDefinitelyRejected(error));
   assert.equal(attempts, 2);
 });
