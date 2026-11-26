@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { AgentTeam, UserAgent, LogicalAgentAvailability } from "../../types";
+import { agentModel } from "../../lib/agentModels";
 import { teamAvailability } from "../../lib/taskAssignment";
 import { AgentStateBadge } from "../AgentStateBadge";
 import { IdentityMark } from "../IdentityMark";
@@ -21,7 +22,8 @@ import { runtimeLabel } from "../../lib/runtimeLabel";
 // narrowed view. This lets a caller synthesize a placeholder for a value that
 // references an agent/team no longer present in the fetched roster (deleted or
 // scoped out) instead of leaking a raw `agent:<id>` value.
-export type AgentView = Pick<UserAgent, "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">;
+export type AgentView = Pick<UserAgent, "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">
+  & Partial<Pick<UserAgent, "modelPolicy">>;
 export type TeamView = Pick<AgentTeam, "name" | "profileImageUrl" | "members" | "lead" | "enabled" | "workflowSteps" | "workflowStepCount">;
 
 // Status is carried by the glyph's corner pip (the designed agent-state
@@ -81,12 +83,17 @@ const executorLabel = runtimeLabel;
 export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamView }) {
   const { t } = useTranslation();
   if (agent) {
+    const model = agentModel(agent);
     return (
       <span className="roster-option">
         <RosterAgentMark agent={agent} />
         <span className="roster-option-copy">
           <span translate="no">{agent.displayName}</span>
-          <span translate="no">{executorLabel(agent.executorKind)}</span>
+          <span>
+            <span translate="no">{executorLabel(agent.executorKind)}</span>
+            {" · "}
+            {model ? <span translate="no">{model}</span> : t("agents_page.model_default")}
+          </span>
         </span>
       </span>
     );
