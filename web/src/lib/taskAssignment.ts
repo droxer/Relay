@@ -4,6 +4,15 @@ import { isWorkflowTeam } from "./workflowTeamDraft.ts";
 import { issueNeedsProject } from "./issueQueues.ts";
 import type { TaskAssignmentSelection } from "./taskBoardForm.ts";
 import { projectWorkflowName } from "./workflowSelection.ts";
+import { withProjectAgentRole, type AgentRoleIdentity } from "./agentRoleLabel.ts";
+
+export function taskAssigneeRole(
+  task: RelayTaskListItem, agents: readonly UserAgent[], project?: Pick<ProjectListItem, "members"> | null,
+): AgentRoleIdentity | undefined {
+  if (task.assignedTeamId || !task.assignedAgentId) return undefined;
+  const agent = agents.find((item) => item.id === task.assignedAgentId && !item.deletedAt);
+  return agent ? withProjectAgentRole(agent, project) : undefined;
+}
 
 /** Can this agent/team be offered for a task assigned to `assigneeUserId`?
  *
@@ -137,7 +146,8 @@ export function taskAssignmentOptions({
     : !project && teamSharesOneComputer(team, agents);
   return {
     agents: agents.filter((agent) => agent.enabled !== false && !agent.deletedAt && agentOnTaskComputer(agent)
-      && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, false)),
+      && assignmentOptionVisible(agent.supervisorUserId, assigneeUserId, false))
+      .map((agent) => withProjectAgentRole(agent, project)),
     teams: project ? [] : teams.filter((team) => !isWorkflowTeam(team) && teamOnTaskComputer(team)
       && assignmentOptionVisible(team.ownerUserId, assigneeUserId, false)),
   };

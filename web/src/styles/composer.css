@@ -204,10 +204,7 @@
     display: none;
   }
 
-  /* The mark identifies an agent or a team on its own (profile image, else
-     monogram). The project room's mark is the generic team glyph, which
-     identifies nothing — so its name stays. */
-  .chat-agent-select .roster-trigger-name:not(.roster-trigger-name--room) {
+  .chat-agent-select .roster-trigger-name:not(.roster-trigger-name--room, [data-agent-name]) {
     display: none;
   }
 
@@ -308,10 +305,22 @@
     color var(--t-fast) var(--ease);
 }
 
+.composer-targets [data-slot="select-trigger"].chat-agent-select:has(.agent-role-label) {
+  height: auto;
+  min-height: var(--control-h-xs);
+  text-align: start;
+}
+
+.chat-agent-select .agent-role-label {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 /* The selector above outranks a11y.css's touch floor, so restate it here.
    Ghost chrome has no frame, so the taller box changes nothing you see. */
 @media (pointer: coarse) {
-  :is(.composer-targets, .composer-meta) [data-slot="select-trigger"] {
+  :is(.composer-targets, .composer-meta) [data-slot="select-trigger"],
+  .composer-targets [data-slot="select-trigger"].chat-agent-select:has(.agent-role-label) {
     height: auto;
     min-height: var(--touch-target);
   }

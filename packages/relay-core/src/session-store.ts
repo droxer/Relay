@@ -62,6 +62,7 @@ export interface AgentRun {
   agentVersion?: number;
   workspaceIdentity?: Record<string, unknown>;
   role?: AgentRole;
+  roleLevel?: AgentRoleLevel;
   brief?: string;
   coordinator?: boolean;
   synthesizer?: boolean;
@@ -230,6 +231,7 @@ export interface CollaborationRoundManifest {
     mode?: "action" | "ask" | "review";
     phase?: AgentRun["teamPhase"];
     role?: AgentRole;
+    roleLevel?: AgentRoleLevel;
     brief?: string;
     coordinator?: boolean;
     synthesizer?: boolean;
@@ -610,6 +612,7 @@ export type RelayEvent =
       agentVersion?: number;
       workspaceIdentity?: Record<string, unknown>;
       role?: AgentRole;
+      roleLevel?: AgentRoleLevel;
       brief?: string;
       coordinator?: boolean;
       synthesizer?: boolean;
@@ -931,6 +934,7 @@ export function materializeEvents(events: RelayEvent[]): RelaySession {
         agent: event.agent,
         ...(event.logicalAgentId ? { logicalAgentId: event.logicalAgentId } : {}),
         ...(event.role ? { role: event.role } : {}),
+        ...(event.roleLevel ? { roleLevel: event.roleLevel } : {}),
         ...(event.placementId ? { placementId: event.placementId } : {}),
         ...(event.daemonNodeId ? { daemonNodeId: event.daemonNodeId } : {}),
         ...(event.agentVersion !== undefined ? { agentVersion: event.agentVersion } : {}),

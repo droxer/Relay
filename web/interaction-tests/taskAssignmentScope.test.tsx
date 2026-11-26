@@ -14,8 +14,10 @@ vi.mock("../src/hooks/useSessionCapabilities", () => ({ useSessionCapabilities: 
 vi.mock("../src/api", () => ({ listProjectWorkflowChoices: vi.fn(async () => ({ workflows: [] })) }));
 
 const currentUser = { userId: "owner", username: "owner" } as CurrentUser;
-const project = { id: "p", name: "Project P", enabled: true, ownerUserId: "owner", computerId: "c", members: [{ agentId: "a", enabled: true }] } as ProjectRecord;
-const agent = { id: "a", displayName: "Ada", executorKind: "codex", enabled: true, supervisorUserId: "owner", placements: [{ computerId: "c", desiredState: "active" }] } as UserAgent;
+const project = { id: "p", name: "Project P", enabled: true, ownerUserId: "owner", computerId: "c",
+  members: [{ agentId: "a", enabled: true, role: "reviewer", roleLevel: "junior" }] } as ProjectRecord;
+const agent = { id: "a", displayName: "Ada", executorKind: "codex", enabled: true, supervisorUserId: "owner",
+  defaultRole: "implementer", roleLevel: "senior", placements: [{ computerId: "c", desiredState: "active" }] } as UserAgent;
 const workflow: ProjectWorkflowChoice = { id: "w", name: "Ship workflow", projectId: "p", enabled: true, stepAgentIds: ["a"] };
 
 function mount(initial: TaskBoardFormState, custom = [workflow, { ...workflow, id: "foreign", projectId: "q", name: "Foreign workflow" }]) {
@@ -44,6 +46,16 @@ it.each(["backlog", "routine"] as const)("repairs a saved stale Workflow in the 
   expect(screen.queryByText("workflow.optional_team")).toBeNull();
   fireEvent.submit(container.querySelector("form")!);
   expect(submit).toHaveBeenCalledOnce();
+});
+
+it.each(["backlog", "routine"] as const)("shows the Project Role and Role Level when assigning a %s", variant => {
+  const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
+  mount({ ...form, title: "Work", projectId: "p" });
+  const choice = screen.getByRole("option", { name: /Ada/ });
+  expect(choice.textContent).toContain("role_levels.junior · admin.v2.agent_role.reviewer");
+  fireEvent.click(choice);
+  expect(screen.getByLabelText("backlog.assignment_label").textContent)
+    .toContain("role_levels.junior · admin.v2.agent_role.reviewer");
 });
 
 it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never both, in a new %s", async variant => {
@@ -102,7 +114,7 @@ vi.mock("@/components/ui/select", () => {
   const Context = createContext<any>({});
   return {
     Select: ({ children, value, onValueChange, disabled }: any) => <Context.Provider value={{ value, onValueChange, disabled }}>{children}</Context.Provider>,
-    SelectTrigger: ({ children, ...rest }: any) => <button type="button" role="combobox" aria-label={rest["aria-label"]} aria-labelledby={rest["aria-labelledby"]}>{children}</button>,
+    SelectTrigger: ({ children, id, ...rest }: any) => <button type="button" role="combobox" id={id} aria-label={rest["aria-label"]} aria-labelledby={rest["aria-labelledby"]}>{children}</button>,
     SelectValue: ({ children }: any) => { const { value } = useContext(Context); return <span>{typeof children === "function" ? children(value) : children}</span>; },
     SelectContent: ({ children, header }: any) => <div>{header}{children}</div>,
     SelectGroup: ({ children }: any) => <div>{children}</div>,

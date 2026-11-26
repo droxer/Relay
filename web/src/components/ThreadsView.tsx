@@ -339,6 +339,7 @@ export function ThreadsView({
   const runSlots = useMemo(() => new Map((activeSession?.agentRuns ?? []).map((run) => [
     run.id, turnSlot(run, styleForRun(run, activeSession?.collaborationRounds)),
   ])), [activeSession?.agentRuns, activeSession?.collaborationRounds]);
+  const runsById = useMemo(() => new Map((activeSession?.agentRuns ?? []).map((run) => [run.id, run])), [activeSession?.agentRuns]);
   const fallbackRuns = useMemo(() => new Set((activeSession?.collaborationRounds ?? [])
     .filter((round) => round.styleFallbackFrom)
     .map((round) => activeSession?.agentRuns.find((run) => run.assignmentId === round.assignments[0]?.assignmentId)?.id)),
@@ -764,6 +765,7 @@ export function ThreadsView({
                       ) : null}
                       <MessageBlock
                         message={msg}
+                        runIdentity={msg.kind === "agent" ? runsById.get(msg.runId) : undefined}
                         automationOpening={msg.id === `${activeSessionId}:goal` ? automationOpening : null}
                         slotLabel={msg.kind === "agent" && runSlots.get(msg.runId) ? `collab_style.turn_${runSlots.get(msg.runId)}` : undefined}
                         styleFallback={msg.kind === "agent" && fallbackRuns.has(msg.runId)}

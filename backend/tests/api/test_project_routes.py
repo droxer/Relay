@@ -1147,6 +1147,7 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
                     {
                         "agentId": lead["id"],
                         "role": role,
+                        "roleLevel": "senior",
                         "responsibilities": "先定义边界与实现顺序",
                         "instructions": "不要直接跳过计划阶段。",
                     },
@@ -1178,6 +1179,16 @@ def test_project_task_dispatch_compiles_member_role_and_responsibilities(monkeyp
         assert command["workspaceSubpath"] == project["workspaceSubpath"]
         assert command["logicalAgentId"] == lead["id"]
         assert command["role"] == role
+        app.state.registry.handle_event(
+            computer["id"],
+            {
+                "type": "run.executing", "commandId": command["id"], "sessionId": command["sessionId"],
+                "runId": command["runId"], "agent": command["agent"], "leaseId": command["leaseId"],
+            },
+            f"token_{computer['id']}",
+        )
+        [run] = app.state.session_store.get_session(result["session"]["id"])["agentRuns"]
+        assert (run["role"], run["roleLevel"]) == (role, "senior")
         assert "先定义边界与实现顺序" in command["state"]["assignment_brief"]
         assert "不要直接跳过计划阶段" in command["state"]["assignment_brief"]
 

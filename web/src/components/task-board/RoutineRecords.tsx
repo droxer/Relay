@@ -27,6 +27,7 @@ import type { RelayTaskListItem } from "../../types";
 import { useManualSortTable } from "../../hooks/useManualSortTable";
 import { createCellState } from "../../lib/cellState";
 import type { TFunction } from "i18next";
+import type { AgentRoleIdentity } from "../../lib/agentRoleLabel";
 
 function hrefForRoutineRecord(routineId: string): string {
   return recordHrefForLocation("routine", routineId);
@@ -43,6 +44,7 @@ interface RoutineAssignment {
   name?: string;
   imageUrl?: string | null;
   ready: boolean;
+  agentRole?: AgentRoleIdentity;
 }
 
 /** The row's callbacks, resolved per task by the page that owns the mutations. */
@@ -316,6 +318,7 @@ export function RoutineTable({
               ready={assignment.ready}
               agentDisplayName={assignment.name}
               agentImageUrl={assignment.imageUrl}
+              agentRole={assignment.agentRole}
             />
           );
         }}</RoutineCells.Read>,

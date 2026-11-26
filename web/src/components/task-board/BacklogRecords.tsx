@@ -20,6 +20,7 @@ import { TaskRefLink } from "./TaskRefLink";
 import { InlineAssignee, InlineDue, InlinePriority, InlineStatus } from "./InlineTaskFields";
 import type { AgentTeam, UserAgent, ProjectListItem } from "../../types";
 import type { InlineTaskEdits } from "../../hooks/useInlineTaskEdits";
+import type { AgentRoleIdentity } from "../../lib/agentRoleLabel";
 
 export function hrefForTaskRecord(taskId: string): string {
   return recordHrefForLocation("backlog", taskId);
@@ -51,6 +52,7 @@ export function BacklogTaskCard({
   ready,
   agentDisplayName,
   agentImageUrl,
+  agentRole,
   selected,
   onToggleSelect,
   onOpen,
@@ -62,6 +64,7 @@ export function BacklogTaskCard({
   ready: boolean;
   agentDisplayName?: string;
   agentImageUrl?: string | null;
+  agentRole?: AgentRoleIdentity;
   selected: boolean;
   onToggleSelect: () => void;
   /** Opens the record drawer. The title is a destination now, not a form. */
@@ -135,7 +138,7 @@ export function BacklogTaskCard({
               board of this year's work it was the widest, least
               informative token on the line. */}
           <div className="backlog-meta">
-            <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} />
+            <TaskAssignee task={task} ready={ready} agentDisplayName={agentDisplayName} agentImageUrl={agentImageUrl} agentRole={agentRole} />
             {task.dueDate ? (
               <span className={cn("backlog-due", tone !== "neutral" && tone)}>
                 <ActionCalendar size={ICON.sm} />

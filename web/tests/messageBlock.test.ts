@@ -47,6 +47,22 @@ function session(events: RelaySession["events"]): RelaySession {
 }
 
 describe("ProjectMessagesAccumulator", () => {
+  it("projects the role and level recorded on each turn, including legacy turns", () => {
+    const started = {
+      type: "agent.started", sessionId: "ses_1", timestamp, agent: "codex", logicalAgentId: "ada",
+    } as const;
+    const events: RelaySession["events"] = [
+      { ...started, id: "previous", runId: "run_1", role: "implementer" },
+      { ...started, id: "current", runId: "run_2", role: "reviewer", roleLevel: "senior" },
+    ];
+    const messages = projectMessages(session(events), t);
+    const turns = messages.filter((message) => message.kind === "agent");
+    assert.deepEqual(turns.map((turn) => [turn.role, turn.roleLevel]), [
+      ["implementer", undefined], ["reviewer", "senior"],
+    ]);
+    assert.equal(isGroupedContinuation(messages, messages.indexOf(turns[1])), false);
+  });
+
   it("preserves settled message identities while applying an appended event suffix", () => {
     const projector = new ProjectMessagesAccumulator();
     const started = {

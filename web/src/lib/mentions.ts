@@ -1,8 +1,9 @@
 import type { UserAgent } from "../types.js";
 import { isUserAgentRoutable } from "./agentDisplayNames.ts";
+import type { AgentRoleIdentity } from "./agentRoleLabel.ts";
 
 /** An agent that may be addressed from this thread's composer. */
-export type MentionCandidate = {
+export type MentionCandidate = AgentRoleIdentity & {
   id: string;
   displayName: string;
   profileImageUrl?: string | null;
@@ -54,6 +55,8 @@ export function mentionCandidates(
         id: agent.id,
         displayName: agent.displayName,
         profileImageUrl: agent.profileImageUrl,
+        ...(agent.defaultRole ? { defaultRole: agent.defaultRole } : {}),
+        ...(agent.roleLevel ? { roleLevel: agent.roleLevel } : {}),
         eligible: routable,
         ...(routable ? {} : { reason: "unavailable" as const }),
       };

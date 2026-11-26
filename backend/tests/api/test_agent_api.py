@@ -220,7 +220,7 @@ def test_own_agent_roster_projects_fields_and_reads_configuration_on_demand(clie
     instructions = "Review task ownership before edits. " * 375 + "Inspect the quokka fixture."
     created = client.post("/api/v1/agents", json={
         "displayName": "Release reviewer", "computerId": node["computerId"], "executorKind": "claude",
-        "defaultRole": "reviewer", "instructions": instructions,
+        "defaultRole": "reviewer", "roleLevel": "senior", "instructions": instructions,
     })
     assert created.status_code == 201, created.text
     agent = created.json()["agent"]
@@ -240,6 +240,7 @@ def test_own_agent_roster_projects_fields_and_reads_configuration_on_demand(clie
         assert data["view"] == "summary" and data["defaultAgentOffers"] == [] and data["searchesInstructions"] is True
         [item] = data["agents"]
         assert item["id"] == agent["id"] and item["defaultRole"] == "reviewer"
+        assert item["roleLevel"] == "senior"
         assert item["bindingStatus"] == "available"
         assert [entry["id"] for entry in item["placements"]] == [entry["id"] for entry in agent["placements"]]
         assert not (item.keys() & {"instructions", "availableModels", "skills", "delegationAgentIds"})
@@ -2061,6 +2062,7 @@ def test_new_thread_runs_on_the_selected_computer(monkeypatch) -> None:
                 "displayName": "Builder",
                 "executorKind": "codex",
                 "defaultRole": "implementer",
+                "roleLevel": "senior",
             },
         )
         app.state.agent_placement_store.create_placement(builder, "node_b")
@@ -2088,6 +2090,15 @@ def test_new_thread_runs_on_the_selected_computer(monkeypatch) -> None:
             event for event in session["events"] if event["type"] == "session.created"
         )
         assert created["daemonNodeId"] == "node_b"
+        [command] = app.state.registry.take_commands("node_b", "token_node_b")
+        assert command["state"]["agent_role_level"] == "senior"
+        changed = client.patch(f"/api/v1/agents/{builder['id']}", json={"defaultRole": "planner", "roleLevel": "junior"})
+        assert changed.status_code == 200, changed.text
+        stored = client.get(f"/api/v1/threads/{session['id']}").json()
+        [run] = stored["agentRuns"]
+        assert (run["role"], run["roleLevel"]) == ("implementer", "senior")
+        started = next(event for event in stored["events"] if event["type"] == "agent.started")
+        assert (started["role"], started["roleLevel"]) == ("implementer", "senior")
 
         conflicting = client.post(
             "/api/v1/agent-runs",

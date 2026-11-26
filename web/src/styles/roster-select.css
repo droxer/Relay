@@ -74,7 +74,19 @@
   min-width: 0;
 }
 
-.roster-trigger-name {
+.agent-identity-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.agent-role-label {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.roster-trigger-name,
+.agent-role-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -138,6 +150,9 @@
 }
 
 .roster-option-copy > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--ink-3);
   font: var(--type-meta);
   letter-spacing: var(--type-meta-track);

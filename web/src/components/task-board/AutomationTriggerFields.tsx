@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
 import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
+import { agentRoleLabel, withProjectAgentRole } from "../../lib/agentRoleLabel";
 import type { AgentTeam, UserAgent, ProjectListItem, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
 
 const ANY = "__any__";
@@ -66,6 +67,7 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
   const filtersLabelId = useId();
   if (trigger.kind === "schedule" || trigger.kind === "webhook") return null;
   const filters = trigger.filters ?? {};
+  const project = projects.find((item) => item.id === filters.projectId);
   const setFilter = (key: keyof RoutineTriggerFilters, value: string) =>
     onChange({ ...trigger, filters: { ...filters, [key]: value === ANY ? undefined : value } });
   const choice = (key: keyof RoutineTriggerFilters, label: string, options: FilterChoice[]) => (
@@ -100,7 +102,12 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
             </>
           ) : null}
           {choice("projectId", t("automation.filter_project"), projects.map((p) => ({ value: p.id, label: p.name })))}
-          {choice("assignedAgentId", t("automation.filter_agent"), agents.map((a) => ({ value: a.id, label: a.displayName, mark: <RosterAgentMark agent={a} /> })))}
+          {choice("assignedAgentId", t("automation.filter_agent"), agents.map((agent) => ({
+            value: agent.id,
+            label: agent.displayName,
+            mark: <RosterAgentMark agent={agent} />,
+            role: agentRoleLabel(withProjectAgentRole(agent, project), t),
+          })))}
           {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name, mark: <RosterTeamMark team={team} /> })))}
           {/* Any + three priorities: a fixed set, so it reads as segments
               rather than a menu like the open-ended rosters above. */}
@@ -137,7 +144,7 @@ function PriorityFilter({ value, onChange }: { value: string; onChange: (value: 
 }
 
 /** An agent or team choice carries its visual badge, in the menu and the trigger. */
-type FilterChoice = { value: string; label: string; mark?: ReactNode };
+type FilterChoice = { value: string; label: string; mark?: ReactNode; role?: string };
 
 /* In a list of badged choices, "Any" holds the empty slot so names align —
    the same placeholder the roster pickers draw for "Unassigned". */
@@ -146,7 +153,10 @@ function ChoiceLabel({ option, slotted }: { option: FilterChoice; slotted: boole
   return (
     <span className="roster-trigger">
       {option.mark ?? <span className="agent-state agent-state--empty" aria-hidden="true" />}
-      <span className="roster-trigger-name" translate="no">{option.label}</span>
+      <span className="agent-identity-copy">
+        <span className="roster-trigger-name" translate="no">{option.label}</span>
+        {option.role ? <span className="agent-role-label" title={option.role}>{option.role}</span> : null}
+      </span>
     </span>
   );
 }
