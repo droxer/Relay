@@ -45,7 +45,7 @@ import {
 import { emptyBacklogForm } from "../lib/taskBoardForm";
 import { collectTags } from "../lib/taskTags";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
-import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
+import { taskAgentDisplayName, taskAssigneeLabel, taskAssigneeRole, teamReady } from "../lib/taskAssignment";
 import { taskRef } from "../lib/taskRef";
 import {
   EMPTY_TASK_SELECTION,
@@ -452,6 +452,7 @@ function IssuesPageView({
                   onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
                   agentDisplayName: context.agentDisplayName,
                   agentImageUrl: context.agentImageUrl,
+                  agentRole: taskAssigneeRole(task, logicalAgents, context.project),
                   ready: context.ready,
                   onOpen: () => onOpenRecord(task.id),
                 };

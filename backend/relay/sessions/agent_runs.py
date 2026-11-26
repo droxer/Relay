@@ -71,6 +71,7 @@ class SessionAgentRunMixin(SessionControllerState):
                     ),
                     "agent": step["agent"],
                     **({"role": role} if role else {}),
+                    **({"roleLevel": step["roleLevel"]} if step.get("roleLevel") else {}),
                     **(
                         {"teamPhase": step["teamPhase"]}
                         if step.get("teamPhase")

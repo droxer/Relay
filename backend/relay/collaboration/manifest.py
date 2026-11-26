@@ -104,6 +104,7 @@ def create_round_manifest(
                     "mode",
                     "phase",
                     "role",
+                    "roleLevel",
                     "brief",
                     "coordinator",
                     "synthesizer",

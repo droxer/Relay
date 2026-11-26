@@ -16,12 +16,13 @@ import { MessageTurnActions } from "./MessageTurnActions";
 import type { AgentName } from "../types";
 import { AGENT_NAMES } from "../types";
 import { imageForAgentRun, labelForAgentRun, labelForExecutor } from "../lib/agentDisplayNames";
+import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
 import { runReceipt } from "../lib/runReceipt";
 import { RunReceipt } from "./RunReceipt";
 import { parsePlanSteps, type PlanStep } from "../lib/plan";
-import type { RelayArtifact } from "relay-core";
+import type { AgentRun, RelayArtifact } from "relay-core";
 import { useArtifactBody } from "../lib/useArtifactBody";
 import { summarizeArtifact } from "../lib/artifactStats";
 import type { DerivedMessage } from "../lib/projectMessages";
@@ -159,6 +160,7 @@ function ArtifactChip({ artifact, sessionId, onOpenArtifact }: { artifact: Relay
 
 type MessageBlockProps = {
   slotLabel?: string;
+  runIdentity?: Pick<AgentRun, "role" | "roleLevel">;
   styleFallback?: boolean;
   message: DerivedMessage;
   /** Set on an automation run's opening turn: it draws as the automation's
@@ -184,6 +186,7 @@ type MessageBlockProps = {
 
 export const MessageBlock = memo(function MessageBlock({
   slotLabel,
+  runIdentity,
   styleFallback,
   message,
   automationOpening,
@@ -231,6 +234,10 @@ export const MessageBlock = memo(function MessageBlock({
 
   if (message.kind === "agent") {
     const agentName = labelForAgentRun(message, logicalAgentNames, agentDisplayNames);
+    const role = agentRoleLabel({
+      defaultRole: message.role ?? runIdentity?.role,
+      roleLevel: message.roleLevel ?? runIdentity?.roleLevel,
+    }, t);
     const receipt = runReceipt(message);
     const runtime = labelForExecutor(message.agent);
     return (
@@ -254,6 +261,7 @@ export const MessageBlock = memo(function MessageBlock({
             legacy turn named by its runtime alone skips the repeat. */}
         <header className="msg-speaker" translate="no">
           <span className="msg-speaker-name">{agentName}</span>
+          {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
           {runtime !== agentName ? (
             <span className="msg-speaker-runtime" title={`${t("thread.receipt.runtime")}: ${runtime}`}>
               <span className="sr-only">{t("thread.receipt.runtime")}: </span>

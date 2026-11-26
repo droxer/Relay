@@ -157,6 +157,7 @@ def _apply_agent_started(session: dict[str, Any], event: dict[str, Any]) -> None
     }
     for key in (
         "role",
+        "roleLevel",
         "logicalAgentId",
         "placementId",
         "daemonNodeId",

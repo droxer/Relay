@@ -16,7 +16,8 @@ import { useTeams } from "../hooks/useTeams";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import type { ProjectListItem, CurrentUser, DaemonNodeMonitorRecord, RelaySession, RelayTaskListItem } from "../types";
 import { agentReadyForTask } from "../lib/backlog";
-import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
+import { taskAgentDisplayName, taskAssigneeLabel, taskAssigneeRole, teamReady } from "../lib/taskAssignment";
+import type { AgentRoleIdentity } from "../lib/agentRoleLabel";
 import { triggerError } from "../lib/automationTrigger";
 import { collectTags } from "../lib/taskTags";
 import { filterRoutineTasks, routineSortColumns, routineState, routineStateCounts, runningRoutineIds } from "../lib/routine";
@@ -337,7 +338,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
     }
   }
 
-  function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; imageUrl?: string | null; ready: boolean } {
+  function taskAssignmentDisplay(task: RelayTaskListItem): { name?: string; imageUrl?: string | null; ready: boolean; agentRole?: AgentRoleIdentity } {
     const team = teams.find((candidate) => candidate.id === task.assignedTeamId);
     if (team) {
       return {
@@ -350,6 +351,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       name: taskAgentDisplayName(task, logicalAgents, teams),
       imageUrl: task.assignedTeamId ? undefined : logicalAgents.find((agent) => agent.id === task.assignedAgentId)?.profileImageUrl,
       ready: agentReadyForTask(task, nodes, logicalAgents),
+      agentRole: taskAssigneeRole(task, logicalAgents, projects.find((project) => project.id === task.projectId)),
     };
   }
 

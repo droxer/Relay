@@ -12,6 +12,7 @@ import { agentMatchesQuery } from "../lib/agentSearch";
 import { groupAgentsByComputer } from "../lib/agentGroups";
 import type { CurrentUser, UserAgent } from "../types";
 import { AgentMetaLine } from "./AgentMetaLine";
+import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { agentModel } from "../lib/agentModels";
 import { AgentStateBadge } from "./AgentStateBadge";
 import {
@@ -51,6 +52,7 @@ function RosterRow({
 }) {
   const { t } = useTranslation();
   const { availability, enabled } = agent;
+  const role = agentRoleLabel(agent, t);
   const rosterStatus = describeAgentRosterStatus(agent);
   const statusLabel = rosterStatus
     ? t(rosterStatus.key, rosterStatus.defaultValue ? { defaultValue: rosterStatus.defaultValue } : undefined)
@@ -84,6 +86,7 @@ function RosterRow({
             <span className="agents-roster-row-title">
               <span className="agents-roster-row-name">{agent.displayName}</span>
             </span>
+            {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
             {/* Status leads the secondary line instead of occupying a right-side
                 pill column that crushes names in the 318px rail or 375px phone. */}
             <span className="agents-roster-row-sub">

@@ -78,7 +78,7 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [computer], projects: [], sandboxes: [], skills: [], ...fixtures };
-    if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: USER };
+    if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: fixtures?.user ?? USER };
     if (pathname.endsWith("/threads/review-thread")) body = { ...session, ...thread };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
@@ -445,6 +445,47 @@ test("composer agent picker fits its content at phone width", async ({ browser }
   expect(await overhang(page, ".chat-agent-select")).toBeLessThanOrEqual(0);
   await page.context().close();
 });
+
+for (const [language, currentRole, historicRole] of [
+  ["en", "Senior · Code Reviewer", "Junior · Architect"],
+  ["zh-CN", "高级 · 代码评审员", "初级 · 架构师"],
+]) {
+  test(`Agent role and level fit the composer and transcript on a phone (${language})`, async ({ browser }) => {
+    const agent = {
+      id: "ada", displayName: "Ada", executorKind: "claude", availability: "ready",
+      defaultRole: "reviewer", roleLevel: "senior", enabled: true, version: 1,
+      modelPolicy: {}, skillPolicy: {}, toolPolicy: {},
+      computerId: "node:layout", supervisorUserId: "review-user",
+      placements: [{ id: "placement", daemonNodeId: "layout", computerId: "node:layout", desiredState: "active", status: "ready" }],
+    };
+    const recordedRole = { logicalAgentId: agent.id, role: "planner", roleLevel: "junior" };
+    const thread = {
+      ownerAgentId: agent.id, participantAgentIds: [agent.id],
+      agentRuns: [{ ...session.agentRuns[0], ...recordedRole }],
+      events: [{ ...session.events[0], ...recordedRole }, ...session.events.slice(1)],
+    };
+    const page = await openPage(browser, "/threads/review-thread", true, undefined, thread, {
+      user: { ...USER, language }, agents: [agent],
+    });
+    await page.setViewportSize({ width: 375, height: 812 });
+    const picker = page.locator(".chat-agent-select");
+    await expect(picker.getByText("Ada", { exact: true })).toBeVisible();
+    for (const [identity, value] of [[picker, currentRole], [page.locator(".msg-speaker"), historicRole]] as const) {
+      const label = identity.getByText(value, { exact: true });
+      await expect(label).toBeVisible();
+      await expect.poll(() => label.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    }
+    expect(await overhang(page, ".chat-agent-select")).toBeLessThanOrEqual(0);
+    await picker.press("ArrowDown");
+    const option = page.getByRole("option").filter({ hasText: currentRole });
+    await expect(option).toBeVisible();
+    await option.press("Enter");
+    await expect(picker).toContainText(currentRole);
+    await page.locator(".composer-textarea").pressSequentially("@");
+    await expect(page.locator(".mention-popup").getByRole("option").filter({ hasText: currentRole })).toBeVisible();
+    await page.context().close();
+  });
+}
 
 for (const touch of [false, true]) {
   test(`filter bar controls share one height${touch ? " on touch" : ""}`, async ({ browser }) => {

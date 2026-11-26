@@ -66,7 +66,7 @@ it.each(["task assignment", "conversation"] as const)("shows each agent's model 
     modelPolicy: { model: "provider/custom-model" }, skillPolicy: {}, toolPolicy: {},
     placements: [], version: 1, createdAt: "2026-11-26T00:00:00Z", updatedAt: "2026-11-26T00:00:00Z",
   };
-  const bob: UserAgent = { ...ada, id: "bob", displayName: "Bob", modelPolicy: {} };
+  const bob: UserAgent = { ...ada, id: "bob", displayName: "Bob", modelPolicy: {}, defaultRole: "reviewer", roleLevel: "senior" };
   const agents = [ada, bob];
   const onPick = vi.fn();
   render(surface === "task assignment"
@@ -74,10 +74,11 @@ it.each(["task assignment", "conversation"] as const)("shows each agent's model 
     : <AgentSelect logicalAgents={agents} activeLogicalAgentId={bob.id} onLogicalAgentPicked={onPick} />);
 
   const trigger = screen.getByRole("combobox");
+  expect(trigger.textContent).toContain("role_levels.senior · admin.v2.agent_role.reviewer");
   trigger.focus();
   fireEvent.keyDown(trigger, { key: "ArrowDown" });
   const pinned = await screen.findByRole("option", { name: /Ada.*Codex · provider\/custom-model/ });
-  expect(screen.getByRole("option", { name: /Bob.*Codex · agents_page\.model_default/ })).toBeTruthy();
+  expect(screen.getByRole("option", { name: /Bob.*role_levels\.senior · admin\.v2\.agent_role\.reviewer · Codex · agents_page\.model_default/ })).toBeTruthy();
   act(() => pinned.focus());
   fireEvent.keyDown(pinned, { key: "Enter" });
   expect(onPick).toHaveBeenCalledWith(surface === "task assignment" ? { kind: "agent", id: ada.id } : ada);

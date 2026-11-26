@@ -233,6 +233,8 @@ def resolve_agent_assignments(
             ),
         )
         selected_node_ids.add(node["id"])
+        default_role = agent.get("defaultRole")
+        role_level = assignment.get("roleLevel") or agent.get("roleLevel")
         resolved.append(
             {
                 **assignment,
@@ -241,6 +243,8 @@ def resolve_agent_assignments(
                 "agentDisplayName": agent["displayName"],
                 "executorKind": agent["executorKind"],
                 "agentVersion": agent["version"],
+                **({"agentDefaultRole": default_role} if default_role else {}),
+                **({"roleLevel": role_level} if role_level else {}),
                 **(
                     {"agentInstructions": agent["instructions"]}
                     if agent.get("instructions")

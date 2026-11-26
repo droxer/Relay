@@ -819,6 +819,10 @@
   text-overflow: ellipsis;
 }
 
+.msg-speaker .agent-role-label {
+  min-width: 0;
+}
+
 /* Runtime as plain meta beside the name — glyph plus label in --ink-3, the
    same grammar as .agent-meta-runtime on the agents page — not a boxed chip
    that would outweigh the name it annotates. */

@@ -177,6 +177,7 @@ class DatabaseAgentStore:
             agents.c.created_at, agents.c.updated_at, agents.c.deleted_at,
             snapshot["computerId"].as_string().label("computerId"),
             snapshot["defaultRole"].as_string().label("defaultRole"),
+            snapshot["roleLevel"].as_string().label("roleLevel"),
             snapshot["profileImageUrl"].as_string().label("profileImageUrl"),
         ]
         instructions = snapshot["instructions"].as_string()

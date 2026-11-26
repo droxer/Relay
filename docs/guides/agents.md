@@ -82,6 +82,11 @@ must say that no agent is configured or no placement is currently available.
 - A new run requires `agentId`. Executor kind is agent configuration, not a run
   identity.
 - A conversation records `agentId`; node and placement IDs are audit metadata.
+- The Agent list, composer, and Task and Automation assignments show the Agent
+  Role and optional Role Level. Project and Team choices use the member's
+  configured role and level when available.
+- A Thread turn shows the role and level recorded when the run began. If the
+  run recorded a role without a level, the turn shows the role alone.
 - Continuing, retrying, rerunning, and handing off always resolve a logical
   agent. They never fall back to direct sandbox execution.
 - Selecting an assignee selects an agent. `assigneeUserId` is derived from

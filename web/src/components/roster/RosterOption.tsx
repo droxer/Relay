@@ -11,6 +11,7 @@ import { AgentStateBadge } from "../AgentStateBadge";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
 import { runtimeLabel } from "../../lib/runtimeLabel";
+import { agentRoleLabel, type AgentRoleIdentity } from "../../lib/agentRoleLabel";
 
 /* The rows every roster picker draws: one identity line per agent or team,
    plus the non-entity rows (empty slot, disabled empty roster, nav action)
@@ -23,7 +24,7 @@ import { runtimeLabel } from "../../lib/runtimeLabel";
 // references an agent/team no longer present in the fetched roster (deleted or
 // scoped out) instead of leaking a raw `agent:<id>` value.
 export type AgentView = Pick<UserAgent, "displayName" | "profileImageUrl" | "executorKind" | "enabled" | "availability">
-  & Partial<Pick<UserAgent, "modelPolicy">>;
+  & AgentRoleIdentity & Partial<Pick<UserAgent, "modelPolicy">>;
 export type TeamView = Pick<AgentTeam, "name" | "profileImageUrl" | "members" | "lead" | "enabled" | "workflowSteps" | "workflowStepCount">;
 
 // Status is carried by the glyph's corner pip (the designed agent-state
@@ -84,12 +85,14 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
   const { t } = useTranslation();
   if (agent) {
     const model = agentModel(agent);
+    const role = agentRoleLabel(agent, t);
     return (
       <span className="roster-option">
         <RosterAgentMark agent={agent} />
         <span className="roster-option-copy">
           <span translate="no">{agent.displayName}</span>
           <span>
+            {role ? <>{role}{" · "}</> : null}
             <span translate="no">{executorLabel(agent.executorKind)}</span>
             {" · "}
             {model ? <span translate="no">{model}</span> : t("agents_page.model_default")}
@@ -126,8 +129,10 @@ export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamVi
 type RosterItemProps = Omit<ComponentProps<typeof SelectItem>, "value" | "label">;
 
 export function RosterAgentItem({ value, agent, children, ...itemProps }: { value: string; agent: AgentView } & RosterItemProps) {
+  const { t } = useTranslation();
+  const role = agentRoleLabel(agent, t);
   return (
-    <SelectItem value={value} label={`${agent.displayName} · ${agent.executorKind}`} {...itemProps}>
+    <SelectItem value={value} label={[agent.displayName, role, agent.executorKind].filter(Boolean).join(" · ")} {...itemProps}>
       {children ?? <RosterOption agent={agent} />}
     </SelectItem>
   );
@@ -141,13 +146,14 @@ export function RosterTeamItem({ value, team, children, ...itemProps }: { value:
   );
 }
 
-/** The closed trigger carries identity only — mark + name on one line, at the
+/** The closed trigger carries identity only — mark, name and role, at the
  *  same height and weight as every other select in the drawer. Any operational
  *  readout belongs outside the trigger, so the two never repeat each other.
  *  `hideBusyPulse` silences the busy corner pip for a surface that already
  *  announces the same activity next to the trigger (the composer's running
  *  rail), so the two pulses don't repeat each other. */
 export function RosterTriggerValue({ agent, team, hideBusyPulse = false }: { agent?: AgentView; team?: TeamView; hideBusyPulse?: boolean }) {
+  const { t } = useTranslation();
   if (team) {
     return (
       <span className="roster-trigger">
@@ -157,10 +163,14 @@ export function RosterTriggerValue({ agent, team, hideBusyPulse = false }: { age
     );
   }
   if (agent) {
+    const role = agentRoleLabel(agent, t);
     return (
       <span className={cn("roster-trigger", hideBusyPulse && "roster-trigger--no-busy-pulse")}>
         <RosterAgentMark agent={agent} />
-        <span className="roster-trigger-name" translate="no" title={agent.displayName}>{agent.displayName}</span>
+        <span className="agent-identity-copy" title={role ? `${agent.displayName} · ${role}` : agent.displayName}>
+          <span className="roster-trigger-name" translate="no" data-agent-name>{agent.displayName}</span>
+          {role ? <span className="agent-role-label">{role}</span> : null}
+        </span>
       </span>
     );
   }

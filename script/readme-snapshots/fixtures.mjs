@@ -68,7 +68,7 @@ const BUILDBOX = "managed:mn_buildbox_01";
 /* Agents and teams                                                    */
 /* ------------------------------------------------------------------ */
 
-function agent({ id, displayName, executorKind, defaultRole, avatar, availability, instructions, onBuildBox = false, skills = [] }) {
+function agent({ id, displayName, executorKind, defaultRole, roleLevel, avatar, availability, instructions, onBuildBox = false, skills = [] }) {
   const computerId = onBuildBox ? BUILDBOX : MACBOOK;
   const daemonNodeId = onBuildBox ? BUILDBOX_ID : MACBOOK_ID;
   return {
@@ -79,6 +79,7 @@ function agent({ id, displayName, executorKind, defaultRole, avatar, availabilit
     executorKind,
     instructions,
     defaultRole,
+    ...(roleLevel ? { roleLevel } : {}),
     skillPolicy: {},
     toolPolicy: {},
     modelPolicy: {},
@@ -120,9 +121,9 @@ const SKILL_REVIEW = { source: "catalog", skillId: "skill_review_checklist", slu
 const SKILL_RELEASE = { source: "catalog", skillId: "skill_release_notes", slug: "release-notes", name: "release-notes", namespace: "acme", description: "Turn a merged change set into customer-facing release notes.", available: true, pin: "latest" };
 
 export const agents = [
-  agent({ id: "agent_aria", displayName: "Aria", executorKind: "claude", defaultRole: "implementer", avatar: "lorelei-01", availability: "ready", skills: [SKILL_BILLING, SKILL_RELEASE],
+  agent({ id: "agent_aria", displayName: "Aria", executorKind: "claude", defaultRole: "implementer", roleLevel: "senior", avatar: "lorelei-01", availability: "ready", skills: [SKILL_BILLING, SKILL_RELEASE],
     instructions: "You own backend changes for the billing platform. Prefer small, reviewable diffs and always add a regression test for a bug fix." }),
-  agent({ id: "agent_cascade", displayName: "Cascade", executorKind: "codex", defaultRole: "reviewer", avatar: "lorelei-23", availability: "busy", skills: [SKILL_REVIEW],
+  agent({ id: "agent_cascade", displayName: "Cascade", executorKind: "codex", defaultRole: "reviewer", roleLevel: "junior", avatar: "lorelei-23", availability: "busy", skills: [SKILL_REVIEW],
     instructions: "Review for correctness under concurrency, migration safety, and rollback. Block on missing tests." }),
   agent({ id: "agent_pixel", displayName: "Pixel", executorKind: "opencode", defaultRole: "tester", avatar: "lorelei-19", availability: "ready",
     instructions: "Write and run end-to-end checks. Report the exact command and its output." }),
@@ -290,16 +291,16 @@ const heroArtifacts = [
 const ariaUsage = { input: 18_420, output: 3_960, cache: 96_300, total: 118_680 };
 
 const heroRuns = [
-  { id: "run_aria_1", agent: "claude", logicalAgentId: "agent_aria", daemonNodeId: MACBOOK_ID, role: "implementer", status: "completed", startedAt: ago(14 * MINUTE), completedAt: ago(9 * MINUTE), exitCode: 0, tokenUsage: ariaUsage, artifactIds: heroArtifacts.map((item) => item.id) },
-  { id: "run_cascade_1", agent: "codex", logicalAgentId: "agent_cascade", daemonNodeId: MACBOOK_ID, role: "reviewer", status: "running", startedAt: ago(2 * MINUTE), artifactIds: [] },
+  { id: "run_aria_1", agent: "claude", logicalAgentId: "agent_aria", daemonNodeId: MACBOOK_ID, role: "implementer", roleLevel: "senior", status: "completed", startedAt: ago(14 * MINUTE), completedAt: ago(9 * MINUTE), exitCode: 0, tokenUsage: ariaUsage, artifactIds: heroArtifacts.map((item) => item.id) },
+  { id: "run_cascade_1", agent: "codex", logicalAgentId: "agent_cascade", daemonNodeId: MACBOOK_ID, role: "reviewer", roleLevel: "junior", status: "running", startedAt: ago(2 * MINUTE), artifactIds: [] },
 ];
 
 const heroEvents = [
-  { id: "ev_1", type: "agent.started", sessionId: HERO_ID, timestamp: ago(14 * MINUTE), runId: "run_aria_1", agent: "claude", logicalAgentId: "agent_aria", daemonNodeId: MACBOOK_ID, role: "implementer" },
+  { id: "ev_1", type: "agent.started", sessionId: HERO_ID, timestamp: ago(14 * MINUTE), runId: "run_aria_1", agent: "claude", logicalAgentId: "agent_aria", daemonNodeId: MACBOOK_ID, role: "implementer", roleLevel: "senior" },
   { id: "ev_2", type: "agent.output", sessionId: HERO_ID, timestamp: ago(10 * MINUTE), runId: "run_aria_1", agent: "claude", stream: "stdout", text: ariaOutput },
   ...heroArtifacts.map((artifact, index) => ({ id: `ev_art_${index}`, type: "artifact.created", sessionId: HERO_ID, timestamp: artifact.createdAt, artifact })),
   { id: "ev_3", type: "agent.completed", sessionId: HERO_ID, timestamp: ago(9 * MINUTE), runId: "run_aria_1", agent: "claude", status: "completed", exitCode: 0, tokenUsage: ariaUsage },
-  { id: "ev_4", type: "agent.started", sessionId: HERO_ID, timestamp: ago(2 * MINUTE), runId: "run_cascade_1", agent: "codex", logicalAgentId: "agent_cascade", daemonNodeId: MACBOOK_ID, role: "reviewer" },
+  { id: "ev_4", type: "agent.started", sessionId: HERO_ID, timestamp: ago(2 * MINUTE), runId: "run_cascade_1", agent: "codex", logicalAgentId: "agent_cascade", daemonNodeId: MACBOOK_ID, role: "reviewer", roleLevel: "junior" },
   { id: "ev_5", type: "agent.output", sessionId: HERO_ID, timestamp: ago(1 * MINUTE), runId: "run_cascade_1", agent: "codex", stream: "stdout", text: cascadeOutput },
 ];
 

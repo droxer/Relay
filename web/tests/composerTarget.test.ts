@@ -225,18 +225,15 @@ describe("composer agent selection", () => {
     assert.match(select, /<StateMark tone=\{availabilityPipTone\(/);
   });
 
-  it("drops the rail's lead-in words and agent name at one breakpoint", async () => {
+  it("keeps Agent and Project room identities visible on phones", async () => {
     const composer = await readFile(resolve("web/src/styles/composer.css"), "utf8");
     const responsive = await readFile(resolve("web/src/styles/responsive.css"), "utf8");
-    // One breakpoint for the whole targets rail. The agent name used to hide
-    // at 820 while the readout lead-ins held until 640, so in that band the
-    // choice was a nameless mark beside a fact spelled out in full.
     assert.doesNotMatch(responsive, /chat-agent-select/);
     const phone = composer.slice(composer.indexOf("@media (max-width: 640px)"));
     assert.match(phone, /\.composer-context-label \{\s*display: none;/);
     assert.match(
       phone,
-      /\.chat-agent-select \.roster-trigger-name:not\(\.roster-trigger-name--room\) \{\s*display: none;/,
+      /\.chat-agent-select \.roster-trigger-name:not\(\.roster-trigger-name--room, \[data-agent-name\]\) \{\s*display: none;/,
     );
   });
 

@@ -32,7 +32,7 @@ import { TaskRecordView } from "./task-record/TaskRecordView";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
-import { taskAgentDisplayName, taskAssigneeLabel, teamReady } from "../lib/taskAssignment";
+import { taskAgentDisplayName, taskAssigneeLabel, taskAssigneeRole, teamReady } from "../lib/taskAssignment";
 import { type ProjectListItem, type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type RelayTaskListItem, type TaskStatus } from "../types";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { writeViewPreference } from "../lib/viewPreference";
@@ -454,6 +454,7 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
                 onToggleSelect: () => setSelection((current) => toggleSelected(current, task.id)),
                 agentDisplayName: assignment.name,
                 agentImageUrl: assignment.imageUrl,
+                agentRole: taskAssigneeRole(task, logicalAgents, currentProject),
                 ready: assignment.ready,
                 onOpen: () => onOpenRecord(task.id),
               };

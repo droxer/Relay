@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { AgentName, AgentTeam, ProjectListItem, RelaySession, UserAgent } from "../types";
 import { preferredRoutableAgent } from "../lib/agentDisplayNames";
+import { withProjectAgentRole, withTeamAgentRole } from "../lib/agentRoleLabel";
 import { mentionCandidates } from "../lib/mentions";
 import { threadRoundTeam } from "../lib/messageRouting";
 import { projectThreadRoster } from "../lib/taskAssignment";
@@ -43,22 +44,29 @@ export function useComposerRouting({
   // every other agent on the project's computer (a member the project disabled
   // stays out). A new round is different: the thread is pinned to a computer,
   // not a roster, so the composer and `@` reach every agent on that computer.
+  const team = useMemo(
+    () => teams.find((candidate) => candidate.id === activeSession?.teamId && !candidate.deletedAt),
+    [activeSession?.teamId, teams],
+  );
   const activeTeamRoster = useMemo(
     () => teamRosterForThread(activeSession?.teamId, teams),
     [activeSession?.teamId, teams],
   );
   const effectiveSelectableLogicalAgents = useMemo(() => {
     if (activeProject) {
-      return addressableThreadAgents(logicalAgents, projectThreadRoster(activeProject, logicalAgents));
+      return addressableThreadAgents(logicalAgents, projectThreadRoster(activeProject, logicalAgents))
+        .map((agent) => withProjectAgentRole(agent, activeProject));
     }
     if (activeTeamRoster) {
-      return addressableThreadAgents(selectableLogicalAgents, activeTeamRoster);
+      return addressableThreadAgents(selectableLogicalAgents, activeTeamRoster)
+        .map((agent) => withTeamAgentRole(agent, team));
     }
     return selectableLogicalAgents;
-  }, [activeProject, activeTeamRoster, logicalAgents, selectableLogicalAgents]);
-  const composerLogicalAgents = activeProject
-    ? effectiveSelectableLogicalAgents
-    : selectableLogicalAgents;
+  }, [activeProject, activeTeamRoster, logicalAgents, selectableLogicalAgents, team]);
+  const composerLogicalAgents = useMemo(() => {
+    if (activeProject) return effectiveSelectableLogicalAgents;
+    return team ? selectableLogicalAgents.map((agent) => withTeamAgentRole(agent, team)) : selectableLogicalAgents;
+  }, [activeProject, effectiveSelectableLogicalAgents, selectableLogicalAgents, team]);
   const activeTarget = preferredRoutableAgent(composerLogicalAgents, chosenAgentId);
   const activeLogicalAgentId = activeTarget?.id ?? null;
   const activeAgent = activeTarget?.executorKind ?? chosenExecutor;

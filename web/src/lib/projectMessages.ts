@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-core";
+import type { AgentRun, CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-core";
 import type { AgentName, RelaySession, TokenUsage, Tone } from "../types.js";
 import { permissionInputSummary } from "./permissionRequests.ts";
 import { recoverAntigravityStdout, routeAntigravityToolUpdates } from "./agent-stream/antigravity.ts";
@@ -40,6 +40,8 @@ export type DerivedMessage =
       /** Logical (user) agent that produced the turn. `agent` is only the
        * executor kind, which several named agents can share. */
       agentId?: string;
+      role?: AgentRun["role"];
+      roleLevel?: AgentRun["roleLevel"];
       runId: string;
       /** Relay started this turn to rerun the same step (asking for a missing
        * report, or retrying a failure); it is its own turn, never more of the
@@ -103,7 +105,8 @@ export function isGroupedContinuation(messages: DerivedMessage[], index: number)
   for (let i = index - 1; i >= 0; i -= 1) {
     const prev = messages[i];
     if (prev.kind === "system") continue;
-    return prev.kind === "agent" && isSameAgentTurn(prev, message);
+    return prev.kind === "agent" && isSameAgentTurn(prev, message)
+      && prev.role === message.role && prev.roleLevel === message.roleLevel;
   }
   return false;
 }
@@ -553,11 +556,13 @@ export class ProjectMessagesAccumulator {
       case "agent.started": {
         const ensured = this.ensureRun(event.runId, event.agent, event.timestamp);
         const block = this.out[ensured.index];
-        if (block.kind === "agent" && (block.agentId !== event.logicalAgentId || block.followUp !== event.followUp)) {
+        if (block.kind === "agent") {
           this.out[ensured.index] = {
             ...block,
             ...(event.logicalAgentId ? { agentId: event.logicalAgentId } : {}),
             ...(event.followUp ? { followUp: event.followUp } : {}),
+            ...(event.role ? { role: event.role } : {}),
+            ...(event.roleLevel ? { roleLevel: event.roleLevel } : {}),
           };
           return true;
         }

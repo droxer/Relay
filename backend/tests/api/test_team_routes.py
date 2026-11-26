@@ -2553,6 +2553,7 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
                 "leadAgentId": lead["id"],
                 "memberAgentIds": [lead["id"], support["id"]],
                 "collaborationStyle": "lead_led",
+                "memberConfigs": {support["id"]: {"role": "tester", "roleLevel": "junior"}},
             },
         ).json()["team"]
         task = _routine_run(
@@ -2609,6 +2610,15 @@ def test_a_team_thread_accepts_an_assignment_naming_one_member(monkeypatch) -> N
             if event["type"] == "collaboration.round.started"
         )
         assert round_event["manifest"]["strategy"] == "direct"
+        [assignment] = round_event["manifest"]["assignments"]
+        assert (assignment["role"], assignment["roleLevel"]) == ("tester", "junior")
+        [command] = app.state.registry.take_commands("node_alice", "node_token")
+        assert command["logicalAgentId"] == support["id"]
+        [run] = [
+            run for run in app.state.session_store.get_session(session_id)["agentRuns"]
+            if run["id"] == command["runId"]
+        ]
+        assert (run["role"], run["roleLevel"]) == ("tester", "junior")
         assert round_event["manifest"]["address"] == {
             "kind": "members",
             "agentIds": [support["id"]],

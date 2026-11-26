@@ -208,13 +208,14 @@ def _agent_started_payload(
     sandbox: dict[str, Any],
     role: str | None,
 ) -> dict[str, Any]:
+    recorded_role = role or assignment.get("agentDefaultRole")
     return {
         "runId": command["runId"],
         **({"consultation": True} if (command.get("state") or {}).get("work_question") else {}),
         "assignmentId": assignment["assignmentId"],
         "workItemId": assignment.get("workItemId") or assignment["assignmentId"],
         "agent": command["agent"],
-        **({"role": role} if role else {}),
+        **({"role": recorded_role} if recorded_role else {}),
         "teamPhase": command["phase"],
         **_optional_fields(
             command,
@@ -227,6 +228,7 @@ def _agent_started_payload(
             assignment,
             (
                 ("brief", "brief"),
+                ("roleLevel", "roleLevel"),
                 ("delegationAuthority", "delegationAuthority"),
             ),
         ),

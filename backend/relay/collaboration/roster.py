@@ -434,6 +434,7 @@ def _room_assignments(session: dict[str, Any], mode: str) -> list[dict[str, Any]
 
 TEAM_DEFAULT_ASSIGNMENT_FIELDS = (
     "role",
+    "roleLevel",
     "brief",
     "required",
     "acceptanceCriteria",

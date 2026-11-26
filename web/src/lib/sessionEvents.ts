@@ -152,6 +152,7 @@ function applySessionEventProjection(session: RelaySession, event: RelayEvent): 
             ...(event.agentVersion !== undefined ? { agentVersion: event.agentVersion } : {}),
             ...(event.workspaceIdentity ? { workspaceIdentity: event.workspaceIdentity } : {}),
             ...(event.role ? { role: event.role } : {}),
+            ...(event.roleLevel ? { roleLevel: event.roleLevel } : {}),
             ...(event.brief ? { brief: event.brief } : {}),
             ...(event.coordinator ? { coordinator: true } : {}),
             ...(event.synthesizer ? { synthesizer: true } : {}),

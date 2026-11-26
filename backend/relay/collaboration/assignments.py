@@ -6,6 +6,7 @@ from typing import Any
 
 from ..core.computer_identity import computer_id
 from ..core.ids import new_database_id
+from ..core.models import AGENT_ROLE_LEVELS
 from ..agents.location import agent_computer_ids
 from ..agents.routing import (
     persist_legacy_session_computer_id,
@@ -208,6 +209,7 @@ class AssignmentsMixin(ConductorState):
                 )
             mode = _mode(item.get("mode"))
             role = _role(item.get("role"))
+            role_level = item.get("roleLevel")
             coordinator = item.get("coordinator") is True or bool(
                 team_snapshot
                 and team_snapshot.get("collaborationStyle", LEAD_LED) == LEAD_LED
@@ -234,6 +236,7 @@ class AssignmentsMixin(ConductorState):
                     "phase": phase,
                     **{key: item[key] for key in ("required", "acceptanceCriteria", "expectedOutputs", "awaitApproval") if key in item},
                     **({"role": role} if role else {}),
+                    **({"roleLevel": role_level} if role_level in AGENT_ROLE_LEVELS else {}),
                     **(
                         {"brief": item["brief"].strip()[:ASSIGNMENT_BRIEF_MAX_CHARS]}
                         if isinstance(item.get("brief"), str) and item["brief"].strip()

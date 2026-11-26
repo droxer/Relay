@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { MentionCandidate } from "../../lib/mentions";
+import { agentRoleLabel } from "../../lib/agentRoleLabel";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
 import {
@@ -59,27 +60,33 @@ export function MentionPopup({
           className="mention-popup"
           aria-label={t("composer.mention_list")}
         >
-          {matches.map((candidate) => (
-            <CommandItem
-              key={candidate.id}
-              value={candidate}
-              disabled={!candidate.eligible}
-              className="mention-option"
-            >
-              <ProfileImage
-                src={candidate.profileImageUrl}
-                alt=""
-                fallback={<IdentityMark kind="agent" />}
-                className="mention-option-mark"
-              />
-              <span translate="no">{candidate.displayName}</span>
-              {candidate.reason ? (
-                <span className="mention-option-reason">
-                  {t(`composer.mention_reason.${candidate.reason}`)}
+          {matches.map((candidate) => {
+            const role = agentRoleLabel(candidate, t);
+            return (
+              <CommandItem
+                key={candidate.id}
+                value={candidate}
+                disabled={!candidate.eligible}
+                className="mention-option"
+              >
+                <ProfileImage
+                  src={candidate.profileImageUrl}
+                  alt=""
+                  fallback={<IdentityMark kind="agent" />}
+                  className="mention-option-mark"
+                />
+                <span className="agent-identity-copy">
+                  <span className="roster-trigger-name" translate="no">{candidate.displayName}</span>
+                  {role ? <span className="agent-role-label">{role}</span> : null}
                 </span>
-              ) : null}
-            </CommandItem>
-          ))}
+                {candidate.reason ? (
+                  <span className="mention-option-reason">
+                    {t(`composer.mention_reason.${candidate.reason}`)}
+                  </span>
+                ) : null}
+              </CommandItem>
+            );
+          })}
         </CommandList>
       ) : null}
     </Command>
