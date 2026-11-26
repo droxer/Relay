@@ -190,6 +190,7 @@ def _member_summary(agent: dict[str, Any]) -> dict[str, Any]:
         "profileImageUrl": agent.get("profileImageUrl"),
         "executorKind": agent["executorKind"],
         "defaultRole": agent.get("defaultRole"),
+        **({"roleLevel": agent["roleLevel"]} if agent.get("roleLevel") else {}),
         "enabled": agent.get("enabled", True),
         "availability": agent.get("availability", "offline"),
     }
@@ -217,7 +218,7 @@ def _team_summary(team: dict[str, Any], *, include_presets: bool = True) -> dict
         "defaultWorkflowId": default_workflow_id(team),
         **({"workflowStepCount": len(team["workflowSteps"])} if "workflowSteps" in team else {}),
         "memberConfigs": {
-            agent_id: {key: config[key] for key in ("role", "participation") if key in config}
+            agent_id: {key: config[key] for key in ("role", "roleLevel", "participation") if key in config}
             for agent_id, config in (team.get("memberConfigs") or {}).items()
         },
         "workflowOptions": _workflow_options_summary(team, include_presets=include_presets),

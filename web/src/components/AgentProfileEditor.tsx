@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { AgentRoleSelect } from "./agents/AgentRoleSelect";
+import { AgentRoleLevelSelect } from "./agents/AgentRoleLevelSelect";
 import { AgentModelField } from "./agents/AgentModelField";
 import { modelHintKey, modelIdProblem } from "../lib/agentModels.ts";
 import { profileDraftDirty, type AgentProfileDraft } from "../lib/agentProfileDraft.ts";
@@ -72,6 +73,7 @@ export function AgentProfileEditor({
   const titleId = useId();
   const helpId = useId();
   const roleLabelId = useId();
+  const roleLevelLabelId = useId();
   const modelLabelId = useId();
   const nameLabelId = useId();
   const nameHintId = useId();
@@ -172,6 +174,14 @@ export function AgentProfileEditor({
                 value={draft.role}
                 onChange={(role) => update({ role })}
                 labelledBy={roleLabelId}
+                disabled={saving}
+              />
+            </Field>
+            <Field label={t("role_levels.label")} labelId={roleLevelLabelId} optional={t("admin.v2.optional")} wrapper="div">
+              <AgentRoleLevelSelect
+                value={draft.roleLevel}
+                onChange={(roleLevel) => update({ roleLevel })}
+                labelledBy={roleLevelLabelId}
                 disabled={saving}
               />
             </Field>

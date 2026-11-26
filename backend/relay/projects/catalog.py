@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.computer_identity import computer_id
-from ..core.models import AGENT_ROLES
+from ..core.models import AGENT_ROLE_LEVELS, AGENT_ROLES
 from ..core.project_roles import upgrade_member
 from ..persistence.project.store import ProjectValidationError, ProjectVersionConflict
 from ..agents.location import agent_placed_on_computer
@@ -18,7 +18,7 @@ PROJECT_INSTRUCTIONS_MAX_LENGTH = 8_000
 PROJECT_DESCRIPTION_MAX_LENGTH = 4_000
 PROJECT_GOAL_MAX_LENGTH = 280
 PROJECT_CONTEXT_MAX_LENGTH = 8_000
-EDITABLE_MEMBER_FIELDS = frozenset({"role", "responsibilities", "instructions", "enabled"})
+EDITABLE_MEMBER_FIELDS = frozenset({"role", "roleLevel", "responsibilities", "instructions", "enabled"})
 
 
 def create_project_payload(
@@ -344,12 +344,19 @@ def _normalize_member(value: Any) -> dict[str, Any]:
     role = _required_text(value.get("role"), "project_role_invalid")
     if role not in AGENT_ROLES:
         raise ProjectValidationError("project_role_invalid")
+    raw_role_level = value.get("roleLevel")
+    role_level: str | None = None
+    if raw_role_level is not None and raw_role_level != "":
+        if not isinstance(raw_role_level, str) or raw_role_level.strip() not in AGENT_ROLE_LEVELS:
+            raise ProjectValidationError("project_role_level_invalid")
+        role_level = raw_role_level.strip()
     enabled = value.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ProjectValidationError("project_member_invalid")
     member: dict[str, Any] = {
         "agentId": agent_id,
         "role": role,
+        **({"roleLevel": role_level} if role_level else {}),
         "responsibilities": _required_text(
             value.get("responsibilities"),
             "project_responsibilities_required",

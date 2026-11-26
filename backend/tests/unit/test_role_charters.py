@@ -2,13 +2,31 @@ from __future__ import annotations
 
 import pytest
 
-from relay.core.models import AGENT_ROLES
-from relay.core.role_charters import ROLE_CHARTERS, UNASSIGNED_CHARTER, role_charter
+from relay.core.models import AGENT_ROLE_LEVELS, AGENT_ROLES
+from relay.core.role_charters import (
+    ROLE_CHARTERS,
+    ROLE_LEVEL_CHARTERS,
+    UNASSIGNED_CHARTER,
+    role_charter,
+)
 
 
 def test_every_role_has_its_own_charter() -> None:
     assert set(ROLE_CHARTERS) == set(AGENT_ROLES)
     assert len(set(ROLE_CHARTERS.values())) == len(AGENT_ROLES)
+
+
+def test_every_role_level_has_its_own_charter_and_enriches_role_brief() -> None:
+    assert set(ROLE_LEVEL_CHARTERS) == set(AGENT_ROLE_LEVELS)
+    base = role_charter("security")
+    junior = role_charter("security", "junior")
+    senior = role_charter("security", "senior")
+    assert junior.startswith(base)
+    assert "Junior level" in junior
+    assert senior.startswith(base)
+    assert "Senior level" in senior
+    assert role_charter("security", None) == base
+    assert role_charter("security", "unknown") == base
 
 
 @pytest.mark.parametrize(
@@ -20,7 +38,11 @@ def test_every_role_has_its_own_charter() -> None:
         ("tester", "leave product defects to the implementer or fixer"),
         ("fixer", "and only those"),
         ("researcher", "Do not design or implement"),
+        ("product_manager", "Do not write production code"),
+        ("data", "Do not change application behaviour"),
         ("designer", "Do not implement"),
+        ("security", "Do not rewrite unrelated features"),
+        ("performance", "Do not add premature optimizations"),
         ("writer", "Do not change behaviour to fit the prose"),
         ("devops", "Do not redesign the product"),
     ],

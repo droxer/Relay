@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..core.models import AGENT_ROLES
+from ..core.models import AGENT_ROLE_LEVELS, AGENT_ROLES
 
 ROLES = frozenset(AGENT_ROLES)
-MEMBER_CONFIG_FIELDS = frozenset({"role", "responsibility", "required", "participation", "expectedOutputs"})
+ROLE_LEVELS = frozenset(AGENT_ROLE_LEVELS)
+MEMBER_CONFIG_FIELDS = frozenset({"role", "roleLevel", "responsibility", "required", "participation", "expectedOutputs"})
 
 
 def text_list(value: Any, name: str, *, limit: int = 20) -> list[str]:
@@ -36,6 +37,10 @@ def member_configs(value: Any, members: list[str]) -> dict[str, dict[str, Any]]:
             not isinstance(config["role"], str) or config["role"] not in ROLES
         ):
             raise ValueError("Invalid team role.")
+        if "roleLevel" in config and (
+            not isinstance(config["roleLevel"], str) or config["roleLevel"] not in ROLE_LEVELS
+        ):
+            raise ValueError("Invalid team roleLevel.")
         if "required" in config and not isinstance(config["required"], bool):
             raise ValueError("required must be a boolean.")
         if config.get("participation", "always") not in ("always", "on_request"):

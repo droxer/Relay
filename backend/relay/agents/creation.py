@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.computer_identity import computer_id
-from ..core.models import AGENT_ROLES
+from ..core.models import AGENT_ROLE_LEVELS, AGENT_ROLES
 from ..core.node_readiness import is_live_node, ready_runtimes
 from ..persistence.agent.placements import create_node_placement
 
@@ -64,6 +64,15 @@ def create_agent_for_user(
             "role_invalid",
             f"defaultRole must be one of: {', '.join(AGENT_ROLES)}.",
         )
+    raw_role_level = body.get("roleLevel")
+    role_level: str | None = None
+    if raw_role_level is not None and raw_role_level != "":
+        if not isinstance(raw_role_level, str) or raw_role_level.strip() not in AGENT_ROLE_LEVELS:
+            raise AgentCreationError(
+                "role_level_invalid",
+                f"roleLevel must be one of: {', '.join(AGENT_ROLE_LEVELS)}.",
+            )
+        role_level = raw_role_level.strip()
     agent = ctx.agent_store.create_agent(
         supervisor_user_id,
         {
@@ -82,6 +91,7 @@ def create_agent_for_user(
             "computerId": target_computer_id,
             "executorKind": executor_kind,
             "defaultRole": default_role,
+            **({"roleLevel": role_level} if role_level else {}),
         },
     )
     _place_on_a_live_node(ctx, agent, nodes)

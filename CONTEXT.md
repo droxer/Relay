@@ -90,20 +90,26 @@ _Avoid_: Executor, CLI
 
 **Agent Role**:
 The part a Logical Agent plays in a shared round. Stored and sent by id
-(`researcher`, `planner`, `designer`, `implementer`, `fixer`, `tester`,
-`writer`, `devops`, `operations`, `reviewer` — the order a Pipeline round takes
-them, and the order every picker offers), shown to people and agents by title:
-Research Analyst, Architect, Interaction Designer, Software Engineer, Bug Fixer,
-QA Engineer, Technical Writer, DevOps Engineer, Operations, Code Reviewer.
-Research, design, writing, DevOps, and Operations are specialists. Operations
-handles launch communications, user adoption, and feedback. DevOps handles
-infrastructure and deployment. Build and review reserves the reviewer slot for
-other roles. Each role carries a charter (`backend/relay/core/role_charters.py`)
-saying what it delivers and what it leaves to the others. A round's lead is a
-coordinator, not a role. An agent has its own role, chosen at setup and
-editable on its profile; a Team records a role for each member, starting from
-the agent's own when it joins, and plays that one — changing the agent's role
-later leaves the team's choice alone.
+(`researcher`, `product_manager`, `data`, `planner`, `designer`, `implementer`,
+`fixer`, `tester`, `security`, `performance`, `writer`, `devops`, `operations`,
+`reviewer` — the order a Pipeline round takes them, and the order every picker
+offers), shown to people and agents by title: Research Analyst, Product
+Manager, Data Analyst, Architect, Interaction Designer, Software Engineer, Bug
+Fixer, QA Engineer, Security Engineer, Performance Engineer, Technical Writer,
+DevOps Engineer, Operations, Code Reviewer. Research, product management, data,
+design, security, performance, writing, DevOps, and Operations are specialists.
+Operations handles launch communications, user adoption, and feedback. DevOps
+handles infrastructure and deployment. Build and review reserves the reviewer
+slot for other roles. Each role carries a charter
+(`backend/relay/core/role_charters.py`) saying what it delivers and what it
+leaves to the others. An optional **Role Level** (`roleLevel`: `junior` or
+`senior`) qualifies any role's seniority on an Agent, Project Agent, or Team
+member, enriching both display and the role's prompt charter without changing
+Pipeline stage order. A round's lead is a coordinator, not a role. An agent has
+its own role (and optional level), chosen at setup and editable on its profile;
+a Team records a role (and optional level) for each member, starting from the
+agent's own when it joins, and plays that one — changing the agent's role later
+leaves the team's choice alone.
 _Avoid_: Tech Lead (for the planner), job, persona
 
 **Agent Runtime**:

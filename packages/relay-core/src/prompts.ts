@@ -17,14 +17,25 @@ const ROLE_TITLES: Record<string, string> = {
   tester: "QA Engineer",
   fixer: "Bug Fixer",
   researcher: "Research Analyst",
+  product_manager: "Product Manager",
+  data: "Data Analyst",
   designer: "Interaction Designer",
+  security: "Security Engineer",
+  performance: "Performance Engineer",
   writer: "Technical Writer",
   devops: "DevOps Engineer",
   operations: "Operations",
 };
 
-export function roleTitle(role: string): string {
-  return ROLE_TITLES[role] ?? role;
+const ROLE_LEVEL_TITLES: Record<string, string> = {
+  junior: "Junior",
+  senior: "Senior",
+};
+
+export function roleTitle(role: string, level?: string): string {
+  const base = ROLE_TITLES[role] ?? role;
+  const prefix = level ? ROLE_LEVEL_TITLES[level] : undefined;
+  return prefix ? `${prefix} ${base}` : base;
 }
 
 export function prependPriorAgentBridge(prompt: string, state: AgentState): string {
@@ -74,7 +85,7 @@ function promptPreludes(state: AgentState): string[] {
     preludes.push(
       [
         "[Role]",
-        `You are the ${roleTitle(state.agent_role)} on this task.`,
+        `You are the ${roleTitle(state.agent_role, state.agent_role_level)} on this task.`,
         "Other agents on the thread hold the other roles; do your own and rely on theirs.",
       ].join("\n"),
     );

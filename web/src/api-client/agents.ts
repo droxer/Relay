@@ -3,6 +3,7 @@ import type {
   AgentName,
   AgentPlacement,
   AgentRole,
+  AgentRoleLevel,
   AgentSetupResponse,
   AgentTeam,
   AgentTeamsResponse,
@@ -188,6 +189,8 @@ export type UserAgentMetaPatch = {
   modelPolicy?: { model?: string };
   /** The agent's own role; a team may assign its member a different one. */
   defaultRole?: AgentRole;
+  /** Optional seniority level ("junior" or "senior"); null clears it. */
+  roleLevel?: AgentRoleLevel | null;
 };
 
 export type UserAgentAdminPatch = UserAgentMetaPatch & {

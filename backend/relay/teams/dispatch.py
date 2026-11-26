@@ -163,7 +163,11 @@ def team_member_assignments(
     lead_agent_id = team.get("leadAgentId") if team else None
     configs = (team or {}).get("memberConfigs", {})
     agents = [
-        {**agent, "defaultRole": configs.get(agent["id"], {}).get("role", agent.get("defaultRole"))}
+        {
+            **agent,
+            "defaultRole": configs.get(agent["id"], {}).get("role", agent.get("defaultRole")),
+            "roleLevel": configs.get(agent["id"], {}).get("roleLevel", agent.get("roleLevel")),
+        }
         for agent in agents
         if include_on_request or agent["id"] == lead_agent_id
         or configs.get(agent["id"], {}).get("participation") != "on_request"
@@ -408,21 +412,28 @@ def _team_member_assignment(
     team_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     role = agent.get("defaultRole")
+    role_level = agent.get("roleLevel")
     return {
         "agentId": agent["id"],
         "agent": agent["executorKind"],
         "mode": mode,
         "phase": team_assignment_phase(role, mode, coordinator),
         **({"role": role} if role else {}),
+        **({"roleLevel": role_level} if role_level else {}),
         **({"coordinator": True} if coordinator else {}),
         **({"synthesizer": True} if synthesizer else {}),
-        "brief": _member_brief(role, coordinator, synthesizer, mode=mode),
+        "brief": _member_brief(role, coordinator, synthesizer, mode=mode, role_level=role_level),
         **({"teamSnapshot": team_snapshot} if team_snapshot else {}),
     }
 
 
 def _member_brief(
-    role: str | None, coordinator: bool, synthesizer: bool = False, *, mode: str = "action"
+    role: str | None,
+    coordinator: bool,
+    synthesizer: bool = False,
+    *,
+    mode: str = "action",
+    role_level: str | None = None,
 ) -> str:
     if synthesizer and mode == "action":
         return (
@@ -438,7 +449,7 @@ def _member_brief(
         )
     if coordinator:
         return COORDINATOR_CHARTER
-    return role_charter(role)
+    return role_charter(role, role_level)
 
 
 def team_assignment_phase(

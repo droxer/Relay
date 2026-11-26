@@ -1,16 +1,19 @@
-import type { AgentRole } from "relay-core";
-import { AGENT_ROLE_OPTIONS } from "./agents.ts";
+import type { AgentRole, AgentRoleLevel } from "relay-core";
+import { AGENT_ROLE_LEVEL_OPTIONS, AGENT_ROLE_OPTIONS } from "./agents.ts";
 
 /** What a member does in the Project's rounds; the Project Lead manages it.
     The Project offers the same Agent-role vocabulary, in the same order, as a
     Team and an Agent's own default, so one role means the same thing
     everywhere. */
 export type ProjectRole = AgentRole;
+export type ProjectRoleLevel = AgentRoleLevel;
 export const PROJECT_ROLE_OPTIONS: readonly ProjectRole[] = AGENT_ROLE_OPTIONS;
+export const PROJECT_ROLE_LEVEL_OPTIONS: readonly ProjectRoleLevel[] = AGENT_ROLE_LEVEL_OPTIONS;
 
 export interface ProjectMember {
   agentId: string;
   role: ProjectRole;
+  roleLevel?: ProjectRoleLevel | null;
   responsibilities: string;
   instructions?: string;
   enabled: boolean;
@@ -35,6 +38,7 @@ export interface ProjectSetupProposal {
   members?: Array<{
     agentId: string;
     role: ProjectRole;
+    roleLevel?: ProjectRoleLevel;
     responsibilities: string;
     instructions?: string;
     issue?: ProjectSetupMemberIssue;
@@ -82,6 +86,7 @@ export interface ProjectSetupCandidate {
   name: string;
   executorKind?: string;
   defaultRole?: AgentRole;
+  roleLevel?: AgentRoleLevel;
 }
 
 export interface ProjectSetupResponse {

@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..core.ids import new_relay_id, now_iso
-from ..core.models import AGENT_ROLES
+from ..core.models import AGENT_ROLE_LEVELS, AGENT_ROLES
 from .runtime import agent_on_project_computer
 from .setup_result import SETUP_MODES
 
@@ -113,6 +113,7 @@ def setup_candidates(
                 "name": agent.get("displayName") or agent["id"],
                 "executorKind": agent.get("executorKind"),
                 **({"defaultRole": agent["defaultRole"]} if agent.get("defaultRole") else {}),
+                **({"roleLevel": agent["roleLevel"]} if agent.get("roleLevel") else {}),
                 **(
                     {"personality": instructions[:_INSTRUCTIONS_EXCERPT]}
                     if instructions
@@ -170,6 +171,7 @@ def setup_manifest_block(
         "intent": intent,
         "candidates": candidates,
         "roles": list(AGENT_ROLES),
+        "roleLevels": list(AGENT_ROLE_LEVELS),
         **({"previousProposal": previous_proposal} if previous_proposal else {}),
     }
 

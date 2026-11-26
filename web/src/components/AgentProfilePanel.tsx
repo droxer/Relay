@@ -304,7 +304,10 @@ export function AgentProfilePanel({
               </span>
               <span className="workspace-dossier-field-value" aria-labelledby="agent-default-role-label">
                 {agent.defaultRole
-                  ? t(`admin.v2.agent_role.${agent.defaultRole}`, { defaultValue: agent.defaultRole })
+                  ? [
+                      t(`admin.v2.agent_role.${agent.defaultRole}`, { defaultValue: agent.defaultRole }),
+                      agent.roleLevel ? t(`role_levels.${agent.roleLevel}`, { defaultValue: agent.roleLevel }) : null,
+                    ].filter(Boolean).join(" · ")
                   : t("admin.v2.agent_role_none")}
               </span>
             </div>

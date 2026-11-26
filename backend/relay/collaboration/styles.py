@@ -20,11 +20,15 @@ BUILDER_ROLES = frozenset({"implementer", "fixer"})
 # Lead planning, the lead-led member order and Pipeline all sort by this.
 ROLE_STAGE: dict[str, int] = {
     "researcher": 0,
+    "product_manager": 0,
+    "data": 0,
     "planner": 1,
     "designer": 2,
     "implementer": 3,
     "fixer": 3,
     "tester": 4,
+    "security": 4,
+    "performance": 4,
     "writer": 4,
     "devops": 4,
     "operations": 4,
@@ -32,7 +36,17 @@ ROLE_STAGE: dict[str, int] = {
 }
 # Specialists hand their work to the builders; Build and review never casts
 # one as the reviewer, and a team of them is better served by Pipeline.
-SPECIALIST_ROLES = frozenset({"researcher", "designer", "writer", "devops", "operations"})
+SPECIALIST_ROLES = frozenset({
+    "researcher",
+    "product_manager",
+    "data",
+    "designer",
+    "security",
+    "performance",
+    "writer",
+    "devops",
+    "operations",
+})
 
 
 def collaboration_snapshot(
