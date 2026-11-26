@@ -41,7 +41,7 @@ import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { AUTOMATIONS_PAGE_KEY, COMPUTER_TASKS_QUERY_KEY, HOME_TASKS_QUERY_KEY, ISSUES_PAGE_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY, THREAD_TASKS_QUERY_KEY } from "./useRelayData";
 import { useMutationError } from "./useMutationError";
 import { WORKSPACE_ACTIVITY_QUERY_KEY } from "./useWorkspaceActivity";
-import { PROJECT_DISCUSSIONS_QUERY_KEY, removeCachedProjectDiscussion } from "./useProjectDiscussions";
+import { applyProjectDiscussionDeletions, PROJECT_DISCUSSIONS_QUERY_KEY, removeCachedProjectDiscussion } from "./useProjectDiscussions";
 import { useDialogs } from "../components/ui/DialogProvider";
 import { teamRecordKey, TEAMS_QUERY_KEY } from "./useTeams";
 import { TEAM_WORKFLOW_CHOICES_KEY } from "./useProjectWorkflows";
@@ -165,23 +165,49 @@ export function useRelayMutations() {
     onError: onRelayError("Failed to rename thread", "errors.rename_thread"),
   });
 
+  const cacheSessionDeletions = (results: ReadonlyMap<string, RelaySession["execution"]>) => {
+    if (!results.size) return;
+    applyProjectDiscussionDeletions(queryClient, results);
+    const requestedAt = new Date().toISOString();
+    queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, current => current?.flatMap(session => {
+      if (!results.has(session.id)) return [session];
+      const execution = results.get(session.id);
+      return execution ? [{ ...session, execution, deletionRequestedAt: session.deletionRequestedAt ?? requestedAt }] : [];
+    }));
+    void invalidateSessions();
+    void queryClient.invalidateQueries({ queryKey: PROJECT_DISCUSSIONS_QUERY_KEY });
+    void invalidateTasks();
+    void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY] });
+    void invalidateWorkspaceActivity();
+  };
+
   const deleteSessionMutation = useMutation({
     mutationFn: ({ sessionId, token }: { sessionId: string } & TokenArg) => deleteSession(sessionId, token),
-    onSuccess: (execution, { sessionId }) => {
-      if (!execution) removeCachedProjectDiscussion(queryClient, sessionId);
-      queryClient.setQueryData<RelaySession[]>(SESSIONS_QUERY_KEY, (current) =>
-        execution
-          ? (current ?? []).map((session) => session.id === sessionId
-            ? { ...session, execution, deletionRequestedAt: session.deletionRequestedAt ?? new Date().toISOString() }
-            : session)
-          : (current ?? []).filter((session) => session.id !== sessionId));
-      void invalidateSessions();
-      void queryClient.invalidateQueries({ queryKey: PROJECT_DISCUSSIONS_QUERY_KEY });
-      void invalidateTasks();
-      void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY] });
-      void invalidateWorkspaceActivity();
-    },
+    onSuccess: (execution, { sessionId }) => cacheSessionDeletions(new Map([[sessionId, execution]])),
     onError: onRelayError("Failed to delete thread", "errors.delete_thread"),
+  });
+
+  const deleteDiscussionsMutation = useMutation({
+    mutationFn: async ({ ids, token }: { ids: readonly string[] } & TokenArg) => {
+      const accepted = new Map<string, RelaySession["execution"]>();
+      const failed: unknown[] = [];
+      const concurrency = 5;
+      for (let offset = 0; offset < ids.length; offset += concurrency) {
+        const batch = ids.slice(offset, offset + concurrency);
+        const results = await Promise.allSettled(batch.map(id => deleteSession(id, token)));
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") accepted.set(batch[index], result.value);
+          else failed.push(result.reason);
+        });
+      }
+      return { accepted, failed };
+    },
+    onSuccess: ({ accepted, failed }) => {
+      cacheSessionDeletions(accepted);
+      if (failed.length) {
+        reportMutationError("Failed to delete discussions", failed[0], t("project.discussions_delete_failed", { count: failed.length }));
+      }
+    },
   });
 
   const cancelRunMutation = useMutation({
@@ -738,6 +764,7 @@ export function useRelayMutations() {
   return {
     renameSessionMutation,
     deleteSessionMutation,
+    deleteDiscussionsMutation,
     cancelRunMutation,
     recordDecisionMutation,
     decideWorkflowMutation,

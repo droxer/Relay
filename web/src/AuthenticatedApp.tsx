@@ -630,10 +630,11 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     />
   ) : null;
 
-  const { renameThread, deleteThread } = useThreadEditing({
+  const { renameThread, deleteThread, deleteDiscussions } = useThreadEditing({
     ownerId: user.id,
     threads: myThreads,
-    activeSessionId: activeSession?.id,
+    // A Project overview can have a fallback Thread but no open transcript.
+    activeSessionId: requestedSessionId,
     token: selectedToken,
     onActiveThreadDeleted: () => {
       clearSelection();
@@ -900,6 +901,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onNewThread={startNewThread}
             onRenameThread={(session) => void renameThread(session)}
             onCloseThread={(id, title) => void deleteThread(id, title)}
+            onDeleteDiscussions={deleteDiscussions}
             activeAgent={activeAgent}
             logicalAgents={logicalAgents}
             selectableLogicalAgents={effectiveSelectableLogicalAgents}

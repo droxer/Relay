@@ -8,12 +8,13 @@ from typing import Any, TypedDict
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
-from ...persistence.workspace import ThreadListFilter
+from ...persistence.workspace import ThreadListFilter, ThreadSummaryPosition
 from ...security.actor import Actor
 from ..actors import request_actor, request_actor_or_sandbox
 from ..conditional_get import CACHE_CONTROL, etag_matches, request_validator, weak_etag
 from ..deps import AppContext, AppContextDep
-from ..record_cursor import decode_record_cursor, encode_record_cursor
+from ..projects.access import owned_workspace_project
+from ..record_cursor import decode_record_cursor, decode_thread_summary_cursor, encode_record_cursor
 from .activity import ThreadListActivity, apply_thread_list_activity, read_thread_list_activity
 from .projections import (
     agent_for_workspace,
@@ -29,7 +30,7 @@ router = APIRouter()
 ACTIVE_TASK_STATUSES = frozenset(
     {"assigned", "queued", "running", "waiting_for_human", "review", "blocked"}
 )
-_SUMMARY_REPRESENTATION = ("thread-summary-v1", os.environ.get("RAILWAY_GIT_COMMIT_SHA"))
+_SUMMARY_REPRESENTATION = ("thread-summary-v2", os.environ.get("RAILWAY_GIT_COMMIT_SHA"))
 
 
 class WorkspaceScope(TypedDict):
@@ -46,13 +47,19 @@ class ThreadListScope(TypedDict):
 def thread_list_position(
     request: Request, *, summary: bool = False,
 ) -> tuple[int, tuple[datetime, str] | None]:
+    limit, cursor = _thread_list_limit_and_cursor(request, summary=summary)
+    return limit, decode_record_cursor(cursor) if cursor else None
+
+
+def _thread_list_limit_and_cursor(
+    request: Request, *, summary: bool,
+) -> tuple[int, str | None]:
     default, maximum = (100, 200) if summary else (25, 50)
     try:
         requested = int(request.query_params.get("limit") or str(default))
     except ValueError as error:
         raise HTTPException(400, "limit must be an integer.") from error
-    cursor = request.query_params.get("cursor")
-    return min(max(1, requested), maximum), decode_record_cursor(cursor) if cursor else None
+    return min(max(1, requested), maximum), request.query_params.get("cursor")
 
 
 def _project_thread_filter(request: Request) -> ThreadListFilter:
@@ -78,16 +85,17 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any] | Resp
     # Task projections use the same credentials as GET /tasks.
     actor = (request_actor(request, ctx.auth_store) if include_activity or linked_work_filter
              else request_actor_or_sandbox(request, ctx.auth_store, ctx.registry))
-    limit, before = thread_list_position(request, summary=summary_view)
+    limit, cursor = _thread_list_limit_and_cursor(request, summary=summary_view)
     thread_filter = None
     if project_id is not None:
         project_id = project_id.strip()
         if not project_id:
             raise HTTPException(400, "projectId must not be blank.")
-        _owned_workspace_project(ctx, actor, project_id)
+        owned_workspace_project(ctx, actor, project_id)
         thread_filter = _project_thread_filter(request)
     scope: ThreadListScope = {"project_id": project_id, "thread_filter": thread_filter}
     if summary_view:
+        before = decode_thread_summary_cursor(cursor) if cursor else None
         with ctx.session_store.summary_read_scope():
             stamp = ctx.session_store.summary_page_stamp(
                 owner_user_id=actor["userId"], limit=limit, before=before, **scope,
@@ -114,7 +122,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any] | Resp
                 return JSONResponse(payload, headers=headers)
         return _session_summary_page(ctx, actor, limit, before, include_activity, scope)
     visible, position = ctx.session_store.list_session_record_page(
-        owner_user_id=actor["userId"], limit=limit, before=before, **scope,
+        owner_user_id=actor["userId"], limit=limit, before=decode_record_cursor(cursor) if cursor else None, **scope,
     )
     sessions = ensure_sessions_managed_affinity(ctx, visible)
     sessions = ctx.execution_lifecycle.annotate(sessions)
@@ -122,7 +130,7 @@ def list_sessions(request: Request, ctx: AppContextDep) -> dict[str, Any] | Resp
 
 
 def _session_summary_page(
-    ctx: AppContext, actor: Actor, limit: int, before: tuple[datetime, str] | None,
+    ctx: AppContext, actor: Actor, limit: int, before: ThreadSummaryPosition | None,
     include_activity: bool, scope: ThreadListScope, activity: ThreadListActivity | None = None,
 ) -> dict[str, Any]:
     summaries, next_position = ctx.session_store.list_session_summary_page(
@@ -305,7 +313,7 @@ def _workspace_scope(
     ):
         raise HTTPException(403, "Cannot read another user's team workspace.")
 
-    project = _owned_workspace_project(ctx, actor, requested_project_id) if requested_project_id else None
+    project = owned_workspace_project(ctx, actor, requested_project_id) if requested_project_id else None
 
     agent = agent_for_workspace(ctx, actor, requested_agent_id)
     user_id = _workspace_owner_user_id(
@@ -331,15 +339,6 @@ def _workspace_owner_user_id(
     if agent:
         return agent_supervisor_user_id(agent)
     return user_for_workspace_brief(actor, request.query_params.get("userId"))
-
-
-def _owned_workspace_project(ctx: AppContext, actor: Actor, project_id: str) -> dict[str, Any]:
-    project = ctx.project_store.get_project(project_id)
-    if not project:
-        raise HTTPException(404, "Project not found.")
-    if project.get("ownerUserId") != actor["userId"]:
-        raise HTTPException(403, "Cannot read another user's project workspace.")
-    return project
 
 
 def _workspace_nodes(

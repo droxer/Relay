@@ -44,6 +44,7 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
       permissionMode: session.permissionMode ?? next.permissionMode,
       permissionRequests: session.permissionRequests ?? next.permissionRequests,
       nextSteps: session.nextSteps,
+      discussionPinned: session.discussionPinned ?? next.discussionPinned,
     };
   }
   for (let i = replayCount; i < events.length; i++) next = applySessionEventProjection(next, events[i]);
@@ -51,6 +52,9 @@ export function applySessionEventsUnchecked(session: RelaySession, events: Relay
 }
 
 function applySessionEventProjection(session: RelaySession, event: RelayEvent): RelaySession {
+  if (event.type === "session.discussion_pin_changed") {
+    return { ...session, discussionPinned: event.pinned };
+  }
   const next: RelaySession = {
     ...session,
     updatedAt: event.timestamp,

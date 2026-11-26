@@ -81,6 +81,9 @@ def apply_session_event(
     """Incrementally update a derived session projection with one event."""
     if retain_event:
         session.setdefault("events", []).append(event)
+    if event.get("type") == "session.discussion_pin_changed":
+        session["discussionPinned"] = event["pinned"]
+        return session
     session["updatedAt"] = event["timestamp"]
     handler = SESSION_EVENT_HANDLERS.get(event.get("type", ""))
     if handler:

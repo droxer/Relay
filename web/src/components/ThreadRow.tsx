@@ -1,6 +1,8 @@
 import {
   ActionEdit,
+  ActionPin,
   ActionRemove,
+  ActionUnpin,
   AdminDelete,
   ICON,
   NavMore,
@@ -16,6 +18,7 @@ import { canDeleteThread, threadLabel, threadRowMeta, type ThreadItem } from "..
 import { formatThreadStamp } from "../lib/threadStamp";
 import { queuedRun, queueWaitLabel, shownExecutionPhase } from "../lib/queuedRun";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +48,9 @@ type ThreadRowProps = {
   layout?: "full" | "nested";
   /** The Project's Discussions list already supplies the Project context. */
   discussion?: boolean;
+  onSetDiscussionPin?: (sessionId: string, pinned: boolean) => void;
+  discussionPinPending?: boolean;
+  discussionSelection?: { checked: boolean; disabled: boolean; onToggle: () => void };
   /** The rail's minute clock. The stamp reads it instead of Date.now() so the
       memoized row re-renders once a minute to keep "3m ago" honest, and never
       merely because its parent did. */
@@ -54,7 +60,10 @@ type ThreadRowProps = {
 /* Memoized: the rail mounts dozens of rows and its parents re-render for
    reasons no row cares about. Every prop is stable when unchanged — items are
    carried forward by reuseThreadItems, handlers by useStableCallback. */
-export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingInTranscript, onSelect, onRename, onClose, tone: suppliedTone, layout = "full", discussion = false, now }: ThreadRowProps) {
+export const ThreadRow = memo(function ThreadRow({
+  item, selected, runStartingInTranscript, onSelect, onRename, onClose, tone: suppliedTone, layout = "full",
+  discussion = false, onSetDiscussionPin, discussionPinPending, discussionSelection, now,
+}: ThreadRowProps) {
   const { t, i18n } = useTranslation();
   /* No hover on touch, so the hover-revealed pencil and cross would sit on
      every row for good — two small targets that cost the title a third of
@@ -99,6 +108,8 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
     : "";
   const rowLabel = [label, projectLabel, originLabel, offlineLabel, stateLabel, stamp].filter(Boolean).join(" · ");
   const deleteEnabled = canDeleteThread(item);
+  const menuActions = (discussion || touch) && (onRename || onClose || onSetDiscussionPin);
+  const PinIcon = session.discussionPinned ? ActionUnpin : ActionPin;
 
   // Live activity names the agent or the input it needs. Only linked work
   // keeps failure/cancellation labels after execution ends; standalone chats
@@ -160,9 +171,21 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
   return (
     <li
       className={`conversation-row rail-row list-virtual${layout === "nested" ? " nested" : ""}`}
-      data-selected={selected ? "true" : "false"}
+      data-selected={selected || discussionSelection?.checked ? "true" : "false"}
       data-tone={tone}
     >
+      {discussionSelection && (
+        <span className="discussion-row-selection">
+          {deleteEnabled && (
+            <Checkbox
+              checked={discussionSelection.checked}
+              disabled={discussionSelection.disabled}
+              aria-label={t("project.discussions_select_row", { name: label })}
+              onCheckedChange={discussionSelection.onToggle}
+            />
+          )}
+        </span>
+      )}
       <Button variant="ghost"
         className="conversation-row-inner"
         type="button"
@@ -221,7 +244,7 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
           ) : null}
         </span>
       </Button>
-      {touch && (onRename || onClose) ? (
+      {discussionSelection ? null : menuActions ? (
         <span className="conversation-row-actions">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -237,6 +260,15 @@ export const ThreadRow = memo(function ThreadRow({ item, selected, runStartingIn
               }
             />
             <DropdownMenuContent align="end">
+              {onSetDiscussionPin ? (
+                <DropdownMenuItem
+                  disabled={discussionPinPending || !deleteEnabled}
+                  onClick={() => onSetDiscussionPin(session.id, !session.discussionPinned)}
+                >
+                  <PinIcon size={ICON.sm} aria-hidden="true" />
+                  {t(session.discussionPinned ? "project.discussions_unpin" : "project.discussions_pin")}
+                </DropdownMenuItem>
+              ) : null}
               {onRename ? (
                 <DropdownMenuItem onClick={() => onRename(session)}>
                   <ActionEdit size={ICON.sm} aria-hidden="true" />

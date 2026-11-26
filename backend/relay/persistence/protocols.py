@@ -9,7 +9,7 @@ from typing import Any, Protocol
 from ..core.issue_listing import IssueListRequest
 from ..core.automation_listing import AutomationListRequest
 from ..core.models import AgentName
-from .workspace import ThreadListFilter
+from .workspace import ThreadListFilter, ThreadSummaryPosition
 
 
 @dataclass(frozen=True)
@@ -69,7 +69,7 @@ class SessionStore(Protocol):
     def session_version(self, session_id: str) -> int: ...
     def summary_read_scope(self) -> AbstractContextManager[None]: ...
     def summary_page_stamp(
-        self, *, owner_user_id: str, limit: int, before: tuple[datetime, str] | None,
+        self, *, owner_user_id: str, limit: int, before: ThreadSummaryPosition | None,
         project_id: str | None = None,
         thread_filter: ThreadListFilter | None = None,
     ) -> tuple[list[str], list[Any]] | None: ...
@@ -111,12 +111,12 @@ class SessionStore(Protocol):
         *,
         owner_user_id: str | None = None,
         limit: int = 100,
-        before: tuple[datetime, str] | None = None,
+        before: ThreadSummaryPosition | None = None,
         project_id: str | None = None,
         team_id: str | None = None,
         agent_id: str | None = None,
         thread_filter: ThreadListFilter | None = None,
-    ) -> tuple[list[dict[str, Any]], tuple[datetime, str] | None]: ...
+    ) -> tuple[list[dict[str, Any]], ThreadSummaryPosition | None]: ...
     def list_session_snapshots(
         self, *, owner_user_id: str, project_id: str | None = None
     ) -> list[dict[str, Any]]: ...

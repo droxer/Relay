@@ -69,6 +69,7 @@ export function TaskSelectionBar({
   onDelete,
   onClear,
   deleteLabel,
+  selectedLabel,
   actions,
 }: {
   count: number;
@@ -76,6 +77,7 @@ export function TaskSelectionBar({
   onDelete: () => void;
   onClear: () => void;
   deleteLabel: string;
+  selectedLabel?: string;
   /** Surface-specific batch actions (Issues' move-to-project), set before Clear. */
   actions?: ReactNode;
 }) {
@@ -84,7 +86,7 @@ export function TaskSelectionBar({
 
   return (
     <div className="task-selection-bar" role="region" aria-label={t("backlog.selection")}>
-      <p className="task-selection-count" aria-live="polite">{t("backlog.selected", { count })}</p>
+      <p className="task-selection-count" aria-live="polite">{selectedLabel ?? t("backlog.selected", { count })}</p>
       <div className="task-selection-actions">
         {actions}
         <Button variant="ghost" type="button" onClick={onClear} disabled={deleting}>

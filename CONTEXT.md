@@ -306,7 +306,9 @@ _Avoid_: Project Member, collaborator
 
 **Project Conversation**:
 A Thread that belongs to one Project and therefore shares that Project's
-persistent workspace and Project Agent roster.
+persistent workspace and Project Agent roster. The owner can pin standalone
+Project Conversations above the rest of the Project's **Discussions** list.
+Pinning is a display preference and preserves the Thread's activity timestamp.
 _Avoid_: Project, room
 
 **Project Lead**:

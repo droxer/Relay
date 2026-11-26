@@ -1,6 +1,7 @@
 """SQL scopes shared by Workspace previews and their totals."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy import or_, select
@@ -8,6 +9,8 @@ from sqlalchemy import or_, select
 from .tables.projects import projects
 from .tables.sessions import agent_runs
 from .tables.tasks import task_sessions, tasks
+
+ThreadSummaryPosition = tuple[datetime, str] | tuple[datetime, str, bool]
 
 
 @dataclass(frozen=True)
