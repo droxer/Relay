@@ -34,6 +34,7 @@ def observation_from_row(row: Any) -> dict[str, Any]:
 
 class NodeObservationRows(DaemonStoreState):
     def get_node_liveness(self, node_ids: set[str]) -> dict[str, dict[str, Any]]:
+        """Read the fields used by batched Thread execution liveness checks."""
         ids = sorted(node_id for node_id in node_ids if not sql.names_no_uuid_row(self.engine, node_id))
         if not ids:
             return {}
@@ -41,7 +42,7 @@ class NodeObservationRows(DaemonStoreState):
         statement = select(nodes.id, nodes.status, nodes.last_seen_at)
         with store_transaction(self.engine) as conn:
             return {
-                str(node_id): {"status": status, "lastSeenAt": format_db_time(seen)}
+                str(node_id): {"id": str(node_id), "status": status, "lastSeenAt": format_db_time(seen)}
                 for batch in batched(ids, 500, strict=False)
                 for node_id, status, seen in conn.execute(statement.where(nodes.id.in_(batch)))
             }

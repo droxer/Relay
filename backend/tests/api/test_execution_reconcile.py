@@ -9,17 +9,17 @@ active work. These tests pin both paths and their limits.
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, update
 
 from relay.app import create_app
 from relay.core.ids import new_database_id
 from relay.persistence.events import relay_event
 from relay.sessions.controller import SessionController
-from datetime import UTC
 
 
 def _bootstrap(client: TestClient) -> None:
@@ -44,15 +44,18 @@ def _create_session(client: TestClient) -> str:
     return response.json()["id"]
 
 
-def _dispatched_run(app, session_id: str, *, lease_seconds: float = 60) -> dict:
+def _dispatched_run(
+    app, session_id: str, *, lease_seconds: float = 60, node_id: str = "sbx_alice",
+    owner_id: str = "alice",
+) -> dict:
     """A run the daemon took and never reported back on."""
     registry = app.state.registry
     registry.register({
-        "sandboxId": "sbx_alice", "userId": "alice", "token": "node_token",
+        "sandboxId": node_id, "userId": owner_id, "token": "node_token",
         "protocolVersion": 1, "supportedAgents": ["claude"], "status": "ready",
     })
     request = registry.daemon_store.create_run_request({
-        "nodeId": "sbx_alice", "sessionId": session_id, "taskGoal": "work",
+        "nodeId": node_id, "sessionId": session_id, "taskGoal": "work",
         "assignments": [{"executorKind": "claude"}], "state": {},
     })
     command = {
@@ -63,8 +66,8 @@ def _dispatched_run(app, session_id: str, *, lease_seconds: float = 60) -> dict:
     registry.daemon_store.update_run_request(request["id"], {
         "currentCommandId": command["id"], "currentRunId": command["runId"],
     })
-    registry.daemon_store.enqueue_command("sbx_alice", command)
-    registry.daemon_store.take_queued_commands("sbx_alice", lease_seconds=lease_seconds)
+    registry.daemon_store.enqueue_command(node_id, command)
+    registry.daemon_store.take_queued_commands(node_id, lease_seconds=lease_seconds)
     SessionController(app.state.session_store).record_agent_started(session_id, {
         "runId": command["runId"], "agent": "claude",
     })
@@ -506,10 +509,68 @@ def test_online_heartbeat_is_separate_from_unconfirmed_exit_in_detail_and_list(m
         assert listed["execution"]["canDelete"] is False
 
 
+@pytest.mark.parametrize("view", ["summary", "records"])
+def test_thread_list_with_offline_online_and_missing_computers(monkeypatch, tmp_path, view):
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    app = create_app(str(tmp_path))
+    client = TestClient(app)
+    path = "/api/v1/threads"
+    params = {"view": view}
+    assert client.get(path, params=params).status_code == 401
+    _bootstrap(client)
+    owner_id = client.get("/api/v1/auth/me").json()["user"]["userId"]
+
+    offline, online, missing = [_create_session(client) for _ in range(3)]
+    offline_node, online_node, missing_node = [new_database_id() for _ in range(3)]
+    _dispatched_run(app, offline, node_id=offline_node, owner_id=owner_id, lease_seconds=1)
+    _dispatched_run(app, online, node_id=online_node, owner_id=owner_id, lease_seconds=7200)
+    _dispatched_run(app, missing, node_id=missing_node, owner_id=owner_id, lease_seconds=1)
+    _clock_after(app, 3600)
+    store = app.state.registry.daemon_store
+    with store.engine.begin() as conn:
+        conn.execute(update(store.nodes).where(store.nodes.c.id == offline_node).values(
+            last_seen_at=datetime(2020, 1, 1, tzinfo=UTC),
+        ))
+
+    # Remove the Computer after the list has loaded its execution, so the
+    # actual liveness query returns no observation for that Computer.
+    lookup = store.get_node_liveness
+
+    def lookup_after_removal(node_ids):
+        assert missing_node in node_ids
+        store.delete_node(missing_node)
+        return lookup(node_ids)
+
+    with monkeypatch.context() as scope:
+        scope.setattr(store, "get_node_liveness", lookup_after_removal)
+        response = client.get(path, params=params)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    ids = [row["id"] for row in body["sessions"]]
+    assert set(ids) == {offline, online, missing}
+    assert body["nextCursor"] is None
+    execution = {row["id"]: row["execution"] for row in body["sessions"]}
+    for thread_id, computer_online in ((offline, False), (missing, None)):
+        assert execution[thread_id]["computerOnline"] is computer_online
+        assert execution[thread_id]["phase"] == "recovery_required"
+        assert execution[thread_id]["blockingReason"] == "execution_lost"
+    assert execution[online]["computerOnline"] is True
+    assert execution[online]["phase"] == "running"
+
+    first = client.get(path, params={**params, "limit": 2})
+    assert first.status_code == 200, first.text
+    page = first.json()
+    assert [row["id"] for row in page["sessions"]] == ids[:2]
+    assert page["nextCursor"]
+    last = client.get(path, params={**params, "limit": 2, "cursor": page["nextCursor"]})
+    assert last.status_code == 200, last.text
+    assert [row["id"] for row in last.json()["sessions"]] == ids[2:]
+    assert last.json()["nextCursor"] is None
+
+
 def _clock_after(app, seconds: float) -> None:
     """Advance the lifecycle's view of time past the command's lease."""
-    from datetime import datetime, timedelta
-
     later = datetime.now(UTC) + timedelta(seconds=seconds)
     app.state.execution_lifecycle.clock = lambda: later
 
