@@ -1,9 +1,11 @@
 import {
+  ActionCopy,
+  CheckIcon,
   ICON,
   StreamAttachment,
 } from "./icons";
 import { relayApiEndpoint } from "../lib/apiOrigin";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { AgentMark } from "./AgentMark";
@@ -17,6 +19,7 @@ import type { AgentName } from "../types";
 import { AGENT_NAMES } from "../types";
 import { imageForAgentRun, labelForExecutor } from "../lib/agentDisplayNames";
 import { agentRoleLabel } from "../lib/agentRoleLabel";
+import { extractLeadingMentionTokens } from "../lib/mentions";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
 import { runReceipt } from "../lib/runReceipt";
@@ -27,6 +30,7 @@ import { useArtifactBody } from "../lib/useArtifactBody";
 import { summarizeArtifact } from "../lib/artifactStats";
 import type { DerivedMessage } from "../lib/projectMessages";
 import { Button } from "@/components/ui/button";
+import { useDialogs } from "@/components/ui/DialogProvider";
 export { isGroupedContinuation, projectMessages } from "../lib/projectMessages";
 export type { DerivedMessage } from "../lib/projectMessages";
 
@@ -51,6 +55,47 @@ function MsgTime({ value }: { value: string }) {
   const formatted = useMemo(() => formatTime(value, i18n.language || undefined), [value, i18n.language]);
   if (!formatted) return null;
   return <time className="msg-time tnum" dateTime={value}>{formatted}</time>;
+}
+
+function UserMessageCopy({ text }: { text: string }) {
+  const { t } = useTranslation();
+  const { announce } = useDialogs();
+  const [copied, setCopied] = useState(false);
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = setTimeout(() => setCopied(false), 1800);
+    } catch {
+      announce({ message: t("errors.copy_message"), tone: "error" });
+    }
+  }, [text, t, announce]);
+
+  if (!text.trim()) return null;
+
+  return (
+    <>
+      <span className="sr-only" role="status">{copied ? t("message.copied") : ""}</span>
+      <Button
+        variant="ghost"
+        type="button"
+        className={`msg-turn-action ${copied ? "is-copied" : ""}`}
+        onClick={() => void handleCopy()}
+        tooltip={copied ? t("message.copied") : t("message.copy")}
+      >
+        {copied ? <CheckIcon size={ICON.sm} /> : <ActionCopy size={ICON.sm} />}
+        <span className="msg-turn-action-label">{copied ? t("message.copied") : t("message.copy")}</span>
+      </Button>
+    </>
+  );
 }
 
 function formatArtifactSize(bytes: number | undefined, t: TFunction, locale: string | undefined): string {
@@ -178,6 +223,8 @@ type MessageBlockProps = {
   onOpenArtifact?: (artifact: RelayArtifact) => void;
   onRetryAgent?: (agent: AgentName, agentId?: string) => void;
   onResumeAgent?: (agent: AgentName, agentId?: string) => void;
+  onMentionAgent?: (displayName: string) => void;
+  mentionableAgentIds?: ReadonlySet<string>;
   retryDisabled?: boolean;
   /** Name of the teammate this turn takes over from, when it is a handoff.
    * Until the first output lands the turn says so instead of "Working…". */
@@ -198,10 +245,31 @@ export const MessageBlock = memo(function MessageBlock({
   onOpenArtifact,
   onRetryAgent,
   onResumeAgent,
+  onMentionAgent,
+  mentionableAgentIds,
   retryDisabled = false,
   pickupFrom,
 }: MessageBlockProps) {
   const { t } = useTranslation();
+  const mentionNames = useMemo(() => {
+    if (!logicalAgentNames) return undefined;
+    const names = Object.values(logicalAgentNames);
+    return names.length > 0 ? names : undefined;
+  }, [logicalAgentNames]);
+  const mentionableNames = useMemo(() => {
+    if (!onMentionAgent || !logicalAgentNames || !mentionableAgentIds?.size) return undefined;
+    const map = new Map<string, string>();
+    for (const id of mentionableAgentIds) {
+      const name = logicalAgentNames[id];
+      if (name) map.set(name.toLowerCase(), name);
+    }
+    return map.size > 0 ? map : undefined;
+  }, [onMentionAgent, logicalAgentNames, mentionableAgentIds]);
+  const leadingMentions = useMemo(() => {
+    if (message.kind !== "user" || !mentionNames) return undefined;
+    const tokens = extractLeadingMentionTokens(message.text, mentionNames);
+    return tokens.length > 0 ? tokens : undefined;
+  }, [message, mentionNames]);
   if (message.kind === "user" && automationOpening) {
     return <AutomationOpening opening={automationOpening} time={<MsgTime value={message.timestamp} />} />;
   }
@@ -210,14 +278,19 @@ export const MessageBlock = memo(function MessageBlock({
     return (
       // The user's turn sits on the right as a bubble with no avatar — the
       // side, not a face, says who is speaking (the shape every current chat
-      // surface converged on). The timestamp resolves under it on hover.
+      // surface converged on). The timestamp and copy action resolve under it on hover.
       <article className="msg msg-user" aria-label={t("message.user_label")}>
         <div className="turn-body">
           {/* The user's own Markdown renders like the agent's: a pasted fence
               is a highlighted block, not a paragraph with backticks in it.
               Same escaped pipeline as the agent side — no raw HTML. */}
           <div className="user-text md-body agent-prose">
-            <MarkdownContent text={message.text} />
+            <MarkdownContent
+              text={message.text}
+              leadingMentions={leadingMentions}
+              mentionableNames={mentionableNames}
+              onMentionClick={mentionableNames ? onMentionAgent : undefined}
+            />
             {message.attachments?.length ? <div className="message-images">{message.attachments.map((image, index) => (
               <a key={image.id} href={relayApiEndpoint(`/thread-attachments/${encodeURIComponent(image.id)}`)} target="_blank" rel="noreferrer">
                 <img src={relayApiEndpoint(`/thread-attachments/${encodeURIComponent(image.id)}`)} loading="lazy"
@@ -227,7 +300,10 @@ export const MessageBlock = memo(function MessageBlock({
           </div>
         </div>
         {message.live ? <p className="msg-user-note">{t("message.sent_live")}</p> : null}
-        <MsgTime value={message.timestamp} />
+        <div className="msg-user-foot">
+          <UserMessageCopy text={message.text} />
+          <MsgTime value={message.timestamp} />
+        </div>
       </article>
     );
   }
@@ -276,6 +352,9 @@ export const MessageBlock = memo(function MessageBlock({
             streaming={message.streaming}
             collaborations={message.collaborations}
             permissions={message.permissions}
+            mentionNames={mentionNames}
+            mentionableNames={mentionableNames}
+            onMentionClick={mentionableNames ? onMentionAgent : undefined}
             pickupFrom={pickupFrom}
           />
           {message.attachments.length > 0 ? (
@@ -303,11 +382,15 @@ export const MessageBlock = memo(function MessageBlock({
             <MessageTurnActions
               agent={message.agent}
               agentId={message.agentId}
+              agentName={logicalName}
               stdout={message.stdout}
               stderr={message.stderr}
               streaming={message.streaming}
               retryDisabled={retryDisabled}
               onRetry={onRetryAgent}
+              onMention={onMentionAgent && logicalName && message.agentId && mentionableAgentIds?.has(message.agentId)
+                ? () => onMentionAgent(logicalName)
+                : undefined}
               resumable={message.resumable}
               onResume={onResumeAgent}
             />

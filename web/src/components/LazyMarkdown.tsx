@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import type { MarkdownVariant } from "../lib/markdown";
+import { splitInlineMentions, splitLeadingMentionPrefix } from "../lib/mentions";
 
 /* The markdown pipeline — react-markdown, remark/rehype, KaTeX, highlight.js —
    is ~570 KB of script. It sat in the eager bundle because the default route
@@ -39,8 +40,47 @@ export function preloadMarkdown(): void {
 
 /* Until the chunk lands the text shows as written, in the prose wrapper it will
    keep — the reader sees the words immediately rather than an empty turn. */
-function PlainText({ text }: { text: string }) {
-  return <p className="md-plain">{text}</p>;
+function PlainText({
+  text,
+  leadingMentions,
+  inlineMentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  leadingMentions?: readonly string[];
+  inlineMentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
+  if (!leadingMentions?.length && !inlineMentionNames?.length) {
+    return <p className="md-plain">{text}</p>;
+  }
+  const segments = leadingMentions?.length
+    ? splitLeadingMentionPrefix(text, leadingMentions)
+    : splitInlineMentions(text, inlineMentionNames ?? []);
+  return (
+    <p className="md-plain">
+      {segments.map((segment, index) => {
+        if (!segment.mention) return segment.text;
+        const targetName = mentionableNames?.get(segment.text.slice(1).toLowerCase());
+        if (onMentionClick && targetName) {
+          return (
+            <button
+              key={index}
+              type="button"
+              className="msg-mention msg-mention-interactive"
+              translate="no"
+              onClick={() => onMentionClick(targetName)}
+            >
+              {segment.text}
+            </button>
+          );
+        }
+        return <span key={index} className="msg-mention" translate="no">{segment.text}</span>;
+      })}
+    </p>
+  );
 }
 
 export function Markdown({ text, variant = "chat" }: { text: string; variant?: MarkdownVariant }) {
@@ -59,12 +99,54 @@ export function Markdown({ text, variant = "chat" }: { text: string; variant?: M
   );
 }
 
-export function MarkdownContent({ text, live = false }: { text: string; live?: boolean }) {
+export function MarkdownContent({
+  text,
+  live = false,
+  leadingMentions,
+  inlineMentionNames,
+  mentionableNames,
+  onMentionClick,
+}: {
+  text: string;
+  live?: boolean;
+  leadingMentions?: readonly string[];
+  inlineMentionNames?: readonly string[];
+  mentionableNames?: ReadonlyMap<string, string>;
+  onMentionClick?: (displayName: string) => void;
+}) {
   const [loaded] = useState(() => loadedMarkdown);
-  if (loaded) return <loaded.MarkdownContent text={text} live={live} />;
+  if (loaded) {
+    return (
+      <loaded.MarkdownContent
+        text={text}
+        live={live}
+        leadingMentions={leadingMentions}
+        inlineMentionNames={inlineMentionNames}
+        mentionableNames={mentionableNames}
+        onMentionClick={onMentionClick}
+      />
+    );
+  }
   return (
-    <Suspense fallback={<PlainText text={text} />}>
-      <MarkdownContentImpl text={text} live={live} />
+    <Suspense
+      fallback={(
+        <PlainText
+          text={text}
+          leadingMentions={leadingMentions}
+          inlineMentionNames={inlineMentionNames}
+          mentionableNames={mentionableNames}
+          onMentionClick={onMentionClick}
+        />
+      )}
+    >
+      <MarkdownContentImpl
+        text={text}
+        live={live}
+        leadingMentions={leadingMentions}
+        inlineMentionNames={inlineMentionNames}
+        mentionableNames={mentionableNames}
+        onMentionClick={onMentionClick}
+      />
     </Suspense>
   );
 }

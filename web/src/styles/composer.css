@@ -417,7 +417,12 @@
    `:focus`, which for a text field is exactly when :focus-visible matches
    (and keeps this a wrapper rule, not a restated :focus-visible ring).
    outline, not box-shadow, so it never fights the running hairline. */
+.composer-input-wrap:hover {
+  border-color: var(--line-strong);
+}
+
 .composer-input-wrap:has(.composer-textarea:focus) {
+  border-color: var(--line-strong);
   outline: var(--focus-outline);
   outline-offset: var(--focus-offset);
 }
@@ -644,6 +649,11 @@
   letter-spacing: var(--type-label-track);
   text-align: left;
   cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.mention-option .roster-trigger-name {
+  font-weight: 600;
 }
 
 /* `data-highlighted`, not `data-active`: base-ui's Combobox marks the roving
@@ -692,9 +702,18 @@
   padding-inline: var(--sp-hairline);
   border-radius: var(--r-2);
   background: var(--control-fill-hover);
+  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-strong);
   /* A pill split across two lines keeps its full shape on both halves. */
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+/* Visually bold eligible `@Agent` tokens inside the draft without shifting
+   horizontal glyph metrics: painting a subtle sub-pixel shadow on the mirror
+   layer thickens the stroke while keeping caret and wrapping pixel-exact. */
+.composer-mention-token[data-eligible] {
+  color: var(--ink-1);
+  text-shadow: 0.35px 0 0 currentColor, -0.35px 0 0 currentColor;
 }
 
 /* Blocked mention: the send is disabled while this is in the draft, so it

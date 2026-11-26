@@ -4,9 +4,11 @@
 
 import {
   Activity,
+  ArrowDown,
   ArrowLeft,
   ArrowRightLeft,
   ArrowUp,
+  AtSign,
   ListPlus,
   SendHorizontal,
   ArrowUpRight,
@@ -226,6 +228,8 @@ export const NavComputer = withStandardStroke(Monitor, "NavComputer");
 export const ActionCompose = withStandardStroke(SquarePen, "ActionCompose");
 
 export const ActionCopy = withStandardStroke(Copy, "ActionCopy");
+export const ActionMention = withStandardStroke(AtSign, "ActionMention");
+export const ActionScrollBottom = withStandardStroke(ArrowDown, "ActionScrollBottom");
 export const ActionRetry = withStandardStroke(RefreshCw, "ActionRetry");
 export const ActionSend = withStandardStroke(ArrowUp, "ActionSend");
 // Starter-prompt chip affordance — the arrow reads as "drop this into the

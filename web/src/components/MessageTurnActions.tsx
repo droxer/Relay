@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActionCopy,
+  ActionMention,
   ActionRetry,
   ActionStart,
   CheckIcon,
@@ -16,11 +17,15 @@ type MessageTurnActionsProps = {
   agent: AgentName;
   /** Logical agent that produced the turn, so a retry goes back to it. */
   agentId?: string;
+  /** Display name of the logical agent, used for quick `@Agent` reply. */
+  agentName?: string;
   stdout: string;
   stderr: string;
   streaming: boolean;
   retryDisabled?: boolean;
   onRetry?: (agent: AgentName, agentId?: string) => void;
+  /** Insert or switch to `@AgentName` in the composer and focus it. */
+  onMention?: () => void;
   /** Set when the turn stopped early and its runtime conversation survives. */
   resumable?: boolean;
   onResume?: (agent: AgentName, agentId?: string) => void;
@@ -29,11 +34,13 @@ type MessageTurnActionsProps = {
 export function MessageTurnActions({
   agent,
   agentId,
+  agentName,
   stdout,
   stderr,
   streaming,
   retryDisabled = false,
   onRetry,
+  onMention,
   resumable = false,
   onResume,
 }: MessageTurnActionsProps) {
@@ -79,10 +86,11 @@ export function MessageTurnActions({
   }, [agent, agentId, onResume, retryDisabled, streaming]);
 
   const canCopy = Boolean(plainText);
+  const showMention = Boolean(onMention && agentName) && !streaming;
   const showRetry = Boolean(onRetry) && !streaming;
   const showResume = resumable && Boolean(onResume) && !streaming;
 
-  if (!canCopy && !showRetry && !showResume) return null;
+  if (!canCopy && !showMention && !showRetry && !showResume) return null;
 
   return (
     <div className="msg-turn-actions" role="group" aria-label={t("message.actions_label")}>
@@ -97,6 +105,17 @@ export function MessageTurnActions({
         >
           {copied ? <CheckIcon size={ICON.sm} /> : <ActionCopy size={ICON.sm} />}
           <span className="msg-turn-action-label">{copied ? t("message.copied") : t("message.copy")}</span>
+        </Button>
+      ) : null}
+      {showMention ? (
+        <Button variant="ghost"
+          type="button"
+          className="msg-turn-action"
+          onClick={onMention}
+          tooltip={t("message.mention_agent", { agent: agentName })}
+        >
+          <ActionMention size={ICON.sm} />
+          <span className="msg-turn-action-label">{t("message.mention_agent", { agent: agentName })}</span>
         </Button>
       ) : null}
       {showRetry ? (

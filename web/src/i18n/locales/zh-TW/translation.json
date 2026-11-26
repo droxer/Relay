@@ -614,7 +614,8 @@
     "queue_step_running": "執行",
     "queue_cause_dispatch": "正在等待 {{computer}} 啟動本次執行。",
     "queue_cause_offline": "{{computer}} 已離線。執行會保留在佇列中，電腦重新連線後開始。",
-    "queue_cancel": "取消執行"
+    "queue_cancel": "取消執行",
+    "jump_to_bottom": "回到最新"
   },
   "composer": {
     "permission_mode": "工具權限",
@@ -2349,7 +2350,8 @@
     "copy_code": "複製程式碼",
     "copy_code_failed": "複製失敗",
     "diagram": "圖表",
-    "table": "表格"
+    "table": "表格",
+    "mention_agent": "@ {{agent}}"
   },
   "nodes": {
     "agent_presence_title": "{{agent}}：{{presence}}",

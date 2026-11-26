@@ -10,6 +10,14 @@ import { createContext, useContext } from "react";
 type MarkdownMode = {
   /** The text is still being streamed and is a prefix of its final form. */
   live: boolean;
+  /** Leading `@Agent` tokens to emphasize inline at the start of the first paragraph. */
+  leadingMentions?: readonly string[];
+  /** Known agent display names to emphasize inline wherever `@Agent` appears in prose. */
+  inlineMentionNames?: readonly string[];
+  /** Lowercased displayName -> canonical displayName for agents clickable to address in the composer. */
+  mentionableNames?: ReadonlyMap<string, string>;
+  /** Called when the user clicks an eligible `@Agent` pill in the transcript. */
+  onMentionClick?: (displayName: string) => void;
 };
 
 const MarkdownModeContext = createContext<MarkdownMode>({ live: false });

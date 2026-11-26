@@ -4,6 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatc
 import { useTranslation } from "react-i18next";
 import {
   ActionRoute,
+  ActionScrollBottom,
   ICON,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
@@ -30,7 +31,7 @@ import { useThreadQueue } from "../hooks/useThreadQueue";
 import { useQueueClock } from "../hooks/useQueueClock";
 import { MessageQueue } from "./composer/MessageQueue";
 import type { ThreadItem } from "./ThreadRow";
-import type { MentionCandidate } from "../lib/mentions";
+import { parseMentions, replaceAddressRun, type MentionCandidate } from "../lib/mentions";
 import { ThreadListPanel, type ThreadListPaging } from "./ThreadListPanel";
 import type { ThreadProjectFilter, ThreadProjectOption } from "../lib/threadProjectFilter";
 import type { ThreadKindFilter } from "../lib/threadKindFilter";
@@ -147,6 +148,8 @@ type ThreadsViewProps = {
   transcriptRef: (node: HTMLDivElement | null) => void;
   composerRef: RefObject<ComposerHandle | null>;
   onTranscriptScroll: () => void;
+  transcriptScrolledUp?: boolean;
+  onJumpToBottom?: () => void;
   /** Holds the reader's place while turns are inserted above it. */
   readingPosition: ReadingPosition;
   onSelectThread: (sessionId: string) => void;
@@ -268,6 +271,8 @@ export function ThreadsView({
   transcriptRef,
   composerRef,
   onTranscriptScroll,
+  transcriptScrolledUp = false,
+  onJumpToBottom,
   readingPosition,
   onSelectThread,
   onSelectProject,
@@ -389,6 +394,21 @@ export function ThreadsView({
   }, [transcriptLikely]);
   const agentDisplayNames = useMemo(() => buildExecutorDisplayNameMap(logicalAgents), [logicalAgents]);
   const logicalAgentNames = useMemo(() => buildLogicalAgentNameMap(logicalAgents), [logicalAgents]);
+  const mentionableAgentIds = useMemo(
+    () => new Set(mentionCandidates.filter((candidate) => candidate.eligible).map((candidate) => candidate.id)),
+    [mentionCandidates],
+  );
+  const handleMentionAgent = useCallback((displayName: string) => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    const current = composer.getText();
+    const parsed = parseMentions(current, mentionCandidates);
+    const next = parsed.mentions.length > 0
+      ? replaceAddressRun(current, parsed.mentions, displayName)
+      : `@${displayName} ${current.replace(/^[ \t]+/, "")}`;
+    composer.setText(next);
+    composer.focus();
+  }, [composerRef, mentionCandidates]);
   const workflowRun = activeWorkflowRun(activeSession);
   // Only the run's owner can decide; anyone else sees the progress, not the slip.
   const workflowOwnerWait = workflowNeedsOwner(workflowRun)
@@ -777,6 +797,8 @@ export function ThreadsView({
                         onOpenArtifact={onOpenArtifacts}
                         onRetryAgent={onRetryAgent}
                         onResumeAgent={onResumeAgent}
+                        onMentionAgent={!projectReadOnly ? handleMentionAgent : undefined}
+                        mentionableAgentIds={mentionableAgentIds}
                         retryDisabled={running}
                         pickupFrom={source ? labelForAgentRun(source, logicalAgentNames, agentDisplayNames) : undefined}
                       />
@@ -824,6 +846,22 @@ export function ThreadsView({
               <TranscriptEmpty selectedUser={selectedUser} greetingName={greetingName(currentUser)} />
             )}
           </div>
+          {transcriptScrolledUp && onJumpToBottom ? (
+            <div className="transcript-jump-anchor">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="transcript-jump-bottom"
+                onClick={onJumpToBottom}
+                aria-label={t("thread.jump_to_bottom")}
+              >
+                {running ? <i className="transcript-jump-live" aria-hidden="true" /> : null}
+                <ActionScrollBottom size={ICON.sm} />
+                <span>{t("thread.jump_to_bottom")}</span>
+              </Button>
+            </div>
+          ) : null}
         </div>
         )}
 

@@ -143,7 +143,8 @@
   gap: var(--sp-2);
   align-items: center;
   min-width: 0;
-  padding: 0;
+  margin-inline-start: calc(-1 * var(--sp-1-5));
+  padding: var(--sp-0-5) var(--sp-1-5);
   border: 0;
   /* The focus ring comes from base.css's `button:focus-visible` contract; the
      radius is permanent so the ring has a shape to follow. */
@@ -155,9 +156,13 @@
   line-height: var(--leading-normal);
   text-align: left;
   cursor: pointer;
+  transition:
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
 }
 
 .agent-thinking-header:hover {
+  background: var(--row-hover);
   color: var(--ink-2);
 }
 
@@ -266,7 +271,8 @@
   gap: var(--sp-2);
   align-items: center;
   max-width: 100%;
-  padding: 0;
+  margin-inline-start: calc(-1 * var(--sp-1-5));
+  padding: var(--sp-0-5) var(--sp-1-5);
   border: 0;
   border-radius: var(--r-1);
   background: none;
@@ -276,9 +282,13 @@
   line-height: var(--leading-normal);
   text-align: left;
   cursor: pointer;
+  transition:
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
 }
 
 .agent-activity-header:hover {
+  background: var(--row-hover);
   color: var(--ink-2);
 }
 

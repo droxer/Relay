@@ -625,7 +625,8 @@
     "queue_step_running": "Running",
     "queue_cause_dispatch": "Waiting for the run to start on {{computer}}.",
     "queue_cause_offline": "{{computer}} is offline. The run is held in the queue and starts when the computer reconnects.",
-    "queue_cancel": "Cancel run"
+    "queue_cancel": "Cancel run",
+    "jump_to_bottom": "Jump to latest"
   },
   "composer": {
     "permission_mode": "Tool permissions",
@@ -2413,7 +2414,8 @@
     "copy_code": "Copy code",
     "copy_code_failed": "Copy failed",
     "diagram": "Diagram",
-    "table": "Table"
+    "table": "Table",
+    "mention_agent": "Mention {{agent}}"
   },
   "nodes": {
     "agent_presence_title": "{{agent}}: {{presence}}",

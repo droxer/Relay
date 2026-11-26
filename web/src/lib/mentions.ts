@@ -233,6 +233,131 @@ export function applyMention(
   };
 }
 
+/**
+ * Extract the exact leading `@Agent` mention tokens from a sent message.
+ *
+ * Mirrors `parseMentions` (longest-name-first, case-insensitive, whitespace
+ * boundary) without requiring routability — a sent message keeps its visual
+ * mention emphasis even if the addressed agent later goes offline.
+ */
+export function extractLeadingMentionTokens(
+  text: string,
+  agentNames: readonly string[],
+): string[] {
+  if (!text || agentNames.length === 0) return [];
+  const byLength = [...new Set(agentNames.map((name) => name.trim()).filter(Boolean))]
+    .sort((left, right) => right.length - left.length);
+  if (byLength.length === 0) return [];
+  const tokens: string[] = [];
+  let cursor = leadingSpace(text);
+  while (text.startsWith(MENTION_PREFIX, cursor)) {
+    const rest = text.slice(cursor + MENTION_PREFIX.length);
+    const lowered = rest.toLowerCase();
+    const matched = byLength.find((name) => {
+      const target = name.toLowerCase();
+      return lowered === target || lowered.startsWith(`${target} `) || lowered.startsWith(`${target}\n`) || lowered.startsWith(`${target}\t`);
+    });
+    if (!matched) break;
+    const end = cursor + MENTION_PREFIX.length + matched.length;
+    tokens.push(text.slice(cursor, end));
+    cursor = end + leadingSpace(text.slice(end));
+  }
+  return tokens;
+}
+
+/**
+ * Split a leading text run into emphasized `@Agent` tokens and plain text.
+ * Only consumes the exact tokens matched at the head of the message.
+ */
+export function splitLeadingMentionPrefix(
+  text: string,
+  tokens: readonly string[],
+): Array<{ text: string; mention: boolean }> {
+  if (!text || tokens.length === 0) return text ? [{ text, mention: false }] : [];
+  const segments: Array<{ text: string; mention: boolean }> = [];
+  let cursor = 0;
+  for (const token of tokens) {
+    const space = leadingSpace(text.slice(cursor));
+    const tokenStart = cursor + space;
+    if (!text.startsWith(token, tokenStart)) break;
+    if (tokenStart > cursor) {
+      segments.push({ text: text.slice(cursor, tokenStart), mention: false });
+    }
+    segments.push({ text: token, mention: true });
+    cursor = tokenStart + token.length;
+  }
+  if (segments.length === 0) return [{ text, mention: false }];
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor), mention: false });
+  }
+  return segments;
+}
+
+const ASCII_WORD = /[A-Za-z0-9_]/;
+const ASCII_NAME_TAIL = /[A-Za-z0-9_-]/;
+
+/**
+ * Split prose into plain runs and inline `@Agent` mentions anywhere in `text`.
+ *
+ * Matches longest agent name first (case-insensitive), requiring a non-word
+ * boundary before `@` (so emails like `user@Ada.com` are skipped) and a
+ * non-identifier boundary after the name (so `@Ada` does not match `@Adam`,
+ * while `@Ada,`, `@Ada。`, and `@Ada ` all match).
+ */
+export function splitInlineMentions(
+  text: string,
+  agentNames: readonly string[],
+): Array<{ text: string; mention: boolean }> {
+  if (!text) return [];
+  if (!text.includes(MENTION_PREFIX) || agentNames.length === 0) {
+    return [{ text, mention: false }];
+  }
+  const byLength = [...new Set(agentNames.map((name) => name.trim()).filter(Boolean))]
+    .sort((left, right) => right.length - left.length);
+  if (byLength.length === 0) return [{ text, mention: false }];
+
+  const lowered = text.toLowerCase();
+  const loweredNames = byLength.map((name) => name.toLowerCase());
+  const segments: Array<{ text: string; mention: boolean }> = [];
+  let plainStart = 0;
+  let searchFrom = 0;
+
+  while (searchFrom < text.length) {
+    const atIndex = text.indexOf(MENTION_PREFIX, searchFrom);
+    if (atIndex < 0) break;
+    if (atIndex > 0 && ASCII_WORD.test(text[atIndex - 1])) {
+      searchFrom = atIndex + 1;
+      continue;
+    }
+    const nameStart = atIndex + MENTION_PREFIX.length;
+    let matchedLen = 0;
+    for (const candidate of loweredNames) {
+      if (!lowered.startsWith(candidate, nameStart)) continue;
+      const after = text[nameStart + candidate.length];
+      if (after !== undefined && ASCII_NAME_TAIL.test(after)) continue;
+      matchedLen = candidate.length;
+      break;
+    }
+    if (matchedLen === 0) {
+      searchFrom = nameStart;
+      continue;
+    }
+    if (atIndex > plainStart) {
+      segments.push({ text: text.slice(plainStart, atIndex), mention: false });
+    }
+    const end = nameStart + matchedLen;
+    segments.push({ text: text.slice(atIndex, end), mention: true });
+    plainStart = end;
+    searchFrom = end;
+  }
+
+  if (segments.length === 0) return [{ text, mention: false }];
+  if (plainStart < text.length) {
+    segments.push({ text: text.slice(plainStart), mention: false });
+  }
+  return segments;
+}
+
 function matchName(
   rest: string,
   byLength: readonly MentionCandidate[],
