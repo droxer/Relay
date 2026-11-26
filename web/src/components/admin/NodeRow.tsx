@@ -11,6 +11,7 @@ import { NodeRuntimeMarks } from "./NodeRuntimeMarks";
 import { ICON, NodeOwnershipIcon } from "../icons";
 import { ClientOutdatedBadge } from "../computer/ClientOutdatedBadge";
 import { HostOsBadge } from "../computer/HostOsBadge";
+import { DaemonVersion } from "../computer/DaemonVersion";
 import { computerName } from "../../lib/computerNodes";
 import { failedRuntimeCount } from "../../lib/adminHelpers";
 
@@ -60,6 +61,7 @@ export function NodeIdentityCell({
         <span className="adm-node-row-state">
           <NodePresence node={node} t={t} withLabel />
           <HostOsBadge node={node} />
+          <DaemonVersion node={node} t={t} />
           {failedRuntimeCount(node) > 0 ? (
             <span className="adm-node-card-count is-failed tnum">
               {t("computer.runtimes_failed_count", { count: failedRuntimeCount(node) })}

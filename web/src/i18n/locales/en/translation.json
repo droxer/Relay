@@ -1229,6 +1229,7 @@
     "fact_workspace": "Workspace",
     "fact_id": "Computer ID",
     "fact_unset": "Not reported",
+    "daemon_version": "Relay Daemon {{version}}",
     "runtime_detail_unavailable": "This runtime is not installed on this computer.",
     "runtime_detail_unresponsive": "The readiness check did not finish in time. Check the runtime on this computer.",
     "runtime_detail_failed": "The readiness check failed. Inspect the original diagnostic for details.",

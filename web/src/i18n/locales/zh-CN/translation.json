@@ -1198,6 +1198,7 @@
     "fact_workspace": "工作目录",
     "fact_id": "电脑 ID",
     "fact_unset": "未上报",
+    "daemon_version": "Relay Daemon {{version}}",
     "runtime_detail_unavailable": "此电脑尚未安装该运行时。",
     "runtime_detail_unresponsive": "就绪检查超时。请检查此电脑上的运行时。",
     "runtime_detail_failed": "就绪检查失败。请展开原始诊断查看详情。",
