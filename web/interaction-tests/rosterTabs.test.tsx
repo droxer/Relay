@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { expect, it, vi } from "vitest";
 import { useRosterTabs } from "../src/components/roster/RosterTabs";
 import { AgentSelect } from "../src/components/composer/AgentSelect";
+import { AssignmentSelect } from "../src/components/assignment/AssignmentField";
 import type { AgentTeam, UserAgent } from "../src/types";
 
 // Keep the popup mounted while its options change, as SelectContent does.
@@ -57,6 +58,29 @@ it("moves focus into the new roster after a tab click", () => {
   screen.getByRole("option", { name: "Alice" }).focus();
   fireEvent.click(screen.getByRole("radio", { name: /Teams/ }));
   expect(document.activeElement).toBe(screen.getByRole("option", { name: "Team One" }));
+});
+
+it.each(["task assignment", "conversation"] as const)("shows each agent's model in the %s roster", async (surface) => {
+  const ada: UserAgent = {
+    id: "ada", displayName: "Ada", executorKind: "codex", enabled: true, availability: "ready",
+    modelPolicy: { model: "provider/custom-model" }, skillPolicy: {}, toolPolicy: {},
+    placements: [], version: 1, createdAt: "2026-11-26T00:00:00Z", updatedAt: "2026-11-26T00:00:00Z",
+  };
+  const bob: UserAgent = { ...ada, id: "bob", displayName: "Bob", modelPolicy: {} };
+  const agents = [ada, bob];
+  const onPick = vi.fn();
+  render(surface === "task assignment"
+    ? <AssignmentSelect agents={agents} teams={[]} value="agent:bob" selectedAgent={bob} onSelect={onPick} />
+    : <AgentSelect logicalAgents={agents} activeLogicalAgentId={bob.id} onLogicalAgentPicked={onPick} />);
+
+  const trigger = screen.getByRole("combobox");
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  const pinned = await screen.findByRole("option", { name: /Ada.*Codex · provider\/custom-model/ });
+  expect(screen.getByRole("option", { name: /Bob.*Codex · agents_page\.model_default/ })).toBeTruthy();
+  act(() => pinned.focus());
+  fireEvent.keyDown(pinned, { key: "Enter" });
+  expect(onPick).toHaveBeenCalledWith(surface === "task assignment" ? { kind: "agent", id: ada.id } : ada);
 });
 
 it("selects a composer team with Enter after switching rosters", async () => {
