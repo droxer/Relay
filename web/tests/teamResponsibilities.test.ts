@@ -22,9 +22,10 @@ describe("team member responsibility cards", () => {
     // inherited default is visible without opening the select — as plain
     // muted text beside the name, not a pill with its own dot.
     assert.match(source, /const role = effectiveRoleOf\(member, config\)/);
-    assert.match(source, /<span className="team-work-member-role">[\s\S]*?t\(`team_work\.role_\$\{role\}`\)[\s\S]*?<\/span>/);
-    assert.doesNotMatch(source, /<TonePill tone="neutral" label=\{t\(`team_work\.role_/);
     assert.match(source, /const roleLevel = config\.roleLevel \?\? member\.roleLevel/);
+    assert.match(source, /const roleLabel = agentRoleLabel\(\{ defaultRole: role, roleLevel \}, t\)/);
+    assert.match(source, /<span className="team-work-member-role" title=\{roleLabel\}>\s*\{roleLabel\}\s*<\/span>/);
+    assert.doesNotMatch(source, /<TonePill tone="neutral" label=\{t\(`team_work\.role_/);
     assert.doesNotMatch(source, /<AgentMetaLine\b/);
     // A responsibility is a sentence or two, not a single-line value.
     assert.match(source, /<Textarea\s+rows=\{2\}\s+value=\{config\.responsibility/);
