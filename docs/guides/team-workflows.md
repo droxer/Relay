@@ -29,7 +29,7 @@ all Team members. An assignment never remaps step Agents. Set as default applies
 to that Project only; clear that default before unassigning, disabling, or deleting
 the definition. A selected but invalid default requires explicit repair.
 
-Three predefined Workflows retain their Team role policies:
+Predefined Workflows use the roles of the Project Agents or Team members:
 
 | Workflow | Behavior |
 | --- | --- |
@@ -37,11 +37,16 @@ Three predefined Workflows retain their Team role policies:
 | Pipeline | Eligible Agents run in role order. |
 | Lead-led | The lead plans, delegates dynamically, and reviews the result. |
 
-Predefined Workflows require a Team. Selection resolves an explicit Task choice,
-then the Team's default for the Task's Project, then its predefined default, then
-the system predefined default. Existing legacy custom defaults remain readable
-until changed. A custom Workflow has one immutable Team or Project owner; cross-Project
-templates and role-based step reassignment are outside this version.
+In a Project, open **Collaboration → Workflows** and choose **Edit** beside a
+Predefined Workflow to select its eligible Agents. **Use all Agents** restores
+the default of all enabled Project Agents. Lead-led always includes the
+current Project Lead. The selection applies to direct runs, Tasks, and
+Automations that choose that Predefined Workflow in the Project.
+
+For work assigned to a Team, Relay resolves the explicit Task choice first.
+It then checks the Team's defaults for the Project and for the Team, followed
+by the system default. Existing legacy custom defaults remain readable
+until changed.
 
 ## Execution
 

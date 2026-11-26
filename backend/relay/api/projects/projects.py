@@ -308,6 +308,7 @@ def update_project(
     if (
         request.query_params.get("view") == "member-update"
         and body.keys() <= {"expectedVersion", "leadAgentId", "memberChange"}
+        and current.get("predefinedWorkflows") == project.get("predefinedWorkflows")
     ):
         return {"projectMemberUpdate": _project_member_update(current, project)}
     return {"project": project}

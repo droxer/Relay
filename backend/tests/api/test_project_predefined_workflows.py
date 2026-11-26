@@ -77,6 +77,12 @@ def test_project_preset_runs_on_its_roster(monkeypatch, style, lead_role, order,
 
 def test_project_preset_task_patch_and_automation_dispatch(monkeypatch):
     with unified_world(monkeypatch) as (app, client, node, _, project, payload):
+        selected_agent_id = payload["memberAgentIds"][1]
+        saved = client.patch(f"/api/v1/projects/{project['id']}", json={
+            "expectedVersion": project["version"],
+            "predefinedWorkflowChange": {"workflowId": "preset:pipeline", "agentIds": [selected_agent_id]},
+        })
+        assert saved.status_code == 200, saved.text
         fields = {"projectId": project["id"], "assignedWorkflowId": "preset:pipeline"}
         created = client.post("/api/v1/tasks", json={
             "title": "Manual Pipeline", "projectId": project["id"], "assignedAgentId": payload["leadAgentId"],
@@ -92,9 +98,10 @@ def test_project_preset_task_patch_and_automation_dispatch(monkeypatch):
         manual = started.json()["session"]
         assert manual["collaborationRounds"][-1]["style"] == "pipeline"
         assert not manual.get("teamId")
-        for _ in project["members"]:
-            command, = take(app.state.registry, node)
-            finish(app.state.registry, node, command, {})
+        command, = take(app.state.registry, node)
+        assert command["logicalAgentId"] == selected_agent_id
+        finish(app.state.registry, node, command, {})
+        assert take(app.state.registry, node) == []
 
         created = client.post("/api/v1/tasks", json={
             **fields, "title": "Daily Pipeline", "isRoutine": True,
@@ -109,8 +116,13 @@ def test_project_preset_task_patch_and_automation_dispatch(monkeypatch):
         session = app.state.session_store.get_session(session_id)
         round_info, = session["collaborationRounds"]
         assert round_info["style"] == "pipeline"
-        assert round_info["strategy"] == "coordinate"
+        assert round_info["strategy"] == "direct"
         assert "teamSnapshot" not in round_info
+        assert round_info["projectSnapshot"]["participantAgentIds"] == [selected_agent_id]
+        command, = take(app.state.registry, node)
+        assert command["logicalAgentId"] == selected_agent_id
+        finish(app.state.registry, node, command, {})
+        assert take(app.state.registry, node) == []
 
 
 def test_project_preset_validation_and_daemon_capability(monkeypatch):
@@ -147,3 +159,73 @@ def test_project_preset_validation_and_daemon_capability(monkeypatch):
             "members": [{**member, "enabled": False} for member in project["members"]],
         }, expected_version=project["version"])
         assert client.post("/api/v1/tasks", json=task).json()["detail"] == "project_roster_invalid"
+
+
+def test_project_preset_selection_patch_validates_prunes_and_scopes_runs(monkeypatch):
+    with unified_world(monkeypatch) as (app, client, node, _, project, _):
+        url = f"/api/v1/projects/{project['id']}"
+        _, member = project["members"]
+        change = {"workflowId": "preset:pipeline", "agentIds": [member["agentId"]]}
+
+        def patch(version, body):
+            return client.patch(url, json={"expectedVersion": version, **body})
+
+        for workflow_id in ("preset:nope", []):
+            bad = patch(project["version"], {"predefinedWorkflowChange": {**change, "workflowId": workflow_id}})
+            assert (bad.status_code, bad.json()["detail"]) == (400, "project_workflow_change_invalid")
+        bad = patch(project["version"], {"predefinedWorkflowChange": {**change, "agentIds": []}})
+        assert (bad.status_code, bad.json()["detail"]) == (400, "project_workflow_change_invalid")
+        bad = patch(project["version"], {"predefinedWorkflowChange": {**change, "agentIds": ["stranger"]}})
+        assert (bad.status_code, bad.json()["detail"]) == (400, "project_workflow_agent_not_member")
+        stale = patch(project["version"] + 5, {"predefinedWorkflowChange": change})
+        assert (stale.status_code, stale.json()["detail"]) == (409, "project_version_conflict")
+
+        saved = patch(project["version"], {"predefinedWorkflowChange": change})
+        assert saved.status_code == 200, saved.text
+        record = saved.json()["project"]
+        assert record["predefinedWorkflows"] == {"pipeline": {"agentIds": [member["agentId"]]}}
+        listed = client.get("/api/v1/projects").json()["projects"]
+        assert next(item for item in listed if item["id"] == project["id"])["predefinedWorkflows"] == record["predefinedWorkflows"]
+
+        run_path = "/api/v1/workflows/preset:pipeline/runs"
+        started = client.post(run_path, json={
+            "projectId": project["id"], "taskGoal": "Run with selected Agents", "requestId": str(uuid4()),
+        })
+        assert started.status_code == 201, started.text
+        thread = started.json()
+        round_info, = thread["collaborationRounds"]
+        assert round_info["projectSnapshot"]["participantAgentIds"] == [member["agentId"]]
+        registry = app.state.registry
+        command, = take(registry, node)
+        assert command["sessionId"] == thread["id"]
+        assert command["logicalAgentId"] == member["agentId"]
+        finish(registry, node, command, {})
+        assert app.state.session_store.get_session(thread["id"])["status"] == "completed"
+        assert take(registry, node) == []
+
+        disabled = patch(record["version"], {
+            "memberChange": {"op": "update", "agentId": member["agentId"], "fields": {"enabled": False}},
+        })
+        assert disabled.status_code == 200, disabled.text
+        record = disabled.json()["project"]
+        assert record["predefinedWorkflows"] == {"pipeline": {"agentIds": [member["agentId"]]}}
+        refused = client.post(run_path, json={
+            "projectId": project["id"], "taskGoal": "Check disabled selection", "requestId": str(uuid4()),
+        })
+        assert (refused.status_code, refused.json()["detail"]) == (409, "project_roster_invalid")
+        assert take(registry, node) == []
+        enabled = patch(record["version"], {
+            "memberChange": {"op": "update", "agentId": member["agentId"], "fields": {"enabled": True}},
+        })
+        assert enabled.status_code == 200, enabled.text
+        record = enabled.json()["project"]
+
+        reset = patch(record["version"], {"predefinedWorkflowChange": {**change, "agentIds": None}})
+        assert not reset.json()["project"].get("predefinedWorkflows")
+
+        again = patch(reset.json()["project"]["version"], {"predefinedWorkflowChange": change}).json()["project"]
+        removed = client.patch(url + "?view=member-update", json={
+            "expectedVersion": again["version"], "memberChange": {"op": "remove", "agentId": member["agentId"]},
+        })
+        assert removed.status_code == 200, removed.text
+        assert removed.json()["project"]["predefinedWorkflows"] == {}

@@ -6,7 +6,7 @@ import { startProjectWorkflow } from "../../api";
 import { RelayApiError } from "../../api-client/client";
 import { useTeams } from "../../hooks/useTeams";
 import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
-import { projectWorkflowOptions, workflowOptions } from "../../lib/workflowSelection";
+import { PREDEFINED_WORKFLOWS, projectPresetParticipants, projectWorkflowOptions, workflowOptions } from "../../lib/workflowSelection";
 import type { WorkflowPreview, AgentTeam, ProjectListItem, UserAgent } from "../../types";
 import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
@@ -19,6 +19,8 @@ import { WorkflowStepSummary } from "./WorkflowStepSummary";
 import { workflowProcessMeta } from "./processMeta";
 import { WorkflowEditorForPreview } from "./WorkflowEditor";
 import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
+import { PredefinedWorkflowEditor } from "./PredefinedWorkflowEditor";
+import { WorkflowAgentFace } from "./WorkflowAgentFace";
 
 type Props = {
   project: ProjectListItem;
@@ -38,6 +40,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
   const workflows = useMemo(() => query.data?.workflows ?? [], [query.data]);
   const [editing, setEditing] = useState<{ workflow: WorkflowPreview | null } | null>(null);
   const [starting, setStarting] = useState<StartWorkflow | null>(null);
+  const [editingPreset, setEditingPreset] = useState<typeof PREDEFINED_WORKFLOWS[number] | null>(null);
   const presets = projectWorkflowOptions(project).filter(workflow => workflow.kind === "predefined");
   const canManage = Boolean(userId) && userId === project.ownerUserId && !readOnly;
   const canCreate = canManage && project.members.some(member => member.enabled);
@@ -60,10 +63,21 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
         return <li key={id} className="workflow-team-row" data-kind="predefined">
           <div className="workflow-library-main">
             <div className="workflow-team-row-name"><PredefinedWorkflowIcon style={template} /><h3 className="workflow-library-name">{name}</h3></div>
-            <p className="workflow-library-meta">{t(`collab_style.${template}_hint`)}</p>
-            {canManage && issue === "project_lead_required" ? <p className="workflow-library-meta">{t("workflow.project_lead_required")}</p> : null}
+            <p className="workflow-library-meta">
+              {t(`collab_style.${template}_hint`)}
+              {template === "build_review" ? <> {t("workflow.preset_build_review_fallback")}</> : null}
+            </p>
+            <PresetParticipants
+              ids={projectPresetParticipants(project, template)}
+              all={!project.predefinedWorkflows?.[template]}
+              label={t("workflow.preset_participants")}
+              agent={agentId => agents.find(agent => agent.id === agentId)}
+              role={agentId => project.members.find(member => member.agentId === agentId)?.role}
+            />
+            {issue ? <p className="workflow-library-meta">{t(`workflow.${issue}`)}</p> : null}
           </div>
           {canManage ? <div className="workflow-team-actions">
+            <Button type="button" variant="ghost" size="dense" aria-label={t("workflow.edit_named", { name })} onClick={() => setEditingPreset(template)}>{t("workflow.edit")}</Button>
             <Button type="button" variant="outline" size="dense" aria-label={t("workflow.start_named", { name })}
               disabled={Boolean(issue)} onClick={() => setStarting({ kind: "predefined", id, name })}>
               <ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}
@@ -97,10 +111,35 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
         })}
       </ul>}
     {canManage ? <>
+      <PredefinedWorkflowEditor project={project} template={editingPreset} agents={agents} onClose={() => setEditingPreset(null)} />
       <WorkflowEditorForPreview open={editing !== null} project={project} workflow={editing?.workflow ?? null} teams={teams} agents={agents} onClose={() => setEditing(null)} />
       <WorkflowRunStarter key={starting?.id ?? "closed"} workflow={starting} teams={starting?.kind === "steps" ? linkedTeams(starting.preview) : []} project={project} onClose={() => setStarting(null)} onStarted={sid => { setStarting(null); onOpenThread(sid); }} />
     </> : null}
   </section>;
+}
+
+/** Who runs a Predefined Workflow in this Project; "all" when never narrowed. */
+function PresetParticipants({ ids, all, label, agent, role }: {
+  ids: string[]; all: boolean; label: string;
+  agent: (id: string) => UserAgent | undefined;
+  role: (id: string) => string | undefined;
+}) {
+  const { t } = useTranslation();
+  if (!ids.length) return null;
+  return <div className="workflow-preset-participants">
+    {all ? <span className="workflow-library-meta">{t("workflow.preset_all_agents")}</span> : null}
+    <ul aria-label={label}>
+      {ids.map(id => {
+        const found = agent(id);
+        const projectRole = role(id);
+        return <li key={id}>
+          <WorkflowAgentFace imageUrl={found?.profileImageUrl} />
+          <span>{found?.displayName ?? t("project.member_unavailable")}</span>
+          {projectRole ? <span className="workflow-library-meta">{t(`project.roles.${projectRole}`)}</span> : null}
+        </li>;
+      })}
+    </ul>
+  </div>;
 }
 
 /** A UUID v4 for the start request. `randomUUID` needs a secure context; a

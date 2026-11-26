@@ -224,3 +224,40 @@ def test_addressing_an_agent_off_the_project_computer_is_refused():
         _thread_assignments(_crewless_project(), ["gone"], on_computer={"alex"})
 
     assert raised.value.code == "project_agent_off_computer"
+
+
+def _preset_world(selection):
+    agents = SimpleNamespace(get_agent=lambda agent_id: {
+        "id": agent_id, "supervisorUserId": "alice", "defaultRole": "implementer",
+    })
+    return {**_project(), "predefinedWorkflows": selection}, agents
+
+
+def _preset(project, agents, style):
+    placements = SimpleNamespace(list_placements=lambda *, agent_id: [{
+        "agentId": agent_id, "desiredState": "active", "daemonNodeId": "legacy-node",
+    }])
+    return project_styled_assignments(
+        project, style=style, agent_store=agents, placement_store=placements,
+        daemon_nodes=[{"id": "legacy-node", "userId": "alice", "workspaceId": "main"}],
+    )
+
+
+def test_preset_runs_only_the_selected_agents_and_records_them():
+    project, agents = _preset_world({"pipeline": {"agentIds": ["builder", "reviewer", "gone"]}})
+    assignments, snapshot = _preset(project, agents, "pipeline")
+    assert {item["agentId"] for item in assignments} == {"builder", "reviewer"}
+    assert sorted(snapshot["participantAgentIds"]) == ["builder", "reviewer"]
+
+
+def test_lead_led_selection_always_keeps_the_lead():
+    project, agents = _preset_world({"lead_led": {"agentIds": ["builder"]}})
+    assignments, _ = _preset(project, agents, "lead_led")
+    assert {item["agentId"] for item in assignments} == {"lead", "builder"}
+
+
+def test_selection_with_no_enabled_member_fails_closed():
+    project, agents = _preset_world({"pipeline": {"agentIds": ["gone"]}})
+    with pytest.raises(ProjectDispatchError) as error:
+        _preset(project, agents, "pipeline")
+    assert error.value.code == "project_roster_invalid" and error.value.permanent

@@ -30,14 +30,27 @@ export type ProjectWorkflowOption = ProjectPreset | {
   issue: null;
 };
 
+type PresetProject = Pick<ProjectListItem, "members" | "leadAgentId" | "predefinedWorkflows">;
+
+/** Who takes part in a Predefined Workflow in this Project: the owner's
+ *  selection limited to enabled Project Agents (every enabled Agent when none
+ *  was made), plus the Lead for Lead-led. Mirrors projects/runtime.py. */
+export function projectPresetParticipants(project: PresetProject, template: typeof PREDEFINED_WORKFLOWS[number]): string[] {
+  const enabled = project.members.filter(member => member.enabled).map(member => member.agentId);
+  const selected = project.predefinedWorkflows?.[template]?.agentIds;
+  if (!selected) return enabled;
+  const chosen = new Set(selected);
+  return enabled.filter(id => chosen.has(id) || (template === "lead_led" && id === project.leadAgentId));
+}
+
 export function projectWorkflowOptions(
-  project: Pick<ProjectListItem, "id" | "members" | "leadAgentId">,
+  project: PresetProject & Pick<ProjectListItem, "id">,
   custom: readonly ProjectWorkflowChoice[] = [],
 ): ProjectWorkflowOption[] {
   const enabled = new Set(project.members.filter(member => member.enabled).map(member => member.agentId));
   const presets: ProjectPreset[] = PREDEFINED_WORKFLOWS.map(template => ({
     id: `preset:${template}`, kind: "predefined", template,
-    issue: !enabled.size ? "project_roster_invalid"
+    issue: !projectPresetParticipants(project, template).length ? "project_roster_invalid"
       : template === "lead_led" && (!project.leadAgentId || !enabled.has(project.leadAgentId)) ? "project_lead_required"
       : null,
   }));

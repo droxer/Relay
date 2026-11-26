@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ...core.ids import new_database_id, now_iso
 from ...core.project_directory import PROJECT_DIRECTORY_FIELDS
+from ...core.project_predefined_workflows import prune_removed_members, valid_predefined_workflows
 from ...core.reporting_period import range_utc_bounds
 from ...projects.setup_result import generated_setup_name
 from ..db_time import format_db_time, parse_db_time
@@ -303,14 +304,20 @@ class DatabaseProjectStore(ManagerRows, ProjectToolReads):
         normalized = _normalize_project_patch(patch)
 
         def mutate(current: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+            applied = dict(normalized)
+            selections = applied.get("predefinedWorkflows", current.get("predefinedWorkflows"))
+            if "members" in applied and selections:
+                pruned = prune_removed_members(selections, applied["members"])
+                if pruned != selections:
+                    applied["predefinedWorkflows"] = pruned
             updated = {
                 **current,
-                **normalized,
+                **applied,
                 "version": int(current["version"]) + 1,
                 "updatedAt": now_iso(),
             }
             updated = project_with_manager(updated)
-            return updated, {"patch": normalized, "project": updated}
+            return updated, {"patch": applied, "project": updated}
 
         return self._mutate(
             project_id,
@@ -625,6 +632,7 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
         "contextSuggestions",
         "leadAgentId",
         "members",
+        "predefinedWorkflows",
         "enabled",
     }
     unknown = set(patch) - allowed
@@ -642,6 +650,8 @@ def _normalize_project_patch(patch: dict[str, Any]) -> dict[str, Any]:
     for key in ("description", "goal", "context"):
         if key in normalized and not isinstance(normalized[key], str):
             raise ProjectValidationError(f"project_{key}_invalid")
+    if "predefinedWorkflows" in normalized and not valid_predefined_workflows(normalized["predefinedWorkflows"]):
+        raise ProjectValidationError("project_workflow_change_invalid")
     if "setup" in normalized and not isinstance(normalized["setup"], dict):
         raise ProjectValidationError("project_setup_invalid")
     if "contextRevision" in normalized and (

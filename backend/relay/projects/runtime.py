@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from ..core.project_predefined_workflows import selected_agent_ids
 from ..core.project_roles import PROJECT_MANAGER_RESPONSIBILITIES, project_member_ids
 
 from ..collaboration.styles import LEAD_LED, pipeline_order, resolve_collaboration_style
@@ -98,11 +99,17 @@ def project_workflow_members(
     """Resolve the enabled Project Agents available to the Workflow."""
     project_computer_id = project["computerId"]
     node_ids = {node["id"] for node in daemon_nodes if computer_id(node) == project_computer_id}
+    selected = selected_agent_ids(project, style)
+    eligible = set(selected) if selected is not None else None
+    if eligible is not None and style == LEAD_LED and project.get("leadAgentId"):
+        eligible.add(project["leadAgentId"])
     members = {}
     for member in project.get("members", []):
         if not member.get("enabled", True):
             continue
         agent_id = member["agentId"]
+        if eligible is not None and agent_id not in eligible:
+            continue
         agent = agent_store.get_agent(agent_id)
         if (
             not agent or agent.get("deletedAt") or not agent.get("enabled", True)
@@ -160,6 +167,7 @@ def project_styled_assignments(
         if compiled.fallback_from:
             snapshot["styleFallbackFrom"] = compiled.fallback_from
     snapshot["collaborationStyle"] = style
+    snapshot["participantAgentIds"] = list(dict.fromkeys(turn.agent["id"] for turn in turns))
     if len(turns) > 1:
         snapshot["workContractVersion"] = 1
     assignments = []

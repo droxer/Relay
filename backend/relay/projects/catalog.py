@@ -7,6 +7,7 @@ from ..core.models import AGENT_ROLES
 from ..core.project_roles import upgrade_member
 from ..persistence.project.store import ProjectValidationError, ProjectVersionConflict
 from ..agents.location import agent_placed_on_computer
+from ..core.project_predefined_workflows import PredefinedWorkflowChangeError, apply_workflow_change
 from .setup import ProjectSetupError, resolved_setup
 from ..core.daemon_capabilities import DAEMON_CAPABILITY_PROJECT_WORKSPACES, has_capability
 
@@ -148,6 +149,7 @@ def update_project_payload(
         "leadAgentId",
         "members",
         "memberChange",
+        "predefinedWorkflowChange",
         "enabled",
         "setupResolution",
         "resolveContextSuggestions",
@@ -155,12 +157,17 @@ def update_project_payload(
     }
     if set(payload) - allowed:
         raise ProjectValidationError("project_patch_unsupported")
-    if ("memberChange" in payload or "leadAgentId" in payload) and expected_version != current.get("version", expected_version):
+    if (
+        payload.keys() & {"memberChange", "leadAgentId", "predefinedWorkflowChange"}
+        and expected_version != current.get("version", expected_version)
+    ):
         raise ProjectVersionConflict(current["id"])
     patch = {
         key: value
         for key, value in payload.items()
-        if key not in ("expectedVersion", "setupResolution", "resolveContextSuggestions", "memberChange")
+        if key not in {
+            "expectedVersion", "setupResolution", "resolveContextSuggestions", "memberChange", "predefinedWorkflowChange",
+        }
     }
     if "memberChange" in payload:
         if "members" in payload:
@@ -221,6 +228,15 @@ def update_project_payload(
         # Clearing the last member also clears its lead, even when the caller
         # only supplies members. Keep the roster and lead as one valid update.
         patch["leadAgentId"] = lead_agent_id
+    if "predefinedWorkflowChange" in payload:
+        try:
+            patch["predefinedWorkflows"] = apply_workflow_change(
+                current.get("predefinedWorkflows"),
+                patch.get("members", current["members"]),
+                payload["predefinedWorkflowChange"],
+            )
+        except PredefinedWorkflowChangeError as error:
+            raise ProjectValidationError(error.code) from error
     return patch, expected_version
 
 
