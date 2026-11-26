@@ -644,6 +644,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
 
   const {
     sendMessage,
+    messageRetry,
     cancelActiveRun,
     sendDecision,
     retryAgentMessage,
@@ -656,7 +657,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     effectiveSelectableLogicalAgents,
     composerLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedUser, fallbackNode, selectedThreadNodeId, selectedToken, tokens,
+    selectedUser, draftComputerId: openingComputerId, requestedThreadId: requestedSessionId,
+    fallbackNode, selectedThreadNodeId, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -952,6 +954,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             inheritedPermissionMode={threadTaskContext && threadTaskContext.threadId === activeSession?.id
               ? threadTaskContext.permissionMode : undefined}
             onSend={handleComposerSend}
+            messageRetry={messageRetry}
             onCancelRun={handleCancelRun}
             onRetryAgent={handleRetryAgent}
             onResumeAgent={handleResumeAgent}

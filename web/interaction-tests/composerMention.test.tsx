@@ -177,3 +177,21 @@ it("keeps direct send locked until a slow request settles", async () => {
     vi.useRealTimers();
   }
 });
+
+it("offers the saved send separately from the next draft", async () => {
+  const retry = vi.fn(async () => true);
+  const onSend = vi.fn();
+  const { field, rerender } = setup({
+    onSend,
+    messageRetry: { text: "Original message", busy: false, retry, dismiss: vi.fn() },
+  });
+  expect(screen.getByText("Original message").textContent).toBe("Original message");
+  fireEvent.change(field, { target: { value: "New draft" } });
+  fireEvent.keyDown(field, { key: "Enter" });
+  expect(onSend).not.toHaveBeenCalled();
+
+  await userEvent.click(screen.getByRole("button", { name: "composer.retry_send" }));
+  expect(retry).toHaveBeenCalledTimes(1);
+  rerender({ messageRetry: null });
+  expect(field.value).toBe("New draft");
+});

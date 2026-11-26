@@ -25,6 +25,7 @@ import { useOlderTranscript } from "../hooks/useOlderTranscript";
 import { useRelayStore } from "../lib/store";
 import { threadSendKey } from "../lib/threadSendStore";
 import { threadDraftKey } from "../hooks/useComposer";
+import type { ThreadMessageRetry } from "../hooks/usePendingThreadMessage";
 import { useThreadQueue } from "../hooks/useThreadQueue";
 import { useQueueClock } from "../hooks/useQueueClock";
 import { MessageQueue } from "./composer/MessageQueue";
@@ -217,6 +218,7 @@ type ThreadsViewProps = {
   permissionModePending?: boolean;
   inheritedPermissionMode?: ThreadPermissionMode;
   onSend: (style?: import("../types").CollaborationStyle, intent?: import("../types").ThreadMessageInput["intent"], options?: import("./composer/Composer").ComposerDispatchOptions) => void | Promise<boolean | void>;
+  messageRetry?: ThreadMessageRetry | null;
   onCancelRun: () => void;
   onRetryAgent: (agent: AgentName, agentId?: string) => void;
   onResumeAgent: (agent: AgentName, agentId?: string) => void;
@@ -324,6 +326,7 @@ export function ThreadsView({
   permissionModePending,
   inheritedPermissionMode,
   onSend,
+  messageRetry,
   onCancelRun,
   onRetryAgent,
   onResumeAgent,
@@ -856,6 +859,8 @@ export function ThreadsView({
             && activeSession?.ownerUserId === (currentUser.userId ?? currentUser.username)
             ? onPermissionModeChange : undefined}
           onSend={sendAnswering}
+          messageRetry={messageRetry}
+          queueMessageRetry={threadQueue.messageRetry}
           onCancelRun={onCancelRun}
           onQueue={queueEnabled ? threadQueue.enqueue : undefined}
           queuePending={threadQueue.pending}

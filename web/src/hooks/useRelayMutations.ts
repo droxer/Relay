@@ -259,6 +259,7 @@ export function useRelayMutations() {
   });
 
   const runLogicalAgentsMutation = useMutation({
+    networkMode: "always",
     mutationFn: (input: AgentRunInput) => runLogicalAgents(input),
     onSuccess: (session) => {
       cacheSession(session);
@@ -267,6 +268,7 @@ export function useRelayMutations() {
   });
 
   const submitThreadMessageMutation = useMutation({
+    networkMode: "always",
     mutationFn: ({ sessionId, input }: { sessionId: string; input: ThreadMessageInput }) =>
       submitThreadMessage(sessionId, input),
     onSuccess: (session, { input }) => {

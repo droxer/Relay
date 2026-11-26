@@ -67,6 +67,13 @@ const MESSAGE_RETRY_DELAYS_MS = [500, 1_500];
 const MESSAGE_ATTEMPT_TIMEOUT_MS = 15_000;
 const RETRYABLE_MESSAGE_STATUSES = new Set([408, 500, 502, 503, 504]);
 let messageDeliveryGeneration = 0;
+const unconfirmedRejections = new WeakSet<RelayApiError>();
+
+export function messageDefinitelyRejected(error: unknown): boolean {
+  return error instanceof RelayApiError && error.status >= 400 && error.status < 500
+    && error.status !== 408 && error.code !== "node_not_accepting_commands"
+    && !unconfirmedRejections.has(error);
+}
 
 /** Pending messages belong to the Account that started them. */
 export function cancelMessageDeliveryRetries(): void {
@@ -106,6 +113,7 @@ export async function apiJson<T>(
 
   const generation = messageDeliveryGeneration;
   const mayRetry = () => generation === messageDeliveryGeneration && !options.signal?.aborted;
+  let deliveryUnconfirmed = false;
   for (let attempt = 0; ; attempt++) {
     const timeout = AbortSignal.timeout(MESSAGE_ATTEMPT_TIMEOUT_MS);
     const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
@@ -114,10 +122,13 @@ export async function apiJson<T>(
       response = await fetchWithSession(url, { ...init, signal });
       return await readApiResponse(response, endpoint, options.guard);
     } catch (error) {
+      deliveryUnconfirmed ||= !response || response.ok || RETRYABLE_MESSAGE_STATUSES.has(response.status);
+      if (deliveryUnconfirmed && error instanceof RelayApiError) unconfirmedRejections.add(error);
       const delay = MESSAGE_RETRY_DELAYS_MS[attempt];
       // Even an unreadable error body can carry a definitive HTTP rejection.
       const transient = response && !response.ok
         ? RETRYABLE_MESSAGE_STATUSES.has(response.status)
+          || (response.status === 409 && error instanceof RelayApiError && error.code === "node_not_accepting_commands")
         : timeout.aborted || error instanceof TypeError;
       if (delay === undefined || !transient || !mayRetry()) throw error;
       await new Promise<void>((resolve) => setTimeout(resolve, delay));

@@ -7,7 +7,9 @@ import { apiJson } from "../src/api-client/client";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
 import { THREAD_QUEUE_QUERY_KEY } from "../src/lib/threadQueue";
 
-vi.mock("../src/api-client/client", () => ({ apiJson: vi.fn() }));
+vi.mock("../src/api-client/client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../src/api-client/client")>(), apiJson: vi.fn(),
+}));
 vi.mock("../src/api-client/sessions", () => ({ cancelRun: vi.fn(async () => ({})) }));
 let saved: { messages: { id: string; text: string }[]; paused: boolean };
 beforeEach(() => {
@@ -164,6 +166,7 @@ it("persists the selected Agents and treats a changed target as a new retry inte
   });
   await act(async () => { await hook.result.current.enqueue("Continue", { addressAgentIds: ["selected"] }); });
   await act(async () => { await hook.result.current.enqueue("Continue", { addressAgentIds: ["selected"] }); });
+  act(() => hook.result.current.messageRetry?.dismiss());
   await act(async () => { await hook.result.current.enqueue("Continue", { addressTeamId: "crew" }); });
   expect(posts[0]).toMatchObject({ text: "Continue", addressAgentIds: ["selected"] });
   expect(posts[0].id).toBe(posts[1].id);
@@ -306,4 +309,35 @@ it("keeps the enqueue locked and consumes the saved draft when the composer remo
   expect(sessionStorage.getItem(draftKey)).toBeNull();
   reopened.unmount();
   first.client.clear();
+});
+
+it("reuses the original enqueue after a lost receipt and reload", async () => {
+  const original = open();
+  await waitFor(() => expect(original.client.isFetching()).toBe(0));
+  const reply = vi.mocked(apiJson).getMockImplementation()!;
+  let firstPost = true;
+  const posts: unknown[] = [];
+  vi.mocked(apiJson).mockImplementation(async (path, options) => {
+    if (options?.method !== "POST") return reply(path, options);
+    posts.push(options.body);
+    const accepted = await reply(path, options);
+    if (firstPost) {
+      firstPost = false;
+      throw new TypeError("Receipt lost");
+    }
+    return accepted;
+  });
+  await act(async () => {
+    expect(await original.result.current.enqueue("Keep going", { addressAgentIds: ["selected"] })).toBe(false);
+  });
+  original.unmount();
+  original.client.clear();
+
+  const reloaded = open();
+  expect(reloaded.result.current.messageRetry?.text).toBe("Keep going");
+  await act(async () => { expect(await reloaded.result.current.messageRetry!.retry()).toBe(true); });
+  expect(posts).toHaveLength(2);
+  expect(posts[1]).toEqual(posts[0]);
+  expect(saved.messages).toHaveLength(1);
+  expect(reloaded.result.current.messageRetry).toBeNull();
 });
