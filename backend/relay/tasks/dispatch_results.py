@@ -1,6 +1,22 @@
-"""Serialize post-admission bookkeeping with task ownership changes."""
+"""Fence dispatch writes against changes to the Task while routing or admitting it."""
 from contextlib import contextmanager
+from typing import Any
+
 from ..core.run_request_ids import idempotent_run_request_id
+from ..persistence.protocols import TaskStore
+from .claims import dispatch_claim_active
+
+
+def update_pending_dispatch(
+    store: TaskStore, task_id: str, fields: dict[str, Any],
+) -> dict[str, Any]:
+    """Routing used a snapshot. A manual completion may have won since then."""
+    with store.task_write_scope(task_id) as current:
+        if current["status"] not in ("backlog", "assigned", "queued") or current.get("deletedAt"):
+            return current
+        if dispatch_claim_active(current):
+            return current
+        return store.update_task(task_id, fields)
 
 
 @contextmanager

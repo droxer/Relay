@@ -98,3 +98,22 @@ def test_database_claim_uses_authoritative_events_if_legacy_snapshot_lacks_owner
     with pytest.raises(ValueError, match="task_ownership_changed"):
         claim(store, task_id, "stale", 0)
     assert store.get_task(task_id) == owned
+
+
+@pytest.mark.parametrize("legacy", [True, False])
+def test_manual_completion_fences_old_results_after_reopen_but_allows_new_work(store, legacy):
+    task_id = store.create_task({"title": "Two rounds"})["id"]
+    owner = {"requestId": "legacy", "revision": 0} if legacy else claim(store, task_id, "first", 0)["executionOwner"]
+    store.record_round(task_id, round_result={"status": "continue"}, continuation_session_id="previous",
+                       execution_owner=owner)
+    store.update_task(task_id, {"status": "done", "actorUserId": "owner"})
+    with pytest.raises(ValueError, match="task_ownership_changed"):
+        claim(store, task_id, "stale", owner["revision"])
+    reopened = store.update_task(task_id, {"status": "assigned", "actorUserId": "owner"})
+    assert reopened["lastRoundResult"] == {"status": "continue", "consumed": True}
+    assert "continuationSessionId" not in reopened
+    late = relay_task_event("task.status", task_id, {"status": "blocked"})
+    assert store.append_event(task_id, late, execution_owner=owner) == reopened
+    assert store.record_round(task_id, round_count=99, execution_owner=owner) == reopened
+    new = claim(store, task_id, "new", owner["revision"])["executionOwner"]
+    assert store.append_event(task_id, late, execution_owner=new)["status"] == "blocked"

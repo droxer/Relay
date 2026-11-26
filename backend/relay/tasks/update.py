@@ -20,7 +20,7 @@ from ..persistence.engine import store_transaction
 from ..core.validation import task_priority, task_status
 from .flow import LEGACY_ACCEPTANCE_POLICY, validate_manual_transition
 from .claims import dispatch_claim_active
-from ..sessions.controller import SessionController
+from ..execution.task_completion import complete_linked_task_sessions, mark_task_done
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 from .assignment import (
     logical_agent_for_assignment,
@@ -110,6 +110,9 @@ def update_task(
     ctx: Any, actor: Actor, current: dict[str, Any], request: TaskPatchRequest
 ) -> dict[str, Any]:
     body, move_project = request.body, request.move_project
+    if (body.get("status") == "done" and set(body) <= {"status", "reviewRevision"}
+            and not current.get("isRoutine")):
+        return mark_task_done(ctx, current, actor["userId"], body, request.reload)
     # Everything below judges the task as it will be once the move lands.
     effective = {**current, "projectId": move_project["id"]} if move_project else current
     if "computerId" in body:
@@ -503,7 +506,8 @@ def _write_update(
         except ValueError as error:
             raise TaskRequestError(409, str(error)) from error
         if status == "done":
-            complete_linked_task_sessions(ctx, task, "Task accepted after review.")
+            outcome = "Task accepted after review." if current["status"] == "review" else "Task marked done by user."
+            complete_linked_task_sessions(ctx, task, outcome, actor["userId"])
             task = ctx.task_store.get_task(task_id)
     return current, task
 
@@ -527,39 +531,6 @@ def _validate_status_transition(
         raise TaskRequestError(409, str(error)) from error
 
 
-def complete_linked_task_sessions(ctx: Any, task: dict[str, Any], outcome: str) -> None:
-    # Serialize with admission so a newer thread round cannot acquire the
-    # session between checking its scope and completing it.
-    with ctx.registry.dispatch_lock:
-        controller = SessionController(ctx.session_store)
-        for session_id in task.get("linkedSessionIds", []):
-            _complete_if_task_scoped(ctx, controller, task, session_id, outcome)
-
-
-def _complete_if_task_scoped(
-    ctx: Any,
-    controller: SessionController,
-    task: dict[str, Any],
-    session_id: str,
-    outcome: str,
-) -> None:
-    session = _linked_session(ctx, session_id)
-    if session is None or session.get("status") in ("completed", "failed", "cancelled"):
-        return
-    run_request = ctx.registry.daemon_store.active_run_request_for_session_any_node(session_id)
-    if run_request:
-        if run_request.get("taskId") != task["id"]:
-            return
-    elif _active_round(session).get("workScope") != {"kind": "task", "taskId": task["id"]}:
-        return
-    if run_request:
-        terminal_reason = "Linked task completed before agent delivery finished."
-        ctx.registry.cancel_run_request_before_delivery(run_request["id"], terminal_reason)
-        if ctx.registry.get(run_request["nodeId"]):
-            ctx.registry.cancel_active_run(run_request["nodeId"], session_id, terminal_reason)
-    controller.complete_session(session_id, outcome)
-
-
 def _linked_session(ctx: Any, session_id: str) -> dict[str, Any] | None:
     try:
         return ctx.session_store.get_session(session_id)
@@ -572,14 +543,3 @@ def _linked_session(ctx: Any, session_id: str) -> dict[str, Any] | None:
             exc_info=True,
         )
         return None
-
-
-def _active_round(session: dict[str, Any]) -> dict[str, Any]:
-    return next(
-        (
-            item
-            for item in session.get("collaborationRounds", [])
-            if item.get("roundId") == session.get("activeRoundId")
-        ),
-        {},
-    )

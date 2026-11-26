@@ -110,17 +110,22 @@ def _pick_up(
     if not logical_agent or not agent_id:
         raise HTTPException(400, "agentId is required to pick up a task.")
     agent = logical_agent["executorKind"]
-    task = update_task_unless_dispatching(
-        ctx,
-        task_id,
-        {
-            "assigneeUserId": logical_agent["supervisorUserId"],
-            "status": "assigned",
-            "assignedAgent": agent,
-            "assignedAgentId": agent_id,
-            "assignedTeamId": None,
-        },
-    )
+    try:
+        task = update_task_unless_dispatching(
+            ctx,
+            task_id,
+            {
+                "assigneeUserId": logical_agent["supervisorUserId"],
+                "status": "assigned",
+                "expectedStatus": current["status"],
+                "expectedExecutionRevision": (current.get("executionOwner") or {}).get("revision", 0),
+                "assignedAgent": agent,
+                "assignedAgentId": agent_id,
+                "assignedTeamId": None,
+            },
+        )
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
     return task, agent_id, agent
 
 

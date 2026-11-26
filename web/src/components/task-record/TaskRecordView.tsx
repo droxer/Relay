@@ -69,7 +69,7 @@ export function TaskRecordView({
   const { t, i18n } = useTranslation();
   const { announce, confirm } = useDialogs();
   const openReview = useTaskReview();
-  const { startTaskMutation, cancelRunMutation, deleteTaskMutation, resumeAutomationMutation } = useRelayMutations();
+  const { startTaskMutation, cancelRunMutation, deleteTaskMutation, resumeAutomationMutation, updateTaskMutation } = useRelayMutations();
   const [busyAction, setBusyAction] = useState<RecordAction | null>(null);
 
   // The record in the path — the run when there is one, otherwise the
@@ -136,7 +136,25 @@ export function TaskRecordView({
 
   async function markDone(): Promise<void> {
     if (busyAction || !task) return;
-    if (task.status === "review") openReview(task.id);
+    if (task.status === "review") {
+      openReview(task.id);
+      return;
+    }
+    const confirmed = await confirm({
+      title: t("decision.mark_done"),
+      message: t("record.mark_done_confirm"),
+      confirmLabel: t("decision.mark_done"),
+      cancelLabel: t("dialog.cancel"),
+    });
+    if (!confirmed) return;
+    setBusyAction("done");
+    try {
+      await updateTaskMutation.mutateAsync({ taskId: task.id, input: { status: "done" } });
+    } catch {
+      // The mutation reports the error; leave the action available to retry.
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   async function deleteRecord(): Promise<void> {

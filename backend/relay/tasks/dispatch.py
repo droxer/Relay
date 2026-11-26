@@ -44,7 +44,7 @@ from ..teams.dispatch import (
     resolve_team_task_assignments,
     task_execution_user_id,
 )
-from .dispatch_results import dispatch_result_scope
+from .dispatch_results import dispatch_result_scope, update_pending_dispatch
 from .dispatch_outcome import (
     DispatchResult,
     TaskDispatchContext,
@@ -233,8 +233,8 @@ class TaskDispatcher:
                 f"This task's assignment is no longer valid ({error.detail}); "
                 "reassign it before it can run."
             )
-            self.task = self.ctx.task_store.update_task(
-                self.task["id"],
+            self.task = update_pending_dispatch(
+                self.ctx.task_store, self.task["id"],
                 {
                     "status": "blocked",
                     "blockerReason": message,
@@ -290,8 +290,8 @@ class TaskDispatcher:
                 raise
             message = f"The project cannot execute this task ({error.code})."
             if error.permanent:
-                self.task = self.ctx.task_store.update_task(
-                    self.task["id"],
+                self.task = update_pending_dispatch(
+                    self.ctx.task_store, self.task["id"],
                     {
                         "status": "blocked",
                         "blockerReason": message,
@@ -342,8 +342,8 @@ class TaskDispatcher:
                 else TEAM_UNAVAILABLE_MESSAGE
             )
             if error.permanent:
-                self.task = self.ctx.task_store.update_task(
-                    self.task["id"],
+                self.task = update_pending_dispatch(
+                    self.ctx.task_store, self.task["id"],
                     {
                         "status": "blocked",
                         "blockerReason": message,
@@ -461,8 +461,8 @@ class TaskDispatcher:
         state = "rejected" if error.code in PERMANENT_DISPATCH_CODES else "queued"
         message = str(error)
         if state == "rejected":
-            self.task = self.ctx.task_store.update_task(
-                self.task["id"],
+            self.task = update_pending_dispatch(
+                self.ctx.task_store, self.task["id"],
                 {
                     "status": "blocked",
                     "blockerReason": message,
@@ -676,8 +676,8 @@ class TaskDispatcher:
 
     def _mark_assigned_if_backlog(self) -> None:
         if self.task.get("status") == "backlog":
-            self.task = self.ctx.task_store.update_task(
-                self.task["id"], {"status": "assigned"}
+            self.task = update_pending_dispatch(
+                self.ctx.task_store, self.task["id"], {"status": "assigned"}
             )
 
 

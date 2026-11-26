@@ -22,6 +22,7 @@ export function TaskRecordActions({
   busyAction,
   onRun,
   onCancel,
+  onDone,
   onEdit,
   onDelete,
   onWatchLive,
@@ -86,6 +87,11 @@ export function TaskRecordActions({
           {t("record.cancel_run")}
         </Button>
       ) : null}
+      {actions.includes("done") && !compact ? (
+        <Button type="button" variant="outline" size="dense" disabled={busy} loading={busyAction === "done"} onClick={onDone}>
+          {t("decision.mark_done")}
+        </Button>
+      ) : null}
       {/* Edit stays a button beside the state action; delete folds into one
           overflow menu on every width, so the irreversible action is never a
           red button the same size as the next step. A phone row has room for
@@ -112,6 +118,9 @@ export function TaskRecordActions({
           }
         />
         <DropdownMenuContent align="end">
+          {compact && actions.includes("done") ? (
+            <DropdownMenuItem disabled={busy} onClick={onDone}>{t("decision.mark_done")}</DropdownMenuItem>
+          ) : null}
           {compact && (actions.includes("run") || actions.includes("retry")) ? (
             <DropdownMenuItem disabled={busy} onClick={onRun}>
               <ActionStart size={ICON.sm} aria-hidden="true" />

@@ -63,7 +63,7 @@ from ..tasks.placement import (
     materialize_legacy_task_assignment,
     task_goal_text,
 )
-from ..tasks.dispatch_results import dispatch_result_scope
+from ..tasks.dispatch_results import dispatch_result_scope, update_pending_dispatch
 from ..tasks.scheduled_workflow import (
     ScheduledWorkflowContext,
     dispatch_scheduled_workflow,
@@ -490,8 +490,8 @@ class TaskScheduler(DispatchCandidates):
         return permanent
 
     def _block(self, task: dict[str, Any], message: str, code: str) -> None:
-        self.task_store.update_task(
-            task["id"],
+        update_pending_dispatch(
+            self.task_store, task["id"],
             {
                 "status": "blocked",
                 "blockerReason": message,
@@ -538,21 +538,24 @@ class TaskScheduler(DispatchCandidates):
         return False
 
     def _park_for_human(self, task: dict[str, Any], code: str, message: str) -> None:
-        # Read before the round record clears it: the thread the work was in
-        # is where a person answers, and the message is what they answer.
-        session_id = continuation_session_id(task)
-        self.task_store.record_round(task["id"], clear_continuation=True, round_result={**(task.get("lastRoundResult") or {}), "consumed": True})  # a person's restart is a fresh start
-        # A spent budget is its own kind of wait, so a surface can offer to
-        # continue rather than quote it as an agent's question.
-        kind: WaitKind = "budget" if code == "round_budget_exhausted" else "check"
-        self.task_store.update_task(task["id"], {
-            "status": "waiting_for_human",
-            "statusReason": message,
-            "statusRequest": wait_record(kind, new_question_id()),
-            **({"statusSessionId": session_id} if session_id else {}),
-        })
-        self._record_dispatch_deferred(task, code, message, state="rejected")
-        self.task_store.record_activity(task["id"], message)
+        with self.task_store.task_write_scope(task["id"]) as current:
+            if (current["status"] not in ("assigned", "queued") or not awaits_continuation(current)
+                    or dispatch_claim_active(current) or current.get("executionOwner") != task.get("executionOwner")):
+                return
+            # The round and its wait commit together, unless a person already completed it.
+            session_id = continuation_session_id(current)
+            self.task_store.record_round(
+                task["id"], clear_continuation=True, round_result={**current["lastRoundResult"], "consumed": True},
+            )
+            kind: WaitKind = "budget" if code == "round_budget_exhausted" else "check"
+            self.task_store.update_task(task["id"], {
+                "status": "waiting_for_human",
+                "statusReason": message,
+                "statusRequest": wait_record(kind, new_question_id()),
+                **({"statusSessionId": session_id} if session_id else {}),
+            })
+            self._record_dispatch_deferred(current, code, message, state="rejected")
+            self.task_store.record_activity(task["id"], message)
         logger.info("Task continuation refused", task_id=task["id"], code=code)
 
     def _materialize_legacy_assignment(

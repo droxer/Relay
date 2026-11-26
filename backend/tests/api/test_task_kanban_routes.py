@@ -19,10 +19,10 @@ def client(tmp_path, monkeypatch):
     return client
 
 
-def test_new_tasks_require_review_and_cannot_fabricate_execution(client):
+def test_new_tasks_default_to_human_acceptance_and_cannot_fabricate_execution(client):
     task = client.post("/api/v1/tasks", json={"title": "Deliver"}).json()
     assert task["acceptancePolicy"] == "human"
-    for state in ["running", "review", "done", "waiting_for_human"]:
+    for state in ["running", "review", "waiting_for_human"]:
         response = client.patch(f"/api/v1/tasks/{task['id']}", json={"status": state})
         assert response.status_code == 409
     for state in ["running", "review", "done"]:
@@ -72,7 +72,6 @@ def test_policy_locks_after_work_starts_and_rework_preserves_age(client):
     url = f"/api/v1/tasks/{task['id']}"
     assert client.patch(url, json={"acceptancePolicy": "automatic"}).status_code == 409
     assert client.patch(url, json={"status": "backlog"}).status_code == 409
-    assert client.patch(url, json={"status": "done"}).status_code == 409
     blocked = client.patch(
         url, json={"status": "blocked", "blockerReason": "Missing credentials"}
     ).json()
@@ -111,7 +110,6 @@ def test_cancel_task_preserves_history_and_cannot_fabricate_delivery(client):
     assert "finishedAt" not in cancelled
     assert any(e.get("actorUserId") for e in cancelled["events"] if e.get("status") == "cancelled")
     assert client.get(url).json()["status"] == "cancelled"
-    assert client.patch(url, json={"status": "done"}).status_code == 409
     assert client.patch(url, json={"status": "review"}).status_code == 409
     reopened = client.patch(url, json={"status": "assigned"})
     # Intake cannot queue until it has a project.

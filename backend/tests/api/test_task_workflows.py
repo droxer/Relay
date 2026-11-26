@@ -336,3 +336,22 @@ def test_legacy_create_session_cannot_leave_orphan_workflow_task(monkeypatch):
         assert response.json()["detail"] == "project_team_assignment_forbidden"
         assert app.state.task_store.list_tasks() == before
         assert take(app.state.registry, node) == []
+
+
+def test_completion_at_workflow_approval_releases_the_gate_without_starting_another_step(monkeypatch):
+    with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
+        task, _ = task_workflow(client, project, payload)
+        session = start_task(client, task)
+        registry = app.state.registry
+        first, = take(registry, node)
+        finish(registry, node, first, {"Design": "Ready"})
+        thread_url = f"/api/v1/threads/{session['id']}"
+        waiting = client.get(thread_url).json()
+        assert waiting["workflowRuns"][-1]["status"] == "awaiting_approval"
+        closed = client.patch(f"/api/v1/tasks/{task['id']}", json={"status": "done"})
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["status"] == "done"
+        assert client.get(thread_url).json()["workflowRuns"][-1]["status"] == "cancelled"
+        assert registry.daemon_store.active_run_request_for_task(task["id"]) is None
+        assert client.post(f"{thread_url}/workflow-decisions", json=decision(waiting, "approve")).status_code == 409
+        assert take(registry, node) == []

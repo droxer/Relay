@@ -3,6 +3,17 @@
 from typing import Any
 
 
+def manually_completed(task: dict[str, Any]) -> bool:
+    return task.get("status") == "done" and task.get("manuallyCompletedExecutionRevision") == (
+        task.get("executionOwner") or {}
+    ).get("revision", 0)
+
+
+def require_open_execution(task: dict[str, Any]) -> None:
+    if manually_completed(task):
+        raise ValueError("task_ownership_changed: reopen the completed task before starting work")
+
+
 def prepare_execution_events(
     task: dict[str, Any],
     events: list[dict[str, Any]],
@@ -23,6 +34,7 @@ def prepare_execution_events(
         legacy = owner is None and execution_owner.get("revision") == 0
         if (task.get("deletedAt") or task.get("status") == "cancelled"
             or execution_owner.get("revision", 0) <= task.get("cancelledExecutionRevision", -1)
+            or execution_owner.get("revision", 0) <= task.get("manuallyCompletedExecutionRevision", -1)
             or (not legacy and owner != execution_owner)):
             return []
         # A closeout can be retried after its verdict persisted. Deduplicate
@@ -54,6 +66,7 @@ def prepare_execution_events(
         or task.get("isRoutine")
     ):
         raise ValueError("task_ownership_changed: invalid execution claim")
+    require_open_execution(task)
     if task.get("status") == "cancelled":
         raise ValueError("task_ownership_changed: reopen the cancelled task before starting work")
     if owner == {"requestId": request_id, "revision": expected + 1}:

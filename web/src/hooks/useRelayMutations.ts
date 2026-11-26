@@ -34,7 +34,7 @@ import {
   updateTeam,
   updateTeamMemberConfig,
 } from "../api";
-import type { AgentRunInput, AgentTeam, AgentTeamsResponse, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectListItem, ProjectRecord, RelaySession, RelayTask, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMemberConfigPatch, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
+import type { AgentRunInput, AgentTeam, AgentTeamsResponse, ApplySetupTasksInput, CreateProjectInput, StartProjectSetupInput, CreateTaskInput, ProjectListItem, ProjectRecord, RelaySession, RelayTask, RelayTaskListItem, RelayTaskSummary, TaskMutationInput, TaskRunAssignment, TeamMemberConfigPatch, TeamMutationInput, ThreadMessageInput, ThreadRecoveryInput, UpdateProjectInput } from "../types";
 import { isTaskListScope } from "../domain-types/tasks";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
@@ -374,9 +374,14 @@ export function useRelayMutations() {
     // too, otherwise the board keeps showing the pre-mutation snapshot.
     onSuccess: (task, { input }) => {
       cacheTask(task);
-      if (input.reviewRevision) queryClient.setQueryData([TASK_RECORD_QUERY_KEY, task.id], task);
+      queryClient.setQueryData<RelayTaskListItem | undefined>([TASK_RECORD_QUERY_KEY, task.id], (current) =>
+        current ? { ...current, ...task } : input.reviewRevision ? task : undefined,
+      );
     },
-    onSettled: () => void invalidateTasks(),
+    onSettled: (_data, _error, { taskId }) => {
+      void invalidateTasks();
+      void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY, taskId], exact: true });
+    },
   });
 
   const deleteTaskMutation = useMutation({

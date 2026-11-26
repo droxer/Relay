@@ -2952,6 +2952,7 @@
     "sub": "管理電腦、技能和顯示偏好。"
   },
   "record": {
+    "mark_done_confirm": "確定將此任務標記為完成嗎？系統會請求停止仍在執行的工作。",
     "detail_label": "記錄：{{title}}",
     "record_label": "記錄詳情",
     "sections": "記錄分割槽",
