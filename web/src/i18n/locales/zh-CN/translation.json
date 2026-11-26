@@ -4185,6 +4185,15 @@
     "team_owned": "团队所有",
     "project_owned": "项目所有",
     "project_origin": "所属项目：",
-    "clear_default": "清除默认"
+    "clear_default": "清除默认",
+    "edit_named": "编辑{{name}}",
+    "preset_edit_title": "编辑工作流智能体",
+    "preset_edit_hint": "选择参加的项目智能体。角色在成员列表中设置。",
+    "preset_participants": "参加的智能体",
+    "preset_build_review_fallback": "如果没有可用的审查 Agent，构建 Agent 会独立完成工作。",
+    "preset_all_agents": "全部项目智能体",
+    "preset_lead_locked": "负责人始终参加",
+    "preset_reset": "恢复为全部智能体",
+    "preset_conflict": "编辑期间项目已变更。请关闭此面板，查看最新成员后重试。"
   }
 }

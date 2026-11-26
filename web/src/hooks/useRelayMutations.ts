@@ -566,8 +566,12 @@ export function useRelayMutations() {
     onError: (error, { input }) => {
       // Project editors reconcile version conflicts and show a confirmation.
       // A generic failure toast here incorrectly blames the computer/roster.
-      if (error instanceof RelayApiError && (error.code === "project_version_conflict"
-        || (input.memberChange && error.status === 400 && error.code === "project_patch_unsupported"))) return;
+      if (error instanceof RelayApiError && error.code === "project_version_conflict") {
+        if (input.predefinedWorkflowChange) void invalidateProjects();
+        return;
+      }
+      if (input.memberChange && error instanceof RelayApiError
+        && error.status === 400 && error.code === "project_patch_unsupported") return;
       onRelayError("Failed to update project", "errors.save_project")(error);
     },
   });

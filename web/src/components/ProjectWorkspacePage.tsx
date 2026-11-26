@@ -347,7 +347,7 @@ export function ProjectWorkspacePage({
             onEditMember={membersReadOnly || !projectRecord ? undefined : (member) => setMemberEditor({ member })}
           >
             <ProjectWorkflows
-              project={project}
+              project={projectRecord ?? project}
               agents={agents}
               userId={currentUser.userId}
               readOnly={membersReadOnly}

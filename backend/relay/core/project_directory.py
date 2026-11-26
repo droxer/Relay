@@ -3,5 +3,5 @@
 PROJECT_DIRECTORY_FIELDS = (
     "id", "ownerUserId", "name", "computerId", "workspaceLayout", "workspaceSubpath",
     "leadAgentId", "managerAgentId", "managerThreadId", "enabled", "version",
-    "createdAt", "updatedAt", "archivedAt",
+    "createdAt", "updatedAt", "archivedAt", "predefinedWorkflows",
 )

@@ -10,12 +10,19 @@ vi.mock("../src/api", () => ({ listWorkflowPreviews: vi.fn(), saveWorkflow: vi.f
 vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", TEAM_RECORD_QUERY_KEY: "team-record", useTeams: () => ({ teams: [], isSuccess: true }) }));
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: async () => true, announce: vi.fn() }) }));
+const updateProject = vi.hoisted(() => vi.fn(async () => ({})));
+vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({ updateProjectMutation: { mutateAsync: updateProject } }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
 const project = { id: "p", name: "Launch", ownerUserId: "owner", computerId: "pc", enabled: true, leadAgentId: "a", members: [{ agentId: "a", enabled: true }] } as ProjectRecord;
 const agents = [{ id: "a", displayName: "Ada", enabled: true, executorKind: "codex", placements: [] }] as unknown as UserAgent[];
 const workflow = { id: "w", ownerUserId: "owner", projectId: "p", name: "Release", enabled: true,
   workflowSteps: [{ id: "build", name: "Build", agentId: "a", instructions: "Build it", acceptanceCriteria: ["Tests pass"], requiresApproval: false }] } as Workflow;
-function mount(element: React.ReactNode) { render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{element}</QueryClientProvider>); }
+function mount(element: React.ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(element, {
+    wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+  });
+}
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(listWorkflowPreviews).mockResolvedValue({ workflows: [workflow] }); });
 
 it("creates a Project definition with no Teams or Team fields", async () => {
@@ -81,4 +88,58 @@ it("creates a Team-owned definition without a Project", async () => {
   await waitFor(() => expect(saveWorkflow).toHaveBeenCalledWith(expect.objectContaining({
     name: "Team delivery", ownerTeamId: "team", projectId: null,
   }), undefined));
+});
+
+const pair = { ...project, version: 4, members: [
+  { agentId: "a", role: "planner", enabled: true }, { agentId: "b", role: "reviewer", enabled: true }] } as unknown as ProjectRecord;
+const both = [...agents, { id: "b", displayName: "Bo", enabled: true, executorKind: "codex", placements: [] }] as unknown as UserAgent[];
+
+it("shows a Predefined Workflow's participants and saves a narrowed selection", async () => {
+  mount(<ProjectWorkflows project={pair} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
+  const row = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
+  expect(within(row).getByText("workflow.preset_all_agents")).toBeTruthy();
+  expect(within(row).getByText("Bo")).toBeTruthy();
+  fireEvent.click(within(row).getByRole("button", { name: "workflow.edit_named" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /Bo/ }));
+  fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
+  await waitFor(() => expect(updateProject).toHaveBeenCalledWith({ projectId: "p", input: {
+    expectedVersion: 4, predefinedWorkflowChange: { workflowId: "preset:pipeline", agentIds: ["a"] } } }));
+});
+
+it("shows only the selected Agents and locks the Lead in Lead-led", async () => {
+  const narrowed = { ...pair, predefinedWorkflows: { lead_led: { agentIds: ["b"] }, pipeline: { agentIds: ["b"] } } } as ProjectRecord;
+  mount(<ProjectWorkflows project={narrowed} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
+  const pipeline = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
+  expect(within(pipeline).queryByText("Ada")).toBeNull();
+  expect(within(pipeline).getByText("Bo")).toBeTruthy();
+  const lead = screen.getByRole("heading", { name: "collab_style.lead_led" }).closest("li")!;
+  expect(within(lead).getByText("Ada")).toBeTruthy();
+  fireEvent.click(within(lead).getByRole("button", { name: "workflow.edit_named" }));
+  const box = screen.getByRole("checkbox", { name: /Ada/ });
+  expect(box.getAttribute("aria-checked") ?? (box as HTMLInputElement).checked).toBeTruthy();
+  expect(box.hasAttribute("disabled") || box.getAttribute("aria-disabled") === "true" || box.hasAttribute("data-disabled")).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "workflow.preset_reset" }));
+  await waitFor(() => expect(updateProject).toHaveBeenCalledWith({ projectId: "p", input: {
+    expectedVersion: 4, predefinedWorkflowChange: { workflowId: "preset:lead_led", agentIds: null } } }));
+});
+
+it("saves against the Project version when the editor opened", async () => {
+  const renderWorkflows = (record: ProjectRecord) =>
+    <ProjectWorkflows project={record} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />;
+  const { rerender } = mount(renderWorkflows(pair));
+  const row = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
+  fireEvent.click(within(row).getByRole("button", { name: "workflow.edit_named" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /Bo/ }));
+  rerender(renderWorkflows({ ...pair, version: 5 }));
+  fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
+  await waitFor(() => expect(updateProject).toHaveBeenCalledWith({ projectId: "p", input: {
+    expectedVersion: 4, predefinedWorkflowChange: { workflowId: "preset:pipeline", agentIds: ["a"] },
+  } }));
+});
+
+it("blocks a Predefined Workflow whose selection leaves no enabled Agent", async () => {
+  const empty = { ...pair, predefinedWorkflows: { pipeline: { agentIds: ["gone"] } } } as ProjectRecord;
+  mount(<ProjectWorkflows project={empty} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
+  const row = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
+  expect(within(row).getByRole<HTMLButtonElement>("button", { name: "workflow.start_named" }).disabled).toBe(true);
 });

@@ -4270,6 +4270,15 @@
     "team_owned": "Team-owned",
     "project_owned": "Project-owned",
     "project_origin": "Project:",
-    "clear_default": "Clear default"
+    "clear_default": "Clear default",
+    "edit_named": "Edit {{name}}",
+    "preset_edit_title": "Edit Workflow Agents",
+    "preset_edit_hint": "Choose the Project Agents that take part. Roles are set on the roster.",
+    "preset_participants": "Participating Agents",
+    "preset_build_review_fallback": "If no reviewer is available, the builder completes the work alone.",
+    "preset_all_agents": "All Project Agents",
+    "preset_lead_locked": "Lead always joins",
+    "preset_reset": "Use all Agents",
+    "preset_conflict": "This Project changed while you were editing. Close this panel, review the latest roster, and try again."
   }
 }

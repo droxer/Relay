@@ -115,6 +115,9 @@ export interface ProjectContextSuggestion {
   createdAt: string;
 }
 
+export type ProjectPredefinedTemplate = "build_review" | "pipeline" | "lead_led";
+export type ProjectPredefinedWorkflows = Partial<Record<ProjectPredefinedTemplate, { agentIds: string[] }>>;
+
 export interface ProjectRecord {
   /** Derived from the roster: the member carrying `projectManager`. */
   managerAgentId?: string | null;
@@ -143,6 +146,8 @@ export interface ProjectRecord {
   workspaceHostPath?: string;
   leadAgentId: string | null;
   members: ProjectMember[];
+  /** Per Predefined Workflow: the Project Agents allowed to take part. Absent = every enabled Project Agent. */
+  predefinedWorkflows?: ProjectPredefinedWorkflows;
   enabled: boolean;
   version: number;
   createdAt: string;
@@ -158,7 +163,7 @@ export type ProjectSetupSummary = Pick<ProjectSetup, "state" | "mode" | "threadI
 export interface ProjectDirectoryEntry extends Pick<ProjectRecord,
   "id" | "ownerUserId" | "name" | "computerId" | "workspaceLayout" | "workspaceSubpath"
   | "leadAgentId" | "managerAgentId" | "managerThreadId" | "enabled" | "version"
-  | "createdAt" | "updatedAt" | "archivedAt" | "contextSummary"
+  | "createdAt" | "updatedAt" | "archivedAt" | "contextSummary" | "predefinedWorkflows"
 > {
   view: "directory";
   members: ProjectMemberSummary[];
@@ -209,6 +214,8 @@ export interface UpdateProjectInput {
   members?: CreateProjectInput["members"];
   /** One roster edit against expectedVersion. */
   memberChange?: ProjectMemberChange;
+  /** Limits a Predefined Workflow to these Project Agents; null restores every enabled Agent. */
+  predefinedWorkflowChange?: { workflowId: `preset:${ProjectPredefinedTemplate}`; agentIds: string[] | null };
   enabled?: boolean;
   /** Closes the project's drafted setup in the same revision. */
   setupResolution?: "applied" | "dismissed";
