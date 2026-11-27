@@ -16,6 +16,7 @@ from loguru import logger
 from .api.accounts import (
     auth as auth_routes,
     github as github_connection_routes,
+    home_stats as home_stats_routes,
     notifications as notification_routes,
     password_reset as password_reset_routes,
     profile_images as profile_image_routes,
@@ -440,6 +441,7 @@ API_ROUTERS = (
     connection_tools_routes.router,
     automation_routes.router,
     auth_routes.router,
+    home_stats_routes.router,
     device_authorization_routes.router,
     default_agent_routes.router,
     agent_roster_routes.router,

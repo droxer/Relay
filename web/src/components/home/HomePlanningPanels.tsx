@@ -7,7 +7,7 @@ import { taskRef } from "../../lib/taskRef";
 import type { HomeBlocker, UpcomingItem } from "../../lib/homePlan";
 import type { RelayTaskListItem, StartTaskResponse } from "../../types";
 import type { HomeActions } from "./useHomeActions";
-import { HomeLink } from "./HomePanels";
+import { CardHeader, HomeLink } from "./HomePanels";
 
 const UPCOMING_PREVIEW = 5;
 const BLOCKER_PREVIEW = 3;
@@ -47,7 +47,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
   };
   const due = task.dueDate ? ` · ${t("home.plan.due", { date: task.dueDate })}` : "";
   return (
-    <div className={focus ? "home-focus" : "home-ready-row"}>
+    <div className={focus ? "home-focus-slot" : "home-ready-row"}>
       {focus ? <div className="home-focus-heading"><h3>{t("home.plan.start_here")}</h3></div> : null}
       <div className="home-plan-row">
         <div className="home-plan-copy">
@@ -56,7 +56,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
           </HomeLink>
           <p className="home-plan-meta">{t(`backlog.priorities.${task.priority}`)}{due}</p>
         </div>
-        <Button size="dense" disabled={busy || dispatchState !== null} onClick={() => void start()}>
+        <Button size="dense" variant={focus ? "default" : "outline"} disabled={busy || dispatchState !== null} onClick={() => void start()}>
           {t(dispatchState ? DISPATCH_LABELS[dispatchState] : "home.plan.start")}
         </Button>
       </div>
@@ -97,16 +97,12 @@ export function UpcomingPanel({ rows, today, hrefFor, onOpen }: {
     : "");
   const hasTimes = visible.some((row) => row.kind === "automation" && Boolean(row.task.routineNextRunAt));
   return (
-    <section className="home-section" aria-labelledby="home-upcoming-title">
-      <header className="home-section-header">
-        <h2 id="home-upcoming-title" className="home-section-title">{t("home.plan.upcoming")}</h2>
-        <span className="home-section-count">{t("home.plan.seven_days")}</span>
-      </header>
-      <div className="home-panel">
+    <section className="home-card" aria-labelledby="home-upcoming-title">
+      <CardHeader id="home-upcoming-title" title={t("home.plan.upcoming")} count={t("home.plan.seven_days")} />
+      <div className="home-card-body">
         {visible.length ? (
           <ul className="home-plan-list">
             {visible.map((row, index) => {
-              // A day's rows share one date: only the first one prints it.
               const firstOfDay = index === 0 || visible[index - 1].day !== row.day;
               return (
                 <li key={row.key} data-continues={firstOfDay ? undefined : ""}>
@@ -125,7 +121,7 @@ export function UpcomingPanel({ rows, today, hrefFor, onOpen }: {
               );
             })}
           </ul>
-        ) : <p className="home-plan-empty">{t("home.plan.nothing_upcoming")}</p>}
+        ) : <p className="home-card-empty">{t("home.plan.nothing_upcoming")}</p>}
         {rows.length > UPCOMING_PREVIEW
           ? <ShowAllToggle count={rows.length} expanded={expanded} onToggle={() => setExpanded(!expanded)} />
           : null}
@@ -145,12 +141,9 @@ export function BlockersPanel({ rows, onOpenTask, taskHref }: {
   if (!rows.length) return null;
   const visible = expanded ? rows : rows.slice(0, BLOCKER_PREVIEW);
   return (
-    <section className="home-section" aria-labelledby="home-blockers-title">
-      <header className="home-section-header">
-        <h2 id="home-blockers-title" className="home-section-title">{t("home.plan.shared_blockers")}</h2>
-        <span className="home-section-count tnum">{rows.length}</span>
-      </header>
-      <ul className="home-panel home-blockers">
+    <section className="home-card home-blockers-card" aria-labelledby="home-blockers-title">
+      <CardHeader id="home-blockers-title" title={t("home.plan.shared_blockers")} count={rows.length} />
+      <ul className="home-list home-blockers">
         {visible.map((row) => (
           <li key={row.id} className="home-blocker-row">
             {row.summary?.canOpen

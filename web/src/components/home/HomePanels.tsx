@@ -19,15 +19,19 @@ export function HomeLink({ href, onOpen, className, children }: { href: string; 
   return <a className={className} href={href} onClick={onClick}>{children}</a>;
 }
 
-function SectionHeader({ id, title, count, more }: { id: string; title: string; count?: number; more?: ReactNode }) {
+export function CardHeader({ id, title, count, more }: { id: string; title: string; count?: ReactNode; more?: ReactNode }) {
   return (
-    <header className="home-section-header">
-      <h2 id={id} className="home-section-title">{title}</h2>
-      {count !== undefined ? <span className="home-section-count tnum">{count}</span> : null}
-      {more ? <span className="home-section-more">{more}</span> : null}
+    <header className="home-card-header">
+      <div className="home-card-heading">
+        <h2 id={id} className="home-card-title">{title}</h2>
+        {count !== undefined ? <span className="home-section-count tnum">{count}</span> : null}
+      </div>
+      {more ? <span className="home-card-more">{more}</span> : null}
     </header>
   );
 }
+
+const PROJECTS_PREVIEW = 4;
 
 export function ProjectsPanel({ rows, nextLabel, hrefFor, onOpen, allHref, onOpenAll, onNewProject }: {
   rows: readonly HomeProjectRow[];
@@ -39,12 +43,13 @@ export function ProjectsPanel({ rows, nextLabel, hrefFor, onOpen, allHref, onOpe
   onNewProject: () => void;
 }) {
   const { t } = useTranslation();
+  const visible = rows.slice(0, PROJECTS_PREVIEW);
   const more = <HomeLink className="home-link" href={allHref} onOpen={onOpenAll}>{t("home.all_projects")}</HomeLink>;
-  if (rows.length === 0) {
+  if (visible.length === 0) {
     return (
-      <section className="home-section" aria-labelledby="home-projects-title">
-        <SectionHeader id="home-projects-title" title={t("home.projects")} />
-        <div className="home-panel home-clear">
+      <section className="home-card" aria-labelledby="home-projects-title">
+        <CardHeader id="home-projects-title" title={t("home.projects")} more={more} />
+        <div className="home-clear">
           <p className="home-clear-body">{t("home.no_projects")}</p>
           <Button type="button" variant="outline" size="dense" onClick={onNewProject}>{t("home.new_project")}</Button>
         </div>
@@ -52,10 +57,10 @@ export function ProjectsPanel({ rows, nextLabel, hrefFor, onOpen, allHref, onOpe
     );
   }
   return (
-    <section className="home-section" aria-labelledby="home-projects-title">
-      <SectionHeader id="home-projects-title" title={t("home.projects")} count={rows.length} more={more} />
-      <ul className="home-panel home-projects">
-        {rows.map((row) => {
+    <section className="home-card" aria-labelledby="home-projects-title">
+      <CardHeader id="home-projects-title" title={t("home.projects")} count={rows.length} more={more} />
+      <ul className="home-list home-projects">
+        {visible.map((row) => {
           const share = (count: number) => (row.total ? (count / row.total) * 100 : 0);
           const done = Math.round(share(row.progress.done));
           return (
@@ -105,33 +110,35 @@ export function RunningPanel({ rows, title, agentName, computerName, elapsed, hr
   onOpenAll: () => void;
 }) {
   const { t } = useTranslation();
-  if (rows.length === 0) return null;
   const more = <HomeLink className="home-link" href={allHref} onOpen={onOpenAll}>{t("home.all_threads")}</HomeLink>;
   return (
-    <section className="home-section" aria-labelledby="home-running-title">
-      <SectionHeader id="home-running-title" title={t("home.running_now")} count={rows.length} more={more} />
-      <ul className="home-panel home-runs">
-        {rows.map((row) => {
-          const agent = agentName(row);
-          const computer = computerName(row);
-          return (
-            <li key={row.session.id}>
-              <HomeLink className="home-run" href={hrefFor(row)} onOpen={() => onOpen(row)}>
-                {/* A paused run wants its person: the same warn tone the queue gives a prompt. */}
-                <StateMark className="home-run-mark" tone={row.paused ? "warn" : "live"} />
-                <span className="home-run-body">
-                  <span className="home-run-title">{title(row)}</span>
-                  <span className="home-run-sub">
-                    {[agent, computer].filter(Boolean).join(" · ")}
-                    {row.paused ? <span className="home-run-paused"> · {t("home.paused_for_permission")}</span> : null}
+    <section className="home-card" aria-labelledby="home-running-title">
+      <CardHeader id="home-running-title" title={t("home.running_now")} count={rows.length} more={more} />
+      {rows.length === 0 ? (
+        <p className="home-card-empty">{t("home.no_running")}</p>
+      ) : (
+        <ul className="home-list home-runs">
+          {rows.map((row) => {
+            const agent = agentName(row);
+            const computer = computerName(row);
+            return (
+              <li key={row.session.id}>
+                <HomeLink className="home-run" href={hrefFor(row)} onOpen={() => onOpen(row)}>
+                  <StateMark className="home-run-mark" tone={row.paused ? "warn" : "live"} />
+                  <span className="home-run-body">
+                    <span className="home-run-title">{title(row)}</span>
+                    <span className="home-run-sub">
+                      {[agent, computer].filter(Boolean).join(" · ")}
+                      {row.paused ? <span className="home-run-paused"> · {t("home.paused_for_permission")}</span> : null}
+                    </span>
                   </span>
-                </span>
-                <span className="home-run-time tnum">{elapsed(row.startedAt)}</span>
-              </HomeLink>
-            </li>
-          );
-        })}
-      </ul>
+                  <span className="home-run-time tnum">{elapsed(row.startedAt)}</span>
+                </HomeLink>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }
@@ -143,26 +150,29 @@ export function FinishedPanel({ tasks, sinceLabel, hrefFor, onOpen }: {
   onOpen: (task: RelayTaskListItem) => void;
 }) {
   const { t } = useTranslation();
-  if (tasks.length === 0) return null;
   return (
-    <section className="home-section" aria-labelledby="home-finished-title">
-      <SectionHeader id="home-finished-title" title={t("home.recently_finished")} />
-      <ul className="home-panel home-finished">
-        {tasks.map((task) => (
-          <li key={task.id}>
-            <HomeLink className="home-finished-row" href={hrefFor(task)} onOpen={() => onOpen(task)}>
-              <span className="home-finished-glyph" aria-hidden="true">
-                <StatusOk size={ICON.sm} />
-              </span>
-              <span className="home-finished-title">
-                <span className="home-item-ref">{taskRef(task)}</span>
-                {task.title}
-              </span>
-              <span className="home-finished-meta">{sinceLabel(task.finishedAt ?? task.updatedAt)}</span>
-            </HomeLink>
-          </li>
-        ))}
-      </ul>
+    <section className="home-card" aria-labelledby="home-finished-title">
+      <CardHeader id="home-finished-title" title={t("home.recently_finished")} count={tasks.length} />
+      {tasks.length === 0 ? (
+        <p className="home-card-empty">{t("home.no_finished")}</p>
+      ) : (
+        <ul className="home-list home-finished">
+          {tasks.map((task) => (
+            <li key={task.id}>
+              <HomeLink className="home-finished-row" href={hrefFor(task)} onOpen={() => onOpen(task)}>
+                <span className="home-finished-glyph" aria-hidden="true">
+                  <StatusOk size={ICON.sm} />
+                </span>
+                <span className="home-finished-title">
+                  <span className="home-item-ref">{taskRef(task)}</span>
+                  {task.title}
+                </span>
+                <span className="home-finished-meta tnum">{sinceLabel(task.finishedAt ?? task.updatedAt)}</span>
+              </HomeLink>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

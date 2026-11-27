@@ -3,6 +3,7 @@
    domain, not here. */
 export * from "./api-client/client.ts";
 export * from "./api-client/auth.ts";
+export * from "./api-client/home.ts";
 export * from "./api-client/waitlist.ts";
 export * from "./api-client/sessions.ts";
 export * from "./api-client/tasks.ts";

@@ -24,13 +24,11 @@ export interface HomeQueueProps {
   onOpenNeedsMe: () => void;
 }
 
-const PREVIEW = 5;
+const PREVIEW = 4;
 
-/** "Up next": the ranked queue, banded by tier. The bands already say which
- *  items hold someone's work up, so there is no second filter restating them.
- *  A row the person snoozed leaves at once; the next data refresh confirms
- *  it. The count includes the Start here item, so the header, the brief, and
- *  the rail badge agree. */
+/** "Up next": the ranked queue inside one flat tonal card. The leading focus
+ *  item sits at the top above a hairline divider with the screen's one primary
+ *  action button; remaining items follow in priority bands. */
 export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName, projectName, sinceLabel, hrefFor, onOpen, needsMeHref, onOpenNeedsMe }: HomeQueueProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -43,25 +41,30 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
   const bands = bandsOf(expanded ? shown : shown.slice(0, PREVIEW));
 
   return (
-    <section className="home-section home-queue" aria-labelledby="home-queue-title">
-      <header className="home-section-header">
-        <h2 id="home-queue-title" className="home-section-title">{t("home.up_next")}</h2>
-        <span className="home-section-count tnum">{live.length}</span>
+    <section className="home-card home-queue" aria-labelledby="home-queue-title">
+      <header className="home-card-header">
+        <div className="home-card-heading">
+          <h2 id="home-queue-title" className="home-card-title">{t("home.up_next")}</h2>
+          <span className="home-section-count tnum">{live.length}</span>
+        </div>
+        <HomeLink className="home-link" href={needsMeHref} onOpen={onOpenNeedsMe}>{t("home.all_needs_me")}</HomeLink>
       </header>
+      {contextLinks}
       {focus ? (
-        <div className="home-focus">
+        <div className="home-focus-slot">
           <div className="home-focus-heading">
             <h3>{t("home.plan.start_here")}</h3>
           </div>
-          <ul className="home-items"><HomeQueueItem
-            item={focus} primary actions={actions} agentName={agentName} projectName={projectName}
-            since={sinceLabel(focus.since)} href={hrefFor(focus)} onOpen={() => onOpen(focus)}
-            onResolved={() => setResolved(current => new Set([...current, `${focus.key}@${focus.stamp}`]))}
-          /></ul>
+          <ul className="home-items">
+            <HomeQueueItem
+              item={focus} primary actions={actions} agentName={agentName} projectName={projectName}
+              since={sinceLabel(focus.since)} href={hrefFor(focus)} onOpen={() => onOpen(focus)}
+              onResolved={() => setResolved(current => new Set([...current, `${focus.key}@${focus.stamp}`]))}
+            />
+          </ul>
         </div>
       ) : readyFocus}
-      {contextLinks}
-      <div className="home-panel">
+      <div className="home-card-body">
         {bands.length === 0 ? (
           <div className="home-clear" role="status">
             <p className="home-clear-title">{t(emptyTitle)}</p>
@@ -90,9 +93,6 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
           ))
         )}
         {shown.length > PREVIEW ? <ShowAllToggle count={shown.length} expanded={expanded} onToggle={() => setExpanded(!expanded)} /> : null}
-        <footer className="home-panel-footer">
-          <HomeLink className="home-link" href={needsMeHref} onOpen={onOpenNeedsMe}>{t("home.all_needs_me")}</HomeLink>
-        </footer>
       </div>
     </section>
   );

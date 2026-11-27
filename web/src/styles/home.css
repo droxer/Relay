@@ -1,9 +1,15 @@
-/* Home — a ranked queue beside a quiet work summary. Open lists reduce
-   chrome; semantic color is reserved for attention and completion. */
+/* Home — editorial 12-column personal workspace.
+   Grid math: max-width 1120px = 12 equal columns (~78.67px) + 11 × 16px (var(--sp-4)) gutters.
+   Row 1: 4 × span 3 (personal stats; seams at cols 3, 6, 9).
+   Row 2: span 6 (Up next queue) + span 6 (Token usage over time; seam at col 6).
+   Row 3: span 6 (Projects) + span 6 (Running now & Recently completed; seam at col 6).
+   Row 4: span 6 (Upcoming) + span 6 (Ready to start; seam at col 6).
+   One gutter (var(--sp-4)) horizontally and vertically; tonal panels on var(--surface-list)
+   with whisper var(--hairline-soft) borders, and var(--surface-1) for the primary chart. */
 
-/* One completion colour everywhere — the same --ok the "all clear" brief uses. */
 .home-page {
   --home-completed: var(--ok);
+  --home-data-hue: var(--tag-2);
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -12,15 +18,43 @@
   background: var(--surface-0);
 }
 
-/* The brief and each row's reason are what Home says to its reader, so they
-   read at body size rather than as captions. */
+.home-page [data-stage="done"] { --home-stage: var(--ok-mark); }
+.home-page [data-stage="review"] { --home-stage: var(--warn-mark); }
+.home-page [data-stage="running"] { --home-stage: var(--live-mark); }
+.home-page [data-stage="blocked"] { --home-stage: var(--err-mark); }
+
+.home-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-7) var(--sp-7) var(--sp-8);
+  container-type: inline-size;
+}
+
+.home-canvas {
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+.home-canvas > .page-header {
+  margin: 0 0 var(--sp-6);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .home-brief {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-2) var(--sp-4);
   color: var(--ink-3);
   font: var(--type-body);
   letter-spacing: var(--type-body-track);
+}
+
+.home-brief-date {
+  color: var(--ink-2);
 }
 
 .home-brief-status {
@@ -44,60 +78,117 @@
   background: var(--tone);
 }
 
-/* Each status keeps one colour across the bar, the facts, and the queue:
-   done is ok, review and needs-you are warn, running is live, blocked is err. */
-/* The bar is an area, so its segments read the status MARKS (palette.css);
-   the facts and queue beside it keep the text inks. */
-.home-page [data-stage="done"] { --home-stage: var(--ok-mark); }
-.home-page [data-stage="review"] { --home-stage: var(--warn-mark); }
-.home-page [data-stage="running"] { --home-stage: var(--live-mark); }
-.home-page [data-stage="blocked"] { --home-stage: var(--err-mark); }
+/* ── 12-column editorial board ───────────────────────────────────────── */
 
-/* The greeting belongs to the scrollable canvas, above its two columns. */
-.home-body > .page-header {
-  max-width: 1280px;
-  margin: 0 auto var(--sp-7);
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.home-body {
-  min-height: 0;
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--sp-7) var(--sp-7) var(--sp-8);
-  container-type: inline-size;
-}
-
-.home-grid {
+.home-board {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(360px, 1fr);
-  gap: var(--sp-7);
-  align-items: start;
-  max-width: 1280px;
-  margin-inline: auto;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--sp-4);
+  align-items: stretch;
 }
 
-@container (max-width: 900px) {
-  .home-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.home-stats-band,
+.home-slot-full {
+  grid-column: 1 / -1;
+  min-width: 0;
 }
 
-.home-column {
+.home-slot-half {
+  grid-column: span 6;
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--sp-7);
 }
 
-/* Section header: title, count, and a trailing link on one baseline. */
-.home-section-header {
+.home-slot-half > .home-card {
+  flex: 1;
+}
+
+.home-slot-auto {
+  align-self: start;
+}
+
+.home-slot-auto > .home-card {
+  flex: 0 1 auto;
+}
+
+.home-slot-stack {
+  grid-column: span 6;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+/* ── Flat tonal cards ────────────────────────────────────────────────── */
+
+.home-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border: var(--hairline-soft);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+/* Dark cards sit on --surface-1 (#191919) over --surface-0 (#111111): --line-1
+   is calibrated to 1.29:1 there, matching --line-2's 1.30:1 on light white sheets. */
+html[data-theme="dark"] .home-card,
+html[data-theme="dark"] .home-stats-periods {
+  border-color: var(--line-1);
+}
+
+.home-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-4) var(--sp-5) var(--sp-3);
+  border-bottom: var(--hairline-soft);
+}
+
+.home-card-heading {
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
-  margin-bottom: var(--sp-3);
+  min-width: 0;
+}
+
+.home-card-title {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
+}
+
+.home-card-more {
+  flex-shrink: 0;
+}
+
+.home-card-note {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-card-empty {
+  margin: 0;
+  padding: var(--sp-4) var(--sp-5);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .home-section-title {
@@ -110,15 +201,13 @@
 .home-section-count {
   color: var(--ink-3);
   font: var(--type-meta);
-}
-
-.home-section-more {
-  margin-left: auto;
+  letter-spacing: var(--type-meta-track);
 }
 
 .home-link {
   color: var(--link);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
   text-decoration: none;
 }
 
@@ -127,31 +216,360 @@
   text-decoration: underline;
 }
 
-.home-panel {
+.home-list {
   margin: 0;
   padding: 0;
   list-style: none;
-  overflow: hidden;
-  border-top: var(--hairline);
 }
 
-.home-panel > li + li {
+.home-list > li + li {
   border-top: var(--hairline-soft);
 }
 
-/* ── Up next ─────────────────────────────────────────────────────────── */
+/* ── Row 1: Personal stats (4 × span 3) ──────────────────────────────── */
+
+.home-band-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.home-band-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.home-stats-periods {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-0-5);
+  padding: var(--sp-0-5);
+  border: var(--hairline-soft);
+  border-radius: var(--r-2);
+  background: var(--surface-1);
+}
+
+.home-stats-period {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-h-2xs);
+  padding: 0 var(--sp-3);
+  border: var(--sp-hairline) solid transparent;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.home-stats-period:hover {
+  color: var(--ink-1);
+}
+
+.home-stats-period[aria-pressed="true"] {
+  background: var(--control-fill);
+  color: var(--ink-1);
+}
+
+.home-stats-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--sp-4);
+  align-items: stretch;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.home-stats-row[data-updating="true"] {
+  opacity: 0.72;
+}
+
+.home-stat-card {
+  grid-column: span 3;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.home-stat-link:hover {
+  background: var(--row-hover);
+}
+
+a.home-stat-link:hover .home-stat-label {
+  color: var(--ink-1);
+}
+
+.home-stat-label {
+  color: var(--ink-3);
+  font: var(--type-label);
+  letter-spacing: var(--type-label-track);
+}
+
+.home-stat-value {
+  color: var(--ink-1);
+  font: var(--type-number);
+  letter-spacing: var(--type-number-track);
+  line-height: var(--leading-none);
+  white-space: nowrap;
+}
+
+.home-stat-missing {
+  color: var(--ink-3);
+  font: var(--type-body);
+  letter-spacing: var(--type-body-track);
+}
+
+.home-stat-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-stat-skeleton {
+  display: block;
+  width: 56%;
+  height: var(--fs-5);
+  border-radius: var(--r-1);
+  background: var(--surface-2);
+}
+
+.home-stat-meta-skeleton {
+  display: inline-block;
+  width: 72%;
+  height: var(--fs-1);
+  border-radius: var(--r-1);
+  background: var(--surface-2);
+  vertical-align: middle;
+}
+
+.home-stats-error {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+/* ── Daily token usage chart (Row 2 right, span 6) ───────────────────── */
+
+.home-chart-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--sp-4) var(--sp-5);
+}
+
+.home-chart-frame {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.home-chart-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 164px;
+  text-align: right;
+}
+
+.home-chart-tick,
+.home-chart-axis {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  line-height: var(--leading-none);
+}
+
+.home-chart-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.home-chart-plot {
+  position: relative;
+  height: 164px;
+}
+
+.home-chart-grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.home-chart-gridline {
+  display: block;
+  border-top: var(--hairline-soft);
+}
+
+.home-chart-baseline {
+  display: block;
+  border-top: var(--hairline);
+}
+
+.home-chart-bars {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100%;
+  align-items: flex-end;
+  gap: var(--sp-1);
+}
+
+.home-page .home-chart-col {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  cursor: pointer;
+}
+
+.home-chart-bar {
+  display: block;
+  width: min(64%, 34px);
+  min-width: 4px;
+  border-radius: var(--r-1) var(--r-1) 0 0;
+  background: var(--home-data-hue);
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.home-chart-bar[data-dim="true"] {
+  opacity: 0.42;
+}
+
+.home-chart-xaxis {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--sp-1);
+}
+
+.home-chart-axis {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.home-chart-axis[data-edge="start"] {
+  text-align: left;
+}
+
+.home-chart-axis[data-edge="end"] {
+  text-align: right;
+}
+
+.home-chart-axis:not([data-wide="true"]) {
+  visibility: hidden;
+}
+
+.home-chart-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  padding: var(--sp-3) var(--sp-5);
+  border-top: var(--hairline-soft);
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.home-chart-empty-note {
+  margin: var(--sp-3) 0 0;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.home-chart-skeleton {
+  height: 186px;
+  margin: var(--sp-4) var(--sp-5);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+}
+
+@media (forced-colors: active) {
+  .home-stats-period[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+
+  .home-chart-bar {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+}
+
+/* ── Up next (Row 2 left, span 9) ────────────────────────────────────── */
+
+.home-focus-slot {
+  border-bottom: var(--hairline-soft);
+}
+
+.home-focus-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-3) var(--sp-5) 0;
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.home-focus-heading h3 {
+  margin: 0;
+  color: var(--ink-2);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+}
 
 .home-band { --tone: var(--ink-3); }
 .home-band[data-tier="paused"] { --tone: var(--warn); }
 .home-band[data-tier="needs_you"] { --tone: var(--warn); }
 .home-band[data-tier="stuck"] { --tone: var(--err); }
 
+.home-band + .home-band {
+  border-top: var(--hairline-soft);
+}
+
 .home-band-title {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   margin: 0;
-  padding: var(--sp-4) var(--sp-5) var(--sp-1);
+  padding: var(--sp-3) var(--sp-5) var(--sp-1);
   color: var(--tone);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -169,7 +587,7 @@
   grid-template-columns: var(--control-h-xs) minmax(0, 1fr) auto;
   gap: var(--sp-3);
   align-items: start;
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-3) var(--sp-5);
 }
 
 .home-item + .home-item {
@@ -221,6 +639,7 @@
   margin-right: var(--sp-1-5);
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .home-item-why {
@@ -228,8 +647,8 @@
   margin: var(--sp-0-5) 0 0;
   overflow: hidden;
   color: var(--ink-2);
-  font: var(--type-body);
-  letter-spacing: var(--type-body-track);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   -webkit-box-orient: vertical;
   block-size: 1lh;
   -webkit-line-clamp: 1;
@@ -240,9 +659,10 @@
   display: flex;
   align-items: center;
   gap: var(--sp-1) var(--sp-2);
-  margin: var(--sp-1-5) 0 0;
+  margin: var(--sp-1) 0 0;
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   block-size: 1lh;
   overflow: hidden;
   white-space: nowrap;
@@ -279,32 +699,19 @@
   align-items: center;
 }
 
-/* The label says what the clock means; only a phone, short on width, drops it. */
-@media (max-width: 640px) {
-  .home-snooze-label {
-    display: none;
-  }
-}
-
 .home-item-trail .home-snooze {
   gap: var(--sp-1-5);
   padding-inline: var(--sp-2);
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .home-item-trail .home-snooze:hover {
   color: var(--ink-1);
 }
 
-/* Every row carried the word "Snooze" at the weight of its own meta line, so
-   down the queue the trailing column read as a list of identical buttons
-   beside the titles. With a pointer the clock stays as the quiet cue and the
-   word arrives with the row's hover or focus; it fades rather than collapses,
-   so the row never reflows. Touch keeps the label (no hover to reveal it). */
 @media (hover: hover) and (pointer: fine) {
-  /* The clock holds the trailing edge, so the hidden word's reserved width
-     opens to its left instead of floating the clock inward off the edge. */
   .home-item-trail .home-snooze {
     flex-direction: row-reverse;
   }
@@ -319,7 +726,7 @@
 }
 
 .home-clear {
-  padding: var(--sp-6) var(--sp-4);
+  padding: var(--sp-6) var(--sp-5);
   text-align: center;
 }
 
@@ -334,25 +741,15 @@
   margin: 0 0 var(--sp-3);
   color: var(--ink-3);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
-.home-panel-footer {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-5);
-  border-top: var(--hairline-soft);
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-}
-
-/* ── Running now ─────────────────────────────────────────────────────── */
+/* ── Running now & Setup & Recently completed (Row 2 right, span 3) ─── */
 
 .home-run {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   align-items: center;
   padding: var(--sp-3) var(--sp-5);
   color: inherit;
@@ -379,12 +776,14 @@
 .home-run-title {
   color: var(--ink-1);
   font: var(--type-label);
+  letter-spacing: var(--type-label-track);
 }
 
 .home-run-sub,
 .home-run-time {
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .home-run-paused {
@@ -394,8 +793,8 @@
 .home-count {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-4) var(--sp-3);
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
   color: inherit;
   text-decoration: none;
 }
@@ -417,17 +816,16 @@ a.home-count:hover .home-count-label {
 .home-count-label {
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   overflow-wrap: anywhere;
 }
-
-/* ── Your setup ──────────────────────────────────────────────────────── */
 
 .home-setup {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.home-panel.home-setup > li + li {
+.home-list.home-setup > li + li {
   border-top: 0;
   border-left: var(--hairline-soft);
 }
@@ -436,93 +834,25 @@ a.home-count:hover .home-count-label {
   color: var(--ink-3);
 }
 
-/* Quiet while all is well; a note appears only for what cannot work. */
 .home-setup-note {
   color: var(--ink-2);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   overflow-wrap: anywhere;
 }
 
 .home-setup-note[data-tone="err"] { color: var(--err); }
 .home-setup-note[data-tone="warn"] { color: var(--warn); }
 
-/* ── Projects ────────────────────────────────────────────────────────── */
-
-.home-project {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-4) var(--sp-5);
-  color: inherit;
-  text-decoration: none;
-}
-
-.home-project:hover {
-  background: var(--row-hover);
-}
-
-.home-project-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
-}
-
-.home-project-name {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  color: var(--ink-1);
-  font: var(--type-name);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-project-pct {
-  color: var(--ink-3);
-  font: var(--type-meta);
-  white-space: nowrap;
-}
-
-.home-project-bar {
-  display: flex;
-  height: var(--sp-1);
-  overflow: hidden;
-  border-radius: var(--r-1);
-  background: var(--surface-2);
-}
-
-.home-project-seg {
-  background: var(--home-stage);
-}
-
-.home-project-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-1) var(--sp-2);
-  color: var(--ink-3);
-  font: var(--type-meta);
-}
-
-.home-project-facts [data-tone="live"] { color: var(--live); }
-.home-project-facts [data-tone="warn"] { color: var(--warn); }
-.home-project-facts [data-tone="err"] { color: var(--err); }
-
-.home-project-next {
-  color: var(--ink-2);
-  font: var(--type-body-sm);
-  overflow-wrap: anywhere;
-}
-
-/* ── Recently finished ───────────────────────────────────────────────── */
-
 .home-finished-row {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: var(--icon-sm) minmax(0, 1fr) auto;
   gap: var(--sp-2);
   align-items: center;
-  padding: var(--sp-3) var(--sp-5);
+  padding: var(--sp-2) var(--sp-5);
   color: inherit;
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   text-decoration: none;
 }
 
@@ -546,116 +876,82 @@ a.home-count:hover .home-count-label {
 .home-finished-meta {
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   white-space: nowrap;
 }
 
-/* ── Phone ───────────────────────────────────────────────────────────── */
+/* ── Projects (Row 3 right, span 6) ──────────────────────────────────── */
 
-@media (max-width: 640px) {
-  .home-body {
-    padding: var(--sp-3) var(--sp-4) var(--sp-5);
-  }
-
-  .home-count {
-    padding: var(--sp-3) var(--sp-2);
-  }
-
-  .home-body > .page-header {
-    margin-bottom: var(--sp-4);
-  }
-
-  .home-section-header {
-    margin-bottom: var(--sp-2);
-  }
-
-  .home-focus {
-    margin-bottom: var(--sp-4);
-  }
-
-  .home-grid,
-  .home-column {
-    gap: var(--sp-5);
-  }
-
-  /* The snooze floats on the trailing edge beside the title, so the reason
-     and meta lines below it run the full row width instead of sharing it
-     with an empty column. Tighten the leading icon track so prose keeps
-     its measure on a 390px screen. */
-  .home-item {
-    position: relative;
-    grid-template-columns: var(--icon-lg) minmax(0, 1fr);
-    gap: var(--sp-2);
-    padding: var(--sp-3);
-  }
-
-  .home-item-glyph {
-    width: var(--icon-lg);
-    height: var(--icon-lg);
-    margin-top: var(--sp-0-5);
-  }
-
-  .home-item .home-item-title {
-    padding-inline-end: var(--touch-target);
-  }
-
-  .home-item-trail {
-    position: absolute;
-    top: var(--sp-2);
-    inset-inline-end: 0;
-  }
-
-  .home-item-trail .home-snooze {
-    min-width: var(--touch-target);
-    min-height: var(--touch-target);
-  }
-
-  .home-item-actions > button {
-    min-height: var(--touch-target);
-  }
-
-  .home-band-title {
-    padding-inline: var(--sp-3);
-  }
-
-  .home-finished-row {
-    grid-template-columns: 16px minmax(0, 1fr);
-  }
-
-  .home-finished-title {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .home-finished-meta {
-    grid-column: 2;
-  }
+.home-project {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1-5);
+  padding: var(--sp-3) var(--sp-5);
+  color: inherit;
+  text-decoration: none;
 }
 
-/* A quiet frame keeps the recommendation distinct from the open lists. */
-.home-focus {
-  margin-bottom: var(--sp-5);
-  border: var(--hairline);
-  border-radius: var(--r-3);
-  background: var(--surface-1);
+.home-project:hover {
+  background: var(--row-hover);
+}
+
+.home-project-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.home-project-name {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.home-focus-heading {
+.home-project-pct {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  white-space: nowrap;
+}
+
+.home-project-bar {
+  display: flex;
+  height: var(--sp-1);
+  overflow: hidden;
+  border-radius: var(--r-1);
+  background: var(--surface-2);
+}
+
+.home-project-seg {
+  background: var(--home-stage);
+}
+
+.home-project-facts {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-1) var(--sp-3);
-  padding: var(--sp-3) var(--sp-5);
-  border-bottom: var(--hairline-soft);
-  color: var(--ink-2);
-  font: var(--type-body-sm);
+  gap: var(--sp-1) var(--sp-2);
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
-.home-focus-heading h3 {
-  margin: 0;
-  color: var(--ink-1);
-  font: var(--type-label-strong);
+.home-project-facts [data-tone="live"] { color: var(--live); }
+.home-project-facts [data-tone="warn"] { color: var(--warn); }
+.home-project-facts [data-tone="err"] { color: var(--err); }
+
+.home-project-next {
+  color: var(--ink-2);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  overflow-wrap: anywhere;
 }
+
+/* ── Planning: Upcoming, Ready to start, Blockers ────────────────────── */
 
 .home-plan-list {
   margin: 0;
@@ -673,7 +969,7 @@ a.home-count:hover .home-count-label {
   display: flex;
   align-items: start;
   gap: var(--sp-3);
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-3) var(--sp-5);
 }
 
 .home-plan-copy {
@@ -681,7 +977,7 @@ a.home-count:hover .home-count-label {
   min-width: 0;
   flex: 1;
   flex-direction: column;
-  gap: var(--sp-1);
+  gap: var(--sp-0-5);
 }
 
 .home-plan-meta {
@@ -689,24 +985,26 @@ a.home-count:hover .home-count-label {
   margin: 0;
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   overflow-wrap: anywhere;
 }
 
 .home-plan-outcome,
-.home-plan-empty,
 .home-data-state {
   margin: 0;
-  padding: var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
 }
 
 .home-plan-note {
   margin: 0;
-  padding: var(--sp-3) var(--sp-5);
+  padding: var(--sp-2) var(--sp-5);
   border-top: var(--hairline-soft);
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .home-agenda-row {
@@ -718,24 +1016,21 @@ a.home-count:hover .home-count-label {
   background: var(--row-hover);
 }
 
-/* A floor, not a width: "11月17日周二" is wider than 9ch, and a fixed width
-   broke the weekday onto its own line. One locale's dates share a length, so
-   the titles still line up. */
 .home-agenda-date {
   min-width: 9ch;
   flex-shrink: 0;
   white-space: nowrap;
   color: var(--ink-3);
   font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
-/* Blue means running on this page, so today stands out by ink, not hue. */
 .home-agenda-date[data-today] {
   color: var(--ink-1);
   font: var(--type-label-strong);
+  letter-spacing: var(--type-label-strong-track);
 }
 
-/* A later row of the same day leaves its date blank and joins the day above. */
 .home-plan-list > li[data-continues] {
   border-top: 0;
 }
@@ -745,22 +1040,15 @@ a.home-count:hover .home-count-label {
 }
 
 .home-blocker-row {
-  padding: var(--sp-4) var(--sp-5);
+  padding: var(--sp-3) var(--sp-5);
 }
 
 .home-blocker-dependents {
-  margin: var(--sp-2) 0 0;
+  margin: var(--sp-1-5) 0 0;
   color: var(--ink-2);
   font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   overflow-wrap: anywhere;
-}
-
-.home-data-state {
-  max-width: 1280px;
-  margin-inline: auto;
-  border: var(--hairline);
-  border-radius: var(--r-3);
-  background: var(--surface-1);
 }
 
 .home-data-loading {
@@ -769,59 +1057,29 @@ a.home-count:hover .home-count-label {
   background: transparent;
 }
 
-/* Ghost "Show all": its text lines up with the row content above it. */
 .home-show-all {
-  margin: var(--sp-1) var(--sp-3);
+  align-self: flex-start;
+  margin: var(--sp-1) var(--sp-3) var(--sp-2);
 }
 
-@media (max-width: 640px) {
-  .home-focus-heading,
-  .home-plan-row,
-  .home-agenda-row,
-  .home-blocker-row {
-    padding-inline: var(--sp-3);
-  }
-
-  .home-plan-row > button {
-    min-height: var(--touch-target);
-  }
-
-  /* A phone reads the agenda day-first: the date heads its day's rows
-     instead of holding a column that wraps "Mon, Nov 9" and indents every
-     title beside it. */
-  .home-agenda-row {
-    flex-direction: column;
-    gap: var(--sp-1);
-  }
-
-  .home-agenda-date {
-    width: auto;
-  }
-
-  .home-plan-list > li[data-continues] .home-agenda-date {
-    display: contents;
-  }
-
-  /* "paused for permission" is the point of the row: let it wrap. */
-  .home-run-sub {
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-}
-
+/* ── Narrow container (<= 900px): 2×2 stats, stacked panels ──────────── */
 
 .home-mobile-context { display: none; }
 
-/* The jump links appear exactly when the grid drops to one column (the same
-   900px container width), so the side panels are never buried unannounced. */
 @container (max-width: 900px) {
-  /* A short route to live work and deadlines before the rest of the queue. */
-  /* The phone chip strip: filled chips at their natural width, one row that
-     scrolls sideways rather than wrapping into a ragged block. */
+  .home-stat-card {
+    grid-column: span 6;
+  }
+
+  .home-slot-half,
+  .home-slot-stack {
+    grid-column: 1 / -1;
+  }
+
   .home-mobile-context {
     display: flex;
     gap: var(--sp-2);
-    margin: 0 0 var(--sp-3);
+    padding: var(--sp-3) var(--sp-5) 0;
     overflow-x: auto;
     scrollbar-width: none;
   }
@@ -830,8 +1088,6 @@ a.home-count:hover .home-count-label {
     display: none;
   }
 
-  /* The link keeps the full touch target; the visible chip is the
-     control-height plate painted behind its label. */
   .home-mobile-context a {
     position: relative;
     isolation: isolate;
@@ -842,6 +1098,7 @@ a.home-count:hover .home-count-label {
     padding-inline: var(--sp-3);
     color: var(--ink-1);
     font: var(--type-label);
+    letter-spacing: var(--type-label-track);
     text-decoration: none;
     white-space: nowrap;
   }
@@ -860,14 +1117,21 @@ a.home-count:hover .home-count-label {
   }
 }
 
+/* ── Touch targets (<= 820px) ────────────────────────────────────────── */
+
 @media (max-width: 820px) {
-  .home-page button {
+  .home-page button:not(.home-chart-col) {
     min-height: var(--touch-target);
     min-width: var(--touch-target);
   }
 
-  .home-section-more .home-link,
-  .home-panel-footer .home-link {
+  .home-page .home-stats-period {
+    min-height: var(--control-h-sm);
+    min-width: 0;
+    padding: 0 var(--sp-2);
+  }
+
+  .home-card-header .home-link {
     display: inline-flex;
     align-items: center;
     min-height: var(--touch-target);
@@ -877,4 +1141,181 @@ a.home-count:hover .home-count-label {
     padding-block: var(--sp-1);
     max-block-size: calc(2lh + var(--sp-1) * 2);
   }
+}
+
+/* ── Narrow phone (<= 480px): full-width segmented toggle & compact grid ─ */
+
+@container (max-width: 480px) {
+  .home-stats-periods {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .home-stats-row,
+  .home-board,
+  .home-slot-stack {
+    gap: var(--sp-3);
+  }
+
+  .home-card-note {
+    text-align: left;
+  }
+
+  .home-chart-axis[data-wide="true"]:not([data-narrow="true"]) {
+    visibility: hidden;
+  }
+
+  .home-chart-axis[data-narrow="true"] {
+    visibility: visible;
+  }
+}
+
+/* ── Phone (<= 640px) ────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .home-body {
+    padding: var(--sp-3) var(--sp-4) var(--sp-6);
+  }
+
+  .home-canvas > .page-header {
+    margin-bottom: var(--sp-3);
+  }
+
+  .home-band-bar {
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-2);
+  }
+
+  .home-stat-card {
+    gap: var(--sp-1);
+    padding: var(--sp-3);
+  }
+
+  .home-card-header,
+  .home-card-empty,
+  .home-chart-body,
+  .home-chart-footer,
+  .home-focus-heading,
+  .home-band-title,
+  .home-plan-row,
+  .home-agenda-row,
+  .home-blocker-row,
+  .home-project,
+  .home-run,
+  .home-finished-row,
+  .home-mobile-context {
+    padding-inline: var(--sp-4);
+  }
+
+  .home-snooze-label {
+    display: none;
+  }
+
+  .home-item {
+    position: relative;
+    grid-template-columns: var(--icon-lg) minmax(0, 1fr);
+    gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  .home-item-glyph {
+    width: var(--icon-lg);
+    height: var(--icon-lg);
+    margin-top: var(--sp-0-5);
+  }
+
+  .home-item .home-item-title {
+    padding-inline-end: var(--touch-target);
+  }
+
+  .home-item-trail {
+    position: absolute;
+    top: var(--sp-2);
+    inset-inline-end: var(--sp-2);
+  }
+
+  .home-item-trail .home-snooze {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+
+  .home-item-actions > button,
+  .home-plan-row > button {
+    min-height: var(--touch-target);
+  }
+
+  .home-agenda-row {
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+
+  .home-agenda-date {
+    width: auto;
+  }
+
+  .home-plan-list > li[data-continues] .home-agenda-date {
+    display: contents;
+  }
+
+  .home-run-sub {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .home-finished-row {
+    grid-template-columns: var(--icon-sm) minmax(0, 1fr);
+  }
+
+  .home-finished-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .home-finished-meta {
+    grid-column: 2;
+  }
+}
+
+/* ── Ultra-narrow phone (<= 360px container, e.g. 320px WCAG floor) ──── */
+
+@container (max-width: 360px) {
+  .home-stat-card {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: var(--sp-3);
+    row-gap: var(--sp-0-5);
+    align-items: center;
+  }
+
+  .home-stat-label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .home-stat-meta {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .home-stat-value,
+  .home-stat-missing,
+  .home-stat-skeleton {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-self: end;
+  }
+
+  .home-stat-skeleton {
+    width: 4rem;
+  }
+}
+
+/* The `font:` shorthand in component rules resets `font-variant-numeric`, so
+   re-assert tabular figures last for every numeric readout on Home. */
+.home-page .tnum {
+  font-feature-settings: var(--font-features), "tnum" 1;
+  font-variant-numeric: tabular-nums;
 }

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { HomeSetup } from "../../lib/homeSetup";
 import type { HomeSetupProgress } from "../../lib/onboarding";
-import { HomeLink } from "./HomePanels";
+import { CardHeader, HomeLink } from "./HomePanels";
 
 const NAMED_LIMIT = 2;
 
@@ -18,8 +18,7 @@ function namedList(names: readonly string[], t: T): string {
 }
 
 /** Your setup: computers online and agents ready, quiet while everything is
- *  fine and naming what is not. Only an exception carries colour; a dark
- *  computer holding queued work already has its own row in Up next. */
+ *  fine and naming what is not. Only an exception carries colour. */
 export function HomeSetupPanel({ setup, computersHref, agentsHref, onOpenComputers, onOpenAgents }: {
   setup: HomeSetup;
   computersHref: string;
@@ -35,8 +34,6 @@ export function HomeSetupPanel({ setup, computersHref, agentsHref, onOpenCompute
   const agentNote = agents.total === 0
     ? { tone: "warn", text: t("home.setup.no_agents") }
     : agents.unavailable.length ? { tone: "err", text: t("home.setup.unavailable", { names: namedList(agents.unavailable, t) }) } : null;
-  // A healthy setup is not news: Home speaks up only when a computer or an
-  // agent needs the person, and stays quiet otherwise.
   if (!computerNote && !agentNote) return null;
   const cells = [
     {
@@ -61,11 +58,9 @@ export function HomeSetupPanel({ setup, computersHref, agentsHref, onOpenCompute
     },
   ];
   return (
-    <section className="home-section" aria-labelledby="home-setup-title">
-      <header className="home-section-header">
-        <h2 id="home-setup-title" className="home-section-title">{t("home.setup.title")}</h2>
-      </header>
-      <ul className="home-panel home-setup">
+    <section className="home-card" aria-labelledby="home-setup-title">
+      <CardHeader id="home-setup-title" title={t("home.setup.title")} />
+      <ul className="home-list home-setup">
         {cells.map((cell) => (
           <li key={cell.key} data-cell={cell.key}>
             <HomeLink className="home-count home-setup-cell" href={cell.href} onOpen={cell.onOpen}>
@@ -89,7 +84,7 @@ export function HomeSetupFocus({ progress, onOpen }: { progress: HomeSetupProgre
   const { t } = useTranslation();
   const { step, done, total } = progress;
   return (
-    <div className="home-focus" data-focus="setup">
+    <div className="home-focus-slot" data-focus="setup">
       <div className="home-focus-heading">
         <h3>{t("home.plan.start_here")}</h3>
         <span className="tnum">{t("onboarding.count", { done, total })}</span>
