@@ -33,6 +33,7 @@ class SessionMetricRows(SessionStoreState):
     def dashboard_token_metrics(
         self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None,
         date_range: tuple[date, date] | None = None, all_time: bool = False,
+        owner_user_id: str | None = None,
     ) -> dict[str, Any]:
         """Transfer one row per day/runtime group, rather than one per run.
 
@@ -47,11 +48,14 @@ class SessionMetricRows(SessionStoreState):
         today = date_range[1] if date_range else (now or datetime.now(zone)).astimezone(zone).date()
         start = today - timedelta(days=day_window - 1)
         dates, bucket_size = reporting_dates(start, today)
+        ledger = self.run_token_usage.c
+        owner_filter = (ledger.owner_user_id == owner_user_id,) if owner_user_id is not None else ()
         if all_time:
-            dates, bucket_size = self._all_time_buckets(self.run_token_usage.c.completed_at, zone, now)
+            dates, bucket_size = self._all_time_buckets(
+                ledger.completed_at, zone, now, filters=owner_filter,
+            )
             day_window = len(dates) - 1
         boundaries = [datetime.combine(day, datetime.min.time(), tzinfo=zone).astimezone(UTC) for day in dates]
-        ledger = self.run_token_usage.c
         day = case(
             *[(ledger.completed_at < boundaries[index + 1], dates[index].isoformat()) for index in range(day_window)]
         ).label("day")
@@ -68,7 +72,7 @@ class SessionMetricRows(SessionStoreState):
                 func.sum(case((ledger.reported.is_(False), 1), else_=0)).label("unreported"),
                 func.max(case((ledger.reported.is_(False), ledger.completed_at), else_=None)).label("latest"),
             )
-            .where(ledger.completed_at >= boundaries[0])
+            .where(*owner_filter, ledger.completed_at >= boundaries[0])
             .group_by(day, agent)
         )
         if date_range or all_time:
@@ -223,6 +227,7 @@ class SessionMetricRows(SessionStoreState):
         date_range: tuple[date, date] | None = None,
         zone: tzinfo = UTC,
         all_time: bool = False,
+        owner_user_id: str | None = None,
     ) -> dict[str, int]:
         """Classify threads into conversations, task runs, and automation runs in SQL."""
         sessions = self.sessions
@@ -261,6 +266,8 @@ class SessionMetricRows(SessionStoreState):
             func.sum(case((and_(in_range, is_task_run), 1), else_=0)).label("task_runs"),
             func.sum(case((and_(in_range, has_routine), 1), else_=0)).label("automation_runs"),
         ).select_from(sessions)
+        if owner_user_id is not None:
+            statement = statement.where(sessions.c.owner_user_id == owner_user_id)
         with store_transaction(self.engine) as conn:
             row = conn.execute(statement).mappings().one()
         return {
@@ -275,9 +282,13 @@ class SessionMetricRows(SessionStoreState):
 
     def _all_time_buckets(
         self, timestamp: ColumnElement[Any], zone: tzinfo, now: datetime | None,
+        *, filters: tuple[Any, ...] = (),
     ) -> tuple[list[date], BucketSize]:
+        query = select(func.min(timestamp), func.max(timestamp))
+        if filters:
+            query = query.where(*filters)
         with store_transaction(self.engine) as conn:
-            earliest, latest = conn.execute(select(func.min(timestamp), func.max(timestamp))).one()
+            earliest, latest = conn.execute(query).one()
         today = (now or datetime.now(zone)).astimezone(zone).date()
         start = (earliest.replace(tzinfo=UTC) if earliest and earliest.tzinfo is None else earliest)
         finish = (latest.replace(tzinfo=UTC) if latest and latest.tzinfo is None else latest)

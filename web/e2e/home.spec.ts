@@ -94,6 +94,42 @@ async function serve(page: Page, theme: Theme, onboarding: Record<string, string
       snoozes = [...snoozes, ...(patch?.snooze ?? [])];
       body = { user: user() };
     }
+    if (path.endsWith("/home/stats")) {
+      const period = new URL(request.url()).searchParams.get("period") ?? "week";
+      const multiplier = period === "all" ? 4 : period === "30d" ? 2 : 1;
+      const todayIso = isoDay(new Date(now));
+      const yesterdayIso = isoDay(yesterday);
+      body = {
+        period,
+        startDate: period === "all" ? null : yesterdayIso,
+        endDate: todayIso,
+        timeZone: "UTC",
+        tasks: { completed: 3 * multiplier, created: 5 * multiplier, open: 8, inProgress: 1 },
+        conversations: { total: 6 * multiplier, chats: 4 * multiplier, projectChats: 3 * multiplier, standaloneChats: multiplier, taskRuns: 2 * multiplier, automationRuns: 0 },
+        runs: {
+          total: 7 * multiplier,
+          reported: 7 * multiplier,
+          unreported: 0,
+          runtimes: [{ agent: "claude", runs: 7 * multiplier, reportedRuns: 7 * multiplier, fresh: 140000 * multiplier, input: 91000 * multiplier, output: 49000 * multiplier, cacheWrite: 0, cacheRead: 12000 * multiplier, cache: 12000 * multiplier, total: 152000 * multiplier }],
+        },
+        tokens: {
+          available: true,
+          bucketSize: "day",
+          fresh: 140000 * multiplier,
+          input: 91000 * multiplier,
+          output: 49000 * multiplier,
+          cacheWrite: 0,
+          cacheRead: 12000 * multiplier,
+          cache: 12000 * multiplier,
+          total: 152000 * multiplier,
+          daily: [
+            { date: yesterdayIso, fresh: 50000 * multiplier, input: 32000 * multiplier, output: 18000 * multiplier, cacheWrite: 0, cacheRead: 4000 * multiplier, cache: 4000 * multiplier, total: 54000 * multiplier },
+            { date: todayIso, fresh: 90000 * multiplier, input: 59000 * multiplier, output: 31000 * multiplier, cacheWrite: 0, cacheRead: 8000 * multiplier, cache: 8000 * multiplier, total: 98000 * multiplier },
+          ],
+          unreportedRuns: [],
+        },
+      };
+    }
     if (path.includes("/threads/s-")) body = path.includes("s-migrate") ? migrate : path.includes("s-pricing") ? pricing : webhook;
     if (path.includes("/tasks/t-")) body = tasks.find((item) => path.includes(item.id));
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });

@@ -177,9 +177,11 @@ class SessionStore(Protocol):
     def dashboard_token_metrics(
         self, *, zone: tzinfo, day_window: int = 14, summary_days: int = 7, now: datetime | None = None,
         date_range: tuple[date, date] | None = None, all_time: bool = False,
+        owner_user_id: str | None = None,
     ) -> dict[str, Any]: ...
     def dashboard_conversation_metrics(
         self, *, date_range: tuple[date, date] | None = None, zone: tzinfo = UTC, all_time: bool = False,
+        owner_user_id: str | None = None,
     ) -> dict[str, int]: ...
 
 
@@ -246,6 +248,9 @@ class TaskStore(Protocol):
     def dashboard_task_metrics(
         self, *, date_range: tuple[date, date] | None = None, zone: tzinfo = UTC, all_time: bool = False,
     ) -> dict[str, Any]: ...
+    def user_home_task_stats(
+        self, user_id: str, *, date_range: tuple[date, date] | None = None, zone: tzinfo = UTC, all_time: bool = False,
+    ) -> dict[str, int]: ...
     def find_tasks_by_external_refs(self, refs: list[str]) -> list[dict[str, Any]]: ...
     def list_task_summaries(
         self, *, user_id: str | None = None, limit: int | None = None,

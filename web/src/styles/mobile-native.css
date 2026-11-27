@@ -73,6 +73,7 @@
   .home-agenda-row,
   .home-project,
   .home-finished-row,
+  a.home-stat-link,
   .project-member-row,
   .backlog-row {
     transition: background-color var(--t-slow) var(--ease);
@@ -87,6 +88,7 @@
   .home-agenda-row:active,
   .home-project:active,
   .home-finished-row:active,
+  a.home-stat-link:active,
   button.project-member-row:active,
   .backlog-row:has(.backlog-row-title:active) {
     background-color: var(--control-fill);

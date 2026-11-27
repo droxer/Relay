@@ -39,6 +39,7 @@ import { isTaskListScope } from "../domain-types/tasks";
 import type { PermissionAnswerInput } from "../lib/permissionRequests";
 import type { ThreadPermissionMode, WorkflowAttemptBinding } from "relay-core";
 import { AUTOMATIONS_PAGE_KEY, COMPUTER_TASKS_QUERY_KEY, HOME_TASKS_QUERY_KEY, ISSUES_PAGE_KEY, NODES_QUERY_KEY, PROJECTS_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY, THREAD_TASKS_QUERY_KEY } from "./useRelayData";
+import { HOME_STATS_QUERY_KEY } from "./useHomeStats";
 import { useMutationError } from "./useMutationError";
 import { WORKSPACE_ACTIVITY_QUERY_KEY } from "./useWorkspaceActivity";
 import { applyProjectDiscussionDeletions, PROJECT_DISCUSSIONS_QUERY_KEY, removeCachedProjectDiscussion } from "./useProjectDiscussions";
@@ -72,7 +73,10 @@ export function useRelayMutations() {
   const { announce } = useDialogs();
   const { reportMutationError } = useMutationError();
 
-  const invalidateSessions = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
+  const invalidateSessions = () => {
+    void queryClient.invalidateQueries({ queryKey: HOME_STATS_QUERY_KEY });
+    return queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
+  };
   const invalidateWorkspaceActivity = () => queryClient.invalidateQueries({ queryKey: WORKSPACE_ACTIVITY_QUERY_KEY });
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
   const invalidateIssues = () => queryClient.invalidateQueries({ queryKey: ISSUES_PAGE_KEY });
@@ -89,6 +93,7 @@ export function useRelayMutations() {
     void queryClient.invalidateQueries({ queryKey: THREAD_TASKS_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: COMPUTER_TASKS_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: HOME_TASKS_QUERY_KEY, exact: true });
+    void queryClient.invalidateQueries({ queryKey: HOME_STATS_QUERY_KEY });
     if (task.projectId) void queryClient.invalidateQueries({ queryKey: [...TASKS_QUERY_KEY, task.projectId] });
   };
   const invalidateThreadTasks = (sessionId: string) => {

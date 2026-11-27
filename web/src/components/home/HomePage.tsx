@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import type { HomeStatsPeriod } from "../../api-client/home";
+import { useHomeStats } from "../../hooks/useHomeStats";
 import { useTeams } from "../../hooks/useTeams";
 import { isUserAgentRoutable } from "../../lib/agentDisplayNames";
 import { agentOnComputer, teamOnComputer, isTeamRoutable } from "../../lib/taskAssignment";
@@ -26,8 +28,10 @@ import { greetingName, greetingPeriod } from "../../lib/welcomeRecap";
 import type { AgentName } from "relay-core";
 import type { CurrentUser, DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskListItem, TasksResponse } from "../../types";
 import { HomeQueue } from "./HomeQueue";
-import { FinishedPanel, HomeLink, ProjectsPanel, RunningPanel } from "./HomePanels";
+import { CardHeader, FinishedPanel, HomeLink, ProjectsPanel, RunningPanel } from "./HomePanels";
 import { HomeSetupFocus, HomeSetupPanel } from "./HomeSetupPanel";
+import { HomeStatsPanel } from "./HomeStatsPanel";
+import { HomeTokenChart } from "./HomeTokenChart";
 import type { HomeSetupProgress } from "../../lib/onboarding";
 import { homeSetup } from "../../lib/homeSetup";
 import { useHomeActions } from "./useHomeActions";
@@ -61,13 +65,14 @@ const tasksPath = (search = "") => `${hrefForRoute("backlog")}${search}`;
 const READY_PREVIEW = 3;
 const MINUTE_MS = 60_000;
 
-/** Home: what needs the signed-in person, ranked, beside where their work
- *  stands. The queue is computed once by the app shell (it also feeds the
- *  rail's badge) and arrives here as `items`. */
+/** Home: editorial 12-column personal workspace combining weekly activity stats,
+ *  the ranked attention queue, daily token trend, projects, and upcoming work. */
 export function HomePage({ user, userId, setUser, items, needsYou, tasks, taskProjects, sessions, projects, nodes, onOpenThread, onOpenTaskRecord, dataStatus, setupProgress, onOpenOnboarding, onRefresh, onOpenRoutineRecord }: HomePageProps) {
   const { t, i18n } = useTranslation();
   const now = useMinuteClock();
   const actions = useHomeActions(setUser);
+  const [statsPeriod, setStatsPeriod] = useState<HomeStatsPeriod>("week");
+  const statsQuery = useHomeStats(statsPeriod, dataStatus === "ready");
   const { agents } = useUserAgents(user.userId);
   const { teams } = useTeams(user.userId);
   const today = isoToday(new Date(now));
@@ -88,7 +93,6 @@ export function HomePage({ user, userId, setUser, items, needsYou, tasks, taskPr
   const readyFocus = !homeFocusItem(items) && !setupProgress ? ready[0] : undefined;
   const readyRest = ready.filter(t => t.id !== readyFocus?.id);
 
-
   const agentNames = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.displayName])), [agents]);
   const projectNames = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
   const nodesById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
@@ -98,8 +102,11 @@ export function HomePage({ user, userId, setUser, items, needsYou, tasks, taskPr
   const finished = useMemo(() => recentlyFinished(tasks, userId), [tasks, userId]);
 
   const locale = i18n.resolvedLanguage ?? "en";
+  const todayFormatted = useMemo(
+    () => new Date(now).toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" }),
+    [locale, today],
+  );
   const sinceLabel = useCallback((iso: string) => formatThreadStamp(iso, locale, now), [locale, now]);
-  // Whole minutes: the clock ticks once a minute, so seconds would sit stale.
   const runningFor = useCallback((iso: string) => t("home.running_for", {
     duration: formatRunDuration(Math.max(1, Math.floor((now - Date.parse(iso)) / MINUTE_MS)) * MINUTE_MS),
   }), [now, t]);
@@ -141,7 +148,6 @@ export function HomePage({ user, userId, setUser, items, needsYou, tasks, taskPr
   }, [hrefFor, onOpenTaskRecord, onOpenThread]);
 
   const name = greetingName(user);
-  // An account still setting up has nothing to be caught up on yet.
   const first = needsYou
     ? { tone: "warn", text: t("home.brief.needs", { count: needsYou }) }
     : setupProgress
@@ -169,107 +175,169 @@ export function HomePage({ user, userId, setUser, items, needsYou, tasks, taskPr
   return (
     <section id="home-panel" className="home-page" aria-labelledby="home-title" tabIndex={-1}>
       <div className="home-body">
-        <PageHeader
-          title={<span id="home-title">{t(`transcript.welcome_greeting_${greetingPeriod(new Date(now).getHours())}`, { name })}</span>}
-          titleVariant="display"
-          layout="stacked"
-          subtitle={dataStatus !== "ready" ? t(`home.plan.${dataStatus}`) : <span className="home-brief">{summary.map(({ tone, text }) => (
-            <span key={text} className="home-brief-status" data-tone={tone}>
-              <i aria-hidden="true" />{text}
-            </span>
-          ))}</span>}
-        />
-        {dataStatus === "error" ? (
-          <div className="home-data-state" role="alert">
-            <p>{t("home.plan.error_detail")}</p>
-            <Button variant="outline" onClick={() => void onRefresh()}>{t("home.plan.retry")}</Button>
-          </div>
-        ) : dataStatus === "loading" ? (
-          <div className="home-data-state home-data-loading">
-            <ListSkeleton label={t("home.plan.loading_detail")} rows={4} />
-          </div>
-        ) : <div className="home-grid">
-          <div className="home-column">
-            <HomeQueue
-              items={items}
-              contextLinks={<nav className="home-mobile-context" aria-label={t("home.plan.jump_to")}>
-                {running.length ? <a href="#home-running-title">{t("home.plan.running_jump", { count: running.length })}</a> : null}
-                {readyRest.length ? <a href="#home-ready-title">{t("home.plan.ready_jump", { count: readyRest.length })}</a> : null}
-                <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", { count: upcoming.length })}</a>
-                {blockers.length ? <a href="#home-blockers-title">{t("home.plan.blockers_jump", { count: blockers.length })}</a> : null}
-              </nav>}
-              readyFocus={setupProgress
-                ? <HomeSetupFocus progress={setupProgress} onOpen={onOpenOnboarding} />
-                : readyFocus ? <ReadyTask key={readyFocus.id} task={readyFocus} onStart={actions.startTask} href={taskPath(readyFocus.id)} onOpen={() => onOpenTaskRecord(readyFocus.id)} focus /> : undefined}
-              actions={actions}
-              agentName={agentName}
-              projectName={projectName}
-              sinceLabel={sinceLabel}
-              hrefFor={hrefFor}
-              onOpen={openItem}
-              needsMeHref={tasksPath("?queue=needs_me")}
-              onOpenNeedsMe={() => void navigateToAppPath(tasksPath("?queue=needs_me"))}
-            />
-            {/* Work already in progress comes before work that can only be
-                started, so it leads in both columns and the stacked phone
-                layout. */}
-            <RunningPanel
-              rows={running}
-              title={runTitle}
-              agentName={runAgent}
-              computerName={runComputer}
-              elapsed={runningFor}
-              hrefFor={(row) => threadPath(row.session.id)}
-              onOpen={(row) => onOpenThread(row.session.id)}
-              allHref={hrefForRoute("main")}
-              onOpenAll={() => void navigateToAppPath(hrefForRoute("main"))}
-            />
+        <div className="home-canvas">
+          <PageHeader
+            title={<span id="home-title">{t(`transcript.welcome_greeting_${greetingPeriod(new Date(now).getHours())}`, { name })}</span>}
+            titleVariant="display"
+            layout="stacked"
+            subtitle={dataStatus !== "ready" ? t(`home.plan.${dataStatus}`) : (
+              <span className="home-brief">
+                <span className="home-brief-date">{todayFormatted}</span>
+                {summary.map(({ tone, text }) => (
+                  <span key={text} className="home-brief-status" data-tone={tone}>
+                    <i aria-hidden="true" />{text}
+                  </span>
+                ))}
+              </span>
+            )}
+          />
 
-            {readyRest.length ? <section className="home-section" aria-labelledby="home-ready-title">
-              <header className="home-section-header">
-                <h2 id="home-ready-title" className="home-section-title">{t("home.plan.ready_work")}</h2>
-                <span className="home-section-count tnum">{readyRest.length}</span>
-              </header>
-              <div className="home-panel">
-                {readyVisible.map((task) => <ReadyTask key={task.id} task={task} onStart={actions.startTask} href={taskPath(task.id)} onOpen={() => onOpenTaskRecord(task.id)} />)}
-                {readyRest.length > READY_PREVIEW
-                  ? <ShowAllToggle count={readyRest.length} expanded={readyExpanded} onToggle={() => setReadyExpanded(!readyExpanded)} />
-                  : null}
-                <div className="home-panel-footer">
-                  <HomeLink className="home-link" href={tasksPath()} onOpen={() => void navigateToAppPath(tasksPath())}>{t("home.all_tasks")}</HomeLink>
-                </div>
+          {dataStatus === "error" ? (
+            <div className="home-card home-data-state" role="alert">
+              <p>{t("home.plan.error_detail")}</p>
+              <Button variant="outline" onClick={() => void onRefresh()}>{t("home.plan.retry")}</Button>
+            </div>
+          ) : dataStatus === "loading" ? (
+            <div className="home-data-state home-data-loading">
+              <ListSkeleton label={t("home.plan.loading_detail")} rows={4} />
+            </div>
+          ) : (
+            <div className="home-board">
+              {/* Row 1: 4 × span 3 personal stats */}
+              <HomeStatsPanel
+                period={statsPeriod}
+                onPeriodChange={setStatsPeriod}
+                stats={statsQuery.data}
+                isLoading={statsQuery.isLoading}
+                isFetching={statsQuery.isFetching}
+                isError={statsQuery.isError}
+                onRetry={() => void statsQuery.refetch()}
+                tasksHref={tasksPath()}
+                threadsHref={hrefForRoute("main")}
+                onOpenTasks={() => void navigateToAppPath(tasksPath())}
+                onOpenThreads={() => void navigateToAppPath(hrefForRoute("main"))}
+              />
+
+              {/* Row 2: span 6 attention queue + span 6 daily token trend (col 6 seam, both above the fold) */}
+              <div className="home-slot-half">
+                <HomeQueue
+                  items={items}
+                  contextLinks={
+                    <nav className="home-mobile-context" aria-label={t("home.plan.jump_to")}>
+                      {running.length ? <a href="#home-running-title">{t("home.plan.running_jump", { count: running.length })}</a> : null}
+                      {readyRest.length ? <a href="#home-ready-title">{t("home.plan.ready_jump", { count: readyRest.length })}</a> : null}
+                      <a href="#home-upcoming-title">{t("home.plan.upcoming_jump", { count: upcoming.length })}</a>
+                      {blockers.length ? <a href="#home-blockers-title">{t("home.plan.blockers_jump", { count: blockers.length })}</a> : null}
+                    </nav>
+                  }
+                  readyFocus={setupProgress
+                    ? <HomeSetupFocus progress={setupProgress} onOpen={onOpenOnboarding} />
+                    : readyFocus ? <ReadyTask key={readyFocus.id} task={readyFocus} onStart={actions.startTask} href={taskPath(readyFocus.id)} onOpen={() => onOpenTaskRecord(readyFocus.id)} focus /> : undefined}
+                  actions={actions}
+                  agentName={agentName}
+                  projectName={projectName}
+                  sinceLabel={sinceLabel}
+                  hrefFor={hrefFor}
+                  onOpen={openItem}
+                  needsMeHref={tasksPath("?queue=needs_me")}
+                  onOpenNeedsMe={() => void navigateToAppPath(tasksPath("?queue=needs_me"))}
+                />
               </div>
-            </section> : null}
-            <BlockersPanel rows={blockers} onOpenTask={onOpenTaskRecord} taskHref={taskPath} />
-          </div>
-          <div className="home-column">
-            <HomeSetupPanel
-              setup={setup}
-              computersHref={hrefForRoute("computers")}
-              agentsHref={hrefForRoute("agents")}
-              onOpenComputers={() => void navigateToAppPath(hrefForRoute("computers"))}
-              onOpenAgents={() => void navigateToAppPath(hrefForRoute("agents"))}
-            />
-            <UpcomingPanel rows={upcoming} today={today}
-              hrefFor={row => row.task.isRoutine ? pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: row.task.id }) : taskPath(row.task.id)}
-              onOpen={row => row.task.isRoutine ? onOpenRoutineRecord(row.task.id) : onOpenTaskRecord(row.task.id)} />
-            <ProjectsPanel
-              rows={projectRows}
-              nextLabel={nextLabel}
-              hrefFor={(row) => projectPath(row.project.id)}
-              onOpen={(row) => void navigateToAppPath(projectPath(row.project.id))}
-              allHref={hrefForRoute("projects")}
-              onOpenAll={() => void navigateToAppPath(hrefForRoute("projects"))}
-              onNewProject={() => void navigateToAppPath(hrefForRoute("projects"))}
-            />
-            <FinishedPanel
-              tasks={finished}
-              sinceLabel={sinceLabel}
-              hrefFor={(task) => taskPath(task.id)}
-              onOpen={(task) => onOpenTaskRecord(task.id)}
-            />
-          </div>
-        </div>}
+
+              <div className="home-slot-half">
+                <HomeTokenChart
+                  tokens={statsQuery.data?.tokens}
+                  isLoading={statsQuery.isLoading}
+                  isError={statsQuery.isError}
+                />
+              </div>
+
+              {/* Row 3: span 6 projects + span 6 live runs & recently completed (col 6 seam) */}
+              <div className="home-slot-half">
+                <ProjectsPanel
+                  rows={projectRows}
+                  nextLabel={nextLabel}
+                  hrefFor={(row) => projectPath(row.project.id)}
+                  onOpen={(row) => void navigateToAppPath(projectPath(row.project.id))}
+                  allHref={hrefForRoute("projects")}
+                  onOpenAll={() => void navigateToAppPath(hrefForRoute("projects"))}
+                  onNewProject={() => void navigateToAppPath(hrefForRoute("projects"))}
+                />
+              </div>
+
+              <div className="home-slot-stack">
+                <HomeSetupPanel
+                  setup={setup}
+                  computersHref={hrefForRoute("computers")}
+                  agentsHref={hrefForRoute("agents")}
+                  onOpenComputers={() => void navigateToAppPath(hrefForRoute("computers"))}
+                  onOpenAgents={() => void navigateToAppPath(hrefForRoute("agents"))}
+                />
+                <RunningPanel
+                  rows={running}
+                  title={runTitle}
+                  agentName={runAgent}
+                  computerName={runComputer}
+                  elapsed={runningFor}
+                  hrefFor={(row) => threadPath(row.session.id)}
+                  onOpen={(row) => onOpenThread(row.session.id)}
+                  allHref={hrefForRoute("main")}
+                  onOpenAll={() => void navigateToAppPath(hrefForRoute("main"))}
+                />
+                <FinishedPanel
+                  tasks={finished}
+                  sinceLabel={sinceLabel}
+                  hrefFor={(task) => taskPath(task.id)}
+                  onOpen={(task) => onOpenTaskRecord(task.id)}
+                />
+              </div>
+
+              {/* Row 4: span 6 upcoming + span 6 ready to start (col 6 seam) */}
+              <div className="home-slot-half home-slot-auto">
+                <UpcomingPanel
+                  rows={upcoming}
+                  today={today}
+                  hrefFor={row => row.task.isRoutine ? pathForAppState({ route: "routine", mobileView: "chat", sessionId: null, taskId: row.task.id }) : taskPath(row.task.id)}
+                  onOpen={row => row.task.isRoutine ? onOpenRoutineRecord(row.task.id) : onOpenTaskRecord(row.task.id)}
+                />
+              </div>
+
+              <div className="home-slot-half home-slot-auto">
+                <section className="home-card" aria-labelledby="home-ready-title">
+                  <CardHeader
+                    id="home-ready-title"
+                    title={t("home.plan.ready_work")}
+                    count={readyRest.length}
+                    more={<HomeLink className="home-link" href={tasksPath()} onOpen={() => void navigateToAppPath(tasksPath())}>{t("home.all_tasks")}</HomeLink>}
+                  />
+                  <div className="home-card-body">
+                    {readyVisible.length > 0 ? (
+                      <>
+                        {readyVisible.map((task) => (
+                          <ReadyTask key={task.id} task={task} onStart={actions.startTask} href={taskPath(task.id)} onOpen={() => onOpenTaskRecord(task.id)} />
+                        ))}
+                        {readyRest.length > READY_PREVIEW
+                          ? <ShowAllToggle count={readyRest.length} expanded={readyExpanded} onToggle={() => setReadyExpanded(!readyExpanded)} />
+                          : null}
+                      </>
+                    ) : (
+                      <p className="home-card-empty">
+                        {t(readyFocus ? "home.plan.no_more_ready" : "home.plan.none_ready")}
+                      </p>
+                    )}
+                  </div>
+                </section>
+              </div>
+
+              {/* Row 5: span 12 shared blockers (only when present) */}
+              {blockers.length > 0 ? (
+                <div className="home-slot-full">
+                  <BlockersPanel rows={blockers} onOpenTask={onOpenTaskRecord} taskHref={taskPath} />
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
