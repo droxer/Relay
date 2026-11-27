@@ -1,11 +1,11 @@
 import type { RelayArtifact } from "relay-core";
-import { relayApiPath } from "relay-core/api-url";
 
+import { relayApiEndpoint } from "./apiOrigin.ts";
 import { imageMimeForFile, isHtmlFile, isMarkdownFile, languageForFile } from "./fileKinds.ts";
 
 /** Raw download/streaming URL for an artifact body. */
 export function artifactRawHref(sessionId: string, artifactId: string): string {
-  return relayApiPath(`/threads/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`);
+  return relayApiEndpoint(`/threads/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`);
 }
 
 type WorkspaceFilePreviewMode = "image" | "pdf" | "html" | "text" | "none";
