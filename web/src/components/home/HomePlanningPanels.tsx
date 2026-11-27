@@ -14,7 +14,6 @@ const BLOCKER_PREVIEW = 3;
 const DISPATCH_LABELS = {
   queued: "backlog.statuses.queued",
   started: "home.plan.start_started",
-  rejected: "backlog.history.dispatch_rejected",
 } as const;
 
 export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
@@ -26,7 +25,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const [dispatchState, setDispatchState] = useState<StartTaskResponse["dispatch"]["state"] | null>(null);
+  const [dispatchState, setDispatchState] = useState<Exclude<StartTaskResponse["dispatch"]["state"], "rejected"> | null>(null);
   const startInFlight = useRef(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   const start = async () => {
@@ -36,7 +35,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
     setOutcome(null);
     try {
       const result = await onStart(task);
-      setDispatchState(result.dispatch.state);
+      setDispatchState(result.dispatch.state === "rejected" ? null : result.dispatch.state);
       setOutcome(result.dispatch.message || t(`home.plan.start_${result.dispatch.state}`));
     } catch {
       setOutcome(t("home.plan.start_error"));

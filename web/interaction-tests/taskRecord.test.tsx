@@ -4,9 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { TaskRecordView } from "../src/components/task-record/TaskRecordView";
 
-const { getTask, listTaskRuns, listTaskArtifacts, listTaskEvents, startTask, updateTask, resumeAutomation } = vi.hoisted(() => ({
+const { getTask, listTaskRuns, listTaskArtifacts, listTaskEvents, startTask, updateTask, resumeAutomation, cancelRun } = vi.hoisted(() => ({
   updateTask: vi.fn(async () => ({})),
   resumeAutomation: vi.fn(async () => ({})),
+  cancelRun: vi.fn(async () => ({})),
   getTask: vi.fn(),
   listTaskRuns: vi.fn(),
   listTaskArtifacts: vi.fn(async () => ({ artifacts: [] })),
@@ -34,7 +35,7 @@ vi.mock("../src/hooks/useRelayMutations", () => ({
   useRelayMutations: () => ({
     startTaskMutation: { mutateAsync: startTask },
     updateTaskMutation: { mutateAsync: updateTask },
-    cancelRunMutation: { mutateAsync: vi.fn() },
+    cancelRunMutation: { mutateAsync: cancelRun },
     deleteTaskMutation: { mutateAsync: vi.fn() },
     resumeAutomationMutation: { mutateAsync: resumeAutomation, isPending: false },
     setTaskPrerequisitesMutation: { mutate: vi.fn(), isPending: false },
@@ -69,8 +70,9 @@ const RUNS = [
 function renderRecord(props: Partial<Parameters<typeof TaskRecordView>[0]> = {}) {
   const onOpenRecord = vi.fn();
   const onEdit = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <TaskRecordView
         taskId="R-42"
         currentUser={{ id: "u-1", username: "fei", role: "user", userId: "fei" }}
@@ -83,7 +85,7 @@ function renderRecord(props: Partial<Parameters<typeof TaskRecordView>[0]> = {})
       />
     </QueryClientProvider>,
   );
-  return { onOpenRecord, onEdit };
+  return { onOpenRecord, onEdit, client };
 }
 
 beforeEach(() => {
@@ -161,6 +163,24 @@ it("refuses to render a run under a routine it does not belong to", async () => 
   // A breadcrumb over the wrong routine would be a lie, so the record is not
   // found rather than shown.
   expect(await screen.findByText("record.run_not_of_routine")).toBeTruthy();
+});
+
+it("refuses a standalone Task addressed as an Automation run", async () => {
+  getTask.mockResolvedValue({ ...ROUTINE, id: "T-2288", isRoutine: false });
+  renderRecord({ runId: "T-2288" });
+  expect(await screen.findByText("record.run_not_of_routine")).toBeTruthy();
+});
+
+it("stops the admitted Thread while its Task is still assigned", async () => {
+  getTask.mockResolvedValue({ ...ROUTINE, id: "T-2288", isRoutine: false, status: "assigned",
+    sourceRoutineId: "R-42", linkedSessionIds: ["admitted"] });
+  const { client } = renderRecord({ runId: "T-2288" });
+  client.setQueryData(["relay", "sessions"], [{
+    id: "admitted", status: "running", execution: { phase: "queued" },
+  }]);
+  await userEvent.setup().click(await screen.findByRole("button", { name: "record.cancel_run" }));
+  expect(cancelRun).toHaveBeenCalledWith({ sessionId: "admitted", taskId: "T-2288" });
+  expect(screen.queryByRole("button", { name: "record.retry_run" })).toBeNull();
 });
 
 it("sends editing back to the board's drawer instead of growing a form", async () => {

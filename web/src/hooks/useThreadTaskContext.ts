@@ -35,7 +35,7 @@ export function useThreadTaskContext(
     }
     if (lastRequested.current === refresh) return;
     lastRequested.current = refresh;
-    void client.invalidateQueries({ queryKey: [...THREAD_TASKS_QUERY_KEY, threadId], exact: true });
+    void client.invalidateQueries({ queryKey: [...THREAD_TASKS_QUERY_KEY, threadId], exact: true }, { cancelRefetch: false });
   }, [client, refresh, threadId]);
   return refresh === null;
 }

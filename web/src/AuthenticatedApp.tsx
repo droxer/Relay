@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { logout, reconcileExecution, retryExecutionRecovery } from "./api";
 import type { AgentName, AgentTeam, CollaborationStyle, CurrentUser, UserAgent, RelayArtifact, ThreadMessageInput } from "./types";
@@ -18,6 +18,8 @@ import { useMutationError } from "./hooks/useMutationError";
 import { useAppRouter } from "./hooks/useAppRouter";
 import { useSessionEvents } from "./hooks/useSessionEvents";
 import { useSessionDetail } from "./hooks/useSessionDetail";
+import { invalidateThreadTaskState } from "./hooks/taskStateQueries";
+import { refreshSessionAfterWrite } from "./lib/sessionSnapshotQuery";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { OVERLAY_TAKEOVER_QUERY } from "./lib/breakpoints";
 import { useLocalDaemonNodes } from "./hooks/useLocalDaemonNodes";
@@ -96,6 +98,7 @@ interface AuthenticatedAppProps {
 /** Everything behind sign-in. Loaded lazily by App, so a signed-out visitor
     downloads only the landing, sign-in, and waitlist screens. */
 export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAppProps) {
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { reportMutationError } = useMutationError();
   const {
@@ -886,7 +889,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             threadKindFilter={threadKindFilter}
             onThreadKindFilterChange={setThreadKindFilter}
             activeSession={activeSession}
-            canAdoptNextStep={tasksStatus === "ready" && threadTasksCurrent}
+            taskContextCurrent={tasksStatus === "ready" && threadTasksCurrent}
             transcriptVisible={transcriptVisible}
             threadDetailsReady={threadDetail.ready}
             threadLoadError={threadDetail.error}
@@ -970,11 +973,15 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             onRetryExecutionRecovery={async () => {
               if (!activeSession) return;
               await retryExecutionRecovery(activeSession.id, selectedToken);
+              invalidateThreadTaskState(queryClient, activeSession);
+              void refreshSessionAfterWrite(queryClient, activeSession.id).catch(() => undefined);
               await refresh();
             }}
             onReportExecutionGone={async () => {
               if (!activeSession) return;
               await reconcileExecution(activeSession.id, selectedToken);
+              invalidateThreadTaskState(queryClient, activeSession);
+              void refreshSessionAfterWrite(queryClient, activeSession.id).catch(() => undefined);
               await refresh();
             }}
             running={threadRunning}

@@ -113,7 +113,7 @@ type ThreadsViewProps = {
    *  rather than opening a second observer on the same query. */
   tasks: RelayTaskListItem[];
   projectDashboard?: ProjectDashboardSummary;
-  canAdoptNextStep?: boolean;
+  taskContextCurrent?: boolean;
   currentUser: CurrentUser;
   /** The onboarding wizard, shown instead of the empty transcript while the
    *  person is still setting up. */
@@ -239,7 +239,7 @@ export function ThreadsView({
   directoryMode,
   tasks,
   projectDashboard,
-  canAdoptNextStep = true,
+  taskContextCurrent = true,
   currentUser,
   onboardingPanel,
   filteredThreads,
@@ -441,6 +441,8 @@ export function ThreadsView({
   // A thread parked on its human: the composer carries the question, and
   // sending the reply is what resumes the work.
   const waiting = useMemo(() => (running ? null : awaitingInput(activeSession, tasks)), [activeSession, running, tasks]);
+  const taskContextPending = !taskContextCurrent && activeSession?.status === "completed"
+    && Boolean(waiting || activeSession.taskActivity?.awaitsHuman);
   // Whatever is sent while the prompt shows — a picked answer or a typed one —
   // answers that question. Naming it lets the backend refuse a reply that a
   // newer question has overtaken instead of resuming the task with it.
@@ -452,10 +454,10 @@ export function ThreadsView({
   // stopped run's are the agent's own read of what is left, so they stay.
   const nextSteps = useMemo(
     () => threadNextSteps(activeSession, {
-      busy: running || (waiting !== null && !followUpWait) || awaitingDecision
+      busy: running || taskContextPending || (waiting !== null && !followUpWait) || awaitingDecision
         || openPermissionRequests(activeSession).length > 0,
     }),
-    [activeSession, running, waiting, followUpWait, awaitingDecision],
+    [activeSession, running, taskContextPending, waiting, followUpWait, awaitingDecision],
   );
   const showFollowUpSteps = followUpWait && nextSteps.length > 0;
   const activeWorkScope = activeSession?.collaborationRounds?.find(
@@ -563,7 +565,7 @@ export function ThreadsView({
   const nextStepAdoption = useNextStepAdoption({
     projectId: activeProjectId,
     projectName: activeThreadProject?.name ?? null,
-    readOnly: Boolean(projectReadOnly) || !canAdoptNextStep,
+    readOnly: Boolean(projectReadOnly) || !taskContextCurrent,
     tasks,
     onOpenTaskRecord,
   });
@@ -882,7 +884,7 @@ export function ThreadsView({
           activeAgentDisplayName={activeAgentDisplayName}
           selectedUser={selectedUser}
           initializingThread={initializingThread}
-          contextPending={threadsLoading || projectLoading}
+          contextPending={threadsLoading || projectLoading || taskContextPending}
           projectName={projectName}
           projectRoom={projectRoom}
           projectRoomSelected={projectRoomSelected}
@@ -962,7 +964,7 @@ export function ThreadsView({
               sendHandoff={sendHandoff}
               onRequestChanges={() => composerRef.current?.focus()}
             />
-          ) : showFollowUpSteps ? null : waiting ? (
+          ) : showFollowUpSteps || taskContextPending ? null : waiting ? (
             <AwaitingInputPrompt
               key={`${activeSession?.id}:${waitingQuestionId ?? waiting.kind}`}
               waiting={waiting}

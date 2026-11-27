@@ -47,16 +47,18 @@ import { useDialogs } from "../components/ui/DialogProvider";
 import { teamRecordKey, TEAMS_QUERY_KEY } from "./useTeams";
 import { TEAM_WORKFLOW_CHOICES_KEY } from "./useProjectWorkflows";
 import { TASK_RECORD_QUERY_KEY } from "./useTaskRecord";
-import { mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
+import { isOlderTaskRevision, mergeTaskSummaryIntoTasks, taskSummaryFromTask } from "../lib/taskSummary";
 import { batchOutcome, type BatchOutcome } from "../lib/taskSelection";
 import { mergeProjectIntoProjects, projectDirectoryEntry, projectIndexRow } from "../lib/projectDirectory";
 import { PROJECT_DIRECTORY_ENTRY_QUERY_KEY, PROJECT_INDEX_QUERY_KEY, PROJECT_RECORD_QUERY_KEY, projectDirectoryEntryKey, projectRecordKey } from "./projectQueries";
 import type { ProjectIndexRow } from "../types";
 import { projectCleanupNotice, projectDeleteBlockingThreadId, projectDeleteErrorMessage } from "../lib/projectDeletion";
 import { threadLabel } from "../lib/threads";
-import { THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
+import { cacheThreadQueue, THREAD_QUEUE_QUERY_KEY } from "../lib/threadQueue";
 import { taskWorkflowSessionQueryKey } from "../lib/workflowRuns";
-import { fetchSessionSnapshot, reconcileSessionSnapshot } from "../lib/sessionSnapshotQuery";
+import { fetchSessionSnapshot, reconcileSessionSnapshot, refreshSessionAfterWrite } from "../lib/sessionSnapshotQuery";
+import { observedSessionEventCount } from "../lib/sessionPollMerge";
+import { invalidateTaskState, invalidateThreadTaskState } from "./taskStateQueries";
 
 type TokenArg = { token?: string };
 
@@ -87,26 +89,6 @@ export function useRelayMutations() {
       queryClient.setQueryData<RelayTaskSummary[]>(key, current => current?.filter(keep));
     }
   };
-  const invalidateTaskProjections = (task: RelayTask) => {
-    void invalidateIssues();
-    if (task.isRoutine || task.sourceRoutineId) void queryClient.invalidateQueries({ queryKey: AUTOMATIONS_PAGE_KEY });
-    void queryClient.invalidateQueries({ queryKey: THREAD_TASKS_QUERY_KEY });
-    void queryClient.invalidateQueries({ queryKey: COMPUTER_TASKS_QUERY_KEY });
-    void queryClient.invalidateQueries({ queryKey: HOME_TASKS_QUERY_KEY, exact: true });
-    void queryClient.invalidateQueries({ queryKey: HOME_STATS_QUERY_KEY });
-    if (task.projectId) void queryClient.invalidateQueries({ queryKey: [...TASKS_QUERY_KEY, task.projectId] });
-  };
-  const invalidateThreadTasks = (sessionId: string) => {
-    const linkedIds = new Set(taskLists().flatMap(([, rows]) =>
-      rows.filter(task => task.linkedSessionIds?.includes(sessionId)).map(task => task.id)));
-    // A deep-linked record can be cached before its list row is available.
-    for (const [key, record] of queryClient.getQueriesData<RelayTask>({ queryKey: [TASK_RECORD_QUERY_KEY] })) {
-      if (record?.linkedSessionIds?.includes(sessionId) || (typeof key[1] === "string" && linkedIds.has(key[1]))) {
-        void queryClient.invalidateQueries({ queryKey: key, exact: true });
-      }
-    }
-    return invalidateTasks();
-  };
   const invalidateNodes = () => queryClient.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
   const invalidateProjects = () => queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY });
   const invalidateTeamWorkflowChoices = () => queryClient.invalidateQueries({ queryKey: TEAM_WORKFLOW_CHOICES_KEY });
@@ -115,10 +97,14 @@ export function useRelayMutations() {
   // Prefix on purpose: the teams list is keyed ["teams", userId] and nothing
   // else lives under "teams", so `exact` here would match no query at all.
   const invalidateTeams = () => queryClient.invalidateQueries({ queryKey: [TEAMS_QUERY_KEY] });
-  const cacheSession = (session: RelaySession) => {
+  const cacheSession = (session: RelaySession, { refreshExecution = false } = {}) => {
     // A compact response can need history reads after the write has succeeded.
     // The detail or stream will retry if those reads fail.
-    void reconcileSessionSnapshot(queryClient, session).catch(() => undefined);
+    const merge = () => reconcileSessionSnapshot(queryClient, session);
+    const sync = refreshExecution && !session.execution
+      ? refreshSessionAfterWrite(queryClient, session.id).catch(merge)
+      : merge();
+    void sync.catch(() => undefined);
     if (session.projectId) void queryClient.invalidateQueries({ queryKey: [...PROJECT_DISCUSSIONS_QUERY_KEY, session.projectId] });
   };
   const cacheTask = (task: RelayTask) => {
@@ -138,9 +124,23 @@ export function useRelayMutations() {
       queryClient.setQueryData<RelayTaskSummary[]>(key, current => current && (
         inScope && inWorkspace
           ? mergeTaskSummaryIntoTasks(current, summary)
-          : current.filter(row => row.id !== task.id)
+          : current.filter(row => row.id !== task.id || isOlderTaskRevision(summary, row))
       ));
     }
+  };
+  const publishTaskState = async (task: RelayTask, requestedTaskId = task.id, seedRecord = false) => {
+    const queryKey = [TASK_RECORD_QUERY_KEY, task.id];
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: TASKS_QUERY_KEY }),
+      queryClient.cancelQueries({ queryKey, exact: true }),
+    ]);
+    const summary = taskSummaryFromTask(task);
+    queryClient.setQueryData<RelayTaskListItem>(queryKey, current => {
+      if (!current) return seedRecord ? summary : undefined;
+      return isOlderTaskRevision(summary, current) ? current : { ...current, ...summary };
+    });
+    cacheTask(task);
+    invalidateTaskState(queryClient, [task.id, requestedTaskId, ...(task.sourceRoutineId ? [task.sourceRoutineId] : [])]);
   };
   const cacheProject = (project: ProjectRecord) => {
     const entry = projectDirectoryEntry(project);
@@ -220,13 +220,19 @@ export function useRelayMutations() {
       sessionId,
       token,
       reason,
-    }: { sessionId: string; reason?: string } & TokenArg) =>
+    }: { sessionId: string; reason?: string; taskId?: string } & TokenArg) =>
       cancelRun(sessionId, token, reason),
-    onSuccess: (session) => {
-      cacheSession(session);
-      void queryClient.invalidateQueries({ queryKey: THREAD_QUEUE_QUERY_KEY });
+    onSuccess: (session, { taskId }) => {
+      invalidateThreadTaskState(queryClient, session, taskId);
+      const queueKey = [...THREAD_QUEUE_QUERY_KEY, session.id];
+      if (session.messageQueue) {
+        cacheThreadQueue(queryClient, session.id, { ...session.messageQueue, eventCount: observedSessionEventCount(session) });
+      }
+      void queryClient.invalidateQueries({ queryKey: queueKey, exact: true });
       void invalidateNodes();
-      void invalidateTasks();
+      // Stop can acknowledge a lease cancellation before the daemon exits.
+      // Its response may omit execution, which the snapshot derives live.
+      cacheSession(session, { refreshExecution: true });
     },
     onError: onRelayError("Failed to cancel active run", "errors.cancel_run"),
   });
@@ -241,7 +247,7 @@ export function useRelayMutations() {
       recordDecision(sessionId, kind, note, token),
     onSuccess: (session) => {
       cacheSession(session);
-      void invalidateTasks();
+      invalidateThreadTaskState(queryClient, session);
     },
     onError: onRelayError("Failed to record decision", "errors.record_decision"),
   });
@@ -255,7 +261,7 @@ export function useRelayMutations() {
     }) => decideWorkflow(sessionId, kind, binding, answer),
     onSuccess: (session) => {
       cacheSession(session);
-      void invalidateThreadTasks(session.id);
+      invalidateThreadTaskState(queryClient, session);
       return invalidateTaskWorkflowSession(session.id);
     },
     onError: (error: unknown, { sessionId }) => {
@@ -264,6 +270,7 @@ export function useRelayMutations() {
       // current attempt instead of offering the old one again.
       if (error instanceof RelayApiError && error.status === 409) {
         void invalidateSessions();
+        void fetchSessionSnapshot(queryClient, sessionId).then(cacheSession, () => undefined);
         return invalidateTaskWorkflowSession(sessionId);
       }
     },
@@ -285,7 +292,7 @@ export function useRelayMutations() {
   const threadPermissionModeMutation = useMutation({
     mutationFn: ({ sessionId, mode }: { sessionId: string; mode: ThreadPermissionMode }) =>
       setThreadPermissionMode(sessionId, mode),
-    onSuccess: cacheSession,
+    onSuccess: (session) => cacheSession(session),
     onError: onRelayError("Failed to set Thread permission mode", "errors.thread_permission_mode"),
   });
 
@@ -305,14 +312,13 @@ export function useRelayMutations() {
     onSuccess: (session, { input }) => {
       cacheSession(session);
       void invalidateNodes();
-      // An answer moves its task off the wait; show that without a poll.
-      if (input.questionId) void invalidateThreadTasks(session.id);
+      if (input.intent !== "discuss") invalidateThreadTaskState(queryClient, session);
     },
     onError: (error, { sessionId }) => {
       if (!(error instanceof RelayApiError)) return;
       // The question was answered or replaced elsewhere: fetch the one the
       // task waits on now, so the prompt stops offering the stale one.
-      if (error.code === "question_superseded") void invalidateThreadTasks(sessionId);
+      if (error.code === "question_superseded") invalidateThreadTaskState(queryClient, { id: sessionId });
       // A background task or another tab started a run before the composer
       // saw it. Refresh this thread so the next send can use its queue.
       if (error.code === "thread_run_active") {
@@ -327,7 +333,7 @@ export function useRelayMutations() {
     onSuccess: (session) => {
       cacheSession(session);
       void invalidateNodes();
-      void invalidateThreadTasks(session.id);
+      invalidateThreadTaskState(queryClient, session);
     },
   });
 
@@ -393,27 +399,16 @@ export function useRelayMutations() {
         return [{ key, previous, optimistic }];
       });
     },
+    onSuccess: (task, { input }) => publishTaskState(task, task.id, Boolean(input.reviewRevision)),
     onError: (error, { taskId }, context) => {
       for (const { key, previous, optimistic } of context ?? []) {
-        // Only undo this write while it still owns the row. Another edit or
-        // server response supersedes it; reconciliation settles that race.
+        // A newer edit or read can supersede the optimistic row.
         queryClient.setQueryData<RelayTaskSummary[]>(key, current =>
           current?.map(task => task.id === taskId && task === optimistic ? previous : task));
       }
       const key = error instanceof RelayApiError ? taskFlowErrorKey(error.code) : undefined;
       onRelayError("Failed to update task", key ?? "errors.save_task")(error);
-    },
-    // Settled, not success: a rolled-back failure must resync from the server
-    // too, otherwise the board keeps showing the pre-mutation snapshot.
-    onSuccess: (task, { input }) => {
-      cacheTask(task);
-      queryClient.setQueryData<RelayTaskListItem | undefined>([TASK_RECORD_QUERY_KEY, task.id], (current) =>
-        current ? { ...current, ...task } : input.reviewRevision ? task : undefined,
-      );
-    },
-    onSettled: (_data, _error, { taskId }) => {
-      void invalidateTasks();
-      void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY, taskId], exact: true });
+      invalidateTaskState(queryClient, [taskId]);
     },
   });
 
@@ -466,10 +461,7 @@ export function useRelayMutations() {
 
   const assignTaskMutation = useMutation({
     mutationFn: ({ taskId, agentId }: { taskId: string; agentId: string }) => assignTask(taskId, agentId),
-    onSuccess: (task) => {
-      cacheTask(task);
-      invalidateTaskProjections(task);
-    },
+    onSuccess: (task) => publishTaskState(task),
     onError: onRelayError("Failed to assign task", "errors.task_action"),
   });
 
@@ -481,10 +473,9 @@ export function useRelayMutations() {
       taskId: string;
       assignments?: TaskRunAssignment[];
     }) => startTask(taskId, input),
-    onSuccess: (result) => {
-      cacheTask(result.task);
-      invalidateTaskProjections(result.task);
+    onSuccess: async (result, { taskId }) => {
       if (result.session) cacheSession(result.session);
+      await publishTaskState(result.task, taskId);
       void invalidateNodes();
       announce({
         message:
@@ -499,19 +490,21 @@ export function useRelayMutations() {
             : "info",
       });
     },
-    onError: onRelayError("Failed to start task", "errors.task_action"),
+    onError: (error, { taskId }) => {
+      onRelayError("Failed to start task", "errors.task_action")(error);
+      invalidateTaskState(queryClient, [taskId]);
+    },
   });
 
   const resumeAutomationMutation = useMutation({
     mutationFn: ({ taskId }: { taskId: string }) => resumeAutomation(taskId),
-    onSuccess: (task) => {
-      cacheTask(task);
+    onSuccess: async (task) => {
+      await publishTaskState(task);
       announce({ message: t("automation.resumed_toast"), tone: "success" });
     },
-    onError: onRelayError("Failed to resume automation", "errors.task_action"),
-    onSettled: (_task, _error, { taskId }) => {
-      void invalidateTasks();
-      void queryClient.invalidateQueries({ queryKey: [TASK_RECORD_QUERY_KEY, taskId] });
+    onError: (error, { taskId }) => {
+      onRelayError("Failed to resume automation", "errors.task_action")(error);
+      invalidateTaskState(queryClient, [taskId]);
     },
   });
 

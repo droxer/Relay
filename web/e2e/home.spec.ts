@@ -461,17 +461,17 @@ for (const language of ["en", "zh-CN"]) {
       await page.goto("/home");
       const focus = page.locator(".home-focus");
       const chinese = language === "zh-CN";
-      await focus.getByRole("button", { name: chinese ? "开始" : "Start", exact: true }).click();
-      const result = focus.getByRole("button", { name: chinese ? "无法启动" : "Could not start", exact: true });
-      await expect(result).toBeDisabled();
+      const start = focus.getByRole("button", { name: chinese ? "开始" : "Start", exact: true });
+      await start.click();
       await expect(focus.getByRole("status")).toContainText(chinese
         ? "无法开始。请打开任务查看并解决问题。"
         : "Could not start. Open the task to resolve the issue.");
+      await expect(start).toBeEnabled();
       await expect(focus.getByRole("status").getByRole("link")).toHaveAttribute("href", /t-ready/);
       for (const width of [320, 375]) {
         await page.setViewportSize({ width, height: 812 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-        const buttonBox = await result.boundingBox();
+        const buttonBox = await start.boundingBox();
         const titleBox = await focus.locator(".home-plan-copy").boundingBox();
         expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(width);
         expect(titleBox!.width).toBeGreaterThan(80);

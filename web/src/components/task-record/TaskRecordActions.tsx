@@ -20,6 +20,8 @@ export function TaskRecordActions({
   readOnly = false,
   readingFile = false,
   busyAction,
+  canCancel,
+  automationRunning,
   onRun,
   onCancel,
   onDone,
@@ -33,6 +35,8 @@ export function TaskRecordActions({
   /** Let file navigation lead on phones; execution stays in More actions. */
   readingFile?: boolean;
   busyAction: RecordAction | null;
+  canCancel?: boolean;
+  automationRunning?: boolean;
   onRun: () => void;
   onCancel: () => void;
   onDone: () => void;
@@ -43,7 +47,7 @@ export function TaskRecordActions({
 }) {
   const { t } = useTranslation();
   const phone = useMediaQuery(PHONE_QUERY);
-  const actions = recordActions(task, { readOnly });
+  const actions = recordActions(task, { readOnly, canCancel, automationRunning });
   // One action at a time: every button reads the same lock the record holds.
   const busy = busyAction !== null;
   const compact = phone && readingFile;
@@ -54,7 +58,7 @@ export function TaskRecordActions({
   return (
     <>
       {actions.includes("run") && !compact ? (
-        <Button type="button" variant="default" size="dense" loading={busyAction === "run"} onClick={onRun}>
+        <Button type="button" variant="default" size="dense" disabled={busy} loading={busyAction === "run"} onClick={onRun}>
           <ActionStart size={ICON.sm} />
           {t("record.run_now")}
         </Button>
@@ -67,23 +71,23 @@ export function TaskRecordActions({
         </Button>
       ) : null}
       {actions.includes("retry") && !compact ? (
-        <Button type="button" variant="default" size="dense" loading={busyAction === "retry"} onClick={onRun}>
+        <Button type="button" variant="default" size="dense" disabled={busy} loading={busyAction === "retry"} onClick={onRun}>
           <ActionStart size={ICON.sm} />
           {t("record.retry_run")}
         </Button>
       ) : null}
       {/* A running task's work is visible only in its thread; the record
           would otherwise show a status with no way to watch it. */}
-      {(task.status === "running" || task.attention?.code === "workflow_blocked") && onWatchLive ? (
+      {onWatchLive ? (
         <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onWatchLive}>
-          {t(task.attention?.code === "workflow_blocked" ? "backlog.open_thread" : "record.watch_live")}
+          {t(canCancel === false || task.attention?.code === "workflow_blocked" ? "backlog.open_thread" : "record.watch_live")}
         </Button>
       ) : null}
       {/* Cancelling stops a live run at once, unconfirmed. On a phone it would
           be the row's only button, read as the next step and one stray tap
           from ending the agent's work, so it waits in the menu there. */}
       {actions.includes("cancel") && !phone ? (
-        <Button type="button" variant="outline" size="dense" loading={busyAction === "cancel"} onClick={onCancel}>
+        <Button type="button" variant="outline" size="dense" disabled={busy} loading={busyAction === "cancel"} onClick={onCancel}>
           {t("record.cancel_run")}
         </Button>
       ) : null}

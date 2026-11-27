@@ -1,5 +1,14 @@
 import type { RelayTask, RelayTaskSummary } from "../types.js";
 
+type TaskRevision = { eventCount?: number; updatedAt?: string };
+
+export function isOlderTaskRevision(incoming: TaskRevision, current: TaskRevision): boolean {
+  if (incoming.eventCount !== undefined && current.eventCount !== undefined && incoming.eventCount !== current.eventCount) {
+    return incoming.eventCount < current.eventCount;
+  }
+  return Boolean(incoming.updatedAt && current.updatedAt && incoming.updatedAt < current.updatedAt);
+}
+
 /** Convert a full mutation response to the compact shape owned by the list cache. */
 export function taskSummaryFromTask(task: RelayTask): RelayTaskSummary {
   const { events, activity, ...fields } = task;
@@ -18,11 +27,6 @@ export function mergeTaskSummaryIntoTasks(
 ): RelayTaskSummary[] {
   const existing = tasks.find((candidate) => candidate.id === summary.id);
   if (!existing) return [summary, ...tasks];
-  if (
-    summary.eventCount < existing.eventCount
-    || (summary.eventCount === existing.eventCount && summary.updatedAt < existing.updatedAt)
-  ) {
-    return tasks;
-  }
+  if (isOlderTaskRevision(summary, existing)) return tasks;
   return tasks.map((candidate) => candidate.id === summary.id ? summary : candidate);
 }

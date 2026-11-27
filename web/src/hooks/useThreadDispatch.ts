@@ -428,12 +428,10 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     failureLabel: string;
     failureMessageKey: string;
   }) {
-    if (!activeSession) return;
-    if (!selectedUser) return;
-    if (threadRunning) return;
+    if (!activeSession || !selectedUser || threadRunning || projectDispatchDisabled) return false;
     const logicalAgent = effectiveSelectableLogicalAgents.find(
       (candidate) => candidate.id === prefer && isUserAgentRoutable(candidate),
-    ) ?? (fallback
+    ) ?? (!prefer && fallback
       ? effectiveSelectableLogicalAgents.find(
           (candidate) => candidate.executorKind === fallback && isUserAgentRoutable(candidate),
         )
@@ -444,20 +442,20 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         null,
         t("errors.agent_not_ready", { agent: prefer ?? fallback }),
       );
-      return;
+      return false;
     }
     const sendKey = threadSendKey(selectedUser, activeSession.id);
-    if (useThreadSendStore.getState().operations[sendKey]?.dispatching) return;
+    if (useThreadSendStore.getState().operations[sendKey]?.dispatching) return false;
     const dispatchId = useThreadSendStore.getState().beginDispatch(sendKey);
     let view: ReturnType<typeof retainThreadDispatchView> | undefined;
     try {
       useComposerTargetStore.getState().setActiveTarget(logicalAgent);
-      // A handoff is issued from the thread you are already reading, so it
-      // does not navigate or re-pin; rerun and retry can both be triggered
-      // from elsewhere and have to bring the thread into view first.
+      // Keep the current Project or Computer when this Thread is already open.
       if (kind === "rerun") {
-        useRelayStore.getState().setSelectedSessionId(activeSession.id);
-        navigateToRoute("main");
+        if (requestedThreadId !== activeSession.id) {
+          useRelayStore.getState().setSelectedSessionId(activeSession.id);
+          navigateToRoute("main");
+        }
         transcript.pinToBottom();
       }
       view = retainThreadDispatchView();
@@ -479,12 +477,14 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         syncThreadUrl(done.id, true, done.projectId ?? activeSession.projectId, undefined, threadComputerId(done));
       }
       if (useThreadSendStore.getState().operations[sendKey]?.stopRequested) await cancelSessionRun(done.id, done.projectId);
+      return true;
     } catch (error) {
       reportMutationError(
         failureLabel,
         error,
         formatDispatchError(error, t) ?? t(failureMessageKey),
       );
+      return false;
     } finally {
       view?.release();
       useThreadSendStore.getState().endDispatch(sendKey, dispatchId);
@@ -496,14 +496,13 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     if (!activeSession) return false;
     if (kind === "rerun") {
       const assignment = rerunAssignmentForSession(activeSession, useComposerTargetStore.getState().activeAgent);
-      await dispatchRecovery({
+      return dispatchRecovery({
         prefer: assignment.agentId,
         fallback: assignment.agent,
         kind: "rerun",
         failureLabel: "Failed to rerun assignment",
         failureMessageKey: "errors.rerun_assignment",
       });
-      return true;
     }
     const view = retainThreadDispatchView();
     try {

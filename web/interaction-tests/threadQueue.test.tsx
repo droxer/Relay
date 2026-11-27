@@ -204,6 +204,20 @@ it("requests Stop & send next in one action and localizes failures", async () =>
   expect(hook.result.current.error).toBe("queue.errors.change_failed");
 });
 
+it("revalidates the linked Task when the paused message queue resumes", async () => {
+  saved.paused = true;
+  saved.messages.push({ id: "q1", text: "Continue the Task" });
+  const hook = open("owner:thread", false);
+  const taskKey = ["task-record", "task"];
+  const sessionsKey = ["relay", "sessions"];
+  hook.client.setQueryData(taskKey, { id: "task", linkedSessionIds: ["thread"] });
+  hook.client.setQueryData(sessionsKey, [{ id: "thread" }]);
+  await waitFor(() => expect(hook.result.current.paused).toBe(true));
+  await act(async () => hook.result.current.resume());
+  await waitFor(() => expect(hook.client.getQueryState(taskKey)?.isInvalidated).toBe(true));
+  expect(hook.client.getQueryState(sessionsKey)?.isInvalidated).toBe(true);
+});
+
 it("shows a message handed to the live run as sending until its computer answers", async () => {
   const until = new Date(Date.now() + 60_000).toISOString();
   vi.mocked(apiJson).mockResolvedValue({ messages: [{ id: "q1", text: "Use staging" }], paused: false, live: { id: "q1", until } } as any);

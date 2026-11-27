@@ -6,7 +6,7 @@ import { useTaskReview } from "./TaskReviewProvider";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { Drawer } from "@/components/ui/Drawer";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
-import { useTaskRecord } from "../../hooks/useTaskRecord";
+import { useTaskExecutionThread, useTaskRecord } from "../../hooks/useTaskRecord";
 import { pathForAppState } from "../../lib/appRoute";
 import { runningRoutineIds, type RoutineListState } from "../../lib/routine";
 import { taskStartMutationInput } from "../../lib/taskBoardForm";
@@ -83,6 +83,7 @@ export function TaskRecordView({
   const { task, isPending, notFound, error } = useTaskRecord(
     recordId, placeholder, dependentIds, compactList, automationStates?.[recordId],
   );
+  const executionThreadId = useTaskExecutionThread(task);
   const parent = useMemo(
     () => (runId ? tasks.find((candidate) => candidate.id === taskId) : undefined),
     [runId, taskId, tasks],
@@ -121,12 +122,10 @@ export function TaskRecordView({
   }
 
   async function cancelRecord(): Promise<void> {
-    if (busyAction || !task) return;
-    const sessionId = task.linkedSessionIds.at(-1);
-    if (!sessionId) return;
+    if (busyAction || !executionThreadId) return;
     setBusyAction("cancel");
     try {
-      await cancelRunMutation.mutateAsync({ sessionId });
+      await cancelRunMutation.mutateAsync({ sessionId: executionThreadId, taskId: task?.id });
     } catch {
       // Same: the toast is the report, the button comes back.
     } finally {
@@ -192,7 +191,7 @@ export function TaskRecordView({
     body = <section className="record-missing" role="status" aria-live="polite">{t("record.loading")}</section>;
   /* A run addressed under a routine it does not belong to is not that run.
      Rendering it anyway would put a breadcrumb over it that lies. */
-  } else if (runId && task.sourceRoutineId && task.sourceRoutineId !== taskId) {
+  } else if (runId && task.sourceRoutineId !== taskId) {
     body = (
       <section className="record-missing" role="status" tabIndex={-1}>
         <h1>{t("record.not_found_title")}</h1>
@@ -207,6 +206,7 @@ export function TaskRecordView({
         runningRoutineIds={running}
         parentRoutine={parentRoutine}
         busyAction={busyAction}
+        executionThreadId={executionThreadId}
         presentation={drawer ? "drawer" : "page"}
         tabSearchKey={tabSearchKey}
         hrefForRun={hrefForRecord ? (runId) => hrefForRecord(taskId, runId) : undefined}

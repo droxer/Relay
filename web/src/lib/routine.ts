@@ -89,6 +89,13 @@ export function runNowRefused(routine: Pick<RelayTaskListItem, "routineState" | 
   return routine.routineState === "paused_by_relay" && routine.routinePauseReason === "rate_limited";
 }
 
+export function canRunAutomationNow(
+  task: Pick<RelayTaskListItem, "assignedAgentId" | "assignedTeamId" | "projectId" | "routineState" | "routinePauseReason">,
+  running = false,
+): boolean {
+  return !running && !runNowRefused(task) && Boolean(task.assignedAgentId || task.assignedTeamId || task.projectId);
+}
+
 /**
  * Schedule urgency, most urgent first — the order the state column sorts by.
  * It is not the order `RoutineListState` happens to be declared in: that union
