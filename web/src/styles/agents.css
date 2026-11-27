@@ -47,26 +47,26 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-2) 0 var(--sp-7);
+  padding: var(--sp-2) 0 var(--sp-5);
 }
 
 .agents-roster-group + .agents-roster-group {
-  margin-top: var(--sp-4);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline-soft);
 }
 
-/* Same group label as the thread rail's state groups: a quiet name and a
-   count, no divider line. The band names the computer; the rows beneath it
-   no longer repeat it. */
+/* Aligned with the row's leading avatar edge (--sp-3 list + --sp-3 row = --sp-6)
+   so computer bands sit on one clean left edge with the agents beneath them. */
 .agents-roster-group-label {
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: var(--sp-2);
-  /* --sp-3 twice over is what a row's TEXT is inset by (list padding + row
-     padding), which is what this label must line up with. */
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-1-5) var(--sp-6);
   background: var(--surface-list);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
@@ -74,6 +74,7 @@
 }
 
 .agents-roster-group-count {
+  flex: none;
   color: var(--ink-4);
 }
 
@@ -82,7 +83,7 @@
      .conversation-list in thread.css. */
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  gap: var(--sp-0-5);
   margin: 0;
   padding: var(--sp-1) var(--sp-3) 0;
   list-style: none;
@@ -132,7 +133,7 @@
      padding on the row the ring came out floating 12px inside the row edge,
      outlining the text instead of the row. Same total geometry either way —
      the button fills the row. */
-  padding: var(--sp-row) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
   border-radius: inherit;
   color: inherit;
   cursor: pointer;
@@ -157,10 +158,14 @@
 .agents-roster-row-main {
   display: flex;
   flex-direction: column;
-  /* 2px between a name and its meta line sat below the supporting-text
-     rhythm used everywhere else in the app. */
-  gap: var(--sp-1);
+  gap: var(--sp-0-5);
   min-width: 0;
+}
+
+.agents-roster-row .agent-role-meta {
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  color: var(--ink-3);
 }
 
 .agents-roster-row-title {
@@ -366,6 +371,333 @@
   color: var(--ink-4);
 }
 
+/* ---- roster footer summary ------------------------------------------- */
+
+.agents-roster-summary {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-6);
+  border-top: var(--hairline-soft);
+  background: var(--surface-list);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.agents-roster-summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+  white-space: nowrap;
+}
+
+.agents-roster-summary-item[data-tone="live"] {
+  color: var(--live);
+}
+
+.agents-roster-summary-item[data-tone="bad"] {
+  color: var(--err);
+}
+
+/* ---- fleet overview (desktop right sheet when no agent is open) ------ */
+
+.agents-overview {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agents-overview-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Divided metric strip: one container split by vertical hairlines, no cards
+   and no icons on KPIs. */
+.agents-overview-metrics {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border-bottom: var(--hairline);
+}
+
+.agents-overview-metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-4) var(--page-gutter);
+  border-right: var(--hairline-soft);
+}
+
+.agents-overview-metric:last-child {
+  border-right: 0;
+}
+
+.agents-overview-metric-label {
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+.agents-overview-metric-value {
+  margin: 0;
+  color: var(--ink-1);
+  font: var(--type-number);
+  letter-spacing: var(--type-number-track);
+}
+
+.agents-overview-metric-value[data-tone="live"] {
+  color: var(--live);
+}
+
+.agents-overview-metric-value[data-tone="bad"] {
+  color: var(--err);
+}
+
+.agents-overview-metric-value[data-tone="muted"] {
+  color: var(--ink-3);
+}
+
+.agents-overview-table-wrap {
+  flex: none;
+  min-width: 0;
+  overflow-x: auto;
+  padding: var(--sp-4) var(--page-gutter) var(--sp-5);
+}
+
+.agents-overview-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.agents-overview-table th {
+  padding: 0 var(--sp-3) var(--sp-2);
+  border-bottom: var(--hairline);
+  color: var(--ink-3);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.agents-overview-table th:first-child,
+.agents-overview-table td:first-child {
+  padding-left: 0;
+}
+
+.agents-overview-table th:last-child,
+.agents-overview-table td:last-child {
+  padding-right: 0;
+}
+
+.agents-overview-col-agent {
+  width: 28%;
+}
+
+.agents-overview-table th.agents-overview-col-status,
+.agents-overview-cell-status {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.agents-overview-row {
+  border-bottom: var(--hairline-soft);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.agents-overview-row:last-child {
+  border-bottom: 0;
+}
+
+.agents-overview-row:hover {
+  background: var(--row-hover);
+}
+
+.agents-overview-table td {
+  padding: var(--sp-3);
+  vertical-align: middle;
+  color: var(--ink-2);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.agents-overview-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  text-decoration: none;
+  text-align: left;
+}
+
+.agents-overview-open:hover .agents-overview-name {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.agents-overview-row[data-unavailable="true"] .agents-overview-open {
+  color: var(--ink-2);
+}
+
+.agents-overview-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-overview-cell-role,
+.agents-overview-cell-host {
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.agents-overview-cell-runtime {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-0-5);
+}
+
+.agents-overview-runtime-name {
+  color: var(--ink-1);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+}
+
+.agents-overview-model {
+  color: var(--ink-3);
+  font-size: var(--fs-1);
+  letter-spacing: var(--type-code-track);
+}
+
+.agents-overview-model-default,
+.agents-overview-dash {
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+}
+
+/* Computer breakdown sits beneath the agent table to show per-host readiness
+   without repeating the row list. */
+.agents-overview-computers {
+  flex: none;
+  margin-top: var(--sp-2);
+  padding: var(--sp-5) var(--page-gutter) var(--sp-7);
+  border-top: var(--hairline);
+}
+
+.agents-overview-section-title {
+  margin: 0 0 var(--sp-3);
+  color: var(--ink-1);
+  font: var(--type-title);
+  letter-spacing: var(--type-title-track);
+}
+
+.agents-overview-computer-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.agents-overview-computer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) 0;
+  border-bottom: var(--hairline-soft);
+}
+
+.agents-overview-computer-row:last-child {
+  border-bottom: 0;
+}
+
+.agents-overview-computer-main {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.agents-overview-computer-name {
+  color: var(--ink-1);
+  font: var(--type-name);
+  letter-spacing: var(--type-name-track);
+  white-space: nowrap;
+}
+
+.agents-overview-computer-runtimes {
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agents-overview-computer-stats {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  white-space: nowrap;
+}
+
+.agents-overview-computer-stat[data-tone="live"] {
+  color: var(--live);
+}
+
+.agents-overview-computer-stat[data-tone="bad"] {
+  color: var(--err);
+}
+
+/* Narrow overview container (mid-width stacked viewports or expanded sidenav):
+   fold the 4-up readiness strip into 2x2 and let computer rows wrap cleanly. */
+@container record-page (max-width: 768px) {
+  .agents-overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agents-overview-metric {
+    padding: var(--sp-3) var(--sp-4);
+  }
+
+  .agents-overview-metric:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .agents-overview-metric:nth-child(-n + 2) {
+    border-bottom: var(--hairline-soft);
+  }
+
+  .agents-overview-table-wrap {
+    padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  }
+
+  .agents-overview-computers {
+    padding: var(--sp-4) var(--sp-4) var(--sp-6);
+  }
+}
+
+@container record-page (max-width: 640px) {
+  .agents-overview-computer-row {
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-4);
+  }
+}
+
 /* ---- detail (right pane) --------------------------------------------- */
 
 .agents-detail {
@@ -401,13 +733,37 @@
   }
 
   .agents-roster {
+    flex: none;
     border-right: 0;
     border-bottom: var(--hairline);
-    max-height: 46vh;
+    max-height: 36vh;
+  }
+
+  /* When the fleet overview is already stacked right below the roster,
+     drop the duplicate roster readiness bar so it is not printed twice. */
+  .agents-page[data-view="list"] .agents-roster-summary {
+    display: none;
   }
 
   .agents-detail {
-    min-height: 60vh;
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  /* Stacked under the roster, the detail/overview sheet sizes to its content
+     so the page owns one scroll instead of clipping rows inside a fixed box. */
+  .agents-detail > .workspace-page {
+    height: auto;
+    overflow: visible;
+  }
+
+  html[data-theme="light"] .agents-detail > .workspace-page {
+    margin: var(--sp-3);
+    height: auto;
+  }
+
+  .agents-overview-body {
     overflow: visible;
   }
 }
@@ -417,7 +773,7 @@
     display: none;
   }
 
-  /* The 46vh cap above is for the stacked roster-over-detail layout. Here the
+  /* The 36vh cap above is for the stacked roster-over-detail layout. Here the
      detail is hidden, so the cap only boxed the roster into a short scroller
      with the rest of the screen empty — the roster takes the whole pane. */
   .agents-page[data-view="list"] .agents-roster {
@@ -427,12 +783,27 @@
     border-bottom: 0;
   }
 
+  .agents-page[data-view="list"] .agents-roster-summary {
+    display: flex;
+  }
+
   .agents-page[data-view="detail"] .agents-roster {
     display: none;
   }
 
   .agents-page[data-view="detail"] .agents-detail {
+    flex: 1;
     min-height: 0;
+    overflow: hidden;
+  }
+
+  .agents-page[data-view="detail"] .agents-detail > .workspace-page {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  html[data-theme="light"] .agents-detail > .workspace-page {
+    margin: 0;
   }
 
   .agents-mobile-back {
@@ -443,5 +814,24 @@
 
   .agents-roster-row-select {
     min-height: var(--touch-target);
+    padding: var(--sp-2) var(--sp-3);
+  }
+
+  .agents-roster .list-filter-bar {
+    padding-inline: var(--sp-4);
+  }
+
+  .agents-roster-group-label {
+    padding: var(--sp-2) var(--sp-4);
+    font: var(--type-label);
+    letter-spacing: var(--type-label-track);
+  }
+
+  .agents-roster-list {
+    padding: var(--sp-1) var(--sp-4) 0;
+  }
+
+  .agents-roster-summary {
+    padding: var(--sp-3) var(--sp-4);
   }
 }

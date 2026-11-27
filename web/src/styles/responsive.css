@@ -209,6 +209,7 @@
      ellipses it instead, and the full name rides the heading's title. */
   .mobile-topbar-title {
     display: block;
+    margin: 0;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;

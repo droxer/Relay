@@ -28,6 +28,7 @@ import { PageHeader } from "./PageHeader";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { Button } from "@/components/ui/button";
 import { CreateAgentDialog } from "./agents/CreateAgentDialog";
+import { AgentsOverview, summarizeAgentFleet } from "./agents/AgentsOverview";
 import { ListSkeleton } from "./ListSkeleton";
 import { ListRailResizeHandle } from "@/components/ListRailResize";
 import { RELAY_POLL_INTERVALS_MS } from "../lib/relayPolling";
@@ -180,6 +181,7 @@ function AgentsPageView({
   }, [activeAgents, blurbs, matches, query]);
 
   const agentGroups = useMemo(() => groupAgentsByComputer(visibleAgents), [visibleAgents]);
+  const fleetSummary = useMemo(() => summarizeAgentFleet(activeAgents), [activeAgents]);
 
   const loading = (isFetching && agents.length === 0)
     || (searchEnabled && (waitForSearch || matchQuery.isPending) && visibleAgents.length === 0);
@@ -288,6 +290,23 @@ function AgentsPageView({
             })}
           </div>
         )}
+        {activeAgents.length > 0 ? (
+          <div className="agents-roster-summary" aria-label={t("agents_page.metrics")}>
+            <span className="agents-roster-summary-item">
+              <span className="tnum">{fleetSummary.ready}</span> {t("agents_page.metric_ready").toLowerCase()}
+            </span>
+            {fleetSummary.busy > 0 ? (
+              <span className="agents-roster-summary-item" data-tone="live">
+                <span className="tnum">{fleetSummary.busy}</span> {t("agents_page.metric_busy").toLowerCase()}
+              </span>
+            ) : null}
+            {fleetSummary.offline > 0 ? (
+              <span className="agents-roster-summary-item" data-tone="bad">
+                <span className="tnum">{fleetSummary.offline}</span> {t("agents_page.metric_offline").toLowerCase()}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <ListRailResizeHandle />
       </div>
 
@@ -318,6 +337,13 @@ function AgentsPageView({
                 actions={<Button type="button" variant="outline" onClick={() => void refetchRecord()}>{t("workspace.retry")}</Button>} />
             ) : <ListSkeleton label={t("admin.loading")} />}
           </>
+        ) : activeAgents.length > 0 ? (
+          <AgentsOverview
+            agents={visibleAgents.length > 0 ? visibleAgents : activeAgents}
+            canCreate={Boolean(currentUser.userId)}
+            onOpenAgent={(agent) => void handleSelectAgent(agent)}
+            onCreateAgent={() => setCreateOpen(true)}
+          />
         ) : (
           <RelayEmptyState feature="agents"
             fill

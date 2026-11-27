@@ -31,10 +31,17 @@
   flex: none;
   width: var(--avatar-sm);
   height: var(--avatar-sm);
+  border: var(--hairline-soft);
   border-radius: var(--r-2);
   background: var(--surface-2);
   color: var(--ink-1);
-  box-shadow: inset 0 0 0 var(--sp-hairline) var(--line-2);
+}
+
+/* Promote the agent record title to the page-title rung so the agent's name
+   clearly leads its profile tabs, properties, and embedded instructions. */
+.agents-detail .page-header-title--record {
+  font: var(--type-page);
+  letter-spacing: var(--type-page-track);
 }
 
 /* Stacked workspace header stays compact in the agents detail pane. */
@@ -211,11 +218,46 @@
 }
 
 .record-band-value.code {
+  font-family: var(--font-mono);
   letter-spacing: var(--type-code-track);
-  font-size: var(--fs-2);
+  font-size: var(--fs-code);
   color: var(--ink-2);
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.record-band-id-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.record-band-id-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-band-copy {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-h-2xs);
+  height: var(--control-h-2xs);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+
+.record-band-copy:hover {
+  color: var(--ink-1);
+  background: var(--control-fill);
 }
 
 /* Quiet ink alone marks the empty value: Space Grotesk has no italic, and a
@@ -769,9 +811,9 @@
 
 .record-band--panel .record-band-cell {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 80px minmax(0, 1fr);
   align-items: center;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   padding: 0;
   border: 0;
 }
@@ -799,30 +841,33 @@
     border-bottom: var(--hairline);
   }
 
-  /* Folded above the body, the facts stay a left-aligned label/value list —
-     the same rows as the column, just tighter. A wrapping line of cells
-     inherited the band's centred cell and read as a scattered grid. */
+  /* Folded above the body, two compact columns keep all record coordinates
+     readable in half the vertical height so the profile body stays above
+     the fold on tablet and phone viewports. */
   .record-band--panel {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-1-5);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3) var(--sp-4);
   }
 
   .record-band--panel .record-band-cell {
-    display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
-    justify-content: start;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-0-5);
     text-align: start;
   }
 
+  .record-band--panel .record-band-cell:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
   .record-band--panel .record-band-value {
+    max-width: 100%;
     justify-content: flex-start;
     white-space: normal;
     overflow-wrap: anywhere;
-  }
-
-  .record-band--panel .record-band-cell {
-    align-items: baseline;
   }
 }
 

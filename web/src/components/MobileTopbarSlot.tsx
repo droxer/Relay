@@ -79,5 +79,5 @@ export function useMobileTopbarTitle(title: string, active = true): ReactNode {
   const slot = useContext(MobileTopbarSlotContext).title;
   const phone = useMediaQuery(PHONE_QUERY);
   if (!phone || !slot || !active) return null;
-  return createPortal(<span className="mobile-topbar-title">{title}</span>, slot);
+  return createPortal(<h1 className="mobile-topbar-title">{title}</h1>, slot);
 }

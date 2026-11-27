@@ -145,6 +145,7 @@
   .chat-header [data-variant="icon"],
   .send-button,
   .overlay-close,
+  .record-band-copy,
   .adm-chat-rows button,
   .adm-node-card-icon-btn {
     width: var(--touch-target);

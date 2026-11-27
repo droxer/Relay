@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { UserAgent } from "../types";
 import { agentLabel } from "../lib/plan";
@@ -25,7 +26,7 @@ import {
 import type { RecordFact } from "./workspace/RecordBand";
 import { RecordLayout } from "./workspace/RecordLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ICON } from "./icons";
+import { ActionApprove, ActionCopy, ICON } from "./icons";
 
 export type AgentDetailTab = "profile" | "skills" | "activities";
 
@@ -68,6 +69,22 @@ export function AgentDetailPage({
   const primaryPlacement = placementDescriptions.find(
     ({ placement }) => placement.desiredState === "active",
   ) ?? placementDescriptions[0];
+
+  const [copiedId, setCopiedId] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+  }, []);
+  const handleCopyId = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(agent.id);
+      setCopiedId(true);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopiedId(false), 1800);
+    } catch {
+      // Clipboard may be unavailable in insecure contexts.
+    }
+  }, [agent.id]);
 
   const model = agentModel(agent);
   const bandFacts: RecordFact[] = [
@@ -117,7 +134,24 @@ export function AgentDetailPage({
     {
       key: "id",
       label: t("agents_page.agent_id"),
-      value: truncateId(agent.id),
+      value: (
+        <span className="record-band-id-row">
+          <span className="record-band-id-text">{truncateId(agent.id, 6, 4)}</span>
+          <button
+            type="button"
+            className="record-band-copy"
+            aria-label={copiedId ? t("admin.v2.copied") : t("admin.v2.copy")}
+            title={copiedId ? t("admin.v2.copied") : t("admin.v2.copy")}
+            onClick={() => void handleCopyId()}
+          >
+            {copiedId ? (
+              <ActionApprove size={ICON.xs} aria-hidden="true" />
+            ) : (
+              <ActionCopy size={ICON.xs} aria-hidden="true" />
+            )}
+          </button>
+        </span>
+      ),
       technical: true,
       title: agent.id,
     },
@@ -145,7 +179,7 @@ export function AgentDetailPage({
         )}
         topbarTitle={agent.displayName}
         titleVariant="record"
-        titleAs="h2"
+        titleAs="h1"
         layout="stacked"
         toolbar={(
           <TabsList className="workspace-page-tabs" stripKey={pageTab} aria-label={t("agents_page.detail_sections")}>
