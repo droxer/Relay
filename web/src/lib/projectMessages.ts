@@ -2,7 +2,8 @@ import type { TFunction } from "i18next";
 import type { AgentRun, CodexCollaborationEvent, RelayArtifact, RunFollowUp } from "relay-core";
 import type { AgentName, RelaySession, TokenUsage, Tone } from "../types.js";
 import { permissionInputSummary } from "./permissionRequests.ts";
-import { recoverAntigravityStdout, routeAntigravityToolUpdates } from "./agent-stream/antigravity.ts";
+import { routeAntigravityToolUpdates } from "./agent-stream/antigravity.ts";
+import { OUTPUT_OMISSION_LINE, recoverCompletedStdout } from "./agent-stream/completed-output.ts";
 import { toolInput, toolTarget } from "./agent-stream/builders.ts";
 import { agentMessagePlainText } from "./agent-stream/display.ts";
 
@@ -234,8 +235,8 @@ type RunProjectionState = RunStreams & {
   stdoutStart: number;
   stderrStart: number;
   collaborations: CodexCollaborationEvent[];
-  /** Reconcile late output against the stream before adding log recovery text. */
-  completedOutput?: { streamed: RunStreams; fallback: RunStreams };
+  /** Keep the streamed output and its cut for replay after completion. */
+  completedOutput?: { streamed: RunStreams; fallback: RunStreams; streamedStdoutStart: number };
   /** For a steered Antigravity run, keep the original cuts even when recovery
    * inserts lines and moves their positions in the rendered stream. */
   antigravityBlocks?: {
@@ -269,9 +270,13 @@ function reconcileCompletedOutput(state: RunProjectionState, agent: AgentName, t
   const completed = state.completedOutput;
   if (!completed) return;
   const output = { ...completed.streamed };
-  if (agent === "antigravity") {
+  const fallbackStdout = completed.fallback.stdout;
+  // A capped JSONL log can replay its opening and ending around streamed
+  // records that the capture omitted. Match the frames before recovering any.
+  if (agent === "antigravity" || (OUTPUT_OMISSION_LINE.test(fallbackStdout) && looksLikeAgentStream(fallbackStdout))) {
     const blocks = state.antigravityBlocks;
-    const recovered = recoverAntigravityStdout(output.stdout, completed.fallback.stdout, blocks?.offsets ?? []);
+    const offsets = blocks?.offsets ?? [completed.streamedStdoutStart];
+    const recovered = recoverCompletedStdout(output.stdout, fallbackStdout, offsets);
     output.stdout = recovered.stdout;
     output.stderr = appendMissingStream(output.stderr, completed.fallback.stderr);
     if (blocks) state.antigravityBlocks = { ...blocks, recoveredOffsets: recovered.offsets };
@@ -676,6 +681,7 @@ export class ProjectMessagesAccumulator {
           state.completedOutput = {
             streamed: state.completedOutput?.streamed ?? { stdout: state.stdout, stderr: state.stderr },
             fallback: streamsFromAgentLog(event.agentLog),
+            streamedStdoutStart: state.completedOutput?.streamedStdoutStart ?? state.stdoutStart,
           };
           reconcileCompletedOutput(state, event.agent, t);
         }
