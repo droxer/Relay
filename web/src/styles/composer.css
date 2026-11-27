@@ -316,6 +316,13 @@
 }
 
 .chat-agent-select .agent-role-label {
+  flex-wrap: wrap;
+  row-gap: var(--sp-0-5);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-agent-select .agent-role-meta-name {
   overflow-wrap: anywhere;
   white-space: normal;
 }

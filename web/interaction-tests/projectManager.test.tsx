@@ -1,5 +1,5 @@
 import {cloneElement,createElement} from 'react';
-import {act,fireEvent,render,renderHook,screen,waitFor} from '@testing-library/react';
+import {act,fireEvent,render,renderHook,screen,waitFor,within} from '@testing-library/react';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach,expect,it,vi} from 'vitest';
 import {ProjectManagerLine} from '../src/components/ProjectManagerLine';
@@ -52,7 +52,8 @@ it('names the Project Lead on the dashboard and offers no discussion unless aske
  const onManage=vi.fn();
  wrap(<ProjectManagerLine project={managed({roleLevel:'junior'})} agents={[{...ada,defaultRole:'planner',roleLevel:'senior'}]} onManage={onManage} />);
  const line=screen.getByRole('group',{name:'project.roles.project_manager'});
- expect(line.textContent).toContain('role_levels.senior · admin.v2.agent_role.planner');
+ expect(within(line).getByText('role_levels.badge_senior')).toBeTruthy();
+ expect(within(line).getByText('admin.v2.agent_role.planner')).toBeTruthy();
  expect(screen.queryByRole('button',{name:'project_manager.discuss'})).toBeNull();
  expect(api.get).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('link',{name:'Ada'}));

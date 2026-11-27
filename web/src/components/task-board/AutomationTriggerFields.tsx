@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TITLE_CONTAINS_MAX, TRIGGER_KINDS, TRIGGER_ON, triggerError, triggerForKind } from "../../lib/automationTrigger";
 import { TASK_PRIORITIES, TASK_STATUSES } from "../../lib/backlog";
 import { RosterAgentMark, RosterTeamMark } from "../roster/RosterOption";
-import { agentRoleLabel } from "../../lib/agentRoleLabel";
+import type { AgentRoleIdentity } from "../../lib/agentRoleLabel";
+import { AgentRoleMeta } from "../RoleLevelBadge";
 import type { AgentTeam, UserAgent, ProjectListItem, RoutineTrigger, RoutineTriggerFilters, RoutineTriggerKind, RoutineTriggerOn } from "../../types";
 
 const ANY = "__any__";
@@ -105,7 +106,7 @@ export function EventTriggerFields({ trigger, agents, teams, projects, onChange 
             value: agent.id,
             label: agent.displayName,
             mark: <RosterAgentMark agent={agent} />,
-            role: agentRoleLabel(agent, t),
+            role: agent,
           })))}
           {choice("assignedTeamId", t("automation.filter_team"), teams.map((team) => ({ value: team.id, label: team.name, mark: <RosterTeamMark team={team} /> })))}
           {/* Any + three priorities: a fixed set, so it reads as segments
@@ -143,7 +144,7 @@ function PriorityFilter({ value, onChange }: { value: string; onChange: (value: 
 }
 
 /** An agent or team choice carries its visual badge, in the menu and the trigger. */
-type FilterChoice = { value: string; label: string; mark?: ReactNode; role?: string };
+type FilterChoice = { value: string; label: string; mark?: ReactNode; role?: AgentRoleIdentity };
 
 /* In a list of badged choices, "Any" holds the empty slot so names align —
    the same placeholder the roster pickers draw for "Unassigned". */
@@ -154,7 +155,7 @@ function ChoiceLabel({ option, slotted }: { option: FilterChoice; slotted: boole
       {option.mark ?? <span className="agent-state agent-state--empty" aria-hidden="true" />}
       <span className="agent-identity-copy">
         <span className="roster-trigger-name" translate="no">{option.label}</span>
-        {option.role ? <span className="agent-role-label" title={option.role}>{option.role}</span> : null}
+        <AgentRoleMeta identity={option.role} />
       </span>
     </span>
   );

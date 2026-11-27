@@ -73,7 +73,12 @@ describe("agent role vocabulary", () => {
         assert.equal(typeof copy.admin.v2.agent_role[role], "string", `${locale} admin.v2.agent_role.${role}`);
         assert.equal(typeof copy.role_hints[role], "string", `${locale} role_hints.${role}`);
       }
-      for (const key of ["label", "standard", ...AGENT_ROLE_LEVEL_OPTIONS]) {
+      for (const key of [
+        "label",
+        "standard",
+        ...AGENT_ROLE_LEVEL_OPTIONS,
+        ...AGENT_ROLE_LEVEL_OPTIONS.map((level) => `badge_${level}`),
+      ]) {
         assert.equal(typeof copy.role_levels[key], "string", `${locale} role_levels.${key}`);
       }
       for (const key of ["standard", ...AGENT_ROLE_LEVEL_OPTIONS]) {

@@ -5,7 +5,7 @@ import { assignSkill, revokeSkillAssignment } from "../api";
 import type { AgentTeam, UserAgent, SkillDetail } from "../types";
 import { USER_AGENT_RECORD_QUERY_KEY } from "../hooks/useUserAgents";
 import { SKILLS_QUERY_KEY } from "../hooks/useSkills";
-import { agentRoleLabel } from "../lib/agentRoleLabel";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Drawer } from "@/components/ui/Drawer";
@@ -24,7 +24,7 @@ function TargetRow({
   disabled: boolean;
   onToggle: () => void;
   label: string;
-  meta?: string;
+  meta?: ReactNode;
   /** The target's visual badge — an agent's or team's face. */
   mark?: ReactNode;
 }) {
@@ -187,7 +187,7 @@ export function ShareSkillDrawer({
                   onToggle={() => toggle(`agent:${agent.id}`)}
                   label={agent.displayName}
                   mark={<RosterAgentMark agent={agent} />}
-                  meta={agentRoleLabel(agent, t)}
+                  meta={agent.defaultRole || agent.roleLevel ? <AgentRoleMeta identity={agent} className="" /> : undefined}
                 />
               ))}
             </div>

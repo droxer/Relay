@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getProjectSetup, RelayApiError } from "../api";
 import { useRelayMutations } from "../hooks/useRelayMutations";
-import { agentRoleLabel } from "../lib/agentRoleLabel";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import {
   effectiveLead,
   keptMemberIds,
@@ -455,7 +455,6 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
   const blocked = Boolean(member.issue);
   const inactive = blocked || !member.include;
   const issueId = `setup-member-issue-${member.agentId}`;
-  const role = agentRoleLabel(agent, t);
   return (
     <li className="project-setup-item" data-excluded={member.include ? undefined : ""}>
       <div className="project-setup-member-head">
@@ -469,7 +468,7 @@ function SetupMemberRow({ member, name, agent, lead, onChange, onMakeLead }: {
           {agent ? <RosterAgentMark agent={agent} /> : null}
           <strong translate="no">{name}</strong>
         </label>
-        {role ? <span className="project-settings-hint">{role}</span> : null}
+        <AgentRoleMeta identity={agent} className="project-settings-hint" />
         <label className="project-member-flag">
           <Checkbox checked={lead} disabled={inactive} onCheckedChange={(value) => { if (value === true) onMakeLead(); }} />
           <span>{t("project.setup_member_lead")}</span>

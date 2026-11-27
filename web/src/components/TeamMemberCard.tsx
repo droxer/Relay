@@ -5,9 +5,9 @@ import { useTranslation } from "react-i18next";
 import { AGENT_ROLE_OPTIONS } from "../types";
 import type { AgentName, AgentRole, AgentRoleLevel, LogicalAgentAvailability, TeamMemberConfig, TeamMemberConfigPatch } from "../types";
 import { teamMemberConfigPatch } from "../lib/teamForm";
-import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { LeadBadge } from "./LeadBadge";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import { TonePill } from "./StatusPill";
 import { ActionEdit, ICON } from "./icons";
 import { Button } from "@/components/ui/button";
@@ -59,7 +59,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
   const { t } = useTranslation();
   const role = effectiveRoleOf(member, config);
   const roleLevel = config.roleLevel ?? member.roleLevel;
-  const roleLabel = agentRoleLabel({ defaultRole: role, roleLevel }, t);
+  const roleIdentity = { defaultRole: role, roleLevel };
   const availability = member.enabled === false ? "offline" : member.availability;
   return (
     <header className="team-work-member-head">
@@ -74,11 +74,7 @@ function TeamMemberCardHead({ member, config, lead, nameId, side }: {
         <span className="team-work-member-name">
           <strong id={nameId}>{member.displayName}</strong>
           {lead ? <LeadBadge /> : null}
-          {roleLabel ? (
-            <span className="team-work-member-role" title={roleLabel}>
-              {roleLabel}
-            </span>
-          ) : null}
+          <AgentRoleMeta identity={roleIdentity} className="team-work-member-role" />
           {member.enabled === false ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
         </span>
       </span>
