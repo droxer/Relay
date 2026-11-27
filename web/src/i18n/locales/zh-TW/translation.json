@@ -146,6 +146,8 @@
     "coming_soon": "即將推出",
     "coming_soon_short": "即將",
     "refresh": "重新整理",
+    "refreshing": "正在重新整理",
+    "refresh_failed": "無法重新整理清單。請下拉重試。",
     "settings": "設定",
     "logout": "退出登入",
     "collapse": "收起",

@@ -91,6 +91,104 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   return page;
 }
 
+const refreshProject = { id: "refresh-project", name: "Refresh project", ownerUserId: USER.id,
+  enabled: true, members: [], computerId: "node:layout", leadAgentId: null, version: 1,
+  workspaceLayout: "project", workspaceSubpath: "projects/refresh-project", createdAt: stamp, updatedAt: stamp };
+
+for (const directory of [
+  { path: "/threads", list: ".conversation-list", endpoint: "threads" },
+  { path: "/tasks", list: ".issues-page .sec-main", endpoint: "tasks" },
+  { path: "/projects/refresh-project?tab=tasks", list: ".backlog-project-main", endpoint: "tasks", projectId: refreshProject.id },
+] as const) {
+  test(`phone pull refresh updates ${directory.path} in place`, async ({ browser, browserName }) => {
+    const isThread = directory.endpoint === "threads";
+    const projectId = "projectId" in directory ? directory.projectId : undefined;
+    const record = isThread ? session : { ...task, title: "A task to review", projectId };
+    const fixtures = { projects: [refreshProject], [isThread ? "sessions" : "tasks"]: [
+      record,
+      ...Array.from({ length: 18 }, (_, i) => ({
+        ...record, id: `older-${i}`, title: `Older item ${i}`, updatedAt: "2026-08-01T00:00:00.000Z",
+      })),
+    ] };
+    const page = await openPage(browser, directory.path, true, undefined, undefined, fixtures);
+    const list = page.locator(directory.list);
+    const row = list.getByText(record.title, { exact: true });
+    await expect(row).toBeVisible();
+    const originalUrl = page.url();
+    let navigations = 0;
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) navigations += 1;
+    });
+    let requests = 0;
+    let finishRefresh = () => {};
+    const pending = new Promise<void>((resolve) => { finishRefresh = resolve; });
+    const fresh = "Newly created elsewhere";
+    await page.route((url) => url.pathname === `/api/v1/${directory.endpoint}`
+      && (isThread || url.searchParams.get("layout") === "list"), async (route) => {
+      requests += 1;
+      if (projectId) expect(new URL(route.request().url()).searchParams.get("projectId")).toBe(projectId);
+      await pending;
+      await route.fulfill({ json: {
+        [isThread ? "sessions" : "tasks"]: [{ ...record, id: "new-record", title: fresh }, record],
+      } });
+    });
+
+    const pull = (x: number, y: number) => row.evaluate((element, delta) => {
+      const emit = (type: string, point?: { clientX: number; clientY: number }) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, "touches", { value: point ? [point] : [] });
+        element.dispatchEvent(event);
+      };
+      emit("touchstart", { clientX: 80, clientY: 150 });
+      emit("touchmove", { clientX: 80 + delta.x, clientY: 150 + delta.y });
+      emit("touchend");
+    }, { x, y });
+
+    const scroll = async (position: number) => row.evaluate((element, top) => {
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        if (parent.scrollHeight <= parent.clientHeight || getComputedStyle(parent).overflowY !== "auto") continue;
+        parent.scrollTop = top;
+        return parent.scrollTop;
+      }
+      return null;
+    }, position);
+    const indicator = list.getByRole("status", { name: "Refreshing" });
+    expect(await scroll(48)).toBeGreaterThan(0);
+    await pull(0, 120);
+    expect(await scroll(0)).toBe(0);
+    await pull(100, 20);
+    await pull(0, 20);
+    await expect(indicator).toHaveCount(0);
+    expect(requests).toBe(0);
+
+    if (browserName === "chromium") {
+      const firstRow = isThread ? row : list.locator(".backlog-row-title").first();
+      await expect(firstRow).toBeInViewport();
+      const touch = await page.context().newCDPSession(page);
+      const box = await firstRow.boundingBox();
+      if (!box) throw new Error("The row must be visible to start the touch gesture");
+      const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+      for (const distance of [16, 48, 84, 120]) {
+        await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ ...point, y: point.y + distance }] });
+      }
+      await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } else {
+      await pull(0, 120);
+    }
+    await expect(indicator).toBeVisible();
+    await expect.poll(() => requests).toBe(1);
+    await pull(0, 120);
+    finishRefresh();
+    await expect(list.getByText(fresh, { exact: true })).toBeVisible();
+    await expect(indicator).toHaveCount(0);
+    expect(requests).toBe(1);
+    await expect(page).toHaveURL(originalUrl);
+    expect(navigations).toBe(0);
+    await page.context().close();
+  });
+}
+
 test("Task Thread shows the Task tool permission when idle", async ({ browser }) => {
   const page = await openPage(browser, "/threads/review-thread", false, undefined, undefined, {
     tasks: [{ ...task, permissionMode: "yolo" }, routine],

@@ -146,6 +146,8 @@
     "coming_soon": "即将推出",
     "coming_soon_short": "即将",
     "refresh": "刷新",
+    "refreshing": "正在刷新",
+    "refresh_failed": "无法刷新列表。请下拉重试。",
     "settings": "设置",
     "logout": "退出登录",
     "collapse": "收起",

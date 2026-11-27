@@ -39,6 +39,30 @@
     overscroll-behavior-y: none;
   }
 
+  :is(.conversation-list, .sec-main, .backlog-project-main):has(> .pull-to-refresh) {
+    position: relative;
+  }
+
+  .pull-to-refresh:not([hidden]) {
+    position: absolute;
+    z-index: 3;
+    inset-block-start: 0;
+    inset-inline-start: 50%;
+    display: grid;
+    place-items: center;
+    width: var(--sp-8);
+    height: var(--sp-8);
+    border: var(--hairline);
+    border-radius: var(--r-full);
+    background: var(--surface-1);
+    color: var(--ink-3);
+    pointer-events: none;
+  }
+
+  .pull-to-refresh[data-armed="true"] {
+    color: var(--ink-1);
+  }
+
   a[href],
   button,
   [role="button"],

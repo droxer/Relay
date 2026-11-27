@@ -52,6 +52,7 @@ type RelayDataResult = {
   moreSessionsFailed: boolean;
   /** Load the next older page of the thread list. */
   loadMoreSessions: () => Promise<void>;
+  refreshSessions: () => Promise<void>;
   tasks: RelayTaskSummary[];
   homeTaskNeedsYou?: number;
   homeTaskProjects?: TasksResponse["homeProjects"];
@@ -337,6 +338,11 @@ export function useRelayData(
     }
   }, [token, enabled, queryClient]);
 
+  const refreshSessions = useCallback(() => queryClient.refetchQueries(
+    { queryKey: SESSIONS_KEY, exact: true, type: "active" },
+    { cancelRefetch: false, throwOnError: true },
+  ), [queryClient]);
+
   const refresh = useCallback(
     async () => {
       if (!enabled) return;
@@ -375,6 +381,7 @@ export function useRelayData(
     loadingMoreSessions,
     moreSessionsFailed,
     loadMoreSessions,
+    refreshSessions,
     tasks,
     homeTaskNeedsYou: projectedTasksOnly || taskProjectId || taskThreadId || taskComputerId || taskScope === "automations" || homeTaskView
       ? homeTaskNeedsYou ?? undefined : undefined,

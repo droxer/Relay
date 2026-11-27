@@ -3,7 +3,7 @@
 
 import { TASK_FLOW_STAGES, isFlowStage, taskWorkflowStage, type TaskWorkflowStage } from "../lib/taskFlow";
 
-import { useCallback, useEffect, useMemo, useState, useEffectEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useInlineTaskEdits } from "../hooks/useInlineTaskEdits";
@@ -31,6 +31,7 @@ import { GitHubImportDrawer } from "./task-board/GitHubImportDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
 import { taskCreateIntent } from "../lib/taskCreateIntent";
 import { BoardEmpty } from "./BoardEmpty";
+import { PullToRefresh } from "./PullToRefresh";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { taskAgentDisplayName, taskAssigneeLabel, taskAssigneeRole, teamReady } from "../lib/taskAssignment";
 import { type ProjectListItem, type CurrentUser, type DaemonNodeMonitorRecord, type RelaySession, type RelayTaskListItem, type TaskStatus } from "../types";
@@ -169,6 +170,9 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
     },
     enabled: mounted && providedTasks === undefined,
   });
+  const listRef = useRef<HTMLDivElement>(null);
+  const refreshList = providedTasks === undefined
+    ? () => result.refetch({ cancelRefetch: false, throwOnError: true }) : onRefresh;
   const response = providedTasks === undefined && !waitingForSearch ? result.data : undefined;
   const resultTags = response?.tags;
   const resultLanes = response?.lanes;
@@ -349,7 +353,9 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
       >
         {computerId && !readOnly ? <UnplacedComputerWork computerId={computerId} tasks={unplacedTasks}
           page={unplaced} onPageChange={setUnplacedPage} /> : null}
-        <div className="backlog-project-main">
+        <div className="backlog-project-main" ref={listRef}>
+          {view === "list" && !waitingForSearch && refreshList
+            ? <PullToRefresh target={listRef} onRefresh={refreshList} /> : null}
           {/* The header is controls only: the metrics live on the project's
               Dashboard tab, and on the board the lanes already name each status. */}
           {actionsInFilterBar ? null : (
