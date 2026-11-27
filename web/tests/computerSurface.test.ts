@@ -75,18 +75,32 @@ describe("My Computer record card", () => {
     assert.doesNotMatch(page, /adm-fleet-grid/);
   });
 
-  it("shows runtime status as a mark with accessible text and hover details", async () => {
+  it("shows runtime status as a mark with visible non-ready labels and keyboard details", async () => {
     const card = await read("web/src/components/computer/ComputerCard.tsx");
     assert.match(card, /computer-runtime-name/);
     assert.match(card, /role="img" aria-label=\{stateLabel\}/);
-    // The state word stays on hover for a working runtime; only a failed one
-    // prints it, so failure is not told by the ring's hue alone.
-    assert.doesNotMatch(card.replace(/\{failed \? <span className="runtime-mark-state"[^}]*>\{stateLabel\}<\/span> : null\}/, ""), /\{stateLabel\}\s*<\//);
-    assert.match(card, /\{failed \? <span className="runtime-mark-state"/);
-    assert.doesNotMatch(card, /ready \? null/);
+    // Every non-ready runtime prints its state label visibly so touch and
+    // keyboard users never have to hover a pip to tell statuses apart.
+    assert.match(card, /const showStateLabel = tone === "bad" \|\| \(online && tone !== "good"\);/);
+    assert.match(card, /\{showStateLabel \? <span className="runtime-mark-state"/);
+    assert.match(card, /tabIndex=\{0\}/);
     assert.match(card, /\[labelForExecutor\(agent\), stateLabel, version, detail\]/);
     assert.doesNotMatch(card, /<Badge|computer-runtime-detail|computer-runtime-version/);
     assert.match(card, /labelForExecutor\(agent\)/);
+  });
+
+  it("supports Windows paths and a Back action in manual setup, plus retry and live status in browser setup", async () => {
+    const [drawer, deviceSetup, notice] = await Promise.all([
+      read("web/src/components/computer/ConnectComputerDrawer.tsx"),
+      read("web/src/components/computer/ComputerDeviceSetup.tsx"),
+      read("web/src/components/computer/ComputerConnectionNotice.tsx"),
+    ]);
+    assert.match(drawer, /device_back_to_browser/);
+    assert.match(drawer, /a-zA-Z\]:\[\\\\\/\]/);
+    assert.match(deviceSetup, /onRetry=\{error \? handleRetry : undefined\}/);
+    assert.match(deviceSetup, /computer-install-status/);
+    assert.match(notice, /InlineCopyCommand/);
+    assert.match(notice, /token_reissue_action/);
   });
 
   it("labels its actions instead of relying on bare icons", async () => {

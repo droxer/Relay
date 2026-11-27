@@ -13,7 +13,7 @@ import { StateMark } from "../StateMark";
 import { NodePresence } from "../admin/NodePresence";
 import { TonePill } from "../StatusPill";
 import { hasClientUpdate } from "./ClientOutdatedBadge";
-import { ComputerConnectionNotice } from "./ComputerConnectionNotice";
+import { ComputerConnectionNotice, InlineCopyCommand } from "./ComputerConnectionNotice";
 import { ComputerReportCleanup } from "./ComputerReportCleanup";
 import { computerConnection, connectionNeedsNotice, type ComputerConnection } from "../../lib/computerConnection";
 import { HostOsBadge } from "./HostOsBadge";
@@ -69,6 +69,7 @@ export function ComputerCard({
   reportActions,
   onRename,
   onManageExecutors,
+  onCopyId,
   onShowToken,
   onDisconnect,
   onOpenThread,
@@ -80,6 +81,7 @@ export function ComputerCard({
   reportActions?: ReactNode;
   onRename: (node: ControlPanelDaemonNodeRecord) => void;
   onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
+  onCopyId?: (node: ControlPanelDaemonNodeRecord) => void;
   onShowToken: (node: ControlPanelDaemonNodeRecord) => void;
   onDisconnect: (node: ControlPanelDaemonNodeRecord) => void;
   onOpenThread?: (sessionId: string) => void;
@@ -121,7 +123,20 @@ export function ComputerCard({
               on the admin fleet card. Sharing one wrapping row, a long name
               pushed the OS onto a line of its own while a short one kept it
               inline, so no two cards had the same header shape. */}
-          <h2 className="computer-card-name" translate="no" title={title}><a href={computerWorkHref(computerId(node))} onClick={event => { if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) { event.preventDefault(); void navigateToAppPath(computerWorkHref(computerId(node))); } }}>{title}</a></h2>
+          <h2 className="computer-card-name" translate="no" title={title}>
+            <a
+              className="computer-card-name-link"
+              href={computerWorkHref(computerId(node))}
+              onClick={(event) => {
+                if (!event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) {
+                  event.preventDefault();
+                  void navigateToAppPath(computerWorkHref(computerId(node)));
+                }
+              }}
+            >
+              {title}
+            </a>
+          </h2>
           <div className="computer-card-state">
             {waitingForConnection ? (
               <span className="computer-presence-plain" data-state="pending">
@@ -163,11 +178,11 @@ export function ComputerCard({
             <p className="computer-card-outdated">
               <span className="computer-card-outdated-label">
                 <StateMark shape="solid" tone="warn" />
-                <span>{t("computer.client_outdated")}</span>
+                <span>{t(node.clientOutdated ? "computer.client_update_required" : "computer.client_outdated")}</span>
               </span>
               <span className="computer-card-outdated-sep" aria-hidden="true">·</span>
               <span>
-                <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <code className="code" /> }} />
+                <Trans i18nKey="computer.client_outdated_fix" t={t} components={{ cmd: <InlineCopyCommand /> }} />
               </span>
             </p>
           ) : null}
@@ -196,7 +211,7 @@ export function ComputerCard({
                 <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
                 {t("admin.v2.manage_executors")}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void copyText(node.id)}>
+              <DropdownMenuItem onClick={() => (onCopyId ? onCopyId(node) : void copyText(node.id))}>
                 <ActionCopy size={ICON.sm} aria-hidden="true" />
                 {t("admin.copy_node_id")}
               </DropdownMenuItem>
@@ -214,7 +229,12 @@ export function ComputerCard({
               {node.managedNodeId ? null : (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem danger onClick={() => onDisconnect(node)}>
+                  <DropdownMenuItem
+                    danger
+                    disabled={activeRuns.length > 0}
+                    title={activeRuns.length > 0 ? t("errors.disconnect_computer_active") : undefined}
+                    onClick={() => onDisconnect(node)}
+                  >
                     <ActionRemove size={ICON.sm} aria-hidden="true" />
                     {t("computer.disconnect")}
                   </DropdownMenuItem>
@@ -229,7 +249,7 @@ export function ComputerCard({
           happening, whether it fixes itself, and the command to run when it
           does not. Waiting-for-connection shows its own terminal check hint. */}
       {connectionNeedsNotice(connection) ? (
-        <ComputerConnectionNotice node={node} connection={connection} t={t} />
+        <ComputerConnectionNotice node={node} connection={connection} onShowToken={onShowToken} t={t} />
       ) : waitingForConnection ? (
         <div className="computer-card-connection" data-tone="neutral" role="status">
           <p className="computer-card-connection-body">{t("computer.connect_waiting_hint")}</p>
@@ -327,21 +347,29 @@ function RuntimeRow({
   const disabled = Boolean(node.disabledAgents?.includes(agent));
   const agentStatus = node.agents[agent] ?? "unknown";
   const version = node.agentDetails?.[agent]?.version;
-  const tone = agentStatusTone(!isNodeOnline(node) && agentStatus !== "failed" ? "unknown" : agentStatus, { disabled });
+  const online = isNodeOnline(node);
+  const tone = agentStatusTone(!online && agentStatus !== "failed" ? "unknown" : agentStatus, { disabled });
   const presence = nodeAgentPresence(node, agent);
   const stateLabel = runtimeStateLabel(node, agent, disabled, t);
   const detail = runtimeNotReadyDetail(node, agent, disabled, t);
 
   const tooltip = [labelForExecutor(agent), stateLabel, version, detail].filter(Boolean).join(" · ");
-  // A failed runtime says so in words: a red ring beside a grey one is a
-  // difference of hue alone (WCAG 1.4.1).
-  const failed = tone === "bad";
+  // Print visible state text for any non-ready runtime on an online computer
+  // (plus failed runtimes when offline) so touch and keyboard users can
+  // distinguish Not installed, Not responding, Disabled, and Check failed
+  // without repeating "Offline" on every row of an offline card.
+  const showStateLabel = tone === "bad" || (online && tone !== "good");
 
   return (
-    <li className={`computer-runtime-row${disabled ? " is-disabled" : ""}`} title={tooltip}>
+    <li
+      className={`computer-runtime-row${disabled ? " is-disabled" : ""}`}
+      title={tooltip}
+      tabIndex={0}
+      aria-label={tooltip}
+    >
       <span className="computer-runtime-name" translate="no">{labelForExecutor(agent)}</span>
       <RuntimeMark agent={agent} presence={presence} tone={tone} variant="labeled" role="img" aria-label={stateLabel} title={stateLabel}>
-        {failed ? <span className="runtime-mark-state" aria-hidden="true">{stateLabel}</span> : null}
+        {showStateLabel ? <span className="runtime-mark-state" aria-hidden="true">{stateLabel}</span> : null}
       </RuntimeMark>
     </li>
   );

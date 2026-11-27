@@ -75,6 +75,11 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
       width="detail"
       footer={
         <>
+          {!credentials ? (
+            <Button size="cta" type="button" variant="ghost" onClick={onClose} disabled={busy !== null}>
+              {t("admin.v2.close_drawer")}
+            </Button>
+          ) : null}
           <Button
             size="cta"
             type="button"

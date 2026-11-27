@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { CredCopyRow } from "../admin/CredCopyRow";
 
 export type TargetOs = "macos" | "linux" | "windows";
@@ -66,10 +67,11 @@ interface OsInstallCommandProps {
   loading?: boolean;
   copied: boolean;
   onCopy: (command: string) => void;
+  onRetry?: () => void;
 }
 
 /** The selected OS's command, or why there is none. */
-export function OsInstallCommand({ os, unixCommand, windowsCommand, loading, copied, onCopy }: OsInstallCommandProps) {
+export function OsInstallCommand({ os, unixCommand, windowsCommand, loading, copied, onCopy, onRetry }: OsInstallCommandProps) {
   const { t } = useTranslation();
   if (loading) return <p className="adm-form-hint">{t("computer.device_loading")}</p>;
   const command = os === "windows" ? windowsCommand : unixCommand;
@@ -77,7 +79,16 @@ export function OsInstallCommand({ os, unixCommand, windowsCommand, loading, cop
     // Only an older server lacks the Windows installer alone; with no command
     // at all, the request itself failed.
     const windowsMissing = os === "windows" && Boolean(unixCommand);
-    return <Alert>{t(windowsMissing ? "computer.os_windows_unavailable" : "computer.device_error")}</Alert>;
+    return (
+      <div className="computer-install-error">
+        <Alert>{t(windowsMissing ? "computer.os_windows_unavailable" : "computer.device_error")}</Alert>
+        {!windowsMissing && onRetry ? (
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            {t("workspace.retry")}
+          </Button>
+        ) : null}
+      </div>
+    );
   }
   return (
     <CredCopyRow

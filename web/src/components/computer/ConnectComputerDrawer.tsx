@@ -107,7 +107,7 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
 
   if (!manualSetup) return <Drawer open={open} onClose={onClose}
     title={t("computer.connect_title")} subtitle={t("computer.device_setup_intro")} width="form">
-    {open && <ComputerDeviceSetup onManual={() => setManualSetup(true)} />}
+    {open && <ComputerDeviceSetup nodes={nodes} onManual={() => setManualSetup(true)} />}
   </Drawer>;
 
   return (
@@ -193,6 +193,15 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
         </div>
       ) : (
         <form id={formId} className="adm-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
+          <Button
+            type="button"
+            variant="ghost"
+            className="computer-manual-link"
+            onClick={() => setManualSetup(false)}
+            disabled={isBusy}
+          >
+            {t("computer.device_back_to_browser")}
+          </Button>
           <p className="adm-form-hint">{t("computer.connect_requirements")}</p>
           <fieldset className="adm-form-section">
             <Field label={t("computer.connect_name_label")} optional={t("admin.v2.optional")}>
@@ -204,6 +213,7 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
                 placeholder={t("admin.v2.computer_name_placeholder_local")}
                 maxLength={64}
                 disabled={isBusy}
+                data-modal-initial-focus
               />
             </Field>
             <Field
@@ -217,6 +227,8 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
                 name="connect-computer-workspace-path"
                 autoComplete="off"
                 spellCheck={false}
+                required
+                aria-required="true"
                 value={workspacePath}
                 onChange={(event) => {
                   setWorkspacePath(event.target.value);
@@ -226,7 +238,6 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
                 disabled={isBusy}
                 aria-invalid={Boolean(fieldError) || undefined}
                 aria-describedby={fieldError ? "connect-computer-workspace-path-error" : undefined}
-                data-modal-initial-focus
               />
             </Field>
             {/* Agents run as plain processes against the installs already on
@@ -242,12 +253,13 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
 }
 
 function isAbsolutePath(value: string): boolean {
-  return value.startsWith("/");
+  return /^(?:\/|[a-zA-Z]:[\\/]|\\\\)/.test(value);
 }
 
 function workspacePathPlaceholder(): string {
-  if (typeof navigator !== "undefined" && /Linux/i.test(navigator.platform)) {
-    return "/home/alice/project";
+  if (typeof navigator !== "undefined") {
+    if (/Win/i.test(navigator.platform)) return "C:\\Users\\alice\\project";
+    if (/Linux/i.test(navigator.platform)) return "/home/alice/project";
   }
   return "/Users/alice/project";
 }

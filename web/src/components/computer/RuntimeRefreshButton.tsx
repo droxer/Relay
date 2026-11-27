@@ -40,6 +40,13 @@ export function RuntimeRefreshButton({ nodeId, online, supported, busy }: {
     void poll();
     return () => { stopped = true; clearTimeout(timer); };
   }, [nodeId, commandId]);
+  useEffect(() => {
+    if (status !== "completed") return;
+    const timer = setTimeout(() => {
+      setStatus((current) => (current === "completed" ? "idle" : current));
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [status]);
   async function refresh() {
     const current = generation.current;
     setCommandId(undefined);

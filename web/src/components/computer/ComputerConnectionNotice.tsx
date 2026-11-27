@@ -1,10 +1,38 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
-import { Trans } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import type { ControlPanelDaemonNodeRecord } from "../../types";
 import type { ComputerConnection } from "../../lib/computerConnection";
-import { ICON, StatusError, StatusInfo, StatusWarn } from "../icons";
+import { Button } from "@/components/ui/button";
+import { useCopyFeedback } from "@/hooks/useCopyFeedback";
+import { ActionCopy, ICON, StatusError, StatusInfo, StatusOk, StatusWarn } from "../icons";
+
+/** Inline CLI command with a quiet one-click copy action. */
+export function InlineCopyCommand({ children }: { children?: ReactNode }) {
+  const { t } = useTranslation();
+  const { copiedField, copy } = useCopyFeedback();
+  const command = typeof children === "string" ? children.trim() : "";
+  if (!command) return <code className="code">{children}</code>;
+  const copied = copiedField === command;
+  return (
+    <span className="computer-inline-cmd">
+      <code className="code">{children}</code>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-dense"
+        className="computer-inline-cmd-copy"
+        onClick={() => void copy(command, command)}
+        aria-label={t(copied ? "computer.command_copied" : "computer.copy_command", { command })}
+        title={t(copied ? "computer.command_copied" : "computer.copy_command", { command })}
+      >
+        {copied ? <StatusOk size={ICON.sm} aria-hidden="true" /> : <ActionCopy size={ICON.sm} aria-hidden="true" />}
+      </Button>
+    </span>
+  );
+}
 
 /** Which copy a reading speaks with: its state, or the issue behind it. */
 function noticeKey(connection: ComputerConnection, managed: boolean): { title: string; body: string } {
@@ -29,10 +57,12 @@ function noticeKey(connection: ComputerConnection, managed: boolean): { title: s
 export function ComputerConnectionNotice({
   node,
   connection,
+  onShowToken,
   t,
 }: {
   node: ControlPanelDaemonNodeRecord;
   connection: ComputerConnection;
+  onShowToken?: (node: ControlPanelDaemonNodeRecord) => void;
   t: TFunction;
 }) {
   const { title, body } = noticeKey(connection, Boolean(node.managedNodeId));
@@ -41,6 +71,7 @@ export function ComputerConnectionNotice({
   // Offline and revoked states are already named in the card header's presence
   // readout, so repeating the title here adds clutter without new information.
   const showTitle = connection.state !== "offline" && connection.state !== "revoked";
+  const showReissueAction = connection.state === "revoked" && Boolean(onShowToken);
   return (
     <div className="computer-card-connection" data-tone={connection.tone} role="status">
       <Icon size={ICON.sm} aria-hidden="true" />
@@ -48,7 +79,7 @@ export function ComputerConnectionNotice({
         {showTitle ? <p className="computer-card-connection-title">{t(title)}</p> : null}
         <p className="computer-card-connection-body">
           <Trans i18nKey={webCleanup && connection.issue === "quarantine" ? "computer.connection_quarantine_web_body" : body}
-            t={t} components={{ cmd: <code className="code" /> }} />
+            t={t} components={{ cmd: <InlineCopyCommand /> }} />
           {!webCleanup && connection.pendingReports > 0 ? (
             <>
               {" "}
@@ -58,6 +89,13 @@ export function ComputerConnectionNotice({
             </>
           ) : null}
         </p>
+        {showReissueAction ? (
+          <div className="computer-card-connection-actions">
+            <Button type="button" variant="outline" size="sm" onClick={() => onShowToken?.(node)}>
+              {t("computer.token_reissue_action")}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

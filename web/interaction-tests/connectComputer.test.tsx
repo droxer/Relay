@@ -96,13 +96,33 @@ it("only reports connected after a fresh online status and copies the installer 
   expect(screen.getByRole("status").textContent).toContain("Waiting for connection");
 });
 
-it("rejects unsupported Windows paths before registering a computer", () => {
+it("accepts Windows absolute paths and rejects relative paths before registering a computer", async () => {
+  vi.mocked(createLocalDeviceEnrollment).mockResolvedValue({
+    node: { id: "computer-win" }, daemonEnv: {}, nodeToken: "fixture-token",
+    installCommand: "curl -fsSL https://relay.example/install.sh | bash",
+    windowsInstallCommand: "irm 'https://relay.example/install.ps1' | iex",
+  } as Awaited<ReturnType<typeof createLocalDeviceEnrollment>>);
   render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
-  fireEvent.change(document.querySelector('[name="connect-computer-workspace-path"]')!, { target: { value: "C:\\Users\\alice" } });
+  fireEvent.change(document.querySelector('[name="connect-computer-workspace-path"]')!, { target: { value: "relative/project" } });
   fireEvent.submit(document.querySelector("form")!);
   expect(createLocalDeviceEnrollment).not.toHaveBeenCalled();
   expect(screen.getByText(en.computer.connect_workspace_path_error)).toBeTruthy();
+
+  fireEvent.change(document.querySelector('[name="connect-computer-workspace-path"]')!, { target: { value: "C:\\Users\\alice" } });
+  fireEvent.submit(document.querySelector("form")!);
+  await waitFor(() => expect(createLocalDeviceEnrollment).toHaveBeenCalledWith({
+    workspacePath: "C:\\Users\\alice",
+    displayName: undefined,
+  }));
+});
+
+it("lets users return from manual setup to browser setup", () => {
+  render(<ConnectComputerDrawer open onClose={vi.fn()} onConnected={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Manual setup with a computer token" }));
+  expect(screen.getByRole("button", { name: "Generate install command" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Back to browser setup" }));
+  expect(screen.getByRole("button", { name: "Manual setup with a computer token" })).toBeTruthy();
 });
 
 it("explains when an older backend only returns a manual command", async () => {

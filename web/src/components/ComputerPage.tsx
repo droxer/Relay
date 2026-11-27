@@ -42,6 +42,7 @@ import {
   StatusInfo,
 } from "./icons";
 import { omit } from "../lib/omit";
+import { copyText } from "./admin/helpers";
 import { isNodeOnline } from "../lib/adminHelpers";
 
 export function ComputerPage({
@@ -60,7 +61,7 @@ export function ComputerPage({
   onOpenThread?: (sessionId: string) => void;
 }) {
   const { t } = useTranslation();
-  const { confirm, prompt } = useDialogs();
+  const { confirm, prompt, announce } = useDialogs();
   const { reportMutationError } = useMutationError();
   const [overrides, setOverrides] = useState<Record<string, ControlPanelDaemonNodeRecord>>({});
   const [manageExecutorsNodeId, setManageExecutorsNodeId] = useState<string | null>(null);
@@ -132,9 +133,9 @@ export function ComputerPage({
       variant="ghost"
       type="button"
       className="page-header-icon-action page-header-icon-action--primary page-header-create-action"
-      tooltip={computerLimit !== undefined
+      tooltip={limitHint ?? (computerLimit !== undefined
         ? `${t("computer.connect_button")} · ${computersUsed}/${computerLimit}`
-        : t("computer.connect_button")}
+        : t("computer.connect_button"))}
       disabled={atLimit}
       onClick={() => setConnectDrawerOpen(true)}
     >
@@ -183,6 +184,15 @@ export function ComputerPage({
     // Re-connecting an id that was just removed must bring it back.
     setRemovedIds((prev) => prev.filter((id) => id !== result.node.id));
     handleNodeUpdated(result.node);
+  }
+
+  async function handleCopyNodeId(node: ControlPanelDaemonNodeRecord) {
+    try {
+      await copyText(node.id);
+      announce({ message: t("computer.node_id_copied"), tone: "success" });
+    } catch {
+      announce({ message: t("computer.copy_failed"), tone: "error" });
+    }
   }
 
   async function handleDisconnectNode(node: ControlPanelDaemonNodeRecord) {
@@ -283,6 +293,7 @@ export function ComputerPage({
                   node={node}
                   onRename={(target) => void handleRenameNode(target)}
                   onManageExecutors={(target) => setManageExecutorsNodeId(target.id)}
+                  onCopyId={(target) => void handleCopyNodeId(target)}
                   onShowToken={(target) => setTokenNodeId(target.id)}
                   onDisconnect={(target) => void handleDisconnectNode(target)}
                   onOpenThread={onOpenThread}

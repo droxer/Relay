@@ -213,6 +213,23 @@
   white-space: nowrap;
 }
 
+.computer-card-name-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line-1);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  transition:
+    color var(--t-fast) var(--ease),
+    text-decoration-color var(--t-fast) var(--ease);
+}
+
+.computer-card-name-link:hover,
+.computer-card-name-link:focus-visible {
+  color: var(--link-ink-strong, var(--ink-1));
+  text-decoration-color: currentColor;
+}
+
 /* Ownership, isolation, and heartbeat on one quiet line. */
 /* A wrapping text line, not a flex row. A flex row breaks between children,
    so a "·" of its own lands orphaned at the end of a line and a "·" glued to
@@ -346,6 +363,50 @@
 .computer-card-connection-count {
   color: var(--ink-3);
   white-space: nowrap;
+}
+
+.computer-card-connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+
+.computer-inline-cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  vertical-align: baseline;
+}
+
+.computer-inline-cmd-copy {
+  width: 1.375rem;
+  height: 1.375rem;
+  min-width: 1.375rem;
+  min-height: 1.375rem;
+  padding: 0;
+  color: var(--ink-3);
+}
+
+.computer-inline-cmd-copy:hover,
+.computer-inline-cmd-copy:focus-visible {
+  color: var(--ink-1);
+}
+
+.computer-install-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+@media (pointer: coarse) {
+  .computer-card-actions button,
+  .computer-card-section-actions button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .computer-card-actions {
