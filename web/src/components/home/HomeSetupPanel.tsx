@@ -84,7 +84,7 @@ export function HomeSetupFocus({ progress, onOpen }: { progress: HomeSetupProgre
   const { t } = useTranslation();
   const { step, done, total } = progress;
   return (
-    <div className="home-focus-slot" data-focus="setup">
+    <div className="home-focus" data-focus="setup">
       <div className="home-focus-heading">
         <h3>{t("home.plan.start_here")}</h3>
         <span className="tnum">{t("onboarding.count", { done, total })}</span>

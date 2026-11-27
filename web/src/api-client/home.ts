@@ -60,12 +60,29 @@ function viewerTimeZone(): string | undefined {
   }
 }
 
-export function getHomeStats(
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isHomeStatsResponse(value: unknown): value is HomeStatsResponse {
+  if (!isRecord(value)) return false;
+  if (!isRecord(value.tasks) || typeof value.tasks.completed !== "number") return false;
+  if (!isRecord(value.conversations) || typeof value.conversations.chats !== "number") return false;
+  if (!isRecord(value.runs) || !Array.isArray(value.runs.runtimes)) return false;
+  if (!isRecord(value.tokens) || !Array.isArray(value.tokens.daily)) return false;
+  return true;
+}
+
+export async function getHomeStats(
   period: HomeStatsPeriod = "week",
   signal?: AbortSignal,
   timeZone = viewerTimeZone(),
 ): Promise<HomeStatsResponse> {
   const query = new URLSearchParams({ period });
   if (timeZone) query.set("tz", timeZone);
-  return apiJson<HomeStatsResponse>(`/home/stats?${query.toString()}`, { signal });
+  const data = await apiJson<unknown>(`/home/stats?${query.toString()}`, { signal });
+  if (!isHomeStatsResponse(data)) {
+    throw new Error("Invalid home stats payload");
+  }
+  return data;
 }

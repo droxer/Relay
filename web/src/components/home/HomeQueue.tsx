@@ -24,7 +24,7 @@ export interface HomeQueueProps {
   onOpenNeedsMe: () => void;
 }
 
-const PREVIEW = 4;
+const PREVIEW = 5;
 
 /** "Up next": the ranked queue inside one flat tonal card. The leading focus
  *  item sits at the top above a hairline divider with the screen's one primary
@@ -49,9 +49,8 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
         </div>
         <HomeLink className="home-link" href={needsMeHref} onOpen={onOpenNeedsMe}>{t("home.all_needs_me")}</HomeLink>
       </header>
-      {contextLinks}
       {focus ? (
-        <div className="home-focus-slot">
+        <div className="home-focus">
           <div className="home-focus-heading">
             <h3>{t("home.plan.start_here")}</h3>
           </div>
@@ -64,6 +63,7 @@ export function HomeQueue({ items, readyFocus, contextLinks, actions, agentName,
           </ul>
         </div>
       ) : readyFocus}
+      {contextLinks}
       <div className="home-card-body">
         {bands.length === 0 ? (
           <div className="home-clear" role="status">

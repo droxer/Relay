@@ -16,6 +16,7 @@ from .routines import TaskRoutineRows
 from .links import TaskLinkRows
 from .prerequisites import TaskPrerequisiteRows
 from .reads import TaskReadRows
+from .metrics import TaskMetricReads
 from .occurrences import TaskOccurrenceReads
 from .issue_pages import TaskIssueRows
 from .automation_pages import TaskAutomationPages
@@ -31,6 +32,7 @@ class DatabaseTaskStore(
     TaskLinkRows,
     TaskPrerequisiteRows,
     TaskReadRows,
+    TaskMetricReads,
     TaskOccurrenceReads,
     TaskIssueRows,
     TaskAutomationPages,

@@ -47,7 +47,7 @@ export function ReadyTask({ task, href, onOpen, onStart, focus = false }: {
   };
   const due = task.dueDate ? ` · ${t("home.plan.due", { date: task.dueDate })}` : "";
   return (
-    <div className={focus ? "home-focus-slot" : "home-ready-row"}>
+    <div className={focus ? "home-focus" : "home-ready-row"}>
       {focus ? <div className="home-focus-heading"><h3>{t("home.plan.start_here")}</h3></div> : null}
       <div className="home-plan-row">
         <div className="home-plan-copy">

@@ -62,7 +62,7 @@ const threadPath = (sessionId: string) => hrefForRoute("main", sessionId);
 const taskPath = (taskId: string) => pathForAppState({ route: "backlog", mobileView: "chat", sessionId: null, taskId });
 const projectPath = (projectId: string) => pathForAppState({ route: "projects", mobileView: "threads", sessionId: null, projectId });
 const tasksPath = (search = "") => `${hrefForRoute("backlog")}${search}`;
-const READY_PREVIEW = 4;
+const READY_PREVIEW = 3;
 const MINUTE_MS = 60_000;
 
 /** Home: editorial 12-column personal workspace combining weekly activity stats,

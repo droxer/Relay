@@ -533,7 +533,7 @@ a.home-stat-link:hover .home-stat-label {
 
 /* ── Up next (Row 2 left, span 9) ────────────────────────────────────── */
 
-.home-focus-slot {
+.home-focus {
   border-bottom: var(--hairline-soft);
 }
 
