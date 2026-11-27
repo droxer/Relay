@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from task_setup import mark_task_ready
 from automation_helpers import computer_for_automation
 
 from automation_helpers import WEEKLY_TRIGGERS
@@ -597,13 +598,13 @@ def test_workspace_brief_summarizes_user_workspace(monkeypatch) -> None:
         _add_workspace_file_artifact(app, session.json()["id"], "auth-flow.pptx", "/workspace/alice/auth-flow.pptx")
         task = alice_client.post("/api/v1/tasks", json={"computerId": computer_for_automation(alice_client, agent=agent),
             "title": "Patch auth",
-            "status": "assigned",
             "assignedAgentId": agent["id"],
             "isRoutine": True,
             "routineState": "active",
             "routineTriggers": WEEKLY_TRIGGERS,
         })
         assert task.status_code == 201
+        mark_task_ready(alice_client, task.json())
         bob_session = bob_client.post("/api/v1/threads", json={
             "taskGoal": "Bob private",
             "workspacePath": "/workspace/bob",

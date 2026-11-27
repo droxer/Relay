@@ -2,6 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from task_setup import mark_task_ready
 from test_team_routes import _login, _user
 from test_team_workflows import workflow_world
 
@@ -550,11 +551,13 @@ def test_scheduler_preserves_selected_workflow(monkeypatch, entry):
             'title': 'Scheduled work', 'projectId': project['id'],
             'assignedWorkflowId': workflow['id'],
             **({'isRoutine': True, 'routineState': 'active', 'routineTriggers': DAILY_TRIGGERS}
-               if entry == 'automation' else {'status': 'assigned'}),
+               if entry == 'automation' else {}),
         }).json()
         if entry == 'automation':
             app.state.task_scheduler.automations.tick(datetime.now(UTC) + timedelta(days=2))
             task = occurrence_of(app, task['id'])
+        else:
+            mark_task_ready(client, task)
         tick(app)
         current, session = workflow_session(app, task['id'])
         assert current['assignedWorkflowId'] == workflow['id']

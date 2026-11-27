@@ -125,7 +125,7 @@ export function useBacklogTaskForm({
         ...(form.connectionGrants !== undefined ? { connectionGrants: form.connectionGrants } : {}),
         priority: form.priority,
         tags: form.tags,
-        ...(form.status !== formBaseline?.status ? { status: form.status } : {}),
+        ...(form.id && form.status !== formBaseline?.status ? { status: form.status } : {}),
         acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
         ...(form.permissionMode !== formBaseline?.permissionMode ? { permissionMode: form.permissionMode } : {}),
         collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",

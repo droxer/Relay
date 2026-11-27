@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from relay.app import create_app
 
+from task_setup import mark_task_ready
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
 
 
@@ -46,8 +47,9 @@ def test_project_task_run_tells_the_agent_about_the_project(briefed_project):
     app, client, node, project, lead = briefed_project
     task = client.post("/api/v1/tasks", json={
         "title": "Build the pricing page", "projectId": project["id"],
-        "assignedAgentId": lead["id"], "status": "assigned",
+        "assignedAgentId": lead["id"],
     }).json()
+    mark_task_ready(client, task)
 
     started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
     assert started.status_code == 202, started.text
@@ -65,8 +67,9 @@ def test_project_run_suggestions_wait_for_the_owner(briefed_project):
     app, client, node, project, lead = briefed_project
     task = client.post("/api/v1/tasks", json={
         "title": "Build the pricing page", "projectId": project["id"],
-        "assignedAgentId": lead["id"], "status": "assigned",
+        "assignedAgentId": lead["id"],
     }).json()
+    mark_task_ready(client, task)
     assert client.post(f"/api/v1/tasks/{task['id']}/runs", json={}).status_code == 202
     daemon = TestClient(app)
     [command] = daemon.get(

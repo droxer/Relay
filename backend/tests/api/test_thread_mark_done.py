@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from relay.app import create_app
+from task_setup import mark_task_ready
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
 
 DONE_REPORT = {"status": "done", "work": {"status": "done", "evidence": ["Checked"]}}
@@ -37,8 +38,9 @@ def _finished_task_round(
     }).json()["project"]
     task = client.post("/api/v1/tasks", json={
         "title": "Do it", "projectId": project["id"], "assignedAgentId": lead["id"],
-        "status": "assigned", "acceptancePolicy": policy,
+        "acceptancePolicy": policy,
     }).json()
+    mark_task_ready(client, task)
     started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
     assert started.json()["dispatch"]["state"] == "started", started.text
     token = f"token_{node['id']}"

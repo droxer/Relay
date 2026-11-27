@@ -234,8 +234,11 @@ def tool_definitions(*, may_manage: bool = True) -> list[Tool]:
                 properties[id_key] = _TEXT
                 required.append(id_key)
             if verb != "delete":
+                fields = AUTOMATION_FIELDS if kind == "automation" else WORK_FIELDS
+                if verb == "create":
+                    fields = {**fields, "status": {"enum": ["backlog"]}}
                 properties["fields"] = {
-                    "type": "object", "properties": AUTOMATION_FIELDS if kind == "automation" else WORK_FIELDS,
+                    "type": "object", "properties": fields,
                     "additionalProperties": False, "minProperties": 1,
                     **({"required": ["title"]} if verb == "create" else {}),
                 }

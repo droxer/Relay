@@ -1,6 +1,7 @@
 """Project processes have a lifecycle independent of optional Team references."""
 from uuid import uuid4
 
+from task_setup import mark_task_ready
 from test_team_workflows import workflow_world
 from test_team_workflow_definitions import create_parent
 
@@ -106,9 +107,10 @@ def test_scheduler_dispatches_standalone_task_and_automation(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, _, _, project, payload):
         workflow = definition(client, project, payload)
         task = client.post('/api/v1/tasks', json={
-            'title': 'Scheduled workflow', 'status': 'assigned', 'projectId': project['id'],
+            'title': 'Scheduled workflow', 'projectId': project['id'],
             'assignedWorkflowId': workflow['id'],
         }).json()
+        mark_task_ready(client, task)
         asyncio.run(app.state.task_scheduler.tick())
         assert app.state.task_store.get_task(task['id'])['status'] == 'waiting_for_human'
         routine = client.post('/api/v1/tasks', json={

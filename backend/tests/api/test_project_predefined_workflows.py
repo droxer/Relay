@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 
+from task_setup import mark_task_ready
 from automation_helpers import DAILY_TRIGGERS
 from test_scheduled_workflows import occurrence_of, tick
 from test_task_workflows import take
@@ -152,8 +153,9 @@ def test_project_preset_validation_and_daemon_capability(monkeypatch):
         assert client.post("/api/v1/tasks", json={
             **task, "assignedAgentId": payload["leadAgentId"],
         }).json()["detail"] == "workflow_agent_conflict"
-        ready = client.post("/api/v1/tasks", json={**task, "status": "assigned"})
-        assert ready.status_code == 201, ready.text
+        created = client.post("/api/v1/tasks", json=task)
+        assert created.status_code == 201, created.text
+        ready = mark_task_ready(client, created.json())
         lead, other = project["members"]
         project = app.state.project_store.update_project(project_id, {
             "members": [{**lead, "enabled": False}, other],
@@ -161,7 +163,7 @@ def test_project_preset_validation_and_daemon_capability(monkeypatch):
         assert client.post("/api/v1/tasks", json=task).json()["detail"] == "project_lead_required"
         assert client.post(path, json=body).json()["detail"] == "project_lead_required"
         tick(app)
-        blocked = app.state.task_store.get_task(ready.json()["id"])
+        blocked = app.state.task_store.get_task(ready["id"])
         assert blocked["status"] == "blocked"
         assert blocked["attention"]["code"] == "project_lead_required"
         assert take(app.state.registry, node) == []

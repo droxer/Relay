@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from task_setup import mark_task_ready
 from automation_helpers import computer_for_automation
 
 import asyncio
@@ -654,7 +655,6 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
                 "title": "Team task",
                 "assigneeUserId": ALICE,
                 "assignedTeamId": team["id"],
-                "status": "assigned",
             },
         ).json()
         individual_task = client.post(
@@ -713,6 +713,7 @@ def test_user_reads_team_profile_and_activity(monkeypatch) -> None:
             == 200
         )
 
+        mark_task_ready(client, team_task)
         brief = client.get(f"/api/v1/workspace/brief?teamId={team['id']}")
         assert brief.status_code == 200
         payload = brief.json()

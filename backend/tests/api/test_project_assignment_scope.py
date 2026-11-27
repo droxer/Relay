@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from task_setup import mark_task_ready
 from automation_helpers import DAILY_TRIGGERS, WEEKLY_TRIGGERS
 from relay.core.computer_identity import computer_id
 from test_project_execution_policy import project_context  # noqa: F401
@@ -234,8 +235,8 @@ def test_project_workflow_dispatches_in_the_project_workspace_without_a_team(sco
     workflow = _workflow(client, project, lead["id"])
     task = client.post("/api/v1/tasks", json={
         "title": "Deliver", "projectId": project["id"], "assignedWorkflowId": workflow["id"],
-        "status": "assigned",
     }).json()
+    mark_task_ready(client, task)
     started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
     assert started.status_code == 202, started.text
     assert started.json()["dispatch"]["state"] == "started", started.text

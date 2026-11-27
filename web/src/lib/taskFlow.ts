@@ -1,4 +1,4 @@
-import type { RelayTaskListItem, TaskStatus } from "../types.js";
+import type { RelayTaskListItem } from "../types.js";
 
 export const TASK_FLOW_STAGES = ["backlog", "assigned", "queued", "running", "review", "done", "cancelled"] as const;
 export type TaskWorkflowStage = typeof TASK_FLOW_STAGES[number];
@@ -48,9 +48,6 @@ export function taskFlowMetrics(tasks: RelayTaskListItem[], now = Date.now()) {
     sleIsEstimate,
   };
 }
-
-/** The stages a new task may start in: nothing has run yet. */
-export const NEW_TASK_STATUSES = ["backlog", "assigned"] as const satisfies readonly TaskStatus[];
 
 /**
  * Blocked is a hold on a task, not a stage of its own: a blocked task keeps

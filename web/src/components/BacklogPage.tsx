@@ -466,7 +466,7 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
               };
             }}
             onMoveTask={moveTaskToLane}
-            onCreateInLane={readOnly ? undefined : (status) => openTaskForm({ ...emptyBacklogForm(currentUser), status })}
+            onCreateInLane={readOnly ? undefined : () => openTaskForm(emptyBacklogForm(currentUser))}
             onLanePageChange={setLanePage}
           />
         )}

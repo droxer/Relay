@@ -4,6 +4,7 @@ from contextlib import contextmanager
 
 import pytest
 
+from task_setup import mark_task_ready
 from test_team_workflows import workflow_world
 from test_team_workflow_definitions import create_parent
 from test_scheduled_workflows import tick
@@ -53,11 +54,11 @@ def test_task_selects_its_project_workflow(monkeypatch, scheduled):
         response = client.post('/api/v1/tasks', json={
             'title': 'Deliver', 'projectId': project['id'],
             'assignedWorkflowId': workflow['id'],
-            **({'status': 'assigned'} if scheduled else {}),
         })
         assert response.status_code == 201, response.text
         task = response.json()
         if scheduled:
+            mark_task_ready(client, task)
             tick(app)
             task = app.state.task_store.get_task(task['id'])
             assert task['linkedSessionIds'], task
@@ -229,8 +230,9 @@ def test_offline_workflow_computer_records_its_wait_once(monkeypatch):
         }).json()['workflow']
         task = client.post('/api/v1/tasks', json={
             'title': 'Deliver', 'projectId': project['id'],
-            'assignedWorkflowId': workflow['id'], 'status': 'assigned',
+            'assignedWorkflowId': workflow['id'],
         }).json()
+        mark_task_ready(client, task)
         monkeypatch.setattr('relay.tasks.workflow.project_runtime_node', lambda *_: None)
         recorded = _count_outcomes(monkeypatch, app.state.task_store)
         for _ in range(3):

@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timedelta, UTC
 
 import pytest
+from task_setup import mark_task_ready
 from automation_helpers import WEEKLY_TRIGGERS
 
 import test_project_execution_policy as project_api
@@ -23,11 +24,12 @@ def start_work(env, entry):
                          "relay-thread-records", "handoff-validation"],
     })
     created = client.post("/api/v1/tasks", json={
-        "title": "Build", "projectId": project["id"], "assignedAgentId": lead["id"], "status": "assigned",
+        "title": "Build", "projectId": project["id"], "assignedAgentId": lead["id"],
         **({"isRoutine": True, "routineState": "active", "routineTriggers": WEEKLY_TRIGGERS} if entry.startswith("automation") else {}),
     })
     assert created.status_code == 201, created.text
     task = created.json()
+    mark_task_ready(client, task)
     if entry == "automation_scheduler":
         assert app.state.task_scheduler.automations.tick(datetime.now(UTC) + timedelta(days=8)) >= 1
     if entry in ("scheduler", "automation_scheduler"):
