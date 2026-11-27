@@ -988,6 +988,60 @@ describe("projectMessages artifact projection", () => {
     assert.equal(agent.stdout.match(/Already streamed/g)?.length, 1);
   });
 
+  it("shows a Codex reply once when its completed log retains only the ends", () => {
+    const frame = (value: Record<string, unknown>) => JSON.stringify(value) + "\n";
+    const progressText = "Checking. ".repeat(80).trimEnd();
+    const opening = frame({ type: "turn.started" }) + frame({
+      type: "item.completed", item: { type: "agent_message", id: "opening", text: "I’ll check." },
+    });
+    const progress = frame({
+      type: "item.completed", item: { type: "agent_message", id: "progress", text: progressText },
+    });
+    const reply = frame({
+      type: "item.completed", item: { type: "agent_message", id: "reply", text: "Final answer." },
+    }) + frame({ type: "turn.completed" });
+    const fallback = truncateAgentTranscript(opening + progress + reply, 320);
+    assert.match(fallback, /output omitted/);
+    assert.ok(fallback.endsWith(reply));
+
+    const run = { sessionId: "ses_1", timestamp, runId: "run_1", agent: "codex" } as const;
+    const events: RelaySession["events"] = [
+      { ...run, id: "output", type: "agent.output", stream: "stdout", text: opening + progress + reply, sequence: 0 },
+    ];
+    const answers = (messages: ReturnType<typeof projectMessages>) => messages.flatMap((message) =>
+      message.kind === "agent"
+        ? parseAgentStream(message.agent, message.stdout).flatMap((segment) => segment.kind === "text" ? [segment.text] : [])
+        : [],
+    );
+    const projector = new ProjectMessagesAccumulator();
+    const expected = ["I’ll check.", progressText, "Final answer."];
+    assert.deepEqual(answers(projector.update(session(events), t)), expected);
+
+    const completed = {
+      ...run, id: "completed", type: "agent.completed", status: "completed", exitCode: 0,
+      agentLog: `stdout:\n${fallback}`,
+    } satisfies RelaySession["events"][number];
+    events.push(completed);
+    assert.deepEqual(answers(projector.update(session(events), t)), expected);
+    assert.deepEqual(answers(projectMessages(session(events), t)), expected);
+
+    const lateOutput = {
+      ...run, id: "late", type: "agent.output", stream: "stdout", text: reply, sequence: 1,
+    } satisfies RelaySession["events"][number];
+    const delayed: RelaySession["events"] = [
+      { ...lateOutput, id: "partial", text: opening + progress, sequence: 0 },
+      { ...run, id: "steer", type: "user.live_message", text: "Finish the check.", delivery: "steer" },
+      { ...completed, outputTruncated: true },
+    ];
+    const delayedProjector = new ProjectMessagesAccumulator();
+    const repliesByBlock = () => delayedProjector.update(session(delayed), t)
+      .filter((message) => message.kind === "agent")
+      .map((message) => answers([message]));
+    assert.deepEqual(repliesByBlock(), [["I’ll check.", progressText], ["Final answer."]]);
+    delayed.push(lateOutput);
+    assert.deepEqual(repliesByBlock(), [["I’ll check.", progressText], ["Final answer."]]);
+  });
+
   it("carries reported token usage onto the completed agent turn", () => {
     const messages = projectMessages(session([
       {
