@@ -23,8 +23,6 @@ import { threadAgentName } from "../lib/threadBand";
 import { useTranscriptWindow } from "../hooks/useTranscriptWindow";
 import type { ReadingPosition } from "../hooks/useTranscriptPin";
 import { useOlderTranscript } from "../hooks/useOlderTranscript";
-import { useRelayStore } from "../lib/store";
-import { threadSendKey } from "../lib/threadSendStore";
 import { threadDraftKey } from "../hooks/useComposer";
 import type { ThreadMessageRetry } from "../hooks/usePendingThreadMessage";
 import { useThreadQueue } from "../hooks/useThreadQueue";
@@ -356,7 +354,6 @@ export function ThreadsView({
   // An automation run's first turn draws as the automation's card. A fired
   // run says so in its goal's trigger block; a scheduled one carries none, so
   // the task list is what marks the thread as a routine occurrence.
-  const threadDraftId = useRelayStore((s) => s.threadDraftId);
   const activeSessionId = activeSession?.id;
   const activeTaskGoal = activeSession?.taskGoal;
   const automationOpening = useMemo(() => {
@@ -873,7 +870,7 @@ export function ThreadsView({
         )}
 
         <Composer
-          key={threadSendKey(currentUser.userId ?? currentUser.username, activeSession?.id, threadDraftId)}
+          key={currentUser.userId ?? currentUser.username}
           draftKey={threadDraftKey(currentUser, activeSession?.id)}
           ref={composerRef}
           logicalAgents={composerLogicalAgents}

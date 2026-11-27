@@ -16,9 +16,14 @@ export function useComposer(draftKey?: string): {
   if (draft.key !== draftKey) setDraft({ key: draftKey, text: readDraft(draftKey) });
   const composerText = draft.key === draftKey ? draft.text : readDraft(draftKey);
   const setComposerText = useCallback<Dispatch<SetStateAction<string>>>((next) => {
+    if (typeof next !== "function") {
+      writeDraft(draftKey, next);
+      setDraft({ key: draftKey, text: next });
+      return;
+    }
     setDraft((current) => {
       const previous = current.key === draftKey ? current.text : readDraft(draftKey);
-      const text = typeof next === "function" ? next(previous) : next;
+      const text = next(previous);
       writeDraft(draftKey, text);
       return { key: draftKey, text };
     });

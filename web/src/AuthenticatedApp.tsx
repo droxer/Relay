@@ -663,7 +663,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     composerLogicalAgents,
     threadMentionCandidates, composerTeams,
     selectedUser, draftComputerId: openingComputerId, requestedThreadId: requestedSessionId,
-    fallbackNode, selectedThreadNodeId, selectedToken, tokens,
+    fallbackNode, selectedThreadNodeId, runtimeNodes, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,

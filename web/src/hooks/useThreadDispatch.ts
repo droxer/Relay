@@ -22,6 +22,7 @@ import { threadSendKey, useThreadSendStore } from "../lib/threadSendStore";
 import { restoreComposerDraft, threadDraftKey } from "./useComposer";
 import { messageDefinitelyRejected } from "../api-client/client";
 import { usePendingThreadMessage, type PendingDirectMessage, type ThreadMessageRetry } from "./usePendingThreadMessage";
+import { sessionComputer } from "../lib/workspaceScope";
 
 type Mutations = ReturnType<typeof useRelayMutations>;
 type Transcript = ReturnType<typeof useTranscriptPin>;
@@ -66,6 +67,7 @@ export interface ThreadDispatchDeps {
   requestedThreadId?: string | null;
   fallbackNode: Parameters<typeof threadCancelNodeId>[0]["fallbackNode"];
   selectedThreadNodeId: ThreadTargets["selectedThreadNodeId"];
+  runtimeNodes?: Parameters<typeof sessionComputer>[1];
   selectedToken: string | undefined;
   tokens: Record<string, string | undefined>;
 
@@ -102,7 +104,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     effectiveSelectableLogicalAgents,
     composerLogicalAgents = effectiveSelectableLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedUser, draftComputerId, requestedThreadId, fallbackNode, selectedThreadNodeId, selectedToken, tokens,
+    selectedUser, draftComputerId, requestedThreadId, fallbackNode, selectedThreadNodeId, runtimeNodes = [], selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -120,6 +122,9 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   const saved = pending.message;
   const pendingSendKey = threadSendKey(selectedUser, activeThreadId, useRelayStore((state) => state.threadDraftId));
   const pendingBusy = useThreadSendStore((state) => !!state.operations[pendingSendKey]?.dispatching);
+
+  const threadComputerId = (session: Pick<RelaySession, "projectId" | "computerId" | "daemonNodeId">) =>
+    session.projectId ? null : sessionComputer(session, runtimeNodes);
 
   async function sendMessage(
     requestedStyle?: import("../types").CollaborationStyle,
@@ -255,7 +260,8 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     let sendKey = threadSendKey(selectedUser, sessionId, useRelayStore.getState().threadDraftId);
     if (useThreadSendStore.getState().operations[sendKey]?.dispatching) return false;
     if (creatingSession && draftComputerId) syncThreadUrl(null, true, activeProject?.id, undefined, draftComputerId);
-    else syncThreadUrl(sendThreadSessionId(action), true, activeProject?.id);
+    else syncThreadUrl(sendThreadSessionId(action), true, activeProject?.id, undefined,
+      action.kind === "append" && activeSession ? threadComputerId(activeSession) : undefined);
     const dispatchId = useThreadSendStore.getState().beginSend(sendKey, { id: message.id, text: goal }, creatingSession);
     pending.save(message, isInitial);
     const view = retainThreadDispatchView();
@@ -291,7 +297,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       if (view.isCurrent()) {
         view.release();
         useRelayStore.getState().openSession(done.id);
-        syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id);
+        syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id, undefined, threadComputerId(done));
       }
       if (stopRequested) {
         // Dispatch has accepted the run; cancelling earlier could only cancel
@@ -370,7 +376,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       });
       if (onThread && view.isCurrent()) {
         useRelayStore.getState().setSelectedSessionId(session.id);
-        syncThreadUrl(session.id, true, session.projectId ?? projectId);
+        syncThreadUrl(session.id, true, session.projectId ?? projectId, undefined, threadComputerId(session));
       }
     } catch {
       // mutation onError surfaces a toast.
@@ -470,7 +476,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       if (view.isCurrent()) {
         useRelayStore.getState().setSelectedSessionId(done.id);
         if (kind === "handoff") useHandoffStore.getState().finishSend();
-        syncThreadUrl(done.id, true, done.projectId ?? activeSession.projectId);
+        syncThreadUrl(done.id, true, done.projectId ?? activeSession.projectId, undefined, threadComputerId(done));
       }
       if (useThreadSendStore.getState().operations[sendKey]?.stopRequested) await cancelSessionRun(done.id, done.projectId);
     } catch (error) {
@@ -508,7 +514,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
       });
       if (view.isCurrent()) {
         useRelayStore.getState().setSelectedSessionId(session.id);
-        syncThreadUrl(session.id, true, session.projectId ?? activeSession.projectId);
+        syncThreadUrl(session.id, true, session.projectId ?? activeSession.projectId, undefined, threadComputerId(session));
       }
       return true;
     } catch {

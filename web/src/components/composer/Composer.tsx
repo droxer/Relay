@@ -143,7 +143,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     ? t("composer.upload_client_outdated")
     : undefined;
   const [style, setStyle] = useState<CollaborationStyle | null>(null);
-  useEffect(() => setStyle(null), [activeTeamId]);
+  useEffect(() => setStyle(null), [activeTeamId, draftKey]);
   const {
     composerText, setComposerText, textareaRef,
   } = composer;
@@ -215,11 +215,23 @@ const ComposerView = forwardRef<ComposerHandle, {
     [t],
   );
 
-  // Both keyboard and form submission share one lock for the lifetime of the
-  // request, even when the Thread switches between running and idle.
-  const sending = useRef(false);
-  const [submitting, setSubmitting] = useState(false);
+  // Both keyboard and form submission share one lock per draft scope for the
+  // lifetime of the request, so switching threads never inherits another
+  // thread's in-flight lock and sending never needs to remount the composer.
+  const sendScope = draftKey ?? "__default__";
+  const sendingKeys = useRef(new Set<string>());
+  const [submittingKeys, setSubmittingKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const submitting = submittingKeys.has(sendScope);
   const sendPending = submitting || queuePending;
+  const setScopeSubmitting = (scope: string, active: boolean) => {
+    setSubmittingKeys((current) => {
+      if (current.has(scope) === active) return current;
+      const next = new Set(current);
+      if (active) next.add(scope);
+      else next.delete(scope);
+      return next;
+    });
+  };
   const hasUnconfirmedSend = Boolean(messageRetry || queueMessageRetry);
   // One answer to "can this draft be sent?", read by both the button's
   // `disabled` and the keyboard path. They were written separately and had
@@ -236,14 +248,15 @@ const ComposerView = forwardRef<ComposerHandle, {
   // upload bound to this box, so a draft carrying one waits here instead.
   const canQueue = !hasUnconfirmedSend && running && !!onQueue && !readOnly && !!composerText.trim() && !imageInput.images.length && !imageInput.busy;
   const triggerSend = async (intent?: ThreadMessageInput["intent"], literal = false, approve = false, userMessageId?: string): Promise<boolean> => {
-    if (sending.current || queuePending || !mounted.current) return false;
+    if (sendingKeys.current.has(sendScope) || queuePending || !mounted.current) return false;
     const enqueue = !literal && canQueue ? onQueue : undefined;
     if (!enqueue) {
       if (running) return false;
       if (literal ? cannotSendAsWritten : cannotSend) return false;
     }
-    sending.current = true;
-    setSubmitting(true);
+    const scope = sendScope;
+    sendingKeys.current.add(scope);
+    setScopeSubmitting(scope, true);
     try {
       if (enqueue) {
         const address = resolveThreadMessageAddress({
@@ -275,30 +288,33 @@ const ComposerView = forwardRef<ComposerHandle, {
       });
       if (sent === false) return false;
       if (!mounted.current) return true;
-      setStyle(null);
-      imageInput.clear();
+      if (currentDraft.current.key === draftKey) {
+        setStyle(null);
+        imageInput.clear();
+      }
       return true;
     } catch {
       // Dispatch owns error reporting; preserve the override for retry.
       return false;
     } finally {
-      sending.current = false;
-      if (mounted.current) setSubmitting(false);
+      sendingKeys.current.delete(scope);
+      if (mounted.current) setScopeSubmitting(scope, false);
     }
   };
 
   const retryDelivery = async (message: ThreadMessageRetry) => {
-    if (sending.current || message.busy) return;
-    sending.current = true;
-    setSubmitting(true);
+    if (sendingKeys.current.has(sendScope) || message.busy) return;
+    const scope = sendScope;
+    sendingKeys.current.add(scope);
+    setScopeSubmitting(scope, true);
     try {
-      if (await message.retry() && mounted.current && !imageInput.busy && imageInput.images.length
+      if (await message.retry() && mounted.current && currentDraft.current.key === draftKey && !imageInput.busy && imageInput.images.length
         && imageInput.images.every(image => message.attachmentIds?.includes(image.id))) {
         imageInput.clear();
       }
     } finally {
-      sending.current = false;
-      if (mounted.current) setSubmitting(false);
+      sendingKeys.current.delete(scope);
+      if (mounted.current) setScopeSubmitting(scope, false);
     }
   };
 
@@ -325,7 +341,7 @@ const ComposerView = forwardRef<ComposerHandle, {
     getText: () => composerText,
     setText: (text: string) => setComposerText(text),
     send: (text: string, options?: ComposerSendOptions) => {
-      if (sending.current || queuePending) return Promise.resolve(false);
+      if (sendingKeys.current.has(sendScope) || queuePending) return Promise.resolve(false);
       queuedSendRef.current?.resolve(false);
       queuedSendRef.current = null;
       const intent = options?.intent;
@@ -351,7 +367,7 @@ const ComposerView = forwardRef<ComposerHandle, {
         return ok;
       });
     },
-  }), [composerText, queuePending, setComposerText, textareaRef]);
+  }), [composerText, queuePending, sendScope, setComposerText, textareaRef]);
 
   // A project room owns its computer and its workspace, so the room names
   // itself here instead of offering a machine; a thread that has started names

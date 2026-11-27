@@ -326,3 +326,35 @@ it("hides the retry slip during a normal in-flight send and clears it when a man
   expect(result.current.messageRetry).toBeNull();
   expect(deps.composerRef.current?.setText).toHaveBeenCalledWith("do work");
 });
+
+it("clears the new-thread draft from storage synchronously even if the composer unmounts in the same batch", () => {
+  sessionStorage.clear();
+  const key = threadDraftKey({ username: "alice" }, undefined);
+  const first = renderHook(() => useComposer(key));
+  act(() => first.result.current.setComposerText("first thread message"));
+  expect(first.result.current.composerText).toBe("first thread message");
+
+  act(() => {
+    first.result.current.setComposerText("");
+    first.unmount();
+  });
+
+  const nextNewThread = renderHook(() => useComposer(key));
+  expect(nextNewThread.result.current.composerText).toBe("");
+});
+
+it("syncs the created normal thread URL with its computer identity so workspace routing does not redirect", async () => {
+  sessionStorage.clear();
+  const { deps, accept, session } = setup(false);
+  deps.runtimeNodes = [{ id: "node-1", userId: "alice", workspaceId: "ws-1" }];
+  const { result } = renderHook(() => useThreadDispatch(deps));
+
+  let sent!: Promise<boolean>;
+  act(() => { sent = result.current.sendMessage(); });
+  await act(async () => {
+    accept({ ...session, daemonNodeId: "node-1" });
+    expect(await sent).toBe(true);
+  });
+
+  expect(deps.syncThreadUrl).toHaveBeenLastCalledWith(session.id, true, undefined, undefined, "device:alice:ws-1");
+});
