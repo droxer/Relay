@@ -140,7 +140,7 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
     requestClose: closeTaskForm,
     submit: submitTask,
     remove: deleteBacklog,
-  } = useBacklogTaskForm({ currentUser, seed: { projectId, computerId } });
+  } = useBacklogTaskForm({ currentUser, seed: { projectId, computerId }, agents: logicalAgents, teams });
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
   const [deletingSelection, setDeletingSelection] = useState(false);
   // Retain the execution record until the drawer has finished closing.

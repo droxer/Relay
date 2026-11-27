@@ -154,6 +154,7 @@ export function AssignmentSelect({
   describedBy,
   autoFocus = false,
   inline,
+  hideAgents = false,
   hideTeams = false,
   workflows,
   workflowMessage,
@@ -171,6 +172,7 @@ export function AssignmentSelect({
   triggerId?: string;
   describedBy?: string;
   autoFocus?: boolean;
+  hideAgents?: boolean;
   hideTeams?: boolean;
   workflows?: ProjectWorkflowOption[];
   workflowMessage?: string;
@@ -181,9 +183,9 @@ export function AssignmentSelect({
 }) {
   const { t } = useTranslation();
   const selectedTab: AssignmentTab = value.startsWith("workflow:") && workflows ? "workflows"
-    : selectedTeam && !hideTeams ? "teams" : "agents";
+    : (hideAgents || selectedTeam) && !hideTeams ? "teams" : "agents";
   const tabs: RosterTab<AssignmentTab>[] = [
-    { id: "agents", label: t("backlog.agents_section"), count: agents.length },
+    ...(!hideAgents ? [{ id: "agents", label: t("backlog.agents_section"), count: agents.length } satisfies RosterTab<AssignmentTab>] : []),
     ...(workflows ? [{ id: "workflows" as const, label: t("workflow.workflows"), count: workflows.length }] : []),
     ...(!hideTeams ? [{ id: "teams" as const, label: t("backlog.teams_section"), count: teams.length }] : []),
   ];

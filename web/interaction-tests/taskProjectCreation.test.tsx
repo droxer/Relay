@@ -104,10 +104,10 @@ it.each([false, true])("offers Project roster Agents without Teams (automation: 
 });
 
 
-it("files intake without a project and offers no executor", () => {
+it("offers all available agents and teams for a standalone task without a project", () => {
   const save = vi.fn();
   render(<Form save={save} projectChoice="optional" />);
-  expect(screen.queryByTestId("assignment-options")).toBeNull();
+  expect(screen.getByTestId("assignment-options").textContent).toBe("Member,Outside");
   fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ title: "Ship" }));
 });
@@ -121,16 +121,15 @@ it("keeps executor editing available on a projectless routine run", () => {
 });
 
 
-it("can clear a legacy intake assignment without choosing another executor", () => {
+it("allows editing a saved standalone task's assignment", () => {
   const save = vi.fn();
   render(<Form save={save} projectChoice="optional" initial={{
-    ...emptyBacklogForm(user), id: "legacy", title: "Held intake", status: "assigned",
+    ...emptyBacklogForm(user), id: "legacy", title: "Standalone task", status: "assigned",
     assignedAgent: "codex", assignedAgentId: "a",
   }} />);
-  expect(screen.queryByTestId("assignment-options")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "issues.clear_assignment" }));
+  expect(screen.getByTestId("assignment-options").textContent).toBe("Member,Outside");
   fireEvent.click(screen.getByRole("button", { name: "backlog.save_task" }));
-  expect(save).toHaveBeenCalledWith(expect.objectContaining({ status: "backlog", assignedAgentId: "" }));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ assignedAgentId: "a" }));
 });
 
 it.each([false, true])("rejects legacy Project Team assignment before submission (automation: %s)", (automation) => {

@@ -78,3 +78,45 @@ it('offers only Agents on the standalone Task Computer', async () => {
   const options = taskAssignmentOptions({ computerId: 'a', agents, teams: [], assigneeUserId: 'u' });
   expect(options.agents.map(agent => agent.id)).toEqual(['a']);
 });
+
+it('derives the Computer from the chosen Agent or Team when saving a standalone issue', async () => {
+  const agents = [{ id: 'a', supervisorUserId: 'u', placements: [{ computerId: 'device:u:mac', desiredState: 'active' }] }] as never;
+  const teams = [{ id: 't1', ownerUserId: 'u', computerId: 'device:u:linux', memberAgentIds: ['a'] }] as never;
+  create.mockResolvedValue({ id: 'created' });
+  update.mockResolvedValue({ id: 'saved' });
+  const { result } = renderHook(() => useBacklogTaskForm({ currentUser: user, allowIntake: true, agents, teams }));
+
+  // Standalone create with an Agent derives its Computer and sends the assignment.
+  act(() => result.current.openForm({ ...emptyBacklogForm(user), title: 'Agent work', assignedAgentId: 'a', assignedAgent: 'codex' }));
+  await act(async () => result.current.submit({ preventDefault: vi.fn() } as never));
+  expect(create).toHaveBeenLastCalledWith(expect.objectContaining({
+    title: 'Agent work', assignedAgentId: 'a', computerId: 'device:u:mac',
+  }));
+
+  // Standalone create with a Team derives its Computer and sends the assignment.
+  act(() => result.current.openForm({ ...emptyBacklogForm(user), title: 'Team work', assignedTeamId: 't1' }));
+  await act(async () => result.current.submit({ preventDefault: vi.fn() } as never));
+  expect(create).toHaveBeenLastCalledWith(expect.objectContaining({
+    title: 'Team work', assignedTeamId: 't1', computerId: 'device:u:linux',
+  }));
+
+  // Unassigned standalone create omits both assignment and computerId.
+  act(() => result.current.openForm({ ...emptyBacklogForm(user), title: 'Unassigned intake' }));
+  await act(async () => result.current.submit({ preventDefault: vi.fn() } as never));
+  expect(create.mock.lastCall?.[0]).not.toHaveProperty('assignedAgentId');
+  expect(create.mock.lastCall?.[0]).not.toHaveProperty('computerId');
+
+  // Editing an unplaced intake task to assign an Agent binds its Computer once.
+  const intake = { ...emptyBacklogForm(user), id: 'intake-1', title: 'Loose' };
+  act(() => result.current.openForm(intake));
+  act(() => result.current.setForm({ ...intake, assignedAgentId: 'a', assignedAgent: 'codex' }));
+  await act(async () => result.current.submit({ preventDefault: vi.fn() } as never));
+  expect(update).toHaveBeenLastCalledWith({
+    taskId: 'intake-1',
+    input: expect.objectContaining({ assignedAgentId: 'a', computerId: 'device:u:mac' }),
+  });
+
+  // A saved Computer-scoped task locks projectChoice.
+  act(() => result.current.openForm({ ...emptyBacklogForm(user), id: 'scoped-1', title: 'Scoped', computerId: 'device:u:mac' }));
+  expect(result.current.projectChoice).toBe('locked');
+});

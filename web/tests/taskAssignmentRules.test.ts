@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  assignmentComputerId,
   projectRoomAgentIds,
   projectThreadRoster,
   taskAssignmentEditable,
@@ -153,5 +154,28 @@ describe("Project workflow Task options", () => {
     const foreign = { ...matching, id: "other" };
     assert.deepEqual(ids(taskAssignmentOptions({ ...options, project: foreign }).teams), []);
     assert.deepEqual(ids(taskAssignmentOptions(options).teams), []);
+  });
+
+  it("derives the Computer for a standalone Agent or Team assignment", () => {
+    const active = agent("active", "c1");
+    const draining = {
+      id: "draining", displayName: "draining", executorKind: "codex",
+      placements: [{ computerId: "c2", desiredState: "draining" }],
+    } as unknown as UserAgent;
+    const recordedOnly = {
+      id: "recorded", displayName: "recorded", executorKind: "codex",
+      computerId: "c3", placements: [],
+    } as unknown as UserAgent;
+    const explicitTeam = { ...team("explicit", ["active"]), computerId: "c9" } as AgentTeam;
+    const inferredTeam = team("inferred", ["active"]);
+    const agents = [active, draining, recordedOnly];
+    const teams = [explicitTeam, inferredTeam];
+
+    assert.equal(assignmentComputerId({ assignedAgentId: "active" }, agents, teams), "c1");
+    assert.equal(assignmentComputerId({ assignedAgentId: "draining" }, agents, teams), "c2");
+    assert.equal(assignmentComputerId({ assignedAgentId: "recorded" }, agents, teams), "c3");
+    assert.equal(assignmentComputerId({ assignedTeamId: "explicit" }, agents, teams), "c9");
+    assert.equal(assignmentComputerId({ assignedTeamId: "inferred" }, agents, teams), "c1");
+    assert.equal(assignmentComputerId({}, agents, teams), undefined);
   });
 });
