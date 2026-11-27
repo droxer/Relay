@@ -245,15 +245,19 @@
   .composer-targets > [data-slot="select-trigger"] {
     flex-shrink: 1;
     min-width: 0;
+    white-space: nowrap;
   }
 
   .composer-targets > [data-slot="select-trigger"].composer-permission-mode {
     flex-shrink: 0;
   }
 
-  .composer-targets > [data-slot="select-trigger"] > [data-slot="select-value"] {
+  .composer-targets > [data-slot="select-trigger"] > [data-slot="select-value"],
+  .composer-targets > [data-slot="select-trigger"] .roster-trigger-name {
     min-width: 0;
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

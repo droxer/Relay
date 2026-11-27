@@ -546,13 +546,10 @@
     width: auto;
     min-width: 0;
     height: var(--tabbar-h);
-    /* Content basis, not equal shares: six equal tabs left "Automations"
-       60px of the 72px it needs, while every label together fills under
-       300px of a 390px bar. Each tab now starts from its label and splits
-       what is left, so no label ellipsizes at phone width and the shortest
-       tab still clears the 44px target; the label's ellipsis stays as the
-       floor for a larger text size. */
-    flex: 1 1 auto;
+    /* Five equal columns (Home, Activities, Tasks, Projects, More): Automations
+       lives in More so every tab gets an even ~76px column on a 390px screen
+       with balanced glyph spacing and zero label truncation. */
+    flex: 1 1 0;
     flex-direction: column;
     justify-content: center;
     gap: var(--sp-0-5);
@@ -651,11 +648,10 @@
     transition: none;
   }
 
-  /* Home's count rides the glyph's top-right corner. The rail anchors it to
-     the button's corner, which on a wide tab column landed on the label.
-     Through the panel to outrank the expanded-rail placement. */
+  /* Home's count rides the glyph's top-right corner, clear of the tab bar's
+     top hairline. Through the panel to outrank the expanded-rail placement. */
   .sidenav-panel .sidenav-btn .sidenav-count {
-    top: 0;
+    top: var(--sp-1);
     right: auto;
     left: calc(50% + var(--sp-1));
     transform: none;

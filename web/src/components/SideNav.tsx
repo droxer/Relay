@@ -43,6 +43,9 @@ type MoreRoute = MoreSheetRoute & { adminOnly?: boolean };
  *  knows one layout knows the other. A table rather than repeated <a> blocks:
  *  rows differ only in icon, label, and route, and admin only in being gated. */
 const MORE_GROUPS: readonly { labelKey: string; routes: readonly MoreRoute[] }[] = [
+  { labelKey: "nav.workspace", routes: [
+    { route: "routine", Icon: NavRoutine, labelKey: "nav.routine" },
+  ] },
   { labelKey: "nav.workforce", routes: [
     { route: "agents", Icon: NavAgents, labelKey: "nav.agents" },
     { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
@@ -215,7 +218,7 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <span className="sidenav-label sr-only">{t("nav.backlog")}</span>
           </a>
           <a
-            className={`sidenav-btn ${route === "routine" ? "active" : ""}`}
+            className={`sidenav-btn sidenav-secondary-item ${route === "routine" ? "active" : ""}`}
             data-nav="routine"
             href={hrefForRoute("routine")}
             aria-label={t("nav.routine")}

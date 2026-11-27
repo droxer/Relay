@@ -61,6 +61,10 @@
    at 360px the name kept 30px, at 320px none and Change ran off the edge.
    The actions take their own row, Discuss stretched to a thumb-wide target. */
 @container (max-width: 480px) {
+  .project-manager-line:has(> [data-slot="badge"]) > .project-manager-line-text {
+    flex: 1 0 calc(100% - var(--avatar-md) - var(--sp-4));
+  }
+
   .project-manager-line-actions:has(> .project-manager-line-discuss) {
     flex-basis: 100%;
   }

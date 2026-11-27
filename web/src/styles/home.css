@@ -553,7 +553,7 @@ a.home-count:hover .home-count-label {
 
 @media (max-width: 640px) {
   .home-body {
-    padding: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4) var(--sp-5);
   }
 
   .home-count {
@@ -561,22 +561,37 @@ a.home-count:hover .home-count-label {
   }
 
   .home-body > .page-header {
-    margin-bottom: var(--sp-6);
+    margin-bottom: var(--sp-4);
+  }
+
+  .home-section-header {
+    margin-bottom: var(--sp-2);
+  }
+
+  .home-focus {
+    margin-bottom: var(--sp-4);
   }
 
   .home-grid,
   .home-column {
-    gap: var(--sp-6);
+    gap: var(--sp-5);
   }
 
   /* The snooze floats on the trailing edge beside the title, so the reason
      and meta lines below it run the full row width instead of sharing it
-     with an empty column. */
+     with an empty column. Tighten the leading icon track so prose keeps
+     its measure on a 390px screen. */
   .home-item {
     position: relative;
-    grid-template-columns: var(--control-h-xs) minmax(0, 1fr);
+    grid-template-columns: var(--icon-lg) minmax(0, 1fr);
     gap: var(--sp-2);
-    padding-inline: var(--sp-3);
+    padding: var(--sp-3);
+  }
+
+  .home-item-glyph {
+    width: var(--icon-lg);
+    height: var(--icon-lg);
+    margin-top: var(--sp-0-5);
   }
 
   .home-item .home-item-title {

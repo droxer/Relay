@@ -58,7 +58,7 @@
   font: var(--type-code);
   letter-spacing: var(--type-code-track);
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .permission-prompt-full > summary {

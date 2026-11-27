@@ -195,6 +195,13 @@
     /* The strip fades on whichever edge has more behind it (useStripScroll
        marks them), so a chip cut by the edge reads as "more this way"
        rather than as a stray count. */
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black var(--strip-fade-start),
+      black calc(100% - var(--strip-fade-end)),
+      transparent 100%
+    );
     mask-image: linear-gradient(
       to right,
       transparent 0,
@@ -205,8 +212,8 @@
   }
 
   .sec-nav::-webkit-scrollbar { display: none; }
-  .sec-nav[data-more-start] { --strip-fade-start: var(--sp-8); }
-  .sec-nav[data-more-end] { --strip-fade-end: var(--sp-8); }
+  .sec-nav[data-more-start] { --strip-fade-start: calc(var(--sp-8) + var(--sp-2)); }
+  .sec-nav[data-more-end] { --strip-fade-end: calc(var(--sp-8) + var(--sp-2)); }
   .sec-nav-list { flex-direction: row; gap: var(--sp-1); padding-inline-end: var(--sp-4); }
   .sec-nav-item { flex: 0 0 auto; min-width: 0; scroll-snap-align: start; }
   .sec-nav-btn {

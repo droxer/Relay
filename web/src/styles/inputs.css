@@ -216,10 +216,10 @@
   box-shadow: 0 0 0 var(--sp-hairline) var(--line-1);
 }
 
-/* Touch: a finger needs the taller target. */
+/* Touch: a finger needs the full 44px target. */
 @media (pointer: coarse) {
   .thread-kind-filter-item {
-    min-height: 2.25rem;
+    min-height: var(--touch-target);
   }
 }
 

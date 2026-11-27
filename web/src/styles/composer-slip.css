@@ -30,17 +30,6 @@
   display: none;
 }
 
-.composer-dock > * {
-  width: 100%;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-}
-
-.composer-dock > * + * {
-  border-top: var(--hairline-soft);
-}
-
 .composer-slip {
   --slip-inset: var(--composer-radius, var(--sp-5));
   display: grid;
@@ -56,6 +45,21 @@
   /* Rises out from behind the card on the shared `rise`: the one motion, and
      it says where the slip belongs. Reduced motion is handled in a11y.css. */
   animation: rise var(--t-slow) var(--ease) both;
+}
+
+/* When docked inside .composer-dock, the dock owns the outer frame, radius,
+   and inset; slips fill its width without drawing a second nested border.
+   Declared after .composer-slip at higher specificity so it always wins. */
+.composer-dock > .composer-slip,
+.composer-dock > * {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.composer-dock > * + * {
+  border-top: var(--hairline-soft);
 }
 
 .composer-slip-head {

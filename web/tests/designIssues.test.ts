@@ -99,17 +99,15 @@ describe("reviewed design regressions", () => {
     // than the markup it expands to.
     const table = nav.match(/const MORE_GROUPS[\s\S]*?\n\];/)?.[0];
     assert.ok(table, "SideNav must declare a MORE_GROUPS table");
-    for (const route of ["agents", "teams", "computers", "skills", "settings", "admin"]) {
+    for (const route of ["routine", "agents", "teams", "computers", "skills", "settings", "admin"]) {
       assert.match(table, new RegExp(`route: "${route}"`));
     }
     // Sections and order match the desktop rail's groups.
     const headings = [...table.matchAll(/labelKey: "(nav\.[a-z_]+)", routes/g)].map((match) => match[1]);
-    assert.deepEqual(headings, ["nav.workforce", "nav.infra", "nav.manage"]);
-    assert.doesNotMatch(table, /route: "routine"/);
+    assert.deepEqual(headings, ["nav.workspace", "nav.workforce", "nav.infra", "nav.manage"]);
     const workspace = nav.match(/aria-label=\{t\("nav\.workspace"\)\}>([\s\S]*?)<\/div>/)?.[1];
     assert.ok(workspace, "SideNav must keep a Workspace group");
     assert.deepEqual([...workspace.matchAll(/data-nav="([a-z]+)"/g)].map(match => match[1]), ["backlog", "routine", "projects"]);
-    assert.doesNotMatch(workspace, /sidenav-secondary-item|sidenav-overflow-item/);
     assert.doesNotMatch(nav, /data-nav="channels"|route: "channels"/);
     // Still real links, and still the app's own client-side navigation.
     const sheet = readWeb("src/components/MobileMoreSheet.tsx");
