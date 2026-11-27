@@ -8,13 +8,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..core.models import ENGINEER_SPECIALTY_ROLES
 from ..core.workflow_selection import selected_workflow_id, predefined_style
 
 # Solo is an internal one-member fallback.
 COLLABORATION_STYLES: tuple[str, ...] = ("build_review", "pipeline", "lead_led")
 DEFAULT_COLLABORATION_STYLE = "build_review"
 LEAD_LED = "lead_led"
-BUILDER_ROLES = frozenset({"implementer", "fixer"})
+BUILDER_ROLES = frozenset({"implementer", *ENGINEER_SPECIALTY_ROLES, "fixer"})
 # Research answers questions before planning commits to them, then design,
 # then the builders, then verification and delivery work, and review last.
 # Lead planning, the lead-led member order and Pipeline all sort by this.
@@ -24,8 +25,7 @@ ROLE_STAGE: dict[str, int] = {
     "data": 0,
     "planner": 1,
     "designer": 2,
-    "implementer": 3,
-    "fixer": 3,
+    **dict.fromkeys(BUILDER_ROLES, 3),
     "tester": 4,
     "security": 4,
     "performance": 4,

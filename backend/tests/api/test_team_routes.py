@@ -354,6 +354,34 @@ def test_team_member_role_starts_from_agent_role_and_is_the_teams(monkeypatch) -
         assert again["memberConfigs"][checker["id"]]["role"] == "reviewer"
 
 
+def test_engineering_specialties_round_trip_in_agent_and_team_settings(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
+    client = TestClient(create_app(str(tmp_path)))
+    _bootstrap(client)
+    _user(client, "alice")
+    engineer = _agent(client, "alice", "Engineer", "codex", role="frontend_engineer")["id"]
+    _login(client, "alice")
+
+    agent_path = f"/api/v1/agents/{engineer}"
+    assert client.get(agent_path).json()["agent"]["defaultRole"] == "frontend_engineer"
+    updated = client.patch(agent_path, json={"defaultRole": "backend_engineer", "roleLevel": "senior"})
+    assert updated.status_code == 200, updated.text
+
+    created = client.post("/api/v1/teams", json={
+        "name": "Delivery", "leadAgentId": engineer, "memberAgentIds": [engineer],
+    })
+    assert created.status_code == 201, created.text
+    team = created.json()["team"]
+    assert team["memberConfigs"][engineer]["role"] == "backend_engineer"
+    team_path = f"/api/v1/teams/{team['id']}"
+    updated = client.patch(f"{team_path}/members/{engineer}", json={"role": "fullstack_engineer"})
+    assert updated.status_code == 200, updated.text
+    config = client.get(f"{team_path}?view=preview").json()["team"]["memberConfigs"][engineer]
+    assert config["role"] == "fullstack_engineer"
+    profile = client.get(agent_path).json()["agent"]
+    assert (profile["defaultRole"], profile["roleLevel"]) == ("backend_engineer", "senior")
+
+
 def test_team_member_contract_patch_preserves_other_writes(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:

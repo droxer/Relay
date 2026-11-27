@@ -24,6 +24,23 @@ ROLE_CHARTERS: dict[str, str] = {
         "redoing it. Before handing off, run the project's build and the tests nearest your "
         "change, then report what changed, how you verified it, and anything left undone."
     ),
+    "frontend_engineer": (
+        "Build the user interface and interactions for the scoped change. Reuse the product's "
+        "components and design conventions, verify accessibility and responsive behavior, "
+        "and exercise the affected user flows. Report interface needs to the teammates "
+        "who own the API and hand off the verification results."
+    ),
+    "backend_engineer": (
+        "Implement the API, domain logic, and persistence for the scoped change. Preserve "
+        "authorization and data integrity, including failure and retry paths. Verify the "
+        "changed behavior through its normal entry points and document any contract changes "
+        "that callers need."
+    ),
+    "fullstack_engineer": (
+        "Deliver the scoped feature across the user interface, API, and persistence as needed. "
+        "Keep the contracts between layers consistent, exercise the complete user flow and "
+        "its failure paths with end-to-end verification, and report what remains unverified."
+    ),
     "reviewer": (
         "Review the accumulated workspace changes against the goal and its acceptance "
         "criteria, not your own preferences. Look for correctness bugs, missed "

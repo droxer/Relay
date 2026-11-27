@@ -5,6 +5,9 @@ import type { CodexCollaborationEvent } from "./codex-collaboration.js";
 
 export type AgentRole =
   | "implementer"
+  | "frontend_engineer"
+  | "backend_engineer"
+  | "fullstack_engineer"
   | "reviewer"
   | "planner"
   | "tester"

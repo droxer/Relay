@@ -20,6 +20,7 @@ TaskStatus = Literal[
 SandboxStatus = Literal["provisioning", "ready", "running", "stopped", "failed"]
 
 AGENT_NAMES: tuple[str, ...] = get_args(AgentName)
+ENGINEER_SPECIALTY_ROLES = ("frontend_engineer", "backend_engineer", "fullstack_engineer")
 # Offered in stage order (`ROLE_STAGE` in collaboration/styles.py), the order a
 # Pipeline round takes them in.
 AGENT_ROLES: tuple[str, ...] = (
@@ -29,6 +30,7 @@ AGENT_ROLES: tuple[str, ...] = (
     "planner",
     "designer",
     "implementer",
+    *ENGINEER_SPECIALTY_ROLES,
     "fixer",
     "tester",
     "security",

@@ -13,6 +13,9 @@ export function continuesConversation(state: AgentState): boolean {
 const ROLE_TITLES: Record<string, string> = {
   planner: "Architect",
   implementer: "Software Engineer",
+  frontend_engineer: "Frontend Engineer",
+  backend_engineer: "Backend Engineer",
+  fullstack_engineer: "Full-Stack Engineer",
   reviewer: "Code Reviewer",
   tester: "QA Engineer",
   fixer: "Bug Fixer",

@@ -71,6 +71,32 @@ def test_build_review_without_a_second_member_compiles_its_solo_fallback() -> No
     ]
 
 
+@pytest.mark.parametrize(("role", "responsibility"), [
+    ("frontend_engineer", "accessibility"),
+    ("backend_engineer", "data integrity"),
+    ("fullstack_engineer", "end-to-end"),
+])
+def test_engineering_specialty_keeps_its_role_and_brief_through_dispatch(role: str, responsibility: str) -> None:
+    builder = {**_agent("builder", role), "roleLevel": "senior"}
+    reviewer = _agent("lead", "reviewer")
+    team = {"id": "t", "leadAgentId": "lead", "memberAgentIds": ["lead", "builder"]}
+
+    for style, members, expected_ids in [
+        ("build_review", [reviewer, builder], ["builder", "lead"]),
+        ("build_review", [builder], ["builder"]),
+        ("pipeline", [reviewer, builder], ["builder", "lead"]),
+    ]:
+        assignments = team_member_assignments(members, team=team, style=style)
+        assert [item["agentId"] for item in assignments] == expected_ids
+        assignment = assignments[0]
+        assert (assignment["role"], assignment["roleLevel"], assignment["mode"]) == (role, "senior", "action")
+        assert responsibility in assignment["brief"]
+        assert "Senior level" in assignment["brief"]
+        if style == "build_review" and len(members) == 2:
+            assert "A teammate reviews your work next" in assignment["brief"]
+            assert assignments[1]["mode"] == "review"
+
+
 def test_pipeline_runs_every_member_by_stage_and_only_the_last_closes() -> None:
     compiled = compile_style(
         "pipeline",
@@ -134,6 +160,9 @@ def _preview_cases() -> list[dict[str, Any]]:
                         cases.append(
                             {"style": style, "leadId": f"m{lead}", "members": members}
                         )
+    for role in ("frontend_engineer", "backend_engineer", "fullstack_engineer"):
+        members = [{"id": "lead", "role": "reviewer"}, {"id": "engineer", "role": role}]
+        cases.extend({"style": style, "leadId": "lead", "members": members} for style in COLLABORATION_STYLES)
     return cases
 
 
