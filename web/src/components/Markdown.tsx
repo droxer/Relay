@@ -234,6 +234,15 @@ const MARKDOWN_COMPONENTS: Components = {
   img: MarkdownImage,
 };
 
+const DEMOTED_MARKDOWN_COMPONENTS: Components = {
+  ...MARKDOWN_COMPONENTS,
+  h1: ({ children, ...props }) => <h2 {...omit(props, "node")}>{children}</h2>,
+  h2: ({ children, ...props }) => <h3 {...omit(props, "node")}>{children}</h3>,
+  h3: ({ children, ...props }) => <h4 {...omit(props, "node")}>{children}</h4>,
+  h4: ({ children, ...props }) => <h5 {...omit(props, "node")}>{children}</h5>,
+  h5: ({ children, ...props }) => <h6 {...omit(props, "node")}>{children}</h6>,
+};
+
 /**
  * Renders agent-authored Markdown: GFM tables/strikethrough/task lists/
  * footnotes, highlighted code fences with a copy control, TeX math via KaTeX
@@ -249,10 +258,18 @@ const MARKDOWN_COMPONENTS: Components = {
  * `variant` picks the reading: `chat` matches the transcript's body rhythm,
  * `document` gives the thread space preview document scale and a measure.
  */
-export function Markdown({ text, variant = "chat" }: { text: string; variant?: MarkdownVariant }) {
+export function Markdown({
+  text,
+  variant = "chat",
+  demoteHeadings = false,
+}: {
+  text: string;
+  variant?: MarkdownVariant;
+  demoteHeadings?: boolean;
+}) {
   return (
     <div className={`md-body ${variant === "document" ? "doc-prose" : "agent-prose"}`}>
-      <MarkdownContent text={text} />
+      <MarkdownContent text={text} demoteHeadings={demoteHeadings} />
     </div>
   );
 }
@@ -269,6 +286,7 @@ export function Markdown({ text, variant = "chat" }: { text: string; variant?: M
 export const MarkdownContent = memo(function MarkdownContent({
   text,
   live = false,
+  demoteHeadings = false,
   leadingMentions,
   inlineMentionNames,
   mentionableNames,
@@ -276,6 +294,7 @@ export const MarkdownContent = memo(function MarkdownContent({
 }: {
   text: string;
   live?: boolean;
+  demoteHeadings?: boolean;
   leadingMentions?: readonly string[];
   inlineMentionNames?: readonly string[];
   mentionableNames?: ReadonlyMap<string, string>;
@@ -290,7 +309,7 @@ export const MarkdownContent = memo(function MarkdownContent({
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={REHYPE_PLUGINS}
-        components={MARKDOWN_COMPONENTS}
+        components={demoteHeadings ? DEMOTED_MARKDOWN_COMPONENTS : MARKDOWN_COMPONENTS}
         urlTransform={markdownUrlTransform}
       >
         {normalizeMathDelimiters(text)}

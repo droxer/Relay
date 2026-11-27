@@ -2,7 +2,8 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { memo, useCallback, useMemo, useState } from "react";
-import { MobileTopbarSlotContext } from "./MobileTopbarSlot";
+import { MobileTopbarSlotContext, PHONE_QUERY } from "./MobileTopbarSlot";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useTranslation } from "react-i18next";
 import {
   ICON,
@@ -123,6 +124,7 @@ export function AppShell({
   onThemeChange,
 }: AppShellProps) {
   const { t } = useTranslation();
+  const isPhone = useMediaQuery(PHONE_QUERY);
   const isAdmin = user.role === "admin";
   const [commandOpen, setCommandOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -262,10 +264,12 @@ export function AppShell({
           ) : null}
         </div>
         <div className="mobile-topbar-heading" title={mobileTitle}>
-          <span className="mobile-topbar-title">{mobileTitle}</span>
           {/* A record screen's own name, portaled in by
               useMobileTopbarTitle; filled, it replaces the route title. */}
           <div className="mobile-topbar-title-slot" ref={setTitleSlot} />
+          {!isPhone || route === "home"
+            ? <span className="mobile-topbar-title">{mobileTitle}</span>
+            : <h1 className="mobile-topbar-title">{mobileTitle}</h1>}
         </div>
         <div className="mobile-topbar-tools">
           {/* A new thread has no files yet; a disabled toggle would only take

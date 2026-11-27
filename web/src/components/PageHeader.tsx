@@ -50,8 +50,8 @@ export function PageHeader({
   layout?: "inline" | "stacked";
 }) {
   const stacked = layout === "stacked";
-  const TitleTag = titleAs;
   const barTitle = useMobileTopbarTitle(topbarTitle ?? "", topbarTitle !== undefined);
+  const TitleTag = barTitle && titleAs === "h1" ? "span" : titleAs;
 
   return (
     <header

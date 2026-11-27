@@ -99,6 +99,40 @@
   border-top: var(--hairline-soft);
 }
 
+/* Subordinate embedded charter prose to the agent record header (22px) so
+   user-authored headings never out-shout the agent's own name. */
+.agent-personality-document .doc-prose {
+  font-size: var(--fs-2);
+  line-height: var(--leading-loose);
+}
+
+.agent-personality-document .doc-prose h1,
+.agent-personality-document .doc-prose h2 {
+  margin: var(--sp-5) 0 var(--sp-2);
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: var(--fs-document-subheading);
+  font-weight: 600;
+}
+
+.agent-personality-document .doc-prose h3 {
+  margin: var(--sp-5) 0 var(--sp-2);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.agent-personality-document .doc-prose h4,
+.agent-personality-document .doc-prose h5,
+.agent-personality-document .doc-prose h6 {
+  margin: var(--sp-4) 0 var(--sp-1-5);
+  font-size: var(--fs-2);
+  font-weight: 600;
+}
+
+.agent-personality-document .doc-prose > :first-child {
+  margin-top: 0;
+}
+
 .agent-personality-empty {
   position: relative;
   z-index: 1;
@@ -291,10 +325,8 @@
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
-    /* The edge with more tabs behind it fades (useStripScroll marks it via
-       TabsList's stripKey), so a tab cut by the edge reads as "more this
-       way", the way the section chip strips do. */
-    mask-image: linear-gradient(
+    /* Scroll-edge overflow fade mask, not a surface gradient. */
+    mask-image: linear-gradient( /* taste-skill-ignore */
       to right,
       transparent 0,
       black var(--strip-fade-start),

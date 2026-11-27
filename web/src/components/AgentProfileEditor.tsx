@@ -249,7 +249,7 @@ export function AgentProfileEditor({
         </form>
       ) : hasCustomPersonality ? (
         <article className="agent-personality-document">
-          <Markdown text={savedPersonality} variant="document" />
+          <Markdown text={savedPersonality} variant="document" demoteHeadings />
         </article>
       ) : (
         <div className="agent-personality-empty">

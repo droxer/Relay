@@ -83,9 +83,17 @@ function PlainText({
   );
 }
 
-export function Markdown({ text, variant = "chat" }: { text: string; variant?: MarkdownVariant }) {
+export function Markdown({
+  text,
+  variant = "chat",
+  demoteHeadings = false,
+}: {
+  text: string;
+  variant?: MarkdownVariant;
+  demoteHeadings?: boolean;
+}) {
   const [loaded] = useState(() => loadedMarkdown);
-  if (loaded) return <loaded.Markdown text={text} variant={variant} />;
+  if (loaded) return <loaded.Markdown text={text} variant={variant} demoteHeadings={demoteHeadings} />;
   return (
     <Suspense
       fallback={(
@@ -94,7 +102,7 @@ export function Markdown({ text, variant = "chat" }: { text: string; variant?: M
         </div>
       )}
     >
-      <MarkdownImpl text={text} variant={variant} />
+      <MarkdownImpl text={text} variant={variant} demoteHeadings={demoteHeadings} />
     </Suspense>
   );
 }
