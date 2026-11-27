@@ -9,6 +9,7 @@ import { ICON, NavRoutine } from "./icons";
 import { predefinedStyle } from "../lib/workflowSelection";
 import { PredefinedWorkflowIcon } from "./workflow/PredefinedWorkflowIcon";
 import { agentRoleLabel, type AgentRoleIdentity } from "../lib/agentRoleLabel";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 
 /** Every task shows its assigned agent/team as a visible name. */
 export function TaskAssignee({
@@ -41,7 +42,7 @@ export function TaskAssignee({
       ) : null}
       <span className="agent-identity-copy" title={role ? `${name} · ${role}` : name}>
         <span className="task-assignee-name" translate="no">{name}</span>
-        {role ? <span className="agent-role-label">{role}</span> : null}
+        <AgentRoleMeta identity={agentRole} />
       </span>
     </span>
   );

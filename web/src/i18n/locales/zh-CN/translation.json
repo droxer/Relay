@@ -2799,7 +2799,9 @@
     "label": "职级",
     "standard": "标准",
     "junior": "初级",
-    "senior": "高级"
+    "senior": "高级",
+    "badge_junior": "初级",
+    "badge_senior": "高级"
   },
   "role_level_hints": {
     "standard": "默认角色行为，不区分初级或高级。",

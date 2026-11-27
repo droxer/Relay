@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useProjectSave } from "../hooks/useProjectSave";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
-import { agentRoleLabel, projectMemberRole } from "../lib/agentRoleLabel";
+import { projectMemberRole } from "../lib/agentRoleLabel";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import { computerId as stableComputerId } from "../lib/createAgent";
 import { agentsEligibleForProject } from "../lib/projectPage";
 import {
@@ -118,7 +119,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
     [agents, member],
   );
   const selectedAgent = member ? editingAgent : candidates.find((agent) => agent.id === draft.agentId);
-  const role = agentRoleLabel(projectMemberRole(editingAgent, member), t);
+  const roleIdentity = projectMemberRole(editingAgent, member);
   // Project membership is an agent roster only — a member is one agent with a
   // role, never a whole team — so the shared picker renders no tab strip here.
   const rosterTabs: RosterTab<"agents">[] = [
@@ -264,7 +265,11 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
 
         {member || draft.agentId ? (
           <>
-            {role ? <Field label={t("project.role")} wrapper="div"><span>{role}</span></Field> : null}
+            {roleIdentity?.defaultRole ? (
+              <Field label={t("project.role")} wrapper="div">
+                <AgentRoleMeta identity={roleIdentity} className="" compact={false} />
+              </Field>
+            ) : null}
             <Field label={t("project.responsibilities")} error={responsibilitiesError ?? undefined} errorId="project-member-responsibilities-error">
               <Textarea
                 ref={responsibilitiesRef}

@@ -18,7 +18,7 @@ import { MessageTurnActions } from "./MessageTurnActions";
 import type { AgentName } from "../types";
 import { AGENT_NAMES } from "../types";
 import { imageForAgentRun, labelForExecutor } from "../lib/agentDisplayNames";
-import { agentRoleLabel } from "../lib/agentRoleLabel";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import { extractLeadingMentionTokens } from "../lib/mentions";
 import { IdentityMark } from "./IdentityMark";
 import { ProfileImage } from "./ProfileImagePicker";
@@ -311,10 +311,10 @@ export const MessageBlock = memo(function MessageBlock({
   if (message.kind === "agent") {
     const logicalName = message.agentId ? logicalAgentNames?.[message.agentId] : undefined;
     const agentName = logicalName ?? t("backlog.agent");
-    const role = agentRoleLabel({
+    const roleIdentity = {
       defaultRole: message.role ?? runIdentity?.role,
       roleLevel: message.roleLevel ?? runIdentity?.roleLevel,
-    }, t);
+    };
     const receipt = runReceipt(message);
     return (
       <article
@@ -334,7 +334,7 @@ export const MessageBlock = memo(function MessageBlock({
         </span>
         <header className="msg-speaker">
           <span className="msg-speaker-name" translate={logicalName ? "no" : undefined}>{agentName}</span>
-          {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
+          <AgentRoleMeta identity={roleIdentity} />
           {slotLabel ? <span className="msg-speaker-slot">{t(slotLabel)}</span> : null}
         </header>
         <MsgTime value={message.timestamp} />

@@ -52,10 +52,12 @@ it.each(["backlog", "routine"] as const)("shows the Agent's profile role and lev
   const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
   mount({ ...form, title: "Work", projectId: "p" });
   const choice = screen.getByRole("option", { name: /Ada/ });
-  expect(choice.textContent).toContain("role_levels.senior · admin.v2.agent_role.implementer");
+  expect(choice.textContent).toContain("role_levels.badge_senior");
+  expect(choice.textContent).toContain("admin.v2.agent_role.implementer");
   fireEvent.click(choice);
-  expect(screen.getByLabelText("backlog.assignment_label").textContent)
-    .toContain("role_levels.senior · admin.v2.agent_role.implementer");
+  const triggerText = screen.getByLabelText("backlog.assignment_label").textContent;
+  expect(triggerText).toContain("role_levels.badge_senior");
+  expect(triggerText).toContain("admin.v2.agent_role.implementer");
 });
 
 it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never both, in a new %s", async variant => {

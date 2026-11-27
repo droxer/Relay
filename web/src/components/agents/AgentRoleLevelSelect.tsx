@@ -2,6 +2,7 @@
 
 import { useTranslation } from "react-i18next";
 import { AGENT_ROLE_LEVEL_OPTIONS, type AgentRoleLevel } from "../../types";
+import { RoleLevelBadge } from "../RoleLevelBadge";
 import {
   Select,
   SelectContent,
@@ -41,7 +42,15 @@ export function AgentRoleLevelSelect({
       disabled={disabled}
     >
       <SelectTrigger className="w-full" aria-labelledby={labelledBy}>
-        <SelectValue>{(current: string | null) => label(current)}</SelectValue>
+        <SelectValue>
+          {(current: string | null) =>
+            current && current !== NONE_VALUE ? (
+              <RoleLevelBadge level={current as AgentRoleLevel} compact={false} />
+            ) : (
+              label(current)
+            )
+          }
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE_VALUE} aria-label={t("role_levels.standard")}>
@@ -55,7 +64,7 @@ export function AgentRoleLevelSelect({
         {AGENT_ROLE_LEVEL_OPTIONS.map((level) => (
           <SelectItem key={level} value={level} aria-label={t(`role_levels.${level}`)}>
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span>{t(`role_levels.${level}`)}</span>
+              <RoleLevelBadge level={level} compact={false} />
               <span className="text-sm leading-normal text-muted-foreground">
                 {t(`role_level_hints.${level}`)}
               </span>

@@ -31,7 +31,7 @@ import { AgentProfileEditor } from "./AgentProfileEditor";
 import { AgentDelegationSettings } from "./AgentDelegationSettings";
 import { PlacementList } from "./PlacementList";
 import { describeAgentPlacements, placementRuntimeNodeId } from "../lib/agentPlacements";
-import { agentRoleLabel } from "../lib/agentRoleLabel";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import { ProfileImagePicker } from "./ProfileImagePicker";
 import { Alert } from "@/components/ui/alert";
 import { profileDraftDirty, profileDraftOf, profileDraftPatch, type AgentProfileDraft } from "../lib/agentProfileDraft.ts";
@@ -296,7 +296,7 @@ export function AgentProfilePanel({
                 {t("admin.v2.agent_role_label")}
               </span>
               <span className="workspace-dossier-field-value" aria-labelledby="agent-default-role-label">
-                {agentRoleLabel(agent, t) ?? t("admin.v2.agent_role_none")}
+                <AgentRoleMeta identity={agent} className="" compact={false} empty={t("admin.v2.agent_role_none")} />
               </span>
             </div>
           )}

@@ -10,6 +10,7 @@ import { AgentStateBadge } from "../AgentStateBadge";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
 import { agentRoleLabel, type AgentRoleIdentity } from "../../lib/agentRoleLabel";
+import { AgentRoleMeta } from "../RoleLevelBadge";
 
 /* The rows every roster picker draws: one identity line per agent or team,
    plus the non-entity rows (empty slot, disabled empty roster, nav action)
@@ -74,13 +75,12 @@ export function RosterTeamMark({ team }: { team: TeamView }) {
 export function RosterOption({ agent, team }: { agent?: AgentView; team?: TeamView }) {
   const { t } = useTranslation();
   if (agent) {
-    const role = agentRoleLabel(agent, t);
     return (
       <span className="roster-option">
         <RosterAgentMark agent={agent} />
         <span className="roster-option-copy">
           <span translate="no">{agent.displayName}</span>
-          {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
+          <AgentRoleMeta identity={agent} />
         </span>
       </span>
     );
@@ -153,7 +153,7 @@ export function RosterTriggerValue({ agent, team, hideBusyPulse = false }: { age
         <RosterAgentMark agent={agent} />
         <span className="agent-identity-copy" title={role ? `${agent.displayName} · ${role}` : agent.displayName}>
           <span className="roster-trigger-name" translate="no" data-agent-name>{agent.displayName}</span>
-          {role ? <span className="agent-role-label">{role}</span> : null}
+          <AgentRoleMeta identity={agent} />
         </span>
       </span>
     );

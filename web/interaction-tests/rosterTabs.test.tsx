@@ -74,11 +74,12 @@ it.each(["task assignment", "conversation"] as const)("uses Agent roles and leve
     : <AgentSelect logicalAgents={agents} activeLogicalAgentId={bob.id} onLogicalAgentPicked={onPick} />);
 
   const trigger = screen.getByRole("combobox");
-  expect(trigger.textContent).toContain("role_levels.senior · admin.v2.agent_role.reviewer");
+  expect(trigger.textContent).toContain("role_levels.badge_senior");
+  expect(trigger.textContent).toContain("admin.v2.agent_role.reviewer");
   trigger.focus();
   fireEvent.keyDown(trigger, { key: "ArrowDown" });
   const pinned = await screen.findByRole("option", { name: /Ada.*admin\.v2\.agent_role\.planner/ });
-  const senior = screen.getByRole("option", { name: /Bob.*role_levels\.senior · admin\.v2\.agent_role\.reviewer/ });
+  const senior = screen.getByRole("option", { name: /Bob.*role_levels\.senior.*admin\.v2\.agent_role\.reviewer/ });
   expect(pinned.textContent).not.toMatch(/Codex|provider\/custom-model/);
   expect(senior.textContent).not.toMatch(/Codex|agents_page\.model_default/);
   act(() => pinned.focus());

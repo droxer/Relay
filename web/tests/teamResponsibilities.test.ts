@@ -19,12 +19,12 @@ describe("team member responsibility cards", () => {
     assert.match(badge, /aria-label=\{label\} tabIndex=\{0\}/);
     assert.match(badge, /\{label\}\s*<\/Badge>/);
     // The role shows the role the member will actually play, so an
-    // inherited default is visible without opening the select — as plain
-    // muted text beside the name, not a pill with its own dot.
+    // inherited default is visible without opening the select — with a compact
+    // seniority badge beside the muted role name, not a TonePill with a dot.
     assert.match(source, /const role = effectiveRoleOf\(member, config\)/);
     assert.match(source, /const roleLevel = config\.roleLevel \?\? member\.roleLevel/);
-    assert.match(source, /const roleLabel = agentRoleLabel\(\{ defaultRole: role, roleLevel \}, t\)/);
-    assert.match(source, /<span className="team-work-member-role" title=\{roleLabel\}>\s*\{roleLabel\}\s*<\/span>/);
+    assert.match(source, /const roleIdentity = \{ defaultRole: role, roleLevel \}/);
+    assert.match(source, /<AgentRoleMeta identity=\{roleIdentity\} className="team-work-member-role" \/>/);
     assert.doesNotMatch(source, /<TonePill tone="neutral" label=\{t\(`team_work\.role_/);
     assert.doesNotMatch(source, /<AgentMetaLine\b/);
     // A responsibility is a sentence or two, not a single-line value.

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RelayApiError } from "../../api-client/client";
 import { useRelayMutations } from "../../hooks/useRelayMutations";
-import { agentRoleLabel, projectMemberRole } from "../../lib/agentRoleLabel";
+import { projectMemberRole } from "../../lib/agentRoleLabel";
+import { AgentRoleMeta } from "../RoleLevelBadge";
 import { projectPresetParticipants, type PREDEFINED_WORKFLOWS } from "../../lib/workflowSelection";
 import type { ProjectListItem, UserAgent } from "../../types";
 import { Button } from "@/components/ui/button";
@@ -89,10 +90,15 @@ function EditorForm({ project, template, agents, onClose }: Props & { template: 
               })} />
             <WorkflowAgentFace imageUrl={agent?.profileImageUrl} />
             <span className="workflow-preset-choice-name">{name}</span>
-            <span className="workflow-library-meta">{[
-              agentRoleLabel(projectMemberRole(agent, member), t),
-              isLocked ? t("workflow.preset_lead_locked") : undefined,
-            ].filter(Boolean).join(" · ")}</span>
+            <span className="workflow-library-meta">
+              <AgentRoleMeta identity={projectMemberRole(agent, member)} className="" />
+              {isLocked ? (
+                <>
+                  {projectMemberRole(agent, member)?.defaultRole ? <span aria-hidden="true"> · </span> : null}
+                  <span>{t("workflow.preset_lead_locked")}</span>
+                </>
+              ) : null}
+            </span>
           </label>
         </li>;
       })}
