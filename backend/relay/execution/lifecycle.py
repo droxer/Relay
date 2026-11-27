@@ -375,12 +375,14 @@ class ExecutionLifecycleService:
         # request would leave the legacy active-run fallback reporting the
         # execution as live. Record the same terminal transition the
         # daemon's own run.cancelled would have produced.
-        for active in self.registry.daemon_store.list_active_runs(session_ids={session_id}):
-            self.registry.daemon_store.mark_command_cancelled(active["nodeId"], {
+        daemon_store = self.registry.daemon_store
+        for active in daemon_store.list_active_runs(session_ids={session_id}):
+            daemon_store.mark_command_cancelled(active["nodeId"], {
                 "commandId": active["commandId"], "sessionId": session_id,
                 "runId": active["runId"], "agent": active.get("agent"),
                 "reason": RECONCILED_ERROR,
             })
+            daemon_store.retire_run_stops(active["nodeId"], active["commandId"], RECONCILED_ERROR)
             self.registry.clear_run_output(active["runId"])
             self.registry.active_commands.pop(active["commandId"], None)
         if request:

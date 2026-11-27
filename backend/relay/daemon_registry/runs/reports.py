@@ -1,6 +1,6 @@
 """Authenticated, transactional acceptance of write-ahead daemon reports."""
 from typing import Any, TYPE_CHECKING
-from contextlib import ExitStack, nullcontext, contextmanager
+from contextlib import ExitStack, contextmanager
 from collections.abc import Iterator
 from ...persistence.daemon.reports import ReportReceiptConflict
 from ..records import CommandEventMismatchError, LateOutputLeaseMismatchError
@@ -57,7 +57,7 @@ class DurableReportMixin(RegistryState):
                     return
                 record = self.daemon_store.get_command(event['commandId'])
                 if not record:
-                    if self.daemon_store.accept_orphaned_cancel_report(sandbox_id, event, report_id, digest):
+                    if self.daemon_store.accept_cancel_report_from_stop(sandbox_id, event, report_id, digest):
                         return
                     raise CommandEventMismatchError('Report names an unknown command.')
                 command = record['command']
@@ -71,9 +71,18 @@ class DurableReportMixin(RegistryState):
                 # the stop command. Its thread may have been deleted meanwhile;
                 # the authenticated command and exact lease remain authority.
                 redundant_stop = event['type'] == 'run.cancelled' and record['status'] in {'completed', 'failed'}
-                session_scope = nullcontext() if redundant_stop else self.report_session_scope(event['sessionId'])
-                with self.daemon_store.report_ingest_scope(sandbox_id), session_scope, self.daemon_store.report_receipt_scope(sandbox_id, event['commandId'], report_id, digest) as apply:
-                    if apply:
-                        self._handle_event_unlocked(sandbox_id, {**event, '_durableReport': True}, token)
+                with self.daemon_store.report_ingest_scope(sandbox_id), ExitStack() as scope:
+                    if not redundant_stop:
+                        try:
+                            scope.enter_context(self.report_session_scope(event['sessionId']))
+                        except CommandEventMismatchError:
+                            if self.daemon_store.accept_cancel_report_from_stop(
+                                sandbox_id, event, report_id, digest, thread_missing=True,
+                            ):
+                                return
+                            raise
+                    with self.daemon_store.report_receipt_scope(sandbox_id, event['commandId'], report_id, digest) as apply:
+                        if apply:
+                            self._handle_event_unlocked(sandbox_id, {**event, '_durableReport': True}, token)
         except ReportReceiptConflict as error:
             raise CommandEventMismatchError(str(error)) from error

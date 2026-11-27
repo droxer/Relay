@@ -623,10 +623,22 @@ class CommandQueueRows(DaemonStoreState):
             node_id, event, "cancelled", None, event.get("reason")
         )
 
+    def retire_run_stops(self, node_id: str, target_command_id: str, reason: str) -> None:
+        """Supersede unfinished stops without recording daemon acknowledgement."""
+        now = require_db_time(now_iso())
+        with store_transaction(self.engine) as conn:
+            conn.execute(update(self.commands).where(
+                self.commands.c.node_id == self._node_pk(conn, node_id),
+                self.commands.c.type == "run.cancel",
+                self.commands.c.command["commandId"].as_string() == target_command_id,
+                ~self.commands.c.status.in_(TERMINAL_DAEMON_STATUSES),
+            ).values(status="cancelled", updated_at=now, completed_at=now, error=reason))
+
     def mark_cancel_commands_completed(
         self, node_id: str, target_command_id: str
     ) -> None:
         now = now_iso()
+        finished_at = require_db_time(now)
         with store_transaction(self.engine) as conn:
             node_pk = self._node_pk(conn, node_id)
             rows = (
@@ -634,6 +646,7 @@ class CommandQueueRows(DaemonStoreState):
                     select(self.commands)
                     .where(self.commands.c.node_id == node_pk)
                     .where(self.commands.c.type == "run.cancel")
+                    .where(self.commands.c.command["commandId"].as_string() == target_command_id)
                     .where(~self.commands.c.status.in_(TERMINAL_DAEMON_STATUSES))
                 )
                 .mappings()
@@ -641,20 +654,17 @@ class CommandQueueRows(DaemonStoreState):
             )
             for row in rows:
                 record = row_to_command(row)
-                command = record["command"]
-                if command.get("commandId") != target_command_id:
-                    continue
                 updated, completion_event = completed_cancel_record(record, now)
-                conn.execute(
+                changed = conn.execute(
                     update(self.commands)
                     .where(self.commands.c.id == record["id"])
+                    .where(~self.commands.c.status.in_(TERMINAL_DAEMON_STATUSES))
                     .values(
-                        **command_to_row(
-                            updated, database_id=record["id"], node_pk=node_pk
-                        )
+                        status=updated["status"], updated_at=finished_at, completed_at=finished_at,
                     )
                 )
-                self._append_daemon_event(conn, completion_event)
+                if changed.rowcount:
+                    self._append_daemon_event(conn, completion_event)
 
     def append_daemon_event(self, event: dict[str, Any]) -> None:
         with store_transaction(self.engine) as conn:

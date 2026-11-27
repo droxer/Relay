@@ -602,13 +602,14 @@ def test_retention_preserves_exit_authority_until_stop_is_acknowledged(tmp_path)
     assert store.get_command(event['commandId']) is None
 
 
-@pytest.mark.parametrize('terminal_type', ['run.completed', 'run.failed'])
-def test_retained_completed_command_ack_survives_thread_deletion(tmp_path, terminal_type):
+@pytest.mark.parametrize('terminal_type', ['run.completed', 'run.failed', 'run.cancelled'])
+def test_retained_terminal_command_ack_survives_thread_deletion(tmp_path, terminal_type):
     registry, sessions, output = fixture(tmp_path)
     store = registry.daemon_store
     event = {key: value for key, value in output.items()
              if key not in ('stream', 'sequence', 'text', 'replayed')}
     registry.handle_event('node', {**event, 'type': terminal_type, 'exitCode': 0}, 'secret')
+    target = store.get_command(event['commandId'])
     cancel = {'id': new_database_id(), 'type': 'run.cancel',
               'commandId': event['commandId'], 'sessionId': event['sessionId'],
               'runId': event['runId'], 'agent': event['agent'], 'reason': 'stop',
@@ -622,6 +623,28 @@ def test_retained_completed_command_ack_survives_thread_deletion(tmp_path, termi
     registry.handle_durable_report('node', {**event, 'type': 'run.cancelled'}, 'secret', 'a' * 64, 'b' * 64)
     assert store.get_command(cancel['id'])['status'] == 'completed'
     assert store.report_was_accepted('node', event['commandId'], 'a' * 64, 'b' * 64)
+    assert store.get_command(event['commandId']) == target
+
+
+@pytest.mark.parametrize('stop_state', ['missing', 'queued', 'wrong_lease'])
+def test_cancelled_command_ack_for_deleted_thread_requires_matching_stop(tmp_path, stop_state):
+    registry, sessions, output = fixture(tmp_path)
+    store = registry.daemon_store
+    event = {key: value for key, value in output.items()
+             if key not in ('stream', 'sequence', 'text', 'replayed')}
+    event['type'] = 'run.cancelled'
+    registry.handle_event('node', event, 'secret')
+    if stop_state != 'missing':
+        stop = {'id': new_database_id(), 'type': 'run.cancel', 'reason': 'stop',
+                **{key: event[key] for key in ('commandId', 'sessionId', 'runId', 'agent')},
+                'targetLeaseId': 'wrong' if stop_state == 'wrong_lease' else event['leaseId']}
+        store.enqueue_command('node', stop)
+        if stop_state == 'wrong_lease':
+            store.take_queued_commands('node')
+    sessions.delete_session(event['sessionId'])
+    with pytest.raises(CommandEventMismatchError, match='Report thread no longer exists'):
+        registry.handle_durable_report('node', event, 'secret', 'a' * 64, 'b' * 64)
+    assert not store.report_was_accepted('node', event['commandId'], 'a' * 64, 'b' * 64)
 
 
 def orphaned_stop(tmp_path, *, leased=True):
