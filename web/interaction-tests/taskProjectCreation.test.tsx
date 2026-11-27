@@ -49,6 +49,16 @@ it("saves the selected project and limits executor choices to its roster", () =>
   expect(save).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p", title: "Ship", status: "backlog" }));
 });
 
+it("keeps the due date available under More options", () => {
+  const save = vi.fn();
+  render(<Form save={save} initial={{ ...emptyBacklogForm(user), title: "Ship", projectId: "p" }} />);
+  const details = screen.getByText("backlog.more_options").closest("details")!;
+  expect(details.open).toBe(false);
+  details.open = true;
+  expect(details.contains(screen.getByRole("button", { name: /backlog\.due/ }))).toBe(true);
+  expect(screen.queryByRole("radio", { name: "backlog.statuses.assigned" })).toBeNull();
+});
+
 it("rejects an archived selected project at submit time", () => {
   const save = vi.fn(); render(<Form save={save} initial={{ ...emptyBacklogForm(user), title: "Ship", projectId: "archived" }} />);
   fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));

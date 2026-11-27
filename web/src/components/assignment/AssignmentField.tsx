@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AgentTeam, UserAgent } from "../../types";
-import type { ProjectWorkflowOption } from "../../lib/workflowSelection";
+import { projectWorkflowName, type ProjectWorkflowOption } from "../../lib/workflowSelection";
 import { teamAvailability } from "../../lib/taskAssignment";
 import { AgentRoleMeta } from "../RoleLevelBadge";
 import { parseTaskAssignmentValue, type TaskAssignmentSelection } from "../../lib/taskBoardForm";
@@ -223,6 +223,12 @@ export function AssignmentSelect({
         <SelectValue>
           {(current: string) => {
             if (current === NO_ASSIGNMENT) return t("backlog.assign_later");
+            const selection = parseTaskAssignmentValue(current);
+            if (selection.kind === "workflow") {
+              const workflow = workflows?.find((option) => option.id === selection.id);
+              return projectWorkflowName(selection.id, t, workflow?.kind === "steps" ? workflow.name : undefined)
+                ?? workflowMessage ?? t("workflow.unavailable");
+            }
             if (selectedTeam) return <RosterTriggerValue team={selectedTeam} />;
             if (selectedAgent) return <RosterTriggerValue agent={selectedAgent} />;
             return t("backlog.assign_later");
@@ -283,6 +289,7 @@ export function AssignmentField({
   fieldId,
   summaryId,
   emptyHint,
+  compact = false,
   switcher,
   alternate,
   ...select
@@ -290,6 +297,8 @@ export function AssignmentField({
   fieldId: string;
   summaryId: string;
   emptyHint: string;
+  /** The picker already shows the selection. Only add a note if it must wait. */
+  compact?: boolean;
   /** A control above the picker that chooses what kind of assignee this is
    *  (the drawer's Agent | Workflow switch). */
   switcher?: ReactNode;
@@ -299,6 +308,9 @@ export function AssignmentField({
   alternate?: ReactNode;
 }) {
   const { t } = useTranslation();
+  const availability = select.selectedTeam ? teamAvailability(select.selectedTeam)
+    : select.selectedAgent ? effectiveAgentAvailability(select.selectedAgent) : undefined;
+  const waiting = compact && availability && availability !== "ready";
   return (
     <Field
       label={t("backlog.assignment_label")}
@@ -309,13 +321,16 @@ export function AssignmentField({
       {switcher}
       {alternate ?? (
         <>
-          <AssignmentSelect {...select} triggerId={fieldId} describedBy={summaryId} />
-          <AssignmentSummary
+          <AssignmentSelect {...select} triggerId={fieldId} describedBy={!compact || waiting ? summaryId : undefined} />
+          {waiting ? (
+            <p id={summaryId} className="adm-form-hint" role="status">{t("backlog.assignment_waiting_hint")}</p>
+          ) : null}
+          {!compact ? <AssignmentSummary
             id={summaryId}
             agent={select.selectedAgent}
             team={select.selectedTeam}
             emptyHint={emptyHint}
-          />
+          /> : null}
         </>
       )}
     </Field>

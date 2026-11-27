@@ -27,7 +27,7 @@ function mount(initial: TaskBoardFormState, custom = [workflow, { ...workflow, i
   function Editor() {
     const [form, setForm] = useState(initial);
     return <TaskDrawer open form={form} projects={[project]} logicalAgents={[agent]} teams={[]} saving={false}
-      title="Edit" subtitle="" projectChoice="optional" onClose={vi.fn()} onChange={setForm} onSubmit={submit} />;
+      title="Edit" subtitle="" projectChoice="optional" onClose={vi.fn()} onChange={setForm} onSubmit={() => submit(form)} />;
   }
   const view = render(<QueryClientProvider client={client}><Editor /></QueryClientProvider>);
   return { ...view, submit };
@@ -55,14 +55,35 @@ it.each(["backlog", "routine"] as const)("shows the Agent's profile role and lev
   expect(choice.textContent).toContain("role_levels.badge_senior");
   expect(choice.textContent).toContain("admin.v2.agent_role.implementer");
   fireEvent.click(choice);
-  const triggerText = screen.getByLabelText("backlog.assignment_label").textContent;
+  const triggerText = screen.getByRole("combobox", { name: "backlog.assignment_label" }).textContent;
   expect(triggerText).toContain("role_levels.badge_senior");
   expect(triggerText).toContain("admin.v2.agent_role.implementer");
 });
 
-it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never both, in a new %s", async variant => {
-  const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
-  mount({ ...form, title: "Work", projectId: "p" });
+it("chooses between Project Agents and Workflows from one new task picker", () => {
+  const { submit } = mount({ ...emptyBacklogForm(currentUser), title: "Work", projectId: "p" });
+  const picker = screen.getByRole("combobox", { name: "backlog.assignment_label" });
+  expect(picker.textContent).toContain("backlog.assign_later");
+  expect(screen.getAllByText("backlog.assign_later")).toHaveLength(2); // Trigger and roster option.
+  expect(screen.queryByRole("combobox", { name: "workflow.select_workflow" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("radio", { name: /^workflow\.workflows/ }));
+  expect(screen.queryByRole("option", { name: /Ada|Foreign workflow/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /Ship workflow/ }));
+  expect(picker.textContent).toContain("Ship workflow");
+  fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));
+  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedAgentId: "", assignedWorkflowId: "w" }));
+
+  fireEvent.click(screen.getByRole("radio", { name: /^backlog\.agents_section/ }));
+  expect(picker.textContent).toContain("Ship workflow");
+  fireEvent.click(screen.getByRole("option", { name: /Ada/ }));
+  expect(picker.textContent).toContain("Ada");
+  fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));
+  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedAgentId: "a", assignedWorkflowId: "" }));
+});
+
+it("offers an Agent or a Workflow in a new automation", async () => {
+  mount({ ...emptyRoutineForm(currentUser), routineTriggers: [], title: "Work", projectId: "p" });
   const agentKind = screen.getByRole("radio", { name: "backlog.assignment_kind_agent" });
   const workflowKind = screen.getByRole("radio", { name: "backlog.assignment_kind_workflow" });
   expect(agentKind.getAttribute("aria-checked")).toBe("true");
@@ -87,12 +108,13 @@ it.each(["backlog", "routine"] as const)("offers an Agent or a Workflow, never b
 it.each(["backlog", "routine"] as const)("saves a predefined Workflow in a Project with no custom definitions (%s)", async variant => {
   const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
   const { container, submit } = mount({ ...form, title: "Work", projectId: "p" }, []);
-  fireEvent.click(screen.getByRole("radio", { name: "backlog.assignment_kind_workflow" }));
+  const task = variant === "backlog";
+  fireEvent.click(screen.getByRole("radio", { name: task ? /^workflow\.workflows/ : "backlog.assignment_kind_workflow" }));
   expect(screen.getByRole<HTMLButtonElement>("option", { name: /collab_style.lead_led/ }).disabled).toBe(true);
   fireEvent.click(screen.getByRole("option", { name: /collab_style.pipeline/ }));
-  expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("collab_style.pipeline");
+  expect(screen.getByRole("combobox", { name: task ? "backlog.assignment_label" : "workflow.select_workflow" }).textContent).toContain("collab_style.pipeline");
   fireEvent.submit(container.querySelector("form")!);
-  expect(submit).toHaveBeenCalledOnce();
+  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ assignedWorkflowId: "preset:pipeline" }));
 });
 
 it("opens a saved Workflow assignment on the Workflow side", () => {
