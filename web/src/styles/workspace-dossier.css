@@ -23,7 +23,7 @@
 
 .agent-personality-card.is-editing {
   border-color: var(--line-1);
-  background: var(--surface-2);
+  background: var(--surface-1);
 }
 
 /* In the admin drawer the card is one block among many and earns its box.
@@ -55,14 +55,19 @@
 .agent-personality-title-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--sp-3);
+  align-items: center;
+  gap: var(--sp-2);
 }
 
 .agent-personality-source {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sp-0-5) var(--sp-2);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
   color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 /* Section title inside a tab panel. --type-title is the PAGE title role
@@ -102,6 +107,7 @@
 /* Subordinate embedded charter prose to the agent record header (22px) so
    user-authored headings never out-shout the agent's own name. */
 .agent-personality-document .doc-prose {
+  max-width: var(--measure);
   font-size: var(--fs-2);
   line-height: var(--leading-loose);
 }
@@ -201,11 +207,12 @@
 
 @media (max-width: 820px) {
   .agent-personality-card {
-    padding: var(--sp-5);
+    padding: var(--sp-4);
   }
 
   .agent-personality-card-head {
-    flex-direction: column;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
   }
 
   .agent-personality-edit-action {
@@ -215,6 +222,23 @@
   .agent-profile-fields {
     grid-template-columns: 1fr;
   }
+}
+
+.workspace-dossier-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+}
+
+.workspace-dossier-section-head .workspace-dossier-section-title {
+  margin: 0;
+}
+
+.workspace-dossier-section-count {
+  color: var(--ink-4);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
 }
 
 .workspace-dossier-section-title {
@@ -378,6 +402,17 @@
    list (skills.css), so a skill reads the same object on the agent record as
    it does in its own catalog. */
 
+.agent-skills-empty {
+  padding: var(--sp-5);
+  border: var(--hairline-soft);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+}
+
+.agent-skills-empty .adm-cred-empty {
+  margin: 0;
+}
+
 .agent-skill-group + .agent-skill-group {
   margin-top: var(--sp-6);
 }
@@ -388,6 +423,7 @@
   list-style: none;
   border: var(--hairline);
   border-radius: var(--r-3);
+  background: var(--surface-1);
   overflow: hidden;
 }
 

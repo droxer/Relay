@@ -140,6 +140,7 @@ export function AgentDetailPage({
           <button
             type="button"
             className="record-band-copy"
+            data-copied={copiedId ? "true" : undefined}
             aria-label={copiedId ? t("admin.v2.copied") : t("admin.v2.copy")}
             title={copiedId ? t("admin.v2.copied") : t("admin.v2.copy")}
             onClick={() => void handleCopyId()}
@@ -159,7 +160,7 @@ export function AgentDetailPage({
   return (
     <Tabs
       render={<section id="agent-detail-panel" tabIndex={-1} />}
-      className="workspace-page"
+      className="workspace-page agent-detail-page"
       aria-label={t("agents_page.detail_label", { name: agent.displayName })}
       value={pageTab}
       onValueChange={(value) => setPageTab(value as AgentDetailTab)}

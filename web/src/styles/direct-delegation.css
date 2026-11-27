@@ -1,6 +1,6 @@
 .agent-delegation-settings {
   display: grid;
-  gap: var(--sp-3);
+  gap: var(--sp-2);
   min-width: 0;
   margin: var(--sp-6) 0 0;
   padding: var(--sp-5) 0 0;
@@ -28,7 +28,15 @@
   letter-spacing: var(--type-name-track);
 }
 
-.agent-delegation-settings p,
+.agent-delegation-settings > p {
+  max-width: var(--measure);
+  margin: 0 0 var(--sp-2);
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-wrap: pretty;
+}
+
 .direct-delegation-note,
 .direct-delegation-status {
   color: var(--ink-3);
@@ -46,9 +54,28 @@
   align-items: center;
   gap: var(--sp-3);
   min-height: var(--touch-target);
+  padding: var(--sp-1) var(--sp-3);
+  margin-inline: calc(var(--sp-3) * -1);
+  border-radius: var(--r-2);
   overflow-wrap: anywhere;
   color: var(--ink-1);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.agent-delegation-option:hover {
+  background: var(--row-hover);
+}
+
+.agent-delegation-option:has([data-disabled]) {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.agent-delegation-option:has([data-disabled]):hover {
+  background: transparent;
 }
 
 .direct-delegation {

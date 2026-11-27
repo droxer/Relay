@@ -371,333 +371,6 @@
   color: var(--ink-4);
 }
 
-/* ---- roster footer summary ------------------------------------------- */
-
-.agents-roster-summary {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-6);
-  border-top: var(--hairline-soft);
-  background: var(--surface-list);
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-.agents-roster-summary-item {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--sp-1);
-  white-space: nowrap;
-}
-
-.agents-roster-summary-item[data-tone="live"] {
-  color: var(--live);
-}
-
-.agents-roster-summary-item[data-tone="bad"] {
-  color: var(--err);
-}
-
-/* ---- fleet overview (desktop right sheet when no agent is open) ------ */
-
-.agents-overview {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.agents-overview-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Divided metric strip: one container split by vertical hairlines, no cards
-   and no icons on KPIs. */
-.agents-overview-metrics {
-  flex: none;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 0;
-  border-bottom: var(--hairline);
-}
-
-.agents-overview-metric {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  padding: var(--sp-4) var(--page-gutter);
-  border-right: var(--hairline-soft);
-}
-
-.agents-overview-metric:last-child {
-  border-right: 0;
-}
-
-.agents-overview-metric-label {
-  color: var(--ink-3);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-}
-
-.agents-overview-metric-value {
-  margin: 0;
-  color: var(--ink-1);
-  font: var(--type-number);
-  letter-spacing: var(--type-number-track);
-}
-
-.agents-overview-metric-value[data-tone="live"] {
-  color: var(--live);
-}
-
-.agents-overview-metric-value[data-tone="bad"] {
-  color: var(--err);
-}
-
-.agents-overview-metric-value[data-tone="muted"] {
-  color: var(--ink-3);
-}
-
-.agents-overview-table-wrap {
-  flex: none;
-  min-width: 0;
-  overflow-x: auto;
-  padding: var(--sp-4) var(--page-gutter) var(--sp-5);
-}
-
-.agents-overview-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: auto;
-}
-
-.agents-overview-table th {
-  padding: 0 var(--sp-3) var(--sp-2);
-  border-bottom: var(--hairline);
-  color: var(--ink-3);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-  text-align: left;
-  white-space: nowrap;
-}
-
-.agents-overview-table th:first-child,
-.agents-overview-table td:first-child {
-  padding-left: 0;
-}
-
-.agents-overview-table th:last-child,
-.agents-overview-table td:last-child {
-  padding-right: 0;
-}
-
-.agents-overview-col-agent {
-  width: 28%;
-}
-
-.agents-overview-table th.agents-overview-col-status,
-.agents-overview-cell-status {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.agents-overview-row {
-  border-bottom: var(--hairline-soft);
-  cursor: pointer;
-  transition: background var(--t-fast) var(--ease);
-}
-
-.agents-overview-row:last-child {
-  border-bottom: 0;
-}
-
-.agents-overview-row:hover {
-  background: var(--row-hover);
-}
-
-.agents-overview-table td {
-  padding: var(--sp-3);
-  vertical-align: middle;
-  color: var(--ink-2);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-.agents-overview-open {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-3);
-  min-width: 0;
-  color: var(--ink-1);
-  font: var(--type-name);
-  letter-spacing: var(--type-name-track);
-  text-decoration: none;
-  text-align: left;
-}
-
-.agents-overview-open:hover .agents-overview-name {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.agents-overview-row[data-unavailable="true"] .agents-overview-open {
-  color: var(--ink-2);
-}
-
-.agents-overview-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agents-overview-cell-role,
-.agents-overview-cell-host {
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-
-.agents-overview-cell-runtime {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-0-5);
-}
-
-.agents-overview-runtime-name {
-  color: var(--ink-1);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-}
-
-.agents-overview-model {
-  color: var(--ink-3);
-  font-size: var(--fs-1);
-  letter-spacing: var(--type-code-track);
-}
-
-.agents-overview-model-default,
-.agents-overview-dash {
-  color: var(--ink-4);
-  font: var(--type-meta);
-  letter-spacing: var(--type-meta-track);
-}
-
-/* Computer breakdown sits beneath the agent table to show per-host readiness
-   without repeating the row list. */
-.agents-overview-computers {
-  flex: none;
-  margin-top: var(--sp-2);
-  padding: var(--sp-5) var(--page-gutter) var(--sp-7);
-  border-top: var(--hairline);
-}
-
-.agents-overview-section-title {
-  margin: 0 0 var(--sp-3);
-  color: var(--ink-1);
-  font: var(--type-title);
-  letter-spacing: var(--type-title-track);
-}
-
-.agents-overview-computer-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.agents-overview-computer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-4);
-  padding: var(--sp-3) 0;
-  border-bottom: var(--hairline-soft);
-}
-
-.agents-overview-computer-row:last-child {
-  border-bottom: 0;
-}
-
-.agents-overview-computer-main {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  min-width: 0;
-}
-
-.agents-overview-computer-name {
-  color: var(--ink-1);
-  font: var(--type-name);
-  letter-spacing: var(--type-name-track);
-  white-space: nowrap;
-}
-
-.agents-overview-computer-runtimes {
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agents-overview-computer-stats {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-3);
-  color: var(--ink-3);
-  font: var(--type-body-sm);
-  letter-spacing: var(--type-body-sm-track);
-  white-space: nowrap;
-}
-
-.agents-overview-computer-stat[data-tone="live"] {
-  color: var(--live);
-}
-
-.agents-overview-computer-stat[data-tone="bad"] {
-  color: var(--err);
-}
-
-/* Narrow overview container (mid-width stacked viewports or expanded sidenav):
-   fold the 4-up readiness strip into 2x2 and let computer rows wrap cleanly. */
-@container record-page (max-width: 768px) {
-  .agents-overview-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .agents-overview-metric {
-    padding: var(--sp-3) var(--sp-4);
-  }
-
-  .agents-overview-metric:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .agents-overview-metric:nth-child(-n + 2) {
-    border-bottom: var(--hairline-soft);
-  }
-
-  .agents-overview-table-wrap {
-    padding: var(--sp-3) var(--sp-4) var(--sp-4);
-  }
-
-  .agents-overview-computers {
-    padding: var(--sp-4) var(--sp-4) var(--sp-6);
-  }
-}
-
-@container record-page (max-width: 640px) {
-  .agents-overview-computer-row {
-    flex-wrap: wrap;
-    gap: var(--sp-2) var(--sp-4);
-  }
-}
-
 /* ---- detail (right pane) --------------------------------------------- */
 
 .agents-detail {
@@ -739,20 +412,14 @@
     max-height: 36vh;
   }
 
-  /* When the fleet overview is already stacked right below the roster,
-     drop the duplicate roster readiness bar so it is not printed twice. */
-  .agents-page[data-view="list"] .agents-roster-summary {
-    display: none;
-  }
-
   .agents-detail {
     flex: none;
     min-height: auto;
     overflow: visible;
   }
 
-  /* Stacked under the roster, the detail/overview sheet sizes to its content
-     so the page owns one scroll instead of clipping rows inside a fixed box. */
+  /* Stacked under the roster, the detail sheet sizes to its content so the
+     page owns one scroll instead of clipping rows inside a fixed box. */
   .agents-detail > .workspace-page {
     height: auto;
     overflow: visible;
@@ -761,10 +428,6 @@
   html[data-theme="light"] .agents-detail > .workspace-page {
     margin: var(--sp-3);
     height: auto;
-  }
-
-  .agents-overview-body {
-    overflow: visible;
   }
 }
 
@@ -781,10 +444,6 @@
     min-height: 0;
     max-height: none;
     border-bottom: 0;
-  }
-
-  .agents-page[data-view="list"] .agents-roster-summary {
-    display: flex;
   }
 
   .agents-page[data-view="detail"] .agents-roster {
@@ -829,9 +488,5 @@
 
   .agents-roster-list {
     padding: var(--sp-1) var(--sp-4) 0;
-  }
-
-  .agents-roster-summary {
-    padding: var(--sp-3) var(--sp-4);
   }
 }
