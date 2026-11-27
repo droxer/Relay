@@ -18,6 +18,7 @@ import type { CurrentUser, SkillFileInput, SkillRepositoryImportResult, SkillsRe
 import { ActionAdd, ICON } from "./icons";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -688,12 +689,34 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
         <Drawer
           open
           onClose={() => { if (!busy) resetCreate(); }}
-          kicker={t("skills.eyebrow")}
           title={t("skills.publish_title")}
           subtitle={t("skills.publish_subtitle")}
           width="form"
           closeLabel={t("skills.close")}
           bodyClassName="skill-drawer"
+          footer={
+            repositoryResult ? (
+              <Button size="cta" onClick={resetCreate} disabled={busy}>{t("skills.close")}</Button>
+            ) : (
+              <>
+                <Button size="cta" variant="ghost" disabled={busy} onClick={resetCreate}>
+                  {t("skills.cancel")}
+                </Button>
+                <Button
+                  size="cta"
+                  disabled={
+                    busy ||
+                    (mode === "upload" && !draft.name.trim()) ||
+                    (mode === "upload" && !draft.files.length) ||
+                    (mode === "github" && !draft.url)
+                  }
+                  onClick={() => void publish()}
+                >
+                  {busy ? t("skills.publishing") : t("skills.publish")}
+                </Button>
+              </>
+            )
+          }
         >
             {repositoryResult ? (
               <div className="skill-import-results">
@@ -714,7 +737,6 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
                     </ul>
                   </>
                 ) : null}
-                <footer className="adm-form-actions"><Button onClick={resetCreate} disabled={busy}>{t("skills.close")}</Button></footer>
               </div>
             ) : <>
             <Field
@@ -723,27 +745,22 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               wrapper="div"
               hint={t(`skills.source_hints.${mode}`)}
             >
-              <div className="adm-profile-segment" role="group" aria-labelledby={sourceLabelId}>
-                {(["upload", "github"] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className="adm-profile-segment-btn"
-                    data-active={mode === option ? "true" : "false"}
-                    aria-pressed={mode === option}
-                    disabled={busy}
-                    onClick={() => {
-                      if (mode === option) return;
-                      uploadRequest.current.draft++;
-                      patchDraft({ files: [] });
-                      setError(null);
-                      setMode(option);
-                    }}
-                  >
-                    {t(SOURCE_LABELS[option])}
-                  </button>
-                ))}
-              </div>
+              <ChoiceGroup<"upload" | "github">
+                name="skill-source"
+                aria-labelledby={sourceLabelId}
+                value={mode}
+                disabled={busy}
+                onValueChange={(option) => {
+                  uploadRequest.current.draft++;
+                  patchDraft({ files: [] });
+                  setError(null);
+                  setMode(option);
+                }}
+                options={(["upload", "github"] as const).map((option) => ({
+                  value: option,
+                  label: t(SOURCE_LABELS[option]),
+                }))}
+              />
             </Field>
             {mode === "upload" ? <Field label={t("skills.skill_name")} required hint={t("skills.skill_name_hint")}>
               <Input
@@ -832,39 +849,20 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               wrapper="div"
               hint={t(`skills.visibility_hints.${draft.visibility}`)}
             >
-              <div className="adm-profile-segment" role="group" aria-labelledby={visibilityLabelId}>
-                {(["private", "public"] as const).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className="adm-profile-segment-btn"
-                    data-active={draft.visibility === option ? "true" : "false"}
-                    aria-pressed={draft.visibility === option}
-                    onClick={() => patchDraft({ visibility: option })}
-                  >
-                    {t(`skills.visibility.${option}`)}
-                  </button>
-                ))}
-              </div>
+              <ChoiceGroup<SkillVisibility>
+                name="skill-visibility"
+                aria-labelledby={visibilityLabelId}
+                value={draft.visibility}
+                disabled={busy}
+                onValueChange={(option) => patchDraft({ visibility: option })}
+                options={(["private", "public"] as const).map((option) => ({
+                  value: option,
+                  label: t(`skills.visibility.${option}`),
+                }))}
+              />
             </Field>
             {publishing ? <SkillImportProgress kind={mode} /> : null}
             {error ? <Alert>{error}</Alert> : null}
-            <footer className="adm-form-actions">
-              <Button variant="ghost" disabled={busy} onClick={resetCreate}>
-                {t("skills.cancel")}
-              </Button>
-              <Button
-                disabled={
-                  busy ||
-                  (mode === "upload" && !draft.name.trim()) ||
-                  (mode === "upload" && !draft.files.length) ||
-                  (mode === "github" && !draft.url)
-                }
-                onClick={() => void publish()}
-              >
-                {busy ? t("skills.publishing") : t("skills.publish")}
-              </Button>
-            </footer>
             </>}
         </Drawer>
       ) : null}

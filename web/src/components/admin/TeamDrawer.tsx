@@ -33,6 +33,7 @@ export function TeamDrawer({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const formId = useId();
   const computerLabelId = useId();
   const { createTeamMutation } = useRelayMutations();
   const [name, setName] = useState("");
@@ -138,14 +139,17 @@ export function TeamDrawer({
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={t("teams.title")}
       title={t("teams.add")}
       subtitle={t("teams.drawer_subtitle")}
       width="form"
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={busy}>{t("dialog.cancel")}</Button>
+          <Button size="cta" type="submit" form={formId} loading={busy} disabled={computers.isLoading || computers.options.length === 0}>{busy ? t("admin.saving") : t("teams.create")}</Button>
+        </>
+      }
     >
-      <form className="adm-form" onSubmit={(event) => void submit(event)} noValidate>
+      <form id={formId} className="adm-form" onSubmit={(event) => void submit(event)} noValidate>
         <Field
           label={t("teams.computer")}
           labelId={computerLabelId}
@@ -209,10 +213,6 @@ export function TeamDrawer({
             onChange={(event) => setAcceptanceCriteria(event.target.value.split("\n"))}
           />
         </Field>
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={busy}>{t("dialog.cancel")}</Button>
-          <Button size="cta" type="submit" loading={busy} disabled={computers.isLoading || computers.options.length === 0}>{busy ? t("admin.saving") : t("teams.create")}</Button>
-        </div>
       </form>
     </Drawer>
   );

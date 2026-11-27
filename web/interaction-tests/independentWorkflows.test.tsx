@@ -8,7 +8,7 @@ import type { AgentTeam, ProjectRecord, UserAgent, Workflow } from "../src/types
 
 vi.mock("../src/api", () => ({ listWorkflowPreviews: vi.fn(), saveWorkflow: vi.fn(async () => ({})), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(async () => ({ id: "run" })) }));
 vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", TEAM_RECORD_QUERY_KEY: "team-record", useTeams: () => ({ teams: [], isSuccess: true }) }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children, footer }: any) => open ? <div>{children}{footer}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: async () => true, announce: vi.fn() }) }));
 const updateProject = vi.hoisted(() => vi.fn(async () => ({})));
 vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({ updateProjectMutation: { mutateAsync: updateProject } }) }));

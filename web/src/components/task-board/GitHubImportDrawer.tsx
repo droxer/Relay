@@ -13,6 +13,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ChoiceGroup } from "@/components/ui/choice-group";
 import { CheckIcon } from "../icons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -157,6 +158,18 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
       width="detail"
       closeLabel={t("github_import.close")}
       bodyClassName="github-import"
+      footer={
+        <>
+          <Button size="cta" variant="ghost" disabled={busy !== null} onClick={onClose}>
+            {t("github_import.cancel")}
+          </Button>
+          <Button size="cta" disabled={!selected.size || busy !== null || stale || connectionUnavailable} onClick={() => void runImport()}>
+            {busy === "importing"
+              ? t("github_import.importing")
+              : t("github_import.import", { count: selected.size })}
+          </Button>
+        </>
+      }
     >
       <form className="github-import-query" onSubmit={submit} aria-busy={busy !== null}>
         <Field label={t("github_import.connection")} labelId={connectionLabelId} wrapper="div" hint={t("github_import.connection_hint")}>
@@ -181,7 +194,7 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
             <Button type="button" variant="ghost" disabled={busy !== null} onClick={() => void connections.refetch()}>{t("github_connection.retry")}</Button>
           </div> : null}
           {connectionUnavailable ? <p role="alert">{t("github_import.errors.connection_unavailable")}</p> : null}
-          <a href="/settings/connections">{t("github_import.manage_connections")}</a>
+          <a className="github-import-manage-link" href="/settings/connections">{t("github_import.manage_connections")}</a>
         </Field>
         <Field label={t("github_import.repository")} required hint={t("github_import.repository_hint")} disabled={busy !== null}>
           <Input
@@ -212,21 +225,17 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
         )}
         <div className="github-import-filters">
           <Field label={t("github_import.state")} labelId={stateLabelId} wrapper="div">
-            <div className="adm-profile-segment" role="group" aria-labelledby={stateLabelId}>
-              {STATES.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className="adm-profile-segment-btn"
-                  data-active={state === option ? "true" : "false"}
-                  aria-pressed={state === option}
-                  disabled={busy !== null}
-                  onClick={() => setState(option)}
-                >
-                  {t(`github_import.states.${option}`)}
-                </button>
-              ))}
-            </div>
+            <ChoiceGroup<GitHubIssueState>
+              name="github-import-state"
+              aria-labelledby={stateLabelId}
+              value={state}
+              disabled={busy !== null}
+              onValueChange={setState}
+              options={STATES.map((option) => ({
+                value: option,
+                label: t(`github_import.states.${option}`),
+              }))}
+            />
           </Field>
           <Field label={t("github_import.labels")} optional={t("github_import.optional")}>
             <Input
@@ -290,17 +299,6 @@ export function GitHubImportDrawer({ open, onClose, lockedProject, projects = []
       ) : null}
 
       {error ? <p role="alert" className="github-import-error">{error}</p> : null}
-
-      <footer className="adm-form-actions">
-        <Button variant="ghost" disabled={busy !== null} onClick={onClose}>
-          {t("github_import.cancel")}
-        </Button>
-        <Button disabled={!selected.size || busy !== null || stale || connectionUnavailable} onClick={() => void runImport()}>
-          {busy === "importing"
-            ? t("github_import.importing")
-            : t("github_import.import", { count: selected.size })}
-        </Button>
-      </footer>
     </Drawer>
   );
 }

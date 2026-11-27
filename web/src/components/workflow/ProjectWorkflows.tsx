@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { startProjectWorkflow } from "../../api";
 import { RelayApiError } from "../../api-client/client";
@@ -198,6 +198,7 @@ function WorkflowRunStarter({
     }
   }
 
+  const formId = useId();
   return (
     <Drawer
       open={workflow !== null}
@@ -206,10 +207,18 @@ function WorkflowRunStarter({
       title={t("workflow.start_title")}
       subtitle={workflow?.name}
       width="form"
-      closeLabel={t("admin.v2.close_drawer")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={onClose} disabled={pending}>
+            {t("dialog.cancel")}
+          </Button>
+          <Button size="cta" type="submit" form={formId} loading={pending}>
+            {t("workflow.start")}
+          </Button>
+        </>
+      }
     >
-      <form className="workflow-editor" onSubmit={(event) => void submit(event)} noValidate>
+      <form id={formId} className="workflow-editor" onSubmit={(event) => void submit(event)} noValidate>
         {workflow?.kind === "steps" ? <Field label={t("workflow.optional_team")} wrapper="div" hint={t("workflow.independent_run_hint")}>
           <Select value={teamId || "independent"} disabled={pending} onValueChange={value => setTeamId(value === "independent" ? "" : value ?? "")}>
             <SelectTrigger className="w-full" aria-label={t("workflow.optional_team")}><SelectValue>{teamId ? teams.find(team => team.id === teamId)?.name : t("workflow.independent")}</SelectValue></SelectTrigger>
@@ -229,14 +238,6 @@ function WorkflowRunStarter({
           />
         </Field>
         {firstGated ? <p className="workflow-editor-note">{t("workflow.first_gate_note")}</p> : null}
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={onClose} disabled={pending}>
-            {t("dialog.cancel")}
-          </Button>
-          <Button size="cta" type="submit" loading={pending}>
-            {t("workflow.start")}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );

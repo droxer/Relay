@@ -70,6 +70,7 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
   const { confirm, announce } = useDialogs();
   const { createProjectMutation, startProjectSetupMutation } = useRelayMutations();
   const [origin, setOrigin] = useState<"fresh" | "existing">("fresh");
+  const formId = useId();
   const originLabelId = useId();
   const [mode, setMode] = useState<Mode>(userId ? "describe" : "manual");
   const [name, setName] = useState("");
@@ -243,14 +244,31 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
       open={open}
       layer={layer}
       onClose={() => { void requestClose(); }}
-      kicker={t("project.setup_kicker")}
       title={t("project.setup_title")}
       subtitle={t(origin === "existing" ? "project.origin_existing_subtitle" : describing ? "project.setup_subtitle_describe" : "project.setup_subtitle")}
       width="form"
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          {userId && origin === "fresh" ? (
+            <Button
+              size="cta"
+              type="button"
+              variant="ghost"
+              className="project-setup-mode adm-form-actions-leading"
+              onClick={() => setMode(describing ? "manual" : "describe")}
+              disabled={busy}
+            >
+              {t(describing ? "project.setup_manual" : "project.setup_describe")}
+            </Button>
+          ) : null}
+          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>{t("dialog.cancel")}</Button>
+          <Button size="cta" type="submit" form={formId} disabled={busy || noSetupAgents || existingUnlinkable} loading={busy}>
+            {t(describing ? "project.setup_draft" : "project.create")}
+          </Button>
+        </>
+      }
     >
-      <form className="adm-form project-setup-form" onSubmit={(event) => void submit(event)} noValidate>
+      <form id={formId} className="adm-form project-setup-form" onSubmit={(event) => void submit(event)} noValidate>
         <Field label={t("project.origin_label")} labelId={originLabelId} wrapper="div"
           hint={t(origin === "fresh" ? "project.origin_fresh_hint" : "project.origin_existing_hint")}>
           {/* Two answers that reshape the whole form below: segments, so both
@@ -349,24 +367,6 @@ function ProjectDrawerBody({ open, computers, userId, agents, onClose, onSaved, 
           <ManagerAgentField agents={setupAgents} value={managerAgentId ?? ""} disabled={busy}
             onChange={(value) => setManagerChoice(value || null)} />
         ) : null}
-        <div className="adm-form-actions">
-          {userId && origin === "fresh" ? (
-            <Button
-              size="cta"
-              type="button"
-              variant="ghost"
-              className="project-setup-mode"
-              onClick={() => setMode(describing ? "manual" : "describe")}
-              disabled={busy}
-            >
-              {t(describing ? "project.setup_manual" : "project.setup_describe")}
-            </Button>
-          ) : null}
-          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>{t("dialog.cancel")}</Button>
-          <Button size="cta" type="submit" disabled={busy || noSetupAgents || existingUnlinkable} loading={busy}>
-            {t(describing ? "project.setup_draft" : "project.create")}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );

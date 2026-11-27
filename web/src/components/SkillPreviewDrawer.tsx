@@ -71,7 +71,6 @@ export function SkillPreviewDrawer({
       title={skill?.displayName || fallbackTitle}
       subtitle={skill ? skill.slug : undefined}
       subtitleMono
-      kicker={t("skills.preview_kicker")}
       closeLabel={t("skills.close")}
       width="wide"
       bodyClassName="skill-drawer skill-preview"

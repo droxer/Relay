@@ -4,7 +4,7 @@ import { publicRequestError } from "../src/components/waitlist/waitlistErrors";
 import type { TFunction } from "i18next";
 import { EditUserDrawer } from "../src/components/admin/EditUserDrawer";
 import type { UserRecord } from "../src/types";
-vi.mock("../src/components/ui/Drawer", () => ({ Drawer: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
+vi.mock("../src/components/ui/Drawer", () => ({ Drawer: ({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) => <div>{children}{footer}</div> }));
 vi.mock("../src/components/admin/UserPasswordReset", () => ({ UserPasswordReset: () => null }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
 import * as api from "../src/api";

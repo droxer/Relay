@@ -100,9 +100,9 @@ it.each([
   render(providers(instance, <DialogProvider><SkillsPage currentUser={{ userId: "user-1" } as any} skillId={null} onSelectSkill={() => {}} /></DialogProvider>));
   const user = userEvent.setup();
   await user.click(screen.getAllByRole("button", { name: create })[0]!);
-  expect(screen.getByRole("button", { name: privateLabel }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("radio", { name: privateLabel }).getAttribute("aria-checked")).toBe("true");
   expect(screen.getByText(privateHint)).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: publicLabel }));
-  expect(screen.getByRole("button", { name: publicLabel }).getAttribute("aria-pressed")).toBe("true");
+  await user.click(screen.getByRole("radio", { name: publicLabel }));
+  expect(screen.getByRole("radio", { name: publicLabel }).getAttribute("aria-checked")).toBe("true");
   expect(screen.getByText(publicHint)).toBeTruthy();
 });

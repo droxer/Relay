@@ -89,7 +89,7 @@ it("publishes directory uploads relative to the selected bundle root", async () 
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
   await user.click(createButton());
-  await user.click(screen.getByRole("button", { name: "Upload bundle" }));
+  await user.click(screen.getByRole("radio", { name: "Upload bundle" }));
   await user.type(screen.getByLabelText(/^Skill name/), "release-notes");
   const files = ["SKILL.md", "references/example.md"].map((path) => {
     const file = new File(["content"], path.split("/").at(-1)!);
@@ -107,9 +107,9 @@ it("defaults to upload and offers no authoring mode", async () => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
   await user.click(createButton());
-  expect(screen.queryByRole("button", { name: "Author" })).toBeNull();
+  expect(screen.queryByRole("radio", { name: "Author" })).toBeNull();
   expect(screen.queryByLabelText(/^Instructions/)).toBeNull();
-  expect(screen.getByRole("button", { name: "Upload bundle" }).getAttribute("aria-pressed")).toBe("true");
+  expect(screen.getByRole("radio", { name: "Upload bundle" }).getAttribute("aria-checked")).toBe("true");
   expect(document.querySelector('input[type="file"]')).not.toBeNull();
 });
 
@@ -133,7 +133,7 @@ it("keeps the GitHub form open when no Skills can be discovered", async () => {
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
   await user.click(createButton());
-  await user.click(screen.getByRole("button", { name: "GitHub" }));
+  await user.click(screen.getByRole("radio", { name: "GitHub" }));
   await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/mattpocock/skills");
   expect(screen.getByText("skills.subpath_hint")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Publish" }));
@@ -149,7 +149,7 @@ it("publishes a repository without a directory or name and shows each import res
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
   await user.click(createButton());
-  await user.click(screen.getByRole("button", { name: "GitHub" }));
+  await user.click(screen.getByRole("radio", { name: "GitHub" }));
   await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/mattpocock/skills");
   expect(screen.queryByLabelText(/Skill name/)).toBeNull();
   await user.click(screen.getByRole("button", { name: "Publish" }));
@@ -166,7 +166,7 @@ it("shows all-rejected batch results without selecting a missing publication", a
   const user = userEvent.setup();
   render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
   await user.click(createButton());
-  await user.click(screen.getByRole("button", { name: "GitHub" }));
+  await user.click(screen.getByRole("radio", { name: "GitHub" }));
   await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/example/skills");
   await user.click(screen.getByRole("button", { name: "Publish" }));
   expect(await screen.findByText("broken")).toBeTruthy();
@@ -182,7 +182,7 @@ it("shows import progress while a GitHub import runs and clears it when done", a
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<QueryClientProvider client={new QueryClient()}><DialogProvider><RoutedSkillsPage /></DialogProvider></QueryClientProvider>);
     await user.click(createButton());
-    await user.click(screen.getByRole("button", { name: "GitHub" }));
+    await user.click(screen.getByRole("radio", { name: "GitHub" }));
     await user.type(screen.getByLabelText(/skills.repository_url/), "https://github.com/example/skills");
     expect(screen.queryByRole("progressbar")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Publish" }));

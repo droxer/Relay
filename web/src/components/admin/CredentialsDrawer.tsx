@@ -104,14 +104,16 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, userHandle
       title={t("admin.v2.credentials_title")}
       subtitle={`${userLabel} · ${node.id}`}
       subtitleMono
-      closeLabel={t("drawer.close")}
       layer={1}
       width="detail"
-      bodyClassName={hasDangerZone ? "adm-drawer-body--column" : undefined}
+      footer={
+        hasDangerZone ? (
+          <Button size="cta" type="button" variant="ghost" onClick={onClose} disabled={actionPending !== null}>
+            {t("admin.v2.close_drawer")}
+          </Button>
+        ) : undefined
+      }
     >
-      {/* .adm-form is unconditional — it owns the stack's vertical rhythm.
-          Only the column layout is conditional, because only the danger-zone
-          branch has a footer to anchor to the panel's bottom edge. */}
       <div className="adm-form">
         <NodeProfileBadges
           node={node}
@@ -161,43 +163,35 @@ export function CredentialsDrawer({ open, onClose, node, storedToken, userHandle
           <p className="adm-cred-empty">{t("admin.v2.token_only_at_provision")}</p>
         )}
         {hasDangerZone ? (
-          <>
-            <div className="adm-drawer-section">
-              <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
-              <div className="adm-drawer-section-actions">
-                {onUnassign && node.userId ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleUnassign}
-                    disabled={actionPending !== null}
-                    loading={actionPending === "unassign"}
-                  >
-                    {actionPending === "unassign" ? t("admin.v2.unassigning") : t("admin.v2.unassign_action")}
-                  </Button>
-                ) : null}
-                {onDelete ? (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={handleDelete}
-                    disabled={actionPending !== null}
-                    loading={actionPending === "delete"}
-                  >
-                    {actionPending === "delete" ? t("admin.v2.deleting") : t("admin.v2.delete_action")}
-                  </Button>
-                ) : null}
-              </div>
-              {actionError ? (
-                <Alert variant="boxed">{t("admin.v2.action_failed", { message: actionError })}</Alert>
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-actions">
+              {onUnassign && node.userId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleUnassign}
+                  disabled={actionPending !== null}
+                  loading={actionPending === "unassign"}
+                >
+                  {actionPending === "unassign" ? t("admin.v2.unassigning") : t("admin.v2.unassign_action")}
+                </Button>
+              ) : null}
+              {onDelete ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={actionPending !== null}
+                  loading={actionPending === "delete"}
+                >
+                  {actionPending === "delete" ? t("admin.v2.deleting") : t("admin.v2.delete_action")}
+                </Button>
               ) : null}
             </div>
-            <div className="adm-form-actions">
-              <Button size="cta" type="button" variant="ghost" onClick={onClose} disabled={actionPending !== null}>
-                {t("admin.v2.close_drawer")}
-              </Button>
-            </div>
-          </>
+            {actionError ? (
+              <Alert variant="boxed">{t("admin.v2.action_failed", { message: actionError })}</Alert>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </Drawer>

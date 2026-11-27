@@ -12,7 +12,7 @@ vi.mock("../src/api", () => ({
   updateWorkflowDraft: vi.fn(),
   deleteWorkflow: vi.fn(async () => ({})),
 }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children, footer }: any) => open ? <div>{children}{footer}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm: async () => true }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
 vi.mock("../src/components/workflow/WorkflowStepCard", () => ({ WorkflowStepCard: ({ agents }: any) => <li>{agents.map((agent: any) => agent.displayName).join(",")}</li> }));

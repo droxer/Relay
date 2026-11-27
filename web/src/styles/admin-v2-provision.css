@@ -13,21 +13,21 @@
    guidance read as belonging to the wrong field. Sections open to 32px so
    they still group above the field gap. */
 .adm-provision-form {
-  gap: var(--sp-7);
+  gap: var(--sp-5);
 }
 
 .adm-provision-section {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
 }
 
 /* A section's title sits tight on the fields it introduces: 12px, not the
-   24px field gap. Keyed on the title itself, not on :first-child — an
+   20px field gap. Keyed on the title itself, not on :first-child — an
    untitled section (the invite form) leads with a field, and the pull-up
-   packed its first two fields 16px apart. */
+   packed its first two fields too tightly. */
 .adm-provision-section > :is(.adm-provision-section-head, .adm-provision-section-title):first-child {
-  margin-bottom: calc(var(--sp-3) - var(--sp-6));
+  margin-bottom: calc(var(--sp-3) - var(--sp-5));
 }
 
 .adm-provision-section-head {
@@ -147,24 +147,22 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-3);
-  min-height: 56px;
-  padding: var(--sp-3);
+  min-height: var(--control-h-lg);
+  padding: var(--sp-2) var(--sp-3);
   border: var(--hairline);
   border-radius: var(--r-2);
-  background: var(--surface-1);
+  background: var(--surface-0);
   color: var(--ink-1);
   text-align: left;
   cursor: pointer;
   transition:
     border-color var(--t-fast) var(--ease),
-    background var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
+    background var(--t-fast) var(--ease);
 }
 
 .create-agent-runtime-option:hover:not(:disabled) {
   border-color: var(--line-strong);
-  background: var(--surface-2);
-  transform: translateY(-1px);
+  background: var(--row-hover);
 }
 
 .create-agent-runtime-option.is-selected {
@@ -181,19 +179,13 @@
 }
 
 .create-agent-runtime-mark {
-  display: grid;
-  width: var(--avatar-md);
-  height: var(--avatar-md);
-  place-items: center;
-  border: var(--hairline);
-  border-radius: var(--r-1);
-  background: var(--surface-0);
-  color: var(--ink-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
 }
 
 .create-agent-runtime-option.is-selected .create-agent-runtime-mark {
-  --tone: var(--action);
-  border-color: var(--tone-line);
   color: var(--action);
 }
 

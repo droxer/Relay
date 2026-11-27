@@ -17,7 +17,7 @@ vi.mock("../src/api", () => ({
   rotateWebhookSecret: vi.fn(),
   RelayApiError: class extends Error { constructor(message: string, public status: number) { super(message); } },
 }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => children }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer }: any) => <>{children}{footer}</> }));
 vi.mock("../src/components/assignment/AssignmentField", () => ({
   AssignmentField: ({ onSelect }: { onSelect: (selection: { kind: string; id?: string }) => void }) => (
     <div data-testid="assignment">

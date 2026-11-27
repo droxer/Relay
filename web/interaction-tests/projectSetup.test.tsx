@@ -26,7 +26,7 @@ const agents = [
 ];
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, open }: any) => open ? children : null }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer, open }: any) => open ? <>{children}{footer}</> : null }));
 /* A select whose items are plain buttons, so a test picks an option by name. */
 vi.mock("@/components/ui/select", () => {
   const Pick = createContext<(value: string) => void>(() => undefined);

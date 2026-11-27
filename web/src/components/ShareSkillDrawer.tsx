@@ -132,9 +132,31 @@ export function ShareSkillDrawer({
       onClose={onClose}
       titleVariant="record"
       title={skill.displayName}
-      kicker={t("skills.share_managed")}
       closeLabel={t("skills.close")}
       bodyClassName="skill-drawer"
+      footer={
+        <>
+          {!selected.length ? (
+            <p className="skill-muted skill-share-hint adm-form-actions-leading">
+              {t("skills.select_target_required")}
+            </p>
+          ) : null}
+          <Button size="cta" variant="ghost" onClick={onClose}>
+            {t("skills.cancel")}
+          </Button>
+          <Button
+            size="cta"
+            disabled={busy || !selected.length}
+            onClick={() => void submit()}
+          >
+            {busy
+              ? t("skills.sharing")
+              : selected.length
+                ? t("skills.share_with_count", { count: selected.length })
+                : t("skills.share")}
+          </Button>
+        </>
+      }
     >
         <p className="skill-muted">
           {t("skills.share_delivery_note")}
@@ -238,28 +260,6 @@ export function ShareSkillDrawer({
             {error}
           </p>
         ) : null}
-        <footer className="adm-form-actions">
-          {/* The one requirement, stated beside the button it gates. In the
-              body it vanished on the first pick and shifted every row up. */}
-          {!selected.length ? (
-            <p className="skill-muted skill-share-hint">
-              {t("skills.select_target_required")}
-            </p>
-          ) : null}
-          <Button variant="ghost" onClick={onClose}>
-            {t("skills.cancel")}
-          </Button>
-          <Button
-            disabled={busy || !selected.length}
-            onClick={() => void submit()}
-          >
-            {busy
-              ? t("skills.sharing")
-              : selected.length
-                ? t("skills.share_with_count", { count: selected.length })
-                : t("skills.share")}
-          </Button>
-        </footer>
     </Drawer>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { createLocalDeviceEnrollment } from "../../api";
 import type { ControlPanelDaemonNodeRecord, CreateLocalDeviceEnrollmentResponse } from "../../types";
@@ -39,6 +39,7 @@ interface ConnectComputerDrawerProps {
  */
 export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }: ConnectComputerDrawerProps) {
   const { t } = useTranslation();
+  const formId = useId();
   const [manualSetup, setManualSetup] = useState(false);
   const [workspacePath, setWorkspacePath] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -104,9 +105,8 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
   const liveNode = result ? nodes.find((node) => node.id === result.node.id) : undefined;
   const connected = Boolean(liveNode && isNodeOnline(liveNode));
 
-  if (!manualSetup) return <Drawer open={open} onClose={onClose} kicker={t("computer.title")}
-    title={t("computer.connect_title")} subtitle={t("computer.device_setup_intro")} width="form"
-    closeLabel={t("drawer.close")}>
+  if (!manualSetup) return <Drawer open={open} onClose={onClose}
+    title={t("computer.connect_title")} subtitle={t("computer.device_setup_intro")} width="form">
     {open && <ComputerDeviceSetup onManual={() => setManualSetup(true)} />}
   </Drawer>;
 
@@ -114,12 +114,25 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={t("computer.title")}
       title={t("computer.connect_title")}
       subtitle={result ? t("computer.connect_success_sub") : t("computer.connect_sub")}
       width="form"
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        result ? (
+          <Button size="cta" type="button" onClick={onClose}>
+            {t("admin.v2.close_drawer")}
+          </Button>
+        ) : (
+          <>
+            <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={isBusy}>
+              {t("admin.v2.cancel")}
+            </Button>
+            <Button size="cta" type="submit" form={formId} loading={isBusy}>
+              {isBusy ? t("computer.connect_connecting") : t("computer.connect_action")}
+            </Button>
+          </>
+        )
+      }
     >
       {result ? (
         <div className="adm-form" ref={resultRef} tabIndex={-1}>
@@ -177,19 +190,10 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
               onCopy={() => void copy("node-id", result.node.id)}
             />
           </details>
-          <div className="adm-form-actions">
-            <Button size="cta" type="button" onClick={onClose}>
-              {t("admin.v2.close_drawer")}
-            </Button>
-          </div>
         </div>
       ) : (
-        <form className="adm-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
-          <div className="computer-install-intro">
-            <h3>{t("computer.connect_intro_title")}</h3>
-            <p>{t("computer.connect_intro_body")}</p>
-            <p className="adm-form-hint">{t("computer.connect_requirements")}</p>
-          </div>
+        <form id={formId} className="adm-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
+          <p className="adm-form-hint">{t("computer.connect_requirements")}</p>
           <fieldset className="adm-form-section">
             <Field label={t("computer.connect_name_label")} optional={t("admin.v2.optional")}>
               <Input
@@ -231,15 +235,6 @@ export function ConnectComputerDrawer({ open, onClose, onConnected, nodes = [] }
           </fieldset>
 
           {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
-
-          <div className="adm-form-actions">
-            <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={isBusy}>
-              {t("admin.v2.cancel")}
-            </Button>
-            <Button size="cta" type="submit" loading={isBusy}>
-              {isBusy ? t("computer.connect_connecting") : t("computer.connect_action")}
-            </Button>
-          </div>
         </form>
       )}
     </Drawer>

@@ -208,6 +208,7 @@ export function TaskDrawer({
   projectChoice = form.id ? "locked" : form.variant === "routine" ? "optional" : "required",
 }: TaskDrawerProps) {
   const { t } = useTranslation();
+  const formId = useId();
   const priorityLabelId = useId();
   const fieldPrefix = form.variant;
   const acceptanceLabelId = useId();
@@ -454,17 +455,29 @@ export function TaskDrawer({
       onClose={() => {
         if (!busy) onClose();
       }}
-      kicker={form.id ? t(form.variant === "routine" ? "nav.routine" : "nav.backlog") : undefined}
       title={title}
       subtitle={form.id ? subtitle : creatingTask && projectChoice === "locked" ? project?.name : undefined}
       subtitleMono={Boolean(form.id)}
       width={creatingTask ? "form" : "task"}
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
       onClosed={onClosed}
       layer={layer}
+      footer={
+        <>
+          <Button type="button" variant="ghost" size="cta" onClick={onClose} disabled={busy}>
+            {t("dialog.cancel")}
+          </Button>
+          <Button type="submit" form={formId} variant="default" size="cta" loading={saving} disabled={deleting || Boolean(workflowIssue)}>
+            {saving ? t("admin.saving") : submitLabel}
+          </Button>
+          {creatingTask ? null : (
+            <span className="task-drawer-shortcut" aria-hidden="true">
+              <kbd className="command-kbd">{submitShortcutLabel()}</kbd> {t("backlog.submit_shortcut")}
+            </span>
+          )}
+        </>
+      }
     >
-      <form className={`adm-form task-board-drawer-form${creatingTask ? " task-board-drawer-form--create" : ""}`}
+      <form id={formId} className="adm-form task-board-drawer-form"
         onSubmit={handleSubmit} onKeyDown={handleKeyDown} noValidate>
         <Field label={t("backlog.title_field")} required={creatingTask} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
@@ -587,38 +600,23 @@ export function TaskDrawer({
             onChange={connectionGrants => onChange({ ...form, connectionGrants })} />
           </div>
         </details>
-        <div className="adm-form-actions">
-          {form.id && onDelete ? (
-            <Button
-              type="button"
-              variant="destructive"
-              size="cta"
-              className="adm-form-actions-leading"
-              onClick={onDelete}
-              disabled={busy}
-              loading={deleting}
-            >
-              {deleting
-                ? t(form.variant === "routine" ? "routine.deleting" : "backlog.deleting")
-                : t(form.variant === "routine" ? "routine.delete_task" : "backlog.delete_task")}
-            </Button>
-          ) : null}
-          <Button type="button" variant="ghost" size="cta" onClick={onClose} disabled={busy}>
-            {t("dialog.cancel")}
-          </Button>
-          <Button type="submit" variant="default" size="cta" loading={saving} disabled={deleting || Boolean(workflowIssue)}>
-            {saving ? t("admin.saving") : submitLabel}
-          </Button>
-          {/* Last in the DOM so the phone footer's odd-child rule still sees
-              Cancel and Submit as its last pair; CSS moves it to the leading
-              edge, on pointer devices only — a touch keyboard has no chord.
-              A saved record's Delete owns that edge, so it shows none. */}
-          {creatingTask || (form.id && onDelete) ? null : (
-            <span className="task-drawer-shortcut" aria-hidden="true">
-              <kbd className="command-kbd">{submitShortcutLabel()}</kbd> {t("backlog.submit_shortcut")}
-            </span>
-          )}
-        </div>
+        {form.id && onDelete ? (
+          <div className="adm-drawer-section">
+            <div className="adm-drawer-section-actions">
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={onDelete}
+                disabled={busy}
+                loading={deleting}
+              >
+                {deleting
+                  ? t(form.variant === "routine" ? "routine.deleting" : "backlog.deleting")
+                  : t(form.variant === "routine" ? "routine.delete_task" : "backlog.delete_task")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </form>
     </Drawer>
   );

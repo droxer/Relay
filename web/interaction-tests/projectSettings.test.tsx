@@ -14,7 +14,7 @@ vi.mock("../src/hooks/useRelayMutations", () => ({ useRelayMutations: () => ({
 }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm }) }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, open }: any) => open ? children : null }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer, open }: any) => open ? <>{children}{footer}</> : null }));
 vi.mock("@/components/ui/select", () => ({
   Select: ({ value, onValueChange }: any) => <select aria-label="project.computer" value={value} onChange={(event) => onValueChange(event.target.value)}><option value="">Choose</option><option value="node">node</option></select>,
   SelectContent: () => null, SelectItem: () => null, SelectTrigger: () => null, SelectValue: () => null,

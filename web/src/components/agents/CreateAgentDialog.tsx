@@ -49,6 +49,7 @@ interface CreateAgentDialogProps {
 export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAgentDialogProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const formId = useId();
   const computerLabelId = useId();
   const runtimeLabelId = useId();
   const roleLabelId = useId();
@@ -198,14 +199,21 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={t("agents_page.title")}
       title={t("agents_page.create_title")}
       subtitle={t("agents_page.create_sub")}
       width="form"
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={isBusy}>
+            {t("admin.v2.cancel")}
+          </Button>
+          <Button size="cta" type="submit" form={formId} loading={isBusy} disabled={computers.isLoading || computerOptions.length === 0}>
+            {isBusy ? t("agents_page.create_creating") : t("agents_page.create_submit")}
+          </Button>
+        </>
+      }
     >
-      <form className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
+      <form id={formId} className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         <Field
           label={t("agents_page.create_computer_label")}
           labelId={computerLabelId}
@@ -358,15 +366,6 @@ export function CreateAgentDialog({ open, onClose, userId, onCreated }: CreateAg
         </Field>
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
-
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={() => { void requestClose(); }} disabled={isBusy}>
-            {t("admin.v2.cancel")}
-          </Button>
-          <Button size="cta" type="submit" loading={isBusy} disabled={computers.isLoading || computerOptions.length === 0}>
-            {isBusy ? t("agents_page.create_creating") : t("agents_page.create_submit")}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );

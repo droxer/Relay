@@ -115,6 +115,7 @@ function WorkflowEditorBody({ open, project: initialProject, team, projects, wor
   const [submitted, setSubmitted] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
+  const formId = useId();
   const nameErrorId = useId();
   const stepsId = useId();
   const busy = saveMutation.isPending || deleteMutation.isPending;
@@ -218,11 +219,18 @@ function WorkflowEditorBody({ open, project: initialProject, team, projects, wor
       title={workflow ? t("workflow.edit_title") : t("workflow.create_title")}
       subtitle={workflow?.name}
       width="task"
-      closeLabel={t("admin.v2.close_drawer")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>
+            {t("dialog.cancel")}
+          </Button>
+          <Button size="cta" type="submit" form={formId} loading={saveMutation.isPending} disabled={deleteMutation.isPending || !stepAgents.length}>
+            {t("workflow.save")}
+          </Button>
+        </>
+      }
     >
-      <form className="workflow-editor" onSubmit={(event) => void submit(event)} noValidate>
-        <p className="workflow-editor-lede">{t("workflow.editor_lede")}</p>
+      <form id={formId} className="workflow-editor" onSubmit={(event) => void submit(event)} noValidate>
         {pickProject ? <Field label={t("workflow.project")} hint={t("workflow.project_hint")} wrapper="div">
           <Select value={projectId} disabled={busy} onValueChange={value => {
             if (!value || value === projectId) return;
@@ -294,7 +302,6 @@ function WorkflowEditorBody({ open, project: initialProject, team, projects, wor
 
         {workflow ? (
           <div className="adm-drawer-section">
-            <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
             {teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id) ? <p className="workflow-editor-note">{t("workflow.default_in_use")}</p> : null}
             <div className="adm-drawer-section-actions">
               <Button type="button" variant="destructive" onClick={() => void remove()} disabled={busy || teams.some(team => team.defaultWorkflowId === workflow.id || team.projectWorkflowDefaults?.[workflow.projectId ?? ""] === workflow.id)}>
@@ -304,15 +311,6 @@ function WorkflowEditorBody({ open, project: initialProject, team, projects, wor
             </div>
           </div>
         ) : null}
-
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>
-            {t("dialog.cancel")}
-          </Button>
-          <Button size="cta" type="submit" loading={saveMutation.isPending} disabled={deleteMutation.isPending || !stepAgents.length}>
-            {t("workflow.save")}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );

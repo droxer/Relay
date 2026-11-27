@@ -398,10 +398,8 @@ export function ChannelsView({
       <Drawer
         open={createOpen && hasChannels}
         onClose={() => setCreateOpen(false)}
-        kicker={t("admin.v2.chat_eyebrow")}
         title={t("admin.v2.chat_new_title")}
         subtitle={t("admin.v2.chat_new_sub")}
-        closeLabel={t("drawer.close")}
         bodyClassName="adm-drawer-body--column"
         width="form"
       >
