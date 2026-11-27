@@ -347,8 +347,11 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   }, [openSession]);
 
   const setComposingNewFromPath = useCallback((next: boolean) => {
-    if (next) startComposing();
-    else setComposingNew(false);
+    if (next) {
+      if (!useRelayStore.getState().composingNew) startComposing();
+    } else {
+      setComposingNew(false);
+    }
   }, [setComposingNew, startComposing]);
 
   const {

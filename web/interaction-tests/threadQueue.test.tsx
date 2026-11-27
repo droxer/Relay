@@ -354,8 +354,9 @@ it("hides the retry slip during an initial in-flight enqueue and clears it when 
 
   let initialSend!: Promise<boolean>;
   act(() => { initialSend = hook.result.current.enqueue("Keep going"); });
+  // Initial in-flight enqueue must not flash the unconfirmed retry slip even before useIsMutating flips.
+  expect(hook.result.current.messageRetry).toBeNull();
   await waitFor(() => expect(hook.result.current.pending).toBe(true));
-  // Initial in-flight enqueue must not flash the unconfirmed retry slip.
   expect(hook.result.current.messageRetry).toBeNull();
 
   await act(async () => {

@@ -181,6 +181,7 @@ it("the first send from an empty list keeps one draft identity and rejects a dup
   act(() => { first = result.current.sendMessage(); });
   const key = threadSendKey("alice", undefined, useRelayStore.getState().threadDraftId);
   expect(useThreadSendStore.getState().operations[key]?.pendingUserMessage?.text).toBe("do work");
+  expect(result.current.messageRetry).toBeNull();
   let duplicate!: boolean;
   await act(async () => { duplicate = await result.current.sendMessage(); });
   expect(duplicate).toBe(false);

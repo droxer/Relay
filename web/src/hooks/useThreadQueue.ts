@@ -150,7 +150,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
 
   const saved = delivery.message;
   const messageRetry: ThreadMessageRetry | null = threadId && saved?.kind === "enqueue"
-    && !(pending && delivery.initial)
+    && !delivery.initial
     ? {
       text: saved.text,
       busy: pending,
