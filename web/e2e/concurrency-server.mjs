@@ -87,6 +87,9 @@ setInterval(() => {}, 1000);
   const execution = {
     ensureAgentReady: async () => undefined,
     async execStream(command, args, options) {
+      // Only agent invocations stream transcript output. Run auxiliary
+      // commands such as generated-image import as issued by the daemon.
+      if (!options?.stdoutRenderer) return localProcessExecStream(command, args, options);
       if (args?.some(arg => arg.includes("Permission probe"))) {
         return localProcessExecStream(command, args, {
           ...options, env: { ...options.env, RELAY_CODEX_BIN: permissionCodex },
