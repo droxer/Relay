@@ -227,9 +227,8 @@ export function normalizeMathDelimiters(text: string): string {
  *   in this tab; opening a new tab to scroll to a footnote reloads the app.
  * - `relative`: anything else. Agent prose says `[report](out/report.md)` or
  *   `![](./chart.png)` meaning a file in its workspace, but the browser resolves
- *   it against the app's own origin and lands on the web catch-all (or a broken
- *   image). There is no URL that names "this file in that workspace", so these
- *   render inert — the text and target stay visible, nothing navigates.
+ *   it against the app's own origin. The transcript can look these up in the
+ *   Thread's indexed files. Other renderers keep the file name as text.
  * - `none`: no target at all (react-markdown blanks unsafe protocols to "").
  */
 export type MarkdownLinkKind = "external" | "fragment" | "relative" | "unsafe" | "none";

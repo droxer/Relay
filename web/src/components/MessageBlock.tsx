@@ -12,6 +12,8 @@ import { AgentMark } from "./AgentMark";
 import { AgentStream } from "./AgentStream";
 import { AttachmentMarker } from "./AttachmentMarker";
 import { MarkdownContent } from "./LazyMarkdown";
+import { MarkdownFileLinks } from "./markdown/context";
+import type { ResolveThreadFileLink } from "../lib/threadFileLinks";
 import { AutomationOpening } from "./AutomationOpening";
 import type { AutomationOpening as AutomationOpeningParts } from "../lib/automationOpening";
 import { MessageTurnActions } from "./MessageTurnActions";
@@ -205,7 +207,7 @@ function ArtifactChip({ artifact, sessionId, onOpenArtifact }: { artifact: Relay
 
 type MessageBlockProps = {
   slotLabel?: string;
-  runIdentity?: Pick<AgentRun, "role" | "roleLevel">;
+  runIdentity?: Pick<AgentRun, "role" | "roleLevel" | "runtimeSessionId">;
   styleFallback?: boolean;
   message: DerivedMessage;
   /** Set on an automation run's opening turn: it draws as the automation's
@@ -221,6 +223,7 @@ type MessageBlockProps = {
    * back to the name monogram, so this map only carries the exceptions. */
   logicalAgentImages?: Record<string, string>;
   onOpenArtifact?: (artifact: RelayArtifact) => void;
+  resolveFileLink?: ResolveThreadFileLink;
   onRetryAgent?: (agent: AgentName, agentId?: string) => void;
   onResumeAgent?: (agent: AgentName, agentId?: string) => void;
   onMentionAgent?: (displayName: string) => void;
@@ -243,6 +246,7 @@ export const MessageBlock = memo(function MessageBlock({
   logicalAgentNames,
   logicalAgentImages,
   onOpenArtifact,
+  resolveFileLink,
   onRetryAgent,
   onResumeAgent,
   onMentionAgent,
@@ -251,6 +255,15 @@ export const MessageBlock = memo(function MessageBlock({
   pickupFrom,
 }: MessageBlockProps) {
   const { t } = useTranslation();
+  const fileLinkRunId = message.kind === "agent" && !message.streaming ? message.runId : undefined;
+  const codexSessionId = message.kind === "agent" && message.agent === "codex" ? runIdentity?.runtimeSessionId : undefined;
+  const fileLinks = useMemo(() => {
+    if (!fileLinkRunId || !resolveFileLink || !onOpenArtifact) return null;
+    return {
+      resolve: (href: string) => resolveFileLink(href, fileLinkRunId, codexSessionId),
+      open: onOpenArtifact,
+    };
+  }, [fileLinkRunId, codexSessionId, onOpenArtifact, resolveFileLink]);
   const mentionNames = useMemo(() => {
     if (!logicalAgentNames) return undefined;
     const names = Object.values(logicalAgentNames);
@@ -345,18 +358,20 @@ export const MessageBlock = memo(function MessageBlock({
           {message.followUp ? (
             <p className="collab-status">{t(`message.follow_up_${message.followUp}`, { agent: agentName })}</p>
           ) : null}
-          <AgentStream
-            agent={message.agent}
-            stdout={message.stdout}
-            stderr={message.stderr}
-            streaming={message.streaming}
-            collaborations={message.collaborations}
-            permissions={message.permissions}
-            mentionNames={mentionNames}
-            mentionableNames={mentionableNames}
-            onMentionClick={mentionableNames ? onMentionAgent : undefined}
-            pickupFrom={pickupFrom}
-          />
+          <MarkdownFileLinks.Provider value={fileLinks}>
+            <AgentStream
+              agent={message.agent}
+              stdout={message.stdout}
+              stderr={message.stderr}
+              streaming={message.streaming}
+              collaborations={message.collaborations}
+              permissions={message.permissions}
+              mentionNames={mentionNames}
+              mentionableNames={mentionableNames}
+              onMentionClick={mentionableNames ? onMentionAgent : undefined}
+              pickupFrom={pickupFrom}
+            />
+          </MarkdownFileLinks.Provider>
           {message.attachments.length > 0 ? (
             <div className="attachment-list">
               {message.attachments.filter((artifact) => artifact.kind === "plan").map((artifact) => (

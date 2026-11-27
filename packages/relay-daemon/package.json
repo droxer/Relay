@@ -1,6 +1,6 @@
 {
   "name": "relay-daemon",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Relay daemon: sandbox-side service that runs agents and connects them to the backend",
   "type": "module",
   "exports": {
