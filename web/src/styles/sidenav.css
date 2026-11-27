@@ -295,6 +295,12 @@
 .sidenav-toggle { color: var(--ink-3); }
 
 
+/* Slight breathing room before Sign out in the expanded footer row so the
+   destructive icon square does not sit flush against Settings. */
+.sidenav-panel[data-expanded="true"] .sidenav-bottom .sidenav-btn[data-nav="logout"] {
+  margin-inline-start: var(--sp-1);
+}
+
 .sidenav-btn[data-nav="logout"]:hover {
   color: var(--err);
   background: var(--surface-2);
@@ -403,7 +409,7 @@
   text-align: left;
 }
 
-.sidenav-toggle svg {
+.sidenav-btn svg {
   flex-shrink: 0;
 }
 

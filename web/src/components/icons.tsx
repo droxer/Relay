@@ -17,13 +17,13 @@ import {
   Bot,
   FolderKanban,
   ListTodo,
-  MessageCircle,
+  MessagesSquare,
   Monitor,
-  Network,
   Workflow,
   Check,
   CircleAlert,
   CircleCheck,
+  CircleX,
   Coins,
   Copy,
   CalendarDays,
@@ -93,6 +93,7 @@ import {
   Square,
   Star,
   Settings2,
+  Shield,
   ShieldCheck,
   SquarePen,
   Terminal,
@@ -210,13 +211,13 @@ function withStandardStroke(Icon: LucideIcon, displayName: string) {
 // the same 1.75 stroke, rounded terminals and inherited state colour.
 // Keep navigation distinct from the identity marks used in roster avatars.
 export const NavHome = withStandardStroke(House, "NavHome");
-export const NavThreads = withStandardStroke(MessageCircle, "NavThreads");
-export const NavAdmin = withStandardStroke(ShieldCheck, "NavAdmin");
+export const NavThreads = withStandardStroke(MessagesSquare, "NavThreads");
+export const NavAdmin = withStandardStroke(Shield, "NavAdmin");
 export const NavBacklog = withStandardStroke(ListTodo, "NavBacklog");
 export const NavProjects = withStandardStroke(FolderKanban, "NavProjects");
 export const NavRoutine = withStandardStroke(Workflow, "NavRoutine");
 export const NavAgents = withStandardStroke(Bot, "NavAgents");
-export const NavTeams = withStandardStroke(Network, "NavTeams");
+export const NavTeams = withStandardStroke(UsersRound, "NavTeams");
 export const NavSkills = withStandardStroke(BookOpen, "NavSkills");
 export const NavPreferences = withStandardStroke(Settings, "NavPreferences");
 export const NavLogout = withStandardStroke(LogOut, "NavLogout");
@@ -328,6 +329,7 @@ export const StatusOk = withStandardStroke(CircleCheck, "StatusOk");
 export const StatusInfo = withStandardStroke(Info, "StatusInfo");
 export const StatusWarn = withStandardStroke(TriangleAlert, "StatusWarn");
 export const StatusError = withStandardStroke(CircleAlert, "StatusError");
+export const StatusCancelled = withStandardStroke(CircleX, "StatusCancelled");
 // Presence, not ownership. This lived in the ownership block above and
 // answered a different question there: a computer is a cloud or a laptop
 // whether or not it is reachable right now.
