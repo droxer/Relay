@@ -10,6 +10,7 @@ import { browserFrameSchedulerHost, createFrameScheduler } from "../lib/frameSch
 import { setSessionStreamConnected } from "../lib/sessionStreamStatus";
 import { fetchSessionSnapshot, reconcileSessionSnapshot } from "../lib/sessionSnapshotQuery";
 import { cacheThreadQueue, EMPTY_THREAD_QUEUE } from "../lib/threadQueue";
+import { invalidateThreadTaskState } from "./taskStateQueries";
 
 const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
@@ -93,10 +94,18 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
           ...session.messageQueue, eventCount: observedSessionEventCount(session),
         });
       }
-      if (events.some(event => event.type === "session.completed" || event.type === "session.failed"
-        || (event.type === "session.status" && isTerminalSessionStatus(event.status)))) {
+      const terminal = events.some(event => event.type === "session.completed" || event.type === "session.failed"
+        || (event.type === "session.status" && isTerminalSessionStatus(event.status)));
+      const workChanged = events.some(event =>
+        (event.type === "collaboration.round.started" && event.manifest.workScope?.kind === "task")
+        || event.type === "workflow.step_finished" || event.type === "workflow.admission_blocked"
+        || event.type === "workflow.interrupted");
+      if (terminal || workChanged) {
         const session = sessions?.find(item => item.id === sessionId);
-        if (session) void refreshTerminalSnapshot(observedSessionEventCount(session));
+        if (session) {
+          invalidateThreadTaskState(queryClient, session);
+          if (terminal) void refreshTerminalSnapshot(observedSessionEventCount(session));
+        }
       }
       for (const event of events) queued.delete(event.id);
     };

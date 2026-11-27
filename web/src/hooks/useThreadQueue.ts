@@ -6,7 +6,9 @@ import { clearComposerDraft, restoreComposerDraft } from "./useComposer";
 import { apiJson, messageDefinitelyRejected } from "../api-client/client";
 import { cacheThreadQueue, EMPTY_THREAD_QUEUE, newestQueue, THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress, type QueueState } from "../lib/threadQueue";
 import { isThreadStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
-import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY, TASKS_QUERY_KEY } from "./useRelayData";
+import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY } from "./useRelayData";
+import { invalidateThreadTaskState } from "./taskStateQueries";
+import type { RelaySession } from "../types";
 import { clearPendingThreadMessage, usePendingThreadMessage, type PendingQueueMessage, type ThreadMessageRetry } from "./usePendingThreadMessage";
 
 /** The message on its way out: claimed for a new turn, or handed to the live run and not yet answered. */
@@ -62,6 +64,12 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
       if (action === "enqueue" && id && text !== undefined) {
         clearPendingThreadMessage(queueKey, "queue", id);
         clearComposerDraft(queueKey, text);
+      }
+      if (action === "steer" || action === "promote" || action === "resume") {
+        const session = client.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.find(row => row.id === threadId);
+        invalidateThreadTaskState(client, session ?? { id: threadId });
+        void client.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true }, { cancelRefetch: false });
+        void client.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
       }
     },
   });
@@ -174,13 +182,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     composer.setText(draft ? `${draft}\n\n${message.text}` : message.text);
     composer.focus();
   }, [state.messages, composerRef, change, queueKey]);
-  const steer = useCallback(async (id: string) => {
-    if (await change(running ? "steer" : "promote", id)) {
-      void client.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY, exact: true });
-      void client.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
-      void client.invalidateQueries({ queryKey: TASKS_QUERY_KEY });
-    }
-  }, [change, running, client]);
+  const steer = useCallback(async (id: string) => { await change(running ? "steer" : "promote", id); }, [change, running]);
   return { messages: state.messages, enqueue, messageRetry, steer, edit, remove,
     removedAt: state.removed?.removedAt, undoRemove,
     pending, paused: state.paused, sending: outgoingMessageId(state), waiting: awaitsPerson && !running,

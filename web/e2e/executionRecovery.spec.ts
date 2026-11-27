@@ -219,7 +219,7 @@ for (const live of [false, true]) {
     const transcript = page.getByRole("log");
     await expect(transcript).toContainText("Earlier reply");
     await expect(transcript).toContainText("Second message");
-    const starting = transcript.getByRole("status").filter({ hasText: "Starting the run." });
+    const starting = transcript.getByRole("status").filter({ hasText: /^Starting…$/ });
     if (live) {
       await expect(starting).toHaveCount(0);
     } else {

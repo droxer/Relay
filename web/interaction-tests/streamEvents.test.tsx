@@ -74,6 +74,22 @@ it("does not refresh execution when only an agent completes", () => {
   view.unmount(); client.clear();
 });
 
+it.each(["completed", "failed", "cancelled"] as const)("revalidates linked Task state when a streamed round %s", async (status) => {
+  const { client, view } = setup();
+  const taskKey = ["task-record", "task"];
+  const taskContextKey = ["relay", "tasks", "thread", "live"];
+  client.setQueryData(taskKey, { id: "task", status: "running", linkedSessionIds: ["live"], sourceRoutineId: "automation" });
+  client.setQueryData(taskContextKey, { tasks: [] });
+  client.setQueryData(["task-runs", "automation", 25], { runs: [] });
+  const event = { id: "end", type: "session.status", sessionId: "live", timestamp: "2026-09-09T00:00:00Z", status, phase: status };
+  vi.mocked(getSession).mockResolvedValueOnce({ ...initial, status, execution: { phase: "terminal" }, events: [event] } as RelaySession);
+  await act(async () => sources[0].onmessage({ data: JSON.stringify(event) }));
+  expect(client.getQueryState(taskKey)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(taskContextKey)?.isInvalidated).toBe(true);
+  expect(client.getQueryState(["task-runs", "automation", 25])?.isInvalidated).toBe(true);
+  view.unmount(); client.clear();
+});
+
 it("retries when an in-flight snapshot predates the terminal event", async () => {
   const { client, view } = setup();
   const event = { id: "end", type: "session.completed", sessionId: "live", timestamp: "2026-09-09T00:00:00Z", outcome: "done" };

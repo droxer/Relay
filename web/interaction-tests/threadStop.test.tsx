@@ -122,3 +122,26 @@ it.each(["rerun", "handoff"] as const)("reuses the operation id when a %s recove
   expect(second.kind).toBe(kind);
   expect(deps.recoveryOperationIdsRef.current.size).toBe(0);
 });
+
+it("keeps an open Thread in its current workspace when resuming a turn", async () => {
+  const { deps, session } = setup(true);
+  deps.requestedThreadId = session.id;
+  deps.effectiveSelectableLogicalAgents = deps.composerLogicalAgents!;
+  const recover = vi.fn().mockResolvedValue(session);
+  deps.requestThreadRecoveryMutation = { mutateAsync: recover } as ThreadDispatchDeps["requestThreadRecoveryMutation"];
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  await act(async () => result.current.resumeAgentMessage("codex", "agent-1"));
+  expect(recover).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id, input: expect.objectContaining({ resume: true }) }));
+  expect(deps.navigateToRoute).not.toHaveBeenCalled();
+});
+
+it("does not substitute a different Agent for a turn's recorded Agent", async () => {
+  const { deps, session } = setup(true);
+  deps.effectiveSelectableLogicalAgents = deps.composerLogicalAgents!;
+  const recover = vi.fn().mockResolvedValue(session);
+  deps.requestThreadRecoveryMutation = { mutateAsync: recover } as ThreadDispatchDeps["requestThreadRecoveryMutation"];
+  const { result } = renderHook(() => useThreadDispatch(deps));
+  await act(async () => result.current.resumeAgentMessage("codex", "another-agent"));
+  expect(recover).not.toHaveBeenCalled();
+  expect(deps.reportMutationError).toHaveBeenCalled();
+});

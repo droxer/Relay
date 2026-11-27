@@ -70,6 +70,7 @@ export function TaskRecordPage({
   parentRoutine,
   currentUser,
   busyAction,
+  executionThreadId,
   presentation = "page",
   tabSearchKey = "tab",
   hrefForRun,
@@ -99,6 +100,7 @@ export function TaskRecordPage({
       resolve through the directories this user can see. */
   currentUser: CurrentUser;
   busyAction: RecordAction | null;
+  executionThreadId?: string;
   /** "drawer" drops the page header; the surrounding drawer carries it. */
   presentation?: "page" | "drawer";
   tabSearchKey?: "tab" | "recordTab";
@@ -220,13 +222,16 @@ export function TaskRecordPage({
       ))}
     </TabsList>
   );
-  const liveThreadId = task.status === "running" || task.attention?.code === "workflow_blocked" ? task.linkedSessionIds.at(-1) : undefined;
+  const liveThreadId = executionThreadId ?? (task.status === "running" || task.attention?.code === "workflow_blocked"
+    ? task.attention?.sessionId ?? task.linkedSessionIds.at(-1) : undefined);
   const actions = (
     <TaskRecordActions
       readingFile={tab === "artifacts"}
       task={task}
       readOnly={readOnly}
       busyAction={busyAction}
+      canCancel={Boolean(executionThreadId)}
+      automationRunning={runningRoutineIds.has(task.id)}
       onRun={onRun}
       onCancel={onCancel}
       onDone={onDone}

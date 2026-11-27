@@ -1,12 +1,15 @@
 "use client";
 
-import { queryOptions, useQuery, type Query } from "@tanstack/react-query";
+import { useCallback, useSyncExternalStore } from "react";
+import { queryOptions, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import { getTask, RelayApiError } from "../api";
 import type { PrivateResponseCache } from "../api-client/client";
 import { useTaskQueryRevision } from "./useTaskQueryRevision";
 import { taskRecordPollIntervalMs } from "../lib/relayPolling";
 import type { RoutineListState } from "../lib/routine";
-import type { RelayTaskListItem } from "../types";
+import { SESSIONS_QUERY_KEY } from "../lib/sessionPollMerge";
+import { canCancelThreadRun } from "../lib/threadRunning";
+import type { RelaySession, RelayTaskListItem } from "../types";
 
 export const TASK_RECORD_QUERY_KEY = "task-record";
 const validators = new WeakMap<Query, PrivateResponseCache<RelayTaskListItem>>();
@@ -90,4 +93,25 @@ export function useTaskRecord(
     get notFound() { return query.error instanceof RelayApiError && query.error.status === 404; },
     get error() { return query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null; },
   };
+}
+
+/** The record can stop admitted work even before the daemon changes the Task
+ * from assigned to running. Reuse the shell's Thread projection. */
+export function useTaskExecutionThread(task: RelayTaskListItem | undefined): string | undefined {
+  const client = useQueryClient();
+  const subscribe = useCallback((listener: () => void) => client.getQueryCache().subscribe(({ query, type }) => {
+    if ((type === "updated" || type === "removed") && query.queryKey.length === SESSIONS_QUERY_KEY.length
+      && SESSIONS_QUERY_KEY.every((part, i) => query.queryKey[i] === part)) listener();
+  }), [client]);
+  const snapshot = () => {
+    if (!task || task.isRoutine || !["running", "assigned", "queued"].includes(task.status)) return undefined;
+    const sessions = client.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY);
+    const threadId = task.linkedSessionIds?.at(-1);
+    const session = sessions?.find(row => row.id === threadId);
+    if (!session) return task.status === "running" ? threadId : undefined;
+    const scope = session.collaborationRounds?.find(round => round.roundId === session.activeRoundId)?.workScope;
+    if (scope && (scope.kind !== "task" || scope.taskId !== task.id)) return undefined;
+    return canCancelThreadRun({ session, activeRun: undefined }) ? session.id : undefined;
+  };
+  return useSyncExternalStore(subscribe, snapshot, () => undefined);
 }

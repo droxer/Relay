@@ -116,6 +116,27 @@ test("an offered answer is one click, and sends as the reply", async ({ page }, 
   await expect.poll(() => sent).toEqual(["Platform vault"]);
 });
 
+test("waits for the Task question before sending a typed answer", async ({ page }) => {
+  await serve(page, "light");
+  const taskContext = Promise.withResolvers<void>();
+  await page.route(url => url.pathname === "/api/v1/tasks" && url.searchParams.get("threadId") === session.id, async route => {
+    await taskContext.promise;
+    await route.fallback();
+  });
+  try {
+    await page.goto(`/computers/${encodeURIComponent(computerId)}/threads/${session.id}`);
+    await expect(page.getByRole("log")).toContainText("Both vaults hold a key");
+    await page.locator("textarea").fill("Use the platform vault");
+    await expect(page.getByRole("button", { name: "Send", exact: true })).toBeDisabled();
+  } finally {
+    taskContext.resolve();
+  }
+  const reply = page.waitForRequest(request => request.method() === "POST"
+    && new URL(request.url()).pathname.endsWith(`/threads/${session.id}/messages`));
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  expect((await reply).postDataJSON()).toMatchObject({ text: "Use the platform vault", questionId: "wait-1" });
+});
+
 test("a gate stop offers the agent's own next steps below the response with a free composer", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const gate = "Work needs attention. Work 6fc1d579-ef85-4b54-9ceb-444985f8ea6c is not accepted: missing.";

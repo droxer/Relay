@@ -71,14 +71,25 @@ it("keeps Start available after a network failure and prevents duplicate submiss
   expect(onStart).toHaveBeenCalledTimes(2);
 });
 
-it.each(["started", "rejected"] as const)("shows the %s dispatch result instead of Start", async (state) => {
+it("shows an accepted dispatch result instead of Start", async () => {
   const { ReadyTask } = await import("../src/components/home/HomePlanningPanels");
   const task = { id: "ready", title: "Ready work", priority: "high" } as import("../src/types").RelayTaskListItem;
-  const onStart = vi.fn().mockResolvedValue({ task, session: null, dispatch: { state, message: "Dispatch details" } });
+  const onStart = vi.fn().mockResolvedValue({ task, session: null, dispatch: { state: "started", message: "Dispatch details" } });
   render(<ReadyTask task={task} href="/tasks/ready" onOpen={vi.fn()} onStart={onStart} />);
   await userEvent.setup().click(screen.getByRole("button", { name: "home.plan.start" }));
-  const label = state === "rejected" ? "backlog.history.dispatch_rejected" : "home.plan.start_started";
-  expect((screen.getByRole("button", { name: label }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "home.plan.start_started" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByRole("status").textContent).toContain("Dispatch details");
   expect(screen.queryByRole("button", { name: "home.plan.start" })).toBeNull();
+});
+
+it("keeps Start available when Relay refuses dispatch and the Task is still ready", async () => {
+  const { ReadyTask } = await import("../src/components/home/HomePlanningPanels");
+  const task = { id: "ready", title: "Ready work", priority: "high", status: "assigned" } as import("../src/types").RelayTaskListItem;
+  const onStart = vi.fn().mockResolvedValue({ task, session: null, dispatch: { state: "rejected", message: "Computer unavailable" } });
+  render(<ReadyTask task={task} href="/tasks/ready" onOpen={vi.fn()} onStart={onStart} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "home.plan.start" }));
+  expect(screen.getByRole("status").textContent).toContain("Computer unavailable");
+  await user.click(screen.getByRole("button", { name: "home.plan.start" }));
+  expect(onStart).toHaveBeenCalledTimes(2);
 });

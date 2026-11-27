@@ -19,11 +19,13 @@ function task(id: string, status: string, extra: Record<string, unknown> = {}) {
    Press, travel past the 10px activation distance, then glide to the lane. */
 async function dragCard(page: Page, card: Locator, lane: Locator) {
   const from = (await card.boundingBox())!;
-  const to = (await lane.boundingBox())!;
   const start = { x: from.x + from.width / 2, y: from.y + from.height - 8 };
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(start.x + 24, start.y, { steps: 4 });
+  // Extra lanes appear at pickup and move the target before the drop.
+  await expect(page.locator('.backlog-board[data-dragging="true"]')).toBeVisible();
+  const to = (await lane.boundingBox())!;
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 3, { steps: 12 });
   await page.mouse.up();
 }
@@ -144,7 +146,9 @@ async function mockQueuedTask(page: Page): Promise<string[]> {
 
 test("dragging Ready to Running calls execution rather than setting a fake status", async ({ page }) => {
   const writes = await mockQueuedTask(page);
-  await openBoard(page);
+  await page.goto("/projects/p?tab=tasks");
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  await expect(page.locator('.backlog-lane[data-status="assigned"] article')).toBeVisible();
   await dragCard(page, page.locator('.backlog-lane[data-status="assigned"] article'), page.locator('.backlog-lane[data-status="running"]'));
   await expect.poll(() => writes).toEqual(["run"]);
   await expect(page.locator('.backlog-lane[data-status="assigned"]')).toContainText("Queued delivery");

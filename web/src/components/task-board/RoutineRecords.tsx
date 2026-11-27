@@ -19,7 +19,7 @@ import { RoutineStateIcon } from "../RoutineStateIcon";
 import { TaskAssignee } from "../TaskAssignee";
 import { TaskSelectCheckbox } from "./TaskSelection";
 import { formatNextRunAt } from "./RoutineChrome";
-import { runNowRefused, type RoutineListState } from "../../lib/routine";
+import { canRunAutomationNow, type RoutineListState } from "../../lib/routine";
 import { recordHrefForLocation } from "../../lib/workspaceScope";
 import { TaskRefLink } from "./TaskRefLink";
 import { sortIndicator, type SortState } from "../../lib/listSort";
@@ -334,7 +334,7 @@ export function RoutineTable({
           const task = row.original;
           const { onAssign, onStart, starting, readOnly } = s.handlersFor(task);
           if (readOnly) return null;
-          const startDisabled = (!task.assignedAgentId && !task.assignedTeamId) || runNowRefused(task);
+          const startDisabled = !canRunAutomationNow(task, s.stateFor(task) === "running");
           return (
             <div className="backlog-action-group" role="group" aria-label={s.t("backlog.actions_dispatch")}>
               <RoutineAssignButton onAssign={onAssign} />

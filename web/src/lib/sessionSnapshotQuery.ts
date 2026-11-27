@@ -5,11 +5,13 @@ import type { RelaySession } from "../types";
 import { applySessionEventUnchecked, applySessionEventsUnchecked } from "./sessionEvents";
 import { mergeSessionSnapshotIntoSessions, observedSessionEventCount, SESSIONS_QUERY_KEY } from "./sessionPollMerge";
 
+const sessionSnapshotKey = (sessionId: string) => ["session-snapshot", sessionId] as const;
+
 /** Detail hydration and an SSE failure share one in-flight HTTP read. The
  * merged sessions collection can advance through SSE. Keep the last HTTP
  * snapshot separately so the next read can validate its exact event prefix. */
 export async function fetchSessionSnapshot(client: QueryClient, sessionId: string, options?: { reuseRecent?: boolean }) {
-  const queryKey = ["session-snapshot", sessionId] as const;
+  const queryKey = sessionSnapshotKey(sessionId);
   const result = await client.fetchQuery({
     queryKey,
     queryFn: async ({ signal }) => {
@@ -23,6 +25,18 @@ export async function fetchSessionSnapshot(client: QueryClient, sessionId: strin
     retry: false,
   });
   return result.snapshot;
+}
+
+/** A request that predates a write can have the same event count and an
+ * older lease phase. Wait for it before reading the committed execution. */
+export async function refreshSessionAfterWrite(client: QueryClient, sessionId: string) {
+  if (client.isFetching({ queryKey: sessionSnapshotKey(sessionId), exact: true })) {
+    await fetchSessionSnapshot(client, sessionId).catch(() => undefined);
+  }
+  const snapshot = await fetchSessionSnapshot(client, sessionId);
+  if (client.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.some(session => session.id === sessionId)) {
+    await reconcileSessionSnapshot(client, snapshot);
+  }
 }
 
 export function fetchTranscriptPage(client: QueryClient, sessionId: string, before: number) {

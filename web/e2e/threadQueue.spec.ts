@@ -12,7 +12,8 @@ const thread = { id: "queue-thread", taskGoal: "Review the release", workspacePa
   execution: { phase: "running", confirmed: true }, agentRuns: [{ id: "r1", agent: "claude", logicalAgentId: agent.id, status: "running", startedAt: stamp, artifactIds: [] }], artifacts: [], decisions: [], collaborationRounds: [], events: [], eventCount: 0 };
 
 for (const theme of ["light", "dark"] as const) for (const language of ["en", "zh-CN", "zh-TW"] as const) {
-  const copy = (language === "en" ? en : language === "zh-CN" ? zhCN : zhTW).queue;
+  const catalog = language === "en" ? en : language === "zh-CN" ? zhCN : zhTW;
+  const copy = catalog.queue;
   const label = (value: string) => value.replace("{{number}}", "1");
   test(`queue synchronizes laptop and phone, with recoverable errors (${theme}, ${language})`, async ({ browser }, info) => {
     const laptop = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: "block" });
@@ -87,9 +88,9 @@ for (const theme of ["light", "dark"] as const) for (const language of ["en", "z
     await expect(b.locator(".message-queue").getByRole("alert")).toContainText(copy.errors.change_failed);
     await expect(b.locator("textarea").first()).toHaveValue("Then check the release notes on mobile");
     fail = false;
-    await b.locator(".composer-queue-button").click();
+    await b.getByRole("button", { name: catalog.composer.retry_send, exact: true }).click();
     await expect(b.locator(".message-queue")).toContainText(copy.saved.replace("{{count}}", "1"));
-    await b.getByRole("button", { name: (language === "en" ? en : language === "zh-CN" ? zhCN : zhTW).composer.stop, exact: true }).click();
+    await b.getByRole("button", { name: catalog.composer.stop, exact: true }).click();
     await expect(b.locator(".message-queue")).toContainText(("paused" in copy ? copy.paused : copy.paused_one).replace("{{count}}", "1"));
     // The desktop just saw an empty queue, which polls every five seconds.
     await expect(a.locator(".message-queue")).toContainText(("paused" in copy ? copy.paused : copy.paused_one).replace("{{count}}", "1"), { timeout: 7_000 });

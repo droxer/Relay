@@ -1,6 +1,6 @@
 import type { RelayTaskListItem } from "../../types.js";
 import { issueNeedsProject } from "../../lib/issueQueues.ts";
-import { runNowRefused } from "../../lib/routine.ts";
+import { canRunAutomationNow } from "../../lib/routine.ts";
 
 /**
  * What a record can do, decided in one place from what it is.
@@ -18,15 +18,16 @@ export type RecordAction = "run" | "retry" | "resume" | "cancel" | "done" | "del
 export function recordActions(
   task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId" | "dispatchOutcome" | "attention">,
   /** Set when the task belongs to a project that is closed for work. */
-  options?: { readOnly?: boolean },
+  options?: { readOnly?: boolean; canCancel?: boolean; automationRunning?: boolean },
 ): readonly RecordAction[] {
   // A read-only room offers no actions at all — see `projectReadOnly`. The
   // record is still fully readable; it just cannot be acted on.
   if (options?.readOnly) return [];
   const assigned = Boolean(task.assignedAgentId || task.assignedTeamId || task.projectId);
-  if (task.status === "running") return task.isRoutine ? ["cancel"] : ["cancel", "done"];
+  const canCancel = options?.canCancel ?? task.status === "running";
+  if (canCancel) return task.isRoutine ? ["cancel"] : ["cancel", "done"];
   // Run now works on a paused automation too; only a rate-limit pause refuses it.
-  if (task.isRoutine) return assigned && !runNowRefused(task) ? ["run"] : [];
+  if (task.isRoutine) return canRunAutomationNow(task, options?.automationRunning) ? ["run"] : [];
   if (task.status === "done") return [];
   const actions: RecordAction[] = [];
   // Intake: no project means nowhere to run, so the way forward is triage

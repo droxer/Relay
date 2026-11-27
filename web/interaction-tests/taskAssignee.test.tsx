@@ -118,3 +118,13 @@ it.each([
   expect(container.querySelector(`.task-col-priority .priority-badge[data-priority="${priority}"]`)).not.toBeNull();
   expect(container.querySelector(".task-project-label")?.textContent).toBe(projectName);
 });
+
+it.each([["on_demand", false], ["running", true]] as const)("uses Project routing and disables Run now when the Automation is %s", (state, disabled) => {
+  const task = { id: "auto", title: "Project audit", priority: "normal", isRoutine: true, projectId: "p",
+    ...(state === "running" ? { assignedAgentId: "agent-1" } : {}) } as RelayTaskListItem;
+  const { getByRole } = render(<RoutineTable rows={[task]} sort={null} onSort={vi.fn()} ariaLabel="Automations"
+    selectAll={null} selection={new Set()} onToggleSelect={vi.fn()} stateFor={() => state}
+    assignmentFor={() => ({ ready: true })}
+    handlersFor={() => ({ starting: false, onOpen: vi.fn(), onAssign: vi.fn(), onStart: vi.fn() })} />);
+  expect((getByRole("button", { name: "backlog.start" }) as HTMLButtonElement).disabled).toBe(disabled);
+});

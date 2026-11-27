@@ -238,7 +238,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   // already drifted: the button also refused a staged thread with no computer
   // picked, but `triggerSend` did not, so the keyboard shortcut dispatched a round with no
   // runtime — the very bypass the mention comment below was added to close.
-  const cannotSendAsWritten = hasUnconfirmedSend || readOnly
+  const cannotSendAsWritten = hasUnconfirmedSend || readOnly || contextPending
     || imageInput.busy
     || (!!uploadUnavailableReason && imageInput.images.length > 0)
     || (!composerText.trim() && !imageInput.images.length)

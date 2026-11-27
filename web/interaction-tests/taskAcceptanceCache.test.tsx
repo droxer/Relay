@@ -35,7 +35,7 @@ it("keeps review visible until acceptance commits, then updates both list and de
   const accepted = { ...task, status: "done", updatedAt: "2026-11-15T00:01:00Z" } as RelayTask;
   await act(async () => { finish(accepted); await decision; });
   expect(client.getQueryData<RelayTask[]>(TASKS_QUERY_KEY)?.[0].status).toBe("done");
-  expect(client.getQueryData([TASK_RECORD_QUERY_KEY, task.id])).toEqual(accepted);
+  expect(client.getQueryData([TASK_RECORD_QUERY_KEY, task.id])).toMatchObject(taskSummaryFromTask(accepted));
   client.clear();
 });
 
