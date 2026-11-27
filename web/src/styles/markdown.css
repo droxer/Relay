@@ -52,6 +52,7 @@
    24 places). */
 .md-body code {
   padding: var(--sp-0-5) var(--sp-1-5);
+  border: var(--hairline-soft);
   border-radius: var(--r-1);
   background: var(--surface-2);
   color: var(--ink-1);
@@ -85,18 +86,19 @@
   font-style: italic;
 }
 
-/* h1/h2 get clearly more air above than a paragraph gap (sp-4) so a section
-   start can't be mistaken for one more block; h3–h6 keep sp-6. */
+/* Section headings sit clearly below the between-turn gap (--sp-7, 32px) so an
+   in-message heading never reads as a new speaker turn, while still rising
+   well above the paragraph gap (--sp-4, 16px). */
 .md-body h1,
 .md-body h2 {
-  margin: var(--sp-7) 0 var(--sp-2);
+  margin: var(--sp-6) 0 var(--sp-3);
 }
 
 .md-body h3,
 .md-body h4,
 .md-body h5,
 .md-body h6 {
-  margin: var(--sp-6) 0 var(--sp-2);
+  margin: var(--sp-5) 0 var(--sp-1-5);
 }
 
 .md-body h1,
@@ -121,23 +123,25 @@
   margin-top: 0;
 }
 
-/* Six content levels, one compact ladder: 16/16/14/14/14/14, every level at
-   600. The ladder stays at the 16px thread title so a content heading never
-   rivals chrome, and the weight ladder has no 700, so levels that share a
-   size split by ink (and h1 by a soft rule) instead. A 500 heading read
-   weaker than the 600 `**bold**` in the paragraph under it.
-     h1 16 ink-1 + rule · h2 16 ink-1
-     h3 14 ink-1 · h4 14 ink-2 · h5/h6 14 ink-3 */
+/* Six content levels on the existing token ladder: 18/16/14/14/14/14 at 600.
+   h1 steps to --fs-document-subheading (18px) with a full hairline rule; h2
+   carries a soft bottom rule at 16px so major sections scan cleanly; h3/h4
+   stay at full --ink-1 so subheadings never look dimmer than inline bold;
+   h5/h6 step back gently to --ink-2. */
 .md-body h1 {
   padding-bottom: var(--sp-2);
-  border-bottom: var(--hairline-soft);
-  font-size: var(--fs-title);
+  border-bottom: var(--hairline);
+  font-size: var(--fs-document-subheading);
 }
-.md-body h2 { font-size: var(--fs-heading); }
+.md-body h2 {
+  padding-bottom: var(--sp-1-5);
+  border-bottom: var(--hairline-soft);
+  font-size: var(--fs-heading);
+}
 .md-body h3 { font-size: var(--fs-transcript); }
-.md-body h4 { font-size: var(--fs-transcript); color: var(--ink-2); }
-.md-body h5 { font-size: var(--fs-transcript); color: var(--ink-3); }
-.md-body h6 { font-size: var(--fs-transcript); color: var(--ink-3); }
+.md-body h4 { font-size: var(--fs-transcript); color: var(--ink-1); }
+.md-body h5 { font-size: var(--fs-transcript); color: var(--ink-2); }
+.md-body h6 { font-size: var(--fs-transcript); color: var(--ink-2); }
 
 /* Transcript prose measure. The transcript column is wide enough for a code
    fence or table, which at the 14px transcript size ran a paragraph past 110
@@ -168,6 +172,10 @@
 .md-body li {
   margin-bottom: var(--sp-2);
   line-height: var(--leading-transcript);
+}
+
+.md-body li::marker {
+  color: var(--ink-3);
 }
 
 .md-body li:last-child {
@@ -218,12 +226,14 @@
 
 .md-body blockquote {
   margin: 0 0 var(--sp-4);
-  padding: var(--sp-1) var(--sp-4);
+  padding: var(--sp-2) var(--sp-4);
   /* --ink-4, not --line-1: the hairline token sits at ~1.2:1 against the
      preview surface in light theme — invisible, so a quoted block read as an
      unstyled paragraph. --ink-4 is muted but keeps the bar above 3:1 in both
-     themes. */
+     themes; the faint tint separates the quoted block from running prose. */
   border-left: var(--accent-bar-block-w) solid var(--ink-4);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  background: color-mix(in srgb, var(--ink-1) 3%, transparent);
   color: var(--ink-2);
   font-style: italic;
 }
@@ -241,9 +251,9 @@ html:lang(zh-TW) .md-body blockquote {
 }
 
 .md-body hr {
-  margin: var(--sp-5) 0;
+  margin: var(--sp-6) 0;
   border: 0;
-  border-top: var(--hairline-soft);
+  border-top: var(--hairline);
 }
 
 .md-body a {
@@ -292,16 +302,25 @@ html:lang(zh-TW) .md-body blockquote {
    currently fits into horizontal scroll for no reading benefit. */
 .md-body th,
 .md-body td {
-  padding: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: var(--hairline-soft);
   text-align: left;
   vertical-align: top;
 }
 
 .md-body thead th {
-  color: var(--ink-3);
+  background: var(--surface-band);
+  color: var(--ink-2);
   font-weight: 600;
-  border-bottom-color: var(--line-1);
+  border-bottom: var(--stroke-w) solid var(--line-1);
+}
+
+.md-body tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.md-body tbody tr:hover {
+  background: var(--row-hover);
 }
 
 .md-body del {
@@ -324,6 +343,7 @@ html:lang(zh-TW) .md-body blockquote {
 }
 
 .agent-code code {
+  border: 0;
   font: inherit;
   background: transparent;
   padding: 0;
@@ -332,10 +352,10 @@ html:lang(zh-TW) .md-body blockquote {
 /* Syntax-highlight token colors live in styles/syntax.css (highlight.js
    `hljs-*` classes), shared with the workspace file preview. */
 
-/* The language label is plain muted micro text at the start of the fence's
-   header bar — no chip, no border — a caption of the block, not chrome. */
+/* The language label is plain micro text at the start of the fence's header
+   bar — no chip, no border — a clear caption of the block, not chrome. */
 .agent-code-lang {
-  color: var(--ink-3);
+  color: var(--ink-2);
   font: var(--type-micro);
   letter-spacing: var(--type-micro-track);
 }
@@ -374,9 +394,11 @@ html:lang(zh-TW) .md-body blockquote {
 }
 
 /* The covers are painted in --surface-0; a table sitting on a raised surface
-   needs them repainted to match or they read as pale strips. */
+   (including the white light-mode chat sheet) needs them repainted to match or
+   they read as pale strips. */
 .artifact-viewer-body .md-table,
-.thread-space-preview .md-table {
+.thread-space-preview .md-table,
+html[data-theme="light"] .transcript .md-table {
   background-color: var(--surface-1);
   background-image:
     linear-gradient(to right, var(--surface-1) 40%, transparent),
@@ -407,21 +429,23 @@ html:lang(zh-TW) .md-body blockquote {
   position: relative;
   margin: 0 0 var(--sp-4);
   overflow: hidden;
-  border: var(--hairline-soft);
+  border: var(--stroke-w) solid var(--line-1);
   border-radius: var(--r-3);
   background: var(--surface-2);
 }
 
-/* Header bar: language on the left, copy on the right, a hairline between it
-   and the code — the copy control never sits over the first line. */
+/* Header bar: language on the left, copy on the right, a subtle tone step and
+   hairline separating the toolbar from the code body so the copy control never
+   sits over the first line. */
 .md-fence-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
   min-height: var(--sp-7);
-  padding: 0 var(--sp-1) 0 var(--sp-4);
+  padding: 0 var(--sp-2) 0 var(--sp-4);
   border-bottom: var(--hairline);
+  background: color-mix(in srgb, var(--ink-1) 4%, var(--surface-2));
 }
 
 .md-fence .agent-code {

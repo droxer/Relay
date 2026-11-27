@@ -8,6 +8,14 @@
   max-width: 100%;
 }
 
+/* Process chrome (thinking, tools, commands) stays compact with sibling
+   process blocks, while leaving clear breathing room (20px > 16px paragraph
+   gap) whenever transitioning between process output and answer prose. */
+.agent-stream > :is(.agent-thinking, .agent-activity, .agent-tool, .agent-command, .agent-permission-line) + :is(.agent-text, .agent-raw),
+.agent-stream > :is(.agent-text, .agent-raw) + :is(.agent-thinking, .agent-activity, .agent-tool, .agent-command, .agent-permission-line) {
+  margin-top: var(--sp-2);
+}
+
 .collaboration-tree {
   padding: var(--sp-3) var(--sp-4);
   border: var(--hairline-soft);
@@ -135,33 +143,35 @@
   color: var(--ink-3);
 }
 
-/* The whole header row is the control — a row, not a word, so the pointer has
-   something to hit and the label can ellipsize instead of wrapping the
-   affordance onto a second line. */
+/* Reasoning header — stepped down to caption scale (--type-meta) inside a
+   quiet recessed chip so collapsed deliberation recedes behind the 14px answer
+   prose while remaining unmistakably clickable. */
 .agent-thinking-header {
-  display: flex;
-  gap: var(--sp-2);
+  display: inline-flex;
+  align-self: flex-start;
+  gap: var(--sp-1-5);
   align-items: center;
   min-width: 0;
-  margin-inline-start: calc(-1 * var(--sp-1-5));
-  padding: var(--sp-0-5) var(--sp-1-5);
-  border: 0;
+  max-width: 100%;
+  padding: var(--sp-1) var(--sp-2);
+  border: var(--hairline-soft);
   /* The focus ring comes from base.css's `button:focus-visible` contract; the
      radius is permanent so the ring has a shape to follow. */
-  border-radius: var(--r-1);
-  background: none;
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--ink-1) 3%, transparent);
   color: var(--ink-3);
-  font-family: var(--font-sans);
-  font-size: var(--fs-2);
-  line-height: var(--leading-normal);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-align: left;
   cursor: pointer;
   transition:
+    border-color var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease);
 }
 
 .agent-thinking-header:hover {
+  border-color: var(--line-1);
   background: var(--row-hover);
   color: var(--ink-2);
 }
@@ -185,11 +195,10 @@
 }
 
 /* The count trails its label on the tighter --sp-1 rhythm, not the header's
-   --sp-2 gap: the separator and the number belong to the label, not to the
-   next slot in the row. */
+   gap: the separator and the number belong to the label, not to the next slot
+   in the row. */
 .agent-thinking-steps {
   flex: none;
-  margin-left: calc(var(--sp-1) - var(--sp-2));
   color: var(--ink-4);
 }
 
@@ -206,20 +215,18 @@
   animation: blink var(--t-pulse) var(--ease-breathe) infinite;
 }
 
-/* Off-scale optical values, both derived from the header above it: 6px is the
-   12px chevron's centre, so the rule hangs under the affordance (optical, a
-   literal), and the padding is what is left of the label's own 20px column
-   (--sp-5: 12px chevron + --sp-2 gap) after that hang and the hairline.
+/* Expanded reasoning sits on a quieter caption scale (--type-meta with loose
+   leading) behind a legible 2px rail (--accent-bar-w) so a long deliberation
+   clearly ends before the answer begins.
    No italic: synthesized CJK oblique reads as a rendering bug (markdown.css
-   normalizes zh blockquotes for the same reason); the rule and --ink-3 already
-   separate the reasoning tier. */
+   normalizes zh blockquotes for the same reason). */
 .agent-thinking-body {
   min-width: 0;
-  margin-left: 6px;
-  padding-left: calc(var(--sp-5) - 6px - var(--sp-hairline));
-  border-left: var(--hairline-soft);
-  font-family: var(--font-sans);
-  font-size: var(--fs-transcript);
+  margin-left: var(--sp-3);
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
+  border-left: var(--accent-bar-w) solid var(--line-1);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   line-height: var(--leading-loose);
   color: var(--ink-3);
 }
@@ -228,14 +235,13 @@
   margin-top: var(--sp-2);
 }
 
-/* A step title is the one thing in the block that carries weight — it is what
-   the reader scans when the block is open, and what the header shows when it
-   is closed. */
+/* A step title carries medium weight at the reasoning tier's scale so open
+   steps scan cleanly without rivaling headings in the answer prose. */
 .agent-thinking-title {
   margin: 0 0 var(--sp-1);
   color: var(--ink-2);
-  font: var(--type-name);
-  letter-spacing: var(--type-name-track);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
 }
 
 /* Reasoning is verbatim model output, one line per paragraph. `pre-wrap` keeps
@@ -268,26 +274,26 @@
 .agent-activity-header {
   display: inline-flex;
   align-self: flex-start;
-  gap: var(--sp-2);
+  gap: var(--sp-1-5);
   align-items: center;
   max-width: 100%;
-  margin-inline-start: calc(-1 * var(--sp-1-5));
-  padding: var(--sp-0-5) var(--sp-1-5);
-  border: 0;
-  border-radius: var(--r-1);
-  background: none;
+  padding: var(--sp-1) var(--sp-2);
+  border: var(--hairline-soft);
+  border-radius: var(--r-2);
+  background: color-mix(in srgb, var(--ink-1) 3%, transparent);
   color: var(--ink-3);
-  font-family: var(--font-sans);
-  font-size: var(--fs-2);
-  line-height: var(--leading-normal);
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
   text-align: left;
   cursor: pointer;
   transition:
+    border-color var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease);
 }
 
 .agent-activity-header:hover {
+  border-color: var(--line-1);
   background: var(--row-hover);
   color: var(--ink-2);
 }
@@ -308,15 +314,16 @@
   white-space: nowrap;
 }
 
-/* Same geometry as .agent-thinking-body: the rule hangs under the chevron. */
+/* Same geometry as .agent-thinking-body: 2px guide rail clearly frames open
+   tool/command logs beneath the disclosure chip. */
 .agent-activity-body {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  gap: var(--sp-1-5);
   min-width: 0;
-  margin-left: 6px;
-  padding-left: calc(var(--sp-5) - 6px - var(--sp-hairline));
-  border-left: var(--hairline-soft);
+  margin-left: var(--sp-3);
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
+  border-left: var(--accent-bar-w) solid var(--line-1);
 }
 
 .agent-activity-body > .agent-tool + .agent-tool,
@@ -334,16 +341,14 @@
   gap: var(--sp-2);
   min-width: 0;
   line-height: var(--leading-normal);
-  color: var(--ink-2);
+  color: var(--ink-3);
 }
 
-/* A command line is mono (`.code`), so it takes the transcript's code size;
-   a tool line is sans and stays on the body rung. One size per selector —
-   the shared block above used to set the body rung only for this rule to
-   restate it. */
+/* Tool and permission lines stay on the compact 12px meta rung so a lone tool
+   call never rivals answer prose; shell commands keep the 13px mono size. */
 .agent-tool,
 .agent-permission-line {
-  font-size: var(--fs-2);
+  font-size: var(--fs-1);
 }
 
 .agent-command {
@@ -373,9 +378,9 @@
 
 .agent-tool-name {
   flex: none;
-  font: var(--type-name);
-  letter-spacing: var(--type-name-track);
-  color: var(--ink-1);
+  font: var(--type-micro);
+  letter-spacing: var(--type-micro-track);
+  color: var(--ink-2);
 }
 
 .agent-tool-target {
@@ -415,13 +420,17 @@
 
 .agent-command > .agent-tool-marker {
   align-self: flex-start;
-  /* (line box − dot) / 2 lands the dot on the first line's centre. */
-  margin-top: calc((1lh - var(--dot-sm)) / 2);
+  /* (line box − dot) / 2 plus top box inset lands the dot on the first line's centre. */
+  margin-top: calc((1lh - var(--dot-sm)) / 2 + var(--sp-1-5));
 }
 
 .agent-command-body {
   flex: 1;
   min-width: 0;
+  padding: var(--sp-1-5) var(--sp-2);
+  border: var(--hairline-soft);
+  border-radius: var(--r-1);
+  background: var(--surface-2);
 }
 
 .agent-command code {
