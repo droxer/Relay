@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { RelayArtifact } from "../../types";
 
 /** Render conditions the Markdown component overrides need.
  *
@@ -27,3 +28,8 @@ export const MarkdownModeProvider = MarkdownModeContext.Provider;
 export function useMarkdownMode(): MarkdownMode {
   return useContext(MarkdownModeContext);
 }
+
+export const MarkdownFileLinks = createContext<{
+  resolve: (href: string) => RelayArtifact | undefined;
+  open: (artifact: RelayArtifact) => void;
+} | null>(null);

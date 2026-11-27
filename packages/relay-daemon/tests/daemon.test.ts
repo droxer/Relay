@@ -3,7 +3,7 @@ import { processRunning } from "./process-state.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
@@ -54,6 +54,9 @@ import { listWorkspace, readWorkspaceFile, workspaceCommandEvent, WorkspaceReadE
 import { isMainModule } from "../src/cli.js";
 import { consumeRoundResult, readRoundResult, ROUND_RESULT_RELATIVE_PATH } from "../src/round-result.js";
 import { WorkspaceRunGate } from "../src/workspace-run-gate.js";
+import { executeCommand } from "../src/run-execution.js";
+import { importCodexGeneratedImages } from "../src/codex-generated-images.js";
+import { ThreadWorkspaceManager } from "../src/thread-workspace.js";
 import { initialAgentState, AGENT_NAMES, type AgentName, type DaemonNodeCommand, type DaemonNodeEvent, type DaemonNodeRegistration, type DaemonNodeRunCommand, type StreamExecResult } from "relay-core";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -1963,6 +1966,102 @@ test("relay daemon completes a successful run whose output batch the backend rej
   assert.equal(completed.agentLog, "[Codex Exit 0]\nstdout:\n  done\n\n");
   assert.deepEqual(completed.generatedFiles?.map((file) => file.relativePath), ["agent-loop-guide.md"]);
   assert.equal(existsSync(controlPath), false);
+});
+
+test("Codex images saved outside the workspace are reported in Files for the producing run", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-codex-images-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const workspace = join(root, "workspace");
+  const codexHome = join(root, "custom-codex-home");
+  const runtimeSessionId = "11111111-1111-4111-8111-111111111111";
+  const imageDir = join(codexHome, "generated_images", runtimeSessionId);
+  const otherSession = join(codexHome, "generated_images", "22222222-2222-4222-8222-222222222222");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHnEAAAAASUVORK5CYII=", "base64");
+  mkdirSync(workspace);
+  mkdirSync(imageDir, { recursive: true });
+  mkdirSync(otherSession, { recursive: true });
+  const oldImage = join(imageDir, "old.png");
+  writeFileSync(oldImage, png);
+  utimesSync(oldImage, 1, 1);
+  const environment = fakeEnvironment({
+    exec: async (cmd, args, opts) => {
+      if (args?.[0] === "-e") {
+        const { stdout, stderr } = await promisify(execFile)(cmd, args, {
+          cwd: opts?.cwd,
+          env: { ...process.env, CODEX_HOME: codexHome },
+        });
+        return { exit_code: 0, stdout, stderr };
+      }
+      writeFileSync(join(imageDir, "generated.png"), png);
+      writeFileSync(join(otherSession, "another-thread.png"), png);
+      writeFileSync(join(imageDir, "diagnostics.txt"), "private runtime data");
+      writeFileSync(join(imageDir, "not-an-image.png"), "private runtime data");
+      if (process.platform !== "win32") {
+        symlinkSync(join(otherSession, "another-thread.png"), join(imageDir, "linked.png"));
+      }
+      const artifacts = join(opts?.cwd ?? workspace, "artifacts");
+      writeFileSync(join(artifacts, "kept.png"), "agent-selected output");
+      writeFileSync(join(imageDir, "kept.png"), png);
+      const stdout = JSON.stringify({ type: "thread.started", thread_id: runtimeSessionId }) + "\n";
+      opts?.stdoutRenderer?.(stdout);
+      return { exit_code: 0, stdout, stderr: "" };
+    },
+  });
+  const command = { ...runCommand("cmd_image"), workspacePath: workspace };
+  const completed = await executeCommand(
+    "http://relay.test", "sbx_test", "node_token", command,
+    async () => jsonResponse({ ok: true }), testLogger(), workspace,
+    new ThreadWorkspaceManager(workspace, "none"), environment,
+  );
+  assert.equal(completed.type, "run.completed");
+  if (completed.type !== "run.completed") throw new Error("missing run.completed");
+  const files = new Map(completed.generatedFiles?.map((file) => [file.relativePath, file]));
+  assert.deepEqual([...files.keys()].sort(), ["artifacts/generated.png", "artifacts/kept.png"]);
+  assert.equal(files.get("artifacts/generated.png")?.contentType, "image/png");
+  assert.equal(files.get("artifacts/generated.png")?.contentBase64, png.toString("base64"));
+  assert.equal(files.get("artifacts/kept.png")?.contentBase64, Buffer.from("agent-selected output").toString("base64"));
+});
+
+test("Codex image import follows the managed skill view's link to the guest Codex home", {
+  skip: process.platform === "win32",
+}, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "relay-guest-images-"));
+  const environment = captureEnv(["RELAY_RUN_AS_CURRENT_USER", "RELAY_AGENT_HOME"]);
+  t.after(() => {
+    restoreCapturedEnv(environment);
+    rmSync(root, { recursive: true, force: true });
+  });
+  delete process.env.RELAY_RUN_AS_CURRENT_USER;
+  delete process.env.RELAY_AGENT_HOME;
+  const workspacePath = join(root, "workspace");
+  const codexSkillHome = join(root, "skill-view");
+  const sessionId = "11111111-1111-4111-8111-111111111111";
+  const guestHome = join(root, "guest-home");
+  const generated = join(guestHome, ".codex", "generated_images");
+  const shellInit = join(root, "guest-shell.sh");
+  // Run the generated guest shell command with a temporary home and our Node.
+  writeFileSync(shellInit, [
+    'node() { "$RELAY_TEST_NODE" "$@"; }',
+    'su() { local command="${@: -1}"; bash -c "${command//\\/home\\/agent/$RELAY_TEST_GUEST_HOME}"; }',
+  ].join("\n"));
+  mkdirSync(workspacePath);
+  mkdirSync(codexSkillHome);
+  mkdirSync(join(generated, sessionId), { recursive: true });
+  symlinkSync(generated, join(codexSkillHome, "generated_images"));
+  const startedAt = Date.now();
+  const gif = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+  writeFileSync(join(generated, sessionId, "generated.gif"), gif);
+
+  await importCodexGeneratedImages(async (cmd, args) => {
+    const { stdout, stderr } = await promisify(execFile)(cmd, args, {
+      env: { ...process.env, BASH_ENV: shellInit, RELAY_TEST_GUEST_HOME: guestHome, RELAY_TEST_NODE: process.execPath },
+    });
+    return { exit_code: 0, stdout, stderr };
+  }, {
+    sandboxMode: "boxlite", workspacePath, codexSkillHome, sessionId,
+    destination: "artifacts/occurrence", startedAt,
+  });
+  assert.deepEqual(readFileSync(join(workspacePath, "artifacts", "occurrence", "generated.gif")), gif);
 });
 
 for (const batching of [false, true]) test(`cloud-latency output is acknowledged before completion (batching=${batching})`, { timeout: 8000 }, async t => {

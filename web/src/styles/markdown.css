@@ -256,16 +256,25 @@ html:lang(zh-TW) .md-body blockquote {
   border-top: var(--hairline);
 }
 
-.md-body a {
+.md-body a,
+.md-body button.md-file-link {
   color: var(--link);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-/* A workspace-relative link or image (components/Markdown.tsx renders it
-   inert — there is no URL for it here). Muted ink and a dotted rule say "this
-   names something" without the link colour promising a destination; the
-   target itself is in the title. */
+.md-body button.md-file-link {
+  max-inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+/* Unindexed file references keep their text and target visible. */
 .md-body .md-link-inert,
 .md-body .md-image-inert {
   color: var(--ink-2);
@@ -274,7 +283,8 @@ html:lang(zh-TW) .md-body blockquote {
   cursor: help;
 }
 
-.md-body a:hover {
+.md-body a:hover,
+.md-body button.md-file-link:hover {
   color: var(--link-hover);
   text-decoration-thickness: 2px;
 }

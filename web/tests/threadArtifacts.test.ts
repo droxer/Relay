@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { latestThreadArtifacts, visibleThreadArtifacts } from "../src/lib/threadArtifacts.js";
+import { indexThreadFileLinks } from "../src/lib/threadFileLinks.js";
 import type { RelayArtifact, RelaySession } from "../src/types.js";
 
 const timestamp = "2026-06-19T12:00:00.000Z";
@@ -120,5 +121,36 @@ describe("latestThreadArtifacts", () => {
     ]);
 
     assert.deepEqual(latest.map((item) => item.id), ["art_review_a", "art_review_b"]);
+  });
+});
+
+describe("reply file links", () => {
+  const files = [
+    artifact({ id: "original", kind: "workspace_file", createdAt: timestamp, agentRunId: "run",
+      path: "C:\\workspace\\artifacts\\report #1.md", workspaceRelativePath: "artifacts/report #1.md" }),
+    artifact({ id: "updated", kind: "workspace_file", createdAt: "2026-06-19T12:01:00.000Z", agentRunId: "another-run",
+      path: "C:\\workspace\\artifacts\\report #1.md", workspaceRelativePath: "artifacts/report #1.md" }),
+    artifact({ id: "first", kind: "workspace_file", createdAt: timestamp, agentRunId: "run",
+      path: "/workspace/a/chart.png", workspaceRelativePath: "a/chart.png" }),
+    artifact({ id: "second", kind: "workspace_file", createdAt: timestamp, agentRunId: "run",
+      path: "/workspace/b/chart.png", workspaceRelativePath: "b/chart.png" }),
+  ];
+  const resolve = indexThreadFileLinks(files);
+
+  it("opens the reply's version first and uses the newest exact path for other runs", () => {
+    assert.equal(resolve("file:///C:/workspace/artifacts/report%20%231.md#L10", "run")?.id, "original");
+    assert.equal(resolve("./artifacts/report%20%231.md", "missing")?.id, "updated");
+    assert.equal(resolve("sandbox:/mnt/data/report%20%231.md", "run")?.id, "original");
+  });
+
+  it("keeps ambiguous names, traversal and non-file targets out of the drawer", () => {
+    for (const target of [
+      "chart.png", "/tmp/chart.png", "/workspace/%2e%2e/a/chart.png",
+      "file://remote/workspace/a/chart.png", "//example.com/a/chart.png",
+      "https://example.com/a/chart.png", "javascript:alert(1)", "a/%98.png",
+    ]) {
+      assert.equal(resolve(target, "run"), undefined, target);
+    }
+    assert.equal(resolve("a/chart.png", "run")?.id, "first");
   });
 });

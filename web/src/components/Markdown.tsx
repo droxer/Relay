@@ -1,5 +1,5 @@
-import { isValidElement, memo, useMemo, type ComponentProps, type ReactElement, type ReactNode } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import { isValidElement, memo, useContext, useMemo, type ComponentProps, type ReactElement, type ReactNode } from "react";
+import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeSlug from "rehype-slug";
 import remarkBreaks from "remark-breaks";
@@ -15,7 +15,8 @@ import {
 } from "../lib/markdown";
 import { omit } from "../lib/omit";
 import { splitInlineMentions, splitLeadingMentionPrefix } from "../lib/mentions";
-import { MarkdownModeProvider, useMarkdownMode } from "./markdown/context";
+import { threadFileLinkPath } from "../lib/threadFileLinks";
+import { MarkdownFileLinks, MarkdownModeProvider, useMarkdownMode } from "./markdown/context";
 import { MarkdownFence } from "./markdown/MarkdownFence";
 import { MarkdownTable } from "./markdown/MarkdownTable";
 
@@ -142,6 +143,54 @@ function nodeText(children: ReactNode): string {
 // processor — once per streamed token, on the hot path.
 type MarkdownOptions = ComponentProps<typeof ReactMarkdown>;
 
+function markdownUrlTransform(url: string, key: string): string {
+  // Preserve local file references for the overrides' lookup. Both overrides
+  // only give actual navigation or image sources to external URLs.
+  if ((key === "href" || key === "src") && /^(?:file:\/\/\/|sandbox:\/|[a-z]:[/\\])/i.test(url) && threadFileLinkPath(url)) {
+    return url;
+  }
+  return defaultUrlTransform(url);
+}
+
+function useFileLink(href: string | undefined) {
+  const links = useContext(MarkdownFileLinks);
+  const artifact = href ? links?.resolve(href) : undefined;
+  return artifact && links ? { artifact, open: links.open } : undefined;
+}
+
+const MarkdownLink: NonNullable<Components["a"]> = ({ href, children, ...props }) => {
+  const rest = omit(props, "node");
+  const kind = markdownLinkKind(href);
+  const file = useFileLink(href);
+  // A linked image uses the outer link's destination and must not render a
+  // second interactive control inside it.
+  const label = <MarkdownFileLinks.Provider value={null}>{children}</MarkdownFileLinks.Provider>;
+  if (kind === "external") {
+    return <a href={href} target="_blank" rel="noreferrer noopener" {...rest}>{label}</a>;
+  }
+  if (kind === "fragment") return <a href={href} {...rest}>{label}</a>;
+  if (file) {
+    return <button type="button" className="md-file-link" onClick={() => file.open(file.artifact)}>{label}</button>;
+  }
+  return <span className="md-link-inert" title={href || undefined}>{label}</span>;
+};
+
+const MarkdownImage: NonNullable<Components["img"]> = ({ src, alt, ...props }) => {
+  const rest = omit(props, "node");
+  const href = typeof src === "string" ? src : undefined;
+  const file = useFileLink(href);
+  if (markdownLinkKind(href) !== "external") {
+    if (file) {
+      return <button type="button" className="md-file-link" onClick={() => file.open(file.artifact)}>{alt || file.artifact.title}</button>;
+    }
+    return <span className="md-image-inert" title={href || undefined}>{alt || href}</span>;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); markdown images have no known size
+    <img src={href} alt={alt ?? ""} loading="lazy" decoding="async" {...rest} />
+  );
+};
+
 const REMARK_PLUGINS: MarkdownOptions["remarkPlugins"] = [
   remarkGfm,
   // Agent CLIs emit hard-wrapped prose and expect the wrap to show. CommonMark
@@ -181,39 +230,8 @@ const MARKDOWN_COMPONENTS: Components = {
   // wrapping: past a few columns it either overflows the transcript or crushes
   // its cells. Give it its own scroll region so the page never scrolls sideways.
   table: MarkdownTable,
-  // react-markdown hands every override its AST `node`; spread onto the DOM it
-  // renders as `node="[object Object]"`, so it is dropped before the spread.
-  a: ({ href, children, ...props }) => {
-    const rest = omit(props, "node");
-    const kind = markdownLinkKind(href);
-    if (kind === "external") {
-      return (
-        <a href={href} target="_blank" rel="noreferrer noopener" {...rest}>
-          {children}
-        </a>
-      );
-    }
-    // Footnote refs/backrefs and heading anchors scroll within this document.
-    if (kind === "fragment") return <a href={href} {...rest}>{children}</a>;
-    // A workspace-relative target has no URL in this app; keep it readable,
-    // not clickable (see markdownLinkKind).
-    return <span className="md-link-inert" title={href || undefined}>{children}</span>;
-  },
-  // Intrinsic dimensions of markdown images are unknown, so no width/height
-  // hints — just lazy-load them instead of blocking on the transcript render.
-  img: ({ src, alt, ...props }) => {
-    const rest = omit(props, "node");
-    const href = typeof src === "string" ? src : undefined;
-    if (markdownLinkKind(href) !== "external") {
-      // A relative image would resolve against the app origin and paint a
-      // broken-image box; say what it was instead.
-      return <span className="md-image-inert" title={href || undefined}>{alt || href}</span>;
-    }
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- static export (no next/image optimizer); markdown images have no known size
-      <img src={href} alt={alt ?? ""} loading="lazy" decoding="async" {...rest} />
-    );
-  },
+  a: MarkdownLink,
+  img: MarkdownImage,
 };
 
 /**
@@ -224,9 +242,9 @@ const MARKDOWN_COMPONENTS: Components = {
  *
  * Output is HTML-escaped — raw HTML is not parsed, highlight.js escapes fence
  * bodies, and Mermaid renders under its strict security level. Absolute links
- * open in a new tab with `noopener`; `#` links stay in place; workspace-relative
- * links and images render inert. Note that remote images referenced by the
- * text still load from their origin.
+ * open in a new tab with `noopener`, and `#` links stay in place. In agent
+ * replies, indexed workspace files open in Files. Remote images load from
+ * their origin.
  *
  * `variant` picks the reading: `chat` matches the transcript's body rhythm,
  * `document` gives the thread space preview document scale and a measure.
@@ -273,6 +291,7 @@ export const MarkdownContent = memo(function MarkdownContent({
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={REHYPE_PLUGINS}
         components={MARKDOWN_COMPONENTS}
+        urlTransform={markdownUrlTransform}
       >
         {normalizeMathDelimiters(text)}
       </ReactMarkdown>
