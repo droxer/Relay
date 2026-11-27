@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, memo, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from "react";
+import { useCallback, memo, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useRelayMutations } from "../hooks/useRelayMutations";
 import { useIssuesPage } from "../hooks/useIssuesPage";
@@ -57,6 +57,7 @@ import {
   type TaskSelection,
 } from "../lib/taskSelection";
 import { PageHeader } from "./PageHeader";
+import { PullToRefresh } from "./PullToRefresh";
 import { BoardEmpty } from "./BoardEmpty";
 import { TaskBoardHeaderActions } from "./TaskBoardHeaderActions";
 import { TaskDrawer } from "./task-board/TaskDrawer";
@@ -196,6 +197,9 @@ function IssuesPageView({
     },
     enabled: mounted && providedTasks === undefined,
   });
+  const listRef = useRef<HTMLDivElement>(null);
+  const refreshList = providedTasks === undefined
+    ? () => issuePage.refetch({ cancelRefetch: false, throwOnError: true }) : onRefresh;
   const response = waitingForSearch ? undefined : issuePage.data;
   const resultTags = response?.tags;
   const resultPage = response?.page;
@@ -364,7 +368,9 @@ function IssuesPageView({
             count={loading ? undefined : t("issues.sub", { count: response?.issueCount ?? issues.length })} titleVariant="title" layout="stacked" />
           <IssueQueueNav value={queue} counts={counts} onChange={(next) => { setQueue(next); setPage(1); }} />
         </div>
-        <div className="sec-main">
+        <div className="sec-main" ref={listRef}>
+          {!board && !waitingForSearch && refreshList
+            ? <PullToRefresh target={listRef} onRefresh={refreshList} /> : null}
           <PageHeader
             title={t(`issues.queues.${queue}`)}
             titleAs="h2"

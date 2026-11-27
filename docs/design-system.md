@@ -731,6 +731,11 @@ denylist rather than an allowlist — to `min-height: var(--touch-target)`
 fields to 16px so iOS does not zoom on focus. Opting a control out takes an
 explicit entry in that file's exceptions block.
 
+**Pull to refresh.** On phones with a coarse pointer, pull down from the
+top of a Thread or Task list and release to fetch the latest records.
+The list keeps its filters and pagination and shows an indicator while
+the request runs. If the request fails, pull again to retry.
+
 
 ## Data visualization
 

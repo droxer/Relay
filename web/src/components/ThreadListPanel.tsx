@@ -32,6 +32,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { useKeyChange } from "../hooks/useKeyChange";
 import { useQueueClock } from "@/hooks/useQueueClock";
 import { ListSkeleton } from "./ListSkeleton";
+import { PullToRefresh } from "./PullToRefresh";
 import { FilterSelect } from "./FiltersBar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { THREAD_KIND_FILTER_ALL, THREAD_KIND_FILTERS, type ThreadKindFilter } from "../lib/threadKindFilter";
@@ -47,6 +48,7 @@ export type ThreadListPaging = {
   loading: boolean;
   failed: boolean;
   loadMore: () => Promise<void> | void;
+  refresh?: () => Promise<void>;
 };
 
 // The logged-in user's own threads. Each row is a session; the list
@@ -123,6 +125,7 @@ export function ThreadListPanel({
   paging?: ThreadListPaging;
 }) {
   const { t } = useTranslation();
+  const listRef = useRef<HTMLDivElement>(null);
   // Rows are memoized; App rebuilds these handlers on every render.
   const selectThread = useStableCallback(onSelectThread);
   const renameThread = useStableCallback(onRenameThread);
@@ -303,7 +306,10 @@ export function ThreadListPanel({
         // project-directory widens the row gap for folder blocks; in threads
         // mode the list must keep conversation-list's tight single-line gap.
         className={directoryMode === "projects" ? "conversation-list project-directory" : "conversation-list"}
+        ref={listRef}
       >
+        {directoryMode === "threads" && listOnScreen && paging?.refresh
+          ? <PullToRefresh target={listRef} onRefresh={paging.refresh} /> : null}
         {directoryMode === "projects" && hierarchy ? hierarchy.projects.map(({ project }) => {
           const selection = selectedProjectId === project.id ? "selected" : null;
           const memberLabel = t("project.member_count", { count: projectIndexRow(project).memberCount });

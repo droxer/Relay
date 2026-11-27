@@ -182,6 +182,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     loadingMoreSessions,
     moreSessionsFailed,
     loadMoreSessions,
+    refreshSessions,
     tasks,
     homeTaskNeedsYou,
     homeTaskProjects,
@@ -936,6 +937,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
               loading: loadingMoreSessions,
               failed: moreSessionsFailed,
               loadMore: loadMoreSessions,
+              refresh: refreshSessions,
             }}
             projectLoading={projectContextPending}
             projectName={activeProject?.name}

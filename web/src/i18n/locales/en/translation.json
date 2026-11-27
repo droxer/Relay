@@ -146,6 +146,8 @@
     "coming_soon": "Coming soon",
     "coming_soon_short": "Soon",
     "refresh": "Refresh",
+    "refreshing": "Refreshing",
+    "refresh_failed": "Could not refresh the list. Pull down to try again.",
     "settings": "Settings",
     "logout": "Sign out",
     "collapse": "Collapse",
