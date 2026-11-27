@@ -142,8 +142,28 @@ describe("artifactFileName", () => {
 });
 
 describe("artifactRawHref", () => {
-  it("URL-encodes both identifiers", () => {
+  function setApiOrigin(t: import("node:test").TestContext, origin?: string) {
+    const key = "NEXT_PUBLIC_RELAY_API_ORIGIN";
+    const previous = process.env[key];
+    if (origin === undefined) delete process.env[key];
+    else process.env[key] = origin;
+    t.after(() => {
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    });
+  }
+
+  it("URL-encodes both identifiers in a same-origin deployment", (t) => {
+    setApiOrigin(t);
     assert.equal(artifactRawHref("ses 1", "art/2"), "/api/v1/threads/ses%201/artifacts/art%2F2");
+  });
+
+  it("sends previews and downloads to the configured API origin", (t) => {
+    setApiOrigin(t, "https://api.example.com/");
+    assert.equal(
+      artifactRawHref("ses 1", "art/2"),
+      "https://api.example.com/api/v1/threads/ses%201/artifacts/art%2F2",
+    );
   });
 });
 

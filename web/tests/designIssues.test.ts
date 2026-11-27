@@ -48,9 +48,9 @@ describe("reviewed design regressions", () => {
     assert.match(panel, /<RowOpen className="project-member-row-open"/);
   });
 
-  it("does not treat failed artifact downloads as copied content", () => {
+  it("reads artifacts through the authenticated client before copying content", () => {
     const header = readWeb("src/components/artifact/ArtifactPreviewHeader.tsx");
-    assert.match(header, /const response = await fetch\(rawHref\);\s*if \(!response\.ok\) throw new Error/s);
+    assert.match(header, /const text = await readArtifactText\(sessionId, artifact\.id\);\s*await navigator\.clipboard\.writeText\(text\);/);
   });
 
   it("preserves a visible unavailable state for failed dashboard data", () => {

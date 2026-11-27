@@ -77,10 +77,15 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   const page = await context.newPage();
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
+    const origin = route.request().headers().origin;
+    const headers = origin ? {
+      "access-control-allow-origin": origin,
+      "access-control-allow-credentials": "true",
+    } : undefined;
     let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [computer], projects: [], sandboxes: [], skills: [], ...fixtures };
     if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: fixtures?.user ?? USER };
     if (pathname.endsWith("/threads/review-thread")) body = { ...session, ...thread };
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    await route.fulfill({ status: 200, contentType: "application/json", headers, body: JSON.stringify(body) });
   });
   await page.goto(path);
   return page;
@@ -791,8 +796,10 @@ for (const touch of [false, true]) test(`reply file links open the Files drawer 
     artifactCount: pictures.length,
   });
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHnEAAAAASUVORK5CYII=", "base64");
-  await page.route("**/api/v1/threads/review-thread/artifacts/*", (route) => route.fulfill({
-    contentType: "image/png", body: png,
+  const apiOrigin = process.env.NEXT_PUBLIC_RELAY_API_ORIGIN?.replace(/\/+$/, "");
+  const artifactPath = "/api/v1/threads/review-thread/artifacts/";
+  await page.route(`${apiOrigin ?? new URL(page.url()).origin}${artifactPath}*`, (route) => route.fulfill({
+    contentType: "image/png", body: png, headers: { "content-disposition": "attachment" },
   }));
 
   const transcript = page.locator(".msg-agent");
@@ -802,7 +809,9 @@ for (const touch of [false, true]) test(`reply file links open the Files drawer 
   await expect(page).toHaveURL(/space=1.*artifact=chart-original/);
   const drawer = page.locator(".thread-space-panel");
   await expect(drawer.locator(".artifact-preview-header-title")).toHaveText("季度 报告.png");
-  await expect(drawer.getByRole("img", { name: "季度 报告.png" })).toBeVisible();
+  await expect(drawer.getByRole("img", { name: "季度 报告.png" })).toHaveJSProperty("naturalWidth", 1);
+  await expect(drawer.getByRole("button", { name: "Download", exact: true }))
+    .toHaveAttribute("href", `${apiOrigin ?? ""}${artifactPath}chart-original`);
   await drawer.getByRole("button", { name: "Close", exact: true }).click();
 
   await transcript.getByRole("button", { name: "Image from Codex" }).click();
