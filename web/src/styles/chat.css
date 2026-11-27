@@ -579,13 +579,18 @@
 }
 
 /* Clear round and speaker boundaries when no phase divider sits between turns:
-   separates a new user prompt from the prior exchange, and a distinct agent
-   speaker from the previous agent, while keeping a user prompt paired tightly
-   with the agent reply that answers it. */
-.transcript-turn + .transcript-turn:not(:has(> .transcript-phase)) > .msg-user,
-.transcript-turn:has(> .msg-agent) + .transcript-turn:not(:has(> .transcript-phase)) > .msg-agent:not(.grouped) {
-  padding-top: var(--sp-6);
-  border-top: var(--hairline-soft);
+   draws a quiet hairline centred inside the existing --sp-7 flex gap so
+   prepending older history pages never alters a turn's box height or shifts
+   the reading anchor. */
+.transcript-turn + .transcript-turn:not(:has(> .transcript-phase)) > .msg-user::before,
+.transcript-turn:has(> .msg-agent) + .transcript-turn:not(:has(> .transcript-phase)) > .msg-agent:not(.grouped)::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--sp-4));
+  inset-inline: 0;
+  height: var(--sp-hairline);
+  background: var(--line-2);
+  pointer-events: none;
 }
 
 .turn-body {
@@ -636,7 +641,7 @@
   width: fit-content;
   max-width: min(85%, 42rem);
   gap: var(--sp-1);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-2) var(--sp-4);
   background: var(--surface-2);
   border: var(--hairline);
   border-radius: var(--r-3);
@@ -870,7 +875,7 @@
   position: relative;
   grid-column: 1 / -1;
   grid-row: 2;
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-2);
 }
 
 .msg-agent > .rail-node-agent,
