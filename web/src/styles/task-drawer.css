@@ -171,6 +171,10 @@
 
 /* ── Task drawer form extras ──────────────────────────────────────── */
 
+.task-board-drawer-form.task-board-drawer-form--create {
+  gap: var(--sp-4);
+}
+
 /* A <legend> is not a flex item of its fieldset, so .adm-form-section's gap
    never reaches it and the Schedule heading sat on the first field label.
    One field-gap step below it, as between any two fields. */
@@ -330,11 +334,7 @@
   letter-spacing: var(--type-body-sm-track);
 }
 
-/* More options — the settings that already carry a default (acceptance,
-   priority, tool permissions, tags, connections). On a new record they fold
-   into one row that names their current values, so the form reads as the
-   decisions only. Opens on the same hairline a section does, in the legend
-   voice, with the chevron Connections uses. */
+/* More options uses the section hairline and the same chevron as Connections. */
 .task-drawer-more {
   min-width: 0;
   background: linear-gradient(var(--line-2), var(--line-2)) top / 100% var(--sp-hairline) no-repeat;

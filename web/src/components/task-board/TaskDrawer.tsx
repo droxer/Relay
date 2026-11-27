@@ -99,23 +99,21 @@ function activatesOnAssign(form: TaskBoardFormState): boolean {
 /** The Select value that stands for "no project" — Select has no null item. */
 const NO_PROJECT = "__none__";
 
-function BacklogFields({ form, onChange }: {
+function TaskDueField({ form, onChange }: {
   form: BacklogTaskFormState;
   onChange: (next: TaskBoardFormState) => void;
 }) {
   const { t } = useTranslation();
   const dueLabelId = useId();
   return (
-    <>
-      <Field label={t("backlog.due")} wrapper="div" labelId={dueLabelId}>
-        <DatePicker
-          labelId={dueLabelId}
-          name="backlog-due-date"
-          value={form.dueDate}
-          onValueChange={(dueDate) => onChange({ ...form, dueDate })}
-        />
-      </Field>
-    </>
+    <Field label={t("backlog.due")} wrapper="div" labelId={dueLabelId}>
+      <DatePicker
+        labelId={dueLabelId}
+        name="backlog-due-date"
+        value={form.dueDate}
+        onValueChange={(dueDate) => onChange({ ...form, dueDate })}
+      />
+    </Field>
   );
 }
 
@@ -217,29 +215,32 @@ export function TaskDrawer({
   const permissionHintId = useId();
   const assignmentFieldId = `${fieldPrefix}-assignment`;
   const assignmentSummaryId = `${fieldPrefix}-assignment-summary`;
+  const creatingTask = form.variant === "backlog" && !form.id;
   const busy = saving || deleting;
   const project = projects.find((item) => item.id === form.projectId);
   /* What the reader chose to assign before choosing who. A saved agent or
      workflow decides it; with neither, the switch remembers the choice until
      the drawer opens on another record. */
   const [kindChoice, setKindChoice] = useState<AssignmentKind>("agent");
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
   const assignmentKind: AssignmentKind = form.assignedWorkflowId && !form.assignedTeamId ? "workflow"
     : form.assignedAgentId || form.assignedTeamId ? "agent" : kindChoice;
-  const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project) && assignmentKind === "workflow");
+  const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project)
+    && (assignmentKind === "workflow" || (creatingTask && assignmentOpen)));
   const availableProjects = projects.filter((item) => item.enabled && !item.archivedAt);
   const projectLabelId = useId();
+  const projectErrorId = useId();
   const projectTriggerRef = useRef<HTMLButtonElement>(null);
   const [projectError, setProjectError] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
-  /* Settings that already carry a default fold away on a new record, with
-     their current values in one line; a saved record opens on them, because
-     changing one is the usual reason to edit. */
+  // A saved record opens its options because changing them is a common edit.
   const [moreOpen, setMoreOpen] = useState(Boolean(form.id));
   useKeyChange(`${open}:${form.id ?? ""}`, () => {
     setKindChoice("agent");
+    setAssignmentOpen(false);
     setMoreOpen(Boolean(form.id));
   });
-  const settingsSummary = [
+  const settingsSummary = creatingTask ? "" : [
     t((form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY) === "human" ? "backlog.acceptance_human" : "backlog.acceptance_automatic"),
     t(`backlog.priorities.${form.priority}`),
     t((form.permissionMode ?? "ask") === "ask" ? "backlog.permission_ask" : "backlog.permission_yolo"),
@@ -252,6 +253,10 @@ export function TaskDrawer({
 
   function updateBase(patch: Partial<TaskBoardFormState>): void {
     onChange({ ...form, ...patch } as TaskBoardFormState);
+  }
+
+  function assignProjectWorkflow(assignedWorkflowId: string): void {
+    updateBase({ assignedWorkflowId, assignedAgentId: "", assignedAgent: "", assignedTeamId: "", collaborationStyle: null });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -307,7 +312,8 @@ export function TaskDrawer({
   const projectWorkflowIssue = form.assignedWorkflowId
     ? projectWorkflowSelectionIssue(form.assignedWorkflowId, projectWorkflows) : null;
   const workflowIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : projectWorkflowIssue;
-
+  const showAssignment = !creatingTask || projectChoice === "locked" || Boolean(project || form.computerId
+    || form.assignedAgent || form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId);
 
   // A saved task can reference an agent/team that has since been deleted or is
   // no longer in the fetched roster. Fall back to the executor kind the task
@@ -341,14 +347,18 @@ export function TaskDrawer({
         fieldId={assignmentFieldId}
         summaryId={assignmentSummaryId}
         autoFocus={initialFocus === "assignment"}
-        value={taskAssignmentValue(form)}
+        compact={creatingTask}
+        value={creatingTask && form.assignedWorkflowId && !form.assignedTeamId ? `workflow:${form.assignedWorkflowId}` : taskAssignmentValue(form)}
         agents={agentOptions}
         teams={teamOptions}
         hideTeams={Boolean(project)}
         selectedAgent={assignedAgentView}
         selectedTeam={assignedTeamView}
         emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
-        switcher={offersWorkflow ? (
+        workflows={creatingTask && offersWorkflow ? projectWorkflows : undefined}
+        workflowMessage={workflowQuery.isError ? t("workflow.load_failed") : workflowQuery.isPending ? t("workflow.loading") : undefined}
+        onOpenChange={creatingTask && offersWorkflow ? setAssignmentOpen : undefined}
+        switcher={!creatingTask && offersWorkflow ? (
           <AssignmentKindSwitch value={assignmentKind} disabled={saving} onChange={(kind) => {
             setKindChoice(kind);
             if (kind !== assignmentKind && (form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId)) {
@@ -356,17 +366,21 @@ export function TaskDrawer({
             }
           }} />
         ) : undefined}
-        alternate={offersWorkflow && assignmentKind === "workflow" ? (
+        alternate={!creatingTask && offersWorkflow && assignmentKind === "workflow" ? (
           <ProjectWorkflowSelect triggerId={assignmentFieldId}
             workflows={projectWorkflows}
             value={form.assignedWorkflowId || ""}
-            onChange={id => updateBase({ assignedWorkflowId: id, assignedAgentId: "", assignedAgent: "", assignedTeamId: "", collaborationStyle: null })}
+            onChange={assignProjectWorkflow}
             disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
             issue={projectWorkflowIssue} onRetry={() => void workflowQuery.refetch()} />
         ) : undefined}
         onSelect={(selection) => {
           if (selection.kind === "none") {
             onChange(clearTaskAssignment(form));
+            return;
+          }
+          if (selection.kind === "workflow") {
+            assignProjectWorkflow(selection.id);
             return;
           }
           if (selection.kind === "agent") {
@@ -399,7 +413,9 @@ export function TaskDrawer({
       label={t("project.project")}
       labelId={projectLabelId}
       wrapper="div"
+      required={creatingTask && projectChoice === "required"}
       error={projectError ? t("project.required") : undefined}
+      errorId={projectErrorId}
     >
       <Select value={form.projectId || (projectChoice === "optional" ? NO_PROJECT : "")} onValueChange={(value) => {
         if (!value) return;
@@ -411,7 +427,9 @@ export function TaskDrawer({
         });
         setProjectError(false);
       }}>
-        <SelectTrigger ref={projectTriggerRef} className="w-full" aria-labelledby={projectLabelId} aria-invalid={projectError || undefined}>
+        <SelectTrigger ref={projectTriggerRef} className="w-full" aria-labelledby={projectLabelId}
+          aria-required={projectChoice === "required" || undefined} aria-invalid={projectError || undefined}
+          aria-describedby={projectError ? projectErrorId : undefined}>
           <SelectValue>{() => project?.name ?? t(projectChoice === "optional" ? "issues.no_project" : "project.choose")}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -421,7 +439,7 @@ export function TaskDrawer({
       </Select>
       {!availableProjects.length && onCreateProject ? <Button type="button" variant="ghost" onClick={onCreateProject}>{t("project.create_action")}</Button> : null}
     </Field>
-  ) : project ? (
+  ) : project && !creatingTask ? (
     /* Locked once saved, but still a field: labelled like every other
        value in the form. */
     <Field label={t("project.projects")} hint={t("project.locked_hint")} wrapper="div">
@@ -435,26 +453,19 @@ export function TaskDrawer({
       onClose={() => {
         if (!busy) onClose();
       }}
-      /* A new record is named by its title alone; the section kicker and the
-         "Draft" subtitle only repeat it. A saved one keeps both: its kicker
-         places it and its subtitle is the reference number. */
       kicker={form.id ? t(form.variant === "routine" ? "nav.routine" : "nav.backlog") : undefined}
       title={title}
-      subtitle={form.id ? subtitle : undefined}
+      subtitle={form.id ? subtitle : creatingTask && projectChoice === "locked" ? project?.name : undefined}
       subtitleMono={Boolean(form.id)}
-      width="task"
+      width={creatingTask ? "form" : "task"}
       closeLabel={t("drawer.close")}
       bodyClassName="adm-drawer-body--column"
       onClosed={onClosed}
       layer={layer}
     >
-      {/* Decisions first, in the order they depend on each other: what the
-          work is, where it runs, who does it, then when — status and due for
-          a task, the trigger for an automation. Settings that already carry a
-          default follow under Details, so on a phone the form can be finished
-          without scrolling past them. */}
-      <form className="adm-form task-board-drawer-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown} noValidate>
-        <Field label={t("backlog.title_field")} error={titleError ?? undefined} errorId="task-drawer-title-error">
+      <form className={`adm-form task-board-drawer-form${creatingTask ? " task-board-drawer-form--create" : ""}`}
+        onSubmit={handleSubmit} onKeyDown={handleKeyDown} noValidate>
+        <Field label={t("backlog.title_field")} required={creatingTask} error={titleError ?? undefined} errorId="task-drawer-title-error">
           <Input
             placeholder={t(form.variant === "routine" ? "routine.title_placeholder" : "backlog.title_placeholder")}
             data-modal-initial-focus={initialFocus === "title" ? "" : undefined}
@@ -475,12 +486,20 @@ export function TaskDrawer({
             name={`${fieldPrefix}-description`}
             autoComplete="off"
             value={form.description}
-            rows={3}
+            rows={creatingTask ? 2 : 3}
             onChange={(event) => updateBase({ description: event.target.value })}
           />
         </Field>
         {projectField}
-        {assignmentField}
+        {showAssignment ? assignmentField : null}
+        {creatingTask && form.assignedWorkflowId && !form.assignedTeamId ? (
+          workflowQuery.isError ? <div role="alert">
+            <p>{t("workflow.load_failed")}</p>
+            <Button type="button" variant="ghost" size="dense" onClick={() => void workflowQuery.refetch()}>{t("workspace.retry")}</Button>
+          </div> : projectWorkflowIssue && !workflowQuery.isPending ? (
+            <p role="alert" className="text-destructive">{t(`workflow.${projectWorkflowIssue}`)}</p>
+          ) : null
+        ) : null}
         {(form.assignedAgentId && !selectedAgent) || (form.assignedTeamId && !selectedTeam) ? <p role="alert" className="text-destructive">{t("backlog.assignment_reselect")}</p> : null}
         {/* Directly under the assignment that reveals it: picking a team
             below must not insert a field above where the reader is working. */}
@@ -489,10 +508,8 @@ export function TaskDrawer({
             value={form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null)}
             onChange={workflowId => onChange({ ...form, assignedWorkflowId: workflowId ?? "", collaborationStyle: null })} />
         </Field> : null}
-        {form.variant === "backlog" ? (
-          <div className={form.id ? undefined : "task-drawer-form-grid"}>
-            <BacklogFields form={form} onChange={onChange} />
-          </div>
+        {form.variant === "backlog" && form.id ? (
+          <TaskDueField form={form} onChange={onChange} />
         ) : null}
         {form.variant === "routine" ? <RoutineSchedule form={form} onChange={onChange} logicalAgents={logicalAgents} teams={teams} projects={projects} /> : null}
         <details
@@ -502,11 +519,12 @@ export function TaskDrawer({
         >
           <summary>
             <span className="task-drawer-more-title">{t("backlog.more_options")}</span>
-            {moreOpen ? null : <span className="task-drawer-more-status">{settingsSummary}</span>}
+            {!moreOpen && settingsSummary ? <span className="task-drawer-more-status">{settingsSummary}</span> : null}
           </summary>
           <div className="task-drawer-more-body">
-          {/* Two-up pairs only — acceptance with priority here, status with
-              due above — so no field is ever left alone in half a row. */}
+          {creatingTask ? (
+            <TaskDueField form={form} onChange={onChange} />
+          ) : null}
           <div className="task-drawer-form-grid">
             <Field
               label={t("backlog.acceptance_policy")}
@@ -594,7 +612,7 @@ export function TaskDrawer({
               Cancel and Submit as its last pair; CSS moves it to the leading
               edge, on pointer devices only — a touch keyboard has no chord.
               A saved record's Delete owns that edge, so it shows none. */}
-          {form.id && onDelete ? null : (
+          {creatingTask || (form.id && onDelete) ? null : (
             <span className="task-drawer-shortcut" aria-hidden="true">
               <kbd className="command-kbd">{submitShortcutLabel()}</kbd> {t("backlog.submit_shortcut")}
             </span>
