@@ -113,6 +113,37 @@ export function teamSharesOneComputer(
 }
 
 /**
+ * Resolve the Computer a standalone Agent or Team assignment runs on when the
+ * task does not already carry one. Prefers an active placement, then any
+ * non-removed placement (matching backend `validate_computer_assignment`),
+ * then the record's own `computerId`.
+ */
+export function assignmentComputerId(
+  selection: { assignedAgentId?: string; assignedTeamId?: string },
+  agents: readonly UserAgent[],
+  teams: readonly AgentTeam[],
+): string | undefined {
+  if (selection.assignedAgentId) {
+    const agent = agents.find((candidate) => candidate.id === selection.assignedAgentId);
+    if (!agent) return undefined;
+    const placements = agent.placements ?? [];
+    const active = placements.find((placement) => placement.desiredState === "active" && placement.computerId)?.computerId;
+    if (active) return active;
+    const nonRemoved = placements.find((placement) => placement.desiredState !== "removed" && placement.computerId)?.computerId;
+    return nonRemoved ?? agent.computerId ?? undefined;
+  }
+  if (selection.assignedTeamId) {
+    const team = teams.find((candidate) => candidate.id === selection.assignedTeamId);
+    if (!team) return undefined;
+    if (team.computerId) return team.computerId;
+    const first = agents.find((agent) => agent.id === team.memberAgentIds?.[0]);
+    if (!first) return undefined;
+    return [...agentComputerIds(first)].find((computerId) => teamOnComputer(team, agents, computerId));
+  }
+  return undefined;
+}
+
+/**
  * The agents and teams a task may be given — the one rule the task drawer and
  * an inline row picker share. Project work offers only enabled roster
  * members; Project Workflows are chosen separately. Standalone work offers

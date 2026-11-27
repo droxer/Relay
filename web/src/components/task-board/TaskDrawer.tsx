@@ -218,13 +218,22 @@ export function TaskDrawer({
   const creatingTask = form.variant === "backlog" && !form.id;
   const busy = saving || deleting;
   const project = projects.find((item) => item.id === form.projectId);
-  /* What the reader chose to assign before choosing who. A saved agent or
-     workflow decides it; with neither, the switch remembers the choice until
-     the drawer opens on another record. */
+  /* What the reader chose to assign before choosing who. A saved agent, team,
+     or workflow decides it; with none, the switch remembers the choice until
+     the drawer opens on another record or switches between Project and
+     standalone scope. */
   const [kindChoice, setKindChoice] = useState<AssignmentKind>("agent");
   const [assignmentOpen, setAssignmentOpen] = useState(false);
-  const assignmentKind: AssignmentKind = form.assignedWorkflowId && !form.assignedTeamId ? "workflow"
-    : form.assignedAgentId || form.assignedTeamId ? "agent" : kindChoice;
+  const secondKind: "team" | "workflow" = project ? "workflow" : "team";
+  const assignmentKind: AssignmentKind = form.assignedWorkflowId && !form.assignedTeamId
+    ? (project ? "workflow" : "agent")
+    : form.assignedTeamId
+      ? (project ? "agent" : "team")
+      : form.assignedAgentId
+        ? "agent"
+        : kindChoice === secondKind
+          ? kindChoice
+          : "agent";
   const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project)
     && (assignmentKind === "workflow" || (creatingTask && assignmentOpen)));
   const availableProjects = projects.filter((item) => item.enabled && !item.archivedAt);
@@ -298,13 +307,13 @@ export function TaskDrawer({
     allowWorkflowSelection: true,
   });
   const selectedAgent = agentOptions.find((agent) => agent.id === form.assignedAgentId);
-  /* Intake: an issue outside a project has nowhere to run, so it offers no
-     agent or team — the server refuses one — only the way into a project. */
-  const intake = form.variant === "backlog" && projectChoice !== "required" && !form.projectId && !form.computerId && !form.sourceRoutineId;
   const selectedTeam = teamOptions.find((team) => team.id === form.assignedTeamId);
-  /* Project work runs with one Project Agent or one Project Workflow; teams
-     are hidden there, so the switch is all that decides between the two. */
-  const offersWorkflow = Boolean(project) && !intake && !form.assignedTeamId;
+  /* Project work runs with one Project Agent or one Project Workflow;
+     standalone work runs with one Agent or one Team. Creating a task offers
+     both sides in one compact tabbed picker; editing or creating an automation
+     uses the segmented switch above the picker. */
+  const offersWorkflow = Boolean(project) && !form.assignedTeamId;
+  const offersKindSwitch = !creatingTask && (offersWorkflow || !project);
   const projectAgentIds = project?.members.filter(member => member.enabled).map(member => member.agentId);
   const teamWorkflowIssue = workflowSelectionIssue(selectedTeam,
     form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
@@ -312,7 +321,7 @@ export function TaskDrawer({
   const projectWorkflowIssue = form.assignedWorkflowId
     ? projectWorkflowSelectionIssue(form.assignedWorkflowId, projectWorkflows) : null;
   const workflowIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : projectWorkflowIssue;
-  const showAssignment = !creatingTask || projectChoice === "locked" || Boolean(project || form.computerId
+  const showAssignment = !creatingTask || projectChoice !== "required" || Boolean(project || form.computerId
     || form.assignedAgent || form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId);
 
   // A saved task can reference an agent/team that has since been deleted or is
@@ -334,16 +343,7 @@ export function TaskDrawer({
         : undefined)
     : undefined;
 
-  const assignmentField = intake ? (
-        <Field label={t("backlog.assignment_label")} wrapper="div">
-          <p className="adm-form-hint" id={assignmentSummaryId}>{t("issues.assignment_needs_project")}</p>
-          {form.assignedAgentId || form.assignedTeamId || form.assignedAgent ? (
-            <Button type="button" variant="ghost" disabled={saving} onClick={() => onChange(clearTaskAssignment(form))}>
-              {t("issues.clear_assignment")}
-            </Button>
-          ) : null}
-        </Field>
-      ) : <AssignmentField
+  const assignmentField = <AssignmentField
         fieldId={assignmentFieldId}
         summaryId={assignmentSummaryId}
         autoFocus={initialFocus === "assignment"}
@@ -351,15 +351,16 @@ export function TaskDrawer({
         value={creatingTask && form.assignedWorkflowId && !form.assignedTeamId ? `workflow:${form.assignedWorkflowId}` : taskAssignmentValue(form)}
         agents={agentOptions}
         teams={teamOptions}
-        hideTeams={Boolean(project)}
+        hideAgents={offersKindSwitch && assignmentKind === "team"}
+        hideTeams={Boolean(project) || (offersKindSwitch && assignmentKind !== "team")}
         selectedAgent={assignedAgentView}
         selectedTeam={assignedTeamView}
         emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
         workflows={creatingTask && offersWorkflow ? projectWorkflows : undefined}
         workflowMessage={workflowQuery.isError ? t("workflow.load_failed") : workflowQuery.isPending ? t("workflow.loading") : undefined}
         onOpenChange={creatingTask && offersWorkflow ? setAssignmentOpen : undefined}
-        switcher={!creatingTask && offersWorkflow ? (
-          <AssignmentKindSwitch value={assignmentKind} disabled={saving} onChange={(kind) => {
+        switcher={offersKindSwitch ? (
+          <AssignmentKindSwitch value={assignmentKind} secondKind={secondKind} disabled={saving} onChange={(kind) => {
             setKindChoice(kind);
             if (kind !== assignmentKind && (form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId)) {
               onChange(clearTaskAssignment(form));
