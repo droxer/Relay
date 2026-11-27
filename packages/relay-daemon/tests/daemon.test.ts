@@ -1992,16 +1992,23 @@ test("Codex images saved outside the workspace are reported in Files for the pro
         });
         return { exit_code: 0, stdout, stderr };
       }
-      writeFileSync(join(imageDir, "generated.png"), png);
+      // The fake run writes immediately. Give its files an explicit mtime after
+      // the run begins so filesystem clock granularity cannot make them old.
+      const generatedAt = new Date(Date.now() + 1_000);
+      for (const [name, contents] of [
+        ["generated.png", png], ["kept.png", png], ["not-an-image.png", "private runtime data"],
+      ] as const) {
+        const path = join(imageDir, name);
+        writeFileSync(path, contents);
+        utimesSync(path, generatedAt, generatedAt);
+      }
       writeFileSync(join(otherSession, "another-thread.png"), png);
       writeFileSync(join(imageDir, "diagnostics.txt"), "private runtime data");
-      writeFileSync(join(imageDir, "not-an-image.png"), "private runtime data");
       if (process.platform !== "win32") {
         symlinkSync(join(otherSession, "another-thread.png"), join(imageDir, "linked.png"));
       }
       const artifacts = join(opts?.cwd ?? workspace, "artifacts");
       writeFileSync(join(artifacts, "kept.png"), "agent-selected output");
-      writeFileSync(join(imageDir, "kept.png"), png);
       const stdout = JSON.stringify({ type: "thread.started", thread_id: runtimeSessionId }) + "\n";
       opts?.stdoutRenderer?.(stdout);
       return { exit_code: 0, stdout, stderr: "" };
@@ -2038,23 +2045,29 @@ test("Codex image import follows the managed skill view's link to the guest Code
   const sessionId = "11111111-1111-4111-8111-111111111111";
   const guestHome = join(root, "guest-home");
   const generated = join(guestHome, ".codex", "generated_images");
-  const shellInit = join(root, "guest-shell.sh");
-  // Run the generated guest shell command with a temporary home and our Node.
-  writeFileSync(shellInit, [
+  // Simulate guest su with a temporary home and the Node running this test.
+  const guestShell = [
     'node() { "$RELAY_TEST_NODE" "$@"; }',
-    'su() { local command="${@: -1}"; bash -c "${command//\\/home\\/agent/$RELAY_TEST_GUEST_HOME}"; }',
-  ].join("\n"));
+    'su() { local command="${@: -1}"; (eval "${command//\\/home\\/agent/$RELAY_TEST_GUEST_HOME}"); }',
+  ].join("\n");
   mkdirSync(workspacePath);
   mkdirSync(codexSkillHome);
   mkdirSync(join(generated, sessionId), { recursive: true });
   symlinkSync(generated, join(codexSkillHome, "generated_images"));
-  const startedAt = Date.now();
+  const startedAt = Date.UTC(2026, 0, 1);
+  const generatedAt = new Date(startedAt + 1_000);
   const gif = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
-  writeFileSync(join(generated, sessionId, "generated.gif"), gif);
+  const image = join(generated, sessionId, "generated.gif");
+  writeFileSync(image, gif);
+  utimesSync(image, generatedAt, generatedAt);
 
   await importCodexGeneratedImages(async (cmd, args) => {
-    const { stdout, stderr } = await promisify(execFile)(cmd, args, {
-      env: { ...process.env, BASH_ENV: shellInit, RELAY_TEST_GUEST_HOME: guestHome, RELAY_TEST_NODE: process.execPath },
+    const [flag, script] = args ?? [];
+    assert.equal(cmd, "bash");
+    assert.equal(flag, "-c");
+    assert.ok(script);
+    const { stdout, stderr } = await promisify(execFile)(cmd, ["-c", `${guestShell}\n${script}`], {
+      env: { ...process.env, RELAY_TEST_GUEST_HOME: guestHome, RELAY_TEST_NODE: process.execPath },
     });
     return { exit_code: 0, stdout, stderr };
   }, {
