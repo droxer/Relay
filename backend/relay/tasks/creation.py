@@ -63,7 +63,6 @@ class _Assignment:
 
 @dataclass(frozen=True)
 class _Plan:
-    status: str | None
     acceptance_policy: Any
     collaboration_style: str | None
     routine: dict[str, Any]
@@ -133,6 +132,8 @@ def _plan_creation(
     collaboration_style = collaboration_style_field(body, allow_clear=False)
     if "status" in body and not status:
         raise TaskRequestError(400, "status is not a recognized task status.")
+    if status and status != "backlog":
+        raise TaskRequestError(400, "New tasks must enter Backlog.")
     routine = request.reader.routine(body, current=None)
     if routine.get("isRoutine") and not (project or request.reader.string(body, "computerId")):
         raise TaskRequestError(409, "task_workspace_required")
@@ -147,13 +148,9 @@ def _plan_creation(
         "computerId": request.reader.string(body, "computerId"),
     }
     if issue_needs_project(scope) and (
-        status == "assigned" or assigned or creates_thread
+        assigned or creates_thread
     ):
         raise TaskRequestError(409, ISSUE_NEEDS_PROJECT)
-    if status == "assigned" and not (project or assigned):
-        raise TaskRequestError(400, "assigned status requires an agent or team.")
-    if status and status not in ("backlog", "assigned"):
-        raise TaskRequestError(400, "New tasks must enter Backlog or Ready.")
     if routine.get("routineState") == "active" and not (project or assigned):
         raise TaskRequestError(400, "An active automation requires an agent, team, or project.")
     if creates_thread and assignment.team_id:
@@ -165,7 +162,7 @@ def _plan_creation(
                 "assignedTeamId": assignment.team_id,
             },
         )
-    return _Plan(status, acceptance_policy, collaboration_style, routine, creates_thread)
+    return _Plan(acceptance_policy, collaboration_style, routine, creates_thread)
 
 
 def _create_record(
@@ -184,7 +181,7 @@ def _create_record(
             **({"projectId": project["id"]} if project else {}),
             **({"computerId": request.reader.string(body, "computerId")} if body.get("computerId") else {}),
             "dueDate": request.reader.date(body, "dueDate"),
-            "status": plan.status,
+            "status": "backlog",
             "acceptancePolicy": plan.acceptance_policy or NEW_TASK_ACCEPTANCE_POLICY,
             **({"permissionMode": permission_mode} if permission_mode else {}),
             **(

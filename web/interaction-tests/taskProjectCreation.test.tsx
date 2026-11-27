@@ -43,8 +43,10 @@ it("requires a project even when the task has a title", () => {
 it("saves the selected project and limits executor choices to its roster", () => {
   const save = vi.fn(); render(<Form save={save} initial={{ ...emptyBacklogForm(user), title: "Ship", projectId: "p" }} />);
   expect(screen.getByTestId("assignment-options").textContent).toBe("Member");
+  expect(screen.queryByRole("radio", { name: "backlog.statuses.assigned" })).toBeNull();
+  expect(screen.queryByRole("radio", { name: "backlog.statuses.backlog" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));
-  expect(save).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p", title: "Ship" }));
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ projectId: "p", title: "Ship", status: "backlog" }));
 });
 
 it("rejects an archived selected project at submit time", () => {

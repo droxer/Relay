@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from task_setup import mark_task_ready
 from automation_helpers import DAILY_TRIGGERS, WEEKLY_TRIGGERS
 
 import asyncio
@@ -36,11 +37,11 @@ def test_explicit_project_assignee_runs_without_unavailable_siblings(project_con
     app, client, node, project, lead, worker = project_context
     created = client.post("/api/v1/tasks", json={
         "title": "Worker only", "projectId": project["id"], "assignedAgentId": worker["id"],
-        "status": "assigned",
         **({"isRoutine": True, "routineState": "active", "routineTriggers": WEEKLY_TRIGGERS} if entry == "routine" else {}),
     })
     assert created.status_code == 201, created.text
     task = created.json()
+    mark_task_ready(client, task)
     app.state.agent_store.update_agent(lead["id"], {"enabled": False})
     if entry == "scheduler":
         tick = asyncio.run(app.state.task_scheduler.tick())

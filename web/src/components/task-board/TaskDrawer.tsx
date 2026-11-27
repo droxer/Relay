@@ -33,9 +33,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ChoiceGroup } from "@/components/ui/choice-group";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentTeam, UserAgent, ProjectListItem, RoutineTrigger, TaskPriority, TaskStatus } from "../../types";
+import type { AgentTeam, UserAgent, ProjectListItem, RoutineTrigger, TaskPriority } from "../../types";
 import { TASK_PRIORITIES } from "../../lib/backlog";
-import { NEW_TASK_STATUSES } from "../../lib/taskFlow";
 import { taskAssignmentOptions } from "../../lib/taskAssignment";
 import {
   NEW_TASK_ACCEPTANCE_POLICY,
@@ -100,36 +99,14 @@ function activatesOnAssign(form: TaskBoardFormState): boolean {
 /** The Select value that stands for "no project" — Select has no null item. */
 const NO_PROJECT = "__none__";
 
-function BacklogFields({ form, onChange, canRun }: {
+function BacklogFields({ form, onChange }: {
   form: BacklogTaskFormState;
   onChange: (next: TaskBoardFormState) => void;
-  /** False for intake: without a project there is no Ready to move to. */
-  canRun: boolean;
 }) {
   const { t } = useTranslation();
-  const statusLabelId = useId();
   const dueLabelId = useId();
   return (
     <>
-      {/* A new task picks where it starts; after that, status changes through
-          the task's status control, the same one the list and board use. */}
-      {form.id ? null : (
-      <Field label={t("backlog.status")} labelId={statusLabelId} hint={t("backlog.ready_policy")} wrapper="div">
-        <ChoiceGroup<TaskStatus>
-          name="backlog-status"
-          aria-labelledby={statusLabelId}
-          value={form.status}
-          onValueChange={(status) => onChange({ ...form, status })}
-          options={NEW_TASK_STATUSES.map((status) => ({
-            value: status,
-            label: t(`backlog.statuses.${status}`),
-            /* Intake keeps Ready on screen but unavailable, so the reader sees
-               the step a project would unlock rather than a lone segment. */
-            disabled: !canRun && status === "assigned" && status !== form.status,
-          }))}
-        />
-      </Field>
-      )}
       <Field label={t("backlog.due")} wrapper="div" labelId={dueLabelId}>
         <DatePicker
           labelId={dueLabelId}
@@ -429,7 +406,7 @@ export function TaskDrawer({
         const projectId = value === NO_PROJECT ? undefined : value;
         onChange({
           ...clearTaskAssignment(form),
-          ...(form.variant === "backlog" ? { status: projectId || form.status !== "assigned" ? form.status : "backlog" } : {}),
+          ...(form.variant === "backlog" && form.id ? { status: projectId || form.status !== "assigned" ? form.status : "backlog" } : {}),
           projectId,
         });
         setProjectError(false);
@@ -514,7 +491,7 @@ export function TaskDrawer({
         </Field> : null}
         {form.variant === "backlog" ? (
           <div className={form.id ? undefined : "task-drawer-form-grid"}>
-            <BacklogFields form={form} onChange={onChange} canRun={!intake} />
+            <BacklogFields form={form} onChange={onChange} />
           </div>
         ) : null}
         {form.variant === "routine" ? <RoutineSchedule form={form} onChange={onChange} logicalAgents={logicalAgents} teams={teams} projects={projects} /> : null}

@@ -50,7 +50,6 @@ export function taskFlowMetrics(tasks: RelayTaskListItem[], now = Date.now()) {
 }
 
 /** The stages a new task may start in: nothing has run yet. */
-export const NEW_TASK_STATUSES = ["backlog", "assigned"] as const satisfies readonly TaskStatus[];
 
 /**
  * Blocked is a hold on a task, not a stage of its own: a blocked task keeps

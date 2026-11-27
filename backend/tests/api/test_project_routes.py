@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from task_setup import mark_task_ready
 from automation_helpers import WEEKLY_TRIGGERS
 
 import asyncio
@@ -1393,10 +1394,10 @@ def test_scheduler_dispatches_assigned_project_task(monkeypatch) -> None:
             json={
                 "title": "Scheduled project work",
                 "projectId": project["id"],
-                "status": "assigned",
             },
         )
         assert task_response.status_code == 201, task_response.text
+        mark_task_ready(client, task_response.json())
 
         tick = asyncio.run(app.state.task_scheduler.tick())
 

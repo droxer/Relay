@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from task_setup import mark_task_ready
 from automation_helpers import DAILY_TRIGGERS
 from relay.daemon_registry.dispatch.workflow_admission import workflow_request_id
 from test_task_workflows import start_task, take, task_workflow
@@ -32,7 +33,8 @@ def occurrence_of(app, routine_id):
 
 def test_scheduler_runs_assigned_workflow_task_through_the_ledger(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
-        task, _ = task_workflow(client, project, payload, status="assigned")
+        task, _ = task_workflow(client, project, payload)
+        mark_task_ready(client, task)
         assert tick(app).dispatched == 1
         current, session = workflow_session(app, task["id"])
         assert current["status"] != "blocked", current.get("blockerReason")
@@ -49,7 +51,8 @@ def test_scheduler_runs_assigned_workflow_task_through_the_ledger(monkeypatch):
 def test_scheduler_parks_a_gated_first_step_without_a_command(monkeypatch):
     with workflow_world(monkeypatch) as (app, client, node, _, project, payload):
         payload["workflowSteps"][0]["requiresApproval"] = True
-        task, _ = task_workflow(client, project, payload, status="assigned")
+        task, _ = task_workflow(client, project, payload)
+        mark_task_ready(client, task)
         tick(app)
         current, session = workflow_session(app, task["id"])
         assert current["status"] == "waiting_for_human"
@@ -82,11 +85,11 @@ def test_workflow_waits_for_execution_capacity_and_starts_automatically(monkeypa
         response = client.post("/api/v1/tasks", json={
             "title": "Second workflow task", "projectId": project["id"],
             "assignedWorkflowId": workflow["id"],
-            "status": "assigned" if entry == "scheduler" else "backlog",
         })
         assert response.status_code == 201, response.text
         task_id = response.json()["id"]
         if entry == "scheduler":
+            mark_task_ready(client, response.json())
             assert tick(app).dispatched == 0
         else:
             response = client.post(f"/api/v1/tasks/{task_id}/runs", json={})

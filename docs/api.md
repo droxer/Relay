@@ -1313,7 +1313,9 @@ Usage counts the signed-in user's occupied slots across projects before paginati
 including for administrators. A task entering Review releases its slot. Rework
 requires capacity again.
 
-New tasks accept only Backlog/Ready as initial status. `acceptancePolicy` is
+New tasks enter Backlog. `POST /tasks` accepts an omitted status or `backlog`;
+other initial statuses return 400. Move a task to Ready after creation with
+`PATCH /tasks/{id}`. `acceptancePolicy` is
 `human` (default) or `automatic`; it is immutable once work starts. Successful
 human-policy work enters Review, and `PATCH /tasks/{id}` with `status=done`
 accepts it. Manual transitions to queued, running, or human waiting return 409; use the

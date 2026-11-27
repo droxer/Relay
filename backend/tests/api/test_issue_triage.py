@@ -46,17 +46,17 @@ def test_projectless_issue_is_created_as_backlog_intake(triage_context):
     assert not issue.get("projectId")
 
 
-@pytest.mark.parametrize("fields", [
-    {"status": "assigned"},
-    {"assignedAgentId": "__lead__"},
-    {"createSession": True},
+@pytest.mark.parametrize("fields, status_code, detail", [
+    ({"status": "assigned"}, 400, "New tasks must enter Backlog."),
+    ({"assignedAgentId": "__lead__"}, 409, "issue_needs_project"),
+    ({"createSession": True}, 409, "issue_needs_project"),
 ])
-def test_projectless_issue_cannot_be_created_runnable(triage_context, fields):
+def test_projectless_issue_cannot_be_created_runnable(triage_context, fields, status_code, detail):
     _app, client, _node, _project, lead = triage_context
     body = {key: (lead["id"] if value == "__lead__" else value) for key, value in fields.items()}
     response = client.post("/api/v1/tasks", json={"title": "Runnable", **body})
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"] == "issue_needs_project"
+    assert response.status_code == status_code, response.text
+    assert response.json()["detail"] == detail
 
 
 @pytest.mark.parametrize("request_kind", ["patch-agent", "patch-ready", "put-assignment", "pickup", "run"])

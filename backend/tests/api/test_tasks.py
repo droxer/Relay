@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from task_setup import mark_task_ready
 from automation_helpers import computer_for_automation
 
 from store_fixtures import create_run_request_on_node
@@ -209,6 +210,13 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
         assert skipped_routine.status_code == 404
 
         project = project_for_agents(app.state.project_store, ALICE, [agent])
+        rejected = client.post(
+            "/api/v1/tasks",
+            json={"title": "Cannot skip backlog", "projectId": project["id"],
+                  "assignedAgentId": agent["id"], "status": "assigned"},
+        )
+        assert rejected.status_code == 400
+        assert rejected.json()["detail"] == "New tasks must enter Backlog."
         normal = client.post(
             "/api/v1/tasks",
             json={
@@ -217,10 +225,12 @@ def test_task_create_update_and_retired_claim_next(monkeypatch) -> None:
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
-                "status": "assigned",
             },
         )
         assert normal.status_code == 201
+        assert normal.json()["status"] == "backlog"
+        ready = client.patch(f"/api/v1/tasks/{normal.json()['id']}", json={"status": "assigned"})
+        assert ready.status_code == 200
 
         claimed = client.post(
             "/api/v1/tasks/claim-next",
@@ -541,11 +551,11 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
-                "status": "assigned",
             },
         )
         assert created.status_code == 201
-        task = created.json()
+        _login(client, "alice")
+        task = mark_task_ready(client, created.json())
         assert task["status"] == "assigned"
         assert task["linkedSessionIds"] == []
 
@@ -556,7 +566,6 @@ def test_assigned_backlog_waits_for_scheduler_and_start_can_dispatch_manually(
         assert pending_commands.status_code == 200
         assert pending_commands.json()["commands"] == []
 
-        _login(client, "alice")
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202
         assert started.json()["session"]["id"]
@@ -1311,15 +1320,15 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
-                "status": "assigned",
             },
         )
         assert created.status_code == 201
-        assert created.json()["status"] == "assigned"
+        assert asyncio.run(app.state.task_scheduler.tick()).dispatched == 0
+        _login(client, "alice")
+        mark_task_ready(client, created.json())
 
         result = asyncio.run(app.state.task_scheduler.tick())
         assert result.dispatched == 1
-        _login(client, "alice")
         updated = client.get(f"/api/v1/tasks/{created.json()['id']}")
         assert updated.status_code == 200
         assert updated.json()["status"] == "assigned"
@@ -1553,18 +1562,18 @@ def test_claimed_task_rejects_status_and_assignment_updates(monkeypatch) -> None
                 json={
                     "projectId": project["id"],
                     "ownerUserId": ALICE,
-                "title": "Claimed task",
+                    "title": "Claimed task",
                     "assigneeUserId": ALICE,
                     "assignedAgentId": first["id"],
-                    "status": "assigned",
                 },
             ).json()
+            _login(client, "alice")
+            mark_task_ready(client, task)
             claimed = client.app.state.task_store.claim_task_for_dispatch(
                 task["id"], "codex"
             )
             assert claimed is not None
 
-            _login(client, "alice")
             updated = client.patch(f"/api/v1/tasks/{task['id']}", json=patch)
 
             assert updated.status_code == 409
@@ -1591,15 +1600,15 @@ def test_claimed_task_rejects_pickup_assignment_update(monkeypatch) -> None:
                 "title": "Claimed pickup",
                 "assigneeUserId": ALICE,
                 "assignedAgentId": first["id"],
-                "status": "assigned",
             },
         ).json()
+        _login(client, "alice")
+        mark_task_ready(client, task)
         claimed = client.app.state.task_store.claim_task_for_dispatch(
             task["id"], "codex"
         )
         assert claimed is not None
 
-        _login(client, "alice")
         response = client.post(
             f"/api/v1/tasks/{task['id']}/pickups",
             json={"agentId": second["id"]},
@@ -1628,15 +1637,15 @@ def test_claimed_task_allows_metadata_update(monkeypatch) -> None:
                 "title": "Original title",
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
-                "status": "assigned",
             },
         ).json()
+        _login(client, "alice")
+        mark_task_ready(client, task)
         claimed = client.app.state.task_store.claim_task_for_dispatch(
             task["id"], "codex"
         )
         assert claimed is not None
 
-        _login(client, "alice")
         response = client.patch(
             f"/api/v1/tasks/{task['id']}",
             json={"title": "Updated title", "priority": "high"},
@@ -1684,11 +1693,11 @@ def test_assigned_task_rejects_run_assignment_override(monkeypatch) -> None:
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": assigned["id"],
-                "status": "assigned",
             },
         ).json()
-
         _login(client, "alice")
+        mark_task_ready(client, task)
+
         started = client.post(
             f"/api/v1/tasks/{task['id']}/runs",
             json={"assignments": [{"agentId": override["id"]}]},
@@ -1722,13 +1731,12 @@ def test_task_rejects_invalid_due_date(monkeypatch) -> None:
         )
         assert invalid_status.status_code == 400
 
-        # Outside a project, Ready is refused before anything else is asked:
-        # intake has nowhere to run.
+        # A task can enter Ready only after it has been created in Backlog.
         assigned_without_agent = client.post(
             "/api/v1/tasks", json={"title": "Missing agent", "status": "assigned"}
         )
-        assert assigned_without_agent.status_code == 409
-        assert assigned_without_agent.json()["detail"] == "issue_needs_project"
+        assert assigned_without_agent.status_code == 400
+        assert assigned_without_agent.json()["detail"] == "New tasks must enter Backlog."
 
 
 def test_task_rejects_invalid_routine_fields(monkeypatch) -> None:
@@ -2001,15 +2009,15 @@ def test_task_delete_rejects_active_dispatch_and_linked_thread(monkeypatch) -> N
                 "ownerUserId": ALICE,
                 "assigneeUserId": ALICE,
                 "assignedAgentId": agent["id"],
-                "status": "assigned",
             },
         ).json()
+        _login(client, "alice")
+        mark_task_ready(client, dispatching)
         claimed = client.app.state.task_store.claim_task_for_dispatch(
             dispatching["id"], "codex"
         )
         assert claimed is not None
 
-        _login(client, "alice")
         claim_delete = client.delete(f"/api/v1/tasks/{dispatching['id']}")
         assert claim_delete.status_code == 409
         assert claim_delete.json()["detail"] == "task_execution_active"

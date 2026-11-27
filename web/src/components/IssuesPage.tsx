@@ -459,7 +459,7 @@ function IssuesPageView({
               }}
               onMoveTask={moveTaskToLane}
               onCreateInLane={creatable
-                ? (status) => openForm({ ...emptyBacklogForm(currentUser), projectId: projectFilter ?? undefined, status })
+                ? () => openForm({ ...emptyBacklogForm(currentUser), projectId: projectFilter ?? undefined })
                 : undefined}
               onLanePageChange={setLanePage}
             />
