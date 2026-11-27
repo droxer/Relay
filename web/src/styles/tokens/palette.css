@@ -490,10 +490,10 @@
   --measure: 48ch;
   --measure-wide: 72ch;
   /* The transcript column (--thread-measure) is sized for code fences and
-     tables, and at the 14px transcript size it ran a paragraph to ~120
-     characters. Prose blocks cap here instead (~600px), so a line holds ~90
-     characters (measured) while wide blocks keep the whole column. */
-  --measure-transcript: 68ch;
+     tables. Prose blocks cap here (~650px), balancing comfortable line length
+     against wide blocks so paragraphs and code fences do not feel visually
+     disconnected. */
+  --measure-transcript: 74ch;
 
   /* Document inset — the gutter around a whole rendered FILE (Markdown prose,
      highlighted source, an HTML frame), as opposed to the --page-gutter that
@@ -907,6 +907,7 @@ html:lang(zh-TW) {
   --track-body: 0;
   --track-body-sm: 0;
   --leading-normal: 1.7;
+  --leading-transcript: 1.78;
   --leading-loose: 1.8;
   --leading-prose: 1.9;
   /* Looser Han leading makes every clamped line taller, so the tile's frame

@@ -94,6 +94,14 @@ html[data-theme="light"] .sidenav-panel {
   border-right-color: transparent;
 }
 
+/* Light-mode chat canvas sits on the crisp white sheet plane (--surface-1) so
+   the elevation ladder runs stone rail (#f5f4f2) -> warm list (#faf9f7) ->
+   white reading canvas (#ffffff), giving user bubbles, code fences, and inline
+   code clean separation from the page ground. */
+html[data-theme="light"] .chat-panel {
+  background: var(--surface-1);
+}
+
 html[data-theme="light"] .home-page,
 html[data-theme="light"] .sec-shell,
 html[data-theme="light"] .backlog-page,

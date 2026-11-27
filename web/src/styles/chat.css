@@ -478,7 +478,7 @@
      holds. A fixed 5.5rem timestamp gutter used to run down the whole right
      edge of the transcript — dead width on every turn, there to hold a
      figure few readers look for. */
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: var(--avatar-sm) minmax(0, 1fr) auto;
   column-gap: var(--sp-2);
   align-items: start;
   content-visibility: auto;
@@ -523,6 +523,8 @@
    separate one agent from the next. (The generic Relay product mark lives on
    the agent-phase divider.) */
 .msg-agent .rail-node.rail-node-agent {
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
   border-radius: var(--r-2);
   background: var(--surface-3);
   /* Nearest edge token: 32% ≈ --line-drag's 30% on a 1px hairline; this is a
@@ -569,9 +571,21 @@
 }
 
 /* Consecutive turns from the same agent are one continued answer, so they pull
-   back to a --sp-2 gap. Tracks the .transcript-inner gap above. */
-.msg-agent + .msg-agent.grouped {
+   back to a --sp-2 gap. Tracks the .transcript-inner gap above, both directly
+   and across .transcript-turn wrappers. */
+.msg-agent + .msg-agent.grouped,
+.transcript-turn:has(> .msg-agent) + .transcript-turn:not(:has(> .transcript-phase)) > .msg-agent.grouped {
   margin-top: calc(var(--sp-2) - var(--sp-7));
+}
+
+/* Clear round and speaker boundaries when no phase divider sits between turns:
+   separates a new user prompt from the prior exchange, and a distinct agent
+   speaker from the previous agent, while keeping a user prompt paired tightly
+   with the agent reply that answers it. */
+.transcript-turn + .transcript-turn:not(:has(> .transcript-phase)) > .msg-user,
+.transcript-turn:has(> .msg-agent) + .transcript-turn:not(:has(> .transcript-phase)) > .msg-agent:not(.grouped) {
+  padding-top: var(--sp-6);
+  border-top: var(--hairline-soft);
 }
 
 .turn-body {
@@ -615,16 +629,38 @@
   gap: var(--sp-1);
 }
 
-/* A soft fill with a quiet hairline edge: the side already says whose turn it
-   is, and the hairline keeps the bubble crisp across both registers. */
+/* A soft fill with a crisp hairline edge: the side already says whose turn it
+   is, and the structural hairline keeps the bubble clearly legible across both
+   registers so user prompts act as landmarks when scanning long threads. */
 .msg-user .turn-body {
   width: fit-content;
   max-width: min(85%, 42rem);
   gap: var(--sp-1);
-  padding: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   background: var(--surface-2);
-  border: var(--hairline-soft);
+  border: var(--hairline);
   border-radius: var(--r-3);
+}
+
+/* Code inside a user bubble cannot share the bubble's own --surface-2 fill or
+   inline chips and fences vanish into the background. Step them to --surface-1. */
+.msg-user .md-body code {
+  border-color: var(--line-1);
+  background: var(--surface-1);
+}
+
+.msg-user .md-fence,
+.msg-user .md-fence .agent-code {
+  background: var(--surface-1);
+}
+
+.msg-user .md-fence-head {
+  background: color-mix(in srgb, var(--ink-1) 4%, var(--surface-1));
+}
+
+.msg-user .md-fence .agent-code code {
+  border: 0;
+  background: transparent;
 }
 
 /* The user's turn is Markdown too (MessageBlock), so markdown.css owns the
@@ -834,7 +870,7 @@
   position: relative;
   grid-column: 1 / -1;
   grid-row: 2;
-  margin-top: var(--sp-2);
+  margin-top: var(--sp-3);
 }
 
 .msg-agent > .rail-node-agent,
