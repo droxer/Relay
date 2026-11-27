@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { useSessionEvents } from "../src/hooks/useSessionEvents";
 import { getSession, RelayApiError } from "../src/api";
 import { isSessionStreamConnected } from "../src/lib/sessionStreamStatus";
+import { isThreadRunInFlight } from "../src/lib/threadRunning";
 vi.mock("../src/api", () => ({ getSession: vi.fn(), RelayApiError: class extends Error { constructor(message: string, public status: number) { super(message); } } }));
 const { deferFrame } = vi.hoisted(() => ({ deferFrame: { current: false } }));
 vi.mock("../src/lib/frameScheduler", () => ({
@@ -44,6 +45,49 @@ function setup(enabled = true) {
   return { client, view };
 }
 afterEach(() => { deferFrame.current = false; vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it("refreshes authoritative execution immediately after a terminal event, even after the stream unmounts", async () => {
+  const { client, view } = setup();
+  const event = { id: "end", type: "session.completed", sessionId: "live", timestamp: "2026-09-09T00:00:00Z", outcome: "done" };
+  const running = { ...initial, execution: { phase: "running" } };
+  const settled = { ...running, status: "completed", phase: "completed", execution: { phase: "terminal" }, events: [event] };
+  client.setQueryData(key, [running]);
+  let resolve!: (session: RelaySession) => void;
+  vi.mocked(getSession).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  act(() => sources[0].onmessage({ data: JSON.stringify(event) }));
+  expect(getSession).toHaveBeenCalled();
+  view.unmount();
+  await act(async () => resolve(settled as RelaySession));
+  const session = client.getQueryData<RelaySession[]>(key)![0];
+  expect(session.execution?.phase).toBe("terminal");
+  expect(isThreadRunInFlight({ session, activeRun: undefined, pendingSend: false, dispatchingRun: false })).toBe(false);
+  client.clear();
+});
+
+it("does not refresh execution when only an agent completes", () => {
+  const { client, view } = setup();
+  vi.mocked(getSession).mockClear();
+  act(() => sources[0].onmessage({ data: JSON.stringify({
+    id: "agent-end", type: "agent.completed", sessionId: "live", timestamp: "2026-09-09T00:00:00Z", runId: "run", status: "completed",
+  }) }));
+  expect(getSession).not.toHaveBeenCalled();
+  view.unmount(); client.clear();
+});
+
+it("retries when an in-flight snapshot predates the terminal event", async () => {
+  const { client, view } = setup();
+  const event = { id: "end", type: "session.completed", sessionId: "live", timestamp: "2026-09-09T00:00:00Z", outcome: "done" };
+  let resolve!: (session: RelaySession) => void;
+  vi.mocked(getSession).mockReset().mockImplementationOnce(() => new Promise(done => { resolve = done; }))
+    .mockResolvedValueOnce({ ...initial, status: "completed", execution: { phase: "terminal" }, events: [event] } as RelaySession);
+  const { fetchSessionSnapshot } = await import("../src/lib/sessionSnapshotQuery");
+  const earlier = fetchSessionSnapshot(client, "live");
+  act(() => sources[0].onmessage({ data: JSON.stringify(event) }));
+  await act(async () => { resolve(initial as RelaySession); await earlier; });
+  expect(getSession).toHaveBeenCalledTimes(2);
+  expect(client.getQueryData<RelaySession[]>(key)?.[0].execution?.phase).toBe("terminal");
+  view.unmount(); client.clear();
+});
 
 it("merges frames and batches once, tolerates malformed frames, and closes terminal streams", () => {
   const { client, view } = setup();

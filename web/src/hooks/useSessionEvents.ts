@@ -57,6 +57,21 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
     // backgrounded or occluded tab must still commit streamed output.
     const scheduler = createFrameScheduler(browserFrameSchedulerHost());
 
+    const refreshTerminalSnapshot = async (eventCount: number) => {
+      try {
+        let snapshot = await fetchSessionSnapshot(queryClient, sessionId);
+        // A detail request already in flight may predate the terminal frame.
+        if (observedSessionEventCount(snapshot) < eventCount) {
+          snapshot = await fetchSessionSnapshot(queryClient, sessionId);
+        }
+        if (queryClient.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.some(row => row.id === sessionId)) {
+          await reconcileSessionSnapshot(queryClient, snapshot);
+        }
+      } catch {
+        // The normal detail poll remains the fallback if this read fails.
+      }
+    };
+
     const flush = () => {
       if (pending.length === 0) return;
       const events = pending;
@@ -77,6 +92,11 @@ export function useSessionEvents(sessionId: string | undefined, enabled: boolean
         if (session?.messageQueue) cacheThreadQueue(queryClient, sessionId, {
           ...session.messageQueue, eventCount: observedSessionEventCount(session),
         });
+      }
+      if (events.some(event => event.type === "session.completed" || event.type === "session.failed"
+        || (event.type === "session.status" && isTerminalSessionStatus(event.status)))) {
+        const session = sessions?.find(item => item.id === sessionId);
+        if (session) void refreshTerminalSnapshot(observedSessionEventCount(session));
       }
       for (const event of events) queued.delete(event.id);
     };
