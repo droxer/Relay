@@ -16,29 +16,36 @@ class ReportReceiptRows(DaemonStoreState):
     if TYPE_CHECKING:
         def mark_cancel_commands_completed(self, node_id: str, target_command_id: str) -> None: ...
 
-    def accept_orphaned_cancel_report(
+    def accept_cancel_report_from_stop(
         self, node_id: str, event: dict[str, Any], report_id: str, digest: str,
+        *, thread_missing: bool = False,
     ) -> bool:
-        """Use a retained stop as authority when its target was already pruned.
+        """Accept from a retained stop when its target or Thread is gone.
 
-        No session or run is changed: only the stop and its payload-bound
-        receipt commit together. Unknown reports still require intervention.
+        A retained target must already be cancelled and its Thread missing.
+        In that case the stop must have been delivered, even if later retired.
+        Only the stop and its payload-bound receipt may change.
         """
         if event['type'] != 'run.cancelled':
             return False
         with self.report_ingest_scope(node_id), store_transaction(self.engine) as conn:
             if self.report_was_accepted(node_id, event['commandId'], report_id, digest):
                 return True
-            if conn.scalar(select(self.commands.c.id).where(self.commands.c.id == event['commandId'])):
+            target_status = conn.scalar(select(self.commands.c.status).where(
+                self.commands.c.id == event['commandId'],
+            ).with_for_update())
+            if target_status is not None and not (thread_missing and target_status == 'cancelled'):
                 return False
-            authority = conn.scalar(select(self.commands.c.id).where(
+            stop = select(self.commands.c.id).where(
                 self.commands.c.node_id == node_id,
                 self.commands.c.type == 'run.cancel',
                 *(self.commands.c.command[key].as_string() == event[key]
                   for key in ('commandId', 'sessionId', 'runId', 'agent')),
                 self.commands.c.command['targetLeaseId'].as_string() == event.get('leaseId'),
-            ).with_for_update().limit(1))
-            if authority is None:
+            )
+            if thread_missing:
+                stop = stop.where(self.commands.c.dispatched_at.is_not(None))
+            if conn.scalar(stop.with_for_update().limit(1)) is None:
                 return False
             self.mark_cancel_commands_completed(node_id, event['commandId'])
             conn.execute(insert(report_receipts).values(

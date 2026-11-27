@@ -485,15 +485,19 @@ the daemon again to resume delivery of retained reports and refresh transport
 diagnostics. Back up the private daemon state when moving a Computer.
 
 A stop acknowledgement for an already completed or failed run settles the stop
-without changing the run's outcome. Retention keeps a target command while its
+without changing the run's outcome. When a person reports a run gone, Relay
+retires its pending stops in the same transaction. An acknowledgement for a
+stop that was already delivered can still receive a receipt after the cancelled
+run's Thread is deleted. It must match the retained stop's Computer, command,
+Thread, run, runtime, and lease. Retention keeps a target command while its
 stop is unacknowledged. For older orphaned stops whose targets were already
-pruned, a durable cancellation acknowledgement can instead use the retained
-stop's matching Computer, command, Thread, run, runtime, and lease as authority.
-The stop completion and payload-bound receipt commit together, even if the
-Thread was deleted. Other unknown reports still receive 409. After upgrading
-the backend, stop the daemon, retry the affected cancellation reports with
-`relay retry-report --report <id>`, and start it again; quarantined reports are
-never retried automatically.
+pruned, the matching stop alone can authorize the acknowledgement. The stop
+and payload-bound receipt are settled together. Other unknown reports still
+receive 409.
+
+After upgrading the backend, stop the daemon, retry the affected cancellation
+reports with `relay retry-report --report <id>`, and start it again.
+Quarantined reports require an explicit retry.
 
 An outage lasting 60 seconds, or an immediate storage, credential, quarantine,
 or uncertain-exit fault, opens one incident per stable Computer. The owner (or

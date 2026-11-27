@@ -10,6 +10,8 @@ active work. These tests pin both paths and their limits.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+import json
 from tempfile import TemporaryDirectory
 
 import pytest
@@ -79,7 +81,7 @@ def _stop_requested_long_ago(app, request_id: str) -> None:
     store = app.state.registry.daemon_store
     request = store.get_run_request(request_id)
     state = dict(request.get("state") or {})
-    state["_relay_stop_command_id"] = "cmd_stop"
+    state.setdefault("_relay_stop_command_id", "cmd_stop")
     state["_relay_stop_requested_at"] = "2020-01-01T00:00:00+00:00"
     store.update_run_request(request_id, {"state": state})
 
@@ -294,7 +296,8 @@ def test_late_terminal_evidence_is_protected_and_can_be_saved(monkeypatch, reque
             assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
 
 
-def test_delete_waits_out_the_stop_grace_before_asserting(monkeypatch) -> None:
+@pytest.mark.parametrize("stop_delivered", [False, True])
+def test_delete_waits_out_the_stop_grace_before_asserting(monkeypatch, stop_delivered) -> None:
     """A fresh stop still gets its chance to confirm: the daemon may be slow,
     not dead, so the assertion only stands in once recovery is required."""
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
@@ -303,17 +306,38 @@ def test_delete_waits_out_the_stop_grace_before_asserting(monkeypatch) -> None:
         client = TestClient(app)
         _bootstrap(client)
         session_id = _create_session(client)
-        run = _dispatched_run(app, session_id)
+        owner_id = app.state.session_store.get_session(session_id)["ownerUserId"]
+        run = _dispatched_run(app, session_id, owner_id=owner_id)
 
         response = client.delete(f"/api/v1/threads/{session_id}?stop=true")
         assert response.status_code == 202
         assert response.json()["phase"] == "stopping"
         assert client.get(f"/api/v1/threads/{session_id}").status_code == 200
+        store = app.state.registry.daemon_store
+        [stop] = store.pending_commands_of_type("sbx_alice", "run.cancel")
+        if stop_delivered:
+            assert store.take_queued_commands("sbx_alice", lease_seconds=0)[0]["id"] == stop["id"]
 
         _stop_requested_long_ago(app, run["request"]["id"])
         app.state.execution_lifecycle.tick()
         assert client.get(f"/api/v1/threads/{session_id}").status_code == 404
-        assert app.state.registry.daemon_store.active_run_request_for_session_any_node(session_id) is None
+        assert store.active_run_request_for_session_any_node(session_id) is None
+        assert store.take_queued_commands("sbx_alice") == []
+        assert store.get_command(stop["id"])["status"] == "cancelled"
+        if stop_delivered:
+            target = store.get_command(run["command"]["id"])
+            ack = {
+                "type": "run.cancelled", "commandId": target["id"], "leaseId": target["leaseId"],
+                "sessionId": session_id, "runId": target["command"]["runId"], "agent": "claude",
+            }
+            raw = json.dumps(ack)
+            digest = sha256(raw.encode()).hexdigest()
+            response = client.post("/api/v1/daemon-nodes/sbx_alice/reports",
+                                   headers={"Authorization": "Bearer node_token"},
+                                   json={"reports": [{"id": "a" * 64, "digest": digest, "body": raw}]})
+            assert response.status_code == 200, response.text
+            assert response.json()["receipts"] == [{"id": "a" * 64, "digest": digest, "status": 200}]
+            assert store.get_command(target["id"]) == target
 
 
 def test_delete_frees_an_orphaned_run_without_a_report(monkeypatch) -> None:
