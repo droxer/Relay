@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from ..core.models import ENGINEER_SPECIALTY_ROLES
 from ..core.role_charters import ROLE_CHARTERS, ROLE_LEVEL_CHARTERS
 from .styles import StyleSlots, fill_build_review_slots, pipeline_order
 
@@ -61,10 +62,11 @@ class CompiledStyle:
 
 
 SOLO_BRIEF = "Complete the shared goal yourself and report the delivered result to the user."
-BUILDER_BRIEF = ROLE_CHARTERS["implementer"] + (
-    " A teammate reviews your work next; if it reports findings you will be asked "
+BUILDER_REVIEW_NOTE = (
+    "A teammate reviews your work next; if it reports findings you will be asked "
     "to repair them."
 )
+BUILDER_BRIEF = f"{ROLE_CHARTERS['implementer']} {BUILDER_REVIEW_NOTE}"
 REVIEWER_BRIEF = ROLE_CHARTERS["reviewer"] + (
     " Report findings on the builder's work item to request changes. Report done "
     "with evidence only when the result is acceptable, then summarize what was "
@@ -177,15 +179,20 @@ def _template_turns(
         last = len(members) - 1
         for index, agent in enumerate(members):
             own_role = agent.get("defaultRole")
+            role = step.role or own_role or "implementer"
             closing = step.closing and index == last
             brief = step.brief if step.brief is not None else role_brief(own_role)
+            if step.who == "builder" and own_role in ENGINEER_SPECIALTY_ROLES:
+                role = own_role
+                note = BUILDER_REVIEW_NOTE if template.style == "build_review" else SOLO_BRIEF
+                brief = f"{role_brief(role)} {note}"
             level_note = ROLE_LEVEL_CHARTERS.get(agent.get("roleLevel") or "")
             if level_note:
                 brief = f"{brief} {level_note}"
             turns.append(
                 StyleTurn(
                     agent=agent,
-                    role=step.role or own_role or "implementer",
+                    role=role,
                     mode=step.mode,
                     synthesizer=closing,
                     brief=brief + (step.closing_note if closing else ""),

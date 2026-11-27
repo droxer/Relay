@@ -5,7 +5,8 @@ import type { AgentRun, CollaborationRoundManifest, CollaborationStyle, RelaySes
 // previewSlots against what backend dispatch fills.
 export const COLLABORATION_STYLES: readonly CollaborationStyle[] = ["build_review", "pipeline", "lead_led"];
 const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
-// Mirrors ROLE_STAGE and SPECIALIST_ROLES in backend/relay/collaboration/styles.py.
+// Mirrors backend/relay/collaboration/styles.py.
+const BUILDER_ROLES = new Set(["implementer", "frontend_engineer", "backend_engineer", "fullstack_engineer", "fixer"]);
 const STAGE: Record<string, number> = {
   researcher: 0,
   product_manager: 0,
@@ -13,6 +14,9 @@ const STAGE: Record<string, number> = {
   planner: 1,
   designer: 2,
   implementer: 3,
+  frontend_engineer: 3,
+  backend_engineer: 3,
+  fullstack_engineer: 3,
   fixer: 3,
   tester: 4,
   security: 4,
@@ -55,7 +59,7 @@ export function previewSlots(all: SlotMember[], leadId: string | undefined, styl
     const first: Slot[] = lead ? [{ slot: "lead", memberId: lead.id }] : [];
     return { style, slots: [...first, ...rest, ...(rest.length ? first : [])] };
   }
-  const builds = (m: SlotMember) => m.role === "implementer" || m.role === "fixer";
+  const builds = (m: SlotMember) => BUILDER_ROLES.has(m.role ?? "");
   const builder = (lead && builds(lead) ? lead : undefined) ?? members.find(builds) ?? lead ?? members[0];
   const others = members.filter((m) => m.id !== builder.id && !SPECIALIST_ROLES.has(m.role ?? ""));
   const reviewer = others.find((m) => m.role === "reviewer") ?? others.find((m) => m.role === "tester") ?? others.find((m) => m.id === leadId) ?? others[0];
@@ -97,16 +101,17 @@ export function styleForRun(run: Pick<AgentRun, "assignmentId" | "teamSnapshot">
 
 const TURN_ROLES = new Set(["planner", "tester", ...SPECIALIST_ROLES]);
 
-export function turnSlot(run: { role?: string; coordinator?: boolean; synthesizer?: boolean; workResult?: { status?: string; findings?: unknown[] } }, style?: CollaborationStyle): string | null {
+export function turnSlot(run: { role?: string; teamPhase?: AgentRun["teamPhase"]; coordinator?: boolean; synthesizer?: boolean; workResult?: { status?: string; findings?: unknown[] } }, style?: CollaborationStyle): string | null {
   if (!style) return null;
   if (style === "lead_led" && run.coordinator) return "lead";
   if (style === "lead_led" && run.synthesizer) return "lead_summary";
-  if (run.role === "reviewer") {
+  const slotPhase = style === "build_review" ? run.teamPhase : undefined;
+  if (slotPhase === "review" || (slotPhase === undefined && run.role === "reviewer")) {
     if (run.workResult?.status === "continue" && run.workResult.findings?.length) return "reviewer_changes";
     if (run.workResult?.status === "done") return "reviewer_approved";
     return "reviewer";
   }
-  if (run.role === "implementer" || run.role === "fixer") return "builder";
+  if (slotPhase === "execution" || BUILDER_ROLES.has(run.role ?? "")) return "builder";
   if (run.role && TURN_ROLES.has(run.role)) return run.role;
   return null;
 }
@@ -114,7 +119,9 @@ export function turnSlot(run: { role?: string; coordinator?: boolean; synthesize
 export function reviewCycle(session: RelaySession): { cycle: number; max: number } | null {
   const round = session.collaborationRounds?.find((r) => r.roundId === session.activeRoundId) ?? session.collaborationRounds?.at(-1);
   if (session.status !== "running" || round?.style !== "build_review") return null;
-  const builder = round.assignments.find((a) => a.role === "implementer");
+  const builder = round.assignments.find((a) =>
+    a.mode === "action" || (a.mode === undefined && BUILDER_ROLES.has(a.role ?? "")),
+  );
   if (!builder) return null;
   const cycle = (session.agentRuns ?? []).filter((r) => r.assignmentId === builder.assignmentId && !r.consultation).length;
   return cycle > 1 ? { cycle, max: 3 } : null;
@@ -123,7 +130,7 @@ export function reviewCycle(session: RelaySession): { cycle: number; max: number
 export function reviewBudgetExhausted(session: RelaySession): boolean {
   const round = session.collaborationRounds?.at(-1);
   if (round?.style !== "build_review" || session.workOutcome !== "blocked") return false;
-  const reviewer = round.assignments.find((a) => a.role === "reviewer");
+  const reviewer = round.assignments.find((a) => a.mode === "review" || (a.mode === undefined && a.role === "reviewer"));
   const reviews = (session.agentRuns ?? []).filter((r) => r.assignmentId === reviewer?.assignmentId && !r.consultation);
   const last = reviews.at(-1)?.workResult;
   return reviews.length >= 3 && last?.status === "continue" && Boolean(last.findings?.length);

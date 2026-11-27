@@ -306,6 +306,11 @@ describe("prompts", () => {
     assert.equal(roleTitle("fixer"), "Bug Fixer");
     assert.equal(roleTitle("auditor"), "auditor");
   });
+  it("names each engineering specialty in the Agent prompt", () => {
+    assert.equal(roleTitle("frontend_engineer", "senior"), "Senior Frontend Engineer");
+    assert.equal(roleTitle("backend_engineer"), "Backend Engineer");
+    assert.equal(roleTitle("fullstack_engineer"), "Full-Stack Engineer");
+  });
   it("scopes a team member to its explicit assignment brief", () => {
     const assignedState = state({
       task_goal: "Ship the endpoint",

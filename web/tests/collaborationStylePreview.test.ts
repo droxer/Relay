@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 import type { CollaborationStyle } from "relay-core";
-import { approvalSlotIndex, previewGaps, previewSlots, type SlotMember } from "../src/lib/collaborationStyle.js";
+import { approvalSlotIndex, previewGaps, previewSlots, turnSlot, type SlotMember } from "../src/lib/collaborationStyle.js";
 
 // Written by backend/tests/unit/test_collaboration_templates.py from what team
 // dispatch really fills, so the preview cannot drift from the backend alone.
@@ -31,6 +31,14 @@ describe("collaboration style preview", () => {
         item.expected,
         `${item.style} lead=${item.leadId} ${JSON.stringify(item.members)}`,
       );
+    }
+  });
+
+  it("labels an engineering role by its actual work in Build and Review", () => {
+    for (const role of ["frontend_engineer", "backend_engineer", "fullstack_engineer"]) {
+      assert.equal(turnSlot({ role }, "pipeline"), "builder");
+      assert.equal(turnSlot({ role, teamPhase: "execution" }, "build_review"), "builder");
+      assert.equal(turnSlot({ role, teamPhase: "review", workResult: { status: "done" } }, "build_review"), "reviewer_approved");
     }
   });
 

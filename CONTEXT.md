@@ -91,13 +91,17 @@ _Avoid_: Executor, CLI
 **Agent Role**:
 The part a Logical Agent plays in a shared round. Stored and sent by id
 (`researcher`, `product_manager`, `data`, `planner`, `designer`, `implementer`,
-`fixer`, `tester`, `security`, `performance`, `writer`, `devops`, `operations`,
+`frontend_engineer`, `backend_engineer`, `fullstack_engineer`, `fixer`, `tester`,
+`security`, `performance`, `writer`, `devops`, `operations`,
 `reviewer` — the order a Pipeline round takes them, and the order every picker
 offers), shown to people and agents by title: Research Analyst, Product
-Manager, Data Analyst, Architect, Interaction Designer, Software Engineer, Bug
-Fixer, QA Engineer, Security Engineer, Performance Engineer, Technical Writer,
+Manager, Data Analyst, Architect, Interaction Designer, Software Engineer,
+Frontend Engineer, Backend Engineer, Full-Stack Engineer, Bug Fixer, QA Engineer,
+Security Engineer, Performance Engineer, Technical Writer,
 DevOps Engineer, Operations, Code Reviewer. Research, product management, data,
 design, security, performance, writing, DevOps, and Operations are specialists.
+The three engineering roles share the Software Engineer's Pipeline stage and
+can fill the Build and Review builder slot with their own charters.
 Operations handles launch communications, user adoption, and feedback. DevOps
 handles infrastructure and deployment. Build and review reserves the reviewer
 slot for other roles. Each role carries a charter
