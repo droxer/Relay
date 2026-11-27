@@ -155,10 +155,8 @@
   flex-direction: column;
   gap: var(--sp-3);
   margin: 0;
-  padding: 0;
+  padding: var(--sp-4) 0 0;
   list-style: none;
-  border-top: 0.5px solid var(--lg-hairline-soft);
-  padding-top: var(--sp-5);
 }
 
 .login-point {
@@ -644,7 +642,8 @@
 }
 
 .login-foot-meta {
-  font: var(--type-meta);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
   color: var(--lg-muted);
 }
 
@@ -719,8 +718,8 @@
   .login-panel {
     padding: var(--sp-6);
     border-left: 0;
-    border-top: 0.5px solid var(--lg-hairline-soft);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--lg-ink) 6%, transparent);
+    border-top: 0;
+    box-shadow: none;
   }
 
   .login-foot {

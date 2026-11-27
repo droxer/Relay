@@ -138,9 +138,9 @@ export const ThreadRow = memo(function ThreadRow({
         }
       : tone === "attn"
         ? { tone: "attn", text: t("thread.statuses.waiting_for_human") }
-        : hasLifecycle && session.status === "failed"
+        : (hasLifecycle || touch) && session.status === "failed"
           ? { tone: "err", text: t("thread.statuses.failed") }
-          : hasLifecycle && session.status === "cancelled"
+          : (hasLifecycle || touch) && session.status === "cancelled"
             ? { tone: "idle", text: t("thread.statuses.cancelled") }
             : null;
 
@@ -196,9 +196,10 @@ export const ThreadRow = memo(function ThreadRow({
         <span className="conversation-copy">
           <span className="conversation-topline">
             {hasLifecycle ? <TaskStatusIcon status={iconStatus} />
-              /* A chat whose subline states its status keeps only the badge's
-                 tinted mark: spelling it twice cost the title its width. */
-              : <ThreadStatusBadge session={session} reading={reading} compact iconOnly={Boolean(discussion || (status && (subline || !visibleStatus)))} />}
+              /* A chat whose subline states its status — or any phone row,
+                 where a leading pill steals a third of the title's width —
+                 keeps only the badge's tinted mark. */
+              : <ThreadStatusBadge session={session} reading={reading} compact iconOnly={Boolean(discussion || touch || (status && (subline || !visibleStatus)))} />}
             <span className="conversation-name">
               {item.origin ? (
                 /* An automation run carries the Automations nav glyph on its

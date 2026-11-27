@@ -1595,6 +1595,38 @@ html[data-theme="light"] .landing-blank-submit {
     display: none;
   }
 
+  /* Phone hero composition: headline → supporting sentence → primary CTA,
+     followed immediately by the interactive dials paired above the live CLI
+     output they mutate, then the hardware photograph. */
+  .landing-hero {
+    padding: var(--sp-5) var(--ld-gutter) var(--sp-6);
+  }
+
+  .landing-hero-inner {
+    gap: var(--sp-4);
+    min-height: 0;
+  }
+
+  .landing-hero-statement {
+    gap: var(--sp-4);
+  }
+
+  .landing-headline { order: 1; }
+  .landing-lede { order: 2; }
+  .landing-ctas-start { order: 3; width: 100%; }
+  .landing-hero-dials { order: 4; }
+
+  .landing-hero-stage {
+    gap: var(--sp-4);
+  }
+
+  .landing-hero-dispatch { order: 1; }
+  .landing-hero-photo-frame { order: 2; }
+
+  .landing-hero-photo {
+    aspect-ratio: 16 / 9;
+  }
+
   .landing-dial-left,
   .landing-dial-mid,
   .landing-dial-right {
@@ -1606,6 +1638,25 @@ html[data-theme="light"] .landing-blank-submit {
     padding: var(--sp-7) var(--ld-gutter);
   }
 
+  /* Wrap CLI commands cleanly on phones instead of clipping mid-token. */
+  .landing-dispatch-cmd,
+  .landing-thread-receipt,
+  .landing-cr-code,
+  .landing-panel-cmd {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  .landing-terminal-command {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    font-size: 0.8571rem;
+  }
+
+  .landing-cr-call {
+    align-items: flex-start;
+  }
+
   .landing-cr-breakout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1614,9 +1665,28 @@ html[data-theme="light"] .landing-blank-submit {
     display: none;
   }
 
+  /* Full-width mobile UI plate rather than a shrunken phone-in-a-phone frame. */
   .landing-workspace-phone {
-    max-width: 20rem;
-    margin-inline: auto;
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  .landing-workspace-phone .landing-shot > img {
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    object-position: top center;
+  }
+
+  /* Crop desktop tour shots into the active workspace area so UI details stay
+     legible on narrow screens instead of shrinking to microscopic strips. */
+  .landing-plate-media {
+    padding: 0;
+  }
+
+  .landing-plate-media .landing-shot > img {
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    object-position: 18% top;
   }
 
   .landing-margin-col {
@@ -1642,8 +1712,43 @@ html[data-theme="light"] .landing-blank-submit {
     display: none;
   }
 
+  /* Two-up compact dial row (Computer + Agent runtime) over one inline Tool
+     gate row — half the vertical height so the live CLI and photo stay close. */
   .landing-hero-dials {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-1-5);
+    padding: var(--sp-1-5);
+  }
+
+  .landing-dial {
+    padding: var(--sp-2) var(--sp-3);
+    gap: var(--sp-0-5);
+  }
+
+  .landing-dial-value {
+    font-size: 1rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .landing-dial-right {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+  }
+
+  .landing-dial-switch {
+    width: auto;
+    margin-top: 0;
+  }
+
+  .landing-dial-opt {
+    flex: none;
+    padding: 0 var(--sp-3);
   }
 
   .landing-headline-line {
@@ -1654,11 +1759,19 @@ html[data-theme="light"] .landing-blank-submit {
     font-size: 2.1rem;
   }
 
+  /* Preserve distinct h2 vs h3 hierarchy on phones while keeping every heading
+     at <= 2 lines at 390px. */
   .landing-section-title,
   .landing-split-heading,
   .landing-oss-title,
   .landing-blank-sentence {
-    font-size: 1.5714rem; /* 22px — guarantees <= 2 lines for every heading at 390px */
+    font-size: 1.7143rem; /* 24px */
+  }
+
+  .landing-cr-title,
+  .landing-note-title,
+  .landing-plate-title {
+    font-size: 1.2857rem; /* 18px */
   }
 
   .landing-blank-input {
@@ -1668,8 +1781,10 @@ html[data-theme="light"] .landing-blank-submit {
   }
 
   .landing-ctas {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-4);
   }
 
   .landing-fleet-row {

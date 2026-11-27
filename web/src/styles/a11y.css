@@ -177,7 +177,9 @@
     padding-inline: var(--sp-3);
   }
 
-  .sec-nav-btn {
+  .sec-nav-btn,
+  .backlog-display-trigger,
+  .backlog-filter-chips button {
     min-width: var(--touch-target);
   }
 
@@ -208,20 +210,27 @@
      target so much as bend the text it lives in — the row actions would set
      the conversation row's height from a decoration. */
   .conversation-rename-btn,
-  .conversation-remove-btn,
-  .md-fence-copy {
+  .conversation-remove-btn {
     min-width: var(--control-h-xs);
     min-height: var(--control-h-xs);
     width: var(--control-h-xs);
     height: var(--control-h-xs);
   }
 
+  /* The code-fence copy button sits in the fence header bar with room to
+     spare, so on touch it takes the full 44px square target. */
+  .md-fence-copy {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
   /* The thread row's one overflow glyph (it replaced the pencil and the
-     cross on touch) is a single target, so it takes the row's full touch
-     height; only its width stays narrow, to leave the title its line. */
+     cross on touch) takes the full 44px square target so thumbs never miss. */
   .conversation-more-btn {
-    width: var(--sp-7);
-    min-width: var(--sp-7);
+    width: var(--touch-target);
+    min-width: var(--touch-target);
     height: var(--touch-target);
     min-height: var(--touch-target);
   }

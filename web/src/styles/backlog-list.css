@@ -459,6 +459,12 @@ button.inline-field[aria-expanded="true"] {
     background: var(--control-fill);
   }
 
+  .backlog-filter-bar button[data-variant="outline"],
+  .backlog-display-trigger {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+
   /* --ink-4 clears AA on the canvas but not on the fill (4.26:1 in light);
      one step up keeps the placeholder legible on the soft chip. */
   .backlog-filter-search::placeholder {
@@ -792,15 +798,17 @@ tr[data-selected="true"] > td:first-child {
     padding-right: calc(var(--row-actions-w) + var(--sp-2));
   }
 
-  /* Line two: the meta, indented under the title. */
+  /* Line two: the meta, indented under the title on one aligned baseline. */
   .task-table .task-col-ref,
   .task-table .issue-col-project,
   .task-table .task-col-priority,
   .task-table .task-col-assignee,
   .task-table .task-col-due {
-    display: block;
+    display: inline-flex;
+    align-items: center;
     flex: none;
     width: auto;
+    min-height: 20px;
     margin-right: var(--sp-3);
     color: var(--ink-3);
     font: var(--type-meta);
@@ -812,20 +820,29 @@ tr[data-selected="true"] > td:first-child {
   .task-table .task-col-due { order: 12; }
   .task-table .issue-col-project { order: 13; }
 
-  /* The assignee closes the meta line and takes what is left of it, cut
-     short rather than wrapped: ahead of the due cell, a long team name pushed
-     the date (an automation's "Paused") onto a third line. The floor keeps
-     its avatar on the line. */
+  /* The assignee closes the meta line at its natural width, wrapping cleanly
+     when a long schedule timestamp precedes it rather than crushing to a
+     few letters beside the action button. */
   .task-table > tbody > tr:not(.issues-band) > td[data-slot="table-cell"].task-col-assignee {
     order: 14;
-    flex: 1 1 0;
-    min-width: var(--avatar-sm);
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
     margin-right: 0;
   }
 
   .task-table .task-col-assignee .inline-field {
+    height: auto;
+    min-height: 0;
     max-width: 100%;
     min-width: 0;
+    padding: 0;
+  }
+
+  /* Phone rows keep the meta line strictly single-line: the agent's role
+     subtitle lives in the task record, not stacked under the name here. */
+  .task-table .task-col-assignee .agent-role-label {
+    display: none;
   }
 
   /* Issues carries its status in a column of its own, not the shared leading
@@ -926,6 +943,7 @@ tr[data-selected="true"] > td:first-child {
 
   .routine-table > tbody > tr:has(.task-col-actions) {
     --row-actions-w: var(--touch-target);
+    padding-inline-end: calc(var(--sp-4) + var(--row-actions-w));
   }
 
   .task-table .task-col-assignee .task-assignee .agent-state {

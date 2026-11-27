@@ -248,13 +248,22 @@
   }
 
   .chat-panel > .workflow-progress > .workflow-progress-meter {
+    position: relative;
     display: block;
     grid-area: 2 / 1;
     height: var(--sp-0-5);
+    overflow: hidden;
     border-radius: var(--r-full);
-    background:
-      linear-gradient(var(--tone, var(--live)) 0 0) 0 0 / calc(100% * var(--done) / var(--total)) 100% no-repeat,
-      var(--line-2);
+    background: var(--line-2);
+  }
+
+  .chat-panel > .workflow-progress > .workflow-progress-meter::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(100% * var(--done) / var(--total));
+    border-radius: inherit;
+    background: var(--tone, var(--live));
   }
 
   .chat-panel > .workflow-progress:has(> .workflow-run-summary:is([data-state="awaiting_approval"], [data-state="awaiting_input"])) { --tone: var(--warn); }
