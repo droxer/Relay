@@ -7,7 +7,7 @@ import { TaskDrawer } from "../src/components/task-board/TaskDrawer";
 import { emptyBacklogForm, emptyRoutineForm, type TaskBoardFormState } from "../src/lib/taskBoardForm";
 import type { AgentTeam, CurrentUser, ProjectRecord, ProjectWorkflowChoice, UserAgent } from "../src/types";
 
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => <div>{children}</div> }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer }: any) => <div>{children}{footer}</div> }));
 vi.mock("../src/components/task-board/TaskTagsField", () => ({ TaskTagsField: () => null }));
 vi.mock("../src/components/connections/ConnectionGrantField", () => ({ ConnectionGrantField: () => null }));
 vi.mock("../src/hooks/useSessionCapabilities", () => ({ useSessionCapabilities: () => ({}) }));

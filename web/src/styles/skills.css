@@ -407,7 +407,7 @@
 .skill-drawer {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
 }
 
 /* The pinned action bar is the shared .adm-form-actions class itself

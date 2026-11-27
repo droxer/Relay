@@ -6,7 +6,7 @@ import { DialogProvider } from "../src/components/ui/DialogProvider";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../src/types";
 
 vi.mock("@/components/ui/Drawer", () => ({
-  Drawer: ({ open, children }: { open: boolean; children: ReactNode }) => (open ? <div>{children}</div> : null),
+  Drawer: ({ open, children, footer }: { open: boolean; children: ReactNode; footer?: ReactNode }) => (open ? <div>{children}{footer}</div> : null),
 }));
 vi.mock("../src/components/admin/ManageAgentRow", () => ({
   ManageAgentRow: ({ agent, enabled, savedEnabled, onToggle }: {

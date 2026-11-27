@@ -11,7 +11,7 @@ vi.mock("../src/api", async (original) => ({
   getMe: vi.fn(async () => ({ authenticated: true })),
   previewSchedule: vi.fn(async () => ({ summary: "", next: [] })),
 }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => children }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer }: any) => <>{children}{footer}</> }));
 vi.mock("../src/components/assignment/AssignmentField", () => ({ AssignmentField: ({ agents, teams }: any) => <div data-testid="assignment-options">{agents.map((a: any) => a.displayName).join(",")}{teams.map((a: any) => a.name).join(",")}</div> }));
 const user = { userId: "u", username: "u" } as CurrentUser;
 const projects = [
@@ -146,7 +146,7 @@ it.each([false, true])("rejects legacy Project Team assignment before submission
   expect(screen.getByRole("alert").textContent).toContain("backlog.assignment_reselect");
   const submit = screen.getByRole("button", { name: automation ? "routine.create" : "backlog.create_task" }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
-  fireEvent.submit(submit.closest("form")!);
+  fireEvent.submit(submit.form!);
   expect(save).not.toHaveBeenCalled();
   rerender(view("preset:pipeline"));
   expect(screen.getByRole("alert").textContent).toContain("backlog.assignment_reselect");

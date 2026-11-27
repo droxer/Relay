@@ -13,7 +13,7 @@ vi.mock("@/components/ui/select", () => ({
   SelectContent: () => null, SelectGroup: () => null, SelectItem: () => null,
   SelectTrigger: () => null, SelectValue: () => null,
 }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => children }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer }: any) => <>{children}{footer}</> }));
 it("preserves a dirty member draft when polling advances the project version", () => {
   const member = { agentId: "a", role: "implementer", responsibilities: "Build", enabled: true };
   const project = { id: "p", version: 1, name: "Project", members: [member], leadAgentId: null, computerId: "c" } as any;

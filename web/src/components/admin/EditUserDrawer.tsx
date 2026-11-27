@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { updateControlPanelUser } from "../../api";
 import type { UserRecord } from "../../types";
@@ -45,6 +45,7 @@ export function EditUserDrawer({
   onSuccess,
 }: EditUserDrawerProps) {
   const { t } = useTranslation();
+  const formId = useId();
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -138,22 +139,22 @@ export function EditUserDrawer({
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={t("admin.v2.provision_kicker_user")}
       title={t("admin.v2.edit_user_title")}
       subtitle={user ? `@${userHandleOf(user)}` : undefined}
       subtitleMono={Boolean(user)}
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
       width="form"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={isBusy}>
+            {t("admin.v2.cancel")}
+          </Button>
+          <Button size="cta" type="submit" form={formId} loading={isBusy} disabled={isBusy || !hasUnsavedChanges}>
+            {t("admin.v2.save")}
+          </Button>
+        </>
+      }
     >
-      <form className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
-        <section className="adm-provision-section" aria-labelledby="adm-edit-emp-identity">
-          <header className="adm-provision-section-head">
-            <h3 id="adm-edit-emp-identity" className="adm-provision-section-title">
-              {t("admin.v2.section_identity")}
-            </h3>
-          </header>
-
+      <form id={formId} className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
           <Field
             label={t("admin.display_name")}
             required
@@ -190,14 +191,6 @@ export function EditUserDrawer({
               placeholder={t("admin.v2.placeholder_email")}
             />
           </Field>
-        </section>
-
-        <section className="adm-provision-section" aria-labelledby="adm-edit-emp-limits">
-          <header className="adm-provision-section-head">
-            <h3 id="adm-edit-emp-limits" className="adm-provision-section-title">
-              {t("admin.v2.section_limits")}
-            </h3>
-          </header>
 
           <Field
             label={t("admin.v2.emp_limit_label")}
@@ -252,20 +245,9 @@ export function EditUserDrawer({
           <TaskCapacityField id="edit-user-task-capacity" value={taskCapacity} inputRef={capacityRef}
             error={capacityError} onChange={(value) => { setTaskCapacity(value); setCapacityError(null); }} />
 
-        </section>
-
         {user ? <UserPasswordReset open={open} userId={user.id} /> : null}
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
-
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={isBusy}>
-            {t("admin.v2.cancel")}
-          </Button>
-          <Button size="cta" type="submit" loading={isBusy} disabled={isBusy || !hasUnsavedChanges}>
-            {t("admin.v2.save")}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );

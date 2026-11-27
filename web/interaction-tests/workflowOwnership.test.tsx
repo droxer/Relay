@@ -14,7 +14,7 @@ import type { AgentTeam, ProjectRecord, TeamWorkflow, UserAgent } from "../src/t
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }));
 vi.mock("../src/api", () => ({ getTeamWorkflowChoices: vi.fn(), updateTeam: vi.fn(async () => ({})), saveWorkflow: vi.fn(), deleteWorkflow: vi.fn(), startProjectWorkflow: vi.fn(), listWorkflowPreviews: vi.fn(), listProjectWorkflowChoices: vi.fn(), linkTeamWorkflow: vi.fn(async () => ({})), setTeamProjectWorkflow: vi.fn(async () => ({})) }));
 vi.mock("../src/hooks/useTeams", () => ({ TEAMS_QUERY_KEY: "teams", TEAM_RECORD_QUERY_KEY: "team-record", teamRecordKey: (...parts: string[]) => ["team-record", ...parts], useTeams: () => ({ teams: [team], isSuccess: true }) }));
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: any) => open ? <div>{children}</div> : null }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children, footer }: any) => open ? <div>{children}{footer}</div> : null }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ confirm, announce: vi.fn() }) }));
 vi.mock("../src/hooks/useUnsavedChangesGuard", () => ({ useUnsavedChangesGuard: () => async () => true }));
 vi.mock("../src/components/workflow/WorkflowStepCard", () => ({ WorkflowStepCard: ({ step, errors }: any) => <li><span data-testid="assignee">{step.agentId}</span>{errors?.agentId && <p role="alert">{errors.agentId}</p>}</li> }));

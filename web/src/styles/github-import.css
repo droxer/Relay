@@ -5,7 +5,22 @@
 .github-import {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
+}
+
+.github-import-manage-link {
+  align-self: flex-start;
+  color: var(--ink-3);
+  font: var(--type-body-sm);
+  letter-spacing: var(--type-body-sm-track);
+  text-decoration: underline;
+  text-decoration-color: var(--line-1);
+  text-underline-offset: 2px;
+}
+
+.github-import-manage-link:hover {
+  color: var(--ink-1);
+  text-decoration-color: currentColor;
 }
 
 .github-import-query {

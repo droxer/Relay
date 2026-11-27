@@ -6,7 +6,7 @@ import * as connections from "../src/api-client/connections";
 import * as api from "../src/api";
 import { GitHubImportDrawer } from "../src/components/task-board/GitHubImportDrawer";
 
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children }: any) => <div>{children}</div> }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer }: any) => <div>{children}{footer}</div> }));
 vi.mock("@/components/ui/DialogProvider", () => ({ useDialogs: () => ({ announce: vi.fn() }) }));
 
 function setup() {

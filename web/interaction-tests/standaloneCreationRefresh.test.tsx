@@ -23,7 +23,7 @@ vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 vi.mock("../src/components/ui/DialogProvider", () => ({ useDialogs: () => ({ announce: vi.fn(), confirm: vi.fn() }) }));
 // Keep the real form and page controllers; omit the drawer's portal/animation.
-vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children }: { open: boolean; children: ReactNode }) => open ? children : null }));
+vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ open, children, footer }: { open: boolean; children: ReactNode; footer?: ReactNode }) => open ? <>{children}{footer}</> : null }));
 
 const user = { userId: "u", username: "u" } as CurrentUser;
 const noop = vi.fn();

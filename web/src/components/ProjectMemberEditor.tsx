@@ -99,6 +99,7 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
   const [initialProject] = useState(project);
   const projectSave = useProjectSave(updateProjectMutation.mutateAsync, Object.fromEntries(agents.map((agent) => [agent.id, agent.displayName])));
   const [initialDraftKey] = useState(() => draftKey(draft));
+  const formId = useId();
   const agentLabelId = useId();
 
   const runtimeNodeId = useMemo(
@@ -218,10 +219,18 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
       title={member ? t("project.member_edit") : t("project.member_add")}
       subtitle={member ? editingAgent?.displayName ?? member.agentId : undefined}
       width="form"
-      closeLabel={t("admin.v2.close_drawer")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>
+            {t("dialog.cancel")}
+          </Button>
+          <Button size="cta" type="submit" form={formId} loading={busy}>
+            {t("project.member_save")}
+          </Button>
+        </>
+      }
     >
-      <form className="project-member-form" onSubmit={(event) => void submit(event)} noValidate>
+      <form id={formId} className="project-member-form" onSubmit={(event) => void submit(event)} noValidate>
         {!member ? (
           candidates.length ? (
             <Field label={t("project.member_agent")} labelId={agentLabelId} wrapper="div" error={agentError ?? undefined} errorId="project-member-agent-error">
@@ -319,7 +328,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
 
         {member ? (
           <div className="adm-drawer-section">
-            <h3 className="adm-drawer-section-title">{t("admin.v2.danger_zone")}</h3>
             <div className="adm-drawer-section-actions">
               <Button
                 type="button"
@@ -336,19 +344,6 @@ function ProjectMemberEditorBody({ open, member, project, agents, computers, onC
 
         {projectSave.error ? <p role="alert" className="text-destructive">{projectSave.error}</p> : null}
         {leadError ? <p role="alert" className="text-destructive">{leadError}</p> : null}
-
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={busy}>
-            {t("dialog.cancel")}
-          </Button>
-          <Button
-            size="cta"
-            type="submit"
-            loading={busy}
-          >
-            {t("project.member_save")}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );

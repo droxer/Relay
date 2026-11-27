@@ -69,13 +69,29 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
     <Drawer
       open={open}
       onClose={onClose}
-      kicker={t("computer.title")}
       title={t("computer.token_title")}
       subtitle={`${node.displayName?.trim() || t("computer.unnamed")} · ${node.id}`}
       subtitleMono
       width="detail"
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          <Button
+            size="cta"
+            type="button"
+            variant="outline"
+            onClick={() => void handleReissue()}
+            disabled={busy !== null}
+            loading={busy === "reissue"}
+          >
+            {busy === "reissue" ? t("computer.token_reissuing") : t("computer.token_reissue_action")}
+          </Button>
+          {credentials ? (
+            <Button size="cta" type="button" onClick={onClose}>
+              {t("admin.v2.close_drawer")}
+            </Button>
+          ) : null}
+        </>
+      }
     >
       <div className="adm-form" ref={credentialsRef} tabIndex={-1}>
         {credentials ? (
@@ -122,38 +138,6 @@ export function ComputerTokenDrawer({ open, onClose, node }: ComputerTokenDrawer
           </p>
         )}
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
-        <div className="adm-form-actions">
-          {credentials ? (
-            <>
-              <Button
-                size="cta"
-                type="button"
-                variant="outline"
-                onClick={() => void handleReissue()}
-                disabled={busy !== null}
-                loading={busy === "reissue"}
-              >
-                {busy === "reissue" ? t("computer.token_reissuing") : t("computer.token_reissue_action")}
-              </Button>
-              <Button size="cta" type="button" onClick={onClose}>
-                {t("admin.v2.close_drawer")}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                size="cta"
-                type="button"
-                variant="outline"
-                onClick={() => void handleReissue()}
-                disabled={busy !== null}
-                loading={busy === "reissue"}
-              >
-                {busy === "reissue" ? t("computer.token_reissuing") : t("computer.token_reissue_action")}
-              </Button>
-            </>
-          )}
-        </div>
       </div>
     </Drawer>
   );

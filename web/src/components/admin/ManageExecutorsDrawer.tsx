@@ -170,10 +170,18 @@ export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdat
       onClose={() => { void requestClose(); }}
       title={t("admin.v2.manage_executors_title")}
       subtitle={subtitle}
-      closeLabel={t("drawer.close")}
       layer={1}
       width="detail"
-      bodyClassName="adm-drawer-body--column"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={saving}>
+            {t("admin.v2.cancel")}
+          </Button>
+          <Button size="cta" type="button" onClick={() => void handleSave()} loading={saving} disabled={!dirty}>
+            {saving ? t("admin.v2.saving") : t("admin.v2.save_agent_settings")}
+          </Button>
+        </>
+      }
     >
       <div className="adm-form">
         <p className="adm-cred-note adm-agent-drawer-note">{t("admin.v2.manage_executors_help")}</p>
@@ -194,14 +202,6 @@ export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdat
         {error ? (
           <Alert variant="boxed">{t("admin.v2.action_failed", { message: error })}</Alert>
         ) : null}
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={saving}>
-            {t("admin.v2.cancel")}
-          </Button>
-          <Button size="cta" type="button" onClick={() => void handleSave()} loading={saving} disabled={!dirty}>
-            {saving ? t("admin.v2.saving") : t("admin.v2.save_agent_settings")}
-          </Button>
-        </div>
       </div>
     </Drawer>
   );

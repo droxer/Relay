@@ -56,7 +56,9 @@ interface DrawerProps {
   /** Named width role, or an explicit pixel width for one-off layouts. */
   width?: DrawerWidth | number;
   children: ReactNode;
-  closeLabel: string;
+  /** Pinned action bar rendered as a flex sibling below the scroll body. */
+  footer?: ReactNode;
+  closeLabel?: string;
   /** Accessible name override. Defaults to `title` when it is a string. */
   ariaLabel?: string;
   /** Extra class on the scroll body — e.g. to opt into a flex-column layout
@@ -99,6 +101,7 @@ export function Drawer({
   kicker,
   width = "detail",
   children,
+  footer,
   closeLabel,
   ariaLabel,
   bodyClassName,
@@ -106,6 +109,7 @@ export function Drawer({
   onClosed,
 }: DrawerProps) {
   const { t } = useTranslation();
+  const resolvedCloseLabel = closeLabel ?? t("drawer.close");
   const titleId = useId();
   const subtitleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -206,12 +210,13 @@ export function Drawer({
                 ) : null}
               </div>
               <OverlayCloseButton
-                label={closeLabel}
+                label={resolvedCloseLabel}
                 onClick={onClose}
                 className="overlay-close"
               />
             </header>
             <div className={`adm-drawer-body${bodyClassName ? ` ${bodyClassName}` : ""}`}>{children}</div>
+            {footer ? <footer className="adm-drawer-footer">{footer}</footer> : null}
             {/* The left edge doubles as a splitter: the drawer sits at the
                 viewport's inline-end, so it grows inline-start. Numeric
                 widths are one-off layouts and stay fixed. Hidden by CSS at

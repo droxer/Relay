@@ -189,11 +189,25 @@
    geometry, color, and hover for every overlay. A drawer-local copy used to
    live here with a one-step-louder resting ink; that fork is retired. */
 
+/* Pinned footer slot rendered by Drawer.tsx as a flex sibling below the scroll
+   body — stays flush to the panel's bottom edge without negative margins or
+   body-layout coupling. */
+.adm-drawer-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-7);
+  background: var(--surface-3);
+  border-top: var(--hairline);
+}
+
 /* ── Forms (drawer + auth) ────────────────────────────────────────── */
 .adm-form {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
 }
 
 .adm-form-section {
@@ -202,10 +216,8 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  /* The drawer contract's 24px field gap, as .adm-form and
-     .adm-provision-section use. */
-  gap: var(--sp-6);
-  padding-bottom: var(--sp-6);
+  gap: var(--sp-5);
+  padding-bottom: var(--sp-5);
   border-bottom: var(--hairline-soft);
 }
 

@@ -34,6 +34,7 @@ interface InviteByEmailDrawerProps {
 export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: InviteByEmailDrawerProps) {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const formId = useId();
   const localeLabelId = useId();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -97,14 +98,21 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      kicker={t("admin.waitlist.invite_email_kicker")}
       title={t("admin.waitlist.invite_email_title")}
       subtitle={canEmail ? t("admin.waitlist.invite_email_sub") : t("admin.waitlist.invite_email_sub_link")}
-      closeLabel={t("drawer.close")}
-      bodyClassName="adm-drawer-body--column"
       width="form"
+      footer={
+        <>
+          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={isBusy}>
+            {t("admin.v2.cancel")}
+          </Button>
+          <Button size="cta" type="submit" form={formId} loading={isBusy}>
+            {canEmail ? t("admin.waitlist.invite_email_send") : t("admin.waitlist.invite_email_create_link")}
+          </Button>
+        </>
+      }
     >
-      <form className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
+      <form id={formId} className="adm-form adm-provision-form" onSubmit={(event) => void handleSubmit(event)} noValidate>
         <section className="adm-provision-section">
           <Field
             label={t("admin.email")}
@@ -168,15 +176,6 @@ export function InviteByEmailDrawer({ open, onClose, canEmail, onInvited }: Invi
         </section>
 
         {error ? <Alert variant="boxed" render={<div />}>{error}</Alert> : null}
-
-        <div className="adm-form-actions">
-          <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={isBusy}>
-            {t("admin.v2.cancel")}
-          </Button>
-          <Button size="cta" type="submit" loading={isBusy}>
-            {canEmail ? t("admin.waitlist.invite_email_send") : t("admin.waitlist.invite_email_create_link")}
-          </Button>
-        </div>
       </form>
     </Drawer>
   );
