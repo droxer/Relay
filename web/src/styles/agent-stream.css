@@ -143,9 +143,9 @@
   color: var(--ink-3);
 }
 
-/* Reasoning header — stepped down to caption scale (--type-meta) inside a
-   quiet recessed chip so collapsed deliberation recedes behind the 14px answer
-   prose while remaining unmistakably clickable. */
+/* Reasoning header — stepped down one rung (13px) inside a quiet recessed chip
+   so collapsed deliberation recedes behind 14px answer prose while staying
+   scannable and matching the tool/activity log tier. */
 .agent-thinking-header {
   display: inline-flex;
   align-self: flex-start;
@@ -161,6 +161,7 @@
   background: color-mix(in srgb, var(--ink-1) 3%, transparent);
   color: var(--ink-3);
   font: var(--type-meta);
+  font-size: var(--fs-code-transcript);
   letter-spacing: var(--type-meta-track);
   text-align: left;
   cursor: pointer;
@@ -215,9 +216,9 @@
   animation: blink var(--t-pulse) var(--ease-breathe) infinite;
 }
 
-/* Expanded reasoning sits on a quieter caption scale (--type-meta with loose
-   leading) behind a legible 2px rail (--accent-bar-w) so a long deliberation
-   clearly ends before the answer begins.
+/* Expanded reasoning sits on the 13px process-log scale (with loose leading)
+   behind a legible 2px rail (--accent-bar-w) so a long deliberation clearly
+   ends before the answer begins.
    No italic: synthesized CJK oblique reads as a rendering bug (markdown.css
    normalizes zh blockquotes for the same reason). */
 .agent-thinking-body {
@@ -226,6 +227,7 @@
   padding: var(--sp-1) 0 var(--sp-1) var(--sp-3);
   border-left: var(--accent-bar-w) solid var(--line-1);
   font: var(--type-meta);
+  font-size: var(--fs-code-transcript);
   letter-spacing: var(--type-meta-track);
   line-height: var(--leading-loose);
   color: var(--ink-3);
@@ -241,6 +243,7 @@
   margin: 0 0 var(--sp-1);
   color: var(--ink-2);
   font: var(--type-micro);
+  font-size: var(--fs-code-transcript);
   letter-spacing: var(--type-micro-track);
 }
 
@@ -283,6 +286,7 @@
   background: color-mix(in srgb, var(--ink-1) 3%, transparent);
   color: var(--ink-3);
   font: var(--type-meta);
+  font-size: var(--fs-code-transcript);
   letter-spacing: var(--type-meta-track);
   text-align: left;
   cursor: pointer;
@@ -344,11 +348,11 @@
   color: var(--ink-3);
 }
 
-/* Tool and permission lines stay on the compact 12px meta rung so a lone tool
-   call never rivals answer prose; shell commands keep the 13px mono size. */
+/* Tool, command, and permission lines share the 13px transcript log scale so
+   process output stays scannable while receding one step below 14px answer prose. */
 .agent-tool,
 .agent-permission-line {
-  font-size: var(--fs-1);
+  font-size: var(--fs-code-transcript);
 }
 
 .agent-command {
@@ -379,6 +383,7 @@
 .agent-tool-name {
   flex: none;
   font: var(--type-micro);
+  font-size: var(--fs-code-transcript);
   letter-spacing: var(--type-micro-track);
   color: var(--ink-2);
 }
@@ -397,7 +402,7 @@
   flex: none;
   margin-left: auto;
   font-family: var(--font-sans);
-  font-size: var(--fs-1);
+  font-size: var(--fs-code-transcript);
   color: var(--ink-3);
   white-space: nowrap;
 }
@@ -464,6 +469,7 @@
   background: none;
   color: var(--ink-4);
   font: var(--type-body);
+  font-size: var(--fs-code-transcript);
   letter-spacing: var(--type-body-track);
   font-style: normal;
   text-align: left;
