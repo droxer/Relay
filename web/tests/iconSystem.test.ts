@@ -138,4 +138,34 @@ describe("icon system regressions", () => {
       readWeb("public/brand/relay-mark.svg"),
     );
   });
+
+  it("keeps sidebar and issue-queue navigation glyphs distinct", () => {
+    const icons = readWeb("src/components/icons.tsx");
+    const navExports = [
+      "NavHome",
+      "NavThreads",
+      "NavBacklog",
+      "NavRoutine",
+      "NavProjects",
+      "NavAgents",
+      "NavTeams",
+      "NavComputer",
+      "NavSkills",
+      "NavPreferences",
+      "NavLogout",
+      "NavAdmin",
+    ];
+    const glyphs = navExports.map((name) => {
+      const match = icons.match(new RegExp(`export const ${name} = withStandardStroke\\(([A-Za-z0-9]+),`));
+      assert.ok(match, `${name} must be defined via withStandardStroke`);
+      return match[1];
+    });
+    assert.equal(new Set(glyphs).size, glyphs.length, "primary sidebar nav exports must not share a Lucide glyph");
+
+    const queues = readWeb("src/components/issues/IssueQueueNav.tsx");
+    const queueBlock = queues.match(/const QUEUE_ICONS = \{([\s\S]*?)\} satisfies/)?.[1] ?? "";
+    const queueGlyphs = [...queueBlock.matchAll(/:\s*([A-Za-z0-9]+),/g)].map((match) => match[1]);
+    assert.ok(queueGlyphs.length >= 8, "IssueQueueNav must define all queue icons");
+    assert.equal(new Set(queueGlyphs).size, queueGlyphs.length, "sibling issue queues must not share an icon");
+  });
 });
