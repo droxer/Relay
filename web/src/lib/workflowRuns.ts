@@ -189,6 +189,11 @@ export const WORKFLOW_RESULT_REASONS = [
   "workflow_execution_failed",
   "workflow_result_incomplete",
   "workflow_result_required",
+  "workflow_result_missing",
+  "workflow_result_invalid",
+  "workflow_result_wrong_run",
+  "workflow_result_not_done",
+  "workflow_evidence_required",
   "workflow_outputs_required",
   "workflow_outputs_too_large",
 ] as const;

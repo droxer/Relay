@@ -44,7 +44,8 @@ class WorkflowProgressionMixin(RegistryState):
                     raise ValueError("workflow_command_missing")
                 self._ensure_agent_started_for_command(request, {**command["command"], "_nodeId": request["nodeId"]})
             self._close_terminal_session_agent(event)
-            payload = {**workflow_binding(run), "expectedRevision": run["revision"], "terminalEvent": event}
+            payload = {**workflow_binding(run), "expectedRevision": run["revision"],
+                       "terminalEvent": event, "reportDiagnostics": True}
             payload.pop("revision")
             session = self.store.append_event(sid, relay_event("workflow.step_finished", sid, payload), hydrate_events=False)
             run = current_workflow_run(session)

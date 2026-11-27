@@ -79,6 +79,36 @@ def _owner_answers(run: dict[str, Any], attempt: dict[str, Any]) -> str:
         answers, ensure_ascii=False) + "\n"
 
 
+_RETRY_FEEDBACK = {
+    "workflow_execution_failed": "The Agent run failed.",
+    "workflow_result_incomplete": "Relay received a truncated or refused report.",
+    "workflow_result_required": "Relay did not accept the completion report.",
+    "workflow_result_missing": "Relay did not receive a completion report.",
+    "workflow_result_invalid": "The completion report did not match the required format.",
+    "workflow_result_wrong_run": "The report did not use the run ID for that attempt.",
+    "workflow_result_not_done": "The report indicated the step was unfinished.",
+    "workflow_evidence_required": "The report was missing concrete completion evidence.",
+    "workflow_outputs_required": "The report was missing a required named output or its content.",
+    "workflow_outputs_too_large": "The named outputs exceeded the report size limit.",
+}
+
+
+def _retry_feedback(run: dict[str, Any], attempt: dict[str, Any]) -> str:
+    prior_retry = next((decision for decision in reversed(run.get("recoveryDecisions", []))
+                        if decision["kind"] == "retry" and decision["workflowStepId"] == attempt["workflowStepId"]
+                        and decision["workflowAttempt"] == attempt["workflowAttempt"] - 1), None)
+    if not prior_retry:
+        return ""
+    for result in reversed(run.get("attemptResults", [])):
+        if result["assignmentId"] == prior_retry["assignmentId"] and result["status"] == "blocked":
+            reason = _RETRY_FEEDBACK.get(result.get("reason", ""))
+            if reason:
+                return (f"Previous attempt: {reason} Check existing work before repeating any actions. "
+                        "Address the failure and use the report path and run ID for this attempt.\n")
+            break
+    return ""
+
+
 def _workflow_step_brief(run: dict[str, Any], first: dict[str, Any]) -> str:
     predecessor_outputs = [
         result for result in run.get("attemptResults", []) if result["status"] == "succeeded"
@@ -93,6 +123,7 @@ def _workflow_step_brief(run: dict[str, Any], first: dict[str, Any]) -> str:
             "If you cannot finish without the owner's decision or information, stop and write outer status "
             "blocked with one question in note (and options when it is a choice); this step reruns with the answer.\n"
             + _owner_answers(run, first)
+            + _retry_feedback(run, first)
             + (
                 "Include work.outputs mapping each legacy required output name to its recorded content or artifact reference.\n"
                 "Required output names: " + json.dumps(first["expectedOutputs"], ensure_ascii=False) + "\n"
@@ -253,6 +284,7 @@ class WorkflowAdmissionMixin(RegistryState):
                 # intake, which normally supplies the AgentState defaults.
                 command["state"] = {**initial_agent_state(session["taskGoal"]), **command["state"]}
                 command["state"]["assignment_brief"] = _workflow_step_brief(run, first)
+                command["state"]["workflow_expected_outputs"] = first["expectedOutputs"]
                 delivered = self._dispatch_run_start(request, node_id, command)
                 linked = self.daemon_store.get_command(delivered.get("currentCommandId")) if delivered.get("currentCommandId") else None
                 if not linked or linked.get("status") == "pending":

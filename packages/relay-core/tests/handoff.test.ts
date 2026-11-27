@@ -503,6 +503,29 @@ describe("prompts", () => {
     assert.match(prompt, /Add a "work" field to the JSON you write to `\.relay\/round-result\.json`, never to your reply/);
     assert.doesNotMatch(prompt, /finishing JSON/);
   });
+  for (const names of [[], ['Design "review"']]) {
+    it(`shows a complete Workflow report ${names.length ? "with" : "without"} named outputs`, () => {
+      const workflowState = {
+        round_result_file: ".relay/round-result-current.json",
+        round_result_run_id: "run_current",
+        workflow_expected_outputs: names,
+      };
+      const prompt = claudeTaskPrompt(state(workflowState));
+      const example = /\[Finishing\][\s\S]*?\n(\{"status":"done"[^\n]*\})\n/.exec(prompt)?.[1];
+      assert.ok(example);
+      assert.deepEqual(JSON.parse(example), {
+        status: "done",
+        runId: "run_current",
+        work: {
+          status: "done",
+          evidence: ["<specific check and observed result>"],
+          ...(names.length ? { outputs: { 'Design "review"': "<recorded content or artifact reference>" } } : {}),
+        },
+      });
+      assert.match(prompt, /Replace the placeholders with your actual evidence/);
+      assert.match(prompt, /When blocked, put the question for the human in "note"/);
+    });
+  }
   it("offers bounded direct delegation through the shared report contract", () => {
     const delegated = state({
       task_goal: "Build sign-in", work_result_required: true,

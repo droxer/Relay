@@ -4272,6 +4272,11 @@
       "workflow_execution_failed": "智慧體的執行失敗了。",
       "workflow_result_incomplete": "執行報告被截斷或被拒絕。",
       "workflow_result_required": "智慧體沒有報告此步驟已完成。",
+      "workflow_result_missing": "Relay 未收到完成報告。",
+      "workflow_result_invalid": "完成報告的格式不符合要求。",
+      "workflow_result_wrong_run": "完成報告的執行 ID 與本次執行不符。",
+      "workflow_result_not_done": "智慧體回報此步驟尚未完成。",
+      "workflow_evidence_required": "完成報告缺少完成證據。",
       "workflow_outputs_required": "有預期產出沒有被記錄。",
       "workflow_outputs_too_large": "記錄的產出過大。",
       "unknown": "此步驟沒有完成。"

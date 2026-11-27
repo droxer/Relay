@@ -7,6 +7,7 @@ import { applySessionEvent, shareSessions } from "../src/lib/sessionEvents.js";
 import { mergeSessionSnapshotIntoSessions } from "../src/lib/sessionPollMerge.js";
 import {
   activeWorkflowRun,
+  workflowBlock,
   workflowDecisionBinding,
   workflowSnapshotDue,
   workflowStepStates,
@@ -108,5 +109,28 @@ describe("workflow event projection parity", () => {
       assignmentId: run.assignments[1].assignmentId,
       expectedRevision: 3,
     });
+  });
+
+  it("keeps specific report failures and the historical fallback visible to the owner", () => {
+    const run = activeWorkflowRun(served(fixture.progression, 4));
+    assert.ok(run);
+    const { assignmentId, workflowStepId, workflowAttempt } = run.assignments[run.currentIndex];
+    for (const reason of [
+      "workflow_result_missing",
+      "workflow_result_invalid",
+      "workflow_result_wrong_run",
+      "workflow_result_not_done",
+      "workflow_evidence_required",
+      "workflow_result_required",
+    ]) {
+      assert.deepEqual(workflowBlock({
+        ...run, status: "blocked",
+        attemptResults: [{
+          assignmentId, workflowStepId, workflowAttempt,
+          runId: "blocked-run", commandId: "blocked-command", timestamp: run.startedAt,
+          status: "blocked", outputs: {}, reason,
+        }],
+      }), { kind: "result", reason });
+    }
   });
 });
