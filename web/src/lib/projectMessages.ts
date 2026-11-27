@@ -294,6 +294,7 @@ export class ProjectMessagesAccumulator {
   private lastEventId: string | undefined;
   private eventStart: number | undefined;
   private transcriptRevision: string | undefined;
+  private windowRunAgentIds?: ReadonlyMap<string, AgentRun["logicalAgentId"]>;
   private out: DerivedMessage[] = [];
   private snapshot: DerivedMessage[] = [];
   private readonly runState = new Map<string, RunProjectionState>();
@@ -311,6 +312,7 @@ export class ProjectMessagesAccumulator {
     next.lastEventId = this.lastEventId;
     next.eventStart = this.eventStart;
     next.transcriptRevision = this.transcriptRevision;
+    next.windowRunAgentIds = this.windowRunAgentIds;
     next.out = [...this.out];
     next.snapshot = this.snapshot;
     for (const [requestId, prompt] of this.prompts) next.prompts.set(requestId, prompt);
@@ -358,6 +360,11 @@ export class ProjectMessagesAccumulator {
     this.lastEventId = undefined;
     this.eventStart = session.eventStart;
     this.transcriptRevision = session.transcriptRevision;
+    // A partial transcript can start after agent.started. The Thread snapshot
+    // still carries the Logical Agent for that run.
+    this.windowRunAgentIds = session.eventStart
+      ? new Map(session.agentRuns.map((run) => [run.id, run.logicalAgentId]))
+      : undefined;
     this.runState.clear();
     this.prompts.clear();
     const attachments = session.events.find(event => event.type === "session.created")?.attachments;
@@ -378,6 +385,7 @@ export class ProjectMessagesAccumulator {
     this.translator = undefined;
     this.processedEvents = 0;
     this.lastEventId = undefined;
+    this.windowRunAgentIds = undefined;
     this.runState.clear();
     this.prompts.clear();
     this.out = [];
@@ -391,11 +399,13 @@ export class ProjectMessagesAccumulator {
   ): { index: number; created: boolean } {
     const existing = this.runState.get(runId);
     if (existing) return { index: existing.index, created: false };
+    const agentId = this.windowRunAgentIds?.get(runId);
     this.out.push({
       kind: "agent",
       id: `${this.sessionId}:run:${runId}`,
       timestamp,
       agent,
+      ...(agentId ? { agentId } : {}),
       runId,
       streaming: true,
       stdout: "",
