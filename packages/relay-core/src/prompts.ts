@@ -55,6 +55,27 @@ export function agentTaskPrompt(state: AgentState): string {
   return `${preludes.join("\n\n")}\n\n[User]\n${task}`;
 }
 
+function roundResultInstructions(file: string, state: AgentState): string[] {
+  const names = state.workflow_expected_outputs;
+  const runId = state.round_result_run_id;
+  if (names === undefined || !runId) {
+    return [`When you stop, write \`${file}\` as JSON: {"status": "done" | "continue" | "blocked", "note": "<one line>"}.`];
+  }
+  const work = {
+    status: "done",
+    evidence: ["<specific check and observed result>"],
+    ...(names.length ? {
+      outputs: Object.fromEntries(names.map(name => [name, "<recorded content or artifact reference>"])),
+    } : {}),
+  };
+  return [
+    `When you stop, write \`${file}\` as JSON. For a successful step, use this structure:`,
+    JSON.stringify({ status: "done", runId, work }),
+    "Replace the placeholders with your actual evidence and any required named outputs. Record a specific check and observed result for each acceptance criterion.",
+    `If the step is unfinished, use {"status":"continue","runId":${JSON.stringify(runId)},"note":"<what remains>"}. If you need the owner's input, use "blocked" instead.`,
+  ];
+}
+
 function promptPreludes(state: AgentState): string[] {
   const preludes: string[] = [
     [
@@ -248,7 +269,7 @@ function promptPreludes(state: AgentState): string[] {
     preludes.push(
       [
         "[Finishing]",
-        `When you stop, write \`${state.round_result_file}\` as JSON: {"status": "done" | "continue" | "blocked", "note": "<one line>"}.`,
+        ...roundResultInstructions(state.round_result_file, state),
         'When blocked, put the question for the human in "note". If the answer is one of a few choices, add "options": ["<short answer>", …] with 2–6 complete, distinct answers the human can pick as is; otherwise omit "options" entirely (a single option is dropped).',
         ...(state.round_result_run_id
           ? [`Include "runId": ${JSON.stringify(state.round_result_run_id)} in that JSON. Copy "runId" exactly; a verdict with any other runId is rejected.`]
@@ -257,7 +278,9 @@ function promptPreludes(state: AgentState): string[] {
         ...(state.project_brief
           ? ['If this run settled a durable project convention, constraint, or decision that future runs should follow and the project context does not already say, add "contextSuggestions": [{"text": "<one line for the project context>", "evidence": "<what established it>"}] (at most 3). The owner decides whether to adopt them; omit the field otherwise.']
           : []),
-        "This file records the work outcome independently of process exit. Missing required reports need attention. Tasks may continue within their round budget; a thread-only run records unfinished work for the next turn.",
+        state.workflow_expected_outputs === undefined
+          ? "This file records the work outcome independently of process exit. Missing required reports need attention. Tasks may continue within their round budget; a thread-only run records unfinished work for the next turn."
+          : "This file records the step's outcome independently of process exit. A successful report allows the Workflow Run to proceed, subject to approval gates.",
         "It is a private control record for Relay, not part of your answer. Do not mention this file, its path, or that you wrote it in your reply; end with the answer itself.",
       ].join("\n"),
     );

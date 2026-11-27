@@ -152,6 +152,8 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
     assert [step["id"] for step in run["teamSnapshot"]["workflowSteps"]] == ["design", "build", "verify", "deploy"]
     launches = [item for item in h.traces() if item["kind"] == "launch"]
     assert "design report" in launches[1]["brief"]
+    assert "Previous attempt: The report was missing a required named output" in launches[3]["brief"]
+    assert "Previous attempt:" not in launches[-1]["brief"]
     assert "verify report" in launches[-1]["brief"]
     assert not h.ctx.daemon_store.list_active_runs(h.node_id)
     if task:

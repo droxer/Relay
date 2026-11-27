@@ -99,25 +99,31 @@ const environment = {
     }
     const control = join(options.probeWorkspace, '.relay');
     mkdirSync(control, { recursive: true });
-    let outputs;
+    const prompt = args.join(' ');
+    let report = { status: 'done', runId: command.runId, work: { status: 'done' } };
     if (profile.workflow) {
-      const legacyNames = command.state.assignment_brief.split('Required output names: ')[1];
-      const names = legacyNames ? JSON.parse(legacyNames.split('\n')[0]) : [];
+      const example = /\[Finishing\][^\n]*\n[^\n]*\n(\{[^\n]+\})\n/.exec(prompt)?.[1];
+      if (!example) throw new Error('Workflow prompt is missing its completion report example');
+      report = JSON.parse(example);
+      if (report.runId !== command.runId || report.work?.status !== 'done' || !report.work.evidence?.length) {
+        throw new Error('Workflow completion example is missing its run binding or work evidence');
+      }
+      const names = Object.keys(report.work.outputs ?? {});
       const failed = join(profile.root, 'verify-failed');
       if (names.includes('verify report') && !existsSync(failed)) {
         writeFileSync(failed, 'First verification deliberately omits its required output.');
-        outputs = {};
-      } else {
-        outputs = Object.fromEntries(names.map(name => [name, `Recorded ${name} from ${command.runId}`]));
+        report.work.outputs = {};
+      } else if (names.length) {
+        report.work.outputs = Object.fromEntries(names.map(name => [name, `Recorded ${name} from ${command.runId}`]));
       }
     }
     // Follow the actual runtime prompt: concurrent Project runs receive private
     // result paths that differ from the state originally sent by the backend.
-    const resultFile = /When you stop, write `([^`]+)`/.exec(args.join(' '))?.[1];
+    const resultFile = /When you stop, write `([^`]+)`/.exec(prompt)?.[1];
     if (!resultFile) throw new Error('E2E runtime prompt is missing its result path');
-    writeFileSync(join(options.probeWorkspace, resultFile), JSON.stringify({ status: 'done', runId: command.runId,
-      work: { status: 'done', note: 'E2E completed.', evidence: ['Emitted eight deterministic replies.'],
-        ...(outputs ? { outputs } : {}) } }));
+    report.work.note = 'E2E completed.';
+    report.work.evidence = ['Emitted eight deterministic replies.'];
+    writeFileSync(join(options.probeWorkspace, resultFile), JSON.stringify(report));
     trace('runtime-ended', { commandId: command.id, aborted: false });
     return { exit_code: 0, stdout: stdout.join(''), stderr: '' };
   },

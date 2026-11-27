@@ -154,7 +154,8 @@ def apply_workflow_step_finished(session: dict[str, Any], event: dict[str, Any])
                and run.get("status") in ("completed", "failed", "cancelled")
                for run in session.get("agentRuns", [])):
         raise ValueError("workflow_terminal_run_mismatch")
-    result = workflow_step_result(assignment, evidence)
+    # Replaying an older event must reconstruct the reason originally recorded.
+    result = workflow_step_result(assignment, evidence, report_diagnostics=event.get("reportDiagnostics") is True)
     updated = deepcopy(current)
     updated.setdefault("attemptResults", []).append({
         **{key: assignment[key] for key in ("workflowStepId", "workflowAttempt", "assignmentId")},

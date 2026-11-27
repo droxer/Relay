@@ -776,7 +776,7 @@ export type RelayEvent =
   | { id: string; type: "session.discussion_pin_changed"; sessionId: string; timestamp: string; pinned: boolean }
   | { id: string; type: "workflow.started"; sessionId: string; timestamp: string; assignments: WorkflowAssignment[]; actorUserId?: string }
   | ({ id: string; type: "workflow.gate_decided"; sessionId: string; timestamp: string; kind: "approve" | "reject"; actorUserId: string } & WorkflowAttemptBinding)
-  | ({ id: string; type: "workflow.step_finished"; sessionId: string; timestamp: string; terminalEvent: Record<string, unknown> } & WorkflowAttemptBinding)
+  | ({ id: string; type: "workflow.step_finished"; sessionId: string; timestamp: string; terminalEvent: Record<string, unknown>; reportDiagnostics?: true } & WorkflowAttemptBinding)
   | ({ id: string; type: "workflow.recovery_decided"; sessionId: string; timestamp: string; kind: "retry" | "cancel" | "answer"; answer?: string; actorUserId: string } & WorkflowAttemptBinding)
   | ({ id: string; type: "workflow.interrupted"; sessionId: string; timestamp: string; actorUserId: string } & WorkflowAttemptBinding)
   | ({ id: string; type: "workflow.admission_blocked"; sessionId: string; timestamp: string; reason: string } & WorkflowAttemptBinding);

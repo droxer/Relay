@@ -106,6 +106,8 @@ export interface AgentState {
    *  the proposal may staff, and where to write the proposal. */
   project_setup?: ProjectSetupBrief;
   round_result_file?: string;
+  /** Present for a Custom Workflow step. Only legacy steps require named outputs. */
+  workflow_expected_outputs?: string[];
   /** Set by the daemon to reject a verdict belonging to another run. */
   round_result_run_id?: string;
   /**

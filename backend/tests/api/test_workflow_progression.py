@@ -76,40 +76,81 @@ def test_four_steps_repeated_agent_outputs_gate_and_replay(monkeypatch):
         assert take(registry, node) == []
 
 
-@pytest.mark.parametrize("failure", ["missing", "structured", "exit"])
-def test_unsuccessful_step_blocks_successor(monkeypatch, failure):
+@pytest.mark.parametrize(("failure", "reason"), [
+    ("missing", "workflow_result_missing"),
+    ("outer_done_only", "workflow_result_invalid"),
+    ("malformed", "workflow_result_invalid"),
+    ("unfinished", "workflow_result_not_done"),
+    ("no_evidence", "workflow_evidence_required"),
+    ("wrong_run", "workflow_result_wrong_run"),
+    ("wrong_run_rejected", "workflow_result_wrong_run"),
+    ("truncated", "workflow_result_incomplete"),
+    ("exit", "workflow_execution_failed"),
+])
+def test_unsuccessful_step_records_reason_without_dispatching_successor(monkeypatch, failure, reason):
     with workflow_world(monkeypatch) as (app, client, node, _, _, payload):
         session = start(client, payload)
         command, = take(app.state.registry, node)
-        patch = {"roundResult": None} if failure == "missing" else {"exitCode": 1} if failure == "exit" else {
-            "roundResult": {"runId": command["runId"], "status": "blocked", "work": {"status": "blocked"}}}
+        report = {"runId": command["runId"], "status": "done"}
+        patches = {
+            "missing": {"roundResult": None},
+            "outer_done_only": {"roundResult": report},
+            "malformed": {"roundResultRejected": {"reason": "malformed"}, "roundResult": None},
+            "unfinished": {"roundResult": {**report, "work": {"status": "continue"}}},
+            "no_evidence": {"roundResult": {**report, "work": {"status": "done"}}},
+            "wrong_run": {"roundResult": {**report, "runId": "previous-run"}},
+            "wrong_run_rejected": {"roundResultRejected": {"reason": "run_id_mismatch"}, "roundResult": None},
+            "truncated": {"outputTruncated": True},
+            "exit": {"exitCode": 1},
+        }
+        patch = patches[failure]
         finish(app.state.registry, node, command, {}, **patch)
         current = app.state.session_store.get_session(session["id"])
-        assert current["workflowRuns"][0]["status"] == "blocked"
-        assert current["workflowRuns"][0]["currentIndex"] == 0
+        run = current["workflowRuns"][0]
+        assert run["status"] == "blocked"
+        assert run["currentIndex"] == 0
+        assert run["attemptResults"][-1]["reason"] == reason
+        assert materialize_events(current["events"])["workflowRuns"] == current["workflowRuns"]
         app.state.registry.reap_stale_runs()
         assert take(app.state.registry, node) == []
         assert app.state.daemon_store.list_active_runs(node["id"]) == []
 
 
-def test_owner_retry_allocates_attempt_and_stale_decision_cannot_duplicate(monkeypatch):
+@pytest.mark.parametrize("gated", [False, True])
+def test_owner_retry_allocates_attempt_and_stale_decision_cannot_duplicate(monkeypatch, gated):
     with workflow_world(monkeypatch) as (app, client, node, _, _, payload):
+        payload["workflowSteps"][0]["requiresApproval"] = gated
         session = start(client, payload)
         sid = session["id"]
-        command, = take(app.state.registry, node)
         url = f"/api/v1/threads/{sid}/workflow-decisions"
+        if gated:
+            approved = client.post(url, json=decision(session, "approve"))
+            assert approved.status_code == 200, approved.text
+            session = approved.json()
+        command, = take(app.state.registry, node)
         assert client.post(url, json=decision(session, "retry")).status_code == 409
         assert len(app.state.daemon_store.list_active_runs(node["id"])) == 1
-        finish(app.state.registry, node, command, {})
+        finish(app.state.registry, node, command, {}, roundResult=None)
         session = app.state.session_store.get_session(sid)
         body = decision(session, "retry")
         response = client.post(url, json=body)
         assert response.status_code == 200, response.text
-        assert response.json()["execution"]["phase"] == "queued"
         assert client.post(url, json=body).status_code == 409
+        assert response.json()["workflowRuns"][0]["assignments"][0]["workflowAttempt"] == 2
+        if gated:
+            assert response.json()["workflowRuns"][0]["status"] == "awaiting_approval"
+            assert take(app.state.registry, node) == []
+            response = client.post(url, json=decision(response.json(), "approve"))
+            assert response.status_code == 200, response.text
+        assert response.json()["execution"]["phase"] == "queued"
         retried, = take(app.state.registry, node)
         assert retried["assignmentId"] != command["assignmentId"]
-        assert response.json()["workflowRuns"][0]["assignments"][0]["workflowAttempt"] == 2
+        assert retried["runId"] != command["runId"]
+        assert "Previous attempt: Relay did not receive a completion report." in retried["state"]["assignment_brief"]
+        without_diagnostics = [{key: value for key, value in event.items() if key != "reportDiagnostics"}
+                               for event in session["events"]]
+        previous_format = materialize_events(without_diagnostics)["workflowRuns"][0]["attemptResults"][-1]
+        assert previous_format["reason"] == "workflow_result_required"
         finish(app.state.registry, node, retried, {"Design": "retry output"})
         current = app.state.session_store.get_session(sid)
         assert current["workflowRuns"][0]["status"] == "awaiting_approval"

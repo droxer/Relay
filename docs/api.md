@@ -2355,7 +2355,11 @@ of artifact correctness or satisfaction of the acceptance criteria.
 `workflow.step_finished` records the attempt result and advances the frozen
 index only for successful execution and a valid structured success report with
 nonempty completion evidence (plus any legacy frozen output requirements).
-Missing, rejected, truncated or failed results block the current step. Earlier
+Missing, rejected, truncated or failed results block the current step. New
+attempt results distinguish a missing report, an invalid report, a wrong run ID,
+an unfinished step, and missing completion evidence. Older events keep their
+original reason when replayed. An owner retry carries the previous attempt's
+recorded failure reason into the new step brief when one is available. Earlier
 successful results, including evidence and any recorded outputs, are included in
 every successor's assignment brief. Repeated assignees retain distinct step/attempt
 identities. The final successful step completes the Thread. No legacy repair,
