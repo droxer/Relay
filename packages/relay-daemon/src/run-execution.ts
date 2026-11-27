@@ -31,6 +31,7 @@ import {
 import { OutputEventBuffer, type BufferedOutput } from "./output-event-buffer.js";
 import { persistTerminalEvent, hasPendingOutput, onOutputDrained } from "./terminal-outbox.js";
 import { materializeImages } from "./image-attachments.js";
+import { importCodexGeneratedImages } from "./codex-generated-images.js";
 import { createRunMcpProxy, MANAGED_MCP_CONTEXT_ENV } from "./relay-mcp-managed.js";
 import { startNativeMcpBridge } from "./relay-mcp-native.js";
 import { createProjectManagerBridge, managerWorkspaceTool } from "./project-manager.js";
@@ -482,6 +483,7 @@ export async function executeCommand(
     // exactly what it created or changed (see generated-files.ts).
     const workspaceSnapshot = await snapshotGeneratedFiles(threadWorkspace.hostPath, { ...scanOptions, signal });
     let patch;
+    let runtimeStartedAt: number;
     let imageInput: Awaited<ReturnType<typeof materializeImages>> | undefined;
     const unwatchOutput = onOutputDrained(fetchFn, command.id, () => {
       if (!outputPostDrain) outputBuffer.resume();
@@ -510,6 +512,7 @@ export async function executeCommand(
         } satisfies DaemonNodeEvent, token, signal);
       }
       const piOutputMode = command.agent === "pi" ? await execution.piOutputMode?.() : undefined;
+      runtimeStartedAt = Date.now();
       patch = await runWithPermissionPrompts(runState, execution, (promptState) => runAgentNode(command.agent, promptState, {
         ...options,
         piOutputMode,
@@ -550,6 +553,21 @@ export async function executeCommand(
     const projectSetup = consumeProjectSetup(threadWorkspace.hostPath, state.project_setup?.file);
     // Only a clean finish offers its person a next step.
     const nextSteps = consumeNextSteps(threadWorkspace.hostPath, nextStepsPath);
+    if (!signal?.aborted && command.agent === "codex" && next.last_exit_code === 0 && patch.runtime_session_id) {
+      try {
+        await importCodexGeneratedImages(execution.execStream, {
+          sandboxMode: environment.sandboxMode,
+          workspacePath: threadWorkspace.executionPath,
+          codexSkillHome: runState.skill_env?.CODEX_HOME,
+          sessionId: patch.runtime_session_id,
+          destination: artifactsDir ?? "generated_images",
+          startedAt: runtimeStartedAt,
+          signal,
+        });
+      } catch {
+        if (!signal?.aborted) logger.warn("Codex image import failed", commandLogFields(sandboxId, command));
+      }
+    }
     if (signal?.aborted) {
       logger.info("run cancelled", {
         ...commandLogFields(sandboxId, command),

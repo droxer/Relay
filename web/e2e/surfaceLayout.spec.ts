@@ -77,10 +77,15 @@ async function openPage(browser: Browser, path: string, touch: boolean, layout?:
   const page = await context.newPage();
   await page.route("**/api/**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
+    const origin = route.request().headers().origin;
+    const headers = origin ? {
+      "access-control-allow-origin": origin,
+      "access-control-allow-credentials": "true",
+    } : undefined;
     let body: unknown = { sessions: [session, waiting], agents: [], teams: [], tasks: [task, routine], nodes: [computer], projects: [], sandboxes: [], skills: [], ...fixtures };
     if (pathname.endsWith("/auth/me")) body = { authenticated: true, user: fixtures?.user ?? USER };
     if (pathname.endsWith("/threads/review-thread")) body = { ...session, ...thread };
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    await route.fulfill({ status: 200, contentType: "application/json", headers, body: JSON.stringify(body) });
   });
   await page.goto(path);
   return page;
@@ -765,6 +770,57 @@ test("opening the files panel narrows the conversation instead of cutting it", a
   expect(await columnOverhang(page)).toBeLessThanOrEqual(0);
   await page.locator(".transcript").evaluate((el) => { el.scrollTop = 0; });
   expect(await columnOverhang(page)).toBeLessThanOrEqual(0);
+  await page.context().close();
+});
+
+for (const touch of [false, true]) test(`reply file links open the Files drawer (touch=${touch})`, async ({ browser }) => {
+  const runtimeSessionId = "11111111-1111-4111-8111-111111111111";
+  const picturePath = "artifacts/季度 报告.png";
+  const pictures = [
+    { id: "chart-original", title: "季度 报告.png", workspaceRelativePath: picturePath, agentRunId: "run-1", createdAt: stamp },
+    { id: "chart-newer", title: "季度 报告.png", workspaceRelativePath: picturePath, agentRunId: "run-2", createdAt: "2026-09-02T00:00:00.000Z" },
+    { id: "codex-picture", title: "exec-chart.png", workspaceRelativePath: "artifacts/exec-chart.png", agentRunId: "run-1", createdAt: stamp },
+  ].map((item) => ({ ...item, kind: "workspace_file", path: `/node/thread/${item.workspaceRelativePath}`, contentType: "image/png" }));
+  const text = [
+    "[Quarterly chart](sandbox:/workspace/artifacts/%E5%AD%A3%E5%BA%A6%20%E6%8A%A5%E5%91%8A.png)",
+    `![Image from Codex](/home/agent/.codex/generated_images/${runtimeSessionId}/exec-chart.png)`,
+    "[Unindexed file](file:///missing.png) · [External reference](https://example.com)",
+  ].join("\n\n");
+  const stdout = JSON.stringify({ type: "item.completed", item: { type: "agent_message", text } }) + "\n";
+  const page = await openPage(browser, "/threads/review-thread", touch, undefined, {
+    agentRuns: [{ ...session.agentRuns[0], agent: "codex", runtimeSessionId }],
+    events: session.events.map((event) => ({
+      ...event, agent: "codex", ...(event.type === "agent.output" ? { text: stdout } : {}),
+    })),
+    artifacts: pictures,
+    artifactCount: pictures.length,
+  });
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHnEAAAAASUVORK5CYII=", "base64");
+  const apiOrigin = process.env.NEXT_PUBLIC_RELAY_API_ORIGIN?.replace(/\/+$/, "");
+  const artifactPath = "/api/v1/threads/review-thread/artifacts/";
+  await page.route(`${apiOrigin ?? new URL(page.url()).origin}${artifactPath}*`, (route) => route.fulfill({
+    contentType: "image/png", body: png, headers: { "content-disposition": "attachment" },
+  }));
+
+  const transcript = page.locator(".msg-agent");
+  const chart = transcript.getByRole("button", { name: "Quarterly chart" });
+  if (touch) await chart.tap();
+  else await chart.press("Enter");
+  await expect(page).toHaveURL(/space=1.*artifact=chart-original/);
+  const drawer = page.locator(".thread-space-panel");
+  await expect(drawer.locator(".artifact-preview-header-title")).toHaveText("季度 报告.png");
+  await expect(drawer.getByRole("img", { name: "季度 报告.png" })).toHaveJSProperty("naturalWidth", 1);
+  await expect(drawer.getByRole("button", { name: "Download", exact: true }))
+    .toHaveAttribute("href", `${apiOrigin ?? ""}${artifactPath}chart-original`);
+  await drawer.getByRole("button", { name: "Close", exact: true }).click();
+
+  await transcript.getByRole("button", { name: "Image from Codex" }).click();
+  await expect(page).toHaveURL(/space=1.*artifact=codex-picture/);
+  await expect(drawer.locator(".artifact-preview-header-title")).toHaveText("exec-chart.png");
+  await drawer.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(transcript.getByText("Unindexed file")).toBeVisible();
+  await expect(transcript.getByRole("button", { name: "Unindexed file" })).toHaveCount(0);
+  await expect(transcript.getByRole("link", { name: "External reference" })).toHaveAttribute("target", "_blank");
   await page.context().close();
 });
 

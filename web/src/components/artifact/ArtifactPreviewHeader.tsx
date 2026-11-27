@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { RelayArtifact } from "relay-core";
+import { readArtifactText } from "../../api";
 import { artifactDownloadName, artifactRawHref, artifactShowsKind } from "../../lib/artifactPreview";
 import { ArtifactViewToggle, type ArtifactView } from "./ArtifactViewToggle";
 import { FilePaneBack } from "../workspace/FilePaneBack";
@@ -55,9 +56,7 @@ export function ArtifactPreviewHeader({
 
   const handleCopy = useCallback(async () => {
     try {
-      const response = await fetch(rawHref);
-      if (!response.ok) throw new Error(response.statusText);
-      const text = await response.text();
+      const text = await readArtifactText(sessionId, artifact.id);
       await navigator.clipboard.writeText(text);
       setCopied(true);
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
@@ -70,7 +69,7 @@ export function ArtifactPreviewHeader({
         tone: "error",
       });
     }
-  }, [rawHref, announce, t]);
+  }, [sessionId, artifact.id, announce, t]);
 
   return (
     <header className="artifact-preview-header">

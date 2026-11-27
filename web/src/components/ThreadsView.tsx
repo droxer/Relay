@@ -79,6 +79,7 @@ import type { ProjectRoomOption } from "./composer/AgentSelect";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
 import { buildSpaceItems, threadHasMultipleProducers } from "../lib/threadSpace";
 import { latestThreadArtifacts } from "../lib/threadArtifacts";
+import { indexThreadFileLinks } from "../lib/threadFileLinks";
 import { ProjectDrawer } from "./ProjectDrawer";
 // The project page carries the whole task board (records, board, filters,
 // date picker); load it with the first project opened, not with every thread.
@@ -549,6 +550,8 @@ export function ThreadsView({
     const latest = new Set(latestThreadArtifacts(visibleArtifacts));
     return spaceSelectableItems.filter((item) => latest.has(item.artifact));
   }, [spaceSelectableItems, visibleArtifacts]);
+  const threadArtifacts = activeSession?.artifacts;
+  const resolveFileLink = useMemo(() => indexThreadFileLinks(threadArtifacts ?? []), [threadArtifacts]);
   const spaceShowProducer = useMemo(
     () => threadHasMultipleProducers(activeSession?.agentRuns),
     [activeSession?.agentRuns],
@@ -798,6 +801,7 @@ export function ThreadsView({
                         logicalAgentNames={logicalAgentNames}
                         logicalAgentImages={logicalAgentImages}
                         onOpenArtifact={onOpenArtifacts}
+                        resolveFileLink={resolveFileLink}
                         onRetryAgent={onRetryAgent}
                         onResumeAgent={onResumeAgent}
                         onMentionAgent={!projectReadOnly ? handleMentionAgent : undefined}
