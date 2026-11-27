@@ -63,12 +63,17 @@ export function AgentSkillsPanel({ agent, canEdit = false }: AgentSkillsPanelPro
         <Alert variant="boxed">{t("admin.v2.action_failed", { message: error })}</Alert>
       ) : null}
       {skills.length === 0 ? (
-        <p className="adm-cred-empty">{t("agents_page.skills_empty")}</p>
+        <div className="agent-skills-empty">
+          <p className="adm-cred-empty">{t("agents_page.skills_empty")}</p>
+        </div>
       ) : (
         <>
           {grantedSkills.length ? (
             <section className="agent-skill-group">
-              <p className="workspace-dossier-section-title">{t("skills.agent_granted_group")}</p>
+              <div className="workspace-dossier-section-head">
+                <p className="workspace-dossier-section-title">{t("skills.agent_granted_group")}</p>
+                <span className="workspace-dossier-section-count tnum">{grantedSkills.length}</span>
+              </div>
               <ul className="agent-skill-list">
                 {grantedSkills.map((skill) => (
                   <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">
@@ -125,7 +130,10 @@ export function AgentSkillsPanel({ agent, canEdit = false }: AgentSkillsPanelPro
           ) : null}
           {installedSkills.length ? (
             <section className="agent-skill-group">
-              <p className="workspace-dossier-section-title">{t("skills.agent_installed_group")}</p>
+              <div className="workspace-dossier-section-head">
+                <p className="workspace-dossier-section-title">{t("skills.agent_installed_group")}</p>
+                <span className="workspace-dossier-section-count tnum">{installedSkills.length}</span>
+              </div>
               <ul className="agent-skill-list">
                 {installedSkills.map((skill) => (
                   <li key={`${skill.namespace ?? ""}/${skill.name}`} className="agent-skill">

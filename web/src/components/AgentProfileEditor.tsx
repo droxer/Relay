@@ -151,7 +151,12 @@ export function AgentProfileEditor({
           }}
         >
           <div className="agent-profile-fields">
-            <Field label={t("admin.v2.agent_name")} labelId={nameLabelId} hint={<span id={nameHintId}>{t("agents_page.edit_name_hint")}</span>}>
+            <Field
+              className="agent-profile-fields-wide"
+              label={t("admin.v2.agent_name")}
+              labelId={nameLabelId}
+              hint={<span id={nameHintId}>{t("agents_page.edit_name_hint")}</span>}
+            >
               <Input
                 ref={nameRef}
                 name="agent-profile-name"

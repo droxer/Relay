@@ -44,9 +44,16 @@
   letter-spacing: var(--type-page-track);
 }
 
-/* Stacked workspace header stays compact in the agents detail pane. */
+/* Stacked workspace header stays compact in the agents detail pane.
+   When tabs sit inside the header, drop bottom padding so the active tab's
+   2px indicator rests flush on the header's bottom hairline instead of
+   floating above it. */
 .workspace-page .page-header {
   padding-block: var(--sp-4);
+}
+
+.workspace-page .page-header:has(.workspace-page-tabs) {
+  padding-bottom: 0;
 }
 
 .workspace-page .page-header-subtitle {
@@ -56,7 +63,7 @@
 .workspace-page .page-header-toolbar {
   width: 100%;
   max-width: 100%;
-  margin-top: var(--sp-2);
+  margin-top: var(--sp-1);
 }
 
 /* The runtime/computer/status chips that used to crowd this slot now live in
@@ -81,6 +88,7 @@
   align-items: stretch;
   gap: var(--sp-5);
   max-width: 100%;
+  margin-bottom: calc(var(--sp-hairline) * -1);
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -258,6 +266,10 @@
 .record-band-copy:hover {
   color: var(--ink-1);
   background: var(--control-fill);
+}
+
+.record-band-copy[data-copied="true"] {
+  color: var(--ok);
 }
 
 /* Quiet ink alone marks the empty value: Space Grotesk has no italic, and a
@@ -656,20 +668,52 @@
    keeps only what is left — a portrait + role identity row, then the
    document, then management at the foot. Scoped to the agent record: the
    team record still uses the doc + rail grid above. */
+.agent-detail-page .workspace-profile {
+  padding: var(--sp-6) var(--page-gutter);
+}
+
+.agent-detail-page .workspace-activity-head,
+.agent-detail-page .workspace-activity-pick {
+  padding-inline: var(--page-gutter);
+}
+
+.agent-detail-page .workspace-activity-pick:not(.workspace-task-card) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+}
+
+.agent-detail-page .workspace-activity-pick:not(.workspace-task-card) .workspace-pick-title {
+  max-width: 100%;
+}
+
+.agent-detail-page .workspace-activity-pick:not(.workspace-task-card) .workspace-pick-meta {
+  font: var(--type-meta);
+  letter-spacing: var(--type-meta-track);
+  white-space: normal;
+}
+
 .workspace-profile .agent-dossier {
   display: flex;
   flex-direction: column;
   /* Section rung — these are independent blocks of a record, not a field
      stack. Matches .adm-view and .workspace-profile-dossier. */
-  gap: var(--sp-7);
+  gap: var(--sp-6);
 }
 
 .agent-dossier-identity {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding-bottom: var(--sp-5);
-  border-bottom: var(--hairline-soft);
+  padding: var(--sp-4) var(--sp-5);
+  border: var(--hairline-soft);
+  border-radius: var(--r-3);
+  background: var(--surface-1);
+}
+
+.agent-dossier-identity .profile-image-picker-action {
+  border-color: var(--surface-1);
 }
 
 .agent-dossier-identity-meta {
@@ -687,23 +731,32 @@
   border-top: 0;
 }
 
-/* Phones: the avatar heads the block and the fields take the full width
-   under it. Side by side, the role and model fields were squeezed into a
-   200px column beside the image and the model field wrapped its own hint. */
+/* Phones: keep the avatar and role/timestamp block horizontal so the identity
+   card stays compact and the personality charter starts above the fold. */
 @media (max-width: 640px) {
+  .agent-detail-page .workspace-profile {
+    padding: var(--sp-4);
+  }
+
+  .agent-detail-page .workspace-activity-head,
+  .agent-detail-page .workspace-activity-pick {
+    padding-inline: var(--sp-4);
+  }
+
   .agent-dossier-identity {
-    flex-direction: column;
-    align-items: flex-start;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
   }
 
-  /* The picker centres itself in a row; in a column it leads, flush with
-     the fields under it. */
   .agent-dossier-identity > .profile-image-picker {
-    align-self: flex-start;
+    width: var(--avatar-xl);
+    min-width: var(--avatar-xl);
   }
 
-  .agent-dossier-identity-meta {
-    width: 100%;
+  .agent-dossier-identity .profile-image-picker-trigger,
+  .agent-dossier-identity .profile-image-picker-visual {
+    width: var(--avatar-xl);
+    height: var(--avatar-xl);
   }
 }
 
@@ -795,7 +848,7 @@
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-5) var(--sp-4);
+  padding: var(--sp-6) var(--sp-4);
   border-left: var(--hairline);
 }
 
@@ -811,8 +864,8 @@
 
 .record-band--panel .record-band-cell {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: baseline;
   gap: var(--sp-2);
   padding: 0;
   border: 0;
@@ -847,7 +900,7 @@
   .record-band--panel {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--sp-3) var(--sp-4);
+    gap: var(--sp-2) var(--sp-4);
   }
 
   .record-band--panel .record-band-cell {
@@ -868,6 +921,12 @@
     justify-content: flex-start;
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 640px) {
+  .agent-detail-page .record-layout-aside {
+    padding: var(--sp-3) var(--sp-4);
   }
 }
 
