@@ -32,7 +32,8 @@ it("shows the recorded role and level beside the Agent name", () => {
     sessionId="s" logicalAgentNames={{ "agent-1": "Reviewer" }} /></DialogProvider>);
 
   const header = screen.getByText("Reviewer").closest("header")!;
-  expect(within(header).getByText("role_levels.senior · admin.v2.agent_role.reviewer")).toBeTruthy();
+  expect(within(header).getByText("role_levels.badge_senior")).toBeTruthy();
+  expect(within(header).getByText("admin.v2.agent_role.reviewer")).toBeTruthy();
   expect(within(header).queryByText("Claude")).toBeNull();
   const receipt = screen.getByRole("region", { name: "thread.receipt.label" });
   expect(within(receipt).queryByText("Claude")).toBeNull();

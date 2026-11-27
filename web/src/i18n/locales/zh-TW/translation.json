@@ -2790,7 +2790,9 @@
     "label": "職級",
     "standard": "標準",
     "junior": "初級",
-    "senior": "高級"
+    "senior": "高級",
+    "badge_junior": "初級",
+    "badge_senior": "高級"
   },
   "role_level_hints": {
     "standard": "預設角色行為，不區分初級或高級。",

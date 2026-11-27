@@ -3,7 +3,8 @@
 import type { MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { navigateToAppPath } from "../lib/appRoute";
-import { agentRoleLabel, projectMemberRole } from "../lib/agentRoleLabel";
+import { projectMemberRole } from "../lib/agentRoleLabel";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import { PROJECT_LEAD_TOPICS, projectLeadTopicLabel, type ProjectLeadTopic } from "../lib/projectLeadTopics";
 import { projectMemberState } from "../lib/projectPage";
 import type { AgentBadge, ProjectListItem, UserAgent } from "../types";
@@ -57,7 +58,7 @@ export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discu
   const agent = agents.find((candidate) => candidate.id === member.agentId);
   const { available, enabled, availability } = projectMemberState(member, agent);
   const name = agent?.displayName || t("project.member_unavailable");
-  const role = agentRoleLabel(projectMemberRole(agent, member), t);
+  const roleIdentity = projectMemberRole(agent, member);
   const href = `/agents/${encodeURIComponent(member.agentId)}`;
   const openAgent = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
@@ -79,8 +80,13 @@ export function ProjectManagerLine({ project, agents, onManage, onDiscuss, discu
       <span className="project-manager-line-text">
         <a className="project-manager-line-name" href={href} onClick={openAgent}>{name}</a>
         <span className="project-manager-line-role">
-          {label}
-          {role ? <><span aria-hidden="true"> · </span>{role}</> : null}
+          <span>{label}</span>
+          {roleIdentity?.defaultRole ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <AgentRoleMeta identity={roleIdentity} className="" />
+            </>
+          ) : null}
         </span>
       </span>
       {!enabled ? <TonePill tone="neutral" label={t("project.member_disabled")} /> : null}

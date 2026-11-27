@@ -2864,7 +2864,9 @@
     "label": "Level",
     "standard": "Standard",
     "junior": "Junior",
-    "senior": "Senior"
+    "senior": "Senior",
+    "badge_junior": "Jr",
+    "badge_senior": "Sr"
   },
   "role_level_hints": {
     "standard": "Default role behavior without a junior or senior qualifier.",

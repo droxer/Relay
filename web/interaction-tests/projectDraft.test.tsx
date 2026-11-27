@@ -52,7 +52,8 @@ it("assigns the first added agent as lead by default", async () => {
 it("sends only the changed responsibility even with long instructions on the roster", async () => {
   const member = { ...lead, instructions: "Keep this private to the member. ".repeat(100) };
   editor([member, { ...other, instructions: "Keep their instructions too. ".repeat(100) }], member);
-  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.planner")).toBeTruthy();
+  expect(screen.getByText("role_levels.senior")).toBeTruthy();
+  expect(screen.getByText("admin.v2.agent_role.planner")).toBeTruthy();
   expect(screen.queryByRole("combobox")).toBeNull();
   fireEvent.change(screen.getByRole("textbox", { name: "project.responsibilities" }), { target: { value: "Ship the release" } });
   fireEvent.click(screen.getByRole("button", { name: "project.member_save" }));

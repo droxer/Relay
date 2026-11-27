@@ -240,7 +240,8 @@ function renderPanel(setup: ProjectSetup = proposedSetup) {
 it("saves the brief and roster while leaving the draft open to file tasks", async () => {
   getProjectSetup.mockResolvedValue({ setup: proposedSetup, candidates: [] });
   renderPanel();
-  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.planner")).toBeTruthy();
+  expect(screen.getByText("role_levels.badge_senior")).toBeTruthy();
+  expect(screen.getByText("admin.v2.agent_role.planner")).toBeTruthy();
   fireEvent.change(screen.getByRole("textbox", { name: "project.instructions · Ada", hidden: true }), {
     target: { value: "Confirm owners before applying" },
   });

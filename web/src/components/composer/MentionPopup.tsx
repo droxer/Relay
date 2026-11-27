@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { MentionCandidate } from "../../lib/mentions";
-import { agentRoleLabel } from "../../lib/agentRoleLabel";
+import { AgentRoleMeta } from "../RoleLevelBadge";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
 import {
@@ -60,9 +60,7 @@ export function MentionPopup({
           className="mention-popup"
           aria-label={t("composer.mention_list")}
         >
-          {matches.map((candidate) => {
-            const role = agentRoleLabel(candidate, t);
-            return (
+          {matches.map((candidate) => (
               <CommandItem
                 key={candidate.id}
                 value={candidate}
@@ -77,7 +75,7 @@ export function MentionPopup({
                 />
                 <span className="agent-identity-copy">
                   <span className="roster-trigger-name" translate="no">{candidate.displayName}</span>
-                  {role ? <span className="agent-role-label">{role}</span> : null}
+                  <AgentRoleMeta identity={candidate} />
                 </span>
                 {candidate.reason ? (
                   <span className="mention-option-reason">
@@ -85,8 +83,7 @@ export function MentionPopup({
                   </span>
                 ) : null}
               </CommandItem>
-            );
-          })}
+            ))}
         </CommandList>
       ) : null}
     </Command>

@@ -3,10 +3,15 @@ import type { AgentTeam, ProjectMemberSummary, UserAgent } from "../types.js";
 
 export type AgentRoleIdentity = Pick<UserAgent, "defaultRole" | "roleLevel">;
 
-export function agentRoleLabel(identity: AgentRoleIdentity | undefined, t: TFunction): string | undefined {
+export function agentRoleName(identity: AgentRoleIdentity | undefined | null, t: TFunction): string | undefined {
   if (!identity?.defaultRole) return undefined;
-  const role = t(`admin.v2.agent_role.${identity.defaultRole}`, { defaultValue: identity.defaultRole });
-  return identity.roleLevel ? `${t(`role_levels.${identity.roleLevel}`)} · ${role}` : role;
+  return t(`admin.v2.agent_role.${identity.defaultRole}`, { defaultValue: identity.defaultRole });
+}
+
+export function agentRoleLabel(identity: AgentRoleIdentity | undefined | null, t: TFunction): string | undefined {
+  const role = agentRoleName(identity, t);
+  if (!role) return undefined;
+  return identity?.roleLevel ? `${t(`role_levels.${identity.roleLevel}`)} · ${role}` : role;
 }
 
 export function projectMemberRole(

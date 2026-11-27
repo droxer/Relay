@@ -446,10 +446,10 @@ test("composer agent picker fits its content at phone width", async ({ browser }
   await page.context().close();
 });
 
-for (const [language, currentRole, historicRole] of [
-  ["en", "Senior · Code Reviewer", "Junior · Architect"],
-  ["zh-CN", "高级 · 代码评审员", "初级 · 架构师"],
-]) {
+for (const [language, seniorBadge, seniorFull, seniorRole, juniorBadge, juniorRole] of [
+  ["en", "Sr", "Senior", "Code Reviewer", "Jr", "Architect"],
+  ["zh-CN", "高级", "高级", "代码评审员", "初级", "架构师"],
+] as const) {
   test(`Agent role and level fit the composer and transcript on a phone (${language})`, async ({ browser }) => {
     const agent = {
       id: "ada", displayName: "Ada", executorKind: "claude", availability: "ready",
@@ -470,36 +470,50 @@ for (const [language, currentRole, historicRole] of [
     await page.setViewportSize({ width: 375, height: 812 });
     const picker = page.locator(".chat-agent-select");
     await expect(picker.getByText("Ada", { exact: true })).toBeVisible();
-    for (const [identity, value] of [[picker, currentRole], [page.locator(".msg-speaker"), historicRole]] as const) {
-      const label = identity.getByText(value, { exact: true });
+    for (const [identity, level, badgeText, roleName] of [
+      [picker, "senior", seniorBadge, seniorRole],
+      [page.locator(".msg-speaker"), "junior", juniorBadge, juniorRole],
+    ] as const) {
+      const badge = identity.locator(`[data-role-level="${level}"]`);
+      const label = identity.locator(".agent-role-meta-name");
+      await expect(badge).toBeVisible();
+      await expect(badge).toHaveText(badgeText);
       await expect(label).toBeVisible();
+      await expect(label).toHaveText(roleName);
       await expect(identity).not.toContainText(/Claude|provider\/layout-model/);
       await expect.poll(() => label.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
     }
     expect(await overhang(page, ".chat-agent-select")).toBeLessThanOrEqual(0);
     await picker.press("ArrowDown");
-    const option = page.getByRole("option").filter({ hasText: currentRole });
+    const option = page.getByRole("option").filter({ hasText: seniorRole });
     await expect(option).toBeVisible();
+    await expect(option.locator('[data-role-level="senior"]')).toHaveText(seniorBadge);
     await expect(option).not.toContainText(/Claude|provider\/layout-model/);
     await option.press("Enter");
-    await expect(picker).toContainText(currentRole);
+    await expect(picker.locator('[data-role-level="senior"]')).toHaveText(seniorBadge);
+    await expect(picker.locator(".agent-role-meta-name")).toHaveText(seniorRole);
     await page.locator(".composer-textarea").pressSequentially("@");
-    await expect(page.locator(".mention-popup").getByRole("option").filter({ hasText: currentRole })).toBeVisible();
+    const mentionOption = page.locator(".mention-popup").getByRole("option").filter({ hasText: seniorRole });
+    await expect(mentionOption).toBeVisible();
+    await expect(mentionOption.locator('[data-role-level="senior"]')).toHaveText(seniorBadge);
 
     await page.route("**/api/v1/agents/ada", (route) => route.fulfill({ json: { agent } }));
     await page.goto("/agents");
     const row = page.locator(".agents-roster-row").filter({ hasText: "Ada" });
     await expect(row).toContainText("provider/layout-model");
+    await expect(row.locator('[data-role-level="senior"]')).toHaveText(seniorBadge);
     await row.getByRole("button").click();
     await expect(page.locator(".record-band")).toContainText("provider/layout-model");
-    await expect(page.locator(".agent-dossier .workspace-dossier-field-value")).toHaveText(currentRole);
+    const dossierRole = page.locator(".agent-dossier .workspace-dossier-field-value");
+    await expect(dossierRole.locator('[data-role-level="senior"]')).toHaveText(seniorFull);
+    await expect(dossierRole.locator(".agent-role-meta-name")).toHaveText(seniorRole);
     await page.context().close();
   });
 }
 
-for (const [theme, language, roleText] of [
-  ["dark", "en", "Senior · Code Reviewer"],
-  ["light", "zh-CN", "高级 · 代码评审员"],
+for (const [theme, language, seniorBadge, roleName] of [
+  ["dark", "en", "Sr", "Code Reviewer"],
+  ["light", "zh-CN", "高级", "代码评审员"],
 ] as const) {
   test(`Agent role and level fit task tables and assignment selects (${theme}, ${language})`, async ({ browser }) => {
     const agent = {
@@ -522,22 +536,27 @@ for (const [theme, language, roleText] of [
     await page.route("**/api/v1/projects/proj-role", (route) => route.fulfill({ json: { project } }));
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.locator(".project-manager-line-role")).toContainText(roleText);
+    await expect(page.locator('.project-manager-line-role [data-role-level="senior"]')).toHaveText(seniorBadge);
+    await expect(page.locator(".project-manager-line-role .agent-role-meta-name")).toHaveText(roleName);
 
     await page.getByRole("tab", { name: language === "zh-CN" ? /任务/ : /Tasks/ }).click();
     const inlineBtn = page.locator(".inline-field--assignee").first();
-    await expect(inlineBtn).toContainText(roleText);
+    await expect(inlineBtn.locator('[data-role-level="senior"]')).toHaveText(seniorBadge);
+    await expect(inlineBtn.locator(".agent-role-meta-name")).toHaveText(roleName);
     const inlineFit = await inlineBtn.evaluate((btn) => {
       const copy = btn.querySelector(".agent-identity-copy")!.getBoundingClientRect();
-      const role = btn.querySelector<HTMLElement>(".agent-role-label")!;
+      const role = btn.querySelector<HTMLElement>(".agent-role-meta-name")!;
+      const badge = btn.querySelector<HTMLElement>(".role-level-badge")!.getBoundingClientRect();
       const box = btn.getBoundingClientRect();
       return {
         roleClipped: role.scrollWidth > role.clientWidth + 1,
+        badgeVisible: badge.width > 0 && badge.height > 0,
         overT: Math.round(box.top - copy.top),
         overB: Math.round(copy.bottom - box.bottom),
       };
     });
     expect(inlineFit.roleClipped).toBe(false);
+    expect(inlineFit.badgeVisible).toBe(true);
     expect(inlineFit.overT).toBeLessThanOrEqual(0);
     expect(inlineFit.overB).toBeLessThanOrEqual(0);
 
@@ -545,7 +564,8 @@ for (const [theme, language, roleText] of [
     const trigger = page.locator('.task-assignment-field [data-slot="select-trigger"]');
     await trigger.click();
     await page.getByRole("option", { name: /Ada Lovelace/ }).click();
-    await expect(trigger).toContainText(roleText);
+    await expect(trigger.locator('[data-role-level="senior"]')).toHaveText(seniorBadge);
+    await expect(trigger.locator(".agent-role-meta-name")).toHaveText(roleName);
     const triggerFit = await trigger.evaluate((btn) => {
       const copy = btn.querySelector(".agent-identity-copy")!.getBoundingClientRect();
       const box = btn.getBoundingClientRect();

@@ -3,9 +3,9 @@
 import { forwardRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentTeam, TeamMemberChoice } from "../types";
-import { agentRoleLabel } from "../lib/agentRoleLabel";
 import { AgentStateBadge } from "./AgentStateBadge";
 import { LeadBadge } from "./LeadBadge";
+import { AgentRoleMeta } from "./RoleLevelBadge";
 import { ActionAdd, ActionRemove, ICON } from "./icons";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
@@ -89,10 +89,10 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
             const lead = agent.id === value.leadId;
             const availability = effectiveAgentAvailability(agent);
             const config = memberConfigs?.[agent.id];
-            const role = agentRoleLabel({
+            const roleIdentity = {
               defaultRole: config?.role ?? agent.defaultRole,
               roleLevel: config?.roleLevel ?? agent.roleLevel,
-            }, t);
+            };
             return (
               <li key={agent.id} className="team-member-row">
                 <AgentStateBadge
@@ -104,7 +104,7 @@ export const TeamMemberPicker = forwardRef<HTMLFieldSetElement, {
                 />
                 <span className="team-member-row-main">
                   <span className="team-member-row-name" translate="no">{agent.displayName}</span>
-                  {role ? <span className="agent-role-label" title={role}>{role}</span> : null}
+                  <AgentRoleMeta identity={roleIdentity} />
                 </span>
                 {lead ? (
                   <LeadBadge />

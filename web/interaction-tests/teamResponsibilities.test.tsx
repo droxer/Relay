@@ -40,7 +40,8 @@ it("shows the member's configured role and level in the picker", () => {
     value={{ memberIds: ["lead"], leadId: "lead" }}
     onChange={() => {}}
   />);
-  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.reviewer")).toBeTruthy();
+  expect(screen.getByText("role_levels.badge_senior")).toBeTruthy();
+  expect(screen.getByText("admin.v2.agent_role.reviewer")).toBeTruthy();
   expect(screen.queryByText("Claude")).toBeNull();
 });
 
@@ -99,7 +100,8 @@ it("reads as a summary and edits one member in place", async () => {
   );
   const view = render(card(["Findings list"]));
   // Read mode: the summary, no form controls.
-  expect(screen.getByText("role_levels.senior · admin.v2.agent_role.reviewer")).toBeTruthy();
+  expect(screen.getByText("role_levels.badge_senior")).toBeTruthy();
+  expect(screen.getByText("admin.v2.agent_role.reviewer")).toBeTruthy();
   expect(screen.getByText("Review the diff")).toBeTruthy();
   expect(screen.getByText("Findings list")).toBeTruthy();
   // A reviewer is required by default.
