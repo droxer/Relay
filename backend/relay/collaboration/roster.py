@@ -13,6 +13,7 @@ from ..projects.runtime import (
     project_thread_assignments,
     project_computer_assignment_error,
     project_runtime_snapshot,
+    project_styled_assignments,
 )
 from ..teams.dispatch import (
     team_agents,
@@ -21,7 +22,7 @@ from ..teams.dispatch import (
 )
 from ..security.actor import Actor
 from .errors import CollaborationError
-from .intake import _PreparedRound, _mode
+from .intake import _PreparedRound, _is_recovery_decision, _mode
 from .state import ConductorState
 from .styles import COLLABORATION_STYLES, LEAD_LED, resolve_collaboration_style
 
@@ -65,12 +66,13 @@ class RosterMixin(ConductorState):
         round_team_id: str | None,
         is_recovery: bool,
         answered_task: dict[str, Any] | None,
+        daemon_nodes: list[dict[str, Any]],
     ) -> _RoundRoster:
         """Who takes this round: the project crew, a team, or the room."""
         raw_assignments = intent.raw_assignments
         if project_id:
             roster = self._project_roster(
-                intent, session, actor, project_id, answered_task
+                intent, session, actor, project_id, answered_task, daemon_nodes,
             )
         elif round_team_id and not raw_assignments:
             roster = self._team_roster(intent, session, actor, round_team_id)
@@ -104,10 +106,40 @@ class RosterMixin(ConductorState):
         actor: Actor,
         project_id: str,
         answered_task: dict[str, Any] | None,
+        daemon_nodes: list[dict[str, Any]],
     ) -> _RoundRoster:
         project = self._round_project(project_id, session, actor)
         project_snapshot = project_runtime_snapshot(project)
         selected_ids = _project_selected_ids(intent.raw_assignments)
+        if session and _is_recovery_decision(intent.decision):
+            source: dict[str, Any] = next((
+                round_ for round_ in session.get("collaborationRounds", [])
+                if round_.get("roundId") == session.get("activeRoundId")
+            ), {})
+            if (source.get("projectSnapshot") or {}).get("requireIndependentReview") is True:
+                target_id = (intent.decision or {}).get("targetAgentId")
+                if selected_ids is None and isinstance(target_id, str) and target_id:
+                    selected_ids = [target_id]
+                if not selected_ids or len(selected_ids) != 1:
+                    raise CollaborationError(
+                        "project_review_recovery_target_required",
+                        "Choose one Agent to take the builder turn before independent review.",
+                        status=400,
+                    )
+                if intent.mode != "action":
+                    raise CollaborationError(
+                        "project_review_recovery_requires_action",
+                        "Use action mode to recover work that requires independent review.",
+                    )
+                try:
+                    assignments, snapshot = project_styled_assignments(
+                        project, style="build_review", agent_store=self.ctx.agent_store,
+                        placement_store=self.ctx.agent_placement_store, daemon_nodes=daemon_nodes,
+                        recovery_builder_id=selected_ids[0],
+                    )
+                except ProjectDispatchError as error:
+                    raise CollaborationError(error.code, error.task_message) from error
+                return _RoundRoster(raw_assignments=assignments, project=project, project_snapshot=snapshot)
         if selected_ids is None and answered_task is not None:
             selected_ids = self._asking_outside_agent_ids(
                 project, intent.question_id

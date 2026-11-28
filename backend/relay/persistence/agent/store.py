@@ -86,20 +86,14 @@ class DatabaseAgentStore:
             self, supervisor_user_id, executor_kind, daemon_node_id, computer_id
         )
 
-    def get_agent(self, agent_id: str) -> dict[str, Any] | None:
+    def get_agent(self, agent_id: str, *, for_update: bool = False) -> dict[str, Any] | None:
         if names_no_uuid_row(self.engine, agent_id):
             return None
+        statement = select(self.agents.c.snapshot, self.agents.c.supervisor_user_id).where(self.agents.c.id == agent_id)
+        if for_update:
+            statement = statement.with_for_update()
         with store_transaction(self.engine) as conn:
-            row = (
-                conn.execute(
-                    select(
-                        self.agents.c.snapshot,
-                        self.agents.c.supervisor_user_id,
-                    ).where(self.agents.c.id == agent_id)
-                )
-                .mappings()
-                .first()
-            )
+            row = conn.execute(statement).mappings().first()
         return (
             _normalized_agent_snapshot(row["snapshot"], row["supervisor_user_id"])
             if row

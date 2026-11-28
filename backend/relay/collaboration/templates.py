@@ -133,6 +133,7 @@ def compile_style(
     lead_agent_id: str | None,
     *,
     role_brief: Callable[[str | None], str],
+    builder_agent_id: str | None = None,
 ) -> CompiledStyle:
     """Fill a built-in template's steps from the participating members.
 
@@ -141,7 +142,7 @@ def compile_style(
     """
     template = BUILTIN_TEMPLATES[style]
     try:
-        turns = _template_turns(template, agents, lead_agent_id, role_brief)
+        turns = _template_turns(template, agents, lead_agent_id, role_brief, builder_agent_id)
     except _UnfilledSlot:
         if template.fallback is None:
             raise ValueError(f"{style} has no fallback for an unfilled slot.") from None
@@ -167,9 +168,10 @@ def _template_turns(
     agents: list[dict[str, Any]],
     lead_agent_id: str | None,
     role_brief: Callable[[str | None], str],
+    builder_agent_id: str | None,
 ) -> list[StyleTurn]:
     slots = (
-        fill_build_review_slots(agents, lead_agent_id)
+        fill_build_review_slots(agents, lead_agent_id, builder_agent_id=builder_agent_id)
         if any(step.who != "each_member" for step in template.steps)
         else None
     )

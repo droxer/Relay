@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from ...collaboration.models import COLLABORATION_MANIFEST_STATE_KEY
 from ...collaboration.policy import ROUND_RESULT_STATE_KEY
 from ...collaboration.work import WORK_RESULTS
 from ...tasks.execution import request_execution_owner
@@ -90,6 +91,14 @@ class RunFailureMixin(RegistryState):
             state[WORK_RESULTS] = {
                 **state.get(WORK_RESULTS, {}),
                 assignment["assignmentId"]: {"status": "blocked", "evidence": [], "note": outcome},
+            }
+            manifest = state.get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+            state[COLLABORATION_MANIFEST_STATE_KEY] = {
+                **manifest,
+                "delegationCandidates": [
+                    candidate for candidate in manifest.get("delegationCandidates") or []
+                    if candidate["agentId"] != assignment["agentId"]
+                ],
             }
             updated = self.daemon_store.update_run_request_if_status(
                 run_request["id"], run_request["status"], advanced_run_cursor(index + 1, state)

@@ -29,6 +29,7 @@ class SessionStoreState:
         # Methods one mixin calls on another, declared so each type-checks alone.
         def _events_for_session(
             self, conn: Any, session_pk: str, event_types: tuple[str, ...] | None = None,
+            *, before_sequence: int | None = None,
         ) -> list[dict[str, Any]]:
             ...
 

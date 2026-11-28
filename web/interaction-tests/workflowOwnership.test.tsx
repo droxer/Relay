@@ -178,3 +178,23 @@ it("refuses disabled defaults but leaves individual Agent work alone", () => {
   expect(workflowSelectionIssue(undefined, null, "p")).toBeNull();
   expect(workflowSelectionIssue({ ...team, workflows: [{ ...workflow, enabled: false }] }, null, "p")).toBe("unavailable");
 });
+
+it.each([
+  ["researcher", true],
+  ["reviewer", false],
+] as const)("uses the Reviewer slot, including a %s beside a designer, to enable Start", (role, blocked) => {
+  const strictProject: ProjectRecord = {
+    ...project,
+    leadAgentId: "a",
+    members: [
+      { agentId: "a", role: "designer", enabled: true, responsibilities: "" },
+      { agentId: "b", role, enabled: true, responsibilities: "" },
+    ],
+    predefinedWorkflows: { build_review: { agentIds: null, requireIndependentReview: true } },
+  };
+  mount(<ProjectWorkflows project={strictProject} agents={agents} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
+
+  const row = screen.getByRole("heading", { name: "collab_style.build_review" }).closest("li")!;
+  expect(within(row).getByRole("button", { name: "workflow.start_named" }).hasAttribute("disabled")).toBe(blocked);
+  expect(Boolean(within(row).queryByText("workflow.project_reviewer_required"))).toBe(blocked);
+});
