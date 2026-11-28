@@ -38,7 +38,7 @@ from ..bodies import JsonBodyDep, json_body
 from ..deps import AppContext, AppContextDep
 from ..projects.links import registration_project_links
 from .daemon_events import daemon_node_event
-from ...collaboration.queue import ThreadQueueDispatcher
+from ...collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
 from ..threads.live_messages import settle_live_message
 
 router = APIRouter()

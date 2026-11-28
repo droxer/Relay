@@ -1401,7 +1401,7 @@ def test_semantic_message_retry_reconciles_a_prepared_attempt_without_duplicate_
         original = SessionController.record_collaboration_round_started
         attempts = 0
 
-        def fail_once(controller, session_id, manifest, *, hydrate=True):
+        def fail_once(controller, session_id, manifest, *, hydrate=True, message_receipt=None):
             nonlocal attempts
             attempts += 1
             if attempts == 1:
@@ -1411,7 +1411,7 @@ def test_semantic_message_retry_reconciles_a_prepared_attempt_without_duplicate_
                 assert prepared and prepared["status"] == "prepared"
                 assert app.state.daemon_store.take_queued_commands(node["id"]) == []
                 raise ValueError("simulated event-store interruption")
-            return original(controller, session_id, manifest, hydrate=hydrate)
+            return original(controller, session_id, manifest, hydrate=hydrate, message_receipt=message_receipt)
 
         monkeypatch.setattr(
             SessionController, "record_collaboration_round_started", fail_once
@@ -1506,12 +1506,12 @@ def test_new_thread_retry_resumes_the_session_owned_by_its_prepared_admission(
         original = SessionController.record_collaboration_round_started
         attempts = 0
 
-        def fail_once(controller, session_id, manifest, *, hydrate=True):
+        def fail_once(controller, session_id, manifest, *, hydrate=True, message_receipt=None):
             nonlocal attempts
             attempts += 1
             if attempts == 1:
                 raise ValueError("simulated event-store interruption")
-            return original(controller, session_id, manifest, hydrate=hydrate)
+            return original(controller, session_id, manifest, hydrate=hydrate, message_receipt=message_receipt)
 
         monkeypatch.setattr(
             SessionController, "record_collaboration_round_started", fail_once

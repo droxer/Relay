@@ -20,8 +20,13 @@ describe("composer stop during dispatch", () => {
     await act(async () => { await result.current.cancelActiveRun(); });
     await act(async () => { await result.current.cancelActiveRun(); });
     expect(cancel).not.toHaveBeenCalled();
-    await act(async () => { accept({ ...session, status: "running" }); await sending; });
-    expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+    await act(async () => {
+      accept({ ...session, status: "running", messageRunRequestId: "sent-run" } as RelaySession);
+      await sending;
+    });
+    expect(cancel).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: session.id, expectedRunRequestId: "sent-run",
+    }));
     expect(cancel).toHaveBeenCalledOnce();
   });
 });

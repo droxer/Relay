@@ -7,6 +7,7 @@ CollaborationPurpose = Literal["accomplish", "discuss", "review"]
 RecoveryKind = Literal["rerun", "handoff"]
 COLLABORATION_MANIFEST_STATE_KEY = "_relay_collaboration_manifest"
 COLLABORATION_FINGERPRINT_STATE_KEY = "_relay_collaboration_fingerprint"
+COLLABORATION_MESSAGE_RECEIPT_STATE_KEY = "_relay_message_receipt"
 COLLABORATION_ADMISSION_EXPIRED_STATE_KEY = "_relay_collaboration_admission_expired"
 COLLABORATION_NEW_SESSION_STATE_KEY = "_relay_collaboration_new_session"
 COLLABORATION_ADMISSION_EXPIRED_OUTCOME = (
@@ -25,6 +26,10 @@ def project_id_for_task_handoff(manifest: dict[str, Any], task_id: str | None) -
 
 class CollaborationIdempotencyError(ValueError):
     """The caller reused an admission key for a different semantic request."""
+
+
+class MessageReceiptUnavailableError(ValueError):
+    """An older message is recorded, but its original request cannot be verified."""
 
 
 @dataclass(frozen=True)

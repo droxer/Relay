@@ -10,6 +10,7 @@ from typing import Any
 from ...collaboration.models import (
     COLLABORATION_FINGERPRINT_STATE_KEY,
     COLLABORATION_MANIFEST_STATE_KEY,
+    COLLABORATION_MESSAGE_RECEIPT_STATE_KEY,
     COLLABORATION_NEW_SESSION_STATE_KEY,
 )
 from ...core.computer_identity import computer_id
@@ -178,7 +179,12 @@ class RunIntentMixin(NodeBackendState):
                 actor_user_id=actor_user_id,
             )
         if manifest:
-            controller.record_collaboration_round_started(session_id, manifest, hydrate=False)
+            receipt = None
+            if request.get("messageReceipt") and request.get("_admissionId"):
+                receipt = {**request["messageReceipt"], "runRequestId": request["_admissionId"]}
+            controller.record_collaboration_round_started(
+                session_id, manifest, hydrate=False, message_receipt=receipt,
+            )
         return dispatch_task_goal
 
     @staticmethod
@@ -245,6 +251,8 @@ class RunIntentMixin(NodeBackendState):
         # (ADR-023): the work so far, and the turn to pick up at.
         resume = request.get("_resume") or {}
         state.update(resume.get("state") or {})
+        if request.get("messageReceipt"):
+            state[COLLABORATION_MESSAGE_RECEIPT_STATE_KEY] = request["messageReceipt"]
         if request.get("attachments"):
             state["input_attachments"] = request["attachments"]
         return self.registry.prepare_run_request(

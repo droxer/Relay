@@ -223,8 +223,9 @@ export function useRelayMutations() {
       sessionId,
       token,
       reason,
-    }: { sessionId: string; reason?: string; taskId?: string } & TokenArg) =>
-      cancelRun(sessionId, token, reason),
+      expectedRunRequestId,
+    }: { sessionId: string; reason?: string; taskId?: string; expectedRunRequestId?: string } & TokenArg) =>
+      cancelRun(sessionId, token, reason, false, expectedRunRequestId),
     onSuccess: (session, { taskId }) => {
       invalidateThreadTaskState(queryClient, session, taskId);
       const queueKey = [...THREAD_QUEUE_QUERY_KEY, session.id];

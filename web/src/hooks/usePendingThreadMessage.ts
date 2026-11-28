@@ -1,15 +1,16 @@
 import { useSyncExternalStore } from "react";
 import type { AgentRunInput, ThreadMessageInput } from "../types";
 import type { QueuedMessage } from "../lib/threadQueue";
+import { messageDefinitelyRejected, messageDeliveryUncertain } from "../api-client/client";
 
-type MessagePreview = { id: string; text: string };
+type MessagePreview = { id: string; text: string; deliveryUnconfirmed?: boolean };
 
 export type PendingDirectMessage = MessagePreview & (
   | { kind: "append"; sessionId: string; input: ThreadMessageInput }
   | { kind: "create"; input: AgentRunInput }
 );
 
-export type PendingQueueMessage = QueuedMessage & { kind: "enqueue" };
+export type PendingQueueMessage = QueuedMessage & MessagePreview & { kind: "enqueue" };
 
 export type ThreadMessageRetry = {
   text: string;
@@ -63,7 +64,10 @@ function parse(raw: string | null): PendingDirectMessage | PendingQueueMessage |
       const { addressAgentIds, addressTeamId } = message;
       if (addressAgentIds !== undefined && (!Array.isArray(addressAgentIds) || !addressAgentIds.every(id => typeof id === "string"))) return null;
       if (addressTeamId !== undefined && typeof addressTeamId !== "string") return null;
-      return { kind: "enqueue", id: message.id, text: message.text, addressAgentIds, addressTeamId };
+      return {
+        kind: "enqueue", id: message.id, text: message.text, addressAgentIds, addressTeamId,
+        deliveryUnconfirmed: message.deliveryUnconfirmed === false ? false : undefined,
+      };
     }
     const { input } = message;
     if (!isRecord(input) || input.userMessageId !== message.id || input.idempotencyKey !== message.id) return null;
@@ -110,7 +114,19 @@ export function usePendingThreadMessage(scope: string, channel: "direct" | "queu
     save: (message: PendingDirectMessage | PendingQueueMessage, initial = false) => {
       if (initial) initialSendIds.add(message.id);
       else initialSendIds.delete(message.id);
-      write(key, JSON.stringify(message));
+      // A reload during any request has to assume that request may commit.
+      write(key, JSON.stringify({ ...message, deliveryUnconfirmed: undefined }));
+    },
+    reject: (message: MessagePreview, error: unknown, initial: boolean) => {
+      const current = parse(snapshot(key));
+      if (current?.id !== message.id) return false;
+      const uncertain = (!initial && message.deliveryUnconfirmed !== false) || messageDeliveryUncertain(error);
+      if (!uncertain && messageDefinitelyRejected(error)) {
+        clearPendingThreadMessage(scope, channel, message.id);
+        return true;
+      }
+      write(key, JSON.stringify({ ...current, deliveryUnconfirmed: uncertain }));
+      return false;
     },
     finishInitial: (id: string) => finishInitialThreadMessage(id),
     clear: (id: string) => clearPendingThreadMessage(scope, channel, id),

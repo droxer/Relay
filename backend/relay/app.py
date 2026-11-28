@@ -137,7 +137,7 @@ from .bootstrap.stores import (
     Stores,
     build_stores,
 )
-from .collaboration.queue import ThreadQueueDispatcher
+from .collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
 from .core.thread_queue import THREAD_QUEUE_READY_PREFIX
 from .bootstrap.runtime import rate_limiter, task_scheduler_from_env
 

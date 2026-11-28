@@ -64,6 +64,8 @@ export type {
 
 export type RelaySession = CoreSession & {
   taskActivity?: ThreadTaskActivity;
+  /** The original run request acknowledged by a message send or replay. */
+  messageRunRequestId?: string;
   /** Number of earlier transcript events available to load. */
   eventStart?: number;
   /** Revision of the most recent HTTP transcript window. */

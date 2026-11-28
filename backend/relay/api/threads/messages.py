@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
+from dataclasses import replace
 from typing import Any
 
 from starlette.concurrency import run_in_threadpool
@@ -10,7 +11,8 @@ from loguru import logger
 
 from ...core.thread_attachments import attachment_ids
 from ...core.workflow_selection import requested_workflow_style
-from ...collaboration.queue import ThreadQueueDispatcher, change_queue, queue_state
+from ...collaboration.queue import change_queue, queue_state
+from ...collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
 from ...collaboration.models import MessageIntent, RecoveryIntent
 from ...collaboration.errors import CollaborationError
 from ...collaboration.service import CollaborationConductor
@@ -133,25 +135,7 @@ async def submit_thread_message(
         raise HTTPException(400, str(error)) from error
     text = body.message_text()
     purpose = body.purpose()
-    supplied_address_agent_ids = body.supplied_address_agent_ids()
     session = await run_in_threadpool(get_session_header_for_actor, ctx.session_store, thread_id, actor)
-    mention_owner_id = (
-        session.get("ownerUserId") if actor["isAdmin"] else actor["userId"]
-    )
-    mentioned_agent_ids = _leading_mention_agent_ids(
-        text,
-        await run_in_threadpool(ctx.agent_store.list_agents, supervisor_user_id=mention_owner_id),
-    )
-    address_agent_ids = mentioned_agent_ids or supplied_address_agent_ids
-    address_team_id = body.address_team_id or None
-    if address_team_id and address_agent_ids:
-        raise HTTPException(
-            400,
-            {
-                "code": "message_address_conflict",
-                "message": "A message addresses either a team or agents, not both.",
-            },
-        )
     try:
         style = requested_workflow_style(body.workflow_id, body.style)
     except ValueError as error:
@@ -162,28 +146,48 @@ async def submit_thread_message(
         except CollaborationStyleError as error:
             raise HTTPException(400, {"code": "style_invalid", "message": str(error)}) from error
     compact = request.query_params.get("view") == "compact"
+    intent = MessageIntent(
+        thread_id=thread_id,
+        text=text,
+        attachment_ids=images,
+        purpose=purpose,  # type: ignore[arg-type]
+        address_agent_ids=body.supplied_address_agent_ids(),
+        address_team_id=body.address_team_id or None,
+        idempotency_key=body.idempotency_key or None,
+        user_message_id=body.user_message_id or None,
+        style=style,
+        question_id=body.answered_question_id(),
+        approve=body.approve is True,
+    )
+    conductor = CollaborationConductor(ctx)
     try:
-        session = await CollaborationConductor(ctx).submit(
-            MessageIntent(
-                thread_id=thread_id,
-                text=text,
-                attachment_ids=images,
-                purpose=purpose,  # type: ignore[arg-type]
-                address_agent_ids=address_agent_ids,
-                address_team_id=address_team_id,
-                idempotency_key=body.idempotency_key or None,
-                user_message_id=body.user_message_id or None,
-                style=style,
-                question_id=body.answered_question_id(),
-                approve=body.approve is True,
-            ),
-            actor,
-            hydrate=not compact,
+        leading_text = text[_leading_space(text):]
+        replay, fingerprint = await conductor.replay_message(
+            intent, actor, hydrate=not compact,
+            has_mention=leading_text.startswith("@") and bool(leading_text[1:2].strip()),
         )
+        if replay is None:
+            mention_owner_id = session.get("ownerUserId") if actor["isAdmin"] else actor["userId"]
+            mentioned = _leading_mention_agent_ids(
+                text,
+                await run_in_threadpool(ctx.agent_store.list_agents, supervisor_user_id=mention_owner_id),
+            )
+            resolved = replace(intent, address_agent_ids=mentioned or intent.address_agent_ids)
+            if resolved.address_team_id and resolved.address_agent_ids:
+                raise HTTPException(400, {
+                    "code": "message_address_conflict",
+                    "message": "A message addresses either a team or agents, not both.",
+                })
+            replay = await conductor.submit(resolved, actor, hydrate=not compact, message_fingerprint=fingerprint)
+        session = replay
+        message_run_request_id = session.get("messageRunRequestId")
         execution = await run_in_threadpool(ctx.execution_lifecycle.status, session)
         if compact:
             session = await run_in_threadpool(compact_message_snapshot, ctx.session_store, session)
-        return {**session, "execution": execution}
+        return {
+            **session, "execution": execution,
+            **({"messageRunRequestId": message_run_request_id} if message_run_request_id else {}),
+        }
     except CollaborationError as error:
         if error.status == 409:
             logger.info(
@@ -256,33 +260,41 @@ async def update_thread_queue(thread_id: str, request: Request, ctx: AppContextD
         text = string_field(body, "text").strip()
         if not text or len(text) > 100_000:
             raise HTTPException(400, "Message text must contain 1–100,000 characters.")
-        agents = await run_in_threadpool(ctx.agent_store.list_agents, supervisor_user_id=actor["userId"])
-        addressed = _leading_mention_agent_ids(text, agents)
         supplied = body.get("addressAgentIds", [])
         if not isinstance(supplied, list) or not all(isinstance(item, str) and item.strip() for item in supplied):
             raise HTTPException(400, "addressAgentIds must be a list of agent ids.")
-        addressed = addressed or tuple(dict.fromkeys(supplied))
         team_id = body.get("addressTeamId")
         if team_id is not None and (not isinstance(team_id, str) or not team_id.strip()):
             raise HTTPException(400, "addressTeamId must be a team id.")
-        if team_id and addressed:
-            raise HTTPException(400, "A message addresses either a team or agents, not both.")
         message = {"id": message_id, "text": text}
-        if addressed:
-            message["addressAgentIds"] = list(addressed)
+        if supplied:
+            message["addressAgentIds"] = list(dict.fromkeys(supplied))
         if team_id:
             message["addressTeamId"] = team_id
+
+    def resolve_queued_address(incoming: dict[str, Any]) -> dict[str, Any]:
+        agents = ctx.agent_store.list_agents(supervisor_user_id=actor["userId"])
+        mentioned = _leading_mention_agent_ids(incoming["text"], agents)
+        addressed = mentioned or incoming.get("addressAgentIds")
+        if incoming.get("addressTeamId") and addressed:
+            raise HTTPException(400, "A message addresses either a team or agents, not both.")
+        return {**incoming, "addressAgentIds": list(addressed)} if addressed else incoming
+
     try:
         if action == "steer":
             state = await run_in_threadpool(steer_thread_queue, request, ctx, session, actor, message_id)
         else:
-            state = await run_in_threadpool(change_queue, ctx.session_store, thread_id, action, message=message, message_id=message_id)
+            state = await run_in_threadpool(
+                change_queue, ctx.session_store, thread_id, action, message=message, message_id=message_id,
+                resolve_message=resolve_queued_address if message is not None else None,
+            )
     except ValueError as error:
         codes = {
             "This thread is archived or being deleted.": "queue_thread_closed",
             "The queue is full (20 messages).": "queue_full",
             "This message is being sent. Wait for it to finish.": "queue_sending",
             "This message was already changed on another device.": "queue_changed",
+            "This message ID already names another message.": "idempotency_conflict",
         }
         raise HTTPException(409, {"code": codes.get(str(error), "queue_change_failed"), "message": str(error)}) from error
     latest = None

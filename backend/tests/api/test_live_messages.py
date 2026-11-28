@@ -10,7 +10,8 @@ import pytest
 
 from test_thread_same_computer_targets import _admin_id, _agent, _sync, _thread, _world
 
-from relay.collaboration.queue import ThreadQueueDispatcher, _save_queue
+from relay.collaboration.queue import _save_queue
+from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
 from relay.sessions.conversation import compute_conversation_history
 
 TOKEN = "token_node_live"
