@@ -118,7 +118,7 @@
 }
 
 .landing-theme-toggle:hover {
-  background: var(--ld-surface);
+  background: var(--control-fill-hover);
   color: var(--ld-ink);
 }
 
@@ -128,7 +128,7 @@
   gap: var(--sp-1-5);
 }
 
-/* ---------- Buttons & inline links (flat, tool-grade --r-2 corners) -- */
+/* ---------- Buttons & inline links (matches ui/button.tsx & login.css) */
 
 .landing-button {
   display: inline-flex;
@@ -159,12 +159,12 @@
 }
 
 .landing-button-secondary {
-  background: var(--ld-surface);
+  background: var(--control-fill);
   color: var(--ld-ink);
 }
 
 .landing-button-secondary:hover {
-  background: var(--ld-elevated);
+  background: var(--control-fill-hover);
 }
 
 .landing-button-icon {
@@ -185,12 +185,14 @@
   font-weight: 500;
   color: var(--link);
   text-decoration: underline;
-  text-underline-offset: 4px;
-  transition: color var(--t-fast) var(--ease);
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--ld-hairline);
+  transition: color var(--t-fast) var(--ease), text-decoration-color var(--t-fast) var(--ease);
 }
 
 .landing-inline-link:hover {
   color: var(--link-hover);
+  text-decoration-color: currentColor;
 }
 
 .landing-ctas {
@@ -272,7 +274,7 @@
   flex-direction: column;
   width: 100%;
   margin-top: var(--sp-2);
-  border: var(--stroke-w) solid var(--ld-hairline);
+  border: var(--hairline-soft);
   border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
   overflow: hidden;
@@ -351,7 +353,7 @@
   flex-direction: column;
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4) var(--sp-4);
-  border-top: var(--stroke-w) solid var(--ld-hairline-soft);
+  border-top: var(--hairline-soft);
   background: var(--ld-surface);
 }
 
@@ -410,6 +412,7 @@
 
 .landing-hero-photo-frame {
   overflow: hidden;
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
 
@@ -494,10 +497,11 @@
   width: 100%;
   max-width: 42ch;
   padding: var(--sp-4);
-  border: 0;
+  border: var(--sp-hairline) solid var(--dark-line);
   border-radius: var(--ld-r-control);
   background: var(--dark-canvas);
   color: var(--dark-ink);
+  caret-color: var(--dark-action);
   font-family: var(--font-sans);
   font-size: var(--ld-fs-subhead);
   line-height: 1.4;
@@ -534,7 +538,7 @@
   flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-5);
-  border: var(--stroke-w) solid var(--ld-pinned-line);
+  border: var(--sp-hairline) solid var(--ld-pinned-line);
   border-radius: var(--ld-r-panel);
   background: var(--paper);
   color: var(--light-action);
@@ -597,7 +601,7 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding-top: var(--sp-3);
-  border-top: var(--stroke-w) solid var(--ld-pinned-line-soft);
+  border-top: var(--sp-hairline) solid var(--ld-pinned-line-soft);
 }
 
 .landing-thread-gate-q {
@@ -616,7 +620,7 @@
 .landing-gate-btn {
   min-height: var(--control-h-sm);
   padding: var(--sp-1) var(--sp-4);
-  border: var(--stroke-w) solid var(--ld-pinned-line-strong);
+  border: var(--sp-hairline) solid var(--ld-pinned-line-strong);
   border-radius: var(--ld-r-control);
   background: var(--paper);
   color: var(--light-action);
@@ -658,6 +662,8 @@
 
 .landing-shot {
   margin: 0;
+  overflow: hidden;
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
 
@@ -749,14 +755,14 @@
   width: var(--control-h-sm);
   height: var(--control-h-sm);
   border-radius: var(--ld-r-control);
-  background: var(--ld-elevated);
+  background: var(--control-fill);
   color: var(--ld-ink);
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .landing-copy-btn:hover {
-  background: var(--action);
-  color: var(--on-action);
+  background: var(--control-fill-hover);
+  color: var(--ld-ink);
 }
 
 .landing-cr-response {
@@ -766,7 +772,7 @@
   gap: var(--sp-2) var(--sp-3);
   margin-inline-start: var(--sp-7);
   padding: var(--sp-3) var(--sp-4);
-  border: var(--stroke-w) solid var(--ld-hairline);
+  border: var(--hairline-soft);
   border-radius: var(--ld-r-panel);
   background: var(--ld-canvas);
 }
@@ -878,7 +884,7 @@
 .landing-manual-panel {
   display: flex;
   flex-direction: column;
-  border: var(--stroke-w) solid var(--ld-hairline);
+  border: var(--hairline-soft);
   border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
   overflow: hidden;
@@ -890,7 +896,7 @@
   justify-content: space-between;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  border-bottom: var(--stroke-w) solid var(--ld-hairline-soft);
+  border-bottom: var(--hairline-soft);
 }
 
 .landing-panel-name {
@@ -910,7 +916,7 @@
 }
 
 .landing-panel-step {
-  border-top: var(--stroke-w) solid var(--ld-hairline-soft);
+  border-top: var(--hairline-soft);
   transition: opacity var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
 
@@ -972,7 +978,7 @@
   width: 100%;
   margin-top: var(--sp-2);
   padding-top: var(--sp-3);
-  border-top: var(--stroke-w) solid var(--ld-hairline-soft);
+  border-top: var(--hairline-soft);
 }
 
 .landing-panel-summary {
@@ -1053,11 +1059,13 @@
 
 .landing-plate-offset .landing-plate-copy {
   padding: var(--sp-6);
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
 
 .landing-plate-media {
   min-width: 0;
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
 
@@ -1104,6 +1112,8 @@
 
 .landing-hardware-figure {
   margin: 0;
+  overflow: hidden;
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
 
@@ -1134,7 +1144,7 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--sp-5);
-  border: var(--stroke-w) solid var(--ld-hairline);
+  border: var(--hairline-soft);
   border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
@@ -1172,7 +1182,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding-block: var(--sp-2);
-  border-top: var(--stroke-w) solid var(--ld-hairline-soft);
+  border-top: var(--hairline-soft);
   font-size: var(--ld-fs-ui);
 }
 
@@ -1200,7 +1210,7 @@
 .landing-fleet-subhead {
   margin-top: var(--sp-2);
   padding-top: var(--sp-3);
-  border-top: var(--stroke-w) solid var(--ld-hairline);
+  border-top: var(--hairline);
   font-size: var(--ld-fs-ui);
   font-weight: 600;
   color: var(--ld-ink);
@@ -1212,7 +1222,7 @@
   justify-content: space-between;
   gap: var(--sp-2);
   padding-block: var(--sp-1-5);
-  border-top: var(--stroke-w) solid var(--ld-hairline-soft);
+  border-top: var(--hairline-soft);
 }
 
 .landing-runtime-name {
@@ -1232,6 +1242,7 @@
   gap: var(--sp-4);
   min-width: 0;
   padding: var(--sp-6);
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
 
@@ -1339,13 +1350,23 @@
   max-width: 100%;
   height: 1.2em;
   padding: 0 0.35em;
-  border: 0;
+  border: var(--sp-hairline) solid var(--field-border);
   border-radius: var(--ld-r-control);
   background: var(--ld-surface);
   color: var(--ld-ink);
+  caret-color: var(--action);
   font: inherit;
   letter-spacing: inherit;
   vertical-align: baseline;
+  transition: border-color var(--t-fast) var(--ease);
+}
+
+.landing-blank-input:hover {
+  border-color: var(--field-border-hover);
+}
+
+.landing-blank-input:focus-visible {
+  border-color: var(--action);
 }
 
 .landing-blank-input::placeholder {
@@ -1358,8 +1379,8 @@
   padding: 0 0.5em;
   border: 0;
   border-radius: var(--ld-r-control);
-  background: var(--ld-accent);
-  color: var(--dark-canvas);
+  background: var(--action);
+  color: var(--on-action);
   font: inherit;
   letter-spacing: inherit;
   vertical-align: baseline;
@@ -1367,7 +1388,7 @@
 }
 
 .landing-blank-submit:hover {
-  background: var(--action);
+  background: var(--action-hover);
   color: var(--on-action);
 }
 
@@ -1405,6 +1426,7 @@
   justify-content: space-between;
   min-width: 0;
   padding: var(--sp-6);
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
   color: var(--ld-ink);
   text-decoration: none;
@@ -1503,9 +1525,15 @@
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
+html[data-theme="dark"] .landing-hero-workbench,
+html[data-theme="dark"] .landing-cr-response,
+html[data-theme="dark"] .landing-manual-panel,
+html[data-theme="dark"] .landing-fleet-panel {
+  border-color: var(--line-1);
+}
+
 html[data-theme="light"] .landing-preset-btn.is-active,
-html[data-theme="light"] .landing-tile-accent,
-html[data-theme="light"] .landing-blank-submit {
+html[data-theme="light"] .landing-tile-accent {
   color: var(--paper);
 }
 
