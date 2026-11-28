@@ -62,6 +62,7 @@ class ServerDaemonNodeBackend(
                 session.get("ownerUserId") or "", session["id"], session.get("taskId"))
         self.agent_placement_store = agent_placement_store
         self.registry.logical_assignment_validator = self._validate_logical_assignment
+        self.registry.delegation_publication_validator = self._validate_delegation_for_publication
         self.registry.logical_skill_bundle_resolver = self._resolve_logical_skill_bundle
 
     def _resolve_logical_skill_bundle(

@@ -100,10 +100,12 @@ def _role(agent: dict[str, Any]) -> str | None:
 
 
 def fill_build_review_slots(
-    agents: list[dict[str, Any]], lead_agent_id: str | None
+    agents: list[dict[str, Any]], lead_agent_id: str | None, *, builder_agent_id: str | None = None,
 ) -> StyleSlots:
     lead = next((agent for agent in agents if agent["id"] == lead_agent_id), None)
-    if lead is not None and _role(lead) in BUILDER_ROLES:
+    if builder_agent_id is not None:
+        builder = next(agent for agent in agents if agent["id"] == builder_agent_id)
+    elif lead is not None and _role(lead) in BUILDER_ROLES:
         builder = lead
     else:
         first_builder: dict[str, Any] | None = next(

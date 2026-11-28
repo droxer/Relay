@@ -342,8 +342,10 @@ def test_project_build_review_required_reviewer_blocks_and_can_retry(monkeypatch
         assert take(registry, node) == []
 
 
-@pytest.mark.parametrize("kind,target_index", [("rerun", 0), ("handoff", 0), ("handoff", 1)])
-def test_project_build_review_recovery_keeps_independent_review(monkeypatch, kind, target_index):
+@pytest.mark.parametrize("kind,target_index,legacy", [
+    ("rerun", 0, False), ("handoff", 0, False), ("handoff", 1, False), ("handoff", 1, True),
+])
+def test_project_build_review_recovery_keeps_independent_review(monkeypatch, kind, target_index, legacy):
     with unified_world(monkeypatch) as (app, client, node, _, project, payload):
         registry = app.state.registry
         registry.update_status(node["id"], {"capabilities": [
@@ -370,9 +372,23 @@ def test_project_build_review_recovery_keeps_independent_review(monkeypatch, kin
         assert app.state.task_store.get_task(task["id"])["status"] == "blocked"
 
         target_id = payload["memberAgentIds"][target_index]
-        recovery = client.post(f"/api/v1/threads/{sid}/recoveries", json={
-            "kind": kind, "targetAgentId": target_id, "idempotencyKey": "retry-required-review",
-        })
+        decision = {"kind": kind, "targetAgentId": target_id}
+        if legacy:
+            relaxed = client.patch(f"/api/v1/projects/{project['id']}", json={
+                "expectedVersion": configured.json()["project"]["version"],
+                "predefinedWorkflowChange": {
+                    "workflowId": "preset:build_review", "agentIds": None, "requireIndependentReview": False,
+                },
+            })
+            assert relaxed.status_code == 200, relaxed.text
+            recovery = client.post("/api/v1/agent-runs", json={
+                "taskGoal": task["title"], "sessionId": sid, "assignments": [{"agentId": target_id}],
+                "decision": decision, "idempotencyKey": "retry-required-review",
+            })
+        else:
+            recovery = client.post(f"/api/v1/threads/{sid}/recoveries", json={
+                **decision, "idempotencyKey": "retry-required-review",
+            })
         assert recovery.status_code == 202, recovery.text
         assert recovery.json()["collaborationRounds"][-1]["projectSnapshot"]["requireIndependentReview"] is True
         [builder] = take(registry, node)
@@ -391,6 +407,14 @@ def test_project_build_review_recovery_keeps_independent_review(monkeypatch, kin
 
 def test_project_preset_stops_before_dispatching_removed_reviewer(monkeypatch):
     with unified_world(monkeypatch) as (app, client, node, _, project, _):
+        configured = client.patch(f"/api/v1/projects/{project['id']}", json={
+            "expectedVersion": project["version"],
+            "predefinedWorkflowChange": {
+                "workflowId": "preset:build_review", "agentIds": None, "requireIndependentReview": True,
+            },
+        })
+        assert configured.status_code == 200, configured.text
+        project = configured.json()["project"]
         response = client.post("/api/v1/workflows/preset:build_review/runs", json={
             "projectId": project["id"], "taskGoal": "Deliver and verify", "requestId": str(uuid4()),
         })
@@ -407,7 +431,13 @@ def test_project_preset_stops_before_dispatching_removed_reviewer(monkeypatch):
         assert take(registry, node) == []
         session = app.state.session_store.get_session(builder["sessionId"])
         assert session["status"] == "failed"
-        assert "project_agent_not_member" in session["outcome"]
+        assert session["finalOutcome"] == "project_agent_not_member"
+        refused = client.post(f"/api/v1/threads/{session['id']}/recoveries", json={
+            "kind": "rerun", "targetAgentId": builder["logicalAgentId"],
+        })
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["detail"]["code"] == "project_reviewer_required"
+        assert take(registry, node) == []
 
 
 def test_handoff_receipt_records_the_source_thread_boundary(monkeypatch):

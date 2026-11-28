@@ -289,6 +289,14 @@ class AssignmentDeliveryMixin(RegistryState):
             COLLABORATION_MANIFEST_STATE_KEY
         ) or {}
         context = manifest.get("handoffContext")
+        if context and (
+            index != 0
+            or any(
+                run.get("assignmentId") == assignment["assignmentId"] and run.get("status") != "running"
+                for run in session_snapshot.get("agentRuns", [])
+            )
+        ):
+            context = None
         handoff_validation = None
         if context:
             state, handoff_validation = _handoff_context_state(
@@ -574,41 +582,72 @@ class AssignmentDeliveryMixin(RegistryState):
         self, request: dict[str, Any], command: dict[str, Any]
     ) -> dict[str, Any] | None:
         command_id = command["id"]
+        assignment = request["assignments"][request.get("currentIndex", 0)]
+        snapshot = assignment.get("projectSnapshot") or {}
+        requester_id = assignment.get("delegatedByAgentId")
+        agent_id = command.get("logicalAgentId")
         manifest = (request.get("state") or {}).get(COLLABORATION_MANIFEST_STATE_KEY) or {}
+        context = manifest.get("handoffContext") or {}
         task_id = request.get("taskId")
-        project_id = project_id_for_task_handoff(manifest, task_id)
-        if project_id is None:
+        task_handoff = (
+            project_id_for_task_handoff(manifest, task_id)
+            if context and context.get("assignmentId") == assignment.get("assignmentId") else None
+        )
+        project_id = task_handoff or (
+            snapshot.get("projectId") if requester_id or snapshot.get("workflowKind") == "predefined" else None
+        )
+        if not (project_id or requester_id):
             return self.daemon_store.publish_command(command_id, request_id=request["id"])
 
-        # Roster edits lock the same Project row. Hold it until the command
-        # becomes claimable or the undelivered reservation is settled.
-        session_id = request["sessionId"]
+        # Publication and staged-command recovery share this check. Keep the
+        # rows that govern permission locked until the command is claimable.
         with self.dispatch_scope([request["nodeId"]]), store_transaction(self.daemon_store.engine):
-            project = (
-                self.project_store.get_project(project_id, for_update=True)
-                if self.project_store else None
-            )
-            agent_id = command.get("logicalAgentId")
+            refusal = self._publication_refusal(project_id, agent_id, requester_id)
+            if not task_handoff:
+                if refusal:
+                    staged = self.daemon_store.get_command(command_id)
+                    if staged and staged["status"] == "pending":
+                        self._fail_run_request(request, refusal)
+                    return None
+                return self.daemon_store.publish_command(command_id, request_id=request["id"])
+            session_id = request["sessionId"]
             with self.store.mutation_scope(session_id):
-                if isinstance(agent_id, str) and agent_id in project_member_ids(project or {}):
+                if refusal is None and isinstance(agent_id, str):
                     published = self.daemon_store.publish_command(command_id, request_id=request["id"])
                     if published and published["status"] == "queued":
                         session = self.store.get_session_header(session_id)
-                        decision_id = manifest["handoffContext"].get("decisionId")
                         actor = next((d.get("actorUserId") for d in session.get("decisions", [])
-                                      if d.get("id") == decision_id), None)
+                                      if d.get("id") == context.get("decisionId")), None)
                         SessionController(self.store).record_participants_joined(session_id, [agent_id], actor)
                     return published
                 staged = self.daemon_store.get_command(command_id)
-                if staged and staged["status"] == "pending":
-                    reason = "project_agent_not_member"
-                    cancelled = self.cancel_run_request_before_delivery(request["id"], reason)
+                if refusal and staged and staged["status"] == "pending":
+                    cancelled = self.cancel_run_request_before_delivery(request["id"], refusal)
                     if cancelled:
                         SessionController(
                             self.store, task_store=self.task_store, task_id=task_id,
                             task_execution_owner=request_execution_owner(cancelled),
-                        ).fail_session(session_id, reason)
+                        ).fail_session(session_id, refusal)
                 return None
+
+    def _publication_refusal(
+        self, project_id: str | None, agent_id: str | None, requester_id: str | None,
+    ) -> str | None:
+        if project_id:
+            project = self.project_store.get_project(project_id, for_update=True) if self.project_store else None
+            if not project or project.get("archivedAt") or not project.get("enabled", True):
+                return "project_unavailable"
+            members = project_member_ids(project)
+            if agent_id not in members or (requester_id and requester_id not in members):
+                return "project_agent_not_member"
+        if requester_id:
+            if not self.delegation_publication_validator or not agent_id:
+                return "Delegation requires logical agent validation."
+            try:
+                self.delegation_publication_validator(requester_id, agent_id)
+            except ValueError as error:
+                return str(error)
+        return None
 
     def _ensure_agent_started_for_command(
         self, run_request: dict[str, Any], command: dict[str, Any]

@@ -136,12 +136,15 @@ def project_workflow_members(
 def project_styled_assignments(
     project: dict[str, Any], *, style: str, agent_store: Any, placement_store: Any,
     daemon_nodes: list[dict[str, Any]],
+    recovery_builder_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     members = project_workflow_members(
         project, style=style, agent_store=agent_store, placement_store=placement_store,
         daemon_nodes=daemon_nodes,
     )
     agents = list(members.values())
+    if recovery_builder_id is not None and recovery_builder_id not in members:
+        raise ProjectDispatchError("project_workflow_agent_not_member", permanent=True)
     lead_id = project.get("leadAgentId")
     snapshot = {
         **project_runtime_snapshot(project),
@@ -171,9 +174,12 @@ def project_styled_assignments(
                 "Review the required contributions against the goal and synthesize one final result.",
             ))
     else:
-        compiled = compile_style(style, agents, lead_id, role_brief=role_charter)
+        compiled = compile_style(
+            style, agents, lead_id, role_brief=role_charter, builder_agent_id=recovery_builder_id,
+        )
         if style == "build_review" and (
-            (project.get("predefinedWorkflows") or {}).get(style, {}).get("requireIndependentReview") is True
+            recovery_builder_id is not None
+            or (project.get("predefinedWorkflows") or {}).get(style, {}).get("requireIndependentReview") is True
         ):
             if compiled.fallback_from:
                 raise ProjectDispatchError(
