@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from "react";
-import { useRelayMutations } from "./useRelayMutations";
+import { useCallback, useSyncExternalStore } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { TASK_UPDATE_MUTATION_KEY, useRelayMutations, type TaskUpdateVariables } from "./useRelayMutations";
 
 export type TaskStatusAction = "accept" | "unblock";
 
@@ -11,27 +12,36 @@ export type TaskStatusAction = "accept" | "unblock";
  */
 export function useTaskStatusActions(taskId: string | undefined) {
   const { updateTaskMutation } = useRelayMutations();
-  const operations = useRef(new Map<string, TaskStatusAction>());
-  const [pending, setPending] = useState<ReadonlyMap<string, TaskStatusAction>>(() => new Map());
   const { mutateAsync } = updateTaskMutation;
+  const cache = useQueryClient().getMutationCache();
+  const subscribe = useCallback((listener: () => void) => cache.subscribe(listener), [cache]);
+  const readPendingAction = useCallback((): TaskStatusAction | null => {
+    if (!taskId) return null;
+    const updates = cache.findAll({ mutationKey: TASK_UPDATE_MUTATION_KEY, exact: true, status: "pending" });
+    for (const update of updates) {
+      const { taskId: target, input } = update.state.variables as TaskUpdateVariables;
+      if (target !== taskId) continue;
+      if (input.action === "unblock") return "unblock";
+      if (input.status === "done") return "accept";
+    }
+    return null;
+  }, [cache, taskId]);
+  const busy = useSyncExternalStore(subscribe, readPendingAction, () => null);
 
   const run = useCallback(async (action: TaskStatusAction): Promise<boolean> => {
-    if (!taskId || operations.current.has(taskId)) return false;
-    operations.current.set(taskId, action);
-    setPending(new Map(operations.current));
+    // Read synchronously so a second click also sees requests started before
+    // this component rendered, including from a previous visit to the Thread.
+    if (!taskId || readPendingAction()) return false;
     try {
       await mutateAsync({ taskId, input: action === "accept" ? { status: "done" } : { action: "unblock" } });
       return true;
     } catch {
       return false;
-    } finally {
-      operations.current.delete(taskId);
-      setPending(new Map(operations.current));
     }
-  }, [mutateAsync, taskId]);
+  }, [mutateAsync, readPendingAction, taskId]);
 
   return {
-    busy: taskId ? pending.get(taskId) ?? null : null,
+    busy,
     accept: useCallback(() => run("accept"), [run]),
     unblock: useCallback(() => run("unblock"), [run]),
   };
