@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { materializeEvents, relayEvent } from "relay-core";
 import type { RelaySession, RelayTaskSummary, SessionSummariesResponse } from "../src/types";
 import { applySessionEvent } from "../src/lib/sessionEvents";
+import { homeQueue } from "../src/lib/homeQueue";
 import { useTaskRoute } from "../src/hooks/useLocationPathname";
 import { useRelayData } from "../src/hooks/useRelayData";
 import { useThreadTaskContext } from "../src/hooks/useThreadTaskContext";
@@ -97,6 +98,45 @@ it.each(["notification", "reconnect", "return to Activity"])("shows a Task Threa
   view.unmount();
   expect(source?.close).toHaveBeenCalledOnce();
   client.clear();
+});
+
+it.each(["changed", "open"])("clears a completed review from Up next after Activity %s", async (event) => {
+  const streams: EventTarget[] = [];
+  class ActivitySource extends EventTarget {
+    constructor() {
+      super();
+      streams.push(this);
+    }
+    close() {}
+  }
+  vi.stubGlobal("EventSource", ActivitySource);
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const task: RelayTaskSummary = {
+    id: "task", title: "Latest review", description: "", status: "review", priority: "normal",
+    ownerUserId: "alice", projectId: "project", linkedSessionIds: ["thread"], eventCount: 1, activityCount: 0,
+    createdAt: "2026-11-28T07:00:00Z", updatedAt: "2026-11-28T07:00:00Z",
+  };
+  vi.mocked(listTasks).mockResolvedValueOnce({ tasks: [task] });
+  vi.mocked(listSessionSummaries).mockResolvedValueOnce({ sessions: [], homeTaskNeedsYou: 1 });
+  const view = renderHook(() => {
+    const { tasks, homeTaskNeedsYou } = useRelayData(undefined, true, true, true, false, undefined, "home", { projectDirectory: false });
+    const rows = homeQueue({ tasks, sessions: [], nodes: [], userId: "alice", today: "2026-11-28" });
+    return { count: homeTaskNeedsYou, rows: rows.map(item => item.kind) };
+  }, { wrapper });
+  try {
+    act(() => streams[0].dispatchEvent(new Event("open")));
+    await waitFor(() => expect(view.result.current).toEqual({ count: 1, rows: ["review"] }));
+    vi.mocked(listTasks).mockResolvedValueOnce({ tasks: [{ ...task, status: "done", eventCount: 2 }] });
+    vi.mocked(listSessionSummaries).mockResolvedValueOnce({ sessions: [], homeTaskNeedsYou: 0 });
+    act(() => streams[0].dispatchEvent(new Event(event)));
+    await waitFor(() => expect(view.result.current).toEqual({ count: 0, rows: [] }));
+  } finally {
+    view.unmount(); client.clear();
+    vi.unstubAllGlobals();
+    vi.mocked(listTasks).mockReset().mockResolvedValue({ tasks: [] });
+    vi.mocked(listSessionSummaries).mockReset().mockResolvedValue({ sessions: [] });
+  }
 });
 
 it("does not refetch the cookie-scoped thread list when the sandbox token changes", async () => {

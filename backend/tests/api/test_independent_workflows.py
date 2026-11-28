@@ -60,6 +60,8 @@ def test_task_can_select_a_workflow_without_a_team(monkeypatch):
         task = response.json()
         assert task['assignedWorkflowId'] == workflow['id']
         assert not task.get('assignedTeamId')
+        home = client.get('/api/v1/tasks?view=summary&scope=home').json()
+        assert {row['id']: row.get('assignedWorkflowId') for row in home['tasks']} == {task['id']: workflow['id']}
         started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
         assert started.status_code == 202, started.text
         assert not started.json()['session'].get('teamId')

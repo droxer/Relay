@@ -11,6 +11,7 @@ from sqlalchemy import delete, event, update
 from relay.app import create_app
 from relay.automations.service import automation_service
 from relay.persistence.events import relay_event, relay_task_event
+from relay.persistence.listeners import thread_activity_key
 from test_project_routes import _agent, _bootstrap, _login_alice, _register_computer
 from user_ids import user_id
 
@@ -293,6 +294,27 @@ def test_home_projects_count_all_issues_but_load_only_inbox_candidates(project_c
     assert counts["progress"] == {"done": 7, "review": 0, "running": 0, "blocked": 0}
     assert counts["updatedAt"]
     assert {task["id"] for task in client.get("/api/v1/tasks?view=summary").json()["tasks"]} >= {dormant["id"], finished[0]["id"]}
+
+
+def test_home_activity_wakes_when_an_unlinked_task_is_blocked_or_deleted(project_context):
+    app, client, project = project_context
+    task = _task(client, project, "Manual Task")
+    key = thread_activity_key(project["ownerUserId"])
+    notifier = app.state.context.control_plane_notifier
+    with notifier.observe(key) as version:
+        response = client.patch(f"/api/v1/tasks/{task['id']}", json={
+            "status": "blocked", "blockerReason": "Waiting on a decision",
+        })
+        assert response.status_code == 200, response.text
+        assert not response.json()["linkedSessionIds"]
+        home = client.get("/api/v1/tasks?view=summary&scope=home").json()
+        assert {row["id"]: row["status"] for row in home["tasks"]} == {task["id"]: "blocked"}
+        assert notifier.version(key) > version
+    with notifier.observe(key) as version:
+        response = client.delete(f"/api/v1/tasks/{task['id']}")
+        assert response.is_success, response.text
+        assert client.get("/api/v1/tasks?view=summary&scope=home").json()["tasks"] == []
+        assert notifier.version(key) > version
 
 
 def test_home_limits_each_queue_and_reads_only_projected_fields(project_context):

@@ -301,10 +301,10 @@ class TaskWriteRows(TaskStoreState):
             if self.emit_automation_events:
                 insert_outbox_rows(conn, task_outbox_rows(current, task))
             insert_notification_rows(conn, task_notification_rows(current, task, events))
-            linked = task.get("linkedSessionIds")
             if (owner := task.get("ownerUserId")) and (
-                linked != current.get("linkedSessionIds")
-                or (linked and task.get("status") != current.get("status"))
+                task.get("linkedSessionIds") != current.get("linkedSessionIds")
+                or task.get("status") != current.get("status")
+                or task.get("deletedAt") != current.get("deletedAt")
             ):
                 key = thread_activity_key(owner)
                 changes = self._thread_activity_changes

@@ -474,7 +474,10 @@ class TaskReadRows(TaskStoreState):
         ready = issue_ids.where(
             tasks.c.status.in_(("assigned", "backlog")), writable_project, ~waiting_on,
             func.coalesce(snapshot["sourceRoutineId"].as_string(), "") == "",
-            or_(tasks.c.assigned_agent_id.is_not(None), tasks.c.assigned_team_id.is_not(None)),
+            or_(
+                tasks.c.assigned_agent_id.is_not(None), tasks.c.assigned_team_id.is_not(None),
+                func.coalesce(snapshot["assignedWorkflowId"].as_string(), "") != "",
+            ),
             snapshot["workspaceWaiting"].as_string().is_(None), snapshot["dispatchClaim"].as_string().is_(None),
             snapshot["dispatchOutcome"]["state"].as_string().is_distinct_from("queued"),
         ).order_by(
