@@ -47,7 +47,7 @@
 }
 
 .thread-project-content {
-  width: min(280px, var(--available-width));
+  width: min(280px, var(--available-width, 280px));
 }
 
 .thread-runtime-select {
