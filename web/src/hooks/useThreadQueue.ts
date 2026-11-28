@@ -91,8 +91,11 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     refetchOnWindowFocus: !pending,
   });
   const state = query.data?.messages ? query.data : EMPTY_THREAD_QUEUE;
-  const activeKey = useRef(queueKey);
-  useLayoutEffect(() => { activeKey.current = queueKey; }, [queueKey]);
+  const activeKey = useRef<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    activeKey.current = queueKey;
+    return () => { activeKey.current = undefined; };
+  }, [queueKey]);
   const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress) => {
     // The account's mutation cache owns the lock, so navigating away and back
     // to this Thread cannot start a second write while its first is pending.
@@ -175,9 +178,9 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
   const undoRemove = useCallback(() => { if (state.removed) void change("undo_remove", state.removed.message.id); }, [change, state.removed]);
   const edit = useCallback(async (id: string) => {
     const message = state.messages.find(item => item.id === id);
-    const composer = composerRef.current;
-    if (!message || !composer || !(await change("edit", id))) return;
-    if (activeKey.current !== queueKey) { restoreComposerDraft(queueKey, message.text); return; }
+    if (!message || !composerRef.current || !(await change("edit", id))) return;
+    const composer = activeKey.current === queueKey ? composerRef.current : null;
+    if (!composer) { restoreComposerDraft(queueKey, message.text); return; }
     const draft = composer.getText().trim();
     composer.setText(draft ? `${draft}\n\n${message.text}` : message.text);
     composer.focus();

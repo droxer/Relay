@@ -8,7 +8,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     const agent={id:'ada',displayName:'Ada',executorKind:'codex',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:'placement',agentId:'ada',computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp};
     const project={id:'launch',name:'Autumn launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',projectManager:true,enabled:true,responsibilities:'Coordinate the launch'}],managerAgentId:'ada',managerThreadId:'manager-thread' as string|null,leadAgentId:'ada',version:1,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
     const session={id:'manager-thread',taskGoal:'Autumn launch · Project Lead',projectId:'launch',ownerUserId:'u',participantAgentIds:['ada'],participants:['human'],status:'completed',phase:'done',events:[],agentRuns:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
-    const sessions=[session];
+    const sessions: Array<typeof session & {projectLeadDiscussion?: true}>=[session];
     let sent=0; let managerReads=0; let conversations=0;
     const agentReads:string[]=[];
     const applications: unknown[]=[];const tasks: Array<Record<string,unknown>>=[];
@@ -22,7 +22,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
       if(path.endsWith('/agents/ada') && searchParams.get('view')==='badge') {agentReads.push('badge');body={agent};}
       if(path.endsWith('/manager/conversation') && method==='POST') {
         const threadId=`discussion-${++conversations}`;
-        sessions.push({...session,id:threadId,taskGoal:''});
+        sessions.push({...session,id:threadId,taskGoal:'',projectLeadDiscussion:true});
         body={threadId,agentId:agent.id};
       }
       if(path.endsWith('/manager')) {managerReads++;body={project,manager:{agentId:'ada',agentName:'Ada',threadId:'manager-thread',toolsAvailable:true,reason:null,candidates:[{id:'ada',displayName:'Ada'}]},proposals:[proposal]};}
@@ -38,7 +38,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     // The dashboard names the holder from the project it already loaded: no manager fetch.
     const line=page.getByRole('group',{name:zh?'项目负责人':'Project Lead',exact:true});
     await expect(line.getByRole('link',{name:'Ada'})).toBeVisible();
-    await expect(line).toContainText(zh?'架构师':'Architect');
+    await expect(line).toContainText(zh?'软件工程师':'Software Engineer');
     await expect(page.getByRole('button',{name:zh?'对话':'Chat',exact:true})).toHaveCount(0);
     await expect(line.getByRole('button',{name:zh?'发起讨论':'Discuss',exact:true})).toBeVisible();
     expect(managerReads).toBe(0);
@@ -50,15 +50,15 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     await expect(page).toHaveURL(/\/threads\/discussion-1/);
     expect(conversations).toBe(1);
     const question=zh?'这个项目下一步应该做什么？请说明优先顺序。':'What should we do next in this project? Explain the priorities.';
-    await expect(page.getByRole('textbox',{name:/Ada/})).toHaveValue(question);
+    const composer=page.getByRole('textbox',{name:zh?'给 项目负责人 发送消息':'Message Project Lead',exact:true});
+    await expect(composer).toHaveValue(question);
     await page.goto('/projects/launch');
     await line.getByRole('button',{name:zh?'发起讨论':'Discuss',exact:true}).click();
     await expect(page).toHaveURL(/\/threads\/discussion-2/);
     expect(conversations).toBe(2);
-    await expect(page.getByRole('textbox',{name:/Ada/})).toHaveValue('');
+    await expect(composer).toHaveValue('');
     await page.goto('/threads/discussion-1');
-    await expect(page.getByRole('textbox',{name:/Ada/}))
-      .toHaveValue(question);
+    await expect(composer).toHaveValue(question);
     expect(sent).toBe(0);
     // Proposals a manager run staged still show in the Thread that produced them.
     await page.goto('/threads/manager-thread');expect(sent).toBe(0);
@@ -78,7 +78,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
   });
 }
 
-test('manager handover replaces a saved target when reopening the normal Thread',async({page})=>{
+test('a legacy Lead Thread defaults to the Lead role after a handover',async({page})=>{
  const stamp='2026-11-06T00:00:00Z';
  const agents=['ada','bea'].map(id=>({id,displayName:id==='ada'?'Ada':'Bea',executorKind:id==='ada'?'codex':'claude',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:`p-${id}`,agentId:id,computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp}));
  const project={id:'launch',name:'Launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',responsibilities:'Plan',enabled:true},{agentId:'bea',role:'implementer',projectManager:true,responsibilities:'Coordinate',enabled:true}],managerAgentId:'bea',managerThreadId:'manager-thread',leadAgentId:'bea',version:3,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
@@ -99,8 +99,8 @@ test('manager handover replaces a saved target when reopening the normal Thread'
   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
  });
  await page.goto('/threads/manager-thread');
- const composer=page.getByRole('textbox',{name:'Message Bea',exact:true});await expect(composer).toBeVisible();
+ const composer=page.getByRole('textbox',{name:'Message Project Lead',exact:true});await expect(composer).toBeVisible();
  await composer.fill('What changed?');await page.getByRole('button',{name:'Send',exact:true}).click();
  await expect.poll(()=>sent.length).toBe(1);
- expect(sent[0]).toMatchObject({addressAgentIds:['bea']});
+ expect(sent[0]).not.toHaveProperty('addressAgentIds');
 });
