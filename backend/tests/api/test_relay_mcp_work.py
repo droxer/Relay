@@ -140,6 +140,11 @@ def test_lead_can_assign_and_start_a_workflow_task_without_skipping_approval(man
     _, lead_command = _start(managed_env)
     token = credential(app, node, lead_command)
     with TestClient(app) as client:
+        refused = _rpc(client, token, "tools/call", {"name": "relay_create_task", "arguments": {
+            "fields": {"title": "Retired Pipeline", "assignedWorkflowId": "preset:pipeline"},
+        }}).json()["result"]
+        assert refused["isError"]
+        assert "workflow_retired" in refused["content"][0]["text"]
         workflow = call(client, token, "relay_create_workflow", projectId=project["id"], name="Release review", workflowSteps=[{
             "id": "release", "name": "Release", "agentId": worker["id"], "instructions": "Prepare the release.",
             "acceptanceCriteria": ["Release notes recorded"], "requiresApproval": True,

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { AgentTeam, CollaborationStyle, DaemonNodeMonitorRecord, UserAgent, ThreadMessageInput } from "../../types";
 import { ComposerImagePicker, ComposerImagePreviews, useComposerImages } from "./ComposerImages";
 import { WorkflowSelect } from "../workflow/WorkflowSelect";
-import { predefinedStyle } from "../../lib/workflowSelection";
+import { defaultWorkflowId, predefinedStyle, RETIRED_WORKFLOW_ID } from "../../lib/workflowSelection";
 import { sendShortcutLabel } from "../../lib/sendShortcut";
 import {
   ActionSend,
@@ -242,7 +242,8 @@ const ComposerView = forwardRef<ComposerHandle, {
     || imageInput.busy
     || (!!uploadUnavailableReason && imageInput.images.length > 0)
     || (!composerText.trim() && !imageInput.images.length)
-    || (initializingThread && !projectName && !runtimeNodeId);
+    || (initializingThread && !projectName && !runtimeNodeId)
+    || (initializingThread && !style && defaultWorkflowId(targetTeam) === RETIRED_WORKFLOW_ID);
   const cannotSend = cannotSendAsWritten || parsed.blocked;
   // A draft written mid-run waits in the queue. Text only: an image is an
   // upload bound to this box, so a draft carrying one waits here instead.
@@ -542,7 +543,7 @@ const ComposerView = forwardRef<ComposerHandle, {
               />
               {activeTeamId && !projectName && !addressedLogicalAgentId && !contextPending ? (
                 <WorkflowSelect compact inherit predefinedOnly aria-label={t("workflow.select_workflow")}
-                  team={teams?.find(team => team.id === activeTeamId)}
+                  team={targetTeam} allowRetiredDefault={!initializingThread}
                   value={style ? `preset:${style}` : null} onChange={value => setStyle(predefinedStyle(value) ?? null)}
                   disabled={running || sendPending || readOnly} />
               ) : null}

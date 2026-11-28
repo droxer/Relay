@@ -4,7 +4,7 @@ import { createRef } from "react";
 import { expect, it, vi } from "vitest";
 import { Composer } from "../src/components/composer/Composer";
 import type { MentionCandidate } from "../src/lib/mentions";
-import type { UserAgent } from "../src/types";
+import type { AgentTeam, UserAgent } from "../src/types";
 
 /* The live `@` wiring, end to end: the real Composer, the real
    `useMentionAutocomplete`, the real `lib/mentions` parsing. `mentionPopup.test.tsx`
@@ -49,6 +49,22 @@ function setup(overrides: Partial<React.ComponentProps<typeof Composer>> = {}) {
     rerender: (props: Partial<React.ComponentProps<typeof Composer>>) => view.rerender(composer({ ...overrides, ...props })),
   };
 }
+
+it("requires an active Workflow to start a Thread with a retired Team default", async () => {
+  const onSend = vi.fn(async () => false);
+  const team = { id: "crew", name: "Crew", enabled: true, members: AGENTS, memberAgentIds: ["a1", "a2"],
+    leadAgentId: "a1", defaultWorkflowId: "preset:pipeline" } as AgentTeam;
+  const { field } = setup({ initializingThread: true, activeTeamId: team.id, teams: [team], onSend });
+  fireEvent.change(field, { target: { value: "Start with the Team" } });
+  const send = screen.getByRole<HTMLButtonElement>("button", { name: "composer.send" });
+  expect(send.disabled).toBe(true);
+  fireEvent.keyDown(field, { key: "Enter" });
+  expect(onSend).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("combobox", { name: "workflow.select_workflow" }));
+  await userEvent.click(await screen.findByRole("option", { name: /collab_style.lead_led/ }));
+  await userEvent.click(send);
+  expect(onSend).toHaveBeenCalledWith("lead_led", undefined, expect.any(Object));
+});
 
 it.each([
   { text: "Continue", expected: { addressAgentIds: ["a1"] } },

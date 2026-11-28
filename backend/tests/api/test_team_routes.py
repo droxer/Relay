@@ -4149,13 +4149,15 @@ def test_pipeline_continues_to_final_specialist_after_missing_member_report(monk
             "capabilities": [PROJECT_CAPABILITY, "workspace-scope", "thread-workspaces", "round-result", "work-results"],
             "status": "ready",
         })
-        team = _setup_admin_client(client).post("/api/v1/admin/teams", json={
-            "ownerUserId": ALICE, "name": "Delivery", "leadAgentId": lead["id"],
+        team = app.state.team_store.create_team(ALICE, {
+            "name": "Delivery", "leadAgentId": lead["id"],
             "memberAgentIds": [lead["id"], builder["id"], reviewer["id"]],
             "collaborationStyle": "pipeline",
-        }).json()["team"]
+        })
         _login(client, "alice")
-        response = client.post("/api/v1/agent-runs", json={"taskGoal": "Fix it", "teamId": team["id"]})
+        with monkeypatch.context() as legacy:
+            legacy.setattr("relay.collaboration.roster.require_selectable_workflow", lambda _: None)
+            response = client.post("/api/v1/agent-runs", json={"taskGoal": "Fix it", "teamId": team["id"]})
         assert response.status_code == 202, response.text
         session_id = response.json()["id"]
 

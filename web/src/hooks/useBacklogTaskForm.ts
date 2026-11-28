@@ -5,12 +5,13 @@ import { useTranslation } from "react-i18next";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { useRelayMutations } from "./useRelayMutations";
 import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
-import { explicitTaskWorkflowId } from "../lib/workflowSelection";
+import { explicitTaskWorkflowId, RETIRED_WORKFLOW_ID } from "../lib/workflowSelection";
 import { assignmentComputerId } from "../lib/taskAssignment";
 import {
   NEW_TASK_ACCEPTANCE_POLICY,
   taskAcceptancePolicy,
   taskAssignmentMutationFields,
+  taskAssignmentUnchanged,
   taskBoardFormsEqual,
   type BacklogTaskFormState,
 } from "../lib/taskBoardForm";
@@ -130,6 +131,7 @@ export function useBacklogTaskForm({
     const computerId = form.computerId || derivedComputerId;
     const bindsComputer = Boolean(form.id && !formBaseline?.computerId && !form.projectId && derivedComputerId);
     const intake = !form.projectId && !computerId && !form.sourceRoutineId;
+    const keepRetiredWorkflow = form.assignedWorkflowId === RETIRED_WORKFLOW_ID && taskAssignmentUnchanged(form, formBaseline);
     setSaving(true);
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
@@ -141,11 +143,13 @@ export function useBacklogTaskForm({
         ...(form.id && form.status !== formBaseline?.status ? { status: form.status } : {}),
         acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
         ...(form.permissionMode !== formBaseline?.permissionMode ? { permissionMode: form.permissionMode } : {}),
-        collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         dueDate: form.dueDate,
         /* Unassigned intake sends no assignment on create. Clearing is still
            sent for a legacy issue that carried one. */
-        ...(intake && !form.id && !hasAssignment ? {} : taskAssignmentMutationFields(form)),
+        ...(keepRetiredWorkflow ? {} : {
+          collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
+          ...(intake && !form.id && !hasAssignment ? {} : taskAssignmentMutationFields(form)),
+        }),
         ...(movesIntoProject ? { projectId: form.projectId } : {}),
         ...(bindsComputer ? { computerId: derivedComputerId } : {}),
       };
@@ -189,6 +193,7 @@ export function useBacklogTaskForm({
 
   return {
     form,
+    formBaseline,
     setForm,
     projectChoice,
     open,

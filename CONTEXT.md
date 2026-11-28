@@ -175,18 +175,23 @@ A Project is selected for execution; its enabled Agents and Computer constrain
 the actual participants. Team-owned steps also require membership in their Team.
 Removing a Team's reference to a Project Workflow preserves that definition.
 A **Predefined Workflow** assigns work by Team roles or by the roles of enabled
-Project Agents: Build → Review, Pipeline, or Lead-led. Build → Review can run
-with a single builder when it cannot fill the review role. Pipeline orders
-participants by role, and the last participant summarizes the result. Lead-led
+Project Agents: Build → Review or Lead-led. Build → Review can run
+with a single builder when it cannot fill the review role. Lead-led
 uses the enabled Project Lead in a Project to plan, delegate, and synthesize
 the result. A lone Lead completes the work in one turn.
 The Project owner can select which enabled Project Agents are eligible for each
 Predefined Workflow. The default includes every enabled Project Agent. Lead-led
 always includes the current Project Lead. A Workflow with no eligible Agent
 cannot start.
+The Project owner can require independent review for Build → Review. When
+enabled, the Workflow needs a second eligible Agent in the Reviewer step.
+Without one, direct starts are refused and Tasks and Automation occurrences
+block until a person resolves the assignment and retries.
 A Team chooses a predefined **Default Workflow** and may choose a custom default
 for each Project. A Task or Automation inherits the applicable Team default or
 selects a Workflow explicitly. A Project can run either kind directly.
+Pipeline is retired for new selections. Saved Pipeline assignments and runs
+keep their role-ordered execution, and new work needs an active Workflow.
 Incompatible selections are refused rather than replaced with another process.
 _Avoid_: Collaboration style (a compatibility name for a Predefined Workflow),
 Workflow Team (a legacy representation combining roster and process)

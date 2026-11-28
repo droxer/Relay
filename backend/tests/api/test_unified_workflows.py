@@ -4,6 +4,7 @@ from contextlib import contextmanager
 
 import pytest
 
+from relay.core.computer_identity import computer_id
 from task_setup import mark_task_ready
 from test_team_workflows import workflow_world
 from test_team_workflow_definitions import create_parent
@@ -35,7 +36,7 @@ def test_team_catalog_and_predefined_default(monkeypatch):
     with unified_world(monkeypatch) as (_, client, _, _, project, payload):
         team = create_parent(client, payload)
         assert team['defaultWorkflowId'] == 'preset:build_review'
-        assert [item['kind'] for item in team['workflowOptions']] == ['predefined'] * 3
+        assert [item['kind'] for item in team['workflowOptions']] == ['predefined'] * 2
         response = client.patch(f"/api/v1/teams/{team['id']}", json={'defaultWorkflowId': 'preset:lead_led'})
         assert response.status_code == 200, response.text
         assert response.json()['team']['defaultWorkflowId'] == 'preset:lead_led'
@@ -85,7 +86,7 @@ def test_default_definition_cannot_be_deleted_or_disabled(monkeypatch):
         assert client.delete(path).status_code == 200
 
 
-@pytest.mark.parametrize('workflow_id', ['preset:build_review', 'preset:pipeline', 'preset:lead_led'])
+@pytest.mark.parametrize('workflow_id', ['preset:build_review', 'preset:lead_led'])
 def test_predefined_run_selection_preserves_its_snapshot(monkeypatch, workflow_id):
     with unified_world(monkeypatch) as (_, client, _, _, _, payload):
         team = create_parent(client, payload)
@@ -100,13 +101,80 @@ def test_predefined_run_selection_preserves_its_snapshot(monkeypatch, workflow_i
 def test_predefined_starts_through_the_workflow_endpoint(monkeypatch):
     with unified_world(monkeypatch) as (_, client, _, _, _, payload):
         team = create_parent(client, payload)
-        path = f"/api/v1/teams/{team['id']}/workflows/preset:pipeline/runs"
-        body = {'requestId': str(uuid4()), 'taskGoal': 'Run the pipeline'}
+        path = f"/api/v1/teams/{team['id']}/workflows/preset:lead_led/runs"
+        body = {'requestId': str(uuid4()), 'taskGoal': 'Run Lead-led'}
         response = client.post(path, json=body)
         assert response.status_code == 201, response.text
         session = response.json()
-        assert session['collaborationRounds'][0]['teamSnapshot']['workflowId'] == 'preset:pipeline'
+        assert session['collaborationRounds'][0]['teamSnapshot']['workflowId'] == 'preset:lead_led'
         assert client.post(path, json=body).json()['id'] == session['id']
+
+
+def test_retired_team_workflow_rejects_new_selection_and_replays_a_saved_run(monkeypatch):
+    with unified_world(monkeypatch) as (app, client, node, _, _, payload):
+        team = create_parent(client, payload)
+        team_id = team['id']
+        team_path = f"/api/v1/teams/{team_id}"
+        for selection in ({'defaultWorkflowId': 'preset:pipeline'}, {'collaborationStyle': 'pipeline'}):
+            patch = client.patch(team_path, json=selection)
+            assert (patch.status_code, patch.json()['detail']) == (400, 'workflow_retired')
+            create = client.post('/api/v1/teams', json={
+                key: payload[key] for key in ('name', 'leadAgentId', 'memberAgentIds')
+            } | selection)
+            assert (create.status_code, create.json()['detail']) == (400, 'workflow_retired')
+
+        app.state.team_store.update_team(team_id, {'collaborationStyle': 'pipeline'})
+        edited = client.patch(team_path, json={'name': 'Saved Pipeline Team', 'defaultWorkflowId': 'preset:pipeline'})
+        assert edited.status_code == 200, edited.text
+        assert all(item['id'] != 'preset:pipeline' for item in edited.json()['team']['workflowOptions'])
+        run = {'taskGoal': 'Fresh conversation', 'teamId': team_id}
+        for selection in ({}, {'workflowId': 'preset:pipeline'}, {'style': 'pipeline'}):
+            response = client.post('/api/v1/agent-runs', json={**run, **selection})
+            assert (response.status_code, response.json()['detail']['code']) == (409, 'workflow_retired')
+
+        task = {'title': 'New task', 'assignedTeamId': team_id, 'computerId': computer_id(node)}
+        for selection in ({}, {'collaborationStyle': 'pipeline'}, {'assignedWorkflowId': 'preset:pipeline'}):
+            response = client.post('/api/v1/tasks', json={**task, **selection})
+            assert (response.status_code, response.json()['detail']) == (409, 'workflow_retired')
+        created = client.post('/api/v1/tasks', json={**task, 'assignedWorkflowId': 'preset:build_review'})
+        assert created.status_code == 201, created.text
+        task_path = f"/api/v1/tasks/{created.json()['id']}"
+        for selection in ({'collaborationStyle': 'pipeline'}, {'assignedWorkflowId': None}):
+            response = client.patch(task_path, json=selection)
+            assert (response.status_code, response.json()['detail']) == (409, 'workflow_retired')
+
+        path = f"{team_path}/workflows/preset:pipeline/runs"
+        body = {'requestId': str(uuid4()), 'taskGoal': 'Saved Pipeline run'}
+        response = client.post(path, json=body)
+        assert (response.status_code, response.json()['detail']['code']) == (409, 'workflow_retired')
+        with monkeypatch.context() as legacy:
+            legacy.setattr('relay.collaboration.service.require_selectable_workflow', lambda _: None)
+            legacy.setattr('relay.collaboration.roster.require_selectable_workflow', lambda _: None)
+            started = client.post(path, json=body)
+        assert started.status_code == 201, started.text
+        session_id = started.json()['id']
+        assert client.post(path, json=body).json()['id'] == session_id
+        _drain_runs(client, node, session_id)
+        reply_path = f"/api/v1/threads/{session_id}/messages"
+        refused = client.post(reply_path, json={'text': 'New selection', 'style': 'pipeline'})
+        assert (refused.status_code, refused.json()['detail']['code']) == (409, 'workflow_retired')
+        reply = client.post(reply_path, json={'text': 'Continue the saved workflow'})
+        assert reply.status_code == 202, reply.text
+        assert all(item['style'] == 'pipeline' for item in reply.json()['collaborationRounds'])
+
+        write_team = app.state.team_store.update_team
+
+        def replace_default_before_edit(team_id, fields):
+            write_team(team_id, {'defaultWorkflowId': 'preset:lead_led'})
+            return write_team(team_id, fields)
+
+        monkeypatch.setattr(app.state.team_store, 'update_team', replace_default_before_edit)
+        renamed = client.patch(team_path, json={
+            'name': 'Renamed Team', 'defaultWorkflowId': 'preset:pipeline', 'collaborationStyle': 'pipeline',
+        })
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()['team']['name'] == 'Renamed Team'
+        assert renamed.json()['team']['defaultWorkflowId'] == 'preset:lead_led'
 
 
 @pytest.mark.parametrize('explicit', [False, True])
@@ -153,14 +221,14 @@ def test_automation_selects_its_project_workflow(monkeypatch):
 def test_legacy_workflow_team_can_adopt_a_predefined_default_without_losing_steps(monkeypatch):
     with unified_world(monkeypatch) as (_, client, _, _, _, payload):
         legacy = client.post('/api/v1/teams', json=payload).json()['team']
-        response = client.patch(f"/api/v1/teams/{legacy['id']}", json={'defaultWorkflowId': 'preset:pipeline'})
+        response = client.patch(f"/api/v1/teams/{legacy['id']}", json={'defaultWorkflowId': 'preset:lead_led'})
         assert response.status_code == 200, response.text
         team = response.json()['team']
         assert 'workflowSteps' not in team
         assert team['workflows'][0]['workflowSteps'] == legacy['workflowSteps']
-        run = client.post('/api/v1/agent-runs', json={'taskGoal': 'Pipeline', 'teamId': team['id']})
+        run = client.post('/api/v1/agent-runs', json={'taskGoal': 'Lead the work', 'teamId': team['id']})
         assert run.status_code == 202, run.text
-        assert run.json()['collaborationRounds'][0]['teamSnapshot']['workflowId'] == 'preset:pipeline'
+        assert run.json()['collaborationRounds'][0]['teamSnapshot']['workflowId'] == 'preset:lead_led'
 
 
 @pytest.mark.parametrize('invalid', ['id', 'missing', 'attachment', 'assignments', 'project', 'computer', 'service'])
@@ -258,7 +326,7 @@ def test_team_thread_keeps_its_predefined_workflow_after_a_custom_default(monkey
     with unified_world(monkeypatch) as (app, client, node, _, project, payload):
         team = create_parent(client, payload)
         started = client.post('/api/v1/agent-runs', json={
-            'taskGoal': 'Talk it through', 'teamId': team['id'], 'workflowId': 'preset:pipeline',
+            'taskGoal': 'Talk it through', 'teamId': team['id'], 'workflowId': 'preset:lead_led',
             'idempotencyKey': str(uuid4()),
         })
         assert started.status_code == 202, started.text
@@ -270,7 +338,7 @@ def test_team_thread_keeps_its_predefined_workflow_after_a_custom_default(monkey
         })
         assert response.status_code == 202, response.text
         rounds = app.state.session_store.get_session(session['id'])['collaborationRounds']
-        assert {item['teamSnapshot']['workflowId'] for item in rounds} == {'preset:pipeline'}
+        assert {item['teamSnapshot']['workflowId'] for item in rounds} == {'preset:lead_led'}
 
 
 def _drain_runs(client, node, session_id):

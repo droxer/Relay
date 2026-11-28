@@ -28,7 +28,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { Button } from "@/components/ui/button";
 import { useListSort } from "../hooks/useListSort";
 import { SortMenu } from "@/components/ui/SortMenu";
-import { NEW_TASK_ACCEPTANCE_POLICY, emptyRoutineForm, routineFormFields, routineMutationFields, taskAssignmentMutationFields, taskBoardFormsEqual, taskAcceptancePolicy, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
+import { NEW_TASK_ACCEPTANCE_POLICY, emptyRoutineForm, routineFormFields, routineMutationFields, taskAssignmentMutationFields, taskAssignmentUnchanged, taskBoardFormsEqual, taskAcceptancePolicy, taskStartMutationInput, type RoutineTaskFormState } from "../lib/taskBoardForm";
+import { explicitTaskWorkflowId, RETIRED_WORKFLOW_ID } from "../lib/workflowSelection";
 import { ProjectDrawer } from "./ProjectDrawer";
 import { TaskDrawer } from "./task-board/TaskDrawer";
 import { TaskRecordView } from "./task-record/TaskRecordView";
@@ -250,7 +251,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
       assignedAgent: task.assignedAgent ?? "",
       assignedAgentId: task.assignedAgentId ?? "",
       assignedTeamId: task.assignedTeamId ?? "",
-      assignedWorkflowId: task.assignedWorkflowId ?? (task.collaborationStyle ? `preset:${task.collaborationStyle === "solo" ? "build_review" : task.collaborationStyle}` : ""),
+      assignedWorkflowId: explicitTaskWorkflowId(task) ?? "",
       collaborationStyle: null,
       ...routineFormFields(task),
     });
@@ -260,19 +261,22 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
     event.preventDefault();
     if (readOnly || !form || !form.title.trim()) return;
     if (form.routineTriggers.some((trigger) => triggerError(trigger))) return;
+    const keepRetiredWorkflow = form.assignedWorkflowId === RETIRED_WORKFLOW_ID && taskAssignmentUnchanged(form, formBaseline);
     setSaving(true);
     try {
       const payload: import("../types").TaskMutationInput & { title: string } = {
         title: form.title.trim(),
         acceptancePolicy: form.acceptancePolicy ?? NEW_TASK_ACCEPTANCE_POLICY,
         ...(form.permissionMode !== formBaseline?.permissionMode ? { permissionMode: form.permissionMode } : {}),
-        collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
         ...(!form.id || form.description !== formBaseline?.description ? { description: form.description } : {}),
         ...(form.connectionGrants !== undefined ? { connectionGrants: form.connectionGrants } : {}),
         priority: form.priority,
         tags: form.tags,
         ...routineMutationFields(form, form.id ? formBaseline : undefined),
-        ...taskAssignmentMutationFields(form),
+        ...(keepRetiredWorkflow ? {} : {
+          collaborationStyle: form.assignedTeamId ? (form.collaborationStyle === "solo" ? "build_review" : form.collaborationStyle ?? "") : "",
+          ...taskAssignmentMutationFields(form),
+        }),
       };
       if (form.id) await updateTaskMutation.mutateAsync({ taskId: form.id, input: payload });
       else await createTaskMutation.mutateAsync({ ...payload, ...(form.projectId ? { projectId: form.projectId } : {}), ...(computerId ? { computerId } : {}) });
@@ -532,6 +536,7 @@ export function RoutinesPage({ projectId, computerId, readOnly = false, projects
           <TaskDrawer
             open={drawerOpen}
             form={form}
+            formBaseline={formBaseline}
             logicalAgents={logicalAgents}
             projects={projects}
             projectChoice={projectId || computerId ? "locked" : undefined}

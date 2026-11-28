@@ -109,16 +109,16 @@ def test_workflow_default_writes_return_only_changed_fields(monkeypatch):
         }).json()["workflow"]
         original = client.get(f"{path}?view=preview").json()["team"]
         query = "?view=preview&format=delta"
-        changed = client.patch(path + query, json={"defaultWorkflowId": "preset:pipeline"})
+        changed = client.patch(path + query, json={"defaultWorkflowId": "preset:lead_led"})
         assert changed.status_code == 200, changed.text
         receipt = changed.json()["teamWorkflowUpdate"]
         assert receipt == {
             "teamId": parent["id"], "baseVersion": original["version"], "version": original["version"] + 1,
-            "updatedAt": receipt["updatedAt"], "defaultWorkflowId": "preset:pipeline", "legacyWorkflow": False,
+            "updatedAt": receipt["updatedAt"], "defaultWorkflowId": "preset:lead_led", "legacyWorkflow": False,
         }
         assert TestClient(app).patch(path + query, json={"defaultWorkflowId": "preset:lead_led"}).status_code == 401
         assert client.patch(path + query, json={"defaultWorkflowId": "preset:deleted"}).status_code >= 400
-        mixed = client.patch(path + query, json={"name": "Updated team", "defaultWorkflowId": "preset:pipeline"})
+        mixed = client.patch(path + query, json={"name": "Updated team", "defaultWorkflowId": "preset:lead_led"})
         assert mixed.json()["team"]["name"] == "Updated team"
         project_path = f"{path}/workflow-defaults/{project['id']}{query}"
         assigned = client.put(project_path, json={"workflowId": workflow["id"]}).json()["teamWorkflowUpdate"]
@@ -128,7 +128,7 @@ def test_workflow_default_writes_return_only_changed_fields(monkeypatch):
         assert cleared["baseVersion"] == assigned["version"]
         after = client.get(f"{path}?view=preview").json()["team"]
         assert after["workflowPreviews"] == original["workflowPreviews"]
-        assert after["defaultWorkflowId"] == "preset:pipeline" and after["projectWorkflowDefaults"] == {}
+        assert after["defaultWorkflowId"] == "preset:lead_led" and after["projectWorkflowDefaults"] == {}
 
 
 def test_default_receipt_identifies_conversion_of_a_legacy_workflow_team(monkeypatch):
@@ -139,7 +139,7 @@ def test_default_receipt_identifies_conversion_of_a_legacy_workflow_team(monkeyp
         path = f"/api/v1/teams/{team['id']}?view=preview"
         before = client.get(path).json()["team"]
         assert before["workflowStepCount"] > 0 and before["projectId"]
-        changed = client.patch(f"{path}&format=delta", json={"defaultWorkflowId": "preset:pipeline"})
+        changed = client.patch(f"{path}&format=delta", json={"defaultWorkflowId": "preset:lead_led"})
         assert changed.status_code == 200, changed.text
         receipt = changed.json()["teamWorkflowUpdate"]
         assert receipt["legacyWorkflow"] is False
@@ -168,7 +168,7 @@ def test_compact_team_summary_shares_members_and_presets(monkeypatch):
         assert {team["id"] for team in packed["teams"]} == {parent["id"], other["id"]}
         member_directory = {member["id"]: member for member in packed["memberDirectory"]}
         assert len(packed["memberDirectory"]) == len(member_directory) == len(payload["memberAgentIds"])
-        assert len(packed["predefinedWorkflows"]) == 3
+        assert len(packed["predefinedWorkflows"]) == 2
         for team in packed["teams"]:
             assert "members" not in team and "lead" not in team
             assert all(option["kind"] == "steps" and "workflowSteps" not in option for option in team["workflowOptions"])

@@ -13,7 +13,7 @@ from ...collaboration.models import CollaborationIdempotencyError
 from ...collaboration.workflow_compilation import compile_workflow
 from ...core.computer_identity import computer_id
 from ...core.ids import new_database_id
-from ...core.workflow_selection import predefined_style
+from ...core.workflow_selection import predefined_style, require_selectable_workflow
 from ...persistence.sql import names_no_uuid_row
 from ...persistence.resource_lock import resource_transaction
 from ...projects.workflow import validate_project_workflow
@@ -67,6 +67,7 @@ def _prepare_project_preset(
     existing = ctx.backend.idempotent_run(identity, owner, expected_fingerprint=fingerprint, hydrate=False)
     if existing:
         return existing, None
+    require_selectable_workflow(workflow_id)
     if code := project_work_error(project):
         raise ValueError(code)
 

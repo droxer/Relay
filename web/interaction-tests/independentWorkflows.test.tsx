@@ -58,12 +58,12 @@ it("starts a predefined Workflow even when the custom catalog fails", async () =
   const lead = screen.getByRole("heading", { name: "collab_style.lead_led" }).closest("li")!;
   expect(lead.textContent).toContain("workflow.project_lead_required");
   expect(within(lead).getByRole<HTMLButtonElement>("button", { name: "workflow.start_named" }).disabled).toBe(true);
-  const pipeline = screen.getByRole("heading", { name: "collab_style.pipeline" }).closest("li")!;
-  fireEvent.click(within(pipeline).getByRole("button", { name: "workflow.start_named" }));
+  const buildReview = screen.getByRole("heading", { name: "collab_style.build_review" }).closest("li")!;
+  fireEvent.click(within(buildReview).getByRole("button", { name: "workflow.start_named" }));
   expect(screen.queryByRole("combobox", { name: "workflow.optional_team" })).toBeNull();
   fireEvent.change(screen.getByRole("textbox", { name: /workflow.goal/ }), { target: { value: "Ship from Project" } });
   fireEvent.click(screen.getAllByRole("button", { name: "workflow.start" }).at(-1)!);
-  await waitFor(() => expect(startProjectWorkflow).toHaveBeenCalledWith("preset:pipeline", {
+  await waitFor(() => expect(startProjectWorkflow).toHaveBeenCalledWith("preset:build_review", {
     requestId: expect.any(String), projectId: "p", taskGoal: "Ship from Project",
   }));
   await waitFor(() => expect(open).toHaveBeenCalledWith("run"));
@@ -96,25 +96,25 @@ const both = [...agents, { id: "b", displayName: "Bo", enabled: true, executorKi
 
 it("shows a Predefined Workflow's participants and saves a narrowed selection", async () => {
   mount(<ProjectWorkflows project={pair} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
-  const row = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
+  const row = (await screen.findByRole("heading", { name: "collab_style.build_review" })).closest("li")!;
   expect(within(row).getByText("workflow.preset_all_agents")).toBeTruthy();
   expect(within(row).getByText("Bo")).toBeTruthy();
-  fireEvent.click(within(row).getByRole("button", { name: "workflow.edit_named" }));
+  fireEvent.click(within(row).getByRole("button", { name: "workflow.select_participants_named" }));
   fireEvent.click(screen.getByRole("checkbox", { name: /Bo/ }));
   fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
   await waitFor(() => expect(updateProject).toHaveBeenCalledWith({ projectId: "p", input: {
-    expectedVersion: 4, predefinedWorkflowChange: { workflowId: "preset:pipeline", agentIds: ["a"] } } }));
+    expectedVersion: 4, predefinedWorkflowChange: { workflowId: "preset:build_review", agentIds: ["a"] } } }));
 });
 
 it("shows only the selected Agents and locks the Lead in Lead-led", async () => {
-  const narrowed = { ...pair, predefinedWorkflows: { lead_led: { agentIds: ["b"] }, pipeline: { agentIds: ["b"] } } } as ProjectRecord;
+  const narrowed = { ...pair, predefinedWorkflows: { lead_led: { agentIds: ["b"] }, build_review: { agentIds: ["b"] } } } as ProjectRecord;
   mount(<ProjectWorkflows project={narrowed} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
-  const pipeline = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
-  expect(within(pipeline).queryByText("Ada")).toBeNull();
-  expect(within(pipeline).getByText("Bo")).toBeTruthy();
+  const buildReview = (await screen.findByRole("heading", { name: "collab_style.build_review" })).closest("li")!;
+  expect(within(buildReview).queryByText("Ada")).toBeNull();
+  expect(within(buildReview).getByText("Bo")).toBeTruthy();
   const lead = screen.getByRole("heading", { name: "collab_style.lead_led" }).closest("li")!;
   expect(within(lead).getByText("Ada")).toBeTruthy();
-  fireEvent.click(within(lead).getByRole("button", { name: "workflow.edit_named" }));
+  fireEvent.click(within(lead).getByRole("button", { name: "workflow.select_participants_named" }));
   const box = screen.getByRole("checkbox", { name: /Ada/ });
   expect(box.getAttribute("aria-checked") ?? (box as HTMLInputElement).checked).toBeTruthy();
   expect(box.hasAttribute("disabled") || box.getAttribute("aria-disabled") === "true" || box.hasAttribute("data-disabled")).toBe(true);
@@ -127,19 +127,35 @@ it("saves against the Project version when the editor opened", async () => {
   const renderWorkflows = (record: ProjectRecord) =>
     <ProjectWorkflows project={record} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />;
   const { rerender } = mount(renderWorkflows(pair));
-  const row = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
-  fireEvent.click(within(row).getByRole("button", { name: "workflow.edit_named" }));
+  const row = (await screen.findByRole("heading", { name: "collab_style.build_review" })).closest("li")!;
+  fireEvent.click(within(row).getByRole("button", { name: "workflow.select_participants_named" }));
   fireEvent.click(screen.getByRole("checkbox", { name: /Bo/ }));
   rerender(renderWorkflows({ ...pair, version: 5 }));
   fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
   await waitFor(() => expect(updateProject).toHaveBeenCalledWith({ projectId: "p", input: {
-    expectedVersion: 4, predefinedWorkflowChange: { workflowId: "preset:pipeline", agentIds: ["a"] },
+    expectedVersion: 4, predefinedWorkflowChange: { workflowId: "preset:build_review", agentIds: ["a"] },
+  } }));
+});
+
+it.each([true, false])("saves independent review as %s when toggled", async (requireIndependentReview) => {
+  const record: ProjectRecord = requireIndependentReview ? pair : {
+    ...pair,
+    predefinedWorkflows: { build_review: { agentIds: null, requireIndependentReview: true } },
+  };
+  mount(<ProjectWorkflows project={record} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
+  const row = (await screen.findByRole("heading", { name: "collab_style.build_review" })).closest("li")!;
+  fireEvent.click(within(row).getByRole("button", { name: "workflow.select_participants_named" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "workflow.preset_require_independent_review" }));
+  fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
+  await waitFor(() => expect(updateProject).toHaveBeenCalledWith({ projectId: "p", input: {
+    expectedVersion: 4,
+    predefinedWorkflowChange: { workflowId: "preset:build_review", agentIds: null, requireIndependentReview },
   } }));
 });
 
 it("blocks a Predefined Workflow whose selection leaves no enabled Agent", async () => {
-  const empty = { ...pair, predefinedWorkflows: { pipeline: { agentIds: ["gone"] } } } as ProjectRecord;
+  const empty = { ...pair, predefinedWorkflows: { build_review: { agentIds: ["gone"] } } } as ProjectRecord;
   mount(<ProjectWorkflows project={empty} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
-  const row = (await screen.findByRole("heading", { name: "collab_style.pipeline" })).closest("li")!;
+  const row = (await screen.findByRole("heading", { name: "collab_style.build_review" })).closest("li")!;
   expect(within(row).getByRole<HTMLButtonElement>("button", { name: "workflow.start_named" }).disabled).toBe(true);
 });

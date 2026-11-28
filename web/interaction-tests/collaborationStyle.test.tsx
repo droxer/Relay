@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { COLLABORATION_STYLES, effectiveStyle, previewSlots, turnSlot, styleForRun, reviewCycle, reviewBudgetExhausted } from "../src/lib/collaborationStyle";
+import { effectiveStyle, previewSlots, turnSlot, styleForRun, reviewCycle, reviewBudgetExhausted } from "../src/lib/collaborationStyle";
+import { PREDEFINED_WORKFLOWS } from "../src/lib/workflowSelection";
 import { TeamWorkflowPreview } from "../src/components/workflow/TeamWorkflowPreview";
 import type { AgentTeam, CollaborationStyle } from "../src/types";
 import type { SlotMember } from "../src/lib/collaborationStyle";
@@ -20,14 +21,14 @@ const CollaborationSlotPreview = ({ style, ...rest }: { members: SlotMember[]; l
   <TeamWorkflowPreview team={team} workflowId={`preset:${style}`} {...rest} />;
 
 it("gives every predefined workflow a decorative glyph", () => {
-  const { container } = render(<>{COLLABORATION_STYLES.map((style) => <PredefinedWorkflowIcon key={style} style={style} />)}</>);
-  expect(container.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(3);
+  const { container } = render(<>{PREDEFINED_WORKFLOWS.map((style) => <PredefinedWorkflowIcon key={style} style={style} />)}</>);
+  expect(container.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(2);
 });
 
 it("states a predefined workflow by name, kind, and meaning above its role slots", () => {
   const { container } = render(<CollaborationSlotPreview members={[{ id: "a", role: "implementer" }, { id: "b", role: "reviewer" }]} leadId="a" style="pipeline" nameOf={(id) => id} />);
   expect(container.querySelector(".workflow-preview")?.getAttribute("data-style")).toBe("pipeline");
-  expect(screen.getByText("collab_style.pipeline")).toBeTruthy();
+  expect(screen.getByText("workflow.pipeline_retired")).toBeTruthy();
   expect(screen.getByText("workflow.predefined")).toBeTruthy();
   expect(screen.getByText("collab_style.pipeline_hint")).toBeTruthy();
 });
@@ -60,8 +61,8 @@ it("shows the person's approval before the step that closes the round", () => {
   expect(screen.getByText(/collab_style.approval_loop/)).toBeTruthy();
 });
 
-it("offers only team styles and normalizes legacy Solo settings", () => {
-  expect(COLLABORATION_STYLES).toEqual(["build_review", "pipeline", "lead_led"]);
+it("offers active Team workflows and normalizes legacy Solo settings", () => {
+  expect(PREDEFINED_WORKFLOWS).toEqual(["build_review", "lead_led"]);
   expect(effectiveStyle({ collaborationStyle: "solo" })).toBe("build_review");
   expect(effectiveStyle(undefined, "solo")).toBe("build_review");
   // Frozen historical runs still describe what actually ran.

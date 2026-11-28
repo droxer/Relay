@@ -9,7 +9,7 @@ from relay.persistence.team.store import DatabaseTeamStore
 
 def test_predefined_catalog_and_legacy_defaults():
     assert [item['id'] for item in PREDEFINED_WORKFLOWS] == [
-        'preset:build_review', 'preset:pipeline', 'preset:lead_led',
+        'preset:build_review', 'preset:lead_led',
     ]
     assert default_workflow_id({}) == 'preset:build_review'
     assert default_workflow_id({'collaborationStyle': 'pipeline'}) == 'preset:pipeline'

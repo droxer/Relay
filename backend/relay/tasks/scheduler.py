@@ -462,7 +462,7 @@ class TaskScheduler(DispatchCandidates):
             record_computer_capacity_wait(self.task_store, task)
             return True
         if isinstance(error, ProjectDispatchError):
-            message = f"The project cannot execute this task ({error.code})."
+            message = error.task_message
             self._record_dispatch_deferred(
                 task, error.code, message, state="rejected" if error.permanent else "queued"
             )

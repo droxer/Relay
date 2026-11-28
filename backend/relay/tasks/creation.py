@@ -121,7 +121,9 @@ def _resolve_assignment(
         )
     team_for_assignment(ctx, actor, team_id, expected_user_id=assignee,
                         project_id=(request.project or {}).get("id"))
-    validate_task_workflow(ctx, {**body, "ownerUserId": request.owner, "assignedTeamId": team_id})
+    validate_task_workflow(
+        ctx, {**body, "ownerUserId": request.owner, "assignedTeamId": team_id}, new_selection=True,
+    )
     validate_task_owner_assignment(request.owner, assignee)
     agent = logical_agent["executorKind"] if logical_agent else None
     return _Assignment(assignee=assignee, agent_id=agent_id, team_id=team_id, agent=agent)

@@ -162,9 +162,9 @@ test("changing a Team default does not refetch the roster or Team record", async
     if (request.method() === "GET" && /^\/api\/v1\/teams(?:\/delivery)?$/.test(url.pathname)) reads.push(url.pathname);
   });
   await page.goto("/teams/delivery");
-  const pipeline = page.locator('.workflow-team-row[data-kind="predefined"]').filter({ hasText: "Pipeline" });
-  await pipeline.getByRole("button", { name: "Set as default" }).click();
-  await expect(pipeline.getByText("Default", { exact: true })).toBeVisible();
+  const leadLed = page.locator('.workflow-team-row[data-kind="predefined"]').filter({ hasText: "Lead-led" });
+  await leadLed.getByRole("button", { name: "Set as default" }).click();
+  await expect(leadLed.getByText("Default", { exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
   expect(reads).toEqual(["/api/v1/teams", "/api/v1/teams/delivery"]);
 });
@@ -205,8 +205,14 @@ test("Project Workflows load previews until editing requests one definition", as
   await expect(starter).toBeVisible();
   expect(reads).toEqual([preview]);
   await starter.getByRole("button", { name: "Cancel", exact: true }).click();
+  await region.getByRole("button", { name: "Choose participants for Build and review", exact: true }).click();
+  const participants = page.getByRole("dialog", { name: "Edit Workflow Agents" });
+  await expect(participants.getByRole("checkbox", { name: /Builder/ })).toBeVisible();
+  await expect(participants.getByRole("textbox", { name: "Instructions", exact: true })).toHaveCount(0);
+  await participants.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(reads).toEqual([preview]);
   for (let opening = 0; opening < 2; opening++) {
-    await region.getByRole("button", { name: "Edit", exact: true }).click();
+    await region.getByRole("button", { name: "Edit steps", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "Edit workflow" });
     await expect(editor.getByRole("textbox", { name: "Instructions", exact: true })).toHaveValue("Build it");
     expect(reads).toEqual([preview, "/api/v1/workflows/wf_release"]);
@@ -217,19 +223,20 @@ test("Project Workflows load previews until editing requests one definition", as
 for (const mobile of [false, true]) {
   test(`team default workflow saves with its role preview (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
-    const { patches } = await fixture(page);
+    const { patches } = await fixture(page, false, "light", 1, false, true);
     await page.goto("/teams/delivery");
     // Read and edit share one statement: name, kind, then who does what.
     const preview = page.locator(".teams-detail .workflow-preview");
-    await expect(preview).toHaveAttribute("data-style", "build_review");
+    await expect(preview).toHaveAttribute("data-style", "pipeline");
+    await expect(preview).toContainText("Pipeline (retired)");
     await expect(preview.locator(".workflow-preview-kind")).toHaveText("Predefined");
-    await expect(preview.locator(".collab-style-sequence li").filter({ hasText: "Builder: Builder" })).toBeVisible();
+    await expect(preview.locator(".collab-style-sequence li").first()).toContainText("Builder");
     const library = page.getByRole("region", { name: /^Workflows/ });
-    await library.locator('.workflow-team-row[data-kind="predefined"]').filter({ hasText: "Pipeline" })
+    await library.locator('.workflow-team-row[data-kind="predefined"]').filter({ hasText: "Lead-led" })
       .getByRole("button", { name: "Set as default" }).click();
-    await expect.poll(() => patches.at(-1)?.defaultWorkflowId).toBe("preset:pipeline");
+    await expect.poll(() => patches.at(-1)?.defaultWorkflowId).toBe("preset:lead_led");
     await page.reload();
-    const saved = page.locator('.teams-detail .workflow-preview[data-style="pipeline"]');
+    const saved = page.locator('.teams-detail .workflow-preview[data-style="lead_led"]');
     await expect(saved).toBeVisible();
     await saved.scrollIntoViewIfNeeded();
     expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
@@ -254,7 +261,7 @@ test("a Project creates an independent workflow and a Team can assign it", async
   const library = page.getByRole("region", { name: /^Workflows/ });
   await library.getByRole("combobox", { name: "Assign workflow" }).click();
   await page.getByRole("option", { name: /^Ship it/ }).click();
-  await expect(library.locator(".workflow-team-row")).toHaveCount(4);
+  await expect(library.locator(".workflow-team-row")).toHaveCount(3);
   await expect(library).toContainText("Ship it");
 });
 
@@ -262,7 +269,7 @@ test("a team with no eligible project explains how to make a custom workflow", a
   await fixture(page, false, "light", 0);
   await page.goto("/teams/delivery");
   const library = page.getByRole("region", { name: /^Workflows/ });
-  await expect(library.locator(".workflow-team-row")).toHaveCount(3);
+  await expect(library.locator(".workflow-team-row")).toHaveCount(2);
   await expect(library.getByRole("button", { name: "New workflow" })).toBeEnabled();
   await expect(library).toContainText("Create a workflow for this Team");
 });
@@ -306,6 +313,10 @@ for (const [device, width] of [["phone", 390], ["laptop", 1280]] as const) {
   test(`team workflow library keeps one layout grammar (${device})`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await fixture(page, false, "light", 1, false, true);
+    await page.route("**/api/v1/teams/delivery/workflow-choices", route => route.fulfill({ json: {
+      projects: [{ id: "project", name: "API" }],
+      workflows: [{ id: "wf_verify", name: "Verify", projectId: "project" }],
+    } }));
     await page.goto("/teams/delivery");
     const library = page.getByRole("region", { name: /^Workflows/ });
     const assign = library.getByRole("combobox", { name: "Assign workflow" });
@@ -340,22 +351,18 @@ test("composer sends a one-message workflow then returns to the team default", a
   await expect(select).toContainText("Team default · Build and review");
 });
 
-test("failed sends retain the workflow and member mentions hide it", async ({ page }) => {
+test("transient send failures retry the same workflow and member mentions hide it", async ({ page }) => {
   const { sends } = await fixture(page, true);
   await page.goto("/threads/style-thread");
   const select = page.getByRole("combobox", { name: "Workflow" });
   await select.click();
-  await option(page, "Pipeline").click();
+  await expect(page.getByRole("option", { name: /^Pipeline/ })).toHaveCount(0);
+  await option(page, "Lead-led").click();
   const text = page.locator('textarea[name="message"]');
   await text.fill("Fix the API");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect.poll(() => sends.length).toBe(1);
-  await expect(text).toHaveValue("Fix the API");
-  await expect(select).toContainText("Pipeline");
-  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
-  await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect.poll(() => sends.length).toBe(2);
-  expect(sends.map((send) => send.workflowId)).toEqual(["preset:pipeline", "preset:pipeline"]);
+  expect(sends.map((send) => send.workflowId)).toEqual(["preset:lead_led", "preset:lead_led"]);
   expect(sends[0].idempotencyKey).toBe(sends[1].idempotencyKey);
   await expect(select).toContainText("Team default · Build and review");
   await text.fill("@Builder fix the API");
@@ -368,7 +375,7 @@ for (const mobile of [false, true]) {
     await fixture(page, false, "light", 1, true);
     await page.goto("/teams/delivery");
     const library = page.getByRole("region", { name: /^Workflows/ });
-    await expect(library.locator(".workflow-team-row")).toHaveCount(4);
+    await expect(library.locator(".workflow-team-row")).toHaveCount(3);
     await expect(page.locator(".workflow-preview-name")).toHaveText("Delivery");
     // The Project's name is the link to its Workflows tab.
     await expect(library.getByRole("link", { name: "API", exact: true })).toBeVisible();
@@ -376,7 +383,7 @@ for (const mobile of [false, true]) {
     await library.getByRole("link", { name: "API", exact: true }).click();
     const projectWorkflows = page.getByRole("region", { name: /^Workflows/ });
     await expect(projectWorkflows.getByRole("button", { name: "Start run", exact: true })).toBeVisible();
-    await expect(projectWorkflows.getByRole("button", { name: "Edit", exact: true })).toBeVisible();
+    await expect(projectWorkflows.getByRole("button", { name: "Edit steps", exact: true })).toBeVisible();
     await projectWorkflows.getByRole("button", { name: "Start run", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Start workflow" })).toBeVisible();
     expect(await page.locator("body").evaluate(el => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
@@ -394,7 +401,7 @@ test("Project Tasks can choose a custom workflow from a larger Team", async ({ p
   await page.getByRole("option", { name: "Assign later", exact: true }).click();
   await page.getByRole("radio", { name: "Workflow", exact: true }).click();
   await page.getByRole("combobox", { name: "Workflow", exact: true }).click();
-  await expect(page.getByRole("option", { name: /^Pipeline/ })).toBeEnabled();
+  await expect(page.getByRole("option", { name: /^Pipeline/ })).toHaveCount(0);
   await page.getByRole("option", { name: /^Project delivery/ }).click();
   await page.getByRole("button", { name: "Save task", exact: true }).click();
   await expect.poll(() => patches.at(-1)?.assignedWorkflowId).toBe("wf_project");
@@ -424,16 +431,16 @@ for (const mobile of [false, true]) {
     const { sends } = await fixture(page, false, "light", 1, false, false, false, false);
     await page.goto("/projects/project?tab=members");
     const library = page.getByRole("region", { name: /^Workflows/ });
-    await expect(library.getByRole("button", { name: /^Start run for / })).toHaveCount(3);
-    await library.getByRole("button", { name: "Start run for Pipeline", exact: true }).click();
+    await expect(library.getByRole("button", { name: /^Start run for / })).toHaveCount(2);
+    await library.getByRole("button", { name: "Start run for Build and review", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Start workflow" });
     await expect(dialog.getByRole("combobox", { name: "Team (optional)" })).toHaveCount(0);
-    await dialog.getByRole("textbox", { name: /^Goal/ }).fill("Release by Pipeline");
+    await dialog.getByRole("textbox", { name: /^Goal/ }).fill("Release with review");
     const submitted = page.waitForRequest(request =>
-      request.method() === "POST" && decodeURIComponent(new URL(request.url()).pathname).endsWith("/workflows/preset:pipeline/runs"));
+      request.method() === "POST" && decodeURIComponent(new URL(request.url()).pathname).endsWith("/workflows/preset:build_review/runs"));
     await dialog.getByRole("button", { name: "Start run", exact: true }).click();
     await submitted;
-    await expect.poll(() => sends[0]).toEqual({ requestId: expect.any(String), projectId: "project", taskGoal: "Release by Pipeline" });
+    await expect.poll(() => sends[0]).toEqual({ requestId: expect.any(String), projectId: "project", taskGoal: "Release with review" });
     expect(await page.locator("body").evaluate(el => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
   });
 }

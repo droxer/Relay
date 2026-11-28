@@ -7,7 +7,7 @@ from typing import Any
 
 from ..core.human_waits import QUESTION_ID_PREFIX
 from ..core.project_roles import project_lead_id, project_member_ids
-from ..core.workflow_selection import default_workflow_id, predefined_style
+from ..core.workflow_selection import default_workflow_id, predefined_style, require_selectable_workflow
 from ..projects.runtime import (
     ProjectDispatchError,
     project_thread_assignments,
@@ -185,6 +185,8 @@ class RosterMixin(ConductorState):
             workflow_style = resolve_collaboration_style(
                 team, None, intent.style or _thread_workflow_style(team, session)
             )
+            if session is None:
+                require_selectable_workflow(f"preset:{workflow_style}")
         except ValueError as error:
             raise CollaborationError(str(error), status=409) from error
         raw_assignments = team_member_assignments(

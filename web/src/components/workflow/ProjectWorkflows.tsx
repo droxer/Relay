@@ -60,26 +60,29 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
     <ul className="workflow-team-list">
       {presets.map(({ id, template, issue }) => {
         const name = t(`collab_style.${template}`);
+        const participantIds = projectPresetParticipants(project, template);
+        const requiresReview = template === "build_review" && project.predefinedWorkflows?.build_review?.requireIndependentReview;
+        const blocker = requiresReview && participantIds.length < 2 ? "project_reviewer_required" : issue;
         return <li key={id} className="workflow-team-row" data-kind="predefined">
           <div className="workflow-library-main">
             <div className="workflow-team-row-name"><PredefinedWorkflowIcon style={template} /><h3 className="workflow-library-name">{name}</h3></div>
             <p className="workflow-library-meta">
               {t(`collab_style.${template}_hint`)}
-              {template === "build_review" ? <> {t("workflow.preset_build_review_fallback")}</> : null}
+              {template === "build_review" ? <> {t(requiresReview ? "workflow.preset_require_independent_review" : "workflow.preset_build_review_fallback")}</> : null}
             </p>
             <PresetParticipants
-              ids={projectPresetParticipants(project, template)}
-              all={!project.predefinedWorkflows?.[template]}
+              ids={participantIds}
+              all={project.predefinedWorkflows?.[template]?.agentIds == null}
               label={t("workflow.preset_participants")}
               agent={agentId => agents.find(agent => agent.id === agentId)}
               role={agentId => project.members.find(member => member.agentId === agentId)?.role}
             />
-            {issue ? <p className="workflow-library-meta">{t(`workflow.${issue}`)}</p> : null}
+            {blocker ? <p className="workflow-library-meta">{t(`workflow.${blocker}`)}</p> : null}
           </div>
           {canManage ? <div className="workflow-team-actions">
-            <Button type="button" variant="ghost" size="dense" aria-label={t("workflow.edit_named", { name })} onClick={() => setEditingPreset(template)}>{t("workflow.edit")}</Button>
+            <Button type="button" variant="ghost" size="dense" aria-label={t("workflow.select_participants_named", { name })} onClick={() => setEditingPreset(template)}>{t("workflow.select_participants")}</Button>
             <Button type="button" variant="outline" size="dense" aria-label={t("workflow.start_named", { name })}
-              disabled={Boolean(issue)} onClick={() => setStarting({ kind: "predefined", id, name })}>
+              disabled={Boolean(blocker)} onClick={() => setStarting({ kind: "predefined", id, name })}>
               <ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}
             </Button>
           </div> : null}
@@ -101,7 +104,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
                 <p className="workflow-library-meta">{workflowProcessMeta(t, workflow.workflowSteps)}</p>
               </div>
               {canManage ? <div className="workflow-team-actions">
-                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>
+                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit_steps")}</Button>
                 <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting({ kind: "steps", id: workflow.id, name: workflow.name, preview: workflow })}><ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}</Button>
               </div> : null}
             </div>
@@ -191,7 +194,7 @@ function WorkflowRunStarter({
       onStarted(session.id);
     } catch (error) {
       const code = error instanceof RelayApiError ? error.code : undefined;
-      setFailure(code === "project_lead_required" || code === "project_roster_invalid"
+      setFailure(code === "project_lead_required" || code === "project_roster_invalid" || code === "project_reviewer_required"
         ? t(`workflow.${code}`) : error instanceof Error ? error.message : String(error));
     } finally {
       setPending(false);

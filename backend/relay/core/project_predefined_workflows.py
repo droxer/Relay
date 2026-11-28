@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal, NotRequired, TypedDict
 
-from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style
+from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style, require_selectable_workflow
 
 _PRESET_TEMPLATES = frozenset(item["template"] for item in PREDEFINED_WORKFLOWS)
+_SAVED_PRESET_TEMPLATES = _PRESET_TEMPLATES | {"pipeline"}
+
+
+class ProjectWorkflowSelection(TypedDict):
+    agentIds: list[str] | None
+    requireIndependentReview: NotRequired[Literal[True]]
 
 
 class PredefinedWorkflowChangeError(ValueError):
@@ -17,9 +23,12 @@ class PredefinedWorkflowChangeError(ValueError):
 
 def apply_workflow_change(
     selections: dict[str, Any] | None, members: list[dict[str, Any]], change: Any
-) -> dict[str, dict[str, list[str]]]:
-    """Return the selections after one change; `agentIds: null` restores the default."""
-    if not isinstance(change, dict) or set(change) != {"workflowId", "agentIds"}:
+) -> dict[str, ProjectWorkflowSelection]:
+    """Update participants and any explicitly supplied Build → Review policy."""
+    required_keys = {"workflowId", "agentIds"}
+    if not isinstance(change, dict) or not required_keys <= change.keys() <= (
+        required_keys | {"requireIndependentReview"}
+    ):
         raise PredefinedWorkflowChangeError("project_workflow_change_invalid")
     try:
         template = predefined_style(change["workflowId"])
@@ -27,18 +36,31 @@ def apply_workflow_change(
         raise PredefinedWorkflowChangeError("project_workflow_change_invalid") from error
     if template is None:
         raise PredefinedWorkflowChangeError("project_workflow_change_invalid")
+    try:
+        require_selectable_workflow(change["workflowId"])
+    except ValueError as error:
+        raise PredefinedWorkflowChangeError(str(error)) from error
 
     result = dict(selections or {})
     agent_ids = change["agentIds"]
-    if agent_ids is None:
-        result.pop(template, None)
-        return result
-    if not _valid_agent_ids(agent_ids):
+    if "requireIndependentReview" in change and (
+        template != "build_review" or not isinstance(change["requireIndependentReview"], bool)
+    ):
         raise PredefinedWorkflowChangeError("project_workflow_change_invalid")
-    enabled = {member["agentId"] for member in members if member.get("enabled", True)}
-    if not set(agent_ids) <= enabled:
-        raise PredefinedWorkflowChangeError("project_workflow_agent_not_member")
-    result[template] = {"agentIds": list(agent_ids)}
+    require_review = change.get("requireIndependentReview", result.get(template, {}).get("requireIndependentReview"))
+    if agent_ids is not None:
+        if not _valid_agent_ids(agent_ids):
+            raise PredefinedWorkflowChangeError("project_workflow_change_invalid")
+        enabled = {member["agentId"] for member in members if member.get("enabled", True)}
+        if not set(agent_ids) <= enabled:
+            raise PredefinedWorkflowChangeError("project_workflow_agent_not_member")
+    selection: ProjectWorkflowSelection = {"agentIds": list(agent_ids) if agent_ids is not None else None}
+    if require_review:
+        selection["requireIndependentReview"] = True
+    if require_review or agent_ids is not None:
+        result[template] = selection
+    else:
+        result.pop(template, None)
     return result
 
 
@@ -53,24 +75,29 @@ def _valid_agent_ids(value: Any) -> bool:
 
 def valid_predefined_workflows(value: Any) -> bool:
     return isinstance(value, dict) and all(
-        template in _PRESET_TEMPLATES
+        template in _SAVED_PRESET_TEMPLATES
         and isinstance(selection, dict)
-        and set(selection) == {"agentIds"}
-        and _valid_agent_ids(selection["agentIds"])
+        and (
+            set(selection) == {"agentIds"} and _valid_agent_ids(selection["agentIds"])
+            or template == "build_review"
+            and set(selection) == {"agentIds", "requireIndependentReview"}
+            and selection["requireIndependentReview"] is True
+            and (selection["agentIds"] is None or _valid_agent_ids(selection["agentIds"]))
+        )
         for template, selection in value.items()
     )
 
 
 def prune_removed_members(
     selections: dict[str, Any] | None, members: list[dict[str, Any]]
-) -> dict[str, dict[str, list[str]]]:
+) -> dict[str, ProjectWorkflowSelection]:
     """Drop Agents the roster no longer lists; a disabled member stays selected."""
     listed = {member["agentId"] for member in members}
-    pruned: dict[str, dict[str, list[str]]] = {}
+    pruned: dict[str, ProjectWorkflowSelection] = {}
     for template, value in (selections or {}).items():
-        kept = [agent_id for agent_id in value["agentIds"] if agent_id in listed]
-        if kept:
-            pruned[template] = {"agentIds": kept}
+        kept = [agent_id for agent_id in value["agentIds"] or [] if agent_id in listed]
+        if kept or value.get("requireIndependentReview"):
+            pruned[template] = {**value, "agentIds": kept or None}
     return pruned
 
 

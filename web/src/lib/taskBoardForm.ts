@@ -188,6 +188,15 @@ export function taskAssignmentMutationFields(
   };
 }
 
+export function taskAssignmentUnchanged(form: TaskBoardFormState, baseline: TaskBoardFormState | null): boolean {
+  return Boolean(form.id && baseline
+    && form.projectId === baseline.projectId
+    && form.assignedAgentId === baseline.assignedAgentId
+    && form.assignedTeamId === baseline.assignedTeamId
+    && form.assignedWorkflowId === baseline.assignedWorkflowId
+    && form.collaborationStyle === baseline.collaborationStyle);
+}
+
 type TaskStartSelection = {
   id: string;
   assignedAgentId?: string;

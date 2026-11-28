@@ -39,11 +39,12 @@ Predefined Workflows use the roles of the Project Agents or Team members:
 | Workflow | Behavior |
 | --- | --- |
 | Build → Review | Roles choose a builder and reviewer; findings can trigger repair. |
-| Pipeline | Eligible Agents run in role order. |
 | Lead-led | The lead plans, delegates dynamically, and reviews the result. |
 
-In a Project, open **Collaboration → Workflows** and choose **Edit** beside a
-Predefined Workflow to select its eligible Agents. **Use all Agents** restores
+In a Project, open **Collaboration → Workflows** and choose **Choose participants**
+beside a Predefined Workflow to select its eligible Agents. Choose **Edit steps**
+on a Custom Workflow to manage its ordered Agents, instructions, and approvals.
+**Use all Agents** restores
 the default of all enabled Project Agents. Lead-led always includes the
 current Project Lead. The selection applies to direct runs, Tasks, and
 Automations that choose that Predefined Workflow in the Project.
@@ -52,6 +53,10 @@ For work assigned to a Team, Relay resolves the explicit Task choice first.
 It then checks the Team's defaults for the Project and for the Team, followed
 by the system default. Existing legacy custom defaults remain readable
 until changed.
+
+Pipeline is retired. Saved Pipeline Tasks and Automations still dispatch in
+role order and existing runs can finish. Choose an active Workflow when
+assigning new work, or replace the retired default in the Team's Workflow library.
 
 ## Execution
 
