@@ -535,3 +535,39 @@ test("the stacked Workflows roster shows its rows on a tablet", async ({ page })
     expect(clipped, `${width}px`).toBeLessThanOrEqual(1);
   }
 });
+
+for (const [language, leadLabel, participantsLabel] of [
+  ["en", "Lead", "Participating Agents"],
+  ["zh-CN", "负责人", "参加的智能体"],
+  ["zh-TW", "負責人", "參與的代理"],
+] as const) {
+  test(`migrated standalone Workflow translates its Lead label (${language})`, async ({ page }) => {
+    await fixture(page);
+    await page.route("**/api/v1/auth/me", (route) => route.fulfill({ json: {
+      authenticated: true,
+      user: { id: "alice", userId: "alice", username: "alice", role: "user", theme: "light", language },
+    } }));
+    const workflow = {
+      id: "wf_migrated", name: "Delivery 流程", kind: "predefined", projectId: null,
+      computerId: "device:alice:host", ownerUserId: "alice", enabled: true, version: 1,
+      workflowSteps: [], createdAt: "2026-11-28T00:00:00Z", updatedAt: "2026-11-28T00:00:00Z",
+      predefined: {
+        template: "lead_led", memberAgentIds: ["lead", "qa"], leadAgentId: "lead",
+        humanApproval: false, acceptanceCriteria: [],
+      },
+    };
+    await page.route("**/api/v1/workflows**", (route) => {
+      const path = new URL(route.request().url()).pathname;
+      return route.fulfill({ json: path.endsWith("/wf_migrated")
+        ? { workflow } : { view: "preview", workflows: [workflow] } });
+    });
+
+    await page.goto("/workflows/wf_migrated");
+    const participants = page.getByRole("list", { name: participantsLabel, exact: true });
+    await expect(participants.getByText("Builder", { exact: true })).toBeVisible();
+    await expect(participants.getByText("Reviewer", { exact: true })).toBeVisible();
+    await expect(participants.getByText(leadLabel, { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Delivery 流程", exact: true })).toBeVisible();
+    await expect(page.getByText("collab.turn_lead", { exact: true })).toHaveCount(0);
+  });
+}
