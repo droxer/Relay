@@ -10,6 +10,7 @@ from ...core.workflows import (
     workflow_step_agent_ids, workflow_step_changes,
 )
 from ...projects.workflow import validate_project_workflow
+from ...computer.workflows import validate_standalone_workflow
 from ...teams.workflow import validate_team_definition
 from ...security.request_auth import require_user_session
 from ..actors import chat_service_user_header
@@ -40,15 +41,19 @@ def owned_definition(request: Request, ctx: AppContextDep, workflow_id: str) -> 
 
 @router.get('/workflows', response_model=None)
 def list_workflows(
-    request: Request, ctx: AppContextDep, projectId: str | None = None,
+    request: Request, ctx: AppContextDep, projectId: str | None = None, scope: str | None = None,
 ) -> dict[str, Any] | Response:
     owner = workflow_owner(request, ctx)
+    if scope not in (None, 'standalone') or (scope == 'standalone' and projectId):
+        raise HTTPException(400, 'workflow_scope_invalid')
     view = request.query_params.get('view')
-    definitions = ctx.workflow_store.list_workflows(owner, project_id=projectId, project_only=view == 'choices')
+    definitions = ctx.workflow_store.list_workflows(owner, project_id=projectId,
+                                                   project_only=view == 'choices' and scope != 'standalone',
+                                                   standalone_only=scope == 'standalone')
     if view == 'choices':
         return private_conditional_json(request, {
             'workflows': [
-                {**{key: definition[key] for key in ('id', 'name', 'projectId', 'enabled')},
+                {**{key: definition[key] for key in ('id', 'name', 'projectId', 'computerId', 'enabled') if key in definition},
                  'stepAgentIds': workflow_step_agent_ids(definition)}
                 for definition in definitions
             ],
@@ -93,6 +98,8 @@ def save_definition(request: Request, ctx: AppContextDep, body: dict[str, Any], 
             validate_team_definition(ctx, definition, team)
             # The owning Team cannot unlink its Workflow.
             team_link_unchanged = bool(current and any(item['id'] == current['id'] for item in team.get('workflows', [])))
+        elif definition.get('computerId'):
+            validate_standalone_workflow(ctx, definition, require_enabled=False)
         else:
             validate_project_workflow(ctx, definition, require_enabled=False)
         saved = ctx.workflow_store.save_workflow(owner, patch, workflow_id=workflow_id, expected_version=expected_version)

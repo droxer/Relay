@@ -28,3 +28,4 @@ operational contracts are indexed in the [documentation guide](../README.md).
 | [ADR-024](024-task-prerequisites-and-project-plans.md) | Task prerequisites, and project plans that agents propose and owners apply |
 | [ADR-025](025-independent-project-workflows.md) | Independent Project Workflows and optional Team assignment |
 | [ADR-026](026-team-and-project-workflow-ownership.md) | Team and Project ownership scopes for reusable Workflows |
+| [ADR-027](027-standalone-task-workflows.md) | User-owned, Computer-bound Workflows for standalone Tasks |

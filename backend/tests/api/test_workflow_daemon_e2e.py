@@ -61,11 +61,12 @@ def wait_for(h, sid, index, status):
 @pytest.mark.integration
 @pytest.mark.parametrize("entry", [
     "project", "task", "independent", "independent_task",
-    "independent_manual", "independent_schedule",
+    "independent_manual", "independent_schedule", "standalone_task",
 ])
 def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workflow_daemon, entry):
     h = workflow_daemon
-    independent = entry.startswith("independent")
+    standalone = entry == 'standalone_task'
+    independent = entry.startswith("independent") or standalone
     automation = entry.endswith(("_manual", "_schedule"))
     if entry == "task":
         # A Project Task names its own Project Workflow, never a Team.
@@ -76,7 +77,10 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
         )["workflow"]
     else:
         workflow = (
-            h.post("/workflows", workflow_fields(h), 201)["workflow"]
+            h.post("/workflows", (
+                {key: value for key, value in workflow_fields(h).items() if key != 'projectId'}
+                | {'computerId': h.project['computerId']} if standalone else workflow_fields(h)
+            ), 201)["workflow"]
             if independent else team(h)
         )
     task = None
@@ -89,7 +93,8 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
         assert not session.get("teamId")
     elif entry == "task" or independent:
         # Every Project Task here names a Workflow; none names a Team.
-        task = h.post("/tasks", {"title": "Ship Task workflow", "projectId": h.project["id"],
+        task = h.post("/tasks", {"title": "Ship Task workflow",
+                                  **({'computerId': h.project['computerId']} if standalone else {'projectId': h.project['id']}),
                                   "assignedWorkflowId": workflow["id"],
                                   **({"isRoutine": True, "routineState": "active",
                                       "routineTriggers": DAILY_TRIGGERS} if automation else {})}, 201)
@@ -110,6 +115,10 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
         if independent:
             assert not session.get("teamId")
             assert h.ctx.team_store.list_teams() == []
+        if standalone:
+            assert not session.get('projectId')
+            assert session['workspaceLayout'] == 'task'
+            assert session['workspaceSubpath'] == f"tasks/{task['id']}"
     else:
         session = start(h, workflow)
     sid = session["id"]
@@ -175,11 +184,20 @@ def test_daemon_workflow_failure_retry_gate_restart_and_frozen_definition(workfl
 
 
 @pytest.mark.integration
-def test_daemon_workflow_cancel_stops_current_runtime_without_successor(workflow_daemon):
+@pytest.mark.parametrize('standalone', [False, True])
+def test_daemon_workflow_cancel_stops_current_runtime_without_successor(workflow_daemon, standalone):
     h = workflow_daemon
-    workflow = team(h)
+    workflow = (h.post('/workflows', {
+        **{key: value for key, value in workflow_fields(h).items() if key != 'projectId'},
+        'computerId': h.project['computerId'],
+    }, 201)['workflow'] if standalone else team(h))
     (h.root / "hold").touch()
-    session = start(h, workflow)
+    if standalone:
+        task = h.post('/tasks', {'title': 'Cancel independent work', 'computerId': h.project['computerId'],
+                                 'assignedWorkflowId': workflow['id']}, 201)
+        session = h.post(f"/tasks/{task['id']}/runs", {}, 202)['session']
+    else:
+        session = start(h, workflow)
     sid = session["id"]
     eventually(lambda: any(item["kind"] == "launch" for item in h.traces()))
     assert h.ctx.daemon_store.list_active_runs(h.node_id)

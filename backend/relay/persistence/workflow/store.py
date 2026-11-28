@@ -33,10 +33,13 @@ class DatabaseWorkflowStore:
 
     def list_workflows(self, owner: str | None = None, *, project_id: str | None = None,
                        team_id: str | None = None, project_only: bool = False,
+                       standalone_only: bool = False,
                        project_ids: Collection[str] | None = None) -> list[dict[str, Any]]:
         statement = select(workflows.c.snapshot, workflows.c.event_version).where(workflows.c.deleted_at.is_(None))
         if owner:
             statement = statement.where(workflows.c.owner_user_id == owner)
+        if standalone_only:
+            statement = statement.where(workflows.c.computer_id.is_not(None))
         if project_id:
             if names_no_uuid_row(self.engine, project_id):
                 return []
@@ -71,14 +74,12 @@ class DatabaseWorkflowStore:
     def save_workflow(
         self, owner: str, payload: dict[str, Any], *, workflow_id: str | None = None, expected_version: int | None = None,
     ) -> dict[str, Any]:
-        project_id = payload.get('projectId')
         old = self.get_workflow(workflow_id) if workflow_id else None
         if workflow_id and not old:
             raise KeyError(workflow_id)
         if old and old['ownerUserId'] != owner:
             raise ValueError('workflow_owner_required')
-        scope = (old.get('projectId') or old.get('ownerTeamId')) if old else (project_id or payload.get('ownerTeamId'))
-        with resource_transaction(self.engine, f'workflows:{scope}'):
+        with resource_transaction(self.engine, self._scope_key(old or payload, owner)):
             current = self.get_workflow(workflow_id) if workflow_id else None
             if workflow_id and not current:
                 raise KeyError(workflow_id)
@@ -88,7 +89,8 @@ class DatabaseWorkflowStore:
             if not current or current['name'].casefold() != definition['name'].casefold():
                 if any(value['id'] != definition['id'] and value['name'].casefold() == definition['name'].casefold()
                        for value in self.list_workflows(owner)
-                       if value.get('projectId') == definition.get('projectId') and value.get('ownerTeamId') == definition.get('ownerTeamId')):
+                       if value.get('projectId') == definition.get('projectId') and value.get('ownerTeamId') == definition.get('ownerTeamId')
+                       and value.get('computerId') == definition.get('computerId')):
                     raise ValueError('workflow_name_taken')
             if current and current['enabled'] and not definition['enabled']:
                 self.assert_not_default(current['id'])
@@ -112,7 +114,7 @@ class DatabaseWorkflowStore:
         current = self.get_workflow(workflow_id)
         if not current:
             raise KeyError(workflow_id)
-        with resource_transaction(self.engine, f"workflows:{current.get('projectId') or current.get('ownerTeamId')}"):
+        with resource_transaction(self.engine, self._scope_key(current, current['ownerUserId'])):
             self.assert_not_default(workflow_id)
             with store_transaction(self.engine) as conn:
                 version = conn.execute(select(workflows.c.event_version).where(workflows.c.id == workflow_id)).scalar_one()
@@ -166,8 +168,15 @@ class DatabaseWorkflowStore:
             migrate_team_workflows(conn)
 
     @staticmethod
+    def _scope_key(value: dict[str, Any], owner: str) -> str:
+        scope = value.get('projectId') or value.get('ownerTeamId')
+        # Team default/link writers use the same legacy scope lock.
+        return f'workflows:{scope}' if scope else f"workflows:standalone:{owner}:{value.get('computerId')}"
+
+    @staticmethod
     def _row(value: dict[str, Any], version: int) -> dict[str, Any]:
         return {'id': value['id'], 'owner_user_id': value['ownerUserId'], 'project_id': value.get('projectId'), 'owner_team_id': value.get('ownerTeamId'),
+                'computer_id': value.get('computerId'),
                 'name': value['name'], 'name_key': value['name'].casefold(), 'snapshot': deepcopy(value),
                 'event_version': version, 'created_at': parse_db_time(value['createdAt']),
                 'updated_at': parse_db_time(value['updatedAt']), 'deleted_at': parse_db_time(value.get('deletedAt'))}

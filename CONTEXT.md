@@ -161,7 +161,11 @@ Thread may address a Team only when the Team lives on the Thread's Computer.
 _Avoid_: Cross-node team, shared-path team
 
 **Workflow**:
-A reusable process. A **Custom Workflow** belongs to exactly one Team or Project and defines
+A reusable process. A standalone **Custom Workflow** is owned by a User and
+bound to one Computer. Its independent Tasks run in their own Task Workspace
+without a Team or Project; step Agents must belong to that User and be placed
+on that Computer. Existing Team- and Project-owned definitions retain their scopes.
+A **Custom Workflow** defines
 ordered steps, each with an Agent, instructions, acceptance criteria, and an
 optional approval gate. The owner manages it where it was created. A Team-owned Workflow runs with its owning Team through a direct Workflow Run.
 Standalone Tasks and Automations assigned to an ordinary Team use a predefined process.

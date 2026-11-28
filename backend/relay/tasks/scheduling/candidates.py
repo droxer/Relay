@@ -103,6 +103,7 @@ class DispatchCandidates:
                 and (
                     task.get("assignedAgent")
                     or task.get("assignedTeamId")
+                    or task.get("assignedWorkflowId")
                     or task.get("projectId")
                 )
             ]

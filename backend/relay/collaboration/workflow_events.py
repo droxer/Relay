@@ -65,12 +65,16 @@ def apply_workflow_started(session: dict[str, Any], event: dict[str, Any]) -> No
     snapshot = assignments[0].get("teamSnapshot")
     if not isinstance(snapshot, dict):
         raise ValueError("workflow_snapshot_required")
+    standalone = (snapshot.get('workflowRecordVersion') == 1 and not snapshot.get('projectId')
+                  and not snapshot.get('ownerTeamId') and snapshot_team_id(snapshot) is None
+                  and session.get('workspaceLayout') == 'task' and session.get('workspaceSubpath'))
     for session_key, team_key in (
         ("teamId", "id"), ("projectId", "projectId"),
         ("ownerUserId", "ownerUserId"), ("computerId", "computerId"),
     ):
         expected = snapshot_team_id(snapshot) if session_key == "teamId" else snapshot.get(team_key)
-        if (session_key != "teamId" and not session.get(session_key)) or session.get(session_key) != expected:
+        optional = session_key == 'teamId' or (session_key == 'projectId' and standalone)
+        if (not optional and not session.get(session_key)) or session.get(session_key) != expected:
             raise ValueError("workflow_scope_mismatch")
     assignments = workflow_work_graph(assignments, team_snapshot=snapshot)
     if any(item["workflowAttempt"] != 1 for item in assignments):

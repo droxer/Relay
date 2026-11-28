@@ -27,13 +27,18 @@ def workflow_fields(
         raise ValueError("team_workflow_project_immutable")
     if merged.get("collaborationStyle") is not None or merged.get("humanApproval") not in (None, False):
         raise ValueError("team_workflow_legacy_policy_conflict")
-    steps = merged.get("workflowSteps")
+    return {"projectId": project, "workflowSteps": normalize_workflow_steps(
+        merged.get("workflowSteps"), merged.get("memberAgentIds") or [],
+    )}
+
+
+def normalize_workflow_steps(steps: Any, members: list[str]) -> list[dict[str, Any]]:
     if not isinstance(steps, list) or not 1 <= len(steps) <= 64:
         raise ValueError("workflowSteps must contain 1 to 64 steps.")
-    normalized = [_step(step, merged.get("memberAgentIds") or []) for step in steps]
+    normalized = [_step(step, members) for step in steps]
     if len({step["id"] for step in normalized}) != len(normalized):
         raise ValueError("team_workflow_duplicate_step_id")
-    return {"projectId": project, "workflowSteps": normalized}
+    return normalized
 
 
 def _step(value: Any, members: list[str]) -> dict[str, Any]:

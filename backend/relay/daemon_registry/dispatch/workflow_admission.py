@@ -156,6 +156,14 @@ def _validate_workflow_scope(
         expected_value = snapshot_team_id(snapshot) if session_key == "teamId" else snapshot.get(team_key)
         if session.get(session_key) != expected_value:
             raise ValueError("workflow_scope_mismatch")
+    if not session.get('projectId'):
+        if (snapshot.get('workflowRecordVersion') != 1 or snapshot.get('ownerTeamId')
+            or snapshot_team_id(snapshot) is not None or not snapshot.get('computerId')
+            or session.get('workspaceLayout') != 'task' or not session.get('workspaceSubpath')):
+            raise ValueError('workflow_scope_mismatch')
+        if validate is not None:
+            validate(snapshot)
+        return
     project = project_store.get_project(session["projectId"]) if project_store else None
     if (
         not project
@@ -178,6 +186,8 @@ def _validate_workflow_scope(
 def _assert_workflow_node_compatible(sandbox: dict[str, Any] | None, session: dict[str, Any]) -> dict[str, Any]:
     if not sandbox or computer_id(sandbox) != session["computerId"]:
         raise ValueError("workflow_computer_mismatch")
+    if session.get('workspaceLayout') == 'task' and (sandbox.get('workspacePath') or '/workspace') != session.get('workspacePath'):
+        raise ValueError('workflow_workspace_mismatch')
     if not has_capability(sandbox, "round-result") or not has_capability(sandbox, "workflow-results"):
         raise ValueError("workflow_result_client_update_required")
     return sandbox

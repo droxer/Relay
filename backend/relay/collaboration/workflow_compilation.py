@@ -15,7 +15,7 @@ from copy import deepcopy
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-from ..core.team_workflows import workflow_fields
+from ..core.team_workflows import workflow_fields, normalize_workflow_steps
 
 # Copy only routing/Agent data. A legacy roster may contain lead planning,
 # synthesis, optional participation or repair authority; none applies here.
@@ -49,7 +49,13 @@ def compile_workflow(
     not persist it or authorize execution.
     """
     run_id = _run_id(run_id)
-    fields = workflow_fields(team)
+    fields: dict[str, Any]
+    if team.get('workflowRecordVersion') == 1 and not team.get('projectId') and team.get('computerId'):
+        fields = {'projectId': None, 'workflowSteps': normalize_workflow_steps(
+            team.get('workflowSteps'), team.get('memberAgentIds') or [],
+        )}
+    else:
+        fields = workflow_fields(team)
     if not fields:
         raise ValueError("workflow_definition_required")
     members: dict[str, dict[str, Any]] = {}
