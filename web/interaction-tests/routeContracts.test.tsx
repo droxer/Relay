@@ -5,7 +5,7 @@ import type { RelayTaskListItem } from "../src/types";
 
 const collections = {
   home: "/home", main: "/threads", projects: "/projects", backlog: "/tasks", routine: "/automations",
-  agents: "/agents", teams: "/teams", computers: "/computers", skills: "/skills",
+  agents: "/agents", workflows: "/workflows", computers: "/computers", skills: "/skills",
   settings: "/settings/notifications", admin: "/admin/dashboard",
 } as const;
 
@@ -18,7 +18,7 @@ it.each(Object.entries(collections))("round trips the %s navigation destination"
 const details = [
   "/threads/new", "/threads/a%2Fb", "/projects/a%2Fb", "/projects/a%2Fb/new", "/projects/p/threads/a%2Fb",
   "/tasks/a%2Fb", "/tasks/t/threads/a%2Fb", "/automations/a%2Fb", "/automations/a/runs/a%2Fb",
-  "/agents/a%2Fb", "/teams/a%2Fb", "/skills/a%2Fb",
+  "/agents/a%2Fb", "/workflows/a%2Fb", "/skills/a%2Fb",
   ...["account", "connections", "notifications", "appearance", "language"].map(section => `/settings/${section}`),
   ...["dashboard", "users", "computers", "waitlist", "organization"].map(section => `/admin/${section}`),
   ...["threads", "threads/new", "threads/a%2Fb", "tasks", "tasks/a%2Fb", "tasks/t/threads/a%2Fb", "automations", "automations/a%2Fb", "automations/a/runs/a%2Fb"].map(path => `/computers/device%3Au%3Am/${path}`),
@@ -42,9 +42,11 @@ it.each(["/login", "/waitlist", "/join", "/forgot-password", "/reset-password"])
   expect(validatedReturnTo(path)).toBe("/home");
 });
 
-it("keeps the team roster search when opening and closing a team", () => {
-  expect(browserUrlForAppState(parseAppPath("/teams/team"), "/teams", "?q=release")).toBe("/teams/team?q=release");
-  expect(browserUrlForAppState(parseAppPath("/teams"), "/teams/team", "?q=release&tab=activities")).toBe("/teams?q=release");
+it("keeps the workflow roster search when opening and closing a workflow, and canonicalizes legacy /teams links", () => {
+  expect(browserUrlForAppState(parseAppPath("/workflows/wf-1"), "/workflows", "?q=release")).toBe("/workflows/wf-1?q=release");
+  expect(browserUrlForAppState(parseAppPath("/workflows"), "/workflows/wf-1", "?q=release")).toBe("/workflows?q=release");
+  expect(canonicalBrowserUrl("/teams", "?q=release")).toBe("/workflows?q=release");
+  expect(canonicalBrowserUrl("/teams/legacy-1", "?q=release")).toBe("/workflows/legacy-1?q=release");
 });
 
 it("links unplaced work to its global record without choosing a Computer", () => {

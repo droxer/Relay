@@ -256,24 +256,24 @@
      box is laid over the band — a stretched ::after is not enough, since
      Chromium's tap targeting hands the click to the text under the finger.
      A meter under the summary says how far the run has come. */
-  .chat-panel > .workflow-progress {
+  .chat-banners > .workflow-progress {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-2);
     transition: background-color var(--t-fast) var(--ease);
   }
 
-  .chat-panel > .workflow-progress:has(> .workflow-progress-open:active) {
+  .chat-banners > .workflow-progress:has(> .workflow-progress-open:active) {
     background: var(--control-fill);
   }
 
   /* Room on the trailing edge for the chevron drawn over it. */
-  .chat-panel > .workflow-progress > .workflow-run-summary {
+  .chat-banners > .workflow-progress > .workflow-run-summary {
     grid-area: 1 / 1;
     padding-inline-end: calc(var(--sp-4) + var(--sp-3));
   }
 
-  .chat-panel > .workflow-progress > .workflow-progress-meter {
+  .chat-banners > .workflow-progress > .workflow-progress-meter {
     position: relative;
     display: block;
     grid-area: 2 / 1;
@@ -283,7 +283,7 @@
     background: var(--line-2);
   }
 
-  .chat-panel > .workflow-progress > .workflow-progress-meter::before {
+  .chat-banners > .workflow-progress > .workflow-progress-meter::before {
     content: "";
     position: absolute;
     inset: 0 auto 0 0;
@@ -292,14 +292,14 @@
     background: var(--tone, var(--live));
   }
 
-  .chat-panel > .workflow-progress:has(> .workflow-run-summary:is([data-state="awaiting_approval"], [data-state="awaiting_input"])) { --tone: var(--warn); }
-  .chat-panel > .workflow-progress:has(> .workflow-run-summary[data-state="blocked"]) { --tone: var(--err); }
-  .chat-panel > .workflow-progress:has(> .workflow-run-summary[data-state="completed"]) { --tone: var(--ok); }
-  .chat-panel > .workflow-progress:has(> .workflow-run-summary[data-state="cancelled"]) { --tone: var(--ink-4); }
+  .chat-banners > .workflow-progress:has(> .workflow-run-summary:is([data-state="awaiting_approval"], [data-state="awaiting_input"])) { --tone: var(--warn); }
+  .chat-banners > .workflow-progress:has(> .workflow-run-summary[data-state="blocked"]) { --tone: var(--err); }
+  .chat-banners > .workflow-progress:has(> .workflow-run-summary[data-state="completed"]) { --tone: var(--ok); }
+  .chat-banners > .workflow-progress:has(> .workflow-run-summary[data-state="cancelled"]) { --tone: var(--ink-4); }
 
   /* Spans both rows and, by a negative margin matching the band's padding,
      the band's whole border box. */
-  .chat-panel > .workflow-progress > .workflow-progress-open {
+  .chat-banners > .workflow-progress > .workflow-progress-open {
     position: relative;
     z-index: 1;
     grid-area: 1 / 1 / 3 / 2;
@@ -315,7 +315,7 @@
     color: var(--ink-3);
   }
 
-  .chat-panel > .workflow-progress > .workflow-progress-open > svg {
+  .chat-banners > .workflow-progress > .workflow-progress-open > svg {
     display: block;
   }
 

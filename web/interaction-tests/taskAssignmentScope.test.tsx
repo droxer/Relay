@@ -5,13 +5,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
 import { TaskDrawer } from "../src/components/task-board/TaskDrawer";
 import { emptyBacklogForm, emptyRoutineForm, type TaskBoardFormState } from "../src/lib/taskBoardForm";
-import type { AgentTeam, CurrentUser, ProjectRecord, ProjectWorkflowChoice, UserAgent } from "../src/types";
+import type { AgentTeam, CurrentUser, ProjectRecord, ProjectWorkflowChoice, StandaloneWorkflowChoice, UserAgent } from "../src/types";
 
 vi.mock("@/components/ui/Drawer", () => ({ Drawer: ({ children, footer }: any) => <div>{children}{footer}</div> }));
 vi.mock("../src/components/task-board/TaskTagsField", () => ({ TaskTagsField: () => null }));
 vi.mock("../src/components/connections/ConnectionGrantField", () => ({ ConnectionGrantField: () => null }));
 vi.mock("../src/hooks/useSessionCapabilities", () => ({ useSessionCapabilities: () => ({}) }));
-vi.mock("../src/api", () => ({ listProjectWorkflowChoices: vi.fn(async () => ({ workflows: [] })) }));
+vi.mock("../src/api", () => ({
+  listProjectWorkflowChoices: vi.fn(async () => ({ workflows: [] })),
+  listStandaloneWorkflowChoices: vi.fn(async () => ({ workflows: [] })),
+}));
 
 const currentUser = { userId: "owner", username: "owner" } as CurrentUser;
 const project = { id: "p", name: "Project P", enabled: true, ownerUserId: "owner", computerId: "c",
@@ -23,15 +26,17 @@ const secondAgent = { id: "b", displayName: "Grace", executorKind: "claude", ena
 const standaloneTeam = { id: "t1", name: "Core Team", ownerUserId: "owner", enabled: true, computerId: "c",
   memberAgentIds: ["a"], members: [{ id: "a", displayName: "Ada", executorKind: "codex", enabled: true, availability: "ready" }] } as AgentTeam;
 const workflow: ProjectWorkflowChoice = { id: "w", name: "Ship workflow", projectId: "p", enabled: true, stepAgentIds: ["a"] };
+const standaloneWorkflow: StandaloneWorkflowChoice = { id: "sw", name: "Standalone release", projectId: null, computerId: "c", enabled: true, stepAgentIds: ["a"] };
 
 function mount(
   initial: TaskBoardFormState,
   custom = [workflow, { ...workflow, id: "foreign", projectId: "q", name: "Foreign workflow" }],
-  { agents = [agent], teams = [] as AgentTeam[] } = {},
+  { agents = [agent], teams = [] as AgentTeam[], standalone = [standaloneWorkflow] as StandaloneWorkflowChoice[] } = {},
 ) {
   const submit = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(["workflows", "choices", "p"], { workflows: custom });
+  client.setQueryData(["workflows", "choices", "standalone"], { workflows: standalone });
   function Editor() {
     const [form, setForm] = useState(initial);
     return <TaskDrawer open form={form} formBaseline={initial.id ? initial : null} projects={[project]} logicalAgents={agents} teams={teams} saving={false}
@@ -156,7 +161,7 @@ it("clears Workflow assignment when an Automation leaves its Project", async () 
   expect(submit).toHaveBeenCalledOnce();
 });
 
-it("chooses between all available Agents and Teams from one new standalone task picker", () => {
+it("chooses between all available Agents and standalone Workflows from one new standalone task picker", () => {
   const { submit } = mount(
     { ...emptyBacklogForm(currentUser), title: "Standalone work" },
     [workflow],
@@ -166,37 +171,40 @@ it("chooses between all available Agents and Teams from one new standalone task 
   expect(picker.textContent).toContain("backlog.assign_later");
   expect(screen.getByRole("option", { name: /Ada/ })).toBeTruthy();
   expect(screen.getByRole("option", { name: /Grace/ })).toBeTruthy();
+  expect(screen.queryByRole("radio", { name: /^backlog\.teams_section/ })).toBeNull();
   expect(screen.queryByRole("option", { name: /Core Team/ })).toBeNull();
 
   fireEvent.click(screen.getByRole("option", { name: /Grace/ }));
   expect(picker.textContent).toContain("Grace");
   fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));
-  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedAgentId: "b", assignedTeamId: "" }));
+  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedAgentId: "b", assignedTeamId: "", assignedWorkflowId: "" }));
 
-  fireEvent.click(screen.getByRole("radio", { name: /^backlog\.teams_section/ }));
-  expect(screen.queryByRole("option", { name: /Grace/ })).toBeNull();
-  fireEvent.click(screen.getByRole("option", { name: /Core Team/ }));
-  expect(picker.textContent).toContain("Core Team");
+  fireEvent.click(screen.getByRole("radio", { name: /^workflow\.workflows/ }));
+  expect(screen.queryByRole("option", { name: /Grace|Ship workflow/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /Standalone release/ }));
+  expect(picker.textContent).toContain("Standalone release");
   fireEvent.click(screen.getByRole("button", { name: "backlog.create_task" }));
-  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedAgentId: "", assignedTeamId: "t1" }));
+  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedAgentId: "", assignedTeamId: "", assignedWorkflowId: "sw" }));
 });
 
-it("offers an Agent | Team switch when editing a saved standalone task", async () => {
+it("offers an Agent | Workflow switch when editing a saved standalone task", async () => {
   const { submit } = mount(
     { ...emptyBacklogForm(currentUser), id: "saved", title: "Saved standalone" },
     [workflow],
     { agents: [agent, secondAgent], teams: [standaloneTeam] },
   );
   const agentKind = screen.getByRole("radio", { name: "backlog.assignment_kind_agent" });
-  const teamKind = screen.getByRole("radio", { name: "backlog.assignment_kind_team" });
+  const workflowKind = screen.getByRole("radio", { name: "backlog.assignment_kind_workflow" });
   expect(agentKind.getAttribute("aria-checked")).toBe("true");
-  expect(screen.queryByRole("radio", { name: "backlog.assignment_kind_workflow" })).toBeNull();
+  expect(screen.queryByRole("radio", { name: "backlog.assignment_kind_team" })).toBeNull();
 
-  fireEvent.click(teamKind);
-  await waitFor(() => expect(teamKind.getAttribute("aria-checked")).toBe("true"));
-  fireEvent.click(screen.getByRole("option", { name: /Core Team/ }));
+  fireEvent.click(workflowKind);
+  await waitFor(() => expect(workflowKind.getAttribute("aria-checked")).toBe("true"));
+  fireEvent.click(screen.getByRole("combobox", { name: "workflow.select_workflow" }));
+  expect(screen.queryByRole("option", { name: /Ship workflow/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /Standalone release/ }));
   fireEvent.click(screen.getByRole("button", { name: "backlog.save_task" }));
-  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ assignedTeamId: "t1", assignedAgentId: "" }));
+  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ assignedWorkflowId: "sw", assignedTeamId: "", assignedAgentId: "" }));
 });
 
 // Keep selection semantics while leaving popup positioning to browser tests.

@@ -9,7 +9,7 @@ const LABELS: Record<string, string> = {
   "nav.backlog": "Backlog",
   "nav.routine": "Routines",
   "nav.agents": "Agents",
-  "nav.teams": "Teams",
+  "nav.workflows": "Workflows",
   "nav.settings": "Settings",
   "nav.channels": "Channels",
   "nav.admin": "Admin",
@@ -46,7 +46,7 @@ describe("buildCommands", () => {
     const navigate = userCommands.filter((command) => command.group === "navigate");
     assert.deepEqual(
       navigate.map((command) => command.id),
-      ["go:home", "go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:teams", "go:computers", "go:skills", "go:settings"],
+      ["go:home", "go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:workflows", "go:computers", "go:skills", "go:settings"],
     );
     for (const command of navigate) {
       assert.match(command.hint ?? "", /^G [A-Z]$/, `${command.id} lost its go-to hint`);
@@ -75,15 +75,15 @@ describe("filterCommands", () => {
 
   it("ranks exact, prefix, substring, then keyword matches", () => {
     const commands: CommandItem[] = [
-      { id: "new-task", group: "create", label: "Teams", keywords: [] },
-      { id: "new-thread", group: "create", label: "Teamsync", keywords: [] },
-      { id: "go:teams", group: "navigate", label: "Go to Teams", keywords: [] },
-      { id: "toggle-theme", group: "view", label: "Appearance", keywords: ["theme", "teams"] },
+      { id: "new-task", group: "create", label: "Workflows", keywords: [] },
+      { id: "new-thread", group: "create", label: "Workflowsync", keywords: [] },
+      { id: "go:workflows", group: "navigate", label: "Go to Workflows", keywords: [] },
+      { id: "toggle-theme", group: "view", label: "Appearance", keywords: ["theme", "workflows"] },
     ];
-    const result = filterCommands(commands, "teams");
+    const result = filterCommands(commands, "workflows");
     assert.deepEqual(
       result.map((command) => command.id),
-      ["new-task", "new-thread", "go:teams", "toggle-theme"],
+      ["new-task", "new-thread", "go:workflows", "toggle-theme"],
     );
   });
 

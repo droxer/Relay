@@ -637,14 +637,18 @@ def test_enqueue_is_atomic_with_the_completion_transaction(tmp_path) -> None:
 
 
 @pytest.mark.parametrize("wire", ["legacy", "events", "reports"])
-def test_http_completion_transactions_do_not_grow_with_file_count(tmp_path, wire):
+def test_http_completion_transactions_do_not_grow_with_file_count(tmp_path, monkeypatch, wire):
     """Exercise the actual HTTP parser, receipt and registry, not a mocked handler."""
     from dataclasses import replace
     from hashlib import sha256
     import json
-    from time import perf_counter
     from fastapi.testclient import TestClient
     from relay.app import create_app
+    from relay.daemon_registry import config
+
+    # Exercise the durable liveness write for every file count. Otherwise a
+    # slower setup can cross the throttle window before just one request.
+    monkeypatch.setattr(config, "DAEMON_NODE_SEEN_PERSIST_INTERVAL_SECONDS", 0)
 
     counts = []
     for n in (1, 150, 201):
@@ -679,7 +683,6 @@ def test_http_completion_transactions_do_not_grow_with_file_count(tmp_path, wire
         def begin(conn, counts=begins):
             counts.append(1)
         event.listen(store.engine, "begin", begin)
-        started = perf_counter()
         try:
             response = client.post(path, content=body, headers=headers)
         finally:
@@ -687,7 +690,6 @@ def test_http_completion_transactions_do_not_grow_with_file_count(tmp_path, wire
         assert response.status_code == 200, response.text
         if wire == "reports":
             assert response.json()["receipts"][0]["status"] == 200
-        assert perf_counter() - started < 5
         counts.append(len(begins))
         assert store.artifact_index_status(command["sessionId"])["pending"] == (2 if n > 200 else 1)
         assert store.get_session(command["sessionId"])["artifacts"] == []

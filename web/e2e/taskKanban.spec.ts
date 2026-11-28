@@ -25,6 +25,7 @@ async function dragCard(page: Page, card: Locator, lane: Locator) {
   await page.mouse.move(start.x + 24, start.y, { steps: 4 });
   // Extra lanes appear at pickup and move the target before the drop.
   await expect(page.locator('.backlog-board[data-dragging="true"]')).toBeVisible();
+  await expect(page.locator(".backlog-lane")).toHaveCount(7);
   const to = (await lane.boundingBox())!;
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 3, { steps: 12 });
   await page.mouse.up();
@@ -105,7 +106,7 @@ test("the Project Tasks page lays its queue out as a board, and a drop commits",
   const writes = await mockQueuedTask(page);
   await page.goto("/projects/p?tab=tasks");
   await page.getByRole("button", { name: "Board", exact: true }).click();
-  await expect(page.locator(".backlog-lane")).toHaveCount(7);
+  await expect(page.locator(".backlog-lane")).toHaveCount(5);
   const card = page.locator('.backlog-lane[data-status="assigned"] article');
   // The Project board keeps the card focused on the work.
   await expect(card).toContainText("Queued delivery");
@@ -114,16 +115,16 @@ test("the Project Tasks page lays its queue out as a board, and a drop commits",
   await expect.poll(() => writes).toEqual(["run"]);
   // The choice is remembered for the Tasks page only.
   await page.reload();
-  await expect(page.locator(".backlog-lane")).toHaveCount(7);
+  await expect(page.locator(".backlog-lane")).toHaveCount(5);
   await page.goto("/projects/p?tab=tasks");
   await expect(page.locator(".backlog-lane")).toHaveCount(0);
 });
 
 /** A project's Issues tab opens as a list; the lanes live behind the view toggle. */
-async function openBoard(page: Page) {
+async function openBoard(page: Page, laneCount = 5) {
   await page.goto("/projects/p?tab=tasks");
   await page.getByRole("button", { name: "Board", exact: true }).click();
-  await expect(page.locator(".backlog-lane")).toHaveCount(7);
+  await expect(page.locator(".backlog-lane")).toHaveCount(laneCount);
 }
 
 /** One Ready task; records whether the board started it (run) or PATCHed it. */
@@ -193,6 +194,7 @@ test("the due date is picked from a calendar and kept as a day key", async ({ pa
   await mockQueuedTask(page);
   await page.goto("/projects/p?tab=tasks");
   await page.getByRole("button", { name: "New task" }).first().click();
+  await page.locator(".task-drawer-more > summary").click();
   const due = page.getByRole("button", { name: /^Due Choose a date$/ });
   await due.click();
   await page.getByRole("grid").getByRole("button", { name: /14/ }).first().click();
@@ -224,7 +226,7 @@ test("queued and cancelled tasks have distinct lanes and global capacity stays v
   await expect(page.getByText("Your WIP across projects: 5 / 5")).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("capacity-mobile.png"), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await openBoard(page);
+  await openBoard(page, 7);
   await expect(page.locator('.backlog-lane[data-status="queued"]')).toContainText("Capacity wait");
   await expect(page.locator('.backlog-lane[data-status="queued"]')).toContainText("start automatically");
   await expect(page.locator('.backlog-lane[data-status="cancelled"]')).toContainText("Abandoned work");

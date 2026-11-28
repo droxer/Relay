@@ -20,6 +20,7 @@ from ..core.validation import valid_agent
 from ..core.daemon_records import ComputerRunCapacityError, ThreadRunActiveError
 from ..persistence.task.rules import compact_task_writes
 from .claims import dispatch_claim_active
+from .workflow.predefined import standalone_predefined_for, resolve_standalone_predefined_assignments
 from .scheduling.candidates import CandidateOutcome, DispatchCandidates
 from .assignment import validate_standalone_assignment
 from .requests import TaskRequestError
@@ -227,7 +228,10 @@ class TaskScheduler(DispatchCandidates):
         scope_refused = self._standalone_scope_refused(task)
         if scope_refused is not None:
             return scope_refused
-        if workflow_team_for(task, self.team_store):
+        predefined = standalone_predefined_for(task, self.team_store.workflow_store) if (
+            self.team_store is not None and task.get("assignedWorkflowId")
+        ) else None
+        if not predefined and workflow_team_for(task, self.team_store):
             return self._dispatch_workflow(task)
         # A project task's team runs inside the project room, so the thread
         # it creates is the project's, never the team's.
@@ -238,7 +242,7 @@ class TaskScheduler(DispatchCandidates):
             continuation_session_id(task) if awaits_continuation(task) else None
         )
         try:
-            route = self._route(task, team_id, resume_session_id)
+            route = self._route(task, team_id, resume_session_id, predefined=predefined)
         except (ProjectDispatchError, TeamDispatchError, AgentRoutingError) as error:
             if self._record_routing_failure(task, error):
                 return CandidateOutcome.SKIPPED
@@ -384,7 +388,8 @@ class TaskScheduler(DispatchCandidates):
         return None
 
     def _route(
-        self, task: dict[str, Any], team_id: str | None, resume_session_id: str | None
+        self, task: dict[str, Any], team_id: str | None, resume_session_id: str | None,
+        *, predefined: dict[str, Any] | None = None,
     ) -> _Route:
         """Resolve the task's assignments and the node they run on."""
         resume_session = (
@@ -414,6 +419,13 @@ class TaskScheduler(DispatchCandidates):
                 daemon_nodes=daemon_nodes,
                 session_store=self.registry.store,
                 team_store=self.team_store,
+            )
+            agent = assignments[0]["agent"]
+        elif predefined:
+            assignments = resolve_standalone_predefined_assignments(
+                task, predefined, registry=self.registry, agent_store=self.backend.agent_store,
+                placement_store=self.backend.agent_placement_store, daemon_nodes=daemon_nodes,
+                session_store=self.registry.store,
             )
             agent = assignments[0]["agent"]
         elif team_id:
@@ -613,6 +625,7 @@ class TaskScheduler(DispatchCandidates):
         claim = task.get("dispatchClaim") or {}
 
         claim_id = claim.get("id")
+        team_snapshot = assignment_team_snapshot(assignments)
         try:
             collaboration = {
                 "manifest": create_round_manifest(
@@ -620,7 +633,7 @@ class TaskScheduler(DispatchCandidates):
                     purpose="accomplish",
                     address=(
                         {"kind": "room"}
-                        if team_id
+                        if team_id or (team_snapshot or {}).get("workflowRecordVersion") == 1
                         else {
                             "kind": "members",
                             "agentIds": [
@@ -631,7 +644,7 @@ class TaskScheduler(DispatchCandidates):
                         }
                     ),
                     assignments=assignments,
-                    team_snapshot=assignment_team_snapshot(assignments),
+                    team_snapshot=team_snapshot,
                     project_snapshot=project_snapshot,
                 )
             }

@@ -88,7 +88,7 @@ def prepare_task_start(
             ctx, task_id, "rejected", AGENT_NOT_FOUND, NAMED_AGENT_REQUIRED
         )
     if task.get("isRoutine") and not (
-        task.get("projectId") or task.get("assignedAgentId") or task.get("assignedTeamId")
+        task.get("projectId") or task.get("assignedAgentId") or task.get("assignedTeamId") or task.get("assignedWorkflowId")
     ):
         return _dispatch_outcome(
             ctx, task_id, "rejected", AGENT_NOT_FOUND, ROUTINE_AGENT_REQUIRED

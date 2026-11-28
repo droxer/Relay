@@ -1,9 +1,10 @@
-import type { AgentTeam, ProjectWorkflowChoice, RelaySession, TeamWorkflowPreview, Workflow, WorkflowDraftUpdate, WorkflowMutationInput, WorkflowPreview, WorkflowStep, WorkflowStepChanges } from "../types.ts";
+import type { AgentTeam, ProjectWorkflowChoice, RelaySession, StandaloneWorkflowChoice, TeamWorkflowPreview, Workflow, WorkflowDraftUpdate, WorkflowMutationInput, WorkflowPreview, WorkflowStep, WorkflowStepChanges } from "../types.ts";
 import { teamWorkflowPreviews } from "../lib/workflowSelection.ts";
 import { apiJson, privateConditionalJson, RelayApiError, type PrivateResponseCache } from "./client.ts";
 import { listProjects } from "./projects.ts";
 
 export type WorkflowChoicesResponse = { workflows: (ProjectWorkflowChoice | Workflow)[] };
+export type StandaloneWorkflowChoicesResponse = { workflows: (StandaloneWorkflowChoice | Workflow)[] };
 export type WorkflowPreviewsResponse = { workflows: WorkflowPreview[]; view?: "preview" };
 export type WorkflowNameResponse = { workflow: Pick<Workflow, "id" | "name"> };
 export type TeamWorkflowChoicesResponse = {
@@ -16,6 +17,37 @@ export function listWorkflowPreviews(
 ): Promise<WorkflowPreviewsResponse> {
   const query = new URLSearchParams({ view: "preview", projectId });
   return privateConditionalJson(`/workflows?${query}`, signal, cache);
+}
+
+export function listStandaloneWorkflowPreviews(
+  signal?: AbortSignal, cache?: PrivateResponseCache<WorkflowPreviewsResponse>,
+): Promise<WorkflowPreviewsResponse> {
+  const query = new URLSearchParams({ scope: "standalone", view: "preview" });
+  return privateConditionalJson(`/workflows?${query}`, signal, cache);
+}
+
+export async function listStandaloneWorkflowChoices(
+  signal?: AbortSignal, cache?: PrivateResponseCache<StandaloneWorkflowChoicesResponse>,
+): Promise<{ workflows: StandaloneWorkflowChoice[] }> {
+  const query = new URLSearchParams({ scope: "standalone", view: "choices" });
+  const { workflows } = await privateConditionalJson<StandaloneWorkflowChoicesResponse>(`/workflows?${query}`, signal, cache);
+  return {
+    workflows: workflows.flatMap((workflow) => {
+      if ("stepAgentIds" in workflow) {
+        if (!workflow.computerId || workflow.projectId !== null) return [];
+        return [workflow];
+      }
+      if (!workflow.computerId || workflow.projectId || workflow.ownerTeamId) return [];
+      return [{
+        id: workflow.id,
+        name: workflow.name,
+        projectId: null,
+        computerId: workflow.computerId,
+        enabled: workflow.enabled,
+        stepAgentIds: [...new Set(workflow.workflowSteps.map((step) => step.agentId))],
+      }];
+    }),
+  };
 }
 
 export async function listProjectWorkflowChoices(

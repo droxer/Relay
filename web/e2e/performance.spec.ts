@@ -998,7 +998,7 @@ test("settings loads onboarding and defers workspace directories and transcripts
     const { pathname: path, searchParams } = new URL(route.request().url());
     if (/\/threads\/[^/]+$/.test(path)) details.push(path);
     const setup = path.endsWith("/agents") && searchParams.get("view") === "setup";
-    if (!setup && /\/(agents|teams|projects)$/.test(path)) directories.push(path);
+    if (!setup && /\/(agents|teams|workflows|projects)$/.test(path)) directories.push(path);
     const body = path.endsWith("/auth/me") ? { authenticated: true, user: USER }
       : setup ? {
         view: "setup", defaultAgentOffers: [],
@@ -1026,7 +1026,8 @@ test("settings loads onboarding and defers workspace directories and transcripts
 
 for (const { route, panel, reads } of [
   { route: "/agents", panel: "#agents-panel", reads: ["agents:summary"] },
-  { route: "/teams", panel: "#teams-panel", reads: ["agents:setup", "teams:summary"] },
+  { route: "/workflows", panel: "#workflows-panel", reads: ["agents:setup", "agents:summary", "workflows:preview"] },
+  { route: "/teams", panel: "#workflows-panel", reads: ["agents:setup", "agents:summary", "workflows:preview"] },
   { route: "/computers", panel: "#computer-panel", reads: ["agents:setup"] },
   { route: "/skills", panel: "#skills-panel", reads: ["agents:setup"] },
   { route: "/projects", panel: ".project-directory-empty", reads: ["agents:setup", "projects:index"] },
@@ -1035,16 +1036,18 @@ for (const { route, panel, reads } of [
     const directoryRequests: string[] = [];
     await page.route("**/api/**", async request => {
       const { pathname, searchParams } = new URL(request.request().url());
-      const catalog = pathname.match(/^\/api\/v1\/(agents|teams|projects)$/)?.[1];
+      const catalog = pathname.match(/^\/api\/v1\/(agents|teams|workflows|projects)$/)?.[1];
       const view = searchParams.get("view");
       if (catalog) directoryRequests.push(`${catalog}:${view}`);
+      if (catalog === "workflows") expect(searchParams.get("scope")).toBe("standalone");
       const body = pathname.endsWith("/auth/me") ? { authenticated: true, user: USER }
         : view === "setup" ? { view, onboardingAgents: [], defaultAgentOffers: [] }
-        : { agents: [], defaultAgentOffers: [], teams: [], nodes: [computer], sessions: [], skills: [], projects: [], homeTaskNeedsYou: 0 };
+        : { agents: [], defaultAgentOffers: [], teams: [], workflows: [], nodes: [computer], sessions: [], skills: [], projects: [], homeTaskNeedsYou: 0 };
       await request.fulfill({ contentType: "application/json", json: body });
     });
     await page.goto(route);
     await expect(page.locator(panel)).toBeVisible();
+    if (panel === "#workflows-panel") await expect(page).toHaveURL(/\/workflows$/);
     await page.waitForLoadState("networkidle");
     expect(directoryRequests.sort()).toEqual(reads);
   });

@@ -1,8 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
-import { predefinedStyle, projectWorkflowOptions, projectWorkflowSelectionIssue } from "../../lib/workflowSelection";
+import { useProjectWorkflowChoices, useStandaloneWorkflowChoices } from "../../hooks/useProjectWorkflows";
+import {
+  predefinedStyle,
+  projectWorkflowOptions,
+  projectWorkflowSelectionIssue,
+  standaloneWorkflowOptions,
+  standaloneWorkflowSelectionIssue,
+  type ProjectWorkflowOption,
+} from "../../lib/workflowSelection";
 import { useTranslation } from "react-i18next";
 import { enUS, zhCN, zhTW } from "react-day-picker/locale";
 import { cn } from "@/lib/utils";
@@ -178,18 +185,27 @@ export function InlinePriority({
   );
 }
 
-type InlineAssigneeProps = Omit<Parameters<typeof InlineAssigneeOptions>[0], "workflowQuery" | "onAssignmentOpenChange">;
+type InlineAssigneeProps = Omit<Parameters<typeof InlineAssigneeOptions>[0], "workflowQuery" | "standaloneWorkflowQuery" | "onAssignmentOpenChange">;
 
 export function InlineAssignee(props: InlineAssigneeProps) {
-  return props.project && !props.readOnly && taskAssignmentEditable(props.task)
+  if (props.readOnly || !taskAssignmentEditable(props.task)) {
+    return <InlineAssigneeOptions {...props} />;
+  }
+  return props.project
     ? <ProjectInlineAssignee {...props} />
-    : <InlineAssigneeOptions {...props} />;
+    : <StandaloneInlineAssignee {...props} />;
 }
 
 function ProjectInlineAssignee(props: InlineAssigneeProps) {
   const [open, setOpen] = useState(false);
   const workflowQuery = useProjectWorkflowChoices(props.project!.id, open);
   return <InlineAssigneeOptions {...props} workflowQuery={workflowQuery} onAssignmentOpenChange={setOpen} />;
+}
+
+function StandaloneInlineAssignee(props: InlineAssigneeProps) {
+  const [open, setOpen] = useState(false);
+  const standaloneWorkflowQuery = useStandaloneWorkflowChoices(open);
+  return <InlineAssigneeOptions {...props} standaloneWorkflowQuery={standaloneWorkflowQuery} onAssignmentOpenChange={setOpen} />;
 }
 
 function InlineAssigneeOptions({
@@ -201,9 +217,11 @@ function InlineAssigneeOptions({
   onChange,
   readOnly = false,
   workflowQuery,
+  standaloneWorkflowQuery,
   onAssignmentOpenChange,
 }: {
   workflowQuery?: ReturnType<typeof useProjectWorkflowChoices>;
+  standaloneWorkflowQuery?: ReturnType<typeof useStandaloneWorkflowChoices>;
   onAssignmentOpenChange?: (open: boolean) => void;
   task: RelayTaskListItem;
   agents: readonly UserAgent[];
@@ -216,7 +234,12 @@ function InlineAssigneeOptions({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  const workflows = project ? projectWorkflowOptions(project, workflowQuery?.data?.workflows) : undefined;
+  const projectWorkflows = project ? projectWorkflowOptions(project, workflowQuery?.data?.workflows) : undefined;
+  const standaloneWorkflows = !project
+    ? standaloneWorkflowOptions(standaloneWorkflowQuery?.data?.workflows ?? [], task.computerId, agents)
+    : undefined;
+  const workflows: ProjectWorkflowOption[] | undefined = project ? projectWorkflows : standaloneWorkflows;
+  const activeWorkflowQuery = project ? workflowQuery : standaloneWorkflowQuery;
   const chip = (
     <TaskAssignee task={task} ready={display.ready} agentDisplayName={display.name} agentImageUrl={display.imageUrl}
       agentRole={taskAssigneeRole(task, agents)} />
@@ -244,8 +267,10 @@ function InlineAssigneeOptions({
     ? options.agents.find((agent) => agent.id === task.assignedAgentId)
     : undefined;
   const staleWorkflow = workflows && task.assignedWorkflowId
-    && (predefinedStyle(task.assignedWorkflowId) || workflowQuery?.isSuccess)
-    && projectWorkflowSelectionIssue(task.assignedWorkflowId, workflows);
+    && (predefinedStyle(task.assignedWorkflowId) || activeWorkflowQuery?.isSuccess)
+    && (project
+      ? projectWorkflowSelectionIssue(task.assignedWorkflowId, projectWorkflows!)
+      : standaloneWorkflowSelectionIssue(task.assignedWorkflowId, standaloneWorkflows!));
   const staleAssignment = Boolean(staleWorkflow
     || (task.assignedTeamId && !options.teams.some(team => team.id === task.assignedTeamId))
     || (task.assignedAgentId && !options.agents.some(agent => agent.id === task.assignedAgentId)));
@@ -259,9 +284,10 @@ function InlineAssigneeOptions({
       value={value}
       agents={options.agents}
       teams={options.teams}
-      hideTeams={Boolean(project)}
+      hideTeams={true}
       workflows={workflows}
-      workflowMessage={workflowQuery?.isPending ? t("workflow.loading") : workflowQuery?.isError ? t("workflow.load_failed") : undefined}
+      workflowMessage={activeWorkflowQuery?.isPending ? t("workflow.loading") : activeWorkflowQuery?.isError ? t("workflow.load_failed") : undefined}
+      workflowAction={!project ? { label: t("workflows.create_action"), href: "/workflows?dialog=create" } : undefined}
       onOpenChange={onAssignmentOpenChange}
       selectedAgent={selectedAgent}
       selectedTeam={selectedTeam}
@@ -274,7 +300,14 @@ function InlineAssigneeOptions({
             : selection.kind === "agent"
               ? selection.id === task.assignedAgentId && !task.assignedTeamId && !task.assignedWorkflowId
               : selection.id === task.assignedTeamId && !task.assignedAgentId && !task.assignedWorkflowId;
-        if (!unchanged) onChange(selection);
+        if (!unchanged) {
+          if (selection.kind === "workflow" && !project) {
+            const matched = standaloneWorkflows?.find((wf) => wf.id === selection.id);
+            onChange(matched ? { ...selection, computerId: matched.computerId } : selection);
+            return;
+          }
+          onChange(selection);
+        }
       }}
     />
   );

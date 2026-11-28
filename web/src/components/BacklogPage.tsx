@@ -12,7 +12,7 @@ import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
-import { useProjectWorkflowChoices } from "../hooks/useProjectWorkflows";
+import { useProjectWorkflowChoices, useStandaloneWorkflowChoices } from "../hooks/useProjectWorkflows";
 import { predefinedStyle, projectWorkflowName } from "../lib/workflowSelection";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
@@ -183,8 +183,10 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
   const loading = providedTasks === undefined && (waitingForSearch || result.isPending);
   const loadFailed = providedTasks === undefined && !waitingForSearch && result.isError;
   const tasks = providedTasks ?? response?.tasks ?? NO_TASKS;
-  const workflowChoices = useProjectWorkflowChoices(projectId, Boolean(projectId && tasks.some(task =>
-    task.assignedWorkflowId && !predefinedStyle(task.assignedWorkflowId) && !task.assignedTeamId && !task.assignedAgentId)));
+  const hasCustomWorkflowTask = tasks.some(task =>
+    task.assignedWorkflowId && !predefinedStyle(task.assignedWorkflowId) && !task.assignedTeamId && !task.assignedAgentId);
+  const workflowChoices = useProjectWorkflowChoices(projectId, Boolean(projectId && hasCustomWorkflowTask));
+  const standaloneWorkflowChoices = useStandaloneWorkflowChoices(Boolean(!projectId && hasCustomWorkflowTask));
   const backlogTasks = useMemo(() => remote ? tasks : tasks.filter((task) => !task.deletedAt && !task.isRoutine && !task.sourceRoutineId
     && (!projectId || task.projectId === projectId)
     && (!computerId || taskComputer(task, nodes, sessions) === computerId)), [tasks, remote, projectId, computerId, nodes, sessions]);
@@ -303,7 +305,9 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
       };
     }
     if (task.assignedWorkflowId && !task.assignedTeamId && !task.assignedAgentId) {
-      const name = workflowChoices.data?.workflows.find(workflow => workflow.id === task.assignedWorkflowId)?.name;
+      const name = (task.projectId
+        ? workflowChoices.data?.workflows.find(workflow => workflow.id === task.assignedWorkflowId)?.name
+        : standaloneWorkflowChoices.data?.workflows.find(workflow => workflow.id === task.assignedWorkflowId)?.name);
       return { name: projectWorkflowName(task.assignedWorkflowId, t, name), ready: false };
     }
     return {

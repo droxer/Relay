@@ -78,7 +78,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
   });
 }
 
-test('a legacy Lead Thread defaults to the Lead role after a handover',async({page})=>{
+test('a legacy Lead Thread ignores a stale Agent target after handover',async({page})=>{
  const stamp='2026-11-06T00:00:00Z';
  const agents=['ada','bea'].map(id=>({id,displayName:id==='ada'?'Ada':'Bea',executorKind:id==='ada'?'codex':'claude',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:`p-${id}`,agentId:id,computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp}));
  const project={id:'launch',name:'Launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',responsibilities:'Plan',enabled:true},{agentId:'bea',role:'implementer',projectManager:true,responsibilities:'Coordinate',enabled:true}],managerAgentId:'bea',managerThreadId:'manager-thread',leadAgentId:'bea',version:3,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
@@ -102,5 +102,9 @@ test('a legacy Lead Thread defaults to the Lead role after a handover',async({pa
  const composer=page.getByRole('textbox',{name:'Message Project Lead',exact:true});await expect(composer).toBeVisible();
  await composer.fill('What changed?');await page.getByRole('button',{name:'Send',exact:true}).click();
  await expect.poll(()=>sent.length).toBe(1);
+ // The backend resolves the current Lead. A restored Agent pick must not pin
+ // this role-addressed discussion to its previous holder.
+ expect(sent[0]).toMatchObject({text:'What changed?',intent:'accomplish'});
  expect(sent[0]).not.toHaveProperty('addressAgentIds');
+ expect(sent[0]).not.toHaveProperty('addressTeamId');
 });

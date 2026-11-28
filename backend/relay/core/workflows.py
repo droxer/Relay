@@ -48,6 +48,8 @@ def workflow_step_changes(before: list[dict[str, Any]], after: list[dict[str, An
 
 
 def workflow_step_agent_ids(workflow: dict[str, Any]) -> list[str]:
+    if workflow.get('kind') == 'predefined':
+        return list(workflow['predefined']['memberAgentIds'])
     return list(dict.fromkeys(step['agentId'] for step in workflow['workflowSteps']))
 
 
@@ -55,7 +57,7 @@ def workflow_preview(workflow: dict[str, Any]) -> dict[str, Any]:
     """The step flow and ownership needed to display or start a Workflow."""
     return {
         **{key: workflow[key] for key in (
-            'id', 'name', 'projectId', 'ownerTeamId', 'computerId', 'teamId', 'enabled', 'createdAt', 'updatedAt', 'version',
+            'id', 'name', 'projectId', 'ownerTeamId', 'computerId', 'teamId', 'enabled', 'createdAt', 'updatedAt', 'version', 'kind',
         ) if key in workflow},
         'workflowSteps': [
             {key: step[key] for key in ('id', 'name', 'agentId', 'requiresApproval') if key in step}
@@ -143,6 +145,13 @@ def project_workflow_definition(owner: str, payload: dict[str, Any], *, current:
     if set(payload) - FIELDS:
         raise ValueError('workflow_fields_invalid')
     merged = {**(current or {}), **payload}
+    if current and current.get('kind') == 'predefined':
+        if set(payload) - {'name', 'enabled'}:
+            raise ValueError('workflow_predefined_immutable')
+        name = _workflow_name(merged)
+        return {key: value for key, value in merged.items() if key != 'version'} | {
+            'name': name, 'updatedAt': now_iso(),
+        }
     steps = merged.get('workflowSteps')
     if not isinstance(steps, list):
         raise ValueError('workflowSteps must contain 1 to 64 steps.')
@@ -167,15 +176,21 @@ def project_workflow_definition(owner: str, payload: dict[str, Any], *, current:
     if current and (current.get('projectId') != project_id or current.get('ownerTeamId') != owner_team
                     or current.get('computerId') != fields.get('computerId')):
         raise ValueError('team_workflow_project_immutable')
-    name = merged.get('name')
-    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 200:
-        raise ValueError('workflow_name_required')
-    if not isinstance(merged.get('enabled', True), bool):
-        raise ValueError('workflow_enabled_invalid')
+    name = _workflow_name(merged)
     timestamp = now_iso()
-    return {**fields, 'id': current['id'] if current else new_database_id(), 'ownerUserId': owner,
+    return {**{key: merged[key] for key in ('legacyTeamId', 'legacyWorkflowId') if key in merged},
+            **fields, 'id': current['id'] if current else new_database_id(), 'ownerUserId': owner,
             'name': name.strip(), 'enabled': merged.get('enabled', True),
             'createdAt': current['createdAt'] if current else timestamp, 'updatedAt': timestamp}
+
+
+def _workflow_name(value: dict[str, Any]) -> str:
+    name = value.get('name')
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 200:
+        raise ValueError('workflow_name_required')
+    if not isinstance(value.get('enabled', True), bool):
+        raise ValueError('workflow_enabled_invalid')
+    return name.strip()
 
 
 def project_workflow_snapshot(definition: dict[str, Any], project: dict[str, Any], team: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -495,7 +495,8 @@ test("renaming without a runtime node recovers from a concurrent project edit", 
 });
 
 test("edits a task's priority, status and due date from its row", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
+  // Priority and due columns appear when the Project's task pane has room.
+  await page.setViewportSize({ width: 1920, height: 1080 });
   const stamp = "2026-09-01T00:00:00Z";
   const project = { id: "launch", name: "Autumn launch", ownerUserId: "u", computerId: "c", enabled: true,
     members: [{ agentId: "agent-atlas", enabled: true, role: "implementer", responsibilities: "Deliver" }],
@@ -551,7 +552,7 @@ test("edits a task's priority, status and due date from its row", async ({ page 
   expect(workflowReads).toEqual([]);
   await row.getByRole("combobox", { name: /^Assignee: Unassigned/ }).click();
   await page.getByRole("radio", { name: /^Workflows/ }).click();
-  await expect(page.getByRole("option", { name: "Release brief", exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Release brief Custom", exact: true })).toBeVisible();
   expect(workflowReads).toEqual(["?view=choices&projectId=launch"]);
   await page.getByRole("radio", { name: /^Agents/ }).click();
   await expect(page.getByRole("option", { name: /Neighbour/ })).toHaveCount(0);

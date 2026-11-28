@@ -343,7 +343,7 @@
   /* With its actions in the top bar, a list header whose title is hidden
      (the top bar names the route) holds nothing: drop the band. Record
      routes keep theirs — their lead carries the record's tabs. */
-  .messenger-shell:where([data-route]:not([data-route="main"], [data-route="home"], [data-route="agents"], [data-route="teams"], [data-route="projects"])) .page-header:not(:has(.page-header-actions, .page-header-toolbar)):not(#task-record-panel .page-header) {
+  .messenger-shell:where([data-route]:not([data-route="main"], [data-route="home"], [data-route="agents"], [data-route="workflows"], [data-route="projects"])) .page-header:not(:has(.page-header-actions, .page-header-toolbar)):not(#task-record-panel .page-header) {
     display: none;
   }
 
@@ -407,7 +407,7 @@
      section name the topbar already carries.) */
   .messenger-shell[data-route="backlog"] #task-record-panel .page-header,
   .messenger-shell[data-route="agents"] .page-header,
-  .messenger-shell[data-route="teams"] .page-header,
+  .messenger-shell[data-route="workflows"] .page-header,
   .messenger-shell[data-route="projects"] .page-header {
     min-height: 0;
     justify-content: space-between;
@@ -417,7 +417,7 @@
 
   .messenger-shell[data-route="backlog"] #task-record-panel .page-header-lead,
   .messenger-shell[data-route="agents"] .page-header-lead,
-  .messenger-shell[data-route="teams"] .page-header-lead,
+  .messenger-shell[data-route="workflows"] .page-header-lead,
   .messenger-shell[data-route="projects"] .page-header-lead {
     position: static;
     width: auto;

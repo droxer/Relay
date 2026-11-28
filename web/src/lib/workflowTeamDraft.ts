@@ -250,6 +250,10 @@ export function workflowInput(draft: WorkflowTeamDraft, projectId: string, enabl
   return { ...workflowDraftFields(draft), projectId, enabled };
 }
 
+export function standaloneWorkflowInput(draft: WorkflowTeamDraft, computerId: string, enabled = true): WorkflowMutationInput {
+  return { ...workflowDraftFields(draft), projectId: null, computerId, enabled };
+}
+
 function workflowDraftFields(draft: WorkflowTeamDraft): Pick<WorkflowMutationInput, "name" | "workflowSteps"> {
   return {
     name: draft.name.trim(),

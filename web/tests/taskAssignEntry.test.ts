@@ -8,15 +8,14 @@ describe("Task assignment discoverability", () => {
     const drawerSource = await readFile(resolve("web/src/components/assignment/AssignmentField.tsx"), "utf8");
 
     assert.match(drawerSource, /__nav_agents__/);
-    assert.match(drawerSource, /__nav_teams__/);
+    assert.match(drawerSource, /__nav_workflows__/);
     assert.match(drawerSource, /navigateToAppPath\("\/agents"\)/);
-    assert.match(drawerSource, /navigateToAppPath\("\/teams\?dialog=create"\)/);
+    assert.match(drawerSource, /navigateToAppPath\("\/workflows\?dialog=create"\)/);
     // Both rosters render even when empty, with explicit empty-state copy
     // instead of a silently missing tab.
     assert.match(drawerSource, /backlog\.no_agents_available/);
-    assert.match(drawerSource, /backlog\.no_teams_available/);
+    assert.match(drawerSource, /workflows\.no_workflows_available/);
     assert.match(drawerSource, /backlog\.manage_agents/);
-    assert.match(drawerSource, /backlog\.create_team/);
     assert.doesNotMatch(drawerSource, /teamOptions\.length > 0 \?/);
   });
 

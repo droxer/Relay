@@ -36,6 +36,7 @@ export function useBacklogTaskForm({
   allowIntake = false,
   agents = [],
   teams = [],
+  standaloneWorkflows = [],
 }: {
   currentUser: CurrentUser;
   seed?: { projectId?: string; computerId?: string };
@@ -44,6 +45,7 @@ export function useBacklogTaskForm({
   allowIntake?: boolean;
   agents?: readonly UserAgent[];
   teams?: readonly AgentTeam[];
+  standaloneWorkflows?: readonly { id: string; computerId?: string | null }[];
 }) {
   const { t } = useTranslation();
   const { announce, confirm } = useDialogs();
@@ -126,7 +128,7 @@ export function useBacklogTaskForm({
     const movesIntoProject = Boolean(form.id && form.projectId && !formBaseline?.projectId);
     const hasAssignment = Boolean(form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId);
     const derivedComputerId = !form.projectId && !form.computerId && !form.sourceRoutineId && hasAssignment
-      ? assignmentComputerId(form, agents, teams)
+      ? assignmentComputerId(form, agents, teams, standaloneWorkflows)
       : undefined;
     const computerId = form.computerId || derivedComputerId;
     const bindsComputer = Boolean(form.id && !formBaseline?.computerId && !form.projectId && derivedComputerId);

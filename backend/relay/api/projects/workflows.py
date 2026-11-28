@@ -53,7 +53,7 @@ def list_workflows(
     if view == 'choices':
         return private_conditional_json(request, {
             'workflows': [
-                {**{key: definition[key] for key in ('id', 'name', 'projectId', 'computerId', 'enabled') if key in definition},
+                {**{key: definition[key] for key in ('id', 'name', 'projectId', 'computerId', 'enabled', 'kind') if key in definition},
                  'stepAgentIds': workflow_step_agent_ids(definition)}
                 for definition in definitions
             ],

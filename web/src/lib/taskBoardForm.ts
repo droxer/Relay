@@ -159,7 +159,7 @@ export type TaskAssignmentSelection =
   | { kind: "none" }
   | { kind: "agent"; id: string }
   | { kind: "team"; id: string }
-  | { kind: "workflow"; id: string };
+  | { kind: "workflow"; id: string; computerId?: string };
 
 export function parseTaskAssignmentValue(value: string): TaskAssignmentSelection {
   if (value.startsWith("workflow:") && value.length > 9) return { kind: "workflow", id: value.slice(9) };

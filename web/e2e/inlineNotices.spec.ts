@@ -54,6 +54,7 @@ for (const language of ["en", "zh-CN"] as const) for (const state of ["pending",
       if (path.endsWith("/queue")) body = { messages: [], paused: false };
       if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "u", userId: "u", username: "Fei", role: "user", theme, language } };
       if (path.endsWith("/manager")) body = { project, manager: { agentId: "ada", agentName: "Ada", threadId: "t", toolsAvailable: true, reason: null, candidates: [] }, proposals: [proposal] };
+      if (path.endsWith("/manager/proposals")) body = { proposals: [proposal] };
       if (path.endsWith("/threads/t")) body = { ...session, nextSteps: language === "zh-CN" ? ["把设计任务按风险拆分并安排顺序", "添加截止日期", "总结项目中尚未完成的工作，并列出下周评审前需要确认的事项，以及每项工作的负责人和验收条件"] : session.nextSteps };
       if (path.endsWith("/projects/launch")) body = project;
       if (path.endsWith("/events")) { await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" }); return; }

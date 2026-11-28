@@ -1,4 +1,4 @@
-import type { AgentTeam, CollaborationStyle, ProjectListItem, ProjectPredefinedTemplate, ProjectWorkflowChoice, RelayTaskListItem } from "../types.ts";
+import type { AgentTeam, CollaborationStyle, ProjectListItem, ProjectPredefinedTemplate, ProjectWorkflowChoice, RelayTaskListItem, StandaloneWorkflowChoice, UserAgent } from "../types.ts";
 
 export const PREDEFINED_WORKFLOWS = ["build_review", "lead_led"] as const;
 export const RETIRED_WORKFLOW_ID = "preset:pipeline";
@@ -62,6 +62,56 @@ export function projectWorkflowOptions(
       && workflow.stepAgentIds.every(id => enabled.has(id)))
       .map(({ id, name }): ProjectWorkflowOption => ({ id, name, kind: "steps", issue: null })),
   ];
+}
+
+export type StandaloneWorkflowOption = {
+  id: string;
+  kind: "steps";
+  name: string;
+  computerId: string;
+  stepAgentIds: string[];
+  issue: null;
+};
+
+function agentActiveOnComputer(
+  agent: Pick<UserAgent, "enabled" | "deletedAt" | "placements">,
+  computerId: string,
+): boolean {
+  if (agent.enabled === false || agent.deletedAt) return false;
+  return (agent.placements ?? []).some(
+    (placement) => placement.desiredState !== "removed" && placement.computerId === computerId,
+  );
+}
+
+/** Standalone Workflows eligible for an independent Task (optionally scoped to
+ *  the Task's Computer, and verified against live Agents when provided). */
+export function standaloneWorkflowOptions(
+  custom: readonly StandaloneWorkflowChoice[] = [],
+  computerId?: string | null,
+  agents?: readonly Pick<UserAgent, "id" | "enabled" | "deletedAt" | "placements">[],
+): StandaloneWorkflowOption[] {
+  const agentMap = agents ? new Map(agents.map((agent) => [agent.id, agent])) : null;
+  return custom
+    .filter((workflow) => {
+      if (!workflow.enabled || workflow.projectId !== null || !workflow.computerId) return false;
+      if (computerId && workflow.computerId !== computerId) return false;
+      if (!agentMap) return true;
+      return workflow.stepAgentIds.length > 0 && workflow.stepAgentIds.every((id) => {
+        const agent = agentMap.get(id);
+        return Boolean(agent && agentActiveOnComputer(agent, workflow.computerId));
+      });
+    })
+    .map(({ id, name, computerId: wfComputerId, stepAgentIds }): StandaloneWorkflowOption => ({
+      id, name, kind: "steps", computerId: wfComputerId, stepAgentIds, issue: null,
+    }));
+}
+
+export function standaloneWorkflowSelectionIssue(
+  id: string,
+  options: readonly StandaloneWorkflowOption[],
+): ProjectWorkflowIssue | null {
+  if (id === RETIRED_WORKFLOW_ID) return "workflow_retired";
+  return options.some((item) => item.id === id) ? null : "unavailable_selection";
 }
 
 export function projectWorkflowSelectionIssue(

@@ -36,6 +36,7 @@ WEB_UI_ROUTE_ROOTS = frozenset(
         "teams",
         "threads",
         "waitlist",
+        "workflows",
     }
 )
 

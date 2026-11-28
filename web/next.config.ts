@@ -38,6 +38,8 @@ const CLIENT_ROUTES = [
   "/routines/:path*",
   "/agents",
   "/agents/:path*",
+  "/workflows",
+  "/workflows/:path*",
   "/teams",
   "/teams/:path*",
   "/computers",

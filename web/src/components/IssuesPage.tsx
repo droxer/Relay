@@ -10,6 +10,8 @@ import { useBacklogTaskForm } from "../hooks/useBacklogTaskForm";
 import { useRecordDrawerMirror } from "../hooks/useRecordDrawerMirror";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
+import { useProjectWorkflowChoices, useStandaloneWorkflowChoices } from "../hooks/useProjectWorkflows";
+import { predefinedStyle, projectWorkflowName } from "../lib/workflowSelection";
 import { useUrlFilters } from "../hooks/useUrlFilters";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { useLanePagination, usePagination } from "../hooks/usePagination";
@@ -170,10 +172,17 @@ function IssuesPageView({
   }, { from: false });
   const board = view === "board";
 
+  const standaloneWorkflowChoices = useStandaloneWorkflowChoices(true);
   const {
     form, formBaseline, setForm, open: drawerOpen, assignmentFocus, saving, deleting, projectChoice,
     openForm, editTask, release, requestClose, submit, remove,
-  } = useBacklogTaskForm({ currentUser, allowIntake: true, agents: logicalAgents, teams });
+  } = useBacklogTaskForm({
+    currentUser,
+    allowIntake: true,
+    agents: logicalAgents,
+    teams,
+    standaloneWorkflows: standaloneWorkflowChoices.data?.workflows,
+  });
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
   const drawerRecordId = recordMirror.record;
   const [selection, setSelection] = useState<TaskSelection>(EMPTY_TASK_SELECTION);
@@ -207,6 +216,8 @@ function IssuesPageView({
   const resultLanes = response?.lanes;
   const remote = response?.page !== undefined || response?.lanes !== undefined;
   const tasks = providedTasks ?? response?.tasks ?? NO_TASKS;
+  const hasProjectWorkflowTask = tasks.some(task => Boolean(task.projectId && task.assignedWorkflowId && !predefinedStyle(task.assignedWorkflowId) && !task.assignedTeamId && !task.assignedAgentId));
+  const projectWorkflowChoices = useProjectWorkflowChoices(undefined, hasProjectWorkflowTask);
   const loading = providedTasks === undefined && (waitingForSearch || issuePage.isPending);
   const loadFailed = providedTasks === undefined && !waitingForSearch && issuePage.isError;
 
@@ -278,6 +289,19 @@ function IssuesPageView({
   function rowContext(task: RelayTaskListItem): IssueRowContext {
     const team = teams.find((candidate) => candidate.id === task.assignedTeamId);
     const taskProject = projects.find((project) => project.id === task.projectId) ?? null;
+    if (!team && task.assignedWorkflowId && !task.assignedAgentId) {
+      const customName = task.projectId
+        ? projectWorkflowChoices.data?.workflows.find((wf) => wf.id === task.assignedWorkflowId)?.name
+        : standaloneWorkflowChoices.data?.workflows.find((wf) => wf.id === task.assignedWorkflowId)?.name;
+      return {
+        projectName: task.projectId ? projectName(task.projectId) : undefined,
+        readOnly: projectReadOnly(taskProject),
+        project: taskProject,
+        ready: false,
+        agentDisplayName: projectWorkflowName(task.assignedWorkflowId, t, customName),
+        agentImageUrl: undefined,
+      };
+    }
     return {
       projectName: task.projectId ? projectName(task.projectId) : undefined,
       readOnly: projectReadOnly(taskProject),

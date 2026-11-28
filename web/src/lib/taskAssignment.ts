@@ -119,10 +119,14 @@ export function teamSharesOneComputer(
  * then the record's own `computerId`.
  */
 export function assignmentComputerId(
-  selection: { assignedAgentId?: string; assignedTeamId?: string },
+  selection: { assignedAgentId?: string; assignedTeamId?: string; assignedWorkflowId?: string },
   agents: readonly UserAgent[],
   teams: readonly AgentTeam[],
+  standaloneWorkflows: readonly { id: string; computerId?: string | null }[] = [],
 ): string | undefined {
+  if (selection.assignedWorkflowId && !selection.assignedTeamId && !selection.assignedAgentId) {
+    return standaloneWorkflows.find((workflow) => workflow.id === selection.assignedWorkflowId)?.computerId ?? undefined;
+  }
   if (selection.assignedAgentId) {
     const agent = agents.find((candidate) => candidate.id === selection.assignedAgentId);
     if (!agent) return undefined;
@@ -193,7 +197,15 @@ export type TaskAssignmentChange = TaskAssignmentSelection;
 /** The PATCH an assignment change sends — the same fields the task drawer
  *  submits. The server derives the assignee from the agent's supervisor. */
 export function taskAssignmentPatch(task: RelayTaskListItem, change: TaskAssignmentChange): TaskMutationInput {
-  if (change.kind === "workflow") return { assignedAgentId: null, assignedTeamId: null, assignedWorkflowId: change.id, collaborationStyle: "" };
+  if (change.kind === "workflow") {
+    return {
+      assignedAgentId: null,
+      assignedTeamId: null,
+      assignedWorkflowId: change.id,
+      collaborationStyle: "",
+      ...(!task.projectId && !task.computerId && change.computerId ? { computerId: change.computerId } : {}),
+    };
+  }
   if (change.kind === "team") {
     return {
       assignedAgentId: null,

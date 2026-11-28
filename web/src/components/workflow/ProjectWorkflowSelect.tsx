@@ -19,9 +19,9 @@ export function ProjectWorkflowOptionLabel({ option }: { option: ProjectWorkflow
 /** Shown once the reader chose to run a workflow (the drawer's Agent |
  *  Workflow switch), so it offers workflows only: running with Project Agents
  *  is the other side of that switch, not an item here. */
-export function ProjectWorkflowSelect({ workflows, value, onChange, disabled, loading, failed, issue, onRetry, triggerId }: {
+export function ProjectWorkflowSelect({ workflows, value, onChange, disabled, loading, failed, issue, onRetry, triggerId, hintKey = "workflow.optional_assignment_hint" }: {
   workflows: ProjectWorkflowOption[]; value: string; onChange: (id: string) => void; disabled?: boolean;
-  loading?: boolean; failed?: boolean; issue?: ProjectWorkflowIssue | null; onRetry: () => void; triggerId?: string;
+  loading?: boolean; failed?: boolean; issue?: ProjectWorkflowIssue | null; onRetry: () => void; triggerId?: string; hintKey?: string;
 }) {
   const { t } = useTranslation();
   const issueId = useId();
@@ -41,6 +41,6 @@ export function ProjectWorkflowSelect({ workflows, value, onChange, disabled, lo
     </Select>
     {failed ? <div role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="ghost" size="dense" onClick={onRetry}>{t("workspace.retry")}</Button></div> : null}
     {showIssue ? <p id={issueId} role="alert" className="text-destructive">{t(`workflow.${issue}`)}</p>
-      : <p className="adm-form-hint">{t("workflow.optional_assignment_hint")}</p>}
+      : <p className="adm-form-hint">{t(hintKey)}</p>}
   </>;
 }

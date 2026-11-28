@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 
 
@@ -16,7 +17,7 @@ def remove_agent_from_teams(
 
 
 def reconcile_team_memberships(
-    team_store: Any, agent_store: Any
+    team_store: Any, agent_store: Any, *, excluded_team_ids: Collection[str] = (),
 ) -> list[dict[str, Any]]:
     """Remove historical Team members whose agent no longer exists."""
     updated: list[dict[str, Any]] = []
@@ -27,6 +28,8 @@ def reconcile_team_memberships(
             return updated
         raise
     for team in teams:
+        if team["id"] in excluded_team_ids:
+            continue
         stale_members = [
             agent_id
             for agent_id in team.get("memberAgentIds", [])

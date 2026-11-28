@@ -1,7 +1,7 @@
 import { useId, type ElementType, type ReactNode } from "react";
 import { RelayMark } from "./RelayMark";
 import {
-  NavAgents, NavTeams, NavProjects, NavSkills, NavBacklog,
+  NavAgents, NavTeams, NavWorkflows, NavProjects, NavSkills, NavBacklog,
   NavThreads, NavComputer, NavRoutine, ICON,
 } from "./icons";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 /** Shared first-use and zero-data surface. Feature marks reuse the navigation
  * vocabulary; supplied illustrations always take precedence. */
 const FEATURE_MARKS = {
-  agents: NavAgents, teams: NavTeams, projects: NavProjects, skills: NavSkills,
+  agents: NavAgents, teams: NavTeams, workflows: NavWorkflows, projects: NavProjects, skills: NavSkills,
   tasks: NavBacklog, threads: NavThreads, computers: NavComputer, routines: NavRoutine,
 };
 

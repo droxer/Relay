@@ -158,7 +158,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const workspaceRosters = workspaceDirectories && !projectRailVisible;
   const agentRosterVisible = workspaceRosters || surface === "agents"
     || (projectOverview && ["tasks", "automations", "members"].includes(projectTab));
-  const teamRosterVisible = workspaceRosters || surface === "teams"
+  const teamRosterVisible = workspaceRosters
     || (projectOverview && ["tasks", "automations", "members"].includes(projectTab));
   const setupOnly = openingRoute !== null && !agentRosterVisible;
   const { agents: logicalAgents, isSuccess: agentsReady, defaultAgentOffers } = useUserAgents(user.userId, true, agentRosterVisible);
@@ -366,7 +366,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     agentId,
     recordTaskId,
     recordRunId,
-    teamWorkspaceId,
+    workflowId,
     skillId,
     settingsSection,
     adminSection,
@@ -380,7 +380,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     navigateToRoutineRecord,
     navigateToSettings,
     navigateToAdminSection,
-    navigateToTeamWorkspace,
+    navigateToWorkflow,
     navigateToSkill,
     navigateToProject,
     navigateToLogin,
@@ -809,7 +809,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       theme={preferences.theme}
       onThemeChange={preferences.setTheme}
     >
-      <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${recordTaskId}:${recordRunId}:${teamWorkspaceId}`}>
+      <ScreenErrorBoundary resetKey={`${route}:${routedSessionId}:${routedProjectId}:${agentId}:${recordTaskId}:${recordRunId}:${workflowId}`}>
       <Suspense fallback={<RouteFallback />}>
         {workspacePending ? <RouteFallback /> : showsWorkRoutePage(route, notFound, isTaskThread) ? (
           <WorkRoutePage
@@ -845,8 +845,8 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             recordRunId={recordRunId}
             onOpenTaskRecord={navigateToTaskRecord}
             onOpenRoutineRecord={navigateToRoutineRecord}
-            teamWorkspaceId={teamWorkspaceId}
-            onSelectTeam={navigateToTeamWorkspace}
+            workflowId={workflowId}
+            onSelectWorkflow={navigateToWorkflow}
             skillId={skillId}
             onSelectSkill={navigateToSkill}
             detailAgent={detailAgent}

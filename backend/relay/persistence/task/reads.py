@@ -214,6 +214,21 @@ class TaskReadRows(TaskStoreState):
             record = materialize_task_events(events) if events else snapshot
             return record if include_history else compact_task_snapshot(record, event_count=version)
 
+    def legacy_standalone_team_task_assignments(self) -> list[dict[str, Any]]:
+        tasks = self.tasks
+        snapshot = tasks.c.snapshot
+        with store_transaction(self.engine) as conn:
+            rows = conn.execute(select(
+                tasks.c.id, tasks.c.assigned_team_id.label('assignedTeamId'),
+                tasks.c.owner_user_id.label('ownerUserId'), tasks.c.assignee_user_id.label('assigneeUserId'),
+                snapshot['assignedWorkflowId'].as_string().label('assignedWorkflowId'),
+                snapshot['collaborationStyle'].as_string().label('collaborationStyle'),
+            ).where(
+                tasks.c.project_id.is_(None), tasks.c.deleted_at.is_(None),
+                tasks.c.assigned_team_id.is_not(None),
+            ).order_by(tasks.c.id)).mappings().all()
+        return [{**row, 'id': str(row['id']), 'assignedTeamId': str(row['assignedTeamId'])} for row in rows]
+
     def list_tasks(
         self, *, user_id: str | None = None, limit: int | None = None
     ) -> list[dict[str, Any]]:

@@ -392,6 +392,7 @@ def triggered_occurrence_allowed(
         and (
             routine.get("assignedAgent")
             or routine.get("assignedTeamId")
+            or routine.get("assignedWorkflowId")
             or routine.get("projectId")
         )
     )

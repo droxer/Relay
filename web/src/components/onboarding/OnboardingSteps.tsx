@@ -20,7 +20,7 @@ import type { OnboardingCard } from "../../types";
 const CARD_ROUTES: Record<OnboardingCard, AppRoute> = {
   tasks: "backlog",
   projects: "projects",
-  teams: "teams",
+  teams: "workflows",
   automations: "routine",
 };
 

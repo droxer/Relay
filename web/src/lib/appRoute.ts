@@ -20,7 +20,7 @@ const WORK_PATHS: Record<Exclude<AppRoute, "main" | "projects">, string> = {
   backlog: "/tasks",
   routine: "/automations",
   agents: "/agents",
-  teams: "/teams",
+  workflows: "/workflows",
   computers: "/computers",
   skills: "/skills",
   settings: "/settings",
@@ -53,10 +53,11 @@ const WORK_ROUTES = new Map(
    changed (/tasks, /automations). Folding the new head back keeps every
    `head === "backlog"` / `head === "routines"` branch below meaning one
    thing, and old links (/issues, /backlog) land on the same page. */
-const PATH_HEAD_ALIASES: Record<string, string> = { tasks: "backlog", issues: "backlog", automations: "routines" };
+const PATH_HEAD_ALIASES: Record<string, string> = { tasks: "backlog", issues: "backlog", automations: "routines", teams: "workflows" };
 WORK_ROUTES.set("/backlog", "backlog");
 WORK_ROUTES.set("/issues", "backlog");
 WORK_ROUTES.set("/routines", "routine");
+WORK_ROUTES.set("/teams", "workflows");
 
 export const APP_NAVIGATION_EVENT = "relay:navigation";
 
@@ -76,7 +77,7 @@ export type AppLocationState = {
   taskId?: string | null;
   /** The occurrence open as a run, under the routine named by `taskId`. */
   runId?: string | null;
-  teamWorkspaceId?: string | null;
+  workflowId?: string | null;
   /** The skill whose record is open — `/skills/<id>`. */
   skillId?: string | null;
   settingsSection?: SettingsSection | null;
@@ -201,8 +202,8 @@ export function parseAppPath(pathname: string): AppLocationState {
   if (head === "agents" && second && rest.length === 0) {
     return { route: "agents", ...base, agentId: decodeSegment(second) };
   }
-  if (head === "teams" && second && rest.length === 0) {
-    return { route: "teams", ...base, teamWorkspaceId: decodeSegment(second) };
+  if (head === "workflows" && second && rest.length === 0) {
+    return { route: "workflows", ...base, workflowId: decodeSegment(second) };
   }
   if (head === "skills" && second && rest.length === 0) {
     return { route: "skills", ...base, skillId: decodeSegment(second) };
@@ -235,7 +236,7 @@ export function pathForAppState({
   agentId,
   taskId,
   runId,
-  teamWorkspaceId,
+  workflowId,
   skillId,
   composingNew,
   login,
@@ -260,7 +261,7 @@ export function pathForAppState({
     const routinePath = `${WORK_PATHS.routine}/${encodeURIComponent(taskId)}`;
     return runId ? `${routinePath}/runs/${encodeURIComponent(runId)}` : routinePath;
   }
-  if (route === "teams" && teamWorkspaceId) return `/teams/${encodeURIComponent(teamWorkspaceId)}`;
+  if (route === "workflows" && workflowId) return `/workflows/${encodeURIComponent(workflowId)}`;
   if (route === "skills" && skillId) return `${WORK_PATHS.skills}/${encodeURIComponent(skillId)}`;
   if (route === "settings") {
     const section = settingsSection ?? DEFAULT_SETTINGS_SECTION;
@@ -320,7 +321,6 @@ const ROUTINE_RECORD_TAB_ALIASES: Readonly<Record<string, string>> = { files: "r
 function recordTabParam(value: string | null, aliases = TASK_RECORD_TAB_ALIASES): string | null {
   return value ? aliases[value] ?? value : null;
 }
-const TEAM_TABS = new Set(["profile", "activities"]);
 /* Derived, not restated: a tab the page offers but the route dropped would
    canonicalize straight back out and be a dead control. */
 const PROJECT_TABS = new Set<string>(PROJECT_PAGE_TABS);
@@ -626,16 +626,11 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
     const requestedTab = source.get("tab");
     const tab = requestedTab && AGENT_TABS.has(requestedTab) ? requestedTab : "profile";
     if (tab !== "profile") target.set("tab", tab);
-  } else if (head === "teams" && !entityId) {
+  } else if (head === "workflows" && !entityId) {
     copyParam(source, target, "q");
     if (source.get("dialog") === "create") target.set("dialog", "create");
-  } else if (head === "teams" && entityId && rest.length === 0) {
+  } else if (head === "workflows" && entityId && rest.length === 0) {
     copyParam(source, target, "q");
-    const requestedTab = source.get("tab");
-    const tab = requestedTab && TEAM_TABS.has(requestedTab) ? requestedTab : "profile";
-    if (tab !== "profile") target.set("tab", tab);
-    // The add-team drawer can open over a selected team's profile. Retain its
-    // URL-backed state instead of immediately canonicalizing the click away.
     if (source.get("dialog") === "create") target.set("dialog", "create");
   } else if (head === "channels" && !entityId && CHANNELS_ENABLED) {
     copyParam(source, target, "channel");
@@ -678,7 +673,7 @@ function canonicalSearchForPath(pathname: string, search = ""): string {
    bookmarks. Unlike PATH_HEAD_ALIASES (read-only), these rewrite the address
    bar on arrival (/issues was the Tasks page's address before /tasks).
    /backlog is deliberately absent: its tests pin it. */
-const RENAMED_PATH_HEADS: Readonly<Record<string, string>> = { routines: "automations", issues: "tasks" };
+const RENAMED_PATH_HEADS: Readonly<Record<string, string>> = { routines: "automations", issues: "tasks", teams: "workflows" };
 
 function canonicalPathname(pathname: string): string {
   // The Users section was "employees" before the user rename.
@@ -752,10 +747,8 @@ export function browserUrlForAppState(
     && ["tasks", "automations"].includes(nextSegments[2])) return canonicalBrowserUrl(nextPath, currentSearch);
   const [nextHead] = nextSegments;
   const [currentHead] = currentSegments;
-  if (nextHead === "teams" && currentHead === "teams") {
+  if (nextHead === "workflows" && currentHead === "workflows") {
     const rosterSearch = new URLSearchParams(currentSearch);
-    // A team's own tab is local to that team; only the roster search follows selection.
-    rosterSearch.delete("tab");
     rosterSearch.delete("dialog");
     return canonicalBrowserUrl(nextPath, rosterSearch.toString());
   }

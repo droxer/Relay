@@ -30,12 +30,19 @@ documentation locations, and UI metadata from the backend's shared constants.
 /projects/{projectId}/threads/{threadId}
 /agents
 /agents/{agentId}
-/teams
-/teams/{teamId}
+/workflows
+/workflows/{workflowId}
 /skills
 /channels
 /admin
 ```
+
+The **Workforce** navigation group contains **Agents** and **Workflows**.
+`/workflows` manages standalone Computer-scoped definitions. Legacy `/teams`
+and `/teams/{teamId}` links canonicalize to `/workflows` and
+`/workflows/{teamId}`, preserving query state. The migrated default Workflow
+uses the Team ID when available. Project Workflow management remains within
+the Project.
 
 Standalone work lives under its Computer's stable identity. Project Tasks
 open at `/projects/{projectId}?task={taskId}`; Automations and their runs open
@@ -71,8 +78,9 @@ instead of opening the Computer picker. A Thread deep link waits for the
 addressed Thread before canonicalizing its scope; failed routing data must not
 leave any deep link waiting indefinitely.
 
-Agent lists use `q` and `availability`. Agent and team details use
-`tab`; project details use `tab` plus `path` and `item` on the Workspace tab;
+Agent lists use `q` and `availability`. Agent details use `tab`. The standalone
+Workflow list uses `q`, and its create drawer uses `dialog=create`.
+Project details use `tab` plus `path` and `item` on the Workspace tab;
 an open thread-space panel writes `space=1` with `artifact`; create dialogs use
 `dialog=create`. IDs are percent-encoded path segments. Navigation to another
 route or entity removes query state owned by the previous destination.
@@ -90,7 +98,9 @@ route. `/` is replaced with `/home`.
 | `/api/v1/auth` | Bootstrap, login, logout, current user, preferences |
 | `/api/v1/threads` | Session-backed threads, events, artifacts, decisions, handoffs |
 | `/api/v1/tasks` | Backlog and automation resources, assignment, pickups, runs |
-| `/api/v1/agents`, `/api/v1/teams` | Current-user agents and teams |
+| `/api/v1/agents` | Current-user Agents |
+| `/api/v1/workflows` | User-owned Workflow definitions and scoped previews and choices |
+| `/api/v1/teams` | Legacy Team records and compatibility operations |
 | `/api/v1/skills` | User-owned catalog, immutable revisions, and agent grants |
 | `/api/v1/admin/agents`, `/api/v1/admin/agent-placements` | Admin logical-agent and placement CRUD |
 | `/api/v1/agent-runs` | Ad-hoc agent-targeted run dispatch |
@@ -1619,12 +1629,15 @@ to recover a missed notification. A pending response from a completed long
 poll carries `X-Relay-Permission-Wait: 1` so the daemon can reopen the wait
 immediately.
 
-## Team responsibilities and work acceptance
+## Legacy Team responsibilities and work acceptance
 
 ### Collaboration styles
 
-Teams accept optional `collaborationStyle`: `build_review`, `pipeline`,
-or `lead_led`. Absence defaults to `build_review`; PATCH with `null` clears the
+These fields support legacy Team execution. New standalone clients assign a
+saved Workflow as described in [Independent Workflows](#independent-workflows).
+New Team `collaborationStyle` selections are `build_review` or `lead_led`.
+Stored `pipeline` settings remain readable, but selecting Pipeline for new
+work returns `workflow_retired`. Absence defaults to `build_review`; PATCH with `null` clears the
 team setting. Tasks and routines accept the same optional field; PATCH with
 `""` clears a task override. Routine occurrences inherit their routine's override.
 
@@ -2491,20 +2504,63 @@ A new run freezes `workflowSnapshot`, retaining `teamSnapshot` as a wire alias.
 
 For independent Tasks, create a standalone definition with `name`, `computerId`,
 `workflowSteps` and optional `enabled`. List its definitions or choices with
-`GET /api/v1/workflows?scope=standalone` or `?scope=standalone&view=choices`;
-choices include `computerId` and `stepAgentIds`. The existing unscoped
+`GET /api/v1/workflows?scope=standalone` or `?scope=standalone&view=choices`.
+The management page uses `?scope=standalone&view=preview` for step summaries
+and reads `GET /api/v1/workflows/{id}` for the selected definition. Previews
+omit step instructions and acceptance criteria. Choices include `computerId`,
+`stepAgentIds`, and `kind` when present. The existing unscoped
 `view=choices` remains Project-only. `scope=standalone` cannot combine with
-`projectId`. Names are case-insensitively unique per User and Computer.
+`projectId` (400 `workflow_scope_invalid`). Names are case-insensitively unique
+per User and Computer. A duplicate name returns 409 `workflow_name_taken`.
 Assign it through `assignedWorkflowId` on an independent Task with the same
 `computerId`, without `assignedAgentId` or `assignedTeamId`, then start using
 `POST /api/v1/tasks/{id}/runs`. The Task uses its durable Task Workspace and
 the existing Workflow approval/recovery routes. Standalone definitions do not
-use the Project-only `POST /workflows/{id}/runs` entry. Existing Team/default
-assignments are not rewritten by this additive schema migration.
+use the Project-only `POST /workflows/{id}/runs` entry. Ready Tasks use the
+same execution path through the scheduler. Standalone Automations select the
+same definitions. Their occurrences retain the Workflow assignment.
 Migration 0136 also updates the dispatch queue index so Ready independent Tasks
 with only `assignedWorkflowId` are discovered by the scheduler.
 
-The Team profile reads `GET /api/v1/teams/{teamId}?view=preview` for Workflow
+Migrated Build → Review and Lead-led definitions have `kind: "predefined"`,
+`workflowSteps: []`, and a `predefined` object containing `template`,
+`memberAgentIds`, `leadAgentId`, `memberConfigs`, `acceptanceCriteria`, and
+`humanApproval`. Choices derive `stepAgentIds` from those saved members.
+The runtime compiles the saved roles and approval policy when the Task starts.
+An empty step array on such a definition does not mean that the process has
+no participants. The owner can rename, enable, disable, or delete the
+definition. Step or scope edits return 400 `workflow_predefined_immutable`.
+The public create contract accepts custom steps. It does not accept `kind`
+or `predefined` as client-authored fields.
+
+#### Legacy standalone Team conversion
+
+After schema 0136, enabled startup repairs copy eligible standalone Team
+defaults and Team-owned custom definitions into Computer-scoped Workflows.
+`RELAY_STARTUP_REPAIRS=0` disables this data repair. Schema upgrades alone do
+not convert the records.
+
+Task resolution uses the explicit `assignedWorkflowId`, then its
+`collaborationStyle`, then the Team default. The repair records `computerId`
+and replaces `assignedTeamId` with `assignedWorkflowId` through Task events
+in one transaction. The repair creates no runs. The first imported default
+uses the Team ID when available. Other copies use deterministic UUIDv5 IDs.
+Copies retain `legacyTeamId` and `legacyWorkflowId` for provenance. Repeated
+startup repairs reuse existing imports and preserve owner edits.
+
+The repair preserves source Team records, original Workflow definitions,
+historical events, and frozen runs. Project Tasks, Project definitions, and
+Project-scoped defaults retain their existing behavior. Invalid ownership,
+missing or split Computers, unavailable Agents, disabled selections, retired
+Pipeline selections, and workspace conflicts remain unchanged. Startup logs
+name each skipped record and its reason. Refused Team rosters retain their
+original Lead and members across restarts. Active dispatch claims and
+dedicated custom Workflow runs defer Task conversion until a later startup.
+Existing ordinary Team rounds finish using their frozen manifests.
+
+#### Legacy Team compatibility APIs
+
+The compatibility Team profile reads `GET /api/v1/teams/{teamId}?view=preview` for Workflow
 previews and its members' Agent placements. The Team roster keeps the smaller
 member summaries.
 The roster editor reads `GET /api/v1/teams/{teamId}/member-choices` for Agent
@@ -2521,8 +2577,12 @@ Already linked eligible Workflows remain in the projection. Project-scoped Team 
 `PUT/DELETE /api/v1/teams/{teamId}/workflow-defaults/{projectId}` (PUT body:
 `{workflowId}`). They materialize in `projectWorkflowDefaults`.
 
-Task/Automation assignments may include `assignedWorkflowId` without
-`assignedTeamId` for a standalone custom Workflow. Predefined selections still
-require a Team. Project scope and live participant access remain mandatory.
+Task and Automation assignments may include `assignedWorkflowId` without
+`assignedTeamId` for a Computer-scoped custom or migrated predefined Workflow.
+Project Tasks retain Project-owned definitions and `preset:*` choices from
+the enabled Project roster. Legacy Team selections keep their compatibility
+contract. Every run still checks live participant access and Computer scope.
 See [Teams and Workflows](guides/team-workflows.md) for payloads, compatibility,
-and migration 0129's forward-only recovery boundary.
+and migration 0129's forward-only recovery boundary. See
+[ADR-027](adr/027-standalone-task-workflows.md) for the standalone scope and
+legacy conversion decision.

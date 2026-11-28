@@ -11,7 +11,7 @@ const ROUTE_CHUNKS: Partial<Record<AppRoute, () => Promise<unknown>>> = {
   channels: () => import("../components/ChannelsPage"),
   routine: () => import("../components/RoutinesPage"),
   agents: () => import("../components/AgentsPage"),
-  teams: () => import("../components/TeamsPage"),
+  workflows: () => import("../components/WorkflowsPage"),
   computers: () => import("../components/ComputerPage"),
   skills: () => import("../components/SkillsPage"),
   settings: () => import("../components/SettingsPage"),

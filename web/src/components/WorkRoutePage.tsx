@@ -21,7 +21,7 @@ const BacklogPage = lazy(() => import("./BacklogPage").then((m) => ({ default: m
 const TasksWorkspace = lazy(() => import("./TasksWorkspace").then((m) => ({ default: m.TasksWorkspace })));
 const RoutinesPage = lazy(() => import("./RoutinesPage").then((m) => ({ default: m.RoutinesPage })));
 const AgentsPage = lazy(() => import("./AgentsPage").then((m) => ({ default: m.AgentsPage })));
-const TeamsPage = lazy(() => import("./TeamsPage").then((m) => ({ default: m.TeamsPage })));
+const WorkflowsPage = lazy(() => import("./WorkflowsPage").then((m) => ({ default: m.WorkflowsPage })));
 const ComputerPage = lazy(() => import("./ComputerPage").then((m) => ({ default: m.ComputerPage })));
 const SkillsPage = lazy(() => import("./SkillsPage").then((m) => ({ default: m.SkillsPage })));
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
@@ -31,7 +31,7 @@ const WORK_ROUTE_SKIP_IDS: Record<Exclude<AppRoute, "main" | "projects">, string
   backlog: "backlog-panel",
   routine: "routine-panel",
   agents: "agents-panel",
-  teams: "teams-panel",
+  workflows: "workflows-panel",
   computers: "computer-panel",
   skills: "skills-panel",
   settings: "settings-panel",
@@ -100,8 +100,8 @@ interface WorkRoutePageProps {
   recordRunId: string | null;
   onOpenTaskRecord: (taskId: string | null) => void;
   onOpenRoutineRecord: (routineId: string | null, runId?: string | null) => void;
-  teamWorkspaceId: string | null;
-  onSelectTeam: (teamId: string | null) => void;
+  workflowId: string | null;
+  onSelectWorkflow: (workflowId: string | null) => void;
   skillId: string | null;
   onSelectSkill: (skillId: string | null) => void;
   detailAgent: UserAgent | null;
@@ -203,12 +203,12 @@ export const WorkRoutePage = memo(function WorkRoutePage(props: WorkRoutePagePro
       onOpenRecord={props.onOpenRoutineRecord} onOpenThread={onOpenThread}
       isRefreshing={props.isRefreshing} onRefresh={props.onRefresh}
     />
-  ) : route === "teams" ? (
-    <TeamsPage
+  ) : route === "workflows" ? (
+    <WorkflowsPage
       currentUser={user}
-      onOpenThread={onOpenThread}
-      teamId={props.teamWorkspaceId}
-      onSelectTeam={props.onSelectTeam}
+      nodes={props.runtimeNodes}
+      workflowId={props.workflowId}
+      onSelectWorkflow={props.onSelectWorkflow}
     />
   ) : route === "agents" ? (
     <AgentsPage

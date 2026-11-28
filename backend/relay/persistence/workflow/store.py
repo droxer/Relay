@@ -32,7 +32,7 @@ class DatabaseWorkflowStore:
         return {**deepcopy(row.snapshot), 'version': row.event_version} if row else None
 
     def list_workflows(self, owner: str | None = None, *, project_id: str | None = None,
-                       team_id: str | None = None, project_only: bool = False,
+                       team_id: str | None = None, owner_team_id: str | None = None, project_only: bool = False,
                        standalone_only: bool = False,
                        project_ids: Collection[str] | None = None) -> list[dict[str, Any]]:
         statement = select(workflows.c.snapshot, workflows.c.event_version).where(workflows.c.deleted_at.is_(None))
@@ -50,6 +50,8 @@ class DatabaseWorkflowStore:
             if not project_ids:
                 return []
             statement = statement.where(workflows.c.project_id.in_(project_ids))
+        if owner_team_id:
+            statement = statement.where(workflows.c.owner_team_id == owner_team_id)
         if team_id:
             statement = statement.join(links, links.c.workflow_id == workflows.c.id).where(links.c.team_id == team_id)
         with store_transaction(self.engine) as conn:
@@ -109,6 +111,47 @@ class DatabaseWorkflowStore:
                     raise ValueError('workflow_name_taken') from error
                 raise
             return {**definition, 'version': version + 1}
+
+    def import_standalone_workflow(
+        self, definition: dict[str, Any], *, alternate_id: str,
+    ) -> dict[str, Any]:
+        """Keep a migrated definition independent of subsequent legacy edits."""
+        owner = definition['ownerUserId']
+        with resource_transaction(self.engine, self._scope_key(definition, owner)) as conn:
+            team_id = definition['legacyTeamId']
+            target_id = definition['id']
+            existing = {
+                identity: current for identity in dict.fromkeys((team_id, alternate_id))
+                if (current := self.get_workflow(identity, include_deleted=True))
+            }
+            for current in existing.values():
+                if (current.get('legacyTeamId') == team_id
+                        and current.get('legacyWorkflowId') == definition['legacyWorkflowId']):
+                    if current.get('deletedAt') or not current.get('enabled', True):
+                        raise ValueError('workflow_migrated_target_disabled')
+                    if current.get('computerId') != definition['computerId'] or current.get('ownerUserId') != owner:
+                        raise ValueError('workflow_migrated_target_scope_mismatch')
+                    return current
+            # Old Team URLs keep the first migrated default. Later legacy
+            # defaults can still resolve to their own stable Workflow ids.
+            if target_id == team_id and existing.get(team_id, {}).get('legacyTeamId') == team_id:
+                target_id = alternate_id
+            if target_id in existing:
+                raise ValueError('workflow_migration_identity_conflict')
+            taken = set(conn.scalars(select(workflows.c.name_key).where(
+                workflows.c.owner_user_id == owner,
+                workflows.c.computer_id == definition['computerId'], workflows.c.deleted_at.is_(None),
+            )))
+            name = definition['name'][:200]
+            if name.casefold() in taken:
+                suffix = f" ({target_id})"
+                name = f"{name[:200 - len(suffix)]}{suffix}"
+                if name.casefold() in taken:
+                    raise ValueError('workflow_name_taken')
+            value = {**definition, 'id': target_id, 'name': name, 'updatedAt': now_iso()}
+            conn.execute(insert(workflows).values(**self._row(value, 1)))
+            self._event(conn, value, 0, 'workflow.imported')
+            return {**value, 'version': 1}
 
     def delete_workflow(self, workflow_id: str) -> None:
         current = self.get_workflow(workflow_id)

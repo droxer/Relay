@@ -189,9 +189,6 @@ def create_app(
     _publish_store_changes(stores, notifier)
     if settings.startup_repairs_enabled and not ingest_only:
         requeue_capacity_waits(task_store=stores.tasks)
-        repair_records_before_serving(
-            team_store=stores.teams, agent_store=stores.agents, agent_placement_store=stores.placements
-        )
     bundled_client_version = partial(
         computer_installer_routes.bundle_client_version,
         computer_installer_routes.bundle_path(settings.computer_bundle),
@@ -215,6 +212,10 @@ def create_app(
         connections=connections,
     )
     if settings.startup_repairs_enabled and not ingest_only:
+        repair_records_before_serving(
+            team_store=stores.teams, agent_store=stores.agents, agent_placement_store=stores.placements,
+            task_store=stores.tasks, registry=registry,
+        )
         migrate_legacy_computer_ids(
             agent_store=stores.agents, agent_placement_store=stores.placements, registry=registry
         )

@@ -168,7 +168,9 @@ on that Computer. Existing Team- and Project-owned definitions retain their scop
 A **Custom Workflow** defines
 ordered steps, each with an Agent, instructions, acceptance criteria, and an
 optional approval gate. The owner manages it where it was created. A Team-owned Workflow runs with its owning Team through a direct Workflow Run.
-Standalone Tasks and Automations assigned to an ordinary Team use a predefined process.
+A standalone Team's default and Team-owned custom definitions can be migrated to
+Computer-scoped Workflows. Saved standalone Predefined Workflows retain their
+roster, lead, and approval policy. Legacy definitions and frozen runs remain readable.
 A Project-owned Workflow is available to Tasks and Automations in that Project
 without an assigned Team. Direct Workflow Runs may name an eligible Team. Using a Workflow never transfers its ownership.
 A Project is selected for execution; its enabled Agents and Computer constrain
@@ -292,7 +294,7 @@ _Avoid_: Workspace, Agent home
 **Project**:
 A user-owned collaboration boundary with one persistent workspace, an
 ordered roster of Project Agents, and any number of Project Conversations.
-Project Tasks and Automations may be assigned to enabled Project Agents, Project-owned Custom Workflows, or Predefined Workflows, without a Team. Standalone Tasks and Automations may be assigned to Agents or ordinary Teams regardless of Project membership. Eligibility is checked again when work is dispatched.
+Project Tasks and Automations may be assigned to enabled Project Agents, Project-owned Custom Workflows, or Predefined Workflows, without a Team. Standalone Tasks and Automations may be assigned to Agents or Computer-scoped Workflows. Legacy Team assignments remain readable. Eligibility is checked again when work is dispatched.
 Project, Task, Automation, and Thread records are private to their owning User;
 an Account's admin role and a Task's assignee do not grant access to another
 User's records. Administrative hardware and account management are separate
