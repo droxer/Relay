@@ -5,11 +5,13 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import type { HomeStatsPeriod } from "../../api-client/home";
 import { useHomeStats } from "../../hooks/useHomeStats";
+import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
 import { useTeams } from "../../hooks/useTeams";
 import { isUserAgentRoutable } from "../../lib/agentDisplayNames";
 import { agentOnComputer, teamOnComputer, isTeamRoutable } from "../../lib/taskAssignment";
 import { isoToday } from "../../lib/routine";
-import { homeUpcoming, readyHomeTasks, homeBlockers, homeFocusItem } from "../../lib/homePlan";
+import { homeUpcoming, readyHomeTasks, homeBlockers, homeFocusItem, homeProjectWorkflowReady } from "../../lib/homePlan";
+import { predefinedStyle } from "../../lib/workflowSelection";
 import type { ProjectCollectionStatus } from "../../lib/projectPage";
 import { ReadyTask, ShowAllToggle, UpcomingPanel, BlockersPanel } from "./HomePlanningPanels";
 import { ListSkeleton } from "../ListSkeleton";
@@ -79,16 +81,22 @@ export function HomePage({ user, userId, setUser, items, needsYou, tasks, taskPr
   const [readyExpanded, setReadyExpanded] = useState(false);
   const upcoming = useMemo(() => homeUpcoming(tasks, userId, today), [tasks, userId, today]);
   const blockers = useMemo(() => homeBlockers(tasks, userId), [tasks, userId]);
-  const ready = useMemo(() => readyHomeTasks(tasks, projects, userId).filter(task => {
+  const readyCandidates = useMemo(() => readyHomeTasks(tasks, projects, userId), [tasks, projects, userId]);
+  const workflowChoices = useProjectWorkflowChoices(undefined, readyCandidates.some(task =>
+    !task.assignedTeamId && task.assignedWorkflowId && !predefinedStyle(task.assignedWorkflowId)));
+  const ready = useMemo(() => readyCandidates.filter(task => {
     const project = projects.find(p => p.id === task.projectId)!;
     if (!nodes.some(n => computerId(n) === project.computerId && n.online && !n.stale && !n.retiredAt)) return false;
     if (task.assignedTeamId) {
       const team = teams.find(t => t.id === task.assignedTeamId);
       return Boolean(team && isTeamRoutable(team) && teamOnComputer(team, agents, project.computerId));
     }
+    if (task.assignedWorkflowId) {
+      return homeProjectWorkflowReady(task.assignedWorkflowId, project, agents, workflowChoices.data?.workflows ?? []);
+    }
     const agent = agents.find(a => a.id === task.assignedAgentId);
     return Boolean(agent && isUserAgentRoutable(agent) && agentOnComputer(agent, project.computerId));
-  }), [tasks, projects, userId, nodes, agents, teams]);
+  }), [readyCandidates, projects, nodes, agents, teams, workflowChoices.data]);
   // Unfinished setup takes the Start here slot; ready work then stays listed.
   const readyFocus = !homeFocusItem(items) && !setupProgress ? ready[0] : undefined;
   const readyRest = ready.filter(t => t.id !== readyFocus?.id);

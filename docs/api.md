@@ -1491,11 +1491,12 @@ Errors are the `detail` codes `github_repository_required`,
 ### Live Thread activity
 
 `GET /api/v1/threads/activity/changes` opens an authenticated server-sent event
-stream for the caller's Activity list. A committed Task-to-Thread link or
-status change on a linked Task emits a `changed` event with an empty JSON
-object. Refetch `GET /api/v1/threads?view=summary&include=activity` when the event
-arrives or the stream reconnects. Keep periodic refresh as a fallback for
-missed hints.
+stream for the caller's Activity list and Home. Relay emits a `changed` event
+with an empty JSON object after a Task status, deletion, or Thread link changes.
+When the event arrives or the stream reconnects, refetch
+`GET /api/v1/threads?view=summary&include=activity` and any active Home Task query
+(`GET /api/v1/tasks?view=summary&scope=home`). Keep periodic refresh for missed
+events.
 
 ### Thread execution and deferred deletion
 

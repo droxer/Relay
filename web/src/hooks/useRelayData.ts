@@ -272,14 +272,17 @@ export function useRelayData(
   useEffect(() => {
     if (!enabled || !workspaceVisible || typeof EventSource === "undefined") return;
     const source = new EventSource(relayApiEndpoint("/threads/activity/changes"), { withCredentials: true });
-    const filters = { queryKey: SESSIONS_KEY, exact: true };
+    const projections = [SESSIONS_KEY, HOME_TASKS_QUERY_KEY];
     const refresh = () => {
       // An initial request without cached data would otherwise be reused
-      // even when it began before the Task Thread was linked.
-      void queryClient.cancelQueries({ ...filters, predicate: query => query.state.data === undefined });
-      void queryClient.invalidateQueries(filters);
+      // even when it began before the Task change committed.
+      for (const queryKey of projections) {
+        const filters = { queryKey, exact: true };
+        void queryClient.cancelQueries({ ...filters, predicate: query => query.state.data === undefined });
+        void queryClient.invalidateQueries(filters);
+      }
     };
-    let needsCatchUp = queryClient.getQueryData(SESSIONS_KEY) !== undefined;
+    let needsCatchUp = projections.some(queryKey => queryClient.getQueryData(queryKey) !== undefined);
     source.addEventListener("open", () => {
       if (needsCatchUp) refresh();
       needsCatchUp = true;

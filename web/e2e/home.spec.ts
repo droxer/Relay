@@ -356,6 +356,37 @@ test("recommends ready work when urgent items are clear and preserves queued out
  await expect(focus.getByRole("button",{name:"Queued",exact:true})).toBeDisabled();
 });
 
+for (const workflowId of ["workflow-export", "preset:build_review"]) {
+  test(`starts ready Project Workflow work from Up next (${workflowId})`, async ({ page }) => {
+    await serve(page, "light");
+    const ready = task("t-workflow", 30, { title: "Run the export workflow", assignedWorkflowId: workflowId });
+    const disabled = task("t-disabled", 31, { title: "Disabled workflow", assignedWorkflowId: "workflow-disabled", priority: "high" });
+    await page.route("**/api/v1/tasks?*", route => route.fulfill({ json: { tasks: [ready, disabled] } }));
+    await page.route("**/api/v1/threads?*", route => route.fulfill({ json: { sessions: [] } }));
+    await page.route("**/api/v1/projects?*", route => route.fulfill({ json: { projects: [{
+      ...projects[0], members: [{ agentId: agent.id, enabled: true }],
+    }] } }));
+    await page.route("**/api/v1/workflows?view=choices", route => route.fulfill({ json: { workflows: [
+      { id: "workflow-export", name: "Export workflow", projectId: ready.projectId, enabled: true, stepAgentIds: [agent.id] },
+      { id: "workflow-disabled", name: "Disabled workflow", projectId: ready.projectId, enabled: false, stepAgentIds: [agent.id] },
+    ] } }));
+    const startUrl = "**/api/v1/tasks/t-workflow/runs";
+    await page.route(startUrl, route => route.fulfill({ json: {
+      task: { ...ready, events: [], activity: [] }, session: null, dispatch: { state: "queued" },
+    } }));
+    await page.goto("/home");
+    const focus = queue(page).locator(".home-focus");
+    await expect(focus).toContainText(ready.title);
+    const [start] = await Promise.all([
+      page.waitForRequest(startUrl),
+      focus.getByRole("button", { name: "Start", exact: true }).click(),
+    ]);
+    await expect(focus.getByRole("status")).toContainText("Queued");
+    expect(start.method()).toBe("POST");
+    expect(start.postDataJSON()).toEqual({});
+  });
+}
+
 test("shows a failed source instead of claiming the queue is clear", async ({page}) => {
  await serve(page,"light");
  await page.route("**/api/v1/tasks?*",route=>route.fulfill({status:503,json:{detail:"Unavailable"}}));

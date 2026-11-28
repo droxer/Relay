@@ -1,8 +1,12 @@
 /** Home's recommendations use existing state; dates are local calendar days. */
-import type { ProjectListItem, RelayTaskListItem } from "../types.js";
+import type { ProjectListItem, ProjectWorkflowChoice, RelayTaskListItem, UserAgent } from "../types.js";
 import type { HomeItem } from "./homeQueue.js";
 import { isoToday } from "./routine.ts";
 import { projectReadOnly } from "./projectPage.ts";
+import { isUserAgentRoutable } from "./agentDisplayNames.ts";
+import { previewSlots } from "./collaborationStyle.ts";
+import { agentOnComputer } from "./taskAssignment.ts";
+import { predefinedStyle, projectPresetParticipants } from "./workflowSelection.ts";
 
 const personal = (task: RelayTaskListItem, userId: string) => (task.assigneeUserId ?? task.ownerUserId) === userId;
 const live = (task: RelayTaskListItem) => !task.deletedAt && task.status !== "done";
@@ -11,11 +15,40 @@ export function readyHomeTasks(tasks: readonly RelayTaskListItem[], projects: re
   const writable = new Set(projects.filter(p => !projectReadOnly(p)).map(p => p.id));
   return tasks.filter(t => personal(t, userId) && live(t) && !t.isRoutine && !t.sourceRoutineId
     && (t.status === "backlog" || t.status === "assigned") && t.projectId && writable.has(t.projectId)
-    && (t.assignedAgentId || t.assignedTeamId) && !t.waitingOn?.length
+    && (t.assignedAgentId || t.assignedTeamId || t.assignedWorkflowId) && !t.waitingOn?.length
     && !(t.waitingOn === undefined && t.prerequisiteTaskIds?.length)
     && !t.workspaceWaiting && !t.dispatchClaim && t.dispatchOutcome?.state !== "queued")
     .sort((a,b) => priority[a.priority] - priority[b.priority] || (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
+
+export function homeProjectWorkflowReady(
+  workflowId: string,
+  project: ProjectListItem,
+  agents: readonly UserAgent[],
+  workflows: readonly ProjectWorkflowChoice[],
+): boolean {
+  const runnable = new Map(project.members.flatMap(member => {
+    const agent = agents.find(candidate => candidate.id === member.agentId);
+    return member.enabled && agent && isUserAgentRoutable(agent) && agentOnComputer(agent, project.computerId)
+      ? [[agent.id, { id: agent.id, role: agent.defaultRole ?? "implementer" }] as const] : [];
+  }));
+  const template = predefinedStyle(workflowId);
+  if (template) {
+    const participants = projectPresetParticipants(project, template).flatMap(id => {
+      const agent = runnable.get(id);
+      return agent ? [agent] : [];
+    });
+    const lead = project.leadAgentId ?? undefined;
+    if (template === "lead_led") return participants.some(agent => agent.id === lead);
+    if (template === "build_review" && project.predefinedWorkflows?.build_review?.requireIndependentReview) {
+      return previewSlots(participants, lead, template).slots.some(slot => slot.slot === "reviewer");
+    }
+    return participants.length > 0;
+  }
+  const workflow = workflows.find(item => item.id === workflowId && item.projectId === project.id);
+  return Boolean(workflow?.enabled && workflow.stepAgentIds.length && workflow.stepAgentIds.every(id => runnable.has(id)));
+}
+
 export interface UpcomingItem { key: string; task: RelayTaskListItem; day: string; kind: "deadline" | "scheduled" | "automation"; }
 export function homeUpcoming(tasks: readonly RelayTaskListItem[], userId: string, today: string): UpcomingItem[] {
   const end = new Date(`${today}T12:00:00`); end.setDate(end.getDate()+7);
