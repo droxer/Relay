@@ -69,6 +69,7 @@ export function formatDispatchError(error: unknown, t: TFunction): string | unde
     if (key) return t(key, { agent: noPlacement[1].trim() });
   }
   switch (code) {
+    case "workflow_retired": return t("workflow.workflow_retired");
     case "thread_run_active": return t("errors.thread_run_active");
     case "node_not_accepting_commands": return t("errors.node_not_accepting_commands");
     case "node_offline": return t("errors.computer_offline");

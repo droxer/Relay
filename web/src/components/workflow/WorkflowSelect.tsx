@@ -3,7 +3,7 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentTeam } from "../../types";
-import { defaultWorkflowId, predefinedStyle, teamWorkflowName, workflowOptions, workflowSelectionIssue, workflowParticipantsAllowed } from "../../lib/workflowSelection";
+import { defaultWorkflowId, projectWorkflowName, teamWorkflowName, workflowOptions, workflowSelectionIssue, workflowParticipantsAllowed, RETIRED_WORKFLOW_ID } from "../../lib/workflowSelection";
 import { PredefinedWorkflowIcon } from "./PredefinedWorkflowIcon";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
@@ -12,14 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 export function useWorkflowName(team?: Pick<AgentTeam, "workflows" | "workflowOptions">): (workflowId: string) => string {
   const { t } = useTranslation();
   return (workflowId) => {
-    const style = predefinedStyle(workflowId);
-    if (style) return t(`collab_style.${style}`);
-    return teamWorkflowName(team, workflowId) ?? t("workflow.unavailable");
+    return projectWorkflowName(workflowId, t, teamWorkflowName(team, workflowId)) ?? t("workflow.unavailable");
   };
 }
 
 /** One selection contract for predefined role processes and custom steps. */
-export function WorkflowSelect({ team, value, onChange, inherit = false, predefinedOnly = false, projectId, projectAgentIds, restrictToProject = Boolean(projectId), disabled, compact, id, "aria-label": label }: {
+export function WorkflowSelect({ team, value, onChange, inherit = false, predefinedOnly = false, projectId, projectAgentIds, restrictToProject = Boolean(projectId), allowRetiredDefault = false, disabled, compact, id, "aria-label": label }: {
   team?: AgentTeam;
   value: string | null;
   onChange: (value: string | null) => void;
@@ -28,6 +26,7 @@ export function WorkflowSelect({ team, value, onChange, inherit = false, predefi
   projectId?: string;
   projectAgentIds?: readonly string[];
   restrictToProject?: boolean;
+  allowRetiredDefault?: boolean;
   disabled?: boolean;
   compact?: boolean;
   id?: string;
@@ -37,10 +36,14 @@ export function WorkflowSelect({ team, value, onChange, inherit = false, predefi
   const options = workflowOptions(team, projectId).filter(option => (!predefinedOnly || option.kind === "predefined")
     && (!projectAgentIds || workflowParticipantsAllowed(team, option.id, projectAgentIds)));
   const nameOf = useWorkflowName(team);
-  const inheritedName = nameOf(defaultWorkflowId(team, projectId));
-  const selected = value ?? (inherit ? "inherit" : defaultWorkflowId(team, projectId));
-  const inheritedIssue = restrictToProject ? workflowSelectionIssue(team, null, projectId, projectAgentIds) : null;
-  const issue = restrictToProject ? workflowSelectionIssue(team, value, projectId, projectAgentIds) : null;
+  const defaultId = defaultWorkflowId(team, projectId);
+  const inheritedName = nameOf(defaultId);
+  const selected = value ?? (inherit ? "inherit" : defaultId);
+  const selectionIssue = (id: string | null) => (id ?? defaultId) === RETIRED_WORKFLOW_ID
+    ? (id === null && allowRetiredDefault ? null : "workflow_retired")
+    : restrictToProject ? workflowSelectionIssue(team, id, projectId, projectAgentIds) : null;
+  const inheritedIssue = selectionIssue(null);
+  const issue = selectionIssue(value);
   const issueId = useId();
   return <><Select value={selected} disabled={disabled} onValueChange={next => {
     if (next === "inherit") onChange(null);
@@ -62,5 +65,5 @@ export function WorkflowSelect({ team, value, onChange, inherit = false, predefi
       </SelectItem>)}
       {value && !options.some(option => option.id === value) ? <SelectItem value={value} disabled>{nameOf(value)}</SelectItem> : null}
     </SelectContent>
-  </Select>{issue ? <p id={issueId} role="alert" className="text-destructive">{t(issue === "project" ? "workflow.incompatible_project" : "workflow.unavailable_selection")}</p> : null}</>;
+  </Select>{issue ? <p id={issueId} role="alert" className="text-destructive">{t(issue === "project" ? "workflow.incompatible_project" : issue === "workflow_retired" ? "workflow.workflow_retired" : "workflow.unavailable_selection")}</p> : null}</>;
 }

@@ -39,6 +39,7 @@ import { taskAssignmentOptions } from "../../lib/taskAssignment";
 import {
   NEW_TASK_ACCEPTANCE_POLICY,
   clearTaskAssignment,
+  taskAssignmentUnchanged,
   taskAssignmentValue,
   teamAssignmentPatch,
   type BacklogTaskFormState,
@@ -55,6 +56,7 @@ import {
 type TaskDrawerProps = {
   open: boolean;
   form: TaskBoardFormState;
+  formBaseline?: TaskBoardFormState | null;
   logicalAgents: UserAgent[];
   teams?: AgentTeam[];
   projects?: ProjectListItem[];
@@ -187,6 +189,7 @@ function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
 export function TaskDrawer({
   open,
   form,
+  formBaseline = null,
   logicalAgents,
   teams = [],
   projects = [],
@@ -321,7 +324,10 @@ export function TaskDrawer({
   const projectWorkflows = project ? projectWorkflowOptions(project, workflowQuery.isError ? [] : workflowQuery.data?.workflows) : [];
   const projectWorkflowIssue = form.assignedWorkflowId
     ? projectWorkflowSelectionIssue(form.assignedWorkflowId, projectWorkflows) : null;
-  const workflowIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : projectWorkflowIssue;
+  const selectionIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : projectWorkflowIssue;
+  const assignmentUnchanged = taskAssignmentUnchanged(form, formBaseline);
+  const keepingRetiredWorkflow = selectionIssue === "workflow_retired" && assignmentUnchanged;
+  const workflowIssue = keepingRetiredWorkflow ? null : selectionIssue;
   const showAssignment = !creatingTask || projectChoice !== "required" || Boolean(project || form.computerId
     || form.assignedAgent || form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId);
 
@@ -374,7 +380,7 @@ export function TaskDrawer({
             value={form.assignedWorkflowId || ""}
             onChange={assignProjectWorkflow}
             disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
-            issue={projectWorkflowIssue} onRetry={() => void workflowQuery.refetch()} />
+            issue={keepingRetiredWorkflow ? null : projectWorkflowIssue} onRetry={() => void workflowQuery.refetch()} />
         ) : undefined}
         onSelect={(selection) => {
           if (selection.kind === "none") {
@@ -519,6 +525,7 @@ export function TaskDrawer({
             below must not insert a field above where the reader is working. */}
         {selectedTeam ? <Field label={t("workflow.select_workflow")} wrapper="div">
           <WorkflowSelect team={selectedTeam} projectId={project?.id} projectAgentIds={projectAgentIds} restrictToProject predefinedOnly={!project} inherit disabled={saving}
+            allowRetiredDefault={assignmentUnchanged && !form.assignedWorkflowId}
             value={form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null)}
             onChange={workflowId => onChange({ ...form, assignedWorkflowId: workflowId ?? "", collaborationStyle: null })} />
         </Field> : null}

@@ -18,6 +18,7 @@ from ..automations.service import automation_triggers_enabled, routine_fields_v2
 from ..collaboration.styles import CollaborationStyleError, validate_collaboration_style
 from ..core.permission_requests import TASK_PERMISSION_MODES
 from ..core.task_tags import normalize_tags
+from ..core.workflow_selection import WORKFLOW_RETIRED
 from .claims import TaskExecutionActiveError
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
 
@@ -70,12 +71,16 @@ def tags_field(body: dict[str, Any]) -> list[str] | None:
         raise TaskRequestError(400, str(error)) from error
 
 
-def collaboration_style_field(body: dict[str, Any], *, allow_clear: bool) -> str | None:
+def collaboration_style_field(
+    body: dict[str, Any], *, allow_clear: bool, current_style: str | None = None,
+) -> str | None:
     value = body.get("collaborationStyle")
     if value is None:
         return None
     if allow_clear and value == "":
         return ""
+    if value == "pipeline" and current_style != value:
+        raise TaskRequestError(409, WORKFLOW_RETIRED)
     try:
         return validate_collaboration_style(value)
     except CollaborationStyleError as error:

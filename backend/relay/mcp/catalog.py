@@ -95,7 +95,7 @@ WORK_FIELDS = {
     "assignedTeamId": _NULLABLE_TEXT,
     "assignedWorkflowId": {
         "type": ["string", "null"], "minLength": 1, "maxLength": 128,
-        "description": "A Project Custom Workflow ID or preset:build_review, preset:pipeline, or preset:lead_led.",
+        "description": "A Project Custom Workflow ID, preset:build_review, or preset:lead_led.",
     },
     "status": {"enum": ["backlog", "assigned", "blocked", "cancelled"]},
     "blockerReason": {"type": "string", "maxLength": 2000},

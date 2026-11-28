@@ -11,7 +11,9 @@ from ...core.team_workflows import is_workflow_team
 from ...core.workflows import (
     team_workflows, workflow_catalog, workflow_execution_snapshot, workflow_preview, workflow_step_agent_ids,
 )
-from ...core.workflow_selection import PREDEFINED_WORKFLOWS, default_workflow_id, predefined_style
+from ...core.workflow_selection import (
+    PREDEFINED_WORKFLOWS, RETIRED_WORKFLOW_ID, default_workflow_id, predefined_style, require_selectable_workflow,
+)
 from ...teams.workflow import validate_workflow_write
 from ...teams.computer import resolve_team_computer
 from ...teams.membership import with_member_roles
@@ -83,6 +85,12 @@ def _validated_roster(
     when the write touches neither roster nor computer.
     """
     validate_workflow_write(ctx, owner_user_id, body, current=current)
+    if body.get("defaultWorkflowId") == RETIRED_WORKFLOW_ID and default_workflow_id(current) != RETIRED_WORKFLOW_ID:
+        require_selectable_workflow(RETIRED_WORKFLOW_ID)
+    if body.get("collaborationStyle") == "pipeline" and (
+        (current or {}).get("collaborationStyle") != "pipeline" or default_workflow_id(current) != RETIRED_WORKFLOW_ID
+    ):
+        require_selectable_workflow(RETIRED_WORKFLOW_ID)
     if "defaultWorkflowId" in body and predefined_style(body["defaultWorkflowId"]) is None:
         snapshot = workflow_execution_snapshot({**(current or {}), **body}, body["defaultWorkflowId"])
         validate_workflow_write(ctx, owner_user_id, snapshot)
@@ -118,6 +126,11 @@ def _team_patch(
 ) -> dict[str, Any]:
     lead, members, computer = roster
     patch = dict(body)
+    # A legacy echo must not restore Pipeline after a concurrent replacement.
+    if patch.get("defaultWorkflowId") == RETIRED_WORKFLOW_ID:
+        patch.pop("defaultWorkflowId")
+    if patch.get("collaborationStyle") == "pipeline" and "defaultWorkflowId" not in patch:
+        patch.pop("collaborationStyle")
     if "leadAgentId" in body:
         patch["leadAgentId"] = lead
     if "memberAgentIds" in body:

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style
+from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style, require_selectable_workflow
 
 _PRESET_TEMPLATES = frozenset(item["template"] for item in PREDEFINED_WORKFLOWS)
+_SAVED_PRESET_TEMPLATES = _PRESET_TEMPLATES | {"pipeline"}
 
 
 class PredefinedWorkflowChangeError(ValueError):
@@ -27,6 +28,10 @@ def apply_workflow_change(
         raise PredefinedWorkflowChangeError("project_workflow_change_invalid") from error
     if template is None:
         raise PredefinedWorkflowChangeError("project_workflow_change_invalid")
+    try:
+        require_selectable_workflow(change["workflowId"])
+    except ValueError as error:
+        raise PredefinedWorkflowChangeError(str(error)) from error
 
     result = dict(selections or {})
     agent_ids = change["agentIds"]
@@ -53,7 +58,7 @@ def _valid_agent_ids(value: Any) -> bool:
 
 def valid_predefined_workflows(value: Any) -> bool:
     return isinstance(value, dict) and all(
-        template in _PRESET_TEMPLATES
+        template in _SAVED_PRESET_TEMPLATES
         and isinstance(selection, dict)
         and set(selection) == {"agentIds"}
         and _valid_agent_ids(selection["agentIds"])

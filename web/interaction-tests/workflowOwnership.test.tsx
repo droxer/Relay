@@ -88,9 +88,9 @@ it("preserves step ownership and flags invalid assignees when Project changes", 
 
 it("manages and starts the independent Workflow in its Project", async () => {
   mount(<ProjectWorkflows project={project} agents={agents} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
-  expect(await screen.findByRole("button", { name: "workflow.edit" })).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "workflow.edit_steps" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "workflow.start" })).toBeTruthy();
-  expect(screen.getAllByRole("button", { name: "workflow.start_named" })).toHaveLength(3);
+  expect(screen.getAllByRole("button", { name: "workflow.start_named" })).toHaveLength(2);
 });
 
 it("shows legacy definitions in the same Team library", async () => {

@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { linkTeamWorkflow, setTeamDefaultWorkflow, setTeamProjectWorkflow, type TeamWorkflowWriteResponse } from "../../api";
 import { syncTeamWorkflowUpdate, useTeamWorkflowChoices } from "../../hooks/useProjectWorkflows";
 import { teamRecordKey, TEAMS_QUERY_KEY } from "../../hooks/useTeams";
-import { defaultWorkflowId, PREDEFINED_WORKFLOWS, teamWorkflowPreviews } from "../../lib/workflowSelection";
+import { defaultWorkflowId, PREDEFINED_WORKFLOWS, RETIRED_WORKFLOW_ID, teamWorkflowPreviews } from "../../lib/workflowSelection";
 import type { AgentTeam } from "../../types";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -70,6 +70,7 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
       </div> : null}
     </div>
     <p className="workflow-editor-note">{t("workflow.team_reference_hint")}</p>
+    {defaultWorkflowId(team) === RETIRED_WORKFLOW_ID ? <p className="workflow-editor-note">{t("workflow.workflow_retired")}</p> : null}
     {failure ? <p role="alert" className="workflow-teams-state text-destructive">{failure}</p> : null}
     {loading ? <p className="workflow-teams-state" aria-busy="true">{t("workflow.loading")}</p> : null}
     {loadFailed ? <div className="workflow-teams-state" role="alert"><p>{t("workflow.load_failed")}</p><Button type="button" variant="outline" size="dense" onClick={() => void catalog.refetch()}>{t("workspace.retry")}</Button></div> : null}
@@ -100,7 +101,7 @@ export function TeamWorkflowLibrary({ team, agents, userId }: { team: AgentTeam;
             {canManage ? <div className="workflow-team-actions">
               <Button type="button" variant="ghost" size="dense" disabled={change.isPending || !workflow.enabled}
                 onClick={() => apply(() => workflow.ownerTeamId ? setTeamDefaultWorkflow(team.id, isDefault ? "preset:build_review" : workflow.id) : setTeamProjectWorkflow(team.id, workflow.projectId!, isDefault ? null : workflow.id))}>{t(workflow.ownerTeamId ? (isDefault ? "workflow.clear_default" : "workflow.set_default") : (isDefault ? "workflow.clear_project_default" : "workflow.set_project_default"))}</Button>
-              {!workflow.ownerTeamId ? <Button type="button" variant="ghost" size="dense" disabled={change.isPending || isDefault} onClick={() => apply(() => linkTeamWorkflow(team.id, workflow.id, false))}>{t("workflow.unassign")}</Button> : <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>}
+              {!workflow.ownerTeamId ? <Button type="button" variant="ghost" size="dense" disabled={change.isPending || isDefault} onClick={() => apply(() => linkTeamWorkflow(team.id, workflow.id, false))}>{t("workflow.unassign")}</Button> : <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit_steps")}</Button>}
             </div> : null}
           </div>
           <WorkflowStepSummary steps={workflow.workflowSteps} label={t("workflow.steps_of", { name: workflow.name })} agentName={id => agents.find(agent => agent.id === id)?.displayName ?? t("project.member_unavailable")} agentImage={id => agents.find(agent => agent.id === id)?.profileImageUrl} />

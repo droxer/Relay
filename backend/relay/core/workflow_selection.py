@@ -6,15 +6,24 @@ from typing import Any
 PREDEFINED_WORKFLOWS = (
     {'id': 'preset:build_review', 'kind': 'predefined', 'template': 'build_review', 'name': 'Build → Review',
      'enabled': True},
-    {'id': 'preset:pipeline', 'kind': 'predefined', 'template': 'pipeline', 'name': 'Pipeline', 'enabled': True},
     {'id': 'preset:lead_led', 'kind': 'predefined', 'template': 'lead_led', 'name': 'Lead-led', 'enabled': True},
 )
 DEFAULT_WORKFLOW_ID = 'preset:build_review'
+RETIRED_WORKFLOW_ID = 'preset:pipeline'
+WORKFLOW_RETIRED = 'workflow_retired'
+
+
+def require_selectable_workflow(workflow_id: Any) -> None:
+    """Reject new Pipeline selections while keeping saved references resolvable."""
+    if workflow_id == RETIRED_WORKFLOW_ID:
+        raise ValueError(WORKFLOW_RETIRED)
 
 
 def predefined_style(workflow_id: Any) -> str | None:
     if not isinstance(workflow_id, str) or not workflow_id:
         raise ValueError('workflow_id_invalid')
+    if workflow_id == RETIRED_WORKFLOW_ID:
+        return 'pipeline'
     for definition in PREDEFINED_WORKFLOWS:
         if definition['id'] == workflow_id:
             return str(definition['template'])

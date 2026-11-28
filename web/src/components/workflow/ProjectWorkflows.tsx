@@ -77,7 +77,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
             {issue ? <p className="workflow-library-meta">{t(`workflow.${issue}`)}</p> : null}
           </div>
           {canManage ? <div className="workflow-team-actions">
-            <Button type="button" variant="ghost" size="dense" aria-label={t("workflow.edit_named", { name })} onClick={() => setEditingPreset(template)}>{t("workflow.edit")}</Button>
+            <Button type="button" variant="ghost" size="dense" aria-label={t("workflow.select_participants_named", { name })} onClick={() => setEditingPreset(template)}>{t("workflow.select_participants")}</Button>
             <Button type="button" variant="outline" size="dense" aria-label={t("workflow.start_named", { name })}
               disabled={Boolean(issue)} onClick={() => setStarting({ kind: "predefined", id, name })}>
               <ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}
@@ -101,7 +101,7 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
                 <p className="workflow-library-meta">{workflowProcessMeta(t, workflow.workflowSteps)}</p>
               </div>
               {canManage ? <div className="workflow-team-actions">
-                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit")}</Button>
+                <Button type="button" variant="ghost" size="dense" onClick={() => setEditing({ workflow })}>{t("workflow.edit_steps")}</Button>
                 <Button type="button" variant="outline" size="dense" disabled={!workflow.enabled} onClick={() => setStarting({ kind: "steps", id: workflow.id, name: workflow.name, preview: workflow })}><ActionStart size={ICON.sm} aria-hidden="true" />{t("workflow.start")}</Button>
               </div> : null}
             </div>

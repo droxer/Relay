@@ -12,25 +12,35 @@ const team = { id: "team", collaborationStyle: "pipeline", workflows: [
 it("maps old collaboration settings to predefined workflows", () => {
   expect(defaultWorkflowId(team)).toBe("preset:pipeline");
   expect(defaultWorkflowId({ ...team, defaultWorkflowId: "custom" })).toBe("custom");
+  expect(predefinedStyle("preset:pipeline")).toBe("pipeline");
   expect(predefinedStyle("preset:lead_led")).toBe("lead_led");
   expect(predefinedStyle("custom")).toBeUndefined();
 });
 
 it("offers predefined and scoped custom workflows in one catalog", () => {
   expect(workflowOptions(team, "project").map(item => item.id)).toEqual([
-    "preset:build_review", "preset:pipeline", "preset:lead_led", "custom",
+    "preset:build_review", "preset:lead_led", "custom",
   ]);
   expect(workflowOptions(team, "other").map(item => item.id)).not.toContain("custom");
   expect(workflowOptions(team).map(item => item.id)).toContain("custom");
 });
 
 
-it("shows one picker for inherited, predefined, and custom workflows", async () => {
+it("labels an inherited retired default and filters it from the older backend catalog", async () => {
   const onChange = vi.fn();
-  render(<WorkflowSelect team={team} value={null} onChange={onChange} inherit projectId="project" />);
-  await userEvent.click(screen.getByRole("combobox", { name: "workflow.select_workflow" }));
-  await userEvent.click(await screen.findByRole("option", { name: /collab_style.pipeline/ }));
-  expect(onChange).toHaveBeenCalledWith("preset:pipeline");
+  const oldCatalog = [...workflowOptions(team), {
+    id: "preset:pipeline", kind: "predefined" as const, template: "pipeline" as const, enabled: true,
+  }];
+  render(<WorkflowSelect team={{ ...team, workflowOptions: oldCatalog }} value={null} onChange={onChange} inherit projectId="project" />);
+  const select = screen.getByRole("combobox", { name: "workflow.select_workflow" });
+  expect(select.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByRole("alert").textContent).toBe("workflow.workflow_retired");
+  await userEvent.click(select);
+  const inherit = await screen.findByRole("option", { name: "workflow.inherit_default" });
+  expect(inherit.getAttribute("aria-disabled")).toBe("true");
+  expect(screen.queryByRole("option", { name: /collab_style.pipeline/ })).toBeNull();
+  await userEvent.click(screen.getByRole("option", { name: /collab_style.lead_led/ }));
+  expect(onChange).toHaveBeenCalledWith("preset:lead_led");
 });
 
 it("sends a custom definition id from the same picker", async () => {

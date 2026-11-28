@@ -128,6 +128,7 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
      opens the same record drawer and edits through the same form. */
   const {
     form,
+    formBaseline,
     setForm,
     open: drawerOpen,
     assignmentFocus,
@@ -517,6 +518,7 @@ export function BacklogPage({ readOnly = false, projectId, computerId, projects 
           <TaskDrawer
             open={drawerOpen}
             form={form}
+            formBaseline={formBaseline}
             logicalAgents={logicalAgents}
             projects={projects}
             projectChoice="locked"

@@ -171,7 +171,7 @@ function IssuesPageView({
   const board = view === "board";
 
   const {
-    form, setForm, open: drawerOpen, assignmentFocus, saving, deleting, projectChoice,
+    form, formBaseline, setForm, open: drawerOpen, assignmentFocus, saving, deleting, projectChoice,
     openForm, editTask, release, requestClose, submit, remove,
   } = useBacklogTaskForm({ currentUser, allowIntake: true, agents: logicalAgents, teams });
   const recordMirror = useRecordDrawerMirror(recordTaskId ?? null, recordTaskId ?? null);
@@ -544,6 +544,7 @@ function IssuesPageView({
           <TaskDrawer
             open={drawerOpen}
             form={form}
+            formBaseline={formBaseline}
             projectChoice={projectChoice}
             logicalAgents={logicalAgents}
             projects={projects}

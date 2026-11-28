@@ -156,7 +156,7 @@ def update_task(
         "status": following.status,
         "acceptancePolicy": fields.acceptance_policy,
         **({"permissionMode": fields.permission_mode} if fields.permission_mode is not None else {}),
-        "collaborationStyle": fields.collaboration_style,
+        "collaborationStyle": fields.collaboration_style if fields.collaboration_style != "pipeline" else None,
         "blockerReason": fields.blocker_reason,
         **fields.unblocked_wait,
         "actorUserId": actor["userId"],
@@ -207,7 +207,9 @@ def _read_fields(current: dict[str, Any], request: TaskPatchRequest) -> _Fields:
     priority = task_priority(body.get("priority"))
     status = task_status(body.get("status"))
     acceptance_policy = acceptance_policy_field(body)
-    collaboration_style = collaboration_style_field(body, allow_clear=True)
+    collaboration_style = collaboration_style_field(
+        body, allow_clear=True, current_style=current.get("collaborationStyle"),
+    )
     if "status" in body and not status:
         raise TaskRequestError(400, "status is not a recognized task status.")
     unblock = body.get("action") == "unblock"
@@ -379,8 +381,18 @@ def _plan_next_assignment(
         ctx.session_store, current
     ):
         raise TaskRequestError(409, "task_execution_active")
-    if following.changed or request.move_project or "assignedWorkflowId" in request.body or "computerId" in request.body:
-        validate_task_workflow(ctx, {**effective, **following.patch})
+    style_changed = fields.collaboration_style is not None and (
+        (fields.collaboration_style or None) != current.get("collaborationStyle")
+    )
+    new_selection = bool(
+        following.changed or (style_changed and not current.get("assignedWorkflowId")) or request.move_project
+        or (routine.get("isRoutine") and not current.get("isRoutine"))
+    )
+    if new_selection or "assignedWorkflowId" in request.body or "computerId" in request.body:
+        next_task = {**effective, **following.patch}
+        if fields.collaboration_style is not None:
+            next_task["collaborationStyle"] = fields.collaboration_style or None
+        validate_task_workflow(ctx, next_task, new_selection=new_selection)
     workflow_id = following.patch.get("assignedWorkflowId", current.get("assignedWorkflowId"))
     has_assignment = bool(following.agent_id or following.team_id or workflow_id)
     has_target = bool(effective.get("projectId") or has_assignment)

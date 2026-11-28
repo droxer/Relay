@@ -36,6 +36,7 @@ from ..security.actor import Actor
 from ..core.connections import ConnectionError
 from ..core.daemon_records import ComputerNotDispatchableError, ComputerRunCapacityError, ThreadRunActiveError
 from ..core.thread_attachments import IMAGE_ATTACHMENT_AGENTS
+from ..core.workflow_selection import require_selectable_workflow
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,10 @@ class CollaborationConductor(
                 )
                 if existing:
                     return existing
+            try:
+                require_selectable_workflow(f"preset:{prepared.style}")
+            except ValueError as error:
+                raise CollaborationError(str(error)) from error
             return await self._submit_prepared(prepared, actor, fingerprint, hydrate=hydrate)
         except TeamDispatchError as error:
             raise CollaborationError(error.code) from error

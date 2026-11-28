@@ -10,7 +10,7 @@ from typing import Any
 from ..automations.model import EVENT_KINDS
 from ..core.team_workflows import is_workflow_team
 from ..projects.workflow import validate_project_workflow
-from ..core.workflow_selection import selected_workflow_id, predefined_style
+from ..core.workflow_selection import predefined_style, require_selectable_workflow, selected_workflow_id
 from ..core.computer_identity import computer_id
 from ..projects.runtime import (
     project_task_assignment_error, project_computer_assignment_error, project_workflow_members,
@@ -259,7 +259,9 @@ def validate_computer_assignment(
             raise TaskRequestError(400, "task_assignment_off_computer")
 
 
-def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | None:
+def validate_task_workflow(
+    ctx: Any, task: dict[str, Any], *, new_selection: bool = False,
+) -> dict[str, Any] | None:
     team_id = task.get('assignedTeamId')
     if not team_id and task.get('assignedWorkflowId') is None:
         return None
@@ -270,6 +272,8 @@ def validate_task_workflow(ctx: Any, task: dict[str, Any]) -> dict[str, Any] | N
         raise TaskRequestError(403, 'workflow_owner_required')
     try:
         workflow_id = selected_workflow_id(team, task)
+        if new_selection:
+            require_selectable_workflow(workflow_id)
         style = predefined_style(workflow_id)
         if style is not None:
             if team:

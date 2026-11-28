@@ -1,6 +1,7 @@
-import type { AgentTeam, CollaborationStyle, ProjectListItem, ProjectWorkflowChoice, RelayTaskListItem } from "../types.ts";
+import type { AgentTeam, CollaborationStyle, ProjectListItem, ProjectPredefinedTemplate, ProjectWorkflowChoice, RelayTaskListItem } from "../types.ts";
 
-export const PREDEFINED_WORKFLOWS = ["build_review", "pipeline", "lead_led"] as const;
+export const PREDEFINED_WORKFLOWS = ["build_review", "lead_led"] as const;
+export const RETIRED_WORKFLOW_ID = "preset:pipeline";
 export type WorkflowOption = {
   id: string;
   kind: "predefined" | "steps";
@@ -12,11 +13,12 @@ export type WorkflowOption = {
 };
 
 export function predefinedStyle(id?: string | null): CollaborationStyle | undefined {
+  if (id === RETIRED_WORKFLOW_ID) return "pipeline";
   return PREDEFINED_WORKFLOWS.find(style => id === `preset:${style}`);
 }
 
 type ProjectPresetIssue = "project_roster_invalid" | "project_lead_required";
-export type ProjectWorkflowIssue = ProjectPresetIssue | "unavailable_selection";
+export type ProjectWorkflowIssue = ProjectPresetIssue | "unavailable_selection" | "workflow_retired";
 type ProjectPreset = {
   id: string;
   kind: "predefined";
@@ -35,7 +37,7 @@ type PresetProject = Pick<ProjectListItem, "members" | "leadAgentId" | "predefin
 /** Who takes part in a Predefined Workflow in this Project: the owner's
  *  selection limited to enabled Project Agents (every enabled Agent when none
  *  was made), plus the Lead for Lead-led. Mirrors projects/runtime.py. */
-export function projectPresetParticipants(project: PresetProject, template: typeof PREDEFINED_WORKFLOWS[number]): string[] {
+export function projectPresetParticipants(project: PresetProject, template: ProjectPredefinedTemplate): string[] {
   const enabled = project.members.filter(member => member.enabled).map(member => member.agentId);
   const selected = project.predefinedWorkflows?.[template]?.agentIds;
   if (!selected) return enabled;
@@ -65,11 +67,13 @@ export function projectWorkflowOptions(
 export function projectWorkflowSelectionIssue(
   id: string, options: readonly ProjectWorkflowOption[],
 ): ProjectWorkflowIssue | null {
+  if (id === RETIRED_WORKFLOW_ID) return "workflow_retired";
   const option = options.find(item => item.id === id);
   return option ? option.issue : "unavailable_selection";
 }
 
 export function projectWorkflowName(id: string, t: (key: string) => string, customName?: string): string | undefined {
+  if (id === RETIRED_WORKFLOW_ID) return t("workflow.pipeline_retired");
   const style = predefinedStyle(id);
   return style ? t(`collab_style.${style}`) : customName;
 }
@@ -95,13 +99,15 @@ export function workflowOptions(team?: Pick<AgentTeam, "workflows" | "workflowOp
     ...PREDEFINED_WORKFLOWS.map(template => ({ id: `preset:${template}`, kind: "predefined" as const, template, enabled: true })),
     ...(team?.workflows ?? []).map(workflow => ({ id: workflow.id, kind: "steps" as const, name: workflow.name, projectId: workflow.projectId, enabled: workflow.enabled })),
   ];
-  return catalog.filter(option => option.kind === "predefined" || !projectId || !option.projectId || option.projectId === projectId);
+  return catalog.filter(option => option.id !== RETIRED_WORKFLOW_ID
+    && (option.kind === "predefined" || !projectId || !option.projectId || option.projectId === projectId));
 }
 
 /** Task/Automation choices must resolve in their Project before submission. */
-export function workflowSelectionIssue(team: AgentTeam | undefined, value: string | null, projectId?: string, projectAgentIds?: readonly string[]): "project" | "unavailable" | null {
+export function workflowSelectionIssue(team: AgentTeam | undefined, value: string | null, projectId?: string, projectAgentIds?: readonly string[]): "project" | "unavailable" | "workflow_retired" | null {
   if (!team) return null;
   const selected = value || defaultWorkflowId(team, projectId);
+  if (selected === RETIRED_WORKFLOW_ID) return "workflow_retired";
   const option = workflowOptions(team).find(item => item.id === selected);
   if (!option || !option.enabled) return "unavailable";
   if (option.kind === "steps" && (!projectId || (option.projectId && option.projectId !== projectId))) return "project";

@@ -34,7 +34,7 @@ function mount(
   client.setQueryData(["workflows", "choices", "p"], { workflows: custom });
   function Editor() {
     const [form, setForm] = useState(initial);
-    return <TaskDrawer open form={form} projects={[project]} logicalAgents={agents} teams={teams} saving={false}
+    return <TaskDrawer open form={form} formBaseline={initial.id ? initial : null} projects={[project]} logicalAgents={agents} teams={teams} saving={false}
       title="Edit" subtitle="" projectChoice="optional" onClose={vi.fn()} onChange={setForm} onSubmit={() => submit(form)} />;
   }
   const view = render(<QueryClientProvider client={client}><Editor /></QueryClientProvider>);
@@ -119,16 +119,31 @@ it.each(["backlog", "routine"] as const)("saves a predefined Workflow in a Proje
   const task = variant === "backlog";
   fireEvent.click(screen.getByRole("radio", { name: task ? /^workflow\.workflows/ : "backlog.assignment_kind_workflow" }));
   expect(screen.getByRole<HTMLButtonElement>("option", { name: /collab_style.lead_led/ }).disabled).toBe(true);
-  fireEvent.click(screen.getByRole("option", { name: /collab_style.pipeline/ }));
-  expect(screen.getByRole("combobox", { name: task ? "backlog.assignment_label" : "workflow.select_workflow" }).textContent).toContain("collab_style.pipeline");
+  expect(screen.queryByRole("option", { name: /collab_style.pipeline/ })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /collab_style.build_review/ }));
+  expect(screen.getByRole("combobox", { name: task ? "backlog.assignment_label" : "workflow.select_workflow" }).textContent).toContain("collab_style.build_review");
   fireEvent.submit(container.querySelector("form")!);
-  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ assignedWorkflowId: "preset:pipeline" }));
+  expect(submit).toHaveBeenCalledWith(expect.objectContaining({ assignedWorkflowId: "preset:build_review" }));
 });
 
 it("opens a saved Workflow assignment on the Workflow side", () => {
   mount({ ...emptyBacklogForm(currentUser), id: "saved", title: "Work", projectId: "p", assignedWorkflowId: "w" });
   expect(screen.getByRole("radio", { name: "backlog.assignment_kind_workflow" }).getAttribute("aria-checked")).toBe("true");
   expect(screen.getByRole("combobox", { name: "workflow.select_workflow" }).textContent).toContain("Ship workflow");
+});
+
+it.each(["backlog", "routine"] as const)("keeps or replaces saved Pipeline in the %s editor", async variant => {
+  const form = variant === "backlog" ? emptyBacklogForm(currentUser) : { ...emptyRoutineForm(currentUser), routineTriggers: [] };
+  const { container, submit } = mount({ ...form, id: "saved", title: "Work", projectId: "p", assignedWorkflowId: "preset:pipeline" });
+  const picker = screen.getByRole("combobox", { name: "workflow.select_workflow" });
+  expect(picker.textContent).toContain("workflow.pipeline_retired");
+  fireEvent.submit(container.querySelector("form")!);
+  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedWorkflowId: "preset:pipeline" }));
+  fireEvent.click(picker);
+  expect(screen.queryByRole("option", { name: /pipeline/i })).toBeNull();
+  fireEvent.click(screen.getByRole("option", { name: /collab_style.build_review/ }));
+  fireEvent.submit(container.querySelector("form")!);
+  expect(submit).toHaveBeenLastCalledWith(expect.objectContaining({ assignedWorkflowId: "preset:build_review" }));
 });
 
 it("clears Workflow assignment when an Automation leaves its Project", async () => {

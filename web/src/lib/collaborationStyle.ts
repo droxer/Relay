@@ -1,9 +1,9 @@
 import type { AgentRun, CollaborationRoundManifest, CollaborationStyle, RelaySession } from "relay-core";
+import { predefinedStyle } from "./workflowSelection.ts";
 
 // Mirrors backend/relay/collaboration/styles.py and templates.py. Keep role
 // precedence in sync; web/tests/collaborationStylePreview.test.ts checks
 // previewSlots against what backend dispatch fills.
-export const COLLABORATION_STYLES: readonly CollaborationStyle[] = ["build_review", "pipeline", "lead_led"];
 const DEFAULT_COLLABORATION_STYLE: CollaborationStyle = "build_review";
 // Mirrors backend/relay/collaboration/styles.py.
 const BUILDER_ROLES = new Set(["implementer", "frontend_engineer", "backend_engineer", "fullstack_engineer", "fixer"]);
@@ -42,8 +42,7 @@ export interface SlotMember { id: string; role?: string; onRequest?: boolean }
 type Slot = { slot: "builder" | "reviewer" | "member" | "lead"; memberId: string };
 
 export function effectiveStyle(team?: { collaborationStyle?: CollaborationStyle; defaultWorkflowId?: string }, taskStyle?: CollaborationStyle | null): CollaborationStyle {
-  const selected = team?.defaultWorkflowId?.replace("preset:", "") as CollaborationStyle | undefined;
-  const style = taskStyle ?? (selected && COLLABORATION_STYLES.includes(selected) ? selected : undefined) ?? team?.collaborationStyle ?? DEFAULT_COLLABORATION_STYLE;
+  const style = taskStyle ?? predefinedStyle(team?.defaultWorkflowId) ?? team?.collaborationStyle ?? DEFAULT_COLLABORATION_STYLE;
   return style === "solo" ? DEFAULT_COLLABORATION_STYLE : style;
 }
 
@@ -71,8 +70,7 @@ export function previewSlots(all: SlotMember[], leadId: string | undefined, styl
 }
 
 /** Who a Build and review preview leaves without a turn, and whether a
- *  specialist has to build because the team has no builder — both read as
- *  a nudge toward Pipeline, which gives every member a turn. */
+ *  specialist has to build because the team has no builder. */
 export function previewGaps(all: SlotMember[], preview: ReturnType<typeof previewSlots>): { skipped: string[]; specialistBuilder?: string } {
   if (preview.style === "pipeline" || preview.style === "lead_led") return { skipped: [] };
   const seated = new Set(preview.slots.map((slot) => slot.memberId));
