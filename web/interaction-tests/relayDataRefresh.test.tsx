@@ -54,6 +54,51 @@ it("backs the sessions poll off while the session stream is connected", async ()
   view.unmount(); client.clear();
 });
 
+it.each(["notification", "reconnect", "return to Activity"])("shows a Task Thread after %s without waiting for the list poll", async (trigger) => {
+  class ActivitySource extends EventTarget {
+    constructor(public url: string, public options: EventSourceInit) {
+      super();
+      streams.push(this);
+    }
+    close = vi.fn();
+  }
+  const streams: ActivitySource[] = [];
+  vi.stubGlobal("EventSource", ActivitySource);
+  vi.mocked(listSessionSummaries).mockResolvedValueOnce({ sessions: [], homeTaskNeedsYou: 0 });
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const view = renderHook(({ visible }) => useRelayData(undefined, true, false, visible, true), {
+    wrapper, initialProps: { visible: true },
+  });
+  act(() => streams[0]?.dispatchEvent(new Event("open")));
+  await waitFor(() => expect(view.result.current.sessionsLoading).toBe(false));
+  expect(view.result.current.sessions).toEqual([]);
+  if (trigger === "return to Activity") view.rerender({ visible: false });
+
+  const now = new Date().toISOString();
+  vi.mocked(listSessionSummaries).mockResolvedValueOnce({
+    sessions: [{
+      id: "task-thread", taskGoal: "Scheduled report", status: "running", phase: "running",
+      workspacePath: "/workspace", createdAt: now, updatedAt: now, eventCount: 2, artifactCount: 0, runCount: 1,
+      taskActivity: { origin: { kind: "backlog", taskId: "task", ref: "#1", title: "Scheduled report", status: "running" }, awaitsHuman: false },
+    }],
+    homeTaskNeedsYou: 0,
+  });
+  if (trigger === "return to Activity") view.rerender({ visible: true });
+  const source = streams.at(-1);
+  act(() => source?.dispatchEvent(new Event(trigger === "notification" ? "changed" : "open")));
+  await waitFor(() => expect(view.result.current.sessions).toMatchObject([
+    { id: "task-thread", status: "running", taskActivity: { origin: { kind: "backlog" } } },
+  ]));
+  expect(source && new URL(source.url, location.origin).pathname).toBe("/api/v1/threads/activity/changes");
+  expect(source?.options).toEqual({ withCredentials: true });
+  view.unmount();
+  expect(source?.close).toHaveBeenCalledOnce();
+  client.clear();
+});
+
 it("does not refetch the cookie-scoped thread list when the sandbox token changes", async () => {
   vi.mocked(listDaemonNodes).mockResolvedValue({ nodes: [] });
   vi.mocked(listSandboxes).mockClear();

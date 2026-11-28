@@ -5,6 +5,7 @@ import type { DaemonNodeMonitorRecord, ProjectListItem, RelaySession, RelayTaskS
 import { queryCollectionStatus, type ProjectCollectionStatus } from "../lib/projectPage";
 import { appendOlderSessionPage, mergeSessionHeadPage, SESSIONS_QUERY_KEY, THREAD_PAGE_SIZE } from "../lib/sessionPollMerge";
 import { RELAY_POLL_INTERVALS_MS, sessionsPollIntervalMs } from "../lib/relayPolling";
+import { relayApiEndpoint } from "../lib/apiOrigin";
 import { shareSessions } from "../lib/sessionEvents";
 import { isSessionStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 import { useKeyChange } from "./useKeyChange";
@@ -267,6 +268,25 @@ export function useRelayData(
       void queryClient.refetchQueries({ queryKey: tasksKey, exact: true, stale: true }, { cancelRefetch: false });
     }
   }, [enabled, taskListVisible, queryClient, tasksKey]);
+
+  useEffect(() => {
+    if (!enabled || !workspaceVisible || typeof EventSource === "undefined") return;
+    const source = new EventSource(relayApiEndpoint("/threads/activity/changes"), { withCredentials: true });
+    const filters = { queryKey: SESSIONS_KEY, exact: true };
+    const refresh = () => {
+      // An initial request without cached data would otherwise be reused
+      // even when it began before the Task Thread was linked.
+      void queryClient.cancelQueries({ ...filters, predicate: query => query.state.data === undefined });
+      void queryClient.invalidateQueries(filters);
+    };
+    let needsCatchUp = queryClient.getQueryData(SESSIONS_KEY) !== undefined;
+    source.addEventListener("open", () => {
+      if (needsCatchUp) refresh();
+      needsCatchUp = true;
+    });
+    source.addEventListener("changed", refresh);
+    return () => source.close();
+  }, [enabled, workspaceVisible, queryClient]);
 
   const previouslyWorkspaceVisible = useRef(workspaceVisible);
   useEffect(() => {

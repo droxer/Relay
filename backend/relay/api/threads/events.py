@@ -13,9 +13,11 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from ...core.settings import StreamSettings
+from ...persistence.listeners import thread_activity_key
 from ...realtime.event_notifier import session_event_key
 from ..actors import (
     get_session_header_for_actor,
+    request_actor,
     request_actor_or_sandbox,
 )
 from ..deps import AppContext, AppContextDep
@@ -135,6 +137,32 @@ def _tail_wait_seconds(tail: _EventTail, now: float) -> float:
         _STREAM_MAX_SECONDS - (now - tail.start),
     )
     return max(0.001, wait_seconds)
+
+
+@router.get("/threads/activity/changes")
+async def thread_activity_changes(request: Request, ctx: AppContextDep) -> StreamingResponse:
+    actor = await run_in_threadpool(request_actor, request, ctx.auth_store)
+    key = thread_activity_key(actor["userId"])
+    notifier = ctx.control_plane_notifier
+
+    async def updates() -> AsyncIterator[str]:
+        deadline = time.monotonic() + _STREAM_MAX_SECONDS
+        with notifier.observe(key) as version:
+            yield ": connected\n\n"
+            while (remaining := deadline - time.monotonic()) > 0:
+                await notifier.wait(key, version, timeout=min(remaining, _STREAM_HEARTBEAT_SECONDS))
+                if notifier.version(key) > version:
+                    # Coalesce bursts such as a local wake and its PostgreSQL echo.
+                    await asyncio.sleep(_STREAM_COALESCE_SECONDS)
+                    version = notifier.version(key)
+                    yield _sse_frame({}, event="changed")
+                else:
+                    yield ": heartbeat\n\n"
+
+    return StreamingResponse(
+        updates(), media_type="text/event-stream",
+        headers={"Cache-Control": "private, no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/threads/{session_id}/events")

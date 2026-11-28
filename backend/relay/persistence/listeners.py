@@ -13,6 +13,10 @@ from collections.abc import Callable
 from loguru import logger
 
 
+def thread_activity_key(user_id: str) -> str:
+    return f"thread-activity:{user_id}"
+
+
 class ChangeListener:
     def __init__(self, what: str) -> None:
         self._what = what
