@@ -347,7 +347,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/teams/delivery");
     await expect(page).toHaveURL(/\/workflows\/delivery$/);
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.getByText("Build and review", { exact: true })).toBeVisible();
+    await expect(page.getByText("Execute and review", { exact: true })).toBeVisible();
     await expect(page.getByText("Builder", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Edit steps", exact: true })).toHaveCount(0);
     expect(await page.locator("body").evaluate((el) => el.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
@@ -371,7 +371,7 @@ test("Project Workflows load previews until editing requests one definition", as
   await expect(starter).toBeVisible();
   expect(reads).toEqual([preview]);
   await starter.getByRole("button", { name: "Cancel", exact: true }).click();
-  await region.getByRole("button", { name: "Choose participants for Build and review", exact: true }).click();
+  await region.getByRole("button", { name: "Choose participants for Execute and review", exact: true }).click();
   const participants = page.getByRole("dialog", { name: "Edit Workflow Agents" });
   await expect(participants.getByRole("checkbox", { name: /Builder/ })).toBeVisible();
   await expect(participants.getByRole("textbox", { name: "Instructions", exact: true })).toHaveCount(0);
@@ -423,13 +423,13 @@ test("composer sends a one-message workflow then returns to the team default", a
   const select = page.getByRole("combobox", { name: "Workflow" });
   await select.click();
   await expect(page.getByRole("option", { name: /^Solo/ })).toHaveCount(0);
-  await option(page, "Lead-led").click();
+  await option(page, "Lead delegation").click();
   await page.locator('textarea[name="message"]').fill("Fix the API");
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect.poll(() => sends.at(-1)?.workflowId).toBe("preset:lead_led");
   expect(sends.at(-1)?.style).toBeUndefined();
-  await expect(select).toContainText("Team default · Build and review");
+  await expect(select).toContainText("Team default · Execute and review");
 });
 
 test("transient send failures retry the same workflow and member mentions hide it", async ({ page }) => {
@@ -438,14 +438,14 @@ test("transient send failures retry the same workflow and member mentions hide i
   const select = page.getByRole("combobox", { name: "Workflow" });
   await select.click();
   await expect(page.getByRole("option", { name: /^Pipeline/ })).toHaveCount(0);
-  await option(page, "Lead-led").click();
+  await option(page, "Lead delegation").click();
   const text = page.locator('textarea[name="message"]');
   await text.fill("Fix the API");
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await expect.poll(() => sends.length).toBe(2);
   expect(sends.map((send) => send.workflowId)).toEqual(["preset:lead_led", "preset:lead_led"]);
   expect(sends[0].idempotencyKey).toBe(sends[1].idempotencyKey);
-  await expect(select).toContainText("Team default · Build and review");
+  await expect(select).toContainText("Team default · Execute and review");
   await text.fill("@Builder fix the API");
   await expect(select).toHaveCount(0);
 });
@@ -488,7 +488,7 @@ for (const mobile of [false, true]) {
     await page.goto("/projects/project?tab=members");
     const library = page.getByRole("region", { name: /^Workflows/ });
     await expect(library.getByRole("button", { name: /^Start run for / })).toHaveCount(2);
-    await library.getByRole("button", { name: "Start run for Build and review", exact: true }).click();
+    await library.getByRole("button", { name: "Start run for Execute and review", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Start workflow" });
     await expect(dialog.getByRole("combobox", { name: "Team (optional)" })).toHaveCount(0);
     await dialog.getByRole("textbox", { name: /^Goal/ }).fill("Release with review");

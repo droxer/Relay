@@ -177,15 +177,15 @@ A Project is selected for execution; its enabled Agents and Computer constrain
 the actual participants. Team-owned steps also require membership in their Team.
 Removing a Team's reference to a Project Workflow preserves that definition.
 A **Predefined Workflow** assigns work by Team roles or by the roles of enabled
-Project Agents: Build → Review or Lead-led. Build → Review can run
-with a single builder when it cannot fill the review role. Lead-led
+Project Agents: Execute and review or Lead delegation. Execute and review can run
+with a single builder when it cannot fill the review role. Lead delegation
 uses the enabled Project Lead in a Project to plan, delegate, and synthesize
 the result. A lone Lead completes the work in one turn.
 The Project owner can select which enabled Project Agents are eligible for each
-Predefined Workflow. The default includes every enabled Project Agent. Lead-led
+Predefined Workflow. The default includes every enabled Project Agent. Lead delegation
 always includes the current Project Lead. A Workflow with no eligible Agent
 cannot start.
-The Project owner can require independent review for Build → Review. When
+The Project owner can require independent review for Execute and review. When
 enabled, the Workflow needs a second eligible Agent in the Reviewer step.
 Without one, direct starts are refused and Tasks and Automation occurrences
 block until a person resolves the assignment and retries.
@@ -469,7 +469,7 @@ names its `reviewRevision`. Task changes, a new Task round, or updated evidence
 in the review require the person to refresh and review again. Conversation
 activity outside the reviewed work leaves the revision stable. Artifact links
 target the versions recorded for the review.
-An opted-in Build → Review Project Task also shows the Daemon Node's required
+An opted-in Execute and review Project Task also shows the Daemon Node's required
 check result for an exact Git commit and owner-selected check definition. The
 owner accepts that candidate using the current review revision after it passes.
 

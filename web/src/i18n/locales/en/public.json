@@ -45,7 +45,7 @@
     "tour_automations_body": "Trigger work on a schedule, from task or run events, through a webhook, or with Run now. Each run goes to its assigned agent or team and keeps its history.",
     "tour_automations_alt": "The Relay automations list with cadence and next run",
     "tour_teams_title": "Teams",
-    "tour_teams_body": "Give a team a workflow: Build and review, Pipeline, Lead-led, or your own steps. Clear roles and handoffs show who did what.",
+    "tour_teams_body": "Give a team a workflow: Execute and review, Pipeline, Lead delegation, or your own steps. Clear roles and handoffs show who did what.",
     "tour_teams_alt": "A Relay team profile with members and responsibilities",
     "principles_title": "What Relay holds to",
     "principle_local_title": "Runs where your code lives",
