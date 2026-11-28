@@ -4248,6 +4248,8 @@
     "step_count_other": "{{count}} 步",
     "create_title": "新建工作流",
     "edit_title": "編輯工作流",
+    "rename": "重新命名工作流程",
+    "rename_conflict": "此工作流程已變更。請重新整理後再次命名。",
     "editor_lede": "為每個步驟設定智慧體、指令和驗收標準，並依需要加入審核。",
     "team_name": "工作流名称",
     "steps": "步驟",

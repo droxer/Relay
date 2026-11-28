@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { WorkflowsPage } from "../src/components/WorkflowsPage";
+import { RelayApiError } from "../src/api";
 import { TaskDrawer } from "../src/components/task-board/TaskDrawer";
 import { emptyBacklogForm, type TaskBoardFormState } from "../src/lib/taskBoardForm";
 import { assignmentComputerId } from "../src/lib/taskAssignment";
@@ -24,6 +25,7 @@ const saveWorkflow = vi.fn();
 const updateWorkflowDraft = vi.fn();
 const deleteWorkflow = vi.fn();
 const confirmDialog = vi.fn(async () => true);
+const promptDialog = vi.fn();
 
 vi.mock("../src/api", () => ({
   listStandaloneWorkflowPreviews: (...args: unknown[]) => listStandaloneWorkflowPreviews(...args),
@@ -36,7 +38,9 @@ vi.mock("../src/api", () => ({
   getWorkflowName: vi.fn(),
   listWorkflowPreviews: vi.fn(),
   getTeamWorkflowChoices: vi.fn(),
-  RelayApiError: class extends Error { status = 500; code = ""; },
+  RelayApiError: class extends Error {
+    constructor(message: string, public status = 500, public code = "") { super(message); }
+  },
 }));
 
 vi.mock("../src/hooks/useUserAgents", () => ({
@@ -44,7 +48,7 @@ vi.mock("../src/hooks/useUserAgents", () => ({
 }));
 
 vi.mock("@/components/ui/DialogProvider", () => ({
-  useDialogs: () => ({ confirm: confirmDialog, announce: vi.fn(), prompt: vi.fn() }),
+  useDialogs: () => ({ confirm: confirmDialog, announce: vi.fn(), prompt: promptDialog }),
 }));
 
 vi.mock("@/components/ui/Drawer", () => ({
@@ -201,6 +205,52 @@ it("lists standalone workflows, inspects steps, toggles enabled, and deletes wit
   fireEvent.click(screen.getByRole("button", { name: "workflow.delete" }));
   await waitFor(() => expect(deleteWorkflow).toHaveBeenCalledWith("wf-1"));
   expect(onSelect).toHaveBeenCalledWith(null);
+});
+
+function renderPredefinedWorkflow() {
+  const workflow: Workflow = {
+    ...sampleFull, kind: "predefined", workflowSteps: [],
+    predefined: { template: "build_review", memberAgentIds: ["agent-1"], leadAgentId: "agent-1" },
+  };
+  listStandaloneWorkflowPreviews.mockResolvedValue({ workflows: [workflow] });
+  getWorkflow.mockResolvedValue({ workflow });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}>
+    <WorkflowsPage currentUser={currentUser} nodes={[computer1]} workflowId={workflow.id} onSelectWorkflow={vi.fn()} />
+  </QueryClientProvider>);
+  return workflow;
+}
+
+it("only offers rename for a predefined Workflow and preserves its version", async () => {
+  const workflow = renderPredefinedWorkflow();
+  promptDialog.mockResolvedValue("  Renamed preset  ");
+  saveWorkflow.mockResolvedValue({ workflow: { ...workflow, name: "Renamed preset", version: 2 } });
+
+  const rename = await screen.findByRole("button", { name: "workflow.rename" });
+  expect(screen.queryByRole("button", { name: "workflow.edit_steps" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "workflows.disable" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "workflow.delete" })).toBeNull();
+  fireEvent.click(rename);
+  await waitFor(() => expect(saveWorkflow).toHaveBeenCalledWith({ name: "Renamed preset", expectedVersion: 1 }, workflow.id));
+  expect(promptDialog).toHaveBeenCalledWith(expect.objectContaining({ defaultValue: workflow.name }));
+  expect(deleteWorkflow).not.toHaveBeenCalled();
+});
+
+it.each([null, "Release Flow", "", "x".repeat(201)])("does not save a cancelled, unchanged or invalid rename (%s)", async value => {
+  renderPredefinedWorkflow();
+  promptDialog.mockResolvedValue(value);
+  fireEvent.click(await screen.findByRole("button", { name: "workflow.rename" }));
+  await waitFor(() => expect(promptDialog).toHaveBeenCalled());
+  expect(saveWorkflow).not.toHaveBeenCalled();
+});
+
+it("explains a rename conflict without changing the predefined Workflow", async () => {
+  renderPredefinedWorkflow();
+  promptDialog.mockResolvedValue("My edit");
+  saveWorkflow.mockRejectedValueOnce(new RelayApiError("Conflict", 409, "workflow_version_conflict"));
+  fireEvent.click(await screen.findByRole("button", { name: "workflow.rename" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("workflow.rename_conflict");
+  expect(screen.getByRole("heading", { name: "Release Flow" })).toBeTruthy();
 });
 
 it("assigns and edits standalone workflows in TaskDrawer without exposing Teams or Project workflows", async () => {

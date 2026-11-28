@@ -134,6 +134,16 @@ test("standalone workflows can be created, edited, toggled, and persist after re
   await expect(page.getByText("Execute and review", { exact: true })).toBeVisible();
   await expect(page.getByText("Existing clients remain compatible", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit steps", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Disable", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Delete workflow", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Rename workflow", exact: true }).click();
+  const rename = page.getByRole("dialog", { name: "Rename workflow", exact: true });
+  await rename.getByRole("textbox").fill("Renamed delivery");
+  await rename.getByRole("button", { name: "Rename", exact: true }).click();
+  await expect.poll(() => patchPayloads.at(-1)).toEqual({ name: "Renamed delivery", expectedVersion: 1 });
+  await expect(page.getByRole("heading", { name: "Renamed delivery", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Renamed delivery", exact: true })).toBeVisible();
 
   // Create a new standalone Workflow without any Team or Project.
   await page.getByRole("button", { name: "New workflow", exact: true }).click();

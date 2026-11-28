@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { deleteWorkflow, saveWorkflow } from "../api";
+import { deleteWorkflow, RelayApiError, saveWorkflow } from "../api";
 import { useInvalidateWorkflows, useStandaloneWorkflows, useWorkflowRecord } from "../hooks/useProjectWorkflows";
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId, computerName as stableComputerName } from "../lib/createAgent";
 import { nodesAssignedToUser } from "../lib/computerNodes";
+import { WORKFLOW_LIMITS } from "../lib/workflowTeamDraft";
 import type { CurrentUser, DaemonNodeMonitorRecord, WorkflowPreview } from "../types";
 import { ActionAdd, ICON, NavWorkflows } from "./icons";
 import { PageHeader } from "./PageHeader";
@@ -35,7 +36,7 @@ export function WorkflowsPage({
   onSelectWorkflow: (workflowId: string | null) => void;
 }) {
   const { t } = useTranslation();
-  const { confirm } = useDialogs();
+  const { confirm, prompt } = useDialogs();
   const invalidate = useInvalidateWorkflows();
   const { agents } = useUserAgents(currentUser.userId);
   const query = useStandaloneWorkflows();
@@ -109,8 +110,36 @@ export function WorkflowsPage({
     onError: (error) => setActionError(error instanceof Error ? error.message : String(error)),
   });
 
+  const renameMutation = useMutation({
+    mutationFn: ({ workflow, name }: { workflow: WorkflowPreview; name: string }) =>
+      saveWorkflow({ name, expectedVersion: workflow.version }, workflow.id),
+    onSuccess: (data) => {
+      setActionError(null);
+      return invalidate(data, detail ?? null);
+    },
+    onError: (error) => setActionError(error instanceof RelayApiError && error.code === "workflow_version_conflict"
+      ? t("workflow.rename_conflict") : error instanceof Error ? error.message : String(error)),
+  });
+
   const loading = query.isPending && workflows.length === 0;
-  const busy = toggleMutation.isPending || deleteMutation.isPending;
+  const busy = toggleMutation.isPending || deleteMutation.isPending || renameMutation.isPending;
+
+  async function handleRename(workflow: WorkflowPreview) {
+    if (busy) return;
+    setActionError(null);
+    const result = await prompt({
+      title: t("workflow.rename"), message: t("workflow.team_name"),
+      defaultValue: workflow.name, confirmLabel: t("thread.rename"),
+    });
+    if (result === null) return;
+    const name = result.trim();
+    if (!name || name.length > WORKFLOW_LIMITS.name) {
+      setActionError(t(!name ? "workflow.error_required" : "workflow.error_too_long", { limit: WORKFLOW_LIMITS.name }));
+      return;
+    }
+    if (name === workflow.name) return;
+    renameMutation.mutate({ workflow, name });
+  }
 
   async function handleDelete(target: WorkflowPreview) {
     if (busy) return;
@@ -246,7 +275,10 @@ export function WorkflowsPage({
             busy={busy}
             actionError={actionError}
             onBack={() => onSelectWorkflow(null)}
-            onEdit={() => setEditing(selectedWorkflow)}
+            onEdit={() => {
+              if (selectedWorkflow.kind === "predefined" || detail?.kind === "predefined") void handleRename(selectedWorkflow);
+              else setEditing(selectedWorkflow);
+            }}
             onToggleEnabled={() => void toggleMutation.mutateAsync(selectedWorkflow)}
             onDelete={() => void handleDelete(selectedWorkflow)}
           />
