@@ -27,6 +27,6 @@ def validate_standalone_workflow(
             raise ValueError('workflow_agent_unavailable')
         if not agent_placed_on_computer(member, identity, node_ids=node_ids, placement_store=ctx.agent_placement_store):
             raise ValueError('workflow_agent_computer_mismatch')
-    return {**deepcopy(definition), 'workflowId': definition['id'], 'workflowKind': 'steps',
+    return {**deepcopy(definition), 'workflowId': definition['id'], 'workflowKind': definition.get('kind', 'steps'),
             'workflowRecordVersion': 1, 'workflowVersion': definition['updatedAt'],
             'teamId': None, 'projectId': None, 'memberAgentIds': members}

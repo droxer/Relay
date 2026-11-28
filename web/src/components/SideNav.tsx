@@ -17,8 +17,8 @@ import {
   NavSidebarCollapse,
   NavSkills,
   NavSidebarExpand,
-  NavTeams,
   NavThreads,
+  NavWorkflows,
 } from "./icons";
 import { RelayMark } from "./RelayMark";
 import { countBadgeText } from "../lib/countBadge";
@@ -48,7 +48,7 @@ const MORE_GROUPS: readonly { labelKey: string; routes: readonly MoreRoute[] }[]
   ] },
   { labelKey: "nav.workforce", routes: [
     { route: "agents", Icon: NavAgents, labelKey: "nav.agents" },
-    { route: "teams", Icon: NavTeams, labelKey: "nav.teams" },
+    { route: "workflows", Icon: NavWorkflows, labelKey: "nav.workflows" },
   ] },
   { labelKey: "nav.infra", routes: [
     { route: "computers", Icon: NavComputer, labelKey: "nav.computers" },
@@ -266,19 +266,19 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <span className="sidenav-label sr-only">{t("nav.agents")}</span>
           </a>
           <a
-            className={`sidenav-btn sidenav-secondary-item ${route === "teams" ? "active" : ""}`}
-            data-nav="teams"
-            href={hrefForRoute("teams")}
-            aria-label={t("nav.teams")}
-            aria-current={route === "teams" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "teams")}
-            onMouseEnter={(event) => showNavTooltip(t("nav.teams"), event.currentTarget)}
+            className={`sidenav-btn sidenav-secondary-item ${route === "workflows" ? "active" : ""}`}
+            data-nav="workflows"
+            href={hrefForRoute("workflows")}
+            aria-label={t("nav.workflows")}
+            aria-current={route === "workflows" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "workflows")}
+            onMouseEnter={(event) => showNavTooltip(t("nav.workflows"), event.currentTarget)}
             onMouseLeave={hideNavTooltip}
-            onFocus={(event) => showNavTooltip(t("nav.teams"), event.currentTarget)}
+            onFocus={(event) => showNavTooltip(t("nav.workflows"), event.currentTarget)}
             onBlur={hideNavTooltip}
           >
-            <NavTeams size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("nav.teams")}</span>
+            <NavWorkflows size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.workflows")}</span>
           </a>
         </div>
         {/* Infra: what agents run on (computers) and what they carry

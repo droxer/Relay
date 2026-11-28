@@ -5,7 +5,7 @@ const WORK_ROUTE_LABEL_KEYS: Record<Exclude<AppRoute, "main" | "projects">, stri
   backlog: "nav.backlog",
   routine: "nav.routine",
   agents: "nav.agents",
-  teams: "nav.teams",
+  workflows: "nav.workflows",
   computers: "nav.computers",
   skills: "nav.skills",
   settings: "nav.settings",

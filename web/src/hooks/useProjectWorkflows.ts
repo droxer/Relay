@@ -1,8 +1,9 @@
 "use client";
 import { useQuery, useQueryClient, type Query, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import {
-  getTeamWorkflowChoices, getWorkflow, getWorkflowName, listProjectWorkflowChoices, listWorkflowPreviews, RelayApiError,
-  type TeamWorkflowChoicesResponse, type TeamWorkflowLinkUpdate, type TeamWorkflowUpdate,
+  getTeamWorkflowChoices, getWorkflow, getWorkflowName, listProjectWorkflowChoices,
+  listStandaloneWorkflowChoices, listStandaloneWorkflowPreviews, listWorkflowPreviews, RelayApiError,
+  type StandaloneWorkflowChoicesResponse, type TeamWorkflowChoicesResponse, type TeamWorkflowLinkUpdate, type TeamWorkflowUpdate,
   type WorkflowChoicesResponse, type WorkflowNameResponse, type WorkflowPreviewsResponse, type WorkflowSaveResponse,
 } from "../api";
 import type { PrivateResponseCache } from "../api-client/client";
@@ -15,6 +16,7 @@ export const TEAM_WORKFLOW_CHOICES_KEY = [WORKFLOWS_QUERY_KEY, "team-choices"] a
 const WORKFLOW_STALE_MS = 15_000;
 const WORKFLOW_REFRESH_MS = 30_000;
 const choiceValidators = new WeakMap<Query, PrivateResponseCache<WorkflowChoicesResponse>>();
+const standaloneChoiceValidators = new WeakMap<Query, PrivateResponseCache<StandaloneWorkflowChoicesResponse>>();
 const teamChoiceValidators = new WeakMap<Query, PrivateResponseCache<TeamWorkflowChoicesResponse>>();
 const previewValidators = new WeakMap<Query, PrivateResponseCache<WorkflowPreviewsResponse>>();
 const recordValidators = new WeakMap<Query, PrivateResponseCache<{ workflow: Workflow }>>();
@@ -35,10 +37,26 @@ export function useProjectWorkflows(projectId: string) {
   });
 }
 
+export function useStandaloneWorkflows(enabled = true) {
+  return useQuery({
+    queryKey: [WORKFLOWS_QUERY_KEY, "preview", "standalone"],
+    queryFn: ({ signal, client, queryKey }) => listStandaloneWorkflowPreviews(signal, responseCache(client, queryKey, previewValidators)),
+    enabled, staleTime: WORKFLOW_STALE_MS, refetchInterval: WORKFLOW_REFRESH_MS,
+  });
+}
+
 export function useProjectWorkflowChoices(projectId?: string, enabled = true) {
   return useQuery({
     queryKey: [WORKFLOWS_QUERY_KEY, "choices", projectId ?? "all"],
     queryFn: ({ signal, client, queryKey }) => listProjectWorkflowChoices(projectId, signal, responseCache(client, queryKey, choiceValidators)),
+    enabled, staleTime: WORKFLOW_STALE_MS,
+  });
+}
+
+export function useStandaloneWorkflowChoices(enabled = true) {
+  return useQuery({
+    queryKey: [WORKFLOWS_QUERY_KEY, "choices", "standalone"],
+    queryFn: ({ signal, client, queryKey }) => listStandaloneWorkflowChoices(signal, responseCache(client, queryKey, standaloneChoiceValidators)),
     enabled, staleTime: WORKFLOW_STALE_MS,
   });
 }
@@ -75,7 +93,7 @@ export function useWorkflowName(workflowId?: string | null, projectId?: string |
     refetchInterval: WORKFLOW_REFRESH_MS,
     queryFn: async ({ signal, queryKey }) => {
       if (!workflowId) return null;
-      for (const scope of projectId ? [projectId, "all"] : ["all"]) {
+      for (const scope of projectId ? [projectId, "all"] : ["standalone", "all"]) {
         for (const view of ["preview", "choices"]) {
           const key = [WORKFLOWS_QUERY_KEY, view, scope];
           const catalog = client.getQueryState<{ workflows: Pick<Workflow, "id" | "name">[] }>(key);
@@ -260,8 +278,13 @@ export function useInvalidateWorkflows() {
     const workflow = result?.workflow;
     const projectEdit = workflow?.projectId && workflow.projectId === original?.projectId && workflow.version !== undefined
       ? workflow : undefined;
-    const choicesChanged = !projectEdit || !original || projectEdit.name !== original.name || projectEdit.enabled !== original.enabled
-      || JSON.stringify(workflowAgentIds(projectEdit)) !== JSON.stringify(workflowAgentIds(original));
+    const standaloneEdit = workflow && !workflow.projectId && !workflow.ownerTeamId && workflow.computerId
+      && workflow.computerId === original?.computerId && workflow.version !== undefined
+      ? workflow : undefined;
+    const isStandalone = Boolean(workflow && !workflow.projectId && !workflow.ownerTeamId && workflow.computerId);
+    const edited = projectEdit ?? standaloneEdit;
+    const choicesChanged = !edited || !original || edited.name !== original.name || edited.enabled !== original.enabled
+      || JSON.stringify(workflowAgentIds(edited)) !== JSON.stringify(workflowAgentIds(original));
     if (workflow) {
       const recordKey = [WORKFLOWS_QUERY_KEY, "record", workflow.id];
       const nameKey = [WORKFLOWS_QUERY_KEY, "name", workflow.id];
@@ -275,6 +298,7 @@ export function useInvalidateWorkflows() {
         client.setQueryData(nameKey, workflow.name);
       }
     }
+    const previewScope = projectEdit ? projectEdit.projectId : standaloneEdit ? "standalone" : null;
     await Promise.all([
       client.invalidateQueries({
         queryKey: [WORKFLOWS_QUERY_KEY],
@@ -282,25 +306,28 @@ export function useInvalidateWorkflows() {
           if (view === "record" || (view === "name" && id === workflow?.id)) return false;
           if (view === "team-choices") return !workflow || (id === workflow.ownerUserId && choicesChanged && Boolean(workflow.projectId));
           if (!original || !workflow) return true;
-          // An edit keeps the Workflow's owner and Project scope.
-          if (view === "preview") return !projectEdit && id === workflow.projectId;
-          if (view === "choices") return choicesChanged && Boolean(workflow.projectId) && (id === "all" || id === workflow.projectId);
+          // An edit keeps the Workflow's owner and scope.
+          if (view === "preview") return isStandalone ? (!standaloneEdit && id === "standalone") : (!projectEdit && id === workflow.projectId);
+          if (view === "choices") {
+            if (isStandalone) return choicesChanged && id === "standalone";
+            return choicesChanged && Boolean(workflow.projectId) && (id === "all" || id === workflow.projectId);
+          }
           return false;
         },
       }),
-      projectEdit && updateWorkflowQuery<WorkflowPreviewsResponse>(client, [WORKFLOWS_QUERY_KEY, "preview", projectEdit.projectId], data => {
-        const preview = data.workflows.find(item => item.id === projectEdit.id);
+      edited && previewScope && updateWorkflowQuery<WorkflowPreviewsResponse>(client, [WORKFLOWS_QUERY_KEY, "preview", previewScope], data => {
+        const preview = data.workflows.find(item => item.id === edited.id);
         if (data.view !== "preview" || preview?.version === undefined) return undefined;
-        if (!workflowRecordIsOlder(projectEdit, preview) && projectEdit.version !== preview.version) {
-          if (preview.name !== projectEdit.name) return undefined;
+        if (!workflowRecordIsOlder(edited, preview) && edited.version !== preview.version) {
+          if (preview.name !== edited.name) return undefined;
           return { ...data, workflows: data.workflows.map(item => item === preview ? {
-            ...item, version: projectEdit.version, updatedAt: projectEdit.updatedAt,
-            enabled: projectEdit.enabled, workflowSteps: workflowPreviewSteps(projectEdit),
+            ...item, version: edited.version, updatedAt: edited.updatedAt,
+            enabled: edited.enabled, workflowSteps: workflowPreviewSteps(edited),
           } : item) };
         }
         return data;
       }),
-      refreshTeamWorkflows(client, result, Boolean(projectEdit)),
+      !isStandalone && refreshTeamWorkflows(client, result, Boolean(projectEdit)),
     ]);
   };
 }

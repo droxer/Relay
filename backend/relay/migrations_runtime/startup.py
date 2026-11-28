@@ -19,15 +19,21 @@ from .agent_computer_id import (
     migrate_agent_computer_ids,
     migrate_agent_placement_computer_ids,
 )
+from .standalone_workflows import LegacyWorkflowMigration
 
 
 def repair_records_before_serving(
-    *, team_store: Any, agent_store: Any, agent_placement_store: Any
+    *, team_store: Any, agent_store: Any, agent_placement_store: Any, task_store: Any, registry: Any,
 ) -> None:
     """Repairs the request paths depend on; a failure stops startup."""
+    skipped_teams = LegacyWorkflowMigration(
+        team_store, task_store, agent_store, agent_placement_store, registry,
+    ).run()
+    # Keep a refused Team's original roster across restarts so an automatic
+    # roster repair cannot make the next migration substitute a new lead.
     # Older runtimes could retire an agent without updating Teams. Repair those
     # dangling member references through Team events before serving requests.
-    reconcile_team_memberships(team_store, agent_store)
+    reconcile_team_memberships(team_store, agent_store, excluded_team_ids=skipped_teams)
     # Heal any agent left with multiple active placements before the
     # one-agent-one-computer invariant (idempotent; a no-op once collapsed).
     reconcile_single_active_placement(agent_placement_store)

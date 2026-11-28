@@ -7,7 +7,7 @@ import { useAppRouter } from '../src/hooks/useAppRouter';
 const destinations = [
   ['nav.home', '/home'], ['nav.threads', '/threads'], ['nav.backlog', '/tasks'],
   ['nav.routine', '/automations'], ['project.projects', '/projects'],
-  ['nav.agents', '/agents'], ['nav.teams', '/teams'], ['nav.computers', '/computers'],
+  ['nav.agents', '/agents'], ['nav.workflows', '/workflows'], ['nav.computers', '/computers'],
   ['nav.skills', '/skills'], ['nav.settings', '/settings/notifications'],
   ['nav.admin', '/admin/dashboard'],
 ] as const;

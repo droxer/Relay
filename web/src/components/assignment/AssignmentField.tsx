@@ -20,7 +20,7 @@ import { navigateToAppPath } from "../../lib/appRoute";
 import { AvatarStack } from "../AvatarStack";
 import { IdentityMark } from "../IdentityMark";
 import { ProfileImage } from "../ProfileImagePicker";
-import { ICON, NavAgents, NavTeams } from "../icons";
+import { ICON, NavAgents, NavTeams, NavWorkflows } from "../icons";
 import {
   availabilityTone,
   effectiveAgentAvailability,
@@ -38,6 +38,7 @@ import { ProjectWorkflowOptionLabel } from "../workflow/ProjectWorkflowSelect";
 const NO_ASSIGNMENT = "__none__";
 const NAV_AGENTS = "__nav_agents__";
 const NAV_TEAMS = "__nav_teams__";
+const NAV_WORKFLOWS = "__nav_workflows__";
 
 type AssignmentSelection = TaskAssignmentSelection;
 export type { AgentView, TeamView };
@@ -158,6 +159,7 @@ export function AssignmentSelect({
   hideTeams = false,
   workflows,
   workflowMessage,
+  workflowAction,
   onOpenChange,
 }: {
   /** `agent:<id>`, `team:<id>`, or `NO_ASSIGNMENT`. */
@@ -176,6 +178,7 @@ export function AssignmentSelect({
   hideTeams?: boolean;
   workflows?: ProjectWorkflowOption[];
   workflowMessage?: string;
+  workflowAction?: { label: string; href: string };
   onOpenChange?: (open: boolean) => void;
   /** A list row's compact trigger: the row's own assignee chip, named by
    *  `label`, instead of the drawer's full-width field. */
@@ -205,7 +208,11 @@ export function AssignmentSelect({
           return;
         }
         if (next === NAV_TEAMS) {
-          navigateToAppPath("/teams?dialog=create");
+          navigateToAppPath("/workflows?dialog=create");
+          return;
+        }
+        if (next === NAV_WORKFLOWS) {
+          navigateToAppPath(workflowAction?.href ?? "/workflows?dialog=create");
           return;
         }
         onSelect(parseTaskAssignmentValue(next));
@@ -265,7 +272,13 @@ export function AssignmentSelect({
               {workflows?.map(workflow => <SelectItem key={workflow.id} value={`workflow:${workflow.id}`} disabled={Boolean(workflow.issue)}>
                 <ProjectWorkflowOptionLabel option={workflow} />
               </SelectItem>)}
+              {!workflowMessage && workflows?.length === 0 ? (
+                <RosterEmptyOption value="__empty_workflows__" label={t("workflows.no_workflows_available")} disabled />
+              ) : null}
               {workflowMessage ? <RosterEmptyOption value="__workflow_status__" label={workflowMessage} disabled /> : null}
+              {workflowAction ? (
+                <RosterActionOption value={NAV_WORKFLOWS} label={workflowAction.label} icon={<NavWorkflows size={ICON.sm} />} />
+              ) : null}
             </>
           ) : (
             <>

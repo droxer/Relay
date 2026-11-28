@@ -16,7 +16,7 @@ describe("reviewed design regressions", () => {
     assert.match(responsive, /\.messenger-shell:where\(\[data-route\]:not\(\[data-route="main"\], \[data-route="home"\]\)\) \.page-header-lead\s*\{/);
     assert.doesNotMatch(responsive, /\.messenger-shell\[data-route\]:not\(\[data-route="main"\]\) \.page-header-lead\s*\{/);
 
-    for (const route of ["agents", "teams", "projects"]) {
+    for (const route of ["agents", "workflows", "projects"]) {
       assert.match(
         responsive,
         new RegExp(`\\.messenger-shell\\[data-route="${route}"\\] \\.page-header-lead[\\s\\S]*?position:\\s*static`),
@@ -99,7 +99,7 @@ describe("reviewed design regressions", () => {
     // than the markup it expands to.
     const table = nav.match(/const MORE_GROUPS[\s\S]*?\n\];/)?.[0];
     assert.ok(table, "SideNav must declare a MORE_GROUPS table");
-    for (const route of ["routine", "agents", "teams", "computers", "skills", "settings", "admin"]) {
+    for (const route of ["routine", "agents", "workflows", "computers", "skills", "settings", "admin"]) {
       assert.match(table, new RegExp(`route: "${route}"`));
     }
     // Sections and order match the desktop rail's groups.

@@ -139,7 +139,7 @@ describe("OnboardingPanel", () => {
       completedCount: 3,
     }));
     fireEvent.click(screen.getAllByRole("button", { name: "onboarding.explore.open" })[2]);
-    expect(onOpenRoute).toHaveBeenCalledWith("teams");
+    expect(onOpenRoute).toHaveBeenCalledWith("workflows");
     fireEvent.click(screen.getAllByRole("button", { name: "onboarding.explore.close" })[0]);
     expect(controls.closeCard).toHaveBeenCalledWith("tasks");
     fireEvent.click(screen.getByRole("button", { name: "onboarding.explore.done" }));

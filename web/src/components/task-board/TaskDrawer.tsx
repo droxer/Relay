@@ -12,9 +12,16 @@ import { useSessionCapabilities } from "../../hooks/useSessionCapabilities";
 import { isSubmitChord, submitShortcutLabel } from "../../lib/shortcuts";
 import { DatePicker } from "@/components/ui/date-picker";
 import { ProjectWorkflowSelect } from "../workflow/ProjectWorkflowSelect";
-import { useProjectWorkflowChoices } from "../../hooks/useProjectWorkflows";
+import { useProjectWorkflowChoices, useStandaloneWorkflowChoices } from "../../hooks/useProjectWorkflows";
 import { WorkflowSelect } from "../workflow/WorkflowSelect";
-import { projectWorkflowOptions, projectWorkflowSelectionIssue, workflowSelectionIssue } from "../../lib/workflowSelection";
+import {
+  projectWorkflowOptions,
+  projectWorkflowSelectionIssue,
+  standaloneWorkflowOptions,
+  standaloneWorkflowSelectionIssue,
+  workflowSelectionIssue,
+  type ProjectWorkflowOption,
+} from "../../lib/workflowSelection";
 import { useKeyChange } from "../../hooks/useKeyChange";
 import { AssignmentKindSwitch, type AssignmentKind } from "./AssignmentKindSwitch";
 import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -130,7 +137,7 @@ function RoutineSchedule({ form, onChange, logicalAgents, teams, projects }: {
   const { automationTriggers } = useSessionCapabilities();
   const active = form.routineState === "active";
   // Nothing to run it on yet: the switch cannot turn on, and says why.
-  const cannotEnable = !form.projectId && !form.assignedAgentId && !form.assignedTeamId && !active;
+  const cannotEnable = !form.projectId && !form.assignedAgentId && !form.assignedTeamId && !form.assignedWorkflowId && !active;
   const triggers = form.routineTriggers;
   const setTriggers = (routineTriggers: RoutineTrigger[]) => onChange({ ...form, routineTriggers });
   const setOnly = (trigger: RoutineTrigger) => setTriggers([trigger]);
@@ -228,18 +235,18 @@ export function TaskDrawer({
      standalone scope. */
   const [kindChoice, setKindChoice] = useState<AssignmentKind>("agent");
   const [assignmentOpen, setAssignmentOpen] = useState(false);
-  const secondKind: "team" | "workflow" = project ? "workflow" : "team";
   const assignmentKind: AssignmentKind = form.assignedWorkflowId && !form.assignedTeamId
-    ? (project ? "workflow" : "agent")
-    : form.assignedTeamId
-      ? (project ? "agent" : "team")
-      : form.assignedAgentId
-        ? "agent"
-        : kindChoice === secondKind
-          ? kindChoice
-          : "agent";
+    ? "workflow"
+    : form.assignedTeamId || form.assignedAgentId
+      ? "agent"
+      : kindChoice === "workflow"
+        ? "workflow"
+        : "agent";
   const workflowQuery = useProjectWorkflowChoices(project?.id, open && Boolean(project)
     && (assignmentKind === "workflow" || (creatingTask && assignmentOpen)));
+  const standaloneWorkflowQuery = useStandaloneWorkflowChoices(open && !project
+    && (assignmentKind === "workflow" || (creatingTask && assignmentOpen) || Boolean(form.assignedWorkflowId)));
+  const activeWorkflowQuery = project ? workflowQuery : standaloneWorkflowQuery;
   const availableProjects = projects.filter((item) => item.enabled && !item.archivedAt);
   const projectLabelId = useId();
   const projectErrorId = useId();
@@ -268,8 +275,15 @@ export function TaskDrawer({
     onChange({ ...form, ...patch } as TaskBoardFormState);
   }
 
-  function assignProjectWorkflow(assignedWorkflowId: string): void {
-    updateBase({ assignedWorkflowId, assignedAgentId: "", assignedAgent: "", assignedTeamId: "", collaborationStyle: null });
+  function assignWorkflow(assignedWorkflowId: string): void {
+    updateBase({
+      assignedWorkflowId,
+      assignedAgentId: "",
+      assignedAgent: "",
+      assignedTeamId: "",
+      collaborationStyle: null,
+      ...(activatesOnAssign(form) ? { routineState: "active" as const } : {}),
+    });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -312,19 +326,25 @@ export function TaskDrawer({
   });
   const selectedAgent = agentOptions.find((agent) => agent.id === form.assignedAgentId);
   const selectedTeam = teamOptions.find((team) => team.id === form.assignedTeamId);
-  /* Project work runs with one Project Agent or one Project Workflow;
-     standalone work runs with one Agent or one Team. Creating a task offers
-     both sides in one compact tabbed picker; editing or creating an automation
-     uses the segmented switch above the picker. */
-  const offersWorkflow = Boolean(project) && !form.assignedTeamId;
-  const offersKindSwitch = !creatingTask && (offersWorkflow || !project);
+  /* Both Project and standalone work run with one Agent or one Workflow.
+     Creating a task offers both sides in one compact tabbed picker; editing
+     or creating an automation uses the segmented switch above the picker. */
+  const offersWorkflow = !form.assignedTeamId;
+  const offersKindSwitch = !creatingTask;
   const projectAgentIds = project?.members.filter(member => member.enabled).map(member => member.agentId);
   const teamWorkflowIssue = workflowSelectionIssue(selectedTeam,
     form.assignedWorkflowId || (form.collaborationStyle ? `preset:${form.collaborationStyle}` : null), project?.id, projectAgentIds);
   const projectWorkflows = project ? projectWorkflowOptions(project, workflowQuery.isError ? [] : workflowQuery.data?.workflows) : [];
-  const projectWorkflowIssue = form.assignedWorkflowId
-    ? projectWorkflowSelectionIssue(form.assignedWorkflowId, projectWorkflows) : null;
-  const selectionIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : projectWorkflowIssue;
+  const standaloneWorkflows = !project
+    ? standaloneWorkflowOptions(standaloneWorkflowQuery.isError ? [] : standaloneWorkflowQuery.data?.workflows, form.computerId, logicalAgents)
+    : [];
+  const workflowChoices: ProjectWorkflowOption[] = project ? projectWorkflows : standaloneWorkflows;
+  const selectedWorkflowIssue = form.assignedWorkflowId
+    ? (project
+      ? projectWorkflowSelectionIssue(form.assignedWorkflowId, projectWorkflows)
+      : standaloneWorkflowSelectionIssue(form.assignedWorkflowId, standaloneWorkflows))
+    : null;
+  const selectionIssue = form.assignedTeamId ? (Boolean(project) || !selectedTeam || teamWorkflowIssue) : selectedWorkflowIssue;
   const assignmentUnchanged = taskAssignmentUnchanged(form, formBaseline);
   const keepingRetiredWorkflow = selectionIssue === "workflow_retired" && assignmentUnchanged;
   const workflowIssue = keepingRetiredWorkflow ? null : selectionIssue;
@@ -358,16 +378,17 @@ export function TaskDrawer({
         value={creatingTask && form.assignedWorkflowId && !form.assignedTeamId ? `workflow:${form.assignedWorkflowId}` : taskAssignmentValue(form)}
         agents={agentOptions}
         teams={teamOptions}
-        hideAgents={offersKindSwitch && assignmentKind === "team"}
-        hideTeams={Boolean(project) || (offersKindSwitch && assignmentKind !== "team")}
+        hideAgents={false}
+        hideTeams={true}
         selectedAgent={assignedAgentView}
         selectedTeam={assignedTeamView}
         emptyHint={t(form.variant === "backlog" ? "backlog.unassigned_backlog_hint" : "backlog.unassigned_routine_hint")}
-        workflows={creatingTask && offersWorkflow ? projectWorkflows : undefined}
-        workflowMessage={workflowQuery.isError ? t("workflow.load_failed") : workflowQuery.isPending ? t("workflow.loading") : undefined}
+        workflows={creatingTask && offersWorkflow ? workflowChoices : undefined}
+        workflowMessage={activeWorkflowQuery.isError ? t("workflow.load_failed") : activeWorkflowQuery.isPending ? t("workflow.loading") : undefined}
+        workflowAction={!project ? { label: t("workflows.create_action"), href: "/workflows?dialog=create" } : undefined}
         onOpenChange={creatingTask && offersWorkflow ? setAssignmentOpen : undefined}
         switcher={offersKindSwitch ? (
-          <AssignmentKindSwitch value={assignmentKind} secondKind={secondKind} disabled={saving} onChange={(kind) => {
+          <AssignmentKindSwitch value={assignmentKind} secondKind="workflow" disabled={saving} onChange={(kind) => {
             setKindChoice(kind);
             if (kind !== assignmentKind && (form.assignedAgentId || form.assignedTeamId || form.assignedWorkflowId)) {
               onChange(clearTaskAssignment(form));
@@ -376,11 +397,13 @@ export function TaskDrawer({
         ) : undefined}
         alternate={!creatingTask && offersWorkflow && assignmentKind === "workflow" ? (
           <ProjectWorkflowSelect triggerId={assignmentFieldId}
-            workflows={projectWorkflows}
+            workflows={workflowChoices}
             value={form.assignedWorkflowId || ""}
-            onChange={assignProjectWorkflow}
-            disabled={saving} loading={workflowQuery.isPending} failed={workflowQuery.isError}
-            issue={keepingRetiredWorkflow ? null : projectWorkflowIssue} onRetry={() => void workflowQuery.refetch()} />
+            onChange={assignWorkflow}
+            disabled={saving} loading={activeWorkflowQuery.isPending} failed={activeWorkflowQuery.isError}
+            issue={keepingRetiredWorkflow ? null : selectedWorkflowIssue}
+            hintKey={project ? "workflow.optional_assignment_hint" : "workflows.task_assignment_hint"}
+            onRetry={() => void activeWorkflowQuery.refetch()} />
         ) : undefined}
         onSelect={(selection) => {
           if (selection.kind === "none") {
@@ -388,7 +411,7 @@ export function TaskDrawer({
             return;
           }
           if (selection.kind === "workflow") {
-            assignProjectWorkflow(selection.id);
+            assignWorkflow(selection.id);
             return;
           }
           if (selection.kind === "agent") {
@@ -513,11 +536,11 @@ export function TaskDrawer({
         {projectField}
         {showAssignment ? assignmentField : null}
         {creatingTask && form.assignedWorkflowId && !form.assignedTeamId ? (
-          workflowQuery.isError ? <div role="alert">
+          activeWorkflowQuery.isError ? <div role="alert">
             <p>{t("workflow.load_failed")}</p>
-            <Button type="button" variant="ghost" size="dense" onClick={() => void workflowQuery.refetch()}>{t("workspace.retry")}</Button>
-          </div> : projectWorkflowIssue && !workflowQuery.isPending ? (
-            <p role="alert" className="text-destructive">{t(`workflow.${projectWorkflowIssue}`)}</p>
+            <Button type="button" variant="ghost" size="dense" onClick={() => void activeWorkflowQuery.refetch()}>{t("workspace.retry")}</Button>
+          </div> : selectedWorkflowIssue && !activeWorkflowQuery.isPending ? (
+            <p role="alert" className="text-destructive">{t(`workflow.${selectedWorkflowIssue}`)}</p>
           ) : null
         ) : null}
         {(form.assignedAgentId && !selectedAgent) || (form.assignedTeamId && !selectedTeam) ? <p role="alert" className="text-destructive">{t("backlog.assignment_reselect")}</p> : null}

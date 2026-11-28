@@ -4,7 +4,7 @@ import type { RelaySession, RelayTaskListItem } from "../types.js";
  *  attention tone as their task icons; information stays neutral. */
 export type RecoveryGuide = {
   key: string;
-  destination?: "computer" | "agents" | "teams" | "projects" | "backlog";
+  destination?: "computer" | "agents" | "workflows" | "projects" | "backlog";
   tone?: "info" | "warn";
   /** Whether a person may assert the agent is gone. True only where the exit
    *  evidence Relay is waiting for can no longer arrive on its own: a retry
@@ -51,7 +51,7 @@ function register(codes: string[], key: string, destination?: RecoveryGuide["des
 }
 register(["project_team_assignment_forbidden", "standalone_team_workflow", "team_workflow_project_mismatch", "project_workflow_owner_mismatch", "workflow_not_found", "workflow_agent_conflict"], "assignment", "backlog");
 register(["agent_disabled", "agent_not_found", "agent_policy_unsupported", "executor_mismatch", "agent_mismatch", "task_not_assigned"], "assignment", "agents");
-register(["team_not_found", "team_disabled", "team_invalid", "team_unavailable"], "assignment", "teams");
+register(["team_not_found", "team_disabled", "team_invalid", "team_unavailable"], "assignment", "workflows");
 register(["project_not_found", "project_disabled", "project_roster_invalid", "project_reviewer_required", "project_agent_not_member", "project_agent_off_computer", "project_team_off_computer", "project_team_not_member"], "assignment", "projects");
 register(["agent_forbidden", "team_forbidden", "project_forbidden"], "access");
 register(["agent_offline", "node_offline", "executor_not_ready", "project_computer_offline"], "offline", "computer");

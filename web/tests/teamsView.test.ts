@@ -42,7 +42,7 @@ describe("Agent team management", () => {
 
     assert.doesNotMatch(adminPageSource, /adminTeam|adminAddTeam|<TeamsView/);
     assert.doesNotMatch(agentsSource, /agentsView|managementView|<TeamDrawer|useTeams/);
-    assert.match(appSource, /route === "teams" \? \(\s*<TeamsPage/s);
+    assert.match(appSource, /route === "workflows" \? \(\s*<WorkflowsPage/s);
     assert.match(teamsSource, /className="teams-list"/);
     assert.match(teamsSource, /<TeamWorkspacePage/);
     // Skills is the agent record's own tab; a workspace tab is what must stay out.
@@ -78,8 +78,8 @@ describe("Agent team management", () => {
     // The assignment picker identifies a team by its profile image, whose
     // default is the shared team glyph — the same mark the empty state draws.
     assert.match(rosterRowSource, /fallback=\{<IdentityMark kind="team" \/>\}/);
-    assert.match(sideNavSource, /data-nav="teams"/);
-    assert.match(sideNavSource, /handleRouteClick\(event, "teams"\)/);
+    assert.match(sideNavSource, /data-nav="workflows"/);
+    assert.match(sideNavSource, /handleRouteClick\(event, "workflows"\)/);
     assert.match(drawerSource, /memberAgentIds/);
     assert.match(drawerSource, /leadAgentId/);
     assert.match(drawerSource, /useUserAgents\(open \? userId : undefined\)/);

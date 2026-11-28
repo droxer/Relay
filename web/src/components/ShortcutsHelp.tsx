@@ -34,7 +34,7 @@ const NAVIGATE_ROWS: ShortcutRow[] = [
   { keys: "G B", labelKey: "nav.backlog" },
   { keys: "G R", labelKey: "nav.routine" },
   { keys: "G A", labelKey: "nav.agents" },
-  { keys: "G E", labelKey: "nav.teams" },
+  { keys: "G W", labelKey: "nav.workflows" },
   { keys: "G C", labelKey: "nav.computers" },
   { keys: "G K", labelKey: "nav.skills" },
   ...(CHANNELS_ENABLED ? [{ keys: "G H", labelKey: "nav.channels" }] : []),

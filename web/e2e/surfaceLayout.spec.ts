@@ -1199,8 +1199,8 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
   await expect(sheet).toBeVisible();
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 
-  await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Agents and teams", "Resources", "Manage"]);
-  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Agents", "Teams", "Computers", "Skills", "Settings"]);
+  await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Workforce", "Resources", "Manage"]);
+  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Agents", "Workflows", "Computers", "Skills", "Settings"]);
   const controls = sheet.locator("button, a");
   await expect(controls.first()).toHaveText("Search");
   await expect(controls.last()).toHaveText("Sign out");

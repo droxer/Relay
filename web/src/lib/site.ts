@@ -31,6 +31,7 @@ export const PRIVATE_PATHS: readonly string[] = [
   "/automations",
   "/routines",
   "/agents",
+  "/workflows",
   "/teams",
   "/settings",
   "/projects",

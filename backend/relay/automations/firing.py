@@ -220,8 +220,8 @@ def fired_kind(events: list[dict[str, Any]], manual: bool) -> str:
 
 def triggered_target(routine: dict[str, Any], project_store: Any) -> bool:
     """Whether the routine has somewhere to run: an open project, or an
-    assigned agent or team."""
+    assigned Agent, Team, or Workflow."""
     if routine.get("projectId"):
         project = project_store.get_project(routine["projectId"]) if project_store else None
         return not project_work_error(project)
-    return bool(routine.get("assignedAgent") or routine.get("assignedTeamId"))
+    return bool(routine.get("assignedAgent") or routine.get("assignedTeamId") or routine.get("assignedWorkflowId"))

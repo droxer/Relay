@@ -140,7 +140,7 @@ export function TaskRecordPage({
   const { teams, isSuccess: teamsReady, error: teamsError } = useTeams(currentUser.userId);
   const assignedTeam = teams.find((team) => team.id === task.assignedTeamId);
   const cachedWorkflowName = teamWorkflowName(assignedTeam, task.assignedWorkflowId);
-  const fetchWorkflowName = tab === "definition" && !predefinedStyle(task.assignedWorkflowId)
+  const fetchWorkflowName = Boolean(task.assignedWorkflowId) && !predefinedStyle(task.assignedWorkflowId)
     && !cachedWorkflowName && (!task.assignedTeamId || teamsReady || teamsError);
   const workflowName = useWorkflowName(fetchWorkflowName ? task.assignedWorkflowId : undefined, task.projectId);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);
@@ -151,7 +151,9 @@ export function TaskRecordPage({
   }), [teams, logicalAgents, projectOf]);
   const assigneeAgent = task.assignedAgentId ? logicalAgents.find((agent) => agent.id === task.assignedAgentId) : undefined;
   const assigneeDisplay = {
-    name: taskAgentDisplayName(task, logicalAgents, teams),
+    name: task.assignedWorkflowId && !task.assignedTeamId && !task.assignedAgentId
+      ? (cachedWorkflowName ?? workflowName.data ?? undefined)
+      : taskAgentDisplayName(task, logicalAgents, teams),
     imageUrl: assigneeAgent?.profileImageUrl ?? assignedTeam?.profileImageUrl ?? null,
     ready: assigneeAgent ? assigneeAgent.availability === "ready" : Boolean(assignedTeam?.enabled),
   };

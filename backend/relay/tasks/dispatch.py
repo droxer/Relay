@@ -11,6 +11,7 @@ from ..collaboration.manifest import compile_assignment_work_graph, create_round
 from ..core.ids import new_database_id
 from ..core.workflow_selection import selected_workflow_id, predefined_style
 from .workflow.dispatch import dispatch_task_workflow
+from .workflow.predefined import standalone_predefined_for, resolve_standalone_predefined_assignments
 from ..core.models import AgentName
 from ..core.daemon_records import ComputerRunCapacityError, ThreadRunActiveError
 from ..persistence.protocols import TaskDispatchAssignment
@@ -167,12 +168,13 @@ class TaskDispatcher:
         if from_capacity:
             return from_capacity
         team = self.ctx.team_store.get_team(self.task["assignedTeamId"]) if self.task.get("assignedTeamId") and self.ctx.team_store else None
-        if (team or self.task.get("assignedWorkflowId")) and predefined_style(selected_workflow_id(team, self.task)) is None:
+        predefined = standalone_predefined_for(self.task, self.ctx.workflow_store) if self.task.get("assignedWorkflowId") else None
+        if not predefined and (team or self.task.get("assignedWorkflowId")) and predefined_style(selected_workflow_id(team, self.task)) is None:
             return dispatch_task_workflow(self.ctx, self.task, self.actor, record_pending=self.record_pending)
         project_result = self._resolve_project_assignments()
         if project_result:
             return project_result
-        team_result = self._resolve_team_assignments()
+        team_result = self._resolve_team_assignments(predefined)
         if team_result:
             return team_result
         if not self._prepare_assignments():
@@ -314,22 +316,27 @@ class TaskDispatcher:
                 self._mark_assigned_if_backlog()
             return self._routing_error_result(error)
 
-    def _resolve_team_assignments(self) -> DispatchResult | None:
-        # A project task's team was already resolved inside the project, pinned
-        # to its computer and workspace; resolving it again would drop both.
-        if not self.task.get("assignedTeamId") or self.project_assignment_resolved:
+    def _resolve_team_assignments(self, predefined: dict[str, Any] | None) -> DispatchResult | None:
+        # Project routing already resolved its roster and pinned it to its workspace.
+        if not (self.task.get("assignedTeamId") or predefined) or self.project_assignment_resolved:
             return None
         try:
-            self.run_assignments = resolve_team_task_assignments(
-                self.task,
-                team_store=self.ctx.team_store,
-                agent_store=self.ctx.agent_store,
-                placement_store=self.ctx.agent_placement_store,
-                daemon_nodes=task_workspace_nodes(
+            routing: dict[str, Any] = {
+                "agent_store": self.ctx.agent_store,
+                "placement_store": self.ctx.agent_placement_store,
+                "daemon_nodes": task_workspace_nodes(
                     self.task, self.ctx.registry.monitor_nodes(), self.ctx.session_store
                 ),
-                session_store=self.ctx.session_store,
-            )
+                "session_store": self.ctx.session_store,
+            }
+            if predefined:
+                self.run_assignments = resolve_standalone_predefined_assignments(
+                    self.task, predefined, registry=self.ctx.registry, **routing,
+                )
+            else:
+                self.run_assignments = resolve_team_task_assignments(
+                    self.task, team_store=self.ctx.team_store, **routing,
+                )
             self.team_assignment_resolved = True
             return None
         except TeamDispatchError as error:
@@ -337,7 +344,7 @@ class TaskDispatcher:
                 raise
             self._mark_assigned_if_backlog()
             message = (
-                f"The assigned team cannot execute this task ({error.code})."
+                f"The assigned {'Workflow' if predefined else 'team'} cannot execute this task ({error.code})."
                 if error.permanent
                 else TEAM_UNAVAILABLE_MESSAGE
             )
@@ -599,7 +606,7 @@ class TaskDispatcher:
                     purpose="accomplish",
                     address=(
                         {"kind": "room"}
-                        if self.task.get("assignedTeamId") or (self.project_snapshot or {}).get("collaborationStyle")
+                        if self.task.get("assignedTeamId") or self.team_assignment_resolved or (self.project_snapshot or {}).get("collaborationStyle")
                         else {
                             "kind": "members",
                             "agentIds": [

@@ -216,6 +216,7 @@ export const NavAdmin = withStandardStroke(Shield, "NavAdmin");
 export const NavBacklog = withStandardStroke(ListTodo, "NavBacklog");
 export const NavProjects = withStandardStroke(FolderKanban, "NavProjects");
 export const NavRoutine = withStandardStroke(Workflow, "NavRoutine");
+export const NavWorkflows = withStandardStroke(Workflow, "NavWorkflows");
 export const NavAgents = withStandardStroke(Bot, "NavAgents");
 export const NavTeams = withStandardStroke(UsersRound, "NavTeams");
 export const NavSkills = withStandardStroke(BookOpen, "NavSkills");

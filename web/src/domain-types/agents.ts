@@ -274,12 +274,21 @@ export interface TeamMutationInput {
   profileImageUrl?: string;
 }
 
-/** A Project-scoped process with optional Team associations. */
+/** A Project-, Team-, or standalone Computer-scoped Workflow definition. */
 export interface Workflow {
   ownerTeamId?: string;
   id: string;
   ownerUserId?: string;
   projectId: string | null;
+  computerId?: string | null;
+  kind?: "steps" | "predefined";
+  predefined?: {
+    template: CollaborationStyle;
+    memberAgentIds: string[];
+    leadAgentId?: string | null;
+    humanApproval?: boolean;
+    acceptanceCriteria?: string[];
+  };
   name: string;
   workflowSteps: WorkflowStep[];
   enabled: boolean;
@@ -300,7 +309,13 @@ export type ProjectWorkflowChoice = Pick<Workflow, "id" | "name" | "enabled"> & 
   stepAgentIds: string[];
 };
 
-export type WorkflowMutationInput = Pick<Workflow, "name" | "projectId" | "workflowSteps" | "ownerTeamId"> & { enabled?: boolean };
+export type StandaloneWorkflowChoice = Pick<Workflow, "id" | "name" | "enabled"> & {
+  projectId: null;
+  computerId: string;
+  stepAgentIds: string[];
+};
+
+export type WorkflowMutationInput = Pick<Workflow, "name" | "projectId" | "workflowSteps" | "ownerTeamId" | "computerId"> & { enabled?: boolean };
 
 export type WorkflowStepFields = Partial<Omit<WorkflowStep, "id" | "kind" | "expectedOutputs">> & {
   kind?: WorkflowStep["kind"] | null;

@@ -10,7 +10,7 @@ const OFFLINE_URL = "/offline.html";
 const PAGE_ROOTS = new Set([
   "", "home", "login", "waitlist", "join", "forgot-password", "reset-password",
   "threads", "tasks", "issues", "backlog", "automations", "routines",
-  "agents", "teams", "computers", "computer", "skills", "settings",
+  "agents", "workflows", "teams", "computers", "computer", "skills", "settings",
   "projects", "channels", "admin"
 ]);
 
