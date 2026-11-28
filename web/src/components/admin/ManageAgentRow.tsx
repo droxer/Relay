@@ -19,7 +19,7 @@ interface ManageAgentRowProps {
   /** Pending state — what Save will write. */
   enabled: boolean;
   saving: boolean;
-  onToggle: (agent: AgentName) => void;
+  onToggle?: (agent: AgentName) => void;
   t: TFunction;
 }
 
@@ -40,7 +40,7 @@ export function ManageAgentRow({ node, agent, savedEnabled, enabled, saving, onT
   const presence = nodeAgentPresence(node, agent);
   const name = labelForExecutor(agent);
   const version = node.agentDetails?.[agent]?.version;
-  const detail = runtimeNotReadyDetail(node, agent, savedDisabled, t);
+  const detail = runtimeNotReadyDetail(node, agent, savedDisabled && Boolean(onToggle), t);
   const diagnostic = detail ? node.agentDetails?.[agent]?.detail : undefined;
   const pending = enabled !== savedEnabled;
   const stateParts = [
@@ -88,15 +88,17 @@ export function ManageAgentRow({ node, agent, savedEnabled, enabled, saving, onT
             </details>
           ) : null}
         </div>
-        <Switch
-          name={`node-${node.id}-${agent}-enabled`}
-          checked={enabled}
-          onCheckedChange={() => onToggle(agent)}
-          disabled={saving}
-          aria-label={enabled
-            ? t("admin.v2.disable_agent", { agent: name })
-            : t("admin.v2.enable_agent", { agent: name })}
-        />
+        {onToggle ? (
+          <Switch
+            name={`node-${node.id}-${agent}-enabled`}
+            checked={enabled}
+            onCheckedChange={() => onToggle(agent)}
+            disabled={saving}
+            aria-label={enabled
+              ? t("admin.v2.disable_agent", { agent: name })
+              : t("admin.v2.enable_agent", { agent: name })}
+          />
+        ) : null}
       </div>
       {inventorySummary ? (
         <>

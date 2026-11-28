@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { QueryStatus } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
+import { useQueryClient, type QueryStatus } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   disconnectComputer,
@@ -10,6 +10,7 @@ import {
   updateDaemonNodeDisabledAgents,
 } from "../api";
 import type {
+  AgentName,
   ControlPanelDaemonNodeRecord,
   CreateLocalDeviceEnrollmentResponse,
   CurrentUser,
@@ -21,9 +22,10 @@ import {
 } from "../lib/computerNodes";
 import { useMutationError } from "../hooks/useMutationError";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { NODES_QUERY_KEY } from "../hooks/useRelayData";
 import { PHONE_QUERY } from "./MobileTopbarSlot";
 import { useDialogs } from "@/components/ui/DialogProvider";
-import { LiveComputerCard } from "./computer/ComputerCard";
+import { LiveComputerCard, type RuntimeChange } from "./computer/ComputerCard";
 import { ConnectComputerDrawer } from "./computer/ConnectComputerDrawer";
 import { ComputerTokenDrawer } from "./computer/ComputerTokenDrawer";
 import { ManageExecutorsDrawer } from "./admin/ManageExecutorsDrawer";
@@ -43,7 +45,9 @@ import {
 } from "./icons";
 import { omit } from "../lib/omit";
 import { copyText } from "./admin/helpers";
-import { isNodeOnline } from "../lib/adminHelpers";
+import { isNodeOnline, isPersonalComputer } from "../lib/adminHelpers";
+import { labelForExecutor } from "../lib/agentDisplayNames";
+import { normalizeDisabledAgentsPayload } from "../lib/manageExecutors";
 
 export function ComputerPage({
   nodes,
@@ -63,6 +67,9 @@ export function ComputerPage({
   const { t } = useTranslation();
   const { confirm, prompt, announce } = useDialogs();
   const { reportMutationError } = useMutationError();
+  const queryClient = useQueryClient();
+  const savingRuntimeNodes = useRef(new Set<string>());
+  const [runtimeChanges, setRuntimeChanges] = useState<Record<string, RuntimeChange>>({});
   const [overrides, setOverrides] = useState<Record<string, ControlPanelDaemonNodeRecord>>({});
   const [manageExecutorsNodeId, setManageExecutorsNodeId] = useState<string | null>(null);
   const [tokenNodeId, setTokenNodeId] = useState<string | null>(null);
@@ -180,6 +187,44 @@ export function ComputerPage({
     setOverrides((prev) => ({ ...prev, [updated.id]: updated }));
   }
 
+  async function handleRuntimeChange(node: ControlPanelDaemonNodeRecord, agent: AgentName, enabled: boolean) {
+    if (savingRuntimeNodes.current.has(node.id)) return;
+    savingRuntimeNodes.current.add(node.id);
+    try {
+      if (!enabled && node.agents[agent] === "ready") {
+        const accepted = await confirm({
+          title: t("admin.v2.manage_executors_disable_confirm", { agents: labelForExecutor(agent) }),
+          message: t("admin.v2.manage_executors_disable_message"),
+          confirmLabel: t("admin.v2.save_agent_settings"),
+          tone: "danger",
+        });
+        if (!accepted) return;
+      }
+
+      setRuntimeChanges((current) => ({ ...current, [node.id]: { agent, phase: "saving" } }));
+      const cached = queryClient.getQueryData<DaemonNodeMonitorRecord[]>(NODES_QUERY_KEY)?.find((item) => item.id === node.id);
+      const latest = cached && cached.updatedAt >= node.updatedAt ? cached : node;
+      const disabled = new Set(latest.disabledAgents ?? []);
+      if (enabled) disabled.delete(agent);
+      else disabled.add(agent);
+      const { node: updated } = await updateDaemonNodeDisabledAgents(node.id, normalizeDisabledAgentsPayload(disabled));
+
+      // Keep a poll started before the save from replacing the acknowledged settings.
+      await queryClient.cancelQueries({ queryKey: NODES_QUERY_KEY, exact: true });
+      queryClient.setQueryData<DaemonNodeMonitorRecord[]>(NODES_QUERY_KEY, (current) =>
+        current?.map((item) => item.id === updated.id && item.updatedAt <= updated.updatedAt
+          ? { ...item, disabledAgents: updated.disabledAgents, updatedAt: updated.updatedAt }
+          : item),
+      );
+      setRuntimeChanges((current) => omit(current, node.id));
+      void queryClient.invalidateQueries({ queryKey: NODES_QUERY_KEY, exact: true });
+    } catch {
+      setRuntimeChanges((current) => ({ ...current, [node.id]: { agent, phase: "failed" } }));
+    } finally {
+      savingRuntimeNodes.current.delete(node.id);
+    }
+  }
+
   function handleConnected(result: CreateLocalDeviceEnrollmentResponse) {
     // Re-connecting an id that was just removed must bring it back.
     setRemovedIds((prev) => prev.filter((id) => id !== result.node.id));
@@ -291,6 +336,10 @@ export function ComputerPage({
               <li key={node.id}>
                 <LiveComputerCard
                   node={node}
+                  runtimeChange={runtimeChanges[node.id]}
+                  onRuntimeChange={isPersonalComputer(node)
+                    ? (agent, enabled) => void handleRuntimeChange(node, agent, enabled)
+                    : undefined}
                   onRename={(target) => void handleRenameNode(target)}
                   onManageExecutors={(target) => setManageExecutorsNodeId(target.id)}
                   onCopyId={(target) => void handleCopyNodeId(target)}
@@ -313,6 +362,7 @@ export function ComputerPage({
         open={manageExecutorsNodeId !== null}
         onClose={() => setManageExecutorsNodeId(null)}
         node={manageExecutorsNode}
+        readOnly={manageExecutorsNode !== null && isPersonalComputer(manageExecutorsNode)}
         onUpdated={handleNodeUpdated}
         onSave={updateDaemonNodeDisabledAgents}
       />

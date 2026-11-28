@@ -1,7 +1,7 @@
 "use client";
 
 import type { TFunction } from "i18next";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Trans } from "react-i18next";
 import type { AgentName, ControlPanelDaemonNodeRecord } from "../../types";
 import { computerId } from "../../lib/createAgent";
@@ -19,6 +19,7 @@ import { computerConnection, connectionNeedsNotice, type ComputerConnection } fr
 import { HostOsBadge } from "./HostOsBadge";
 import { DaemonVersion } from "./DaemonVersion";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,11 +48,14 @@ import {
   nodeAgentPresence,
   nodeOwnershipProfile,
   nodeSandboxProfile,
+  orderNodeAgentNames,
   showsLifecycleStatus,
   statusTone,
   visibleNodeAgentNames,
   visualStatus,
 } from "../admin/helpers";
+
+export type RuntimeChange = { agent: AgentName; phase: "saving" | "failed" };
 
 /**
  * One of the signed-in user's own computers.
@@ -69,6 +73,8 @@ export function ComputerCard({
   reportActions,
   onRename,
   onManageExecutors,
+  onRuntimeChange,
+  runtimeChange,
   onCopyId,
   onShowToken,
   onDisconnect,
@@ -81,6 +87,8 @@ export function ComputerCard({
   reportActions?: ReactNode;
   onRename: (node: ControlPanelDaemonNodeRecord) => void;
   onManageExecutors: (node: ControlPanelDaemonNodeRecord) => void;
+  onRuntimeChange?: (agent: AgentName, enabled: boolean) => void;
+  runtimeChange?: RuntimeChange;
   onCopyId?: (node: ControlPanelDaemonNodeRecord) => void;
   onShowToken: (node: ControlPanelDaemonNodeRecord) => void;
   onDisconnect: (node: ControlPanelDaemonNodeRecord) => void;
@@ -91,7 +99,13 @@ export function ComputerCard({
   const status = visualStatus(node);
   const ownership = nodeOwnershipProfile(node);
   const sandbox = nodeSandboxProfile(node);
-  const runtimes = visibleNodeAgentNames(node);
+  const visibleRuntimes = visibleNodeAgentNames(node);
+  const runtimes = onRuntimeChange
+    ? orderNodeAgentNames([
+        ...visibleRuntimes.filter((agent) => node.agents[agent] !== undefined || node.agentDetails?.[agent]),
+        ...(node.disabledAgents ?? []),
+      ])
+    : visibleRuntimes;
   const activeRuns = node.activeRuns ?? [];
   const online = isNodeOnline(node);
   const waitingForConnection = connection.state === "pending";
@@ -103,6 +117,37 @@ export function ComputerCard({
     && !(waitingForConnection && status === "provisioning")
     && !revokedConnection;
   const showRuntimesSection = online || (!waitingForConnection && runtimes.length > 0);
+  const runtimeSection = showRuntimesSection ? (
+    <section className="computer-card-section" data-runtime-controls={onRuntimeChange ? "" : undefined}>
+      <div className="computer-card-section-head">
+        <h3 className="computer-card-section-title">{t("admin.v2.node_runtimes")}</h3>
+        {online ? (
+          <div className="computer-card-section-actions">
+            <RuntimeRefreshButton nodeId={node.id} online={online}
+              supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
+          </div>
+        ) : null}
+      </div>
+      {runtimes.length === 0 ? (
+        <p className="computer-card-idle">{t(onRuntimeChange ? "computer.runtime_empty" : "admin.v2.node_hosted_agents_empty")}</p>
+      ) : (
+        <ul className="computer-runtime-list" data-compact={!online && !onRuntimeChange ? "true" : undefined}>
+          {runtimes.map((agent) => (
+            <RuntimeRow
+              key={agent}
+              node={node}
+              agent={agent}
+              computerTitle={title}
+              onChange={onRuntimeChange ? (enabled) => onRuntimeChange(agent, enabled) : undefined}
+              saving={runtimeChange?.phase === "saving"}
+              phase={runtimeChange?.agent === agent ? runtimeChange.phase : undefined}
+              t={t}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  ) : null;
 
   return (
     // Stale-aware, matching the presence pill: a daemon that stopped
@@ -187,10 +232,6 @@ export function ComputerCard({
             </p>
           ) : null}
         </div>
-        {/* One overflow menu instead of a row of outlined buttons: managing
-            agents, copying the id, rename, token, and disconnect are
-            occasional, so they stay labelled but out of sight until asked
-            for. */}
         <div className="computer-card-actions">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -209,7 +250,7 @@ export function ComputerCard({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onManageExecutors(node)}>
                 <AdminManageExecutors size={ICON.sm} aria-hidden="true" />
-                {t("admin.v2.manage_executors")}
+                {onRuntimeChange ? t("computer.runtime_details") : t("admin.v2.manage_executors")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => (onCopyId ? onCopyId(node) : void copyText(node.id))}>
                 <ActionCopy size={ICON.sm} aria-hidden="true" />
@@ -256,6 +297,7 @@ export function ComputerCard({
         </div>
       ) : null}
       {reportActions}
+      {onRuntimeChange ? runtimeSection : null}
 
       {/* Active work only appears while there is some: an idle machine says so
           through its presence pill, not through an empty section. */}
@@ -289,28 +331,7 @@ export function ComputerCard({
         </section>
       )}
 
-      {showRuntimesSection ? (
-        <section className="computer-card-section">
-          <div className="computer-card-section-head">
-            <h3 className="computer-card-section-title">{t("admin.v2.node_runtimes")}</h3>
-            {online ? (
-              <div className="computer-card-section-actions">
-                <RuntimeRefreshButton nodeId={node.id} online={online}
-                  supported={Boolean(node.capabilities?.includes("runtime-refresh"))} busy={activeRuns.length > 0} />
-              </div>
-            ) : null}
-          </div>
-          {runtimes.length === 0 ? (
-            <p className="computer-card-idle">{t("admin.v2.node_hosted_agents_empty")}</p>
-          ) : (
-            <ul className="computer-runtime-list" data-compact={!online ? "true" : undefined}>
-              {runtimes.map((name) => (
-                <RuntimeRow key={name} node={node} agent={name} t={t} />
-              ))}
-            </ul>
-          )}
-        </section>
-      ) : null}
+      {onRuntimeChange ? null : runtimeSection}
 
       {/* The workspace path is looked up, not read: one quiet footer line.
           The id is copied, never read, so it lives in the overflow menu. */}
@@ -338,20 +359,30 @@ export function ComputerCard({
 function RuntimeRow({
   node,
   agent,
+  computerTitle,
+  onChange,
+  saving,
+  phase,
   t,
 }: {
   node: ControlPanelDaemonNodeRecord;
   agent: AgentName;
+  computerTitle: string;
+  onChange?: (enabled: boolean) => void;
+  saving: boolean;
+  phase?: RuntimeChange["phase"];
   t: TFunction;
 }) {
+  const statusId = useId();
   const disabled = Boolean(node.disabledAgents?.includes(agent));
   const agentStatus = node.agents[agent] ?? "unknown";
   const version = node.agentDetails?.[agent]?.version;
   const online = isNodeOnline(node);
-  const tone = agentStatusTone(!online && agentStatus !== "failed" ? "unknown" : agentStatus, { disabled });
+  const showDisabledAsStatus = disabled && !onChange;
+  const tone = agentStatusTone(!online && agentStatus !== "failed" ? "unknown" : agentStatus, { disabled: showDisabledAsStatus });
   const presence = nodeAgentPresence(node, agent);
-  const stateLabel = runtimeStateLabel(node, agent, disabled, t);
-  const detail = runtimeNotReadyDetail(node, agent, disabled, t);
+  const stateLabel = runtimeStateLabel(node, agent, showDisabledAsStatus, t);
+  const detail = runtimeNotReadyDetail(node, agent, showDisabledAsStatus, t);
 
   const tooltip = [labelForExecutor(agent), stateLabel, version, detail].filter(Boolean).join(" · ");
   // Print visible state text for any non-ready runtime on an online computer
@@ -359,6 +390,32 @@ function RuntimeRow({
   // distinguish Not installed, Not responding, Disabled, and Check failed
   // without repeating "Offline" on every row of an offline card.
   const showStateLabel = tone === "bad" || (online && tone !== "good");
+
+  if (onChange) {
+    return (
+      <li className="computer-runtime-row" title={tooltip}>
+        <span className="computer-runtime-name" translate="no">{labelForExecutor(agent)}</span>
+        <RuntimeMark id={statusId} agent={agent} presence={presence} tone={tone} variant="labeled" className="computer-runtime-health">
+          <span>{stateLabel}</span>
+        </RuntimeMark>
+        <div className="computer-runtime-control">
+          <span aria-hidden="true">{t(disabled ? "admin.v2.agent_disabled" : "admin.v2.agent_enabled")}</span>
+          <Switch
+            checked={!disabled}
+            onCheckedChange={onChange}
+            disabled={saving}
+            aria-label={t("computer.runtime_on_computer", { runtime: labelForExecutor(agent), computer: computerTitle })}
+            aria-describedby={statusId}
+          />
+        </div>
+        {phase === "saving" ? (
+          <p className="computer-runtime-feedback" role="status">{t("admin.v2.saving")}</p>
+        ) : phase === "failed" ? (
+          <p className="computer-runtime-feedback" role="alert">{t("computer.runtime_save_failed")}</p>
+        ) : null}
+      </li>
+    );
+  }
 
   return (
     <li
