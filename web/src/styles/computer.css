@@ -573,6 +573,73 @@ button.computer-run-open:hover {
   font: var(--type-meta);
 }
 
+[data-runtime-controls] .computer-card-section-title {
+  color: var(--ink-1);
+  font: var(--type-body);
+  font-weight: 600;
+  letter-spacing: var(--type-body-track);
+}
+
+[data-runtime-controls] .computer-runtime-list {
+  display: block;
+}
+
+[data-runtime-controls] .computer-runtime-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  min-height: var(--touch-target);
+  gap: var(--sp-1) var(--sp-4);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) 0;
+  border-block-start: var(--stroke-w) solid var(--line-1);
+}
+
+[data-runtime-controls] .computer-runtime-name {
+  font: var(--type-body);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.computer-runtime-health,
+.computer-runtime-control,
+.computer-runtime-feedback {
+  color: var(--ink-2);
+  font: var(--type-meta);
+}
+
+.computer-runtime-health > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.computer-runtime-control {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.computer-runtime-feedback {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.computer-runtime-feedback[role="alert"] {
+  color: var(--err);
+}
+
+@media (max-width: 640px) {
+  [data-runtime-controls] .computer-runtime-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .computer-runtime-health {
+    grid-area: 2 / 1;
+  }
+
+  .computer-runtime-control {
+    grid-area: 1 / 2 / 3 / 3;
+  }
+}
+
 /* ---- footer facts ---------------------------------------------------- */
 
 /* Workspace path and queue depth are looked up, not read: one quiet line

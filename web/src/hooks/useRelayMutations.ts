@@ -62,6 +62,9 @@ import { invalidateTaskState, invalidateThreadTaskState } from "./taskStateQueri
 
 type TokenArg = { token?: string };
 
+export const TASK_UPDATE_MUTATION_KEY = ["task-update"] as const;
+export type TaskUpdateVariables = { taskId: string; input: TaskMutationInput };
+
 type ApplySetupTasksMutation = {
   projectId: string;
   input: ApplySetupTasksInput;
@@ -364,8 +367,9 @@ export function useRelayMutations() {
   // drawer's other fields are normalized server-side and their latency is
   // hidden by the drawer closing anyway.
   const updateTaskMutation = useMutation({
-    mutationFn: ({ taskId, input }: { taskId: string; input: TaskMutationInput }) => updateTask(taskId, input),
-    onMutate: async ({ taskId, input }: { taskId: string; input: TaskMutationInput }) => {
+    mutationKey: TASK_UPDATE_MUTATION_KEY,
+    mutationFn: ({ taskId, input }: TaskUpdateVariables) => updateTask(taskId, input),
+    onMutate: async ({ taskId, input }) => {
       // Keep the reviewed work visible until acceptance actually commits;
       // an optimistic done would unmount the brief before a stale refusal.
       if (input.reviewRevision) {

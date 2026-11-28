@@ -403,10 +403,13 @@ class SessionEventRows(SessionStoreState):
 
     def _events_for_session(
         self, conn: Any, session_pk: str, event_types: tuple[str, ...] | None = None,
+        *, before_sequence: int | None = None,
     ) -> list[dict[str, Any]]:
         statement = select(self.events.c.payload).where(self.events.c.session_id == session_pk)
         if event_types is not None:
             statement = statement.where(self.events.c.type.in_(event_types))
+        if before_sequence is not None:
+            statement = statement.where(self.events.c.sequence < before_sequence)
         return list(conn.scalars(statement.order_by(self.events.c.sequence)))
 
     def _sync_run_token_usage(

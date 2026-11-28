@@ -10,6 +10,7 @@ import {useProjectLeadDiscussion} from '../src/hooks/useProjectLeadDiscussion';
 import {threadDraftKey} from '../src/hooks/useComposer';
 import {SESSIONS_QUERY_KEY} from '../src/hooks/useRelayData';
 import {useComposerTargetStore} from '../src/lib/composerTargetStore';
+import {APP_NAVIGATION_EVENT} from '../src/lib/appRoute';
 import type {RelayTaskListItem} from '../src/types';
 
 // Floating popups do not open under jsdom; render the topic menu inline.
@@ -127,7 +128,10 @@ it('opens separate Lead discussions with their own drafts and the role as the de
   .mockResolvedValueOnce({threadId:'plain-thread',agentId:'a'});
  const onOpenThread=vi.fn();
  const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(client)});
- act(()=>result.current.discuss('next'));
+ act(() => {
+  result.current.discuss('next');
+  result.current.discuss();
+ });
  await waitFor(()=>expect(result.current.pending).toBe(true));
  act(()=>result.current.discuss());
  expect(api.open).toHaveBeenCalledOnce();
@@ -160,6 +164,62 @@ it('never overwrites a draft the person already left in the lead Thread',async()
  act(()=>result.current.discuss('plan'));
  await waitFor(()=>expect(onOpenThread).toHaveBeenCalled());
  expect(sessionStorage.getItem(key)).toBe('my own question');
+});
+
+it.each(["navigate", "unmount"])("keeps the created Lead discussion without reopening it after %s", async (leave) => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  const receipt = Promise.withResolvers<{ threadId: string; agentId: string }>();
+  api.open.mockReturnValueOnce(receipt.promise);
+  const onOpenThread = vi.fn();
+  const originalUrl = window.location.href;
+  window.history.replaceState({}, "", "/projects/p");
+  const hook = renderHook(() => useProjectLeadDiscussion({ projectId: "p", currentUser: owner, onOpenThread }), {
+    wrapper: hookWrapper(client),
+  });
+  const draftKey = `relay-web.draft:${threadDraftKey(owner, `late-${leave}`)}`;
+  try {
+    act(() => hook.result.current.discuss("next"));
+    await waitFor(() => expect(api.open).toHaveBeenCalledWith("p"));
+    if (leave === "unmount") hook.unmount();
+    else {
+      window.history.replaceState({}, "", "/projects/other");
+      window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+      window.history.replaceState({}, "", "/projects/p");
+      window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+    }
+
+    receipt.resolve({ threadId: `late-${leave}`, agentId: "a" });
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(onOpenThread).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["project-discussions", "p"] });
+    expect(sessionStorage.getItem(draftKey)).toBe("project_manager.prompt_next");
+  } finally {
+    sessionStorage.removeItem(draftKey);
+    window.history.replaceState({}, "", originalUrl);
+  }
+});
+
+it("shows a pending Lead discussion only in the Project that started it", async () => {
+  const receipt = Promise.withResolvers<{ threadId: string; agentId: string }>();
+  api.open.mockReturnValueOnce(receipt.promise);
+  const client = new QueryClient();
+  const onOpenThread = vi.fn();
+  const open = () => renderHook(({ projectId }) => useProjectLeadDiscussion({ projectId, currentUser: owner, onOpenThread }), {
+    initialProps: { projectId: "p" }, wrapper: hookWrapper(client),
+  });
+  const original = open();
+  act(() => original.result.current.discuss());
+  await waitFor(() => expect(original.result.current.pending).toBe(true));
+  original.unmount();
+  const hook = open();
+  await waitFor(() => expect(hook.result.current.pending).toBe(true));
+  hook.rerender({ projectId: "other" });
+  expect(hook.result.current.pending).toBe(false);
+  hook.rerender({ projectId: "p" });
+  expect(hook.result.current.pending).toBe(true);
+  receipt.resolve({ threadId: "p-thread", agentId: "a" });
+  await waitFor(() => expect(hook.result.current.pending).toBe(false));
 });
 
 it('reports a failed open and stays on the dashboard',async()=>{

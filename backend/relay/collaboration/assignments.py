@@ -220,6 +220,8 @@ class AssignmentsMixin(ConductorState):
             # knows who the team lead is, and a lead never leaves a writable
             # phase just because its default role is reviewer.
             phase = team_assignment_phase(role, mode, coordinator)
+            project_snapshot = item.get("projectSnapshot") or {}
+            predefined_project = project_snapshot.get("workflowKind") == "predefined"
             assignments.append(
                 {
                     # Minted here, never carried in: work results are keyed by
@@ -233,7 +235,7 @@ class AssignmentsMixin(ConductorState):
                         else {}
                     ),
                     "mode": mode,
-                    "phase": phase,
+                    "phase": item["phase"] if predefined_project else phase,
                     **{key: item[key] for key in ("required", "acceptanceCriteria", "expectedOutputs", "awaitApproval") if key in item},
                     **({"role": role} if role else {}),
                     **({"roleLevel": role_level} if role_level in AGENT_ROLE_LEVELS else {}),
@@ -247,6 +249,7 @@ class AssignmentsMixin(ConductorState):
                         {"synthesizer": True} if item.get("synthesizer") is True else {}
                     ),
                     **({"teamSnapshot": team_snapshot} if team_snapshot else {}),
+                    **({"projectSnapshot": project_snapshot} if predefined_project else {}),
                 }
             )
         return assignments

@@ -148,7 +148,9 @@ class CollaborationConductor(
         self, intent: _PreparedRound, actor: Actor, fingerprint: str
     ) -> _RoundDispatch:
         """Resolve persisted state on one worker before asynchronous dispatch."""
-        session = self._session_for_actor(intent.session_id, actor)
+        session = self._session_for_actor(
+            intent.session_id, actor, handoff=(intent.decision or {}).get("kind") == "handoff",
+        )
         # Guard before approval/recovery and before retargeting can erase Team scope.
         team_ids = {intent.requested_team_id, intent.address_team_id, (session or {}).get("teamId")}
         task_id = intent.task_id or (session or {}).get("taskId")
@@ -185,6 +187,7 @@ class CollaborationConductor(
             retargetable=intent.source == "message",
         )
         _assert_style_allowed(intent, round_team_id)
+        daemon_nodes = self.ctx.registry.monitor_nodes()
         roster = self._round_roster(
             intent,
             session,
@@ -194,8 +197,8 @@ class CollaborationConductor(
             round_team_id=round_team_id,
             is_recovery=is_recovery,
             answered_task=answered_task,
+            daemon_nodes=daemon_nodes,
         )
-        daemon_nodes = self.ctx.registry.monitor_nodes()
         required_node_id = self._required_node_id(
             intent, session, roster.project, daemon_nodes
         )
@@ -237,14 +240,18 @@ class CollaborationConductor(
         return _RoundDispatch(resolved[0]["daemonNodeId"], parsed, resolved)
 
     def _session_for_actor(
-        self, session_id: str | None, actor: Actor
+        self, session_id: str | None, actor: Actor, *, handoff: bool = False,
     ) -> dict[str, Any] | None:
         if not session_id:
             return None
         try:
-            session = self.ctx.session_store.get_session_with_events(
-                session_id, ("session.created", "user.message"),
-            )
+            event_types = ("session.created", "user.message")
+            if handoff:
+                session = self.ctx.session_store.get_session_with_events(
+                    session_id, (*event_types, "agent.completed", "human.decision"), include_event_boundary=True,
+                )
+            else:
+                session = self.ctx.session_store.get_session_with_events(session_id, event_types)
         except KeyError as error:
             raise CollaborationError("thread_not_found", status=404) from error
         if not session.get("id"):

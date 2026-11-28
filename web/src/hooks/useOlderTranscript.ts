@@ -7,8 +7,8 @@ import { fetchTranscriptPage } from "../lib/sessionSnapshotQuery";
 export function useOlderTranscript(sessionId: string | undefined) {
   const client = useQueryClient();
   const active = useRef(sessionId);
-  const request = useRef<{ id: string } | undefined>(undefined);
-  const [pendingId, setPendingId] = useState<string>();
+  const requests = useRef(new Set<string>());
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
   const [failedId, setFailedId] = useState<string>();
   useLayoutEffect(() => {
     active.current = sessionId;
@@ -16,13 +16,12 @@ export function useOlderTranscript(sessionId: string | undefined) {
   }, [sessionId]);
 
   const load = useCallback(async (beforeInsert: () => void) => {
-    if (!sessionId || request.current?.id === sessionId) return;
+    if (!sessionId || requests.current.has(sessionId)) return;
     const getSession = () => client.getQueryData<RelaySession[]>(SESSIONS_QUERY_KEY)?.find(row => row.id === sessionId);
     const before = getSession()?.eventStart;
     if (!before) return;
-    const ticket = { id: sessionId };
-    request.current = ticket;
-    setPendingId(sessionId);
+    requests.current.add(sessionId);
+    setPendingIds(new Set(requests.current));
     setFailedId(undefined);
     try {
       const page = await fetchTranscriptPage(client, sessionId, before);
@@ -35,12 +34,10 @@ export function useOlderTranscript(sessionId: string | undefined) {
     } catch {
       if (active.current === sessionId) setFailedId(sessionId);
     } finally {
-      if (request.current === ticket) {
-        request.current = undefined;
-        setPendingId(undefined);
-      }
+      requests.current.delete(sessionId);
+      setPendingIds(new Set(requests.current));
     }
   }, [client, sessionId]);
 
-  return { load, pending: !!sessionId && pendingId === sessionId, failed: !!sessionId && failedId === sessionId };
+  return { load, pending: !!sessionId && pendingIds.has(sessionId), failed: !!sessionId && failedId === sessionId };
 }

@@ -1,4 +1,128 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function routePersonalRuntimes(page: Page, theme: "light" | "dark", language: "en" | "zh-CN") {
+  const base = {
+    userId: "computer-user", online: true, stale: false, dispatchable: true,
+    status: "ready", nodeLocation: "user-device", sandboxMode: "none",
+    activeRuns: [], queuedCommandCount: 0,
+    lastSeenAt: "2026-11-28T06:00:00.000Z", updatedAt: "2026-11-28T06:00:00.000Z",
+  };
+  const computers = [
+    { ...base, id: "desk", displayName: "Desk", agents: { codex: "ready", claude: "unresponsive", antigravity: "unresponsive" }, disabledAgents: [] as string[] },
+    { ...base, id: "laptop", displayName: "Laptop", online: false, stale: true, dispatchable: false, agents: { codex: "ready", pi: "unknown" }, disabledAgents: ["pi"] },
+  ];
+  const writes: { id: string; disabledAgents: string[] }[] = [];
+  let releaseFirstWrite = () => {};
+  const firstWriteReleased = new Promise<void>((resolve) => { releaseFirstWrite = resolve; });
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/auth/me")) {
+      await route.fulfill({ json: { authenticated: true, user: { id: "alice", userId: base.userId, username: "alice", role: "user", theme, language } } });
+      return;
+    }
+    if (path.endsWith("/daemon-nodes")) {
+      await route.fulfill({ json: { nodes: computers } });
+      return;
+    }
+    const node = computers.find(({ id }) => path.endsWith(`/daemon-nodes/${id}/disabled-agents`));
+    if (route.request().method() === "PATCH" && node) {
+      const { disabledAgents } = route.request().postDataJSON();
+      writes.push({ id: node.id, disabledAgents });
+      if (writes.length === 1) {
+        await firstWriteReleased;
+        await route.fulfill({ status: 503, json: { detail: "Temporarily unavailable" } });
+        return;
+      }
+      node.disabledAgents = disabledAgents;
+      node.updatedAt = new Date(Date.parse(base.updatedAt) + writes.length * 1000).toISOString();
+      await route.fulfill({ json: { node } });
+      return;
+    }
+    await route.fulfill({ json: { sessions: [], agents: [], teams: [], tasks: [], nodes: [], projects: [], sandboxes: [] } });
+  });
+  return { writes, releaseFirstWrite };
+}
+
+test("saves one runtime at a time per personal computer and retries a failed write", async ({ page }) => {
+  const { writes, releaseFirstWrite } = await routePersonalRuntimes(page, "light", "en");
+  await page.goto("/computers");
+  const desk = page.locator(".computer-card").filter({ has: page.getByRole("heading", { name: "Desk", exact: true }) });
+  const codex = desk.getByRole("switch", { name: "Codex on Desk", exact: true });
+  const claude = desk.getByRole("switch", { name: "Claude on Desk", exact: true });
+  const laptopCodex = page.getByRole("switch", { name: "Codex on Laptop", exact: true });
+  const laptopPi = page.getByRole("switch", { name: "Pi on Laptop", exact: true });
+  const confirm = page.getByRole("button", { name: "Save runtime settings", exact: true });
+
+  await expect(codex).toBeChecked();
+  await expect(laptopPi).not.toBeChecked();
+  await expect(laptopCodex).toHaveAccessibleDescription("Offline");
+  await codex.press("Space");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(writes).toEqual([]);
+  await expect(codex).toBeChecked();
+
+  await codex.press("Space");
+  await confirm.click();
+  await expect(desk.getByText("Saving…", { exact: true })).toBeVisible();
+  await expect(codex).toBeChecked();
+  await expect(claude).toBeDisabled();
+  await expect(laptopPi).toBeEnabled();
+  releaseFirstWrite();
+  await expect(desk.getByRole("alert")).toHaveText("Could not save. Use the switch to try again.");
+  await expect(codex).toBeChecked();
+
+  await codex.click();
+  await confirm.click();
+  await expect(codex).not.toBeChecked();
+  await expect(codex).toHaveAccessibleDescription("Ready");
+  await expect(laptopCodex).toBeChecked();
+  await claude.click();
+  await expect(claude).not.toBeChecked();
+
+  await page.reload();
+  await expect(codex).not.toBeChecked();
+  await expect(claude).not.toBeChecked();
+  await codex.click();
+  await expect(codex).toBeChecked();
+  await expect(claude).not.toBeChecked();
+  await laptopPi.click();
+  await expect.poll(() => writes).toEqual([
+    { id: "desk", disabledAgents: ["codex"] },
+    { id: "desk", disabledAgents: ["codex"] },
+    { id: "desk", disabledAgents: ["claude", "codex"] },
+    { id: "desk", disabledAgents: ["claude"] },
+    { id: "laptop", disabledAgents: [] },
+  ]);
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`runtime controls fit phone, tablet and desktop in the ${theme} theme`, async ({ page }, testInfo) => {
+    await routePersonalRuntimes(page, theme, "zh-CN");
+    await page.goto("/computers");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    const row = page.locator(".computer-runtime-row").filter({ has: page.getByRole("switch", { name: "Desk上的 Google Antigravity" }) });
+    const control = row.getByRole("switch");
+
+    for (const width of [360, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(row.getByText("无响应")).toBeVisible();
+      await expect(row.getByText("已启用")).toBeVisible();
+      await expect(control).toBeVisible();
+      expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await control.evaluate((element) => {
+        const target = getComputedStyle(element, "::after");
+        const { width, height } = element.getBoundingClientRect();
+        return Math.min(width - parseFloat(target.left) - parseFloat(target.right),
+          height - parseFloat(target.top) - parseFloat(target.bottom));
+      })).toBeGreaterThanOrEqual(44);
+      await page.keyboard.press("Tab");
+      await control.focus();
+      await expect(control).toBeFocused();
+      await expect(control).toHaveCSS("outline-style", "solid");
+      await page.screenshot({ path: testInfo.outputPath(`personal-runtimes-${width}.png`) });
+    }
+  });
+}
 
 test("computer owners preview and confirm report cleanup in the browser", async ({ page }, testInfo) => {
   const revision = "00000000-0000-4000-8000-000000000001";
@@ -150,9 +274,9 @@ for (const language of ["en", "zh-CN", "zh-TW"]) {
   test(`runtime hover guidance and keyboard diagnostics follow ${language}`, async ({ page }, testInfo) => {
     const diagnostic = "Codex check failed (exit code 1).\nOriginal CLI output: /usr/bin/codex";
     const labels = {
-      en: { hint: "The readiness check failed. Inspect the original diagnostic for details.", manage: "Manage runtimes", original: "Original diagnostic" },
-      "zh-CN": { hint: "就绪检查失败。请展开原始诊断查看详情。", manage: "管理运行时", original: "原始诊断" },
-      "zh-TW": { hint: "就緒檢查失敗。請展開原始診斷查看詳情。", manage: "管理執行時", original: "原始診斷" },
+      en: { hint: "The readiness check failed. Inspect the original diagnostic for details.", details: "Runtime details", original: "Original diagnostic" },
+      "zh-CN": { hint: "就绪检查失败。请展开原始诊断查看详情。", details: "运行时详情", original: "原始诊断" },
+      "zh-TW": { hint: "就緒檢查失敗。請展開原始診斷查看詳情。", details: "執行環境詳情", original: "原始診斷" },
     }[language]!;
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
@@ -166,7 +290,8 @@ for (const language of ["en", "zh-CN", "zh-TW"]) {
     await expect(row).toHaveAttribute("title", new RegExp(labels.hint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     expect(await row.getAttribute("title")).not.toContain(diagnostic);
     await page.locator(".computer-card-actions button").click();
-    await page.getByRole("menuitem", { name: labels.manage, exact: true }).click();
+    await page.getByRole("menuitem", { name: labels.details, exact: true }).click();
+    await expect(page.getByRole("dialog").getByRole("switch")).toHaveCount(0);
     const summary = page.locator(".adm-agent-toggle-diagnostic summary");
     await expect(summary).toHaveText(labels.original);
     const output = page.locator(".adm-agent-toggle-diagnostic pre");

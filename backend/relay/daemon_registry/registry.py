@@ -116,6 +116,7 @@ class DaemonNodeRegistry(
         self.logical_assignment_validator: Callable[[dict[str, Any]], None] | None = (
             None
         )
+        self.delegation_publication_validator: Callable[[str, str], None] | None = None
         self.logical_skill_bundle_resolver: (
             Callable[
                 [str, str | None],

@@ -144,34 +144,41 @@ class SessionReadRows(SessionStoreState):
         return self._read_session(session_id, None)
 
     def get_session_with_events(
-        self, session_id: str, event_types: tuple[str, ...],
+        self, session_id: str, event_types: tuple[str, ...], *, include_event_boundary: bool = False,
     ) -> dict[str, Any]:
         """Read the Thread with the event types needed for execution.
 
         eventCount still describes the durable sequence.
         """
-        return self._read_session(session_id, event_types)
+        return self._read_session(session_id, event_types, include_event_boundary=include_event_boundary)
 
     def _read_session(
         self, session_id: str, event_types: tuple[str, ...] | None,
+        *, include_event_boundary: bool = False,
     ) -> dict[str, Any]:
         session_pk = _canonical_database_session_id(session_id)
-        with store_transaction(self.engine) as conn:
-            row = (
-                conn.execute(
-                    select(self.sessions.c.id, self.sessions.c.snapshot, self.sessions.c.version).where(
-                        self.sessions.c.id == session_pk
-                    )
-                )
-                .mappings()
-                .first()
+        statement = select(self.sessions.c.id, self.sessions.c.snapshot, self.sessions.c.version)
+        if include_event_boundary:
+            last_event_id = (
+                select(self.events.c.payload["id"].as_string())
+                .where(self.events.c.session_id == self.sessions.c.id)
+                .order_by(self.events.c.sequence.desc())
+                .limit(1)
+                .scalar_subquery()
             )
+            statement = statement.add_columns(last_event_id.label("lastEventId"))
+        with store_transaction(self.engine) as conn:
+            row = conn.execute(statement.where(self.sessions.c.id == session_pk)).mappings().first()
             if not row:
                 raise KeyError(session_id)
-            events = self._events_for_session(conn, row["id"], event_types)
+            events = self._events_for_session(
+                conn, row["id"], event_types, before_sequence=row["version"] if include_event_boundary else None,
+            )
         session = hydrate_session_logs(with_project_lead_discussion(row["snapshot"] or {}), events)
         if event_types is not None:
             session["eventCount"] = int(row["version"] or 0)
+        if include_event_boundary:
+            session["lastEventId"] = row["lastEventId"]
         return session
 
     def get_session_header(self, session_id: str, *, for_update: bool = False) -> dict[str, Any]:

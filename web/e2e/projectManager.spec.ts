@@ -8,7 +8,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     const agent={id:'ada',displayName:'Ada',executorKind:'codex',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:'placement',agentId:'ada',computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp};
     const project={id:'launch',name:'Autumn launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',projectManager:true,enabled:true,responsibilities:'Coordinate the launch'}],managerAgentId:'ada',managerThreadId:'manager-thread' as string|null,leadAgentId:'ada',version:1,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};
     const session={id:'manager-thread',taskGoal:'Autumn launch · Project Lead',projectId:'launch',ownerUserId:'u',participantAgentIds:['ada'],participants:['human'],status:'completed',phase:'done',events:[],agentRuns:[],artifacts:[],decisions:[],collaborationRounds:[],createdAt:stamp,updatedAt:stamp,execution:{phase:'terminal',executionConfirmed:true,deletionRequested:false,canDelete:true,blockingReason:null,lastConfirmedAt:stamp,nextRecoveryAt:null}};
-    const sessions=[session];
+    const sessions: Array<typeof session & {projectLeadDiscussion?: true}>=[session];
     let sent=0; let managerReads=0; let conversations=0;
     const agentReads:string[]=[];
     const applications: unknown[]=[];const tasks: Array<Record<string,unknown>>=[];
@@ -22,7 +22,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
       if(path.endsWith('/agents/ada') && searchParams.get('view')==='badge') {agentReads.push('badge');body={agent};}
       if(path.endsWith('/manager/conversation') && method==='POST') {
         const threadId=`discussion-${++conversations}`;
-        sessions.push({...session,id:threadId,taskGoal:''});
+        sessions.push({...session,id:threadId,taskGoal:'',projectLeadDiscussion:true});
         body={threadId,agentId:agent.id};
       }
       if(path.endsWith('/manager')) {managerReads++;body={project,manager:{agentId:'ada',agentName:'Ada',threadId:'manager-thread',toolsAvailable:true,reason:null,candidates:[{id:'ada',displayName:'Ada'}]},proposals:[proposal]};}
@@ -50,15 +50,15 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
     await expect(page).toHaveURL(/\/threads\/discussion-1/);
     expect(conversations).toBe(1);
     const question=zh?'这个项目下一步应该做什么？请说明优先顺序。':'What should we do next in this project? Explain the priorities.';
-    await expect(page.locator('textarea[name="message"]')).toHaveValue(question);
+    const composer=page.getByRole('textbox',{name:zh?'给 项目负责人 发送消息':'Message Project Lead',exact:true});
+    await expect(composer).toHaveValue(question);
     await page.goto('/projects/launch');
     await line.getByRole('button',{name:zh?'发起讨论':'Discuss',exact:true}).click();
     await expect(page).toHaveURL(/\/threads\/discussion-2/);
     expect(conversations).toBe(2);
-    await expect(page.locator('textarea[name="message"]')).toHaveValue('');
+    await expect(composer).toHaveValue('');
     await page.goto('/threads/discussion-1');
-    await expect(page.locator('textarea[name="message"]'))
-      .toHaveValue(question);
+    await expect(composer).toHaveValue(question);
     expect(sent).toBe(0);
     // Proposals a manager run staged still show in the Thread that produced them.
     await page.goto('/threads/manager-thread');expect(sent).toBe(0);
@@ -78,7 +78,7 @@ for (const variant of [{mobile:false,zh:false},{mobile:true,zh:false},{mobile:tr
   });
 }
 
-test('a Lead discussion ignores a stale saved Agent target after handover',async({page})=>{
+test('a legacy Lead Thread ignores a stale Agent target after handover',async({page})=>{
  const stamp='2026-11-06T00:00:00Z';
  const agents=['ada','bea'].map(id=>({id,displayName:id==='ada'?'Ada':'Bea',executorKind:id==='ada'?'codex':'claude',defaultRole:'implementer',supervisorUserId:'u',enabled:true,availability:'ready',version:1,skills:[],placements:[{id:`p-${id}`,agentId:id,computerId:'computer',daemonNodeId:'node',desiredState:'active',status:'ready'}],createdAt:stamp,updatedAt:stamp}));
  const project={id:'launch',name:'Launch',ownerUserId:'u',computerId:'computer',enabled:true,members:[{agentId:'ada',role:'planner',responsibilities:'Plan',enabled:true},{agentId:'bea',role:'implementer',projectManager:true,responsibilities:'Coordinate',enabled:true}],managerAgentId:'bea',managerThreadId:'manager-thread',leadAgentId:'bea',version:3,workspaceLayout:'project',workspaceSubpath:'projects/launch',createdAt:stamp,updatedAt:stamp};

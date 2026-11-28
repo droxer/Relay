@@ -6,7 +6,7 @@ import { SkillsPage } from "../src/components/SkillsPage";
 import type { CurrentUser } from "../src/domain-types/users";
 import type { SkillRecord } from "../src/domain-types/skills";
 import { DialogProvider } from "../src/components/ui/DialogProvider";
-vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => ({ "skills.group_uploads": "Uploaded" }[key] ?? key), i18n: { language: "en" } }) }));
+vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => ({ "skills.group_ungrouped": "Ungrouped" }[key] ?? key), i18n: { language: "en" } }) }));
 
 function skill(id: string, patch: Partial<SkillRecord>): SkillRecord {
   return {
@@ -15,11 +15,14 @@ function skill(id: string, patch: Partial<SkillRecord>): SkillRecord {
     createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", ...patch,
   };
 }
-const repo = (subpath: string) => ({ source: "git" as const, sourceRef: { url: "https://github.com/acme/skills", ref: "main", subpath } });
+function imported(namespace: string, subpath: string): Partial<SkillRecord> {
+  return { namespace, source: "git", sourceRef: { url: `https://github.com/acme/${namespace}`, ref: "main", subpath } };
+}
 const skills = [
-  skill("tdd", repo("skills/engineering/tdd")),
-  skill("triage", repo("skills/product/triage")),
-  skill("review", repo("skills/engineering/review")),
+  skill("architect", imported("pstack", "skills/architect")),
+  skill("arena", imported("pstack", "skills/product/arena")),
+  skill("writing-for-agents", imported("matt-pocock-skills", "skills/productivity/writing-for-agents")),
+  skill("wait-what", imported("matt-pocock-skills", "skills/engineering/wait-what")),
   skill("notes", {}),
 ];
 vi.mock("../src/api", () => ({ createSkill: vi.fn(), importSkill: vi.fn(), deleteSkill: vi.fn(), reimportSkill: vi.fn(), reviseSkill: vi.fn(), updateSkill: vi.fn() }));
@@ -31,31 +34,58 @@ vi.mock("../src/hooks/useSkills", async (importOriginal) => ({
 vi.mock("../src/hooks/useUserAgents", () => ({ useUserAgents: () => ({ agents: [] }) }));
 vi.mock("../src/hooks/useTeams", () => ({ useTeams: () => ({ teams: [] }) }));
 
-function renderPage() {
-  render(
-    <QueryClientProvider client={new QueryClient()}>
+function renderPage(skillId = "arena") {
+  const currentUser = { userId: "user-1" } as CurrentUser;
+  const queryClient = new QueryClient();
+  const onSelectSkill = vi.fn();
+  const tree = (id: string) => (
+    <QueryClientProvider client={queryClient}>
       <DialogProvider>
-        <SkillsPage currentUser={{ userId: "user-1" } as CurrentUser} skillId="tdd" onSelectSkill={vi.fn()} />
+        <SkillsPage currentUser={currentUser} skillId={id} onSelectSkill={onSelectSkill} />
       </DialogProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const { rerender } = render(tree(skillId));
+  return { onSelectSkill, navigate: (id: string) => rerender(tree(id)) };
 }
 
-const rows = (folder: string) =>
-  within(screen.getByRole("list", { name: folder })).getAllByRole("button").map((row) => row.textContent?.split("skills.")[0]);
+const rows = (group: string) =>
+  within(screen.getByRole("list", { name: group })).getAllByRole("button").map((row) => row.textContent?.split("skills.")[0]);
 
-it("bands the library by each bundle's parent folder, uploads last", () => {
-  renderPage();
-  const bands = screen.getAllByRole("list").map((list) => list.getAttribute("aria-label"));
-  expect(bands).toEqual(["skills/engineering", "skills/product", "Uploaded"]);
-  expect(rows("skills/engineering")).toEqual(["review", "tdd"]);
-  expect(rows("skills/product")).toEqual(["triage"]);
-  expect(rows("Uploaded")).toEqual(["notes"]);
+it("opens the linked Skill's group and lets the reader toggle other groups by keyboard", async () => {
+  const user = userEvent.setup();
+  const { onSelectSkill, navigate } = renderPage();
+  expect(rows("pstack")).toEqual(["architect", "arena"]);
+  expect(screen.getByRole("button", { name: /^arena / }).getAttribute("aria-current")).toBe("page");
+  const group = screen.getByRole("button", { name: /matt-pocock-skills 2/ });
+  expect(group.getAttribute("aria-expanded")).toBe("false");
+  group.focus();
+  await user.keyboard("{Enter}");
+  expect(rows("matt-pocock-skills")).toEqual(["wait-what", "writing-for-agents"]);
+  await user.click(screen.getByRole("button", { name: /^wait-what / }));
+  expect(onSelectSkill).toHaveBeenCalledWith("wait-what");
+  group.focus();
+  await user.keyboard(" ");
+  expect(screen.queryByRole("list", { name: "matt-pocock-skills" })).toBeNull();
+  navigate("wait-what");
+  expect(group.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByRole("button", { name: /^wait-what / }).getAttribute("aria-current")).toBe("page");
+  expect(screen.getAllByRole("heading", { level: 3 }).at(-1)?.textContent).toContain("Ungrouped");
 });
 
-it("finds skills by their folder path and drops emptied bands", async () => {
+it("shows all Skills for a group match, filters item matches and restores folding after search", async () => {
   const user = userEvent.setup();
   renderPage();
-  await user.type(screen.getByRole("searchbox"), "product");
-  expect(screen.getAllByRole("list").map((list) => list.getAttribute("aria-label"))).toEqual(["skills/product"]);
+  await user.click(screen.getByRole("button", { name: /pstack 2/ }));
+  const search = screen.getByRole("searchbox");
+  await user.type(search, "PSTACK");
+  expect(rows("pstack")).toEqual(["architect", "arena"]);
+  expect(screen.getAllByRole("list")).toHaveLength(1);
+  await user.clear(search);
+  await user.type(search, "engineering/wait");
+  expect(rows("matt-pocock-skills")).toEqual(["wait-what"]);
+  expect(screen.getAllByRole("list")).toHaveLength(1);
+  await user.clear(search);
+  expect(screen.queryByRole("list", { name: "pstack" })).toBeNull();
+  expect(screen.queryByRole("list", { name: "matt-pocock-skills" })).toBeNull();
 });

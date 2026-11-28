@@ -28,7 +28,27 @@ from ...core.project_roles import project_member_ids
 from .state import NodeBackendState
 
 
+def _assert_delegation_grant(requester: dict[str, Any] | None, target: dict[str, Any] | None) -> None:
+    if (
+        not requester or not requester.get("enabled", True) or requester.get("deletedAt")
+        or not target or not target.get("enabled", True) or target.get("deletedAt")
+        or requester["id"] == target["id"]
+        or (requester.get("delegationAgentIds") is not None and target["id"] not in requester["delegationAgentIds"])
+        or requester.get("supervisorUserId") != target.get("supervisorUserId")
+        or requester.get("computerId") != target.get("computerId")
+    ):
+        raise ValueError("Delegation permission is no longer available.")
+
+
 class RunTargetValidationMixin(NodeBackendState):
+    def _validate_delegation_for_publication(self, requester_id: str, target_id: str) -> None:
+        if self.agent_store is None:
+            raise ValueError("Delegation requires logical agent validation.")
+        # Both Agents' policy and eligibility must stay current until the
+        # enclosing publication transaction commits. Lock in stable order.
+        agents = {key: self.agent_store.get_agent(key, for_update=True) for key in sorted({requester_id, target_id})}
+        _assert_delegation_grant(agents[requester_id], agents[target_id])
+
     def _validate_logical_assignment(self, assignment: dict[str, Any]) -> None:
         if self.agent_store is None or self.agent_placement_store is None:
             raise ValueError("logical assignments require agent and placement stores")
@@ -47,14 +67,7 @@ class RunTargetValidationMixin(NodeBackendState):
                 or agent_id not in team.get("memberAgentIds", [])):
                 raise ValueError("workflow_team_unavailable")
         if requester_id := assignment.get("delegatedByAgentId"):
-            requester = self.agent_store.get_agent(requester_id)
-            if not requester or not requester.get("enabled", True) or requester.get("deletedAt") or (
-                requester_id == agent_id
-                or (requester.get("delegationAgentIds") is not None and agent_id not in requester["delegationAgentIds"])
-                or requester.get("supervisorUserId") != agent.get("supervisorUserId")
-                or requester.get("computerId") != agent.get("computerId")
-            ):
-                raise ValueError("Delegation permission is no longer available.")
+            _assert_delegation_grant(self.agent_store.get_agent(requester_id), agent)
             project_id = (assignment.get("projectSnapshot") or {}).get("projectId")
             if project_id:
                 project = self.project_store.get_project(project_id) if self.project_store else None

@@ -13,15 +13,18 @@ export interface HomeTokenChartProps {
   isError: boolean;
 }
 
+const EMPTY_BUCKETS = [] as const;
+
 /** Daily fresh token usage column chart in Relay's single data hue (--tag-2).
  *  Uses real HTML typography for y-ticks and x-labels so text stays a true 12px
  *  from 320px phones to 1440px desktops, with tap + hover + keyboard inspection. */
 export function HomeTokenChart({ tokens, isLoading, isError }: HomeTokenChartProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [activeBucket, setActiveBucket] = useState<{ date: string; size: HomeTokenStats["bucketSize"] } | null>(null);
 
-  const daily = tokens?.daily ?? [];
+  const daily = tokens?.daily ?? EMPTY_BUCKETS;
+  const bucketSize = tokens?.bucketSize ?? "day";
   const scale = useMemo(
     () => niceTokenScale(daily.map((day) => day.fresh), 4),
     [daily],
@@ -35,15 +38,15 @@ export function HomeTokenChart({ tokens, isLoading, isError }: HomeTokenChartPro
     [daily.length],
   );
 
-  const activeDay = activeIndex !== null && activeIndex >= 0 && activeIndex < daily.length
-    ? daily[activeIndex]
-    : null;
+  const activeDay = activeBucket?.size === bucketSize
+    ? daily.find(day => day.date === activeBucket.date)
+    : undefined;
 
   const formatTick = (value: number) => (value === 0 ? "0" : formatCompact(value, locale));
 
   const headerNote = activeDay
     ? t("home.stats.chart_day_readout", {
-        date: formatChartDate(activeDay.date, locale, tokens?.bucketSize),
+        date: formatChartDate(activeDay.date, locale, bucketSize),
         fresh: formatCompact(activeDay.fresh, locale),
         input: formatCompact(activeDay.input, locale),
         output: formatCompact(activeDay.output, locale),
@@ -76,7 +79,7 @@ export function HomeTokenChart({ tokens, isLoading, isError }: HomeTokenChartPro
               className="home-chart-frame"
               role="img"
               aria-label={t("home.stats.chart_aria")}
-              onMouseLeave={() => setActiveIndex(null)}
+              onMouseLeave={() => setActiveBucket(null)}
             >
               <div className="home-chart-yaxis" aria-hidden="true">
                 {ticksDesc.map((tick) => (
@@ -95,11 +98,12 @@ export function HomeTokenChart({ tokens, isLoading, isError }: HomeTokenChartPro
                     ))}
                   </div>
                   <div className="home-chart-bars">
-                    {daily.map((day, index) => {
+                    {daily.map((day) => {
                       const ratio = scale.max > 0 ? Math.min(1, day.fresh / scale.max) : 0;
-                      const isHovered = activeIndex === index;
-                      const isDimmed = activeIndex !== null && !isHovered;
-                      const dateLabel = formatChartDate(day.date, locale, tokens?.bucketSize);
+                      const isActive = activeDay?.date === day.date;
+                      const isDimmed = !!activeDay && !isActive;
+                      const inspect = () => setActiveBucket({ date: day.date, size: bucketSize });
+                      const dateLabel = formatChartDate(day.date, locale, bucketSize);
                       const aria = t("home.stats.chart_day_readout", {
                         date: dateLabel,
                         fresh: formatCompact(day.fresh, locale),
@@ -112,17 +116,17 @@ export function HomeTokenChart({ tokens, isLoading, isError }: HomeTokenChartPro
                           type="button"
                           className="home-chart-col"
                           aria-label={aria}
-                          aria-pressed={isHovered}
-                          onMouseEnter={() => setActiveIndex(index)}
-                          onFocus={() => setActiveIndex(index)}
-                          onBlur={() => setActiveIndex(null)}
-                          onClick={() => setActiveIndex((current) => (current === index ? null : index))}
+                          aria-pressed={isActive}
+                          onMouseEnter={inspect}
+                          onFocus={inspect}
+                          onBlur={() => setActiveBucket(null)}
+                          onClick={() => isActive ? setActiveBucket(null) : inspect()}
                         >
                           {day.fresh > 0 ? (
                             <span
                               className="home-chart-bar"
                               style={{ height: `${Math.max(2, ratio * 100)}%` }}
-                              data-active={isHovered ? "true" : undefined}
+                              data-active={isActive ? "true" : undefined}
                               data-dim={isDimmed ? "true" : undefined}
                             />
                           ) : null}
@@ -146,7 +150,7 @@ export function HomeTokenChart({ tokens, isLoading, isError }: HomeTokenChartPro
                           data-narrow={showNarrow ? "true" : undefined}
                           data-edge={edge}
                         >
-                          {showWide || showNarrow ? formatChartDate(day.date, locale, tokens?.bucketSize) : ""}
+                          {showWide || showNarrow ? formatChartDate(day.date, locale, bucketSize) : ""}
                         </span>
                       );
                     })}

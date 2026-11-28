@@ -141,8 +141,8 @@ def capture_handoff_context(
         "targetExecutor": assignment.get("executorKind") or assignment.get("agent"),
         "targetDisplayName": assignment.get("agentDisplayName")
         or assignment.get("agentId"),
-        "sourceEventCount": len(events),
-        "sourceEventId": events[-1].get("id") if events else None,
+        "sourceEventCount": session.get("eventCount", len(events)),
+        "sourceEventId": session.get("lastEventId", events[-1].get("id") if events else None),
         "sourceRunId": run_ids[-1] if run_ids else None,
         "sourceAssignmentId": runs[run_ids[-1]].get("assignmentId")
         if run_ids

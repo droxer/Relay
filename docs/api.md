@@ -596,6 +596,11 @@ disabled or removed, Relay cancels the undelivered command and blocks the Task
 with `project_agent_not_member`. You can rerun the Task with an eligible Agent
 in the same Thread and workspace.
 
+Rerun and Handoff preserve required independent review from the active
+Build → Review round. The selected Agent takes the builder turn in action mode,
+and a distinct eligible Project Agent reviews the result. If Relay cannot fill
+the Reviewer slot, recovery returns `project_reviewer_required` before dispatch.
+
 New rounds record `workScope`: `{ "kind": "thread" }` for thread contributions,
 or `{ "kind": "task", "taskId": "..." }` for task executions. Recovery inherits
 the active source round's scope, including task workspace checks and required

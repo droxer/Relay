@@ -6,6 +6,7 @@ import { startProjectWorkflow } from "../../api";
 import { RelayApiError } from "../../api-client/client";
 import { useTeams } from "../../hooks/useTeams";
 import { useProjectWorkflows } from "../../hooks/useProjectWorkflows";
+import { previewSlots } from "../../lib/collaborationStyle";
 import { PREDEFINED_WORKFLOWS, projectPresetParticipants, projectWorkflowOptions, workflowOptions } from "../../lib/workflowSelection";
 import type { WorkflowPreview, AgentTeam, ProjectListItem, UserAgent } from "../../types";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,14 @@ export function ProjectWorkflows({ project, agents, userId, readOnly, onOpenThre
         const name = t(`collab_style.${template}`);
         const participantIds = projectPresetParticipants(project, template);
         const requiresReview = template === "build_review" && project.predefinedWorkflows?.build_review?.requireIndependentReview;
-        const blocker = requiresReview && participantIds.length < 2 ? "project_reviewer_required" : issue;
+        const hasReviewer = !requiresReview || previewSlots(
+          project.members.filter(member => participantIds.includes(member.agentId))
+            .map(member => ({ id: member.agentId, role: member.role ?? "implementer" })),
+          project.leadAgentId ?? undefined,
+          "build_review",
+        ).slots.some(slot => slot.slot === "reviewer");
+        const blocker = !hasReviewer
+          ? "project_reviewer_required" : issue;
         return <li key={id} className="workflow-team-row" data-kind="predefined">
           <div className="workflow-library-main">
             <div className="workflow-team-row-name"><PredefinedWorkflowIcon style={template} /><h3 className="workflow-library-name">{name}</h3></div>

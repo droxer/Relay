@@ -212,3 +212,25 @@ def test_target_becoming_unavailable_before_delivery_returns_to_a(env):
     [resumed] = app.state.registry.take_commands("node_a", "node_token")
     assert resumed["state"]["agent_display_name"] == "A"
     assert "no longer available" in str(resumed["state"]["work_predecessor_results"])
+
+
+def test_staged_delegate_refused_after_owner_revokes_grant(env, monkeypatch):
+    app, client, a, b, first, work = begin_delegation(env)
+    store = app.state.daemon_store
+    registry = app.state.registry
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(store, "publish_command", lambda *args, **kwargs: None)
+        complete(app, first, work)
+    run = store.active_run_request_for_session_any_node(first["sessionId"])
+    assert store.get_command(run["currentCommandId"])["status"] == "pending"
+    revoked = client.patch(f"/api/v1/agents/{a['id']}", json={"delegationAgentIds": []})
+    assert revoked.status_code == 200, revoked.text
+
+    registry.reap_stale_runs(force=True)
+
+    [resumed] = registry.take_commands("node_a", "node_token")
+    assert resumed["logicalAgentId"] == a["id"]
+    assert not resumed["state"].get("delegation_candidates")
+    assert "Delegation permission is no longer available" in str(resumed["state"]["work_predecessor_results"])
+    complete(app, resumed, {"status": "done", "evidence": ["Verified the work"]})
+    assert app.state.session_store.get_session(first["sessionId"])["status"] == "completed"
