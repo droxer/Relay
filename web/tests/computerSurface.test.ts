@@ -106,7 +106,7 @@ describe("My Computer record card", () => {
   it("labels its actions instead of relying on bare icons", async () => {
     const card = await read("web/src/components/computer/ComputerCard.tsx");
     assert.match(card, /\{t\("thread\.rename"\)\}/);
-    assert.match(card, /\{t\("admin\.v2\.manage_executors"\)\}/);
+    assert.match(card, /t\("computer\.runtime_details"\)/);
     // The overflow trigger is an icon, so it must carry an accessible name.
     assert.match(card, /aria-label=\{t\("computer\.more_actions"/);
   });

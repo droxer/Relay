@@ -109,12 +109,12 @@ it("distinguishes a Computer awaiting first connection from offline, reconnectin
   const update = async (node: DaemonNodeMonitorRecord, label: string) => {
     list.mockResolvedValueOnce({ nodes: [node] });
     await act(async () => { await client.refetchQueries({ queryKey: NODES_QUERY_KEY, exact: true }); });
-    await screen.findByText(label);
+    await screen.findByText(label, { selector: ".adm-presence-pill-label" });
     expect(screen.queryByText("computer.connect_waiting")).toBeNull();
   };
   const registered = { ...pendingComputer, status: "ready", lastSeenAt: time } satisfies DaemonNodeMonitorRecord;
   await update(registered, "nodes.presence_offline");
-  // Offline cards keep their last known runtimes compact and omit duplicate offline titles.
+  // The notice keeps the recovery guidance without repeating the connection heading.
   expect(screen.queryByText("computer.connection_offline_title")).toBeNull();
   expect(screen.getByText("computer.connection_offline_body")).toBeTruthy();
   await update({ ...registered, online: true, stale: false }, "nodes.presence_unsettled");

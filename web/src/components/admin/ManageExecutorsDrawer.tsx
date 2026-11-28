@@ -36,11 +36,12 @@ interface ManageExecutorsDrawerProps {
   node: ControlPanelDaemonNodeRecord | null;
   /** The assigned user's @handle; the node carries only an id. */
   userHandle?: string;
+  readOnly?: boolean;
   onUpdated: (node: ControlPanelDaemonNodeRecord) => void;
   onSave: (nodeId: string, disabledAgents: AgentName[]) => Promise<{ node: ControlPanelDaemonNodeRecord }>;
 }
 
-export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdated, onSave }: ManageExecutorsDrawerProps) {
+export function ManageExecutorsDrawer({ open, onClose, node, userHandle, readOnly = false, onUpdated, onSave }: ManageExecutorsDrawerProps) {
   const { t } = useTranslation();
   const { confirm } = useDialogs();
   const [initialDisabled, setInitialDisabled] = useState<Set<AgentName>>(() => new Set());
@@ -158,7 +159,8 @@ export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdat
   // The card's Runtimes list, in its order — plus anything switched off here,
   // so a hidden runtime the reader disabled can still be switched back on.
   const visible = visibleNodeAgentNames(node);
-  const agents = orderNodeAgentNames([...visible, ...AGENT_NAMES.filter((agent) => !visible.includes(agent) && initialDisabled.has(agent))]);
+  const displayedDisabled = readOnly ? new Set(savedDisabled) : initialDisabled;
+  const agents = orderNodeAgentNames([...visible, ...AGENT_NAMES.filter((agent) => !visible.includes(agent) && displayedDisabled.has(agent))]);
   // Name the computer, not its id. An owner handle is only shown when the
   // caller resolved one (the admin console); never render a raw user id.
   const computerName = node.displayName?.trim() || abbreviateNodeId(node.id);
@@ -168,11 +170,11 @@ export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdat
     <Drawer
       open={open}
       onClose={() => { void requestClose(); }}
-      title={t("admin.v2.manage_executors_title")}
+      title={readOnly ? t("computer.runtime_details") : t("admin.v2.manage_executors_title")}
       subtitle={subtitle}
       layer={1}
       width="detail"
-      footer={
+      footer={readOnly ? undefined : (
         <>
           <Button size="cta" type="button" variant="ghost" onClick={() => void requestClose()} disabled={saving}>
             {t("admin.v2.cancel")}
@@ -181,20 +183,20 @@ export function ManageExecutorsDrawer({ open, onClose, node, userHandle, onUpdat
             {saving ? t("admin.v2.saving") : t("admin.v2.save_agent_settings")}
           </Button>
         </>
-      }
+      )}
     >
       <div className="adm-form">
-        <p className="adm-cred-note adm-agent-drawer-note">{t("admin.v2.manage_executors_help")}</p>
+        {readOnly ? null : <p className="adm-cred-note adm-agent-drawer-note">{t("admin.v2.manage_executors_help")}</p>}
         <ul className="adm-agent-toggle-list">
           {agents.map((agent) => (
             <ManageAgentRow
               key={agent}
               node={node}
               agent={agent}
-              savedEnabled={!initialDisabled.has(agent)}
-              enabled={!disabled.has(agent)}
+              savedEnabled={!displayedDisabled.has(agent)}
+              enabled={!(readOnly ? displayedDisabled : disabled).has(agent)}
               saving={saving}
-              onToggle={toggle}
+              onToggle={readOnly ? undefined : toggle}
               t={t}
             />
           ))}
