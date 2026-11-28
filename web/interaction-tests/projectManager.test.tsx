@@ -10,6 +10,7 @@ import {useProjectLeadDiscussion} from '../src/hooks/useProjectLeadDiscussion';
 import {threadDraftKey} from '../src/hooks/useComposer';
 import {SESSIONS_QUERY_KEY} from '../src/hooks/useRelayData';
 import {useComposerTargetStore} from '../src/lib/composerTargetStore';
+import {APP_NAVIGATION_EVENT} from '../src/lib/appRoute';
 import type {RelayTaskListItem} from '../src/types';
 
 // Floating popups do not open under jsdom; render the topic menu inline.
@@ -160,6 +161,40 @@ it('never overwrites a draft the person already left in the lead Thread',async()
  act(()=>result.current.discuss('plan'));
  await waitFor(()=>expect(onOpenThread).toHaveBeenCalled());
  expect(sessionStorage.getItem(key)).toBe('my own question');
+});
+
+it.each(["navigate", "unmount"])("keeps the created Lead discussion without reopening it after %s", async (leave) => {
+  const client = new QueryClient();
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  const receipt = Promise.withResolvers<{ threadId: string; agentId: string }>();
+  api.open.mockReturnValueOnce(receipt.promise);
+  const onOpenThread = vi.fn();
+  const originalUrl = window.location.href;
+  window.history.replaceState({}, "", "/projects/p");
+  const hook = renderHook(() => useProjectLeadDiscussion({ projectId: "p", currentUser: owner, onOpenThread }), {
+    wrapper: hookWrapper(client),
+  });
+  const draftKey = `relay-web.draft:${threadDraftKey(owner, `late-${leave}`)}`;
+  try {
+    act(() => hook.result.current.discuss("next"));
+    await waitFor(() => expect(api.open).toHaveBeenCalledWith("p"));
+    if (leave === "unmount") hook.unmount();
+    else {
+      window.history.replaceState({}, "", "/projects/other");
+      window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+      window.history.replaceState({}, "", "/projects/p");
+      window.dispatchEvent(new Event(APP_NAVIGATION_EVENT));
+    }
+
+    receipt.resolve({ threadId: `late-${leave}`, agentId: "a" });
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(onOpenThread).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["project-discussions", "p"] });
+    expect(sessionStorage.getItem(draftKey)).toBe("project_manager.prompt_next");
+  } finally {
+    sessionStorage.removeItem(draftKey);
+    window.history.replaceState({}, "", originalUrl);
+  }
 });
 
 it('reports a failed open and stays on the dashboard',async()=>{

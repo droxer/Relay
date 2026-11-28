@@ -146,6 +146,29 @@ it("only removes an edited message after acknowledgment and preserves the draft"
   expect(hook.composer.setText).toHaveBeenCalledWith("draft\n\nqueued");
   expect(saved.messages).toEqual([]);
 });
+
+it("restores a queue edit to its original draft after the composer unmounts", async () => {
+  saved.messages.push({ id: "q1", text: "queued text" });
+  const draftKey = "relay-web.draft:owner:thread";
+  sessionStorage.setItem(draftKey, "unsent text");
+  const hook = open();
+  await waitFor(() => expect(hook.result.current.messages).toHaveLength(1));
+  const receipt = Promise.withResolvers<never>();
+  vi.mocked(apiJson).mockImplementationOnce(() => receipt.promise);
+  let edit!: Promise<void>;
+  act(() => { edit = hook.result.current.edit("q1"); });
+  hook.unmount();
+
+  await act(async () => {
+    receipt.resolve({ messages: [], paused: false } as never);
+    await edit;
+  });
+
+  expect(hook.composer.setText).not.toHaveBeenCalled();
+  expect(hook.composer.focus).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem(draftKey)).toBe("queued text\n\nunsent text");
+  expect(hook.client.getQueryData([...THREAD_QUEUE_QUERY_KEY, "thread"])).toEqual({ messages: [], paused: false });
+});
 it("migrates legacy messages and clears local storage only after acknowledgment", async () => {
   sessionStorage.setItem("relay-web.queue:owner:thread", JSON.stringify([{ id: "legacy", text: "Old draft" }]));
   open();
