@@ -12,7 +12,7 @@ export type WorkflowOption = {
   stepAgentIds?: string[];
 };
 
-export function predefinedStyle(id?: string | null): CollaborationStyle | undefined {
+export function predefinedStyle(id?: string | null): ProjectPredefinedTemplate | undefined {
   if (id === RETIRED_WORKFLOW_ID) return "pipeline";
   return PREDEFINED_WORKFLOWS.find(style => id === `preset:${style}`);
 }

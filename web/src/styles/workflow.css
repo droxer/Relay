@@ -249,26 +249,26 @@
     flex-wrap: nowrap;
   }
 
-  .chat-panel > .workflow-progress > .workflow-run-summary {
+  .chat-banners > .workflow-progress > .workflow-run-summary {
     flex: 1 1 0;
   }
 
-  .chat-panel > .workflow-progress > :not(.workflow-run-summary) {
+  .chat-banners > .workflow-progress > :not(.workflow-run-summary) {
     flex: none;
   }
 
-  .chat-panel > .workflow-progress .workflow-run-step {
+  .chat-banners > .workflow-progress .workflow-run-step {
     flex-wrap: nowrap;
   }
 
-  .chat-panel > .workflow-progress .workflow-run-step > :first-child {
+  .chat-banners > .workflow-progress .workflow-run-step > :first-child {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .chat-panel:has(.workflow-slip) > .workflow-progress .workflow-run-step {
+  .chat-panel:has(.workflow-slip) > .chat-banners > .workflow-progress .workflow-run-step {
     display: none;
   }
 }

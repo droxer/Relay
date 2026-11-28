@@ -1,75 +1,169 @@
 import { expect, test } from "@playwright/test";
 
-test("team responsibilities can be edited and persist after reload", async ({ page }) => {
+test("standalone workflows can be created, edited, toggled, and persist after reload without Teams", async ({ page }) => {
   const stamp = "2026-09-18T00:00:00Z";
-  const agents = ["lead", "builder"].map(id => ({ id, displayName: id === "lead" ? "Lead" : "Builder", executorKind: "codex", defaultRole: "implementer", supervisorUserId: "alice", enabled: true, availability: "ready", computerId: "c",
-    placements: [{ id: `place-${id}`, computerId: "c", nodeDisplayName: "Build Computer", desiredState: "active", priority: 0 }],
-    version: 1, createdAt: stamp, updatedAt: stamp }));
-  let team = { id: "delivery", name: "Delivery", ownerUserId: "alice", computerId: "c", leadAgentId: "lead", memberAgentIds: ["lead", "builder"], members: agents, lead: agents[0], enabled: true, version: 1, memberConfigs: { lead: { role: "implementer" }, builder: { role: "implementer", expectedOutputs: ["Keep the build notes"] } }, acceptanceCriteria: [], createdAt: stamp, updatedAt: stamp };
-  let saved: Record<string, unknown> | undefined;
-  let memberPatch: Record<string, unknown> | undefined;
-  const reads: string[] = [];
-  const agentRosterReads: string[] = [];
-  await page.route("**/api/**", async route => {
-    const { pathname: path, search } = new URL(route.request().url());
+  const computerId = "device:alice:host";
+  const node = {
+    id: "node-1", userId: "alice", workspaceId: "host", displayName: "Build Computer",
+    online: true, stale: false, status: "ready", activeRuns: [], agents: { codex: "ready" },
+  };
+  const agents = ["lead", "builder"].map((id) => ({
+    id, displayName: id === "lead" ? "Lead" : "Builder", executorKind: "codex",
+    defaultRole: "implementer", supervisorUserId: "alice", enabled: true, availability: "ready",
+    computerId, version: 1, createdAt: stamp, updatedAt: stamp,
+    placements: [{ id: `place-${id}`, agentId: id, computerId, daemonNodeId: "node-1", nodeDisplayName: "Build Computer", desiredState: "active", status: "ready", priority: 0 }],
+  }));
+
+  type WorkflowRecord = {
+    id: string;
+    name: string;
+    ownerUserId: string;
+    projectId: null;
+    computerId: string;
+    enabled: boolean;
+    version: number;
+    kind?: "steps" | "predefined";
+    predefined?: {
+      template: "build_review" | "lead_led";
+      memberAgentIds: string[];
+      leadAgentId: string;
+      humanApproval: boolean;
+      acceptanceCriteria: string[];
+    };
+    workflowSteps: Array<{
+      id: string;
+      name: string;
+      agentId: string;
+      instructions: string;
+      acceptanceCriteria: string[];
+      requiresApproval: boolean;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+  };
+
+  const workflows: WorkflowRecord[] = [{
+    id: "delivery",
+    name: "Delivery",
+    ownerUserId: "alice",
+    projectId: null,
+    computerId,
+    enabled: true,
+    version: 1,
+    kind: "predefined",
+    predefined: {
+      template: "build_review",
+      memberAgentIds: ["lead", "builder"],
+      leadAgentId: "lead",
+      humanApproval: true,
+      acceptanceCriteria: ["Existing clients remain compatible"],
+    },
+    workflowSteps: [],
+    createdAt: stamp,
+    updatedAt: stamp,
+  }];
+
+  const createdPayloads: Record<string, unknown>[] = [];
+  const patchPayloads: Record<string, unknown>[] = [];
+
+  await page.route("**/api/**", async (route) => {
+    const { pathname: path, searchParams } = new URL(route.request().url());
     const method = route.request().method();
-    if (method === "GET" && (path.endsWith("/member-choices")
-        || (path.endsWith("/agents") && new URLSearchParams(search).get("view") === "summary"))) {
-      agentRosterReads.push(path + search);
+    let body: unknown = { sessions: [], tasks: [], nodes: [node], projects: [], sandboxes: [], agents, teams: [] };
+
+    if (path.endsWith("/auth/me")) {
+      body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", language: "en", theme: "light" } };
     }
-    let body: unknown = { sessions: [], tasks: [], nodes: [], projects: [], sandboxes: [], agents, teams: [team] };
-    if (path.endsWith("/member-choices")) body = { computerId: "c", agents };
-    if (path.endsWith("/workflow-choices")) body = { workflows: [], projects: [] };
-    if (path.endsWith("/auth/me")) body = { authenticated: true, user: { id: "alice", userId: "alice", username: "alice", role: "user", language: "en", theme: "light" } };
-    if (method === "GET" && path.endsWith("/teams")) {
-      reads.push(path + search);
-      const { members, lead, ...summary } = team;
+    if (path.endsWith("/workflows") && method === "GET" && searchParams.get("scope") === "standalone") {
       body = {
-        view: "summary", memberDirectory: members.map(({ placements, computerId, ...member }) => member), predefinedWorkflows: [],
-        teams: [{ ...summary, workflowOptions: [], memberConfigs: { lead: { role: "implementer" }, builder: { role: "implementer" } } }],
+        view: "preview",
+        workflows: workflows.map((wf) => ({
+          id: wf.id, name: wf.name, projectId: null, computerId: wf.computerId,
+          enabled: wf.enabled, version: wf.version, kind: wf.kind,
+          createdAt: wf.createdAt, updatedAt: wf.updatedAt,
+          workflowSteps: wf.workflowSteps.map(({ id, name, agentId, requiresApproval }) => ({ id, name, agentId, requiresApproval })),
+        })),
       };
     }
-    if (method === "GET" && path.endsWith("/teams/delivery")) {
-      reads.push(path + search);
-      body = { team };
+    if (path.endsWith("/workflows") && method === "POST") {
+      const input = route.request().postDataJSON() as Record<string, unknown>;
+      createdPayloads.push(input);
+      const created: WorkflowRecord = {
+        id: "wf-ship",
+        name: String(input.name),
+        ownerUserId: "alice",
+        projectId: null,
+        computerId: String(input.computerId),
+        enabled: true,
+        version: 1,
+        workflowSteps: input.workflowSteps as WorkflowRecord["workflowSteps"],
+        createdAt: stamp,
+        updatedAt: stamp,
+      };
+      workflows.push(created);
+      body = { workflow: created };
     }
-    if (method === "PATCH" && path.endsWith("/teams/delivery/members/builder")) {
-      memberPatch = route.request().postDataJSON();
-      const baseVersion = team.version;
-      team = { ...team, version: baseVersion + 1, memberConfigs: {
-        ...team.memberConfigs, builder: { ...team.memberConfigs.builder, ...memberPatch },
-      } };
-      body = { teamMemberUpdate: { teamId: team.id, agentId: "builder", baseVersion, version: team.version, updatedAt: stamp, fields: memberPatch } };
-    }
-    if (path.endsWith("/teams/delivery") && method === "PATCH") {
-      saved = route.request().postDataJSON();
-      team = { ...team, ...saved, version: team.version + 1 };
-      body = { team };
+    const wfMatch = path.match(/\/workflows\/([^/]+)$/);
+    if (wfMatch) {
+      const target = workflows.find((wf) => wf.id === wfMatch[1]);
+      if (method === "GET" && target) {
+        body = { workflow: target };
+      } else if (method === "PATCH" && target) {
+        const patch = route.request().postDataJSON() as Record<string, unknown>;
+        patchPayloads.push(patch);
+        if (typeof patch.name === "string") target.name = patch.name;
+        if (typeof patch.enabled === "boolean") target.enabled = patch.enabled;
+        if (patch.workflowStepChanges && typeof patch.workflowStepChanges === "object") {
+          const changes = patch.workflowStepChanges as { byId?: Record<string, Partial<WorkflowRecord["workflowSteps"][number]>> };
+          for (const [stepId, fields] of Object.entries(changes.byId ?? {})) {
+            const step = target.workflowSteps.find((s) => s.id === stepId);
+            if (step) Object.assign(step, fields);
+          }
+        }
+        target.version += 1;
+        body = { workflow: target };
+      }
     }
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
+
+  // Legacy /teams/<id> redirects to /workflows/<id> and renders migrated predefined workflow.
   await page.goto("/teams/delivery");
-  await expect(page.getByText("Build Computer", { exact: true }).first()).toBeVisible();
-  // A member's contract is edited on its own card and saved on its own.
-  await page.getByRole("button", { name: "Edit Builder", exact: true }).click();
-  await page.getByLabel("Responsibility", { exact: true }).fill("Own the API and regression tests");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect.poll(() => memberPatch).toEqual({ responsibility: "Own the API and regression tests" });
+  await expect(page).toHaveURL(/\/workflows\/delivery$/);
+  await expect(page.getByText("Build Computer").first()).toBeVisible();
+  await expect(page.getByText("Build and review", { exact: true })).toBeVisible();
+  await expect(page.getByText("Existing clients remain compatible", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit steps", exact: true })).toHaveCount(0);
+
+  // Create a new standalone Workflow without any Team or Project.
+  await page.getByRole("button", { name: "New workflow", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "New workflow" });
+  await drawer.getByLabel("Workflow name", { exact: true }).fill("Release Flow");
+  await drawer.getByLabel("Step name", { exact: true }).fill("Verify");
+  await drawer.getByLabel("Instructions", { exact: true }).fill("Own the API and regression tests");
+  await drawer.getByLabel(/^Acceptance criteria/).fill("Keep the build notes");
+  await drawer.getByRole("button", { name: "Save workflow", exact: true }).click();
+  await expect.poll(() => createdPayloads.at(-1)).toMatchObject({
+    name: "Release Flow",
+    projectId: null,
+    computerId,
+  });
+
+  // Select the created workflow, edit its instructions, toggle disabled, and verify after reload.
+  await page.getByRole("button", { name: /Release Flow/ }).click();
   await expect(page.getByText("Own the API and regression tests", { exact: true })).toBeVisible();
   await expect(page.getByText("Keep the build notes", { exact: true })).toBeVisible();
-  expect(reads).toEqual(["/api/v1/teams?view=summary&format=compact", "/api/v1/teams/delivery?view=preview"]);
-  expect(agentRosterReads).toEqual([]);
-  // Acceptance criteria belong to the team and are edited with the roster.
-  await page.getByRole("button", { name: "Edit team" }).click();
-  await expect.poll(() => agentRosterReads).toEqual(["/api/v1/teams/delivery/member-choices"]);
-  await page.getByLabel("Acceptance criteria").fill("Existing clients remain compatible");
-  await page.getByRole("button", { name: "Save team", exact: true }).click();
-  await expect.poll(() => saved?.acceptanceCriteria).toEqual(["Existing clients remain compatible"]);
-  await expect.poll(() => saved?.memberConfigs).toEqual({
-    lead: { role: "implementer" },
-    builder: { responsibility: "Own the API and regression tests", role: "implementer", expectedOutputs: ["Keep the build notes"] },
-  });
-  expect(agentRosterReads).toEqual(["/api/v1/teams/delivery/member-choices"]);
+
+  await page.getByRole("button", { name: "Edit steps", exact: true }).click();
+  const editDrawer = page.getByRole("dialog", { name: "Edit workflow" });
+  await editDrawer.getByRole("textbox", { name: "Instructions", exact: true }).fill("Run full API and UI regression suite");
+  await editDrawer.getByRole("button", { name: "Save workflow", exact: true }).click();
+  await expect(page.getByText("Run full API and UI regression suite", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Disable", exact: true }).click();
+  await expect.poll(() => patchPayloads.at(-1)).toEqual({ enabled: false });
+
   await page.reload();
-  await expect(page.getByText("Own the API and regression tests", { exact: true })).toBeVisible();
+  await expect(page.getByText("Run full API and UI regression suite", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enable", exact: true })).toBeVisible();
 });

@@ -204,7 +204,7 @@ function ProjectInlineAssignee(props: InlineAssigneeProps) {
 
 function StandaloneInlineAssignee(props: InlineAssigneeProps) {
   const [open, setOpen] = useState(false);
-  const standaloneWorkflowQuery = useStandaloneWorkflowChoices(open || Boolean(props.task.assignedWorkflowId && !props.task.assignedTeamId));
+  const standaloneWorkflowQuery = useStandaloneWorkflowChoices(open);
   return <InlineAssigneeOptions {...props} standaloneWorkflowQuery={standaloneWorkflowQuery} onAssignmentOpenChange={setOpen} />;
 }
 

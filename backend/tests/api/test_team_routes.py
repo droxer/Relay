@@ -1086,7 +1086,7 @@ def test_team_emptied_by_agent_deletion_is_disabled_and_restaffable(monkeypatch)
         assert restaffed.json()["team"]["lead"]["id"] == fresh["id"]
 
 
-def test_startup_repairs_team_members_deleted_by_an_older_runtime(monkeypatch) -> None:
+def test_startup_preserves_invalid_standalone_rosters_and_repairs_project_rosters(monkeypatch) -> None:
     monkeypatch.setenv("RELAY_ADMIN_TOKEN", "admin_token")
     with TemporaryDirectory() as root:
         app = create_app(root)
@@ -1104,16 +1104,32 @@ def test_startup_repairs_team_members_deleted_by_an_older_runtime(monkeypatch) -
                 "memberAgentIds": [deleted_lead["id"], support["id"]],
             },
         ).json()["team"]
+        team = app.state.team_store.get_team(team["id"])
+        project = project_for_team(app, ALICE, team)
+        project_team = app.state.team_store.create_team(ALICE, {
+            "name": "Legacy project delivery",
+            "leadAgentId": deleted_lead["id"],
+            "memberAgentIds": [deleted_lead["id"], support["id"]],
+            "projectId": project["id"],
+            "workflowSteps": [{
+                "id": "build", "name": "Build", "agentId": deleted_lead["id"],
+                "instructions": "Build", "acceptanceCriteria": ["Passes"],
+            }],
+        })
 
         # Simulate historical data written by a runtime that deleted the agent
         # without removing its Team membership.
         app.state.agent_store.delete_agent(deleted_lead["id"])
 
-        restarted = create_app(root)
-        repaired = restarted.state.team_store.get_team(team["id"])
-
-        assert repaired["leadAgentId"] == support["id"]
-        assert repaired["memberAgentIds"] == [support["id"]]
+        for _ in range(2):
+            restarted = create_app(root)
+            # A refused standalone migration must not silently replace its Lead
+            # and then migrate a different process on the next restart.
+            assert restarted.state.team_store.get_team(team["id"]) == team
+            assert restarted.state.context.workflow_store.list_workflows(ALICE, standalone_only=True) == []
+            repaired = restarted.state.team_store.get_team(project_team["id"])
+            assert repaired["leadAgentId"] == support["id"]
+            assert repaired["memberAgentIds"] == [support["id"]]
 
 
 def test_task_assigned_to_team_starts_all_members_lead_first_in_assignee_thread(

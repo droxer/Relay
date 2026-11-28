@@ -100,19 +100,25 @@ async function fixture(page: Page, language: string, { assignedWorkflowId, quest
   });
 }
 
-test("reads a Task's Workflow by ID only on the Definition tab", async ({ page }) => {
+test("reads a Task's Workflow definition by ID only on the Definition tab", async ({ page }) => {
   const workflowReads: string[] = [];
   page.on("request", request => {
-    const { pathname } = new URL(request.url());
+    const { pathname, searchParams } = new URL(request.url());
+    if (pathname === "/api/v1/workflows") {
+      expect(searchParams.get("view")).toBe("choices");
+      expect(searchParams.get("projectId")).toBe("release");
+    }
     if (pathname === "/api/v1/workflows" || pathname.startsWith("/api/v1/workflows/")) workflowReads.push(pathname);
   });
   await fixture(page, "en", { assignedWorkflowId: "release-plan" });
   await page.goto("/projects/release?task=ship&recordTab=activity");
   await expect(page.getByRole("heading", { name: "Current run" })).toBeVisible();
-  expect(workflowReads).toEqual([]);
+  // The underlying Project list resolves assignment labels from its compact
+  // choices. Opening Activity must not load the full definition as well.
+  expect(workflowReads).toEqual(["/api/v1/workflows"]);
   await page.getByRole("tab", { name: "Definition" }).click();
-  await expect(page.getByText("Release workflow definition", { exact: true })).toBeVisible();
-  expect(workflowReads).toEqual(["/api/v1/workflows/release-plan"]);
+  await expect(page.getByRole("region", { name: "Definition", exact: true }).getByText("Release workflow definition", { exact: true })).toBeVisible();
+  expect(workflowReads).toEqual(["/api/v1/workflows", "/api/v1/workflows/release-plan"]);
 });
 
 test("sends a written Workflow answer without submitting the Thread composer", async ({ page }) => {
@@ -246,12 +252,12 @@ test("a phone thread keeps room for the transcript beside the workflow progress"
   await fixture(page, "en");
   await page.goto("/threads/release-2");
 
-  const progress = page.locator(".chat-panel > .workflow-progress");
+  const progress = page.getByRole("region", { name: "Workflow timeline", exact: true });
   await expect(progress.getByRole("button", { name: "View run details" })).toBeVisible();
   // One summary line plus the current step: the details button rides beside
   // it, so the card stays a band rather than a third of the screen.
   expect((await progress.boundingBox())!.height).toBeLessThanOrEqual(100);
-  const log = await progress.evaluate(element => element.nextElementSibling!.getBoundingClientRect().height);
+  const log = await page.getByRole("log").evaluate(element => element.getBoundingClientRect().height);
   expect(log).toBeGreaterThanOrEqual(200);
 });
 
@@ -313,7 +319,7 @@ test.describe("on a phone held in the hand", () => {
 
     // The band is the control: its button keeps the name but draws a chevron,
     // and a tap anywhere on the band opens the run.
-    const progress = page.locator(".chat-panel > .workflow-progress");
+    const progress = page.getByRole("region", { name: "Workflow timeline", exact: true });
     const trigger = progress.getByRole("button", { name: "View run details" });
     await expect(trigger).toBeVisible();
     await expect(progress.locator(".workflow-progress-meter")).toBeVisible();

@@ -114,11 +114,11 @@ for (const width of [1440, 390]) {
     await page.locator("textarea").fill("Add an example for a new project");
     await page.getByRole("button", { name: "Send", exact: true }).click();
 
-    const starting = transcript.getByText(/^Starting on Relay Dev/);
+    const starting = transcript.getByText("Sending…", { exact: true });
     const working = transcript.getByText("Working…", { exact: true });
     try {
       await expect(starting).toBeVisible();
-      await expect(starting).toHaveText("Starting on Relay Dev…");
+      await expect(transcript.getByRole("status").filter({ hasText: "Sending…" })).toHaveCount(1);
       await expect(working).toHaveCount(0);
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: info.outputPath("reply-starting.png") });
@@ -202,13 +202,16 @@ for (const [theme, width] of [["light", 1440], ["dark", 390]] as const) {
     await page.setViewportSize({ width, height: 900 });
     await serve(page, theme, "review");
     await page.goto(`/tasks/${task.id}`);
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
     const review = page.getByRole("region", { name: "Review result" });
     await expect(review.getByText("Delivered the explanation.")).toBeVisible();
     await expect(review.getByText("Agent-reported evidence")).toBeVisible();
     await expect(review.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
     await expect(review.getByText(/No output snapshots/)).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator("#task-record-panel").evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((animation) => animation.finished)));
+    await page.locator("#task-record-panel").evaluate((el) => Promise.all(el.getAnimations({ subtree: true })
+      .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+      .map((animation) => animation.finished)));
     await page.screenshot({ path: testInfo.outputPath(`task-review-${theme}-${width}.png`), fullPage: true });
   });
 }

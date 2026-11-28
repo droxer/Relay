@@ -63,9 +63,12 @@ const longThreadEvents = Array.from({ length: 12 }, (_, turn) => {
 }).flat();
 
 async function openPage(browser: Browser, path: string, touch: boolean, layout?: Record<string, string>, thread?: Record<string, unknown>, fixtures?: Record<string, unknown>): Promise<Page> {
-  const context = await browser.newContext(touch
-    ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }
-    : { viewport: { width: 1440, height: 900 } });
+  const viewport = touch ? { width: 390, height: 844 } : { width: 1440, height: 900 };
+  // Desktop comparisons must override the phone project's touch defaults too.
+  const context = await browser.newContext({
+    viewport, screen: viewport, hasTouch: touch, isMobile: touch,
+    ...(!touch ? { deviceScaleFactor: 1 } : {}),
+  });
   // Seeded before the first script runs: the shell reads its dragged widths
   // out of localStorage on mount, so setting them afterwards would measure a
   // re-render rather than the load the user actually gets.
@@ -1058,7 +1061,7 @@ for (const [path, roster] of [["/agents", ".agents-roster"], ["/teams", ".teams-
   test(`the ${path.slice(1)} roster opens at the remembered list width`, async ({ browser }) => {
     const page = await openPage(browser, path, false, { "relay-web.threadListWidth": "300" });
     await expect(page.locator(roster).first()).toBeVisible();
-    expect(await renderedWidth(page, roster)).toBe(300);
+    await expect.poll(() => renderedWidth(page, roster)).toBe(300);
     await page.context().close();
   });
 }
@@ -1067,6 +1070,7 @@ test("dragging a roster remembers the width for every list rail", async ({ brows
   const page = await openPage(browser, "/agents", false);
   const handle = page.locator(".agents-roster .list-rail-resize");
   await expect(handle).toBeVisible();
+  await expect.poll(() => renderedWidth(page, ".agents-roster")).toBe(360);
   const before = await renderedWidth(page, ".agents-roster");
   const box = (await handle.boundingBox())!;
   const y = box.y + box.height / 2;
@@ -1084,7 +1088,7 @@ test("dragging a roster remembers the width for every list rail", async ({ brows
   // One width for every list rail: the thread rail comes back at it too.
   await page.goto("/threads/review-thread");
   await expect(page.locator(RAIL_WIDTHS.rail).first()).toBeVisible();
-  expect(await renderedWidth(page, RAIL_WIDTHS.rail)).toBe(after);
+  await expect.poll(() => renderedWidth(page, RAIL_WIDTHS.rail)).toBe(after);
   await page.context().close();
 });
 
@@ -1183,9 +1187,9 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
      their own headings, then Sign out alone (MobileMoreSheet.tsx). */
   const page = await openPage(browser, "/home", true);
   const tabs = page.locator(".sidenav-panel .sidenav-btn:visible");
-  await expect(tabs).toHaveCount(6);
+  await expect(tabs).toHaveCount(5);
   expect(await tabs.evaluateAll((elements) => elements.map((element) => element.getAttribute("data-nav"))))
-    .toEqual(["home", "threads", "backlog", "routine", "projects", "more"]);
+    .toEqual(["home", "threads", "backlog", "projects", "more"]);
   for (const box of await tabs.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON()))) {
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.x + box.width).toBeLessThanOrEqual(390);
@@ -1199,8 +1203,8 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
   await expect(sheet).toBeVisible();
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 
-  await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Workforce", "Resources", "Manage"]);
-  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Agents", "Workflows", "Computers", "Skills", "Settings"]);
+  await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Workspace", "Workforce", "Resources", "Manage"]);
+  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Automations", "Agents", "Workflows", "Computers", "Skills", "Settings"]);
   const controls = sheet.locator("button, a");
   await expect(controls.first()).toHaveText("Search");
   await expect(controls.last()).toHaveText("Sign out");
@@ -1380,7 +1384,12 @@ for (const touch of [false, true]) {
       await page.reload();
       await expect(page.locator(".tasks-workspace")).toBeVisible();
       await expect(page).toHaveURL(/\/tasks$/);
-      await automationsTab.click();
+      if (touch) {
+        await page.getByRole("button", { name: "More pages" }).click();
+        await page.getByRole("dialog", { name: "More" }).getByRole("link", { name: "Automations", exact: true }).click();
+      } else {
+        await automationsTab.click();
+      }
       await expect(page).toHaveURL(/\/automations$/);
       await expect(automationsTab).toHaveAttribute("aria-current", "page");
       await expect(page.locator(".routine-page")).toBeVisible();

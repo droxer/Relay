@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 const pages = [
   ["/home", "#home-panel"], ["/threads", "#thread-panel"], ["/threads/new", "form.composer"],
   ["/tasks", ".tasks-workspace"], ["/automations", ".routine-page"], ["/projects", "#thread-panel"],
-  ["/agents", "#agents-panel"], ["/teams", "#teams-panel"], ["/computers", "#computer-panel"], ["/skills", "#skills-panel"],
+  ["/agents", "#agents-panel"], ["/workflows", "#workflows-panel"], ["/computers", "#computer-panel"], ["/skills", "#skills-panel"],
   ...["account", "connections", "notifications", "appearance", "language"].map(section => [`/settings/${section}`, "#settings-panel"]),
   ...["dashboard", "users", "computers", "waitlist", "organization"].map(section => [`/admin/${section}`, "#admin-panel"]),
 ] as const;
@@ -30,6 +30,30 @@ for (const [path, selector] of pages) {
     await page.reload();
     await expect(page.locator(selector)).toBeVisible();
     expect(errors).toEqual([]);
+  });
+}
+
+for (const [path, canonical] of [["/teams", "/workflows"], ["/teams/delivery", "/workflows/delivery"]]) {
+  test(`legacy route and reload mount ${path} as ${canonical}`, async ({ page, isMobile }) => {
+    await page.route("**/api/**", route => route.fulfill({ json: {
+      authenticated: true, user: { id: "routes-user", userId: "routes-user", username: "routes", role: "user", theme: "light", language: "en" },
+      agents: [], teams: [], workflows: [], nodes: [], sessions: [], projects: [],
+    } }));
+    await page.goto(`${path}?q=delivery`);
+    for (const reload of [false, true]) {
+      if (reload) await page.reload();
+      await expect(page.locator("#workflows-panel")).toBeVisible();
+      await expect(page).toHaveURL(url => url.pathname === canonical && url.searchParams.get("q") === "delivery");
+      if (isMobile) {
+        await page.getByRole("button", { name: "More pages" }).click();
+        const more = page.getByRole("dialog", { name: "More", exact: true });
+        await expect(more.getByRole("link", { name: "Workflows", exact: true })).toHaveAttribute("aria-current", "page");
+        await page.keyboard.press("Escape");
+        await expect(more).toBeHidden();
+      } else {
+        await expect(page.getByRole("link", { name: "Workflows", exact: true })).toHaveAttribute("aria-current", "page");
+      }
+    }
   });
 }
 

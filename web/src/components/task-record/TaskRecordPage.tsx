@@ -140,7 +140,7 @@ export function TaskRecordPage({
   const { teams, isSuccess: teamsReady, error: teamsError } = useTeams(currentUser.userId);
   const assignedTeam = teams.find((team) => team.id === task.assignedTeamId);
   const cachedWorkflowName = teamWorkflowName(assignedTeam, task.assignedWorkflowId);
-  const fetchWorkflowName = Boolean(task.assignedWorkflowId) && !predefinedStyle(task.assignedWorkflowId)
+  const fetchWorkflowName = tab === "definition" && Boolean(task.assignedWorkflowId) && !predefinedStyle(task.assignedWorkflowId)
     && !cachedWorkflowName && (!task.assignedTeamId || teamsReady || teamsError);
   const workflowName = useWorkflowName(fetchWorkflowName ? task.assignedWorkflowId : undefined, task.projectId);
   const { agents: logicalAgents } = useUserAgents(currentUser.userId);

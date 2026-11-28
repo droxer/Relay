@@ -28,7 +28,7 @@ vi.mock("../src/components/ComputerSelect", () => ({
   ),
 }));
 
-it("shows every reported model for the selected computer and runtime", async () => {
+it.each(AGENT_RUNTIME_DISPLAY_ORDER)("shows every reported model for the selected computer and %s runtime", async (kind) => {
   const catalogs = Object.fromEntries(AGENT_NAMES.map(kind => [
     kind,
     Array.from({ length: kind === "opencode" ? 225 : 3 }, (_, index) => `${kind}/model-${index}`),
@@ -59,16 +59,21 @@ it("shows every reported model for the selected computer and runtime", async () 
       target: { value: "device:alice:mac" },
     });
     expect(screen.queryByRole("radio", { name: "Kimi" })).toBeNull();
-    for (const kind of AGENT_RUNTIME_DISPLAY_ORDER) {
-      await user.click(screen.getByRole("radio", { name: agentLabel(kind) }));
-      const input = screen.getByRole("combobox", { name: "agents_page.model_label" }) as HTMLInputElement;
-      expect(input.value).toBe("");
-      await user.click(screen.getByRole("button", { name: "agents_page.model_browse" }));
-      await waitFor(() => expect(screen.getAllByRole("option").filter(option => option.closest('[role="listbox"]')).map(option => option.textContent)).toEqual(catalogs[kind]));
-      const lastModel = catalogs[kind].at(-1)!;
-      await user.click(screen.getByRole("option", { name: lastModel }));
-      expect(input.value).toBe(lastModel);
-    }
+    await user.click(screen.getByRole("radio", { name: agentLabel(kind) }));
+    const input = screen.getByRole<HTMLInputElement>("combobox", { name: "agents_page.model_label" });
+    expect(input.value).toBe("");
+    await user.click(screen.getByRole("button", { name: "agents_page.model_browse" }));
+    await waitFor(() => expect(screen.getAllByRole("option").filter(option => option.closest('[role="listbox"]')).map(option => option.textContent)).toEqual(catalogs[kind]));
+    const lastModel = catalogs[kind].at(-1)!;
+    await user.click(screen.getByRole("option", { name: lastModel }));
+    expect(input.value).toBe(lastModel);
+    const nextRuntime = kind === "codex" ? "claude" : "codex";
+    await user.click(screen.getByRole("radio", { name: agentLabel(nextRuntime) }));
+    const nextInput = screen.getByRole<HTMLInputElement>("combobox", { name: "agents_page.model_label" });
+    expect(nextInput.value).toBe("");
+    await user.click(screen.getByRole("button", { name: "agents_page.model_browse" }));
+    await user.click(screen.getByRole("option", { name: catalogs[nextRuntime][0] }));
+    expect(nextInput.value).toBe(catalogs[nextRuntime][0]);
     fireEvent.change(screen.getByRole("combobox", { name: "agents_page.create_computer_label" }), {
       target: { value: "device:alice:linux" },
     });

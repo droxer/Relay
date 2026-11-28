@@ -120,7 +120,7 @@ describe("Codex app-server adapter", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
-  function run(args: string[], env: Record<string, string> = {}, onSpawn?: (kill: () => void) => void): Promise<Run> {
+  function run(args: string[], env: Record<string, string> = {}, onEvent?: (event: Record<string, unknown>, stop: () => void) => void): Promise<Run> {
     const logFile = join(directory, `log-${Math.random().toString(16).slice(2)}.jsonl`);
     writeFileSync(logFile, "");
     const child = spawn(process.execPath, [ADAPTER, ...args], {
@@ -133,12 +133,23 @@ describe("Codex app-server adapter", () => {
       },
       stdio: ["ignore", "pipe", "inherit"],
     });
-    let stdout = "";
-    child.stdout.setEncoding("utf8").on("data", (chunk: string) => { stdout += chunk; });
-    onSpawn?.(() => child.kill("SIGTERM"));
+    const stdout: Run["stdout"] = [];
+    let buffer = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+      buffer += chunk;
+      let newline: number;
+      while ((newline = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        if (!line) continue;
+        const event: Record<string, unknown> = JSON.parse(line);
+        stdout.push(event);
+        onEvent?.(event, () => { child.kill("SIGTERM"); });
+      }
+    });
     return new Promise((resolve) => child.on("close", (code) => resolve({
       code,
-      stdout: stdout.split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>),
+      stdout,
       log: readFileSync(logFile, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, any>),
     })));
   }
@@ -236,11 +247,17 @@ describe("Codex app-server adapter", () => {
     assert.deepEqual(result.log.find((entry) => entry.answered === "command")?.result, { decision: "decline" });
   });
 
-  it("stops the app-server promptly when the run is aborted", async () => {
-    const started = Date.now();
-    const result = await run(["--cwd", directory, "--", "go"], { FAKE_MODE: "hang" }, (kill) => setTimeout(kill, 300));
+  it("stops the app-server promptly when the run is aborted", { timeout: 5_000 }, async () => {
+    let abortedAt: number | undefined;
+    const result = await run(["--cwd", directory, "--", "go"], { FAKE_MODE: "hang" }, (event, stop) => {
+      if (event.type === "turn.started") {
+        abortedAt = Date.now();
+        stop();
+      }
+    });
+    assert.ok(abortedAt !== undefined, "abort a running app-server, after its handshake");
     assert.equal(result.code, 143);
-    assert.ok(Date.now() - started < 2_000);
+    assert.ok(Date.now() - abortedAt < 2_000);
     assert.ok(result.log.some((entry) => entry.signal === "SIGTERM"));
   });
 
