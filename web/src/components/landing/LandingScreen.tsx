@@ -329,7 +329,7 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
       </header>
 
       <main>
-        {/* ── 1. Hero: Controls on the sentence + live Relay execution chip bar ── */}
+        {/* ── 1. Hero: Statement + unified live dispatch workbench beside studio hardware ── */}
         <section className="landing-hero" aria-labelledby="landing-headline">
           <div className="landing-hero-inner">
             <div className="landing-hero-statement">
@@ -343,51 +343,6 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                 ))}
               </h1>
 
-              {/* Live working product control strip — clicking mutates the live dispatch state */}
-              <div data-ui="" className="landing-hero-dials" role="group" aria-label="Live Relay dispatch controls">
-                <button
-                  type="button"
-                  className="landing-dial landing-dial-left"
-                  onClick={() => setComputerIndex((i) => (i + 1) % HERO_COMPUTERS.length)}
-                >
-                  <span className="landing-dial-label">Computer</span>
-                  <span className="landing-dial-value">{activeComputer.host}</span>
-                  <span className="landing-dial-meta">{activeComputer.env}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="landing-dial landing-dial-mid"
-                  onClick={() => setRuntimeIndex((i) => (i + 1) % LANDING_SUPPORTED_RUNTIMES.length)}
-                >
-                  <span className="landing-dial-label">Agent runtime</span>
-                  <span className="landing-dial-value">{activeRuntime}</span>
-                  <span className="landing-dial-meta">{activeComputer.slots}</span>
-                </button>
-
-                <div className="landing-dial landing-dial-right" role="group" aria-label="Permission mode">
-                  <span className="landing-dial-label">Tool gate</span>
-                  <div className="landing-dial-switch">
-                    <button
-                      type="button"
-                      className={`landing-dial-opt${permissionMode === "ask" ? " is-active" : ""}`}
-                      aria-pressed={permissionMode === "ask"}
-                      onClick={() => setPermissionMode("ask")}
-                    >
-                      Ask me
-                    </button>
-                    <button
-                      type="button"
-                      className={`landing-dial-opt${permissionMode === "yolo" ? " is-active" : ""}`}
-                      aria-pressed={permissionMode === "yolo"}
-                      onClick={() => setPermissionMode("yolo")}
-                    >
-                      Auto
-                    </button>
-                  </div>
-                </div>
-              </div>
-
               <p className="landing-lede">{t("landing.lede")}</p>
 
               <div className="landing-ctas landing-ctas-start">
@@ -399,6 +354,74 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                 ) : (
                   <SectionLink id={HOW_ID} className="landing-inline-link" label={t("landing.cta_secondary")} />
                 )}
+              </div>
+
+              {/* Unified live dispatch workbench — dials sit directly above the command they mutate */}
+              <div data-ui="" className="landing-hero-workbench">
+                <div className="landing-hero-dials" role="group" aria-label="Live Relay dispatch controls">
+                  <button
+                    type="button"
+                    className="landing-dial landing-dial-left"
+                    onClick={() => setComputerIndex((i) => (i + 1) % HERO_COMPUTERS.length)}
+                  >
+                    <span className="landing-dial-label">Computer</span>
+                    <span className="landing-dial-value">{activeComputer.host}</span>
+                    <span className="landing-dial-meta">{activeComputer.env}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="landing-dial landing-dial-mid"
+                    onClick={() => setRuntimeIndex((i) => (i + 1) % LANDING_SUPPORTED_RUNTIMES.length)}
+                  >
+                    <span className="landing-dial-label">Agent runtime</span>
+                    <span className="landing-dial-value">{activeRuntime}</span>
+                    <span className="landing-dial-meta">{activeComputer.slots}</span>
+                  </button>
+
+                  <div className="landing-dial landing-dial-right" role="group" aria-label="Permission mode">
+                    <span className="landing-dial-label">Tool gate</span>
+                    <div className="landing-dial-switch">
+                      <button
+                        type="button"
+                        className={`landing-dial-opt${permissionMode === "ask" ? " is-active" : ""}`}
+                        aria-pressed={permissionMode === "ask"}
+                        onClick={() => setPermissionMode("ask")}
+                      >
+                        Ask me
+                      </button>
+                      <button
+                        type="button"
+                        className={`landing-dial-opt${permissionMode === "yolo" ? " is-active" : ""}`}
+                        aria-pressed={permissionMode === "yolo"}
+                        onClick={() => setPermissionMode("yolo")}
+                      >
+                        Auto
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="landing-hero-dispatch" aria-live="polite">
+                  <div className="landing-dispatch-row">
+                    <span className="landing-status-dot tone-live" aria-hidden="true" />
+                    <span className="landing-dispatch-title">
+                      {activeRuntime} on {activeComputer.host}
+                    </span>
+                    <span className="landing-dispatch-badge">
+                      {permissionMode === "ask" ? "Pauses on tool calls" : "Auto-approves tools"}
+                    </span>
+                  </div>
+                  <pre className="landing-dispatch-cmd">
+                    <code>
+                      <span className="landing-cmd-token">relay run</span>{" "}
+                      <span className="landing-cmd-token">{`--on ${activeComputer.host}`}</span>{" "}
+                      <span className="landing-cmd-token">{`--agent ${activeRuntime.toLowerCase().replace(/\s+/g, "-")}`}</span>{" "}
+                      <span className="landing-cmd-token">{`--${permissionMode}`}</span>
+                    </code>
+                  </pre>
+                  <p className="landing-dispatch-foot">{t("landing.runtimes")}</p>
+                </div>
               </div>
             </div>
 
@@ -417,21 +440,6 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
                   fetchPriority="high"
                   decoding="async"
                 />
-              </div>
-              <div data-ui="" className="landing-hero-dispatch" aria-live="polite">
-                <div className="landing-dispatch-row">
-                  <span className="landing-status-dot tone-live" aria-hidden="true" />
-                  <span className="landing-dispatch-title">
-                    {activeRuntime} on {activeComputer.host}
-                  </span>
-                  <span className="landing-dispatch-badge">
-                    {permissionMode === "ask" ? "Pauses on tool calls" : "Auto-approves tools"}
-                  </span>
-                </div>
-                <pre className="landing-dispatch-cmd">
-                  <code>{`relay run --on ${activeComputer.host} --agent ${activeRuntime.toLowerCase().replace(/\s+/g, "-")} --${permissionMode}`}</code>
-                </pre>
-                <p className="landing-dispatch-foot">{t("landing.runtimes")}</p>
               </div>
             </div>
           </div>
@@ -534,46 +542,56 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
 
             <ol className="landing-cr-list">
               <li className="landing-cr-exchange" data-reveal="idle">
-                <h3 className="landing-cr-title">{t(LANDING_STEPS[0].titleKey)}</h3>
-                <p className="landing-cr-body">{t(LANDING_STEPS[0].bodyKey)}</p>
-                <div className="landing-cr-call">
-                  <pre className="landing-cr-code">
-                    <code>curl -fsSL https://relay.local/install.sh | sh &amp;&amp; relay daemon start</code>
-                  </pre>
-                  <button
-                    type="button"
-                    className="landing-copy-btn"
-                    aria-label={t(copiedEnroll ? "landing.oss_copied" : "landing.oss_copy")}
-                    onClick={() => void copyCommand("curl -fsSL https://relay.local/install.sh | sh && relay daemon start", setCopiedEnroll)}
-                  >
-                    {copiedEnroll ? <CheckIcon size={ICON.sm} aria-hidden="true" /> : <ActionCopy size={ICON.sm} aria-hidden="true" />}
-                  </button>
+                <div className="landing-cr-copy">
+                  <h3 className="landing-cr-title">{t(LANDING_STEPS[0].titleKey)}</h3>
+                  <p className="landing-cr-body">{t(LANDING_STEPS[0].bodyKey)}</p>
                 </div>
-                <div data-ui="" className="landing-cr-response">
-                  <span className="landing-status-dot tone-good" aria-hidden="true" />
-                  <span className="landing-cr-resp-main">studio-macbook-pro registered</span>
-                  <span className="landing-cr-resp-sub">BoxLite sandbox · 5 runtimes ready</span>
+                <div className="landing-cr-io">
+                  <div className="landing-cr-call">
+                    <pre className="landing-cr-code">
+                      <code>curl -fsSL https://relay.local/install.sh | sh &amp;&amp; relay daemon start</code>
+                    </pre>
+                    <button
+                      type="button"
+                      className="landing-copy-btn"
+                      aria-label={t(copiedEnroll ? "landing.oss_copied" : "landing.oss_copy")}
+                      onClick={() => void copyCommand("curl -fsSL https://relay.local/install.sh | sh && relay daemon start", setCopiedEnroll)}
+                    >
+                      {copiedEnroll ? <CheckIcon size={ICON.sm} aria-hidden="true" /> : <ActionCopy size={ICON.sm} aria-hidden="true" />}
+                    </button>
+                  </div>
+                  <div data-ui="" className="landing-cr-response">
+                    <span className="landing-status-dot tone-good" aria-hidden="true" />
+                    <span className="landing-cr-resp-main">studio-macbook-pro registered</span>
+                    <span className="landing-cr-resp-sub">BoxLite sandbox · 5 runtimes ready</span>
+                  </div>
                 </div>
               </li>
 
               <li className="landing-cr-exchange" data-reveal="idle">
-                <h3 className="landing-cr-title">{t(LANDING_STEPS[1].titleKey)}</h3>
-                <p className="landing-cr-body">{t(LANDING_STEPS[1].bodyKey)}</p>
-                <div className="landing-cr-call">
-                  <pre className="landing-cr-code">
-                    <code>relay task create &quot;Investigate dashboard chart slowdown&quot; --team platform</code>
-                  </pre>
+                <div className="landing-cr-copy">
+                  <h3 className="landing-cr-title">{t(LANDING_STEPS[1].titleKey)}</h3>
+                  <p className="landing-cr-body">{t(LANDING_STEPS[1].bodyKey)}</p>
                 </div>
-                <div data-ui="" className="landing-cr-response">
-                  <span className="landing-status-dot tone-live" aria-hidden="true" />
-                  <span className="landing-cr-resp-main">Task #48 assigned to Platform Team</span>
-                  <span className="landing-cr-resp-sub">Architect → Software Engineer → Code Reviewer</span>
+                <div className="landing-cr-io">
+                  <div className="landing-cr-call">
+                    <pre className="landing-cr-code">
+                      <code>relay task create &quot;Investigate dashboard chart slowdown&quot; --team platform</code>
+                    </pre>
+                  </div>
+                  <div data-ui="" className="landing-cr-response">
+                    <span className="landing-status-dot tone-live" aria-hidden="true" />
+                    <span className="landing-cr-resp-main">Task #48 assigned to Platform Team</span>
+                    <span className="landing-cr-resp-sub">Architect → Software Engineer → Code Reviewer</span>
+                  </div>
                 </div>
               </li>
 
               <li className="landing-cr-exchange landing-cr-exchange-final" data-reveal="idle">
-                <h3 className="landing-cr-title">{t(LANDING_STEPS[2].titleKey)}</h3>
-                <p className="landing-cr-body">{t(LANDING_STEPS[2].bodyKey)}</p>
+                <div className="landing-cr-copy">
+                  <h3 className="landing-cr-title">{t(LANDING_STEPS[2].titleKey)}</h3>
+                  <p className="landing-cr-body">{t(LANDING_STEPS[2].bodyKey)}</p>
+                </div>
                 <div className="landing-cr-breakout">
                   <div className="landing-workspace-desktop">
                     <Shot shot={LANDING_SHOWCASE_SHOT} alt={t("landing.hero_alt")} />
@@ -692,23 +710,51 @@ export function LandingScreen({ onThemeChange }: { onThemeChange?: (theme: Theme
             </div>
           </div>
 
-          {/* Editorial Product Plates — full clarity real screenshots, alternating asymmetrical spans */}
+          {/* Editorial Product Plates — varied compositions: full-width feature, diptych, split, offset */}
           <div className="landing-plates">
-            {LANDING_TOUR.map((item, idx) => (
-              <article
-                className={`landing-plate landing-plate-${idx === 0 ? "wide" : idx % 2 === 1 ? "split" : "reverse"}`}
-                key={item.shot}
-                data-reveal="idle"
-              >
-                <div className="landing-plate-media">
-                  <Shot shot={item.shot} alt={t(item.altKey)} />
-                </div>
-                <div className="landing-plate-copy">
-                  <h3 className="landing-plate-title">{t(item.titleKey)}</h3>
-                  <p className="landing-plate-body">{t(item.bodyKey)}</p>
-                </div>
-              </article>
-            ))}
+            <article className="landing-plate landing-plate-feature" data-reveal="idle">
+              <div className="landing-plate-head">
+                <h3 className="landing-plate-title">{t(LANDING_TOUR[0].titleKey)}</h3>
+                <p className="landing-plate-body">{t(LANDING_TOUR[0].bodyKey)}</p>
+              </div>
+              <div className="landing-plate-media">
+                <Shot shot={LANDING_TOUR[0].shot} alt={t(LANDING_TOUR[0].altKey)} />
+              </div>
+            </article>
+
+            <div className="landing-plate-diptych">
+              {LANDING_TOUR.slice(1, 3).map((item) => (
+                <article className="landing-plate landing-plate-column" key={item.shot} data-reveal="idle">
+                  <div className="landing-plate-media">
+                    <Shot shot={item.shot} alt={t(item.altKey)} />
+                  </div>
+                  <div className="landing-plate-copy">
+                    <h3 className="landing-plate-title">{t(item.titleKey)}</h3>
+                    <p className="landing-plate-body">{t(item.bodyKey)}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <article className="landing-plate landing-plate-split" data-reveal="idle">
+              <div className="landing-plate-media">
+                <Shot shot={LANDING_TOUR[3].shot} alt={t(LANDING_TOUR[3].altKey)} />
+              </div>
+              <div className="landing-plate-copy">
+                <h3 className="landing-plate-title">{t(LANDING_TOUR[3].titleKey)}</h3>
+                <p className="landing-plate-body">{t(LANDING_TOUR[3].bodyKey)}</p>
+              </div>
+            </article>
+
+            <article className="landing-plate landing-plate-offset" data-reveal="idle">
+              <div className="landing-plate-media">
+                <Shot shot={LANDING_TOUR[4].shot} alt={t(LANDING_TOUR[4].altKey)} />
+              </div>
+              <div className="landing-plate-copy">
+                <h3 className="landing-plate-title">{t(LANDING_TOUR[4].titleKey)}</h3>
+                <p className="landing-plate-body">{t(LANDING_TOUR[4].bodyKey)}</p>
+              </div>
+            </article>
           </div>
         </section>
 

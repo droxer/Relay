@@ -197,7 +197,7 @@
   background: var(--tone, var(--ink-4));
 }
 
-/* ---------- 1. Hero: Controls on the sentence ------------------------ */
+/* ---------- 1. Hero: Statement + unified live dispatch workbench ----- */
 
 .landing-hero {
   width: 100%;
@@ -206,24 +206,24 @@
 
 .landing-hero-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
   align-items: center;
   gap: var(--sp-7);
-  min-height: min(46rem, calc(100svh - 6rem));
+  min-height: calc(100svh - 6.5rem);
 }
 
 .landing-hero-statement {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--sp-6);
+  gap: var(--sp-5);
   min-width: 0;
 }
 
 .landing-headline {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.1rem, 4.3vw, 4.5rem);
+  font-size: clamp(2.15rem, 4.75vw, 4.85rem);
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: var(--track-display);
@@ -241,16 +241,33 @@
   white-space: nowrap;
 }
 
-/* Unified live product control strip — data-ui isolated */
+.landing-lede {
+  margin: 0;
+  max-width: 48ch;
+  font-size: 1.1429rem; /* 16px body tier */
+  line-height: 1.55;
+  color: var(--ld-body);
+  text-wrap: pretty;
+}
+
+/* Unified live product workbench (dials + command output) — data-ui isolated */
+.landing-hero-workbench {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: var(--sp-2);
+  border: var(--stroke-w) solid var(--ld-hairline);
+  border-radius: var(--r-2);
+  background: var(--ld-surface);
+  overflow: hidden;
+}
+
 .landing-hero-dials {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.05fr) minmax(0, 0.95fr);
   gap: var(--sp-2);
   width: 100%;
   padding: var(--sp-2);
-  border: var(--stroke-w) solid var(--ld-hairline);
-  border-radius: var(--r-2);
-  background: var(--ld-surface);
 }
 
 .landing-dial {
@@ -313,43 +330,12 @@
   color: var(--on-action);
 }
 
-.landing-lede {
-  margin: 0;
-  max-width: 48ch;
-  font-size: 1.1429rem; /* 16px body tier */
-  line-height: 1.55;
-  color: var(--ld-body);
-  text-wrap: pretty;
-}
-
-/* Right half of hero: square-cropped studio hardware photograph + live dispatch fragment */
-.landing-hero-stage {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-  min-width: 0;
-}
-
-.landing-hero-photo-frame {
-  overflow: hidden;
-  background: var(--ld-surface);
-}
-
-.landing-hero-photo {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-  object-position: right center;
-}
-
 .landing-hero-dispatch {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-4);
-  border: var(--stroke-w) solid var(--ld-hairline);
-  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-top: var(--stroke-w) solid var(--ld-hairline-soft);
   background: var(--ld-surface);
 }
 
@@ -387,10 +373,36 @@
   color: var(--ld-ink);
 }
 
+.landing-cmd-token {
+  white-space: nowrap;
+}
+
 .landing-dispatch-foot {
   margin: 0;
   font-size: 0.9286rem;
   color: var(--ld-muted);
+}
+
+/* Right half of hero: full-height square-cropped studio hardware photograph */
+.landing-hero-stage {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  justify-content: center;
+  min-width: 0;
+}
+
+.landing-hero-photo-frame {
+  overflow: hidden;
+  background: var(--ld-surface);
+}
+
+.landing-hero-photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  object-position: right center;
 }
 
 /* ---------- 2. Showcase: Input half (dark) / Output half (light) ----- */
@@ -654,12 +666,25 @@
   display: grid;
   grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
   column-gap: var(--sp-7);
-  row-gap: var(--sp-3);
+  row-gap: var(--sp-5);
   align-items: start;
 }
 
+.landing-cr-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.landing-cr-io {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
 .landing-cr-title {
-  grid-column: 1;
   margin: 0;
   font-size: 1.5714rem;
   font-weight: 600;
@@ -669,7 +694,6 @@
 }
 
 .landing-cr-body {
-  grid-column: 1;
   margin: 0;
   max-width: 44ch;
   font-size: 1.1429rem;
@@ -678,8 +702,6 @@
 }
 
 .landing-cr-call {
-  grid-column: 2;
-  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -714,8 +736,6 @@
 }
 
 .landing-cr-response {
-  grid-column: 2;
-  grid-row: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -744,9 +764,7 @@
   gap: var(--sp-5);
 }
 
-.landing-cr-exchange-final .landing-cr-title,
-.landing-cr-exchange-final .landing-cr-body {
-  grid-column: 1;
+.landing-cr-exchange-final .landing-cr-copy {
   max-width: 56ch;
 }
 
@@ -806,7 +824,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-3);
+  padding: var(--sp-3) 0;
   cursor: pointer;
   transition: background var(--t-fast) var(--ease);
 }
@@ -955,7 +973,7 @@
   color: var(--ld-muted);
 }
 
-/* Editorial Product Plates — varied asymmetrical compositions, no card frames */
+/* Editorial Product Plates — varied compositions, flush to the page gutter */
 .landing-plates {
   display: flex;
   flex-direction: column;
@@ -968,25 +986,54 @@
   gap: var(--sp-7);
 }
 
-.landing-plate-wide {
-  grid-template-columns: minmax(0, 1.55fr) minmax(0, 0.85fr);
+/* 1. Full-width lead feature plate (Threads) */
+.landing-plate-feature {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
 }
 
+.landing-plate-head {
+  display: grid;
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+  align-items: baseline;
+  gap: var(--sp-7);
+}
+
+/* 2. Asymmetric editorial diptych (Projects + Tasks) */
+.landing-plate-diptych {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-7);
+}
+
+.landing-plate-column {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+}
+
+/* 3. Wide split plate (Automations: copy left, large shot right) */
 .landing-plate-split {
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.55fr);
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.65fr);
 }
 
 .landing-plate-split .landing-plate-media {
   order: 2;
 }
 
-.landing-plate-reverse {
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+/* 4. Offset editorial plate (Teams: large shot left, bottom-anchored copy right) */
+.landing-plate-offset {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.72fr);
+  align-items: end;
+}
+
+.landing-plate-offset .landing-plate-copy {
+  padding: var(--sp-6);
+  background: var(--ld-surface);
 }
 
 .landing-plate-media {
   min-width: 0;
-  padding: var(--sp-4);
   background: var(--ld-surface);
 }
 
@@ -1418,7 +1465,7 @@
 
 .landing-tile-giant-name {
   font-family: var(--font-display);
-  font-size: clamp(2.1rem, 4.3vw, 4.5rem);
+  font-size: clamp(2.15rem, 4.75vw, 4.85rem);
   font-weight: 600;
   line-height: 0.95;
   letter-spacing: var(--track-display);
@@ -1431,6 +1478,7 @@
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
+html[data-theme="light"] .landing-preset-btn.is-active,
 html[data-theme="light"] .landing-tile-accent,
 html[data-theme="light"] .landing-blank-submit {
   color: var(--paper);
@@ -1470,16 +1518,6 @@ html[data-theme="light"] .landing-blank-submit {
   }
 }
 
-@keyframes ld-photo-drift {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.035);
-  }
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .landing-headline-line-1 {
     animation: ld-mask-rise 760ms var(--ease) both;
@@ -1489,22 +1527,18 @@ html[data-theme="light"] .landing-blank-submit {
     animation: ld-mask-rise 760ms var(--ease) calc(var(--t-stagger) * 3) both;
   }
 
-  .landing-hero-dials,
   .landing-hero-statement > .landing-lede,
   .landing-hero-statement > .landing-ctas,
+  .landing-hero-workbench,
   .landing-hero-stage {
     --rise-from: var(--rise);
     animation: rise 560ms var(--ease) both;
   }
 
-  .landing-hero-dials { animation-delay: calc(var(--t-stagger) * 4); }
-  .landing-hero-statement > .landing-lede { animation-delay: calc(var(--t-stagger) * 5); }
-  .landing-hero-statement > .landing-ctas { animation-delay: calc(var(--t-stagger) * 6); }
+  .landing-hero-statement > .landing-lede { animation-delay: calc(var(--t-stagger) * 4); }
+  .landing-hero-statement > .landing-ctas { animation-delay: calc(var(--t-stagger) * 5); }
+  .landing-hero-workbench { animation-delay: calc(var(--t-stagger) * 6); }
   .landing-hero-stage { animation-delay: calc(var(--t-stagger) * 4); }
-
-  .landing-hero-photo {
-    animation: ld-photo-drift 18s var(--ease-breathe) infinite;
-  }
 
   [data-reveal="pending"] {
     opacity: 0;
@@ -1528,14 +1562,28 @@ html[data-theme="light"] .landing-blank-submit {
   .landing-hero-inner,
   .landing-split-stage,
   .landing-about-top,
-  .landing-plate-wide,
+  .landing-plate-head,
+  .landing-plate-diptych,
   .landing-plate-split,
-  .landing-plate-reverse {
+  .landing-plate-offset {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing-hero-inner {
+    min-height: 0;
+  }
+
+  .landing-plate-head {
+    gap: var(--sp-3);
   }
 
   .landing-plate-split .landing-plate-media {
     order: 0;
+  }
+
+  .landing-plate-offset .landing-plate-copy {
+    padding: 0;
+    background: transparent;
   }
 
   .landing-manual-grid {
@@ -1560,10 +1608,7 @@ html[data-theme="light"] .landing-blank-submit {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .landing-cr-call,
   .landing-cr-response {
-    grid-column: 1;
-    grid-row: auto;
     margin-inline-start: 0;
   }
 
@@ -1595,15 +1640,12 @@ html[data-theme="light"] .landing-blank-submit {
     display: none;
   }
 
-  /* Phone hero composition: headline → supporting sentence → primary CTA,
-     followed immediately by the interactive dials paired above the live CLI
-     output they mutate, then the hardware photograph. */
   .landing-hero {
     padding: var(--sp-5) var(--ld-gutter) var(--sp-6);
   }
 
   .landing-hero-inner {
-    gap: var(--sp-4);
+    gap: var(--sp-5);
     min-height: 0;
   }
 
@@ -1611,17 +1653,9 @@ html[data-theme="light"] .landing-blank-submit {
     gap: var(--sp-4);
   }
 
-  .landing-headline { order: 1; }
-  .landing-lede { order: 2; }
-  .landing-ctas-start { order: 3; width: 100%; }
-  .landing-hero-dials { order: 4; }
-
-  .landing-hero-stage {
-    gap: var(--sp-4);
+  .landing-ctas-start {
+    width: 100%;
   }
-
-  .landing-hero-dispatch { order: 1; }
-  .landing-hero-photo-frame { order: 2; }
 
   .landing-hero-photo {
     aspect-ratio: 16 / 9;
@@ -1638,13 +1672,13 @@ html[data-theme="light"] .landing-blank-submit {
     padding: var(--sp-7) var(--ld-gutter);
   }
 
-  /* Wrap CLI commands cleanly on phones instead of clipping mid-token. */
+  /* Wrap CLI commands cleanly between flags on phones without splitting tokens. */
   .landing-dispatch-cmd,
   .landing-thread-receipt,
   .landing-cr-code,
   .landing-panel-cmd {
     white-space: pre-wrap;
-    overflow-wrap: break-word;
+    overflow-wrap: normal;
   }
 
   .landing-terminal-command {
@@ -1749,6 +1783,15 @@ html[data-theme="light"] .landing-blank-submit {
   .landing-dial-opt {
     flex: none;
     padding: 0 var(--sp-3);
+  }
+
+  .landing-dispatch-row {
+    align-items: center;
+    row-gap: var(--sp-1-5);
+  }
+
+  .landing-dispatch-badge {
+    margin-left: 0;
   }
 
   .landing-headline-line {
