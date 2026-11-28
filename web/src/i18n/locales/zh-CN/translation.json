@@ -4309,6 +4309,8 @@
     "preset_edit_hint": "选择参加的项目智能体。角色在成员列表中设置。",
     "preset_participants": "参加的智能体",
     "preset_build_review_fallback": "如果没有可用的审查 Agent，构建 Agent 会独立完成工作。",
+    "preset_require_independent_review": "必须独立评审",
+    "project_reviewer_required": "请选择另一位符合条件的项目智能体进行独立评审，然后重试。",
     "preset_all_agents": "全部项目智能体",
     "preset_lead_locked": "负责人始终参加",
     "preset_reset": "恢复为全部智能体",

@@ -4397,6 +4397,8 @@
     "preset_edit_hint": "Choose the Project Agents that take part. Roles are set on the roster.",
     "preset_participants": "Participating Agents",
     "preset_build_review_fallback": "If no reviewer is available, the builder completes the work alone.",
+    "preset_require_independent_review": "Require independent review",
+    "project_reviewer_required": "Select another eligible Project Agent for independent review, then retry.",
     "preset_all_agents": "All Project Agents",
     "preset_lead_locked": "Lead always joins",
     "preset_reset": "Use all Agents",

@@ -179,6 +179,10 @@ The Project owner can select which enabled Project Agents are eligible for each
 Predefined Workflow. The default includes every enabled Project Agent. Lead-led
 always includes the current Project Lead. A Workflow with no eligible Agent
 cannot start.
+The Project owner can require independent review for Build → Review. When
+enabled, the Workflow needs a second eligible Agent in the Reviewer step.
+Without one, direct starts are refused and Tasks and Automation occurrences
+block until a person resolves the assignment and retries.
 A Team chooses a predefined **Default Workflow** and may choose a custom default
 for each Project. A Task or Automation inherits the applicable Team default or
 selects a Workflow explicitly. A Project can run either kind directly.

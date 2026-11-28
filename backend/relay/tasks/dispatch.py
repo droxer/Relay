@@ -288,7 +288,7 @@ class TaskDispatcher:
         except ProjectDispatchError as error:
             if not self.record_pending:
                 raise
-            message = f"The project cannot execute this task ({error.code})."
+            message = error.task_message
             if error.permanent:
                 self.task = update_pending_dispatch(
                     self.ctx.task_store, self.task["id"],

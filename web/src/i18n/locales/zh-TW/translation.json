@@ -4309,6 +4309,8 @@
     "preset_edit_hint": "選擇參與的專案代理。角色在成員列表中設定。",
     "preset_participants": "參與的代理",
     "preset_build_review_fallback": "如果沒有可用的審查 Agent，建置 Agent 會獨立完成工作。",
+    "preset_require_independent_review": "必須獨立審查",
+    "project_reviewer_required": "請選擇另一位符合條件的專案代理進行獨立審查，然後重試。",
     "preset_all_agents": "全部專案代理",
     "preset_lead_locked": "負責人一律參與",
     "preset_reset": "恢復為全部代理",

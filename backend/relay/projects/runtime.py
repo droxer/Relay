@@ -17,9 +17,10 @@ from ..core.daemon_capabilities import has_capability
 
 
 class ProjectDispatchError(ValueError):
-    def __init__(self, code: str, *, permanent: bool = False):
+    def __init__(self, code: str, *, permanent: bool = False, message: str | None = None):
         self.code = code
         self.permanent = permanent
+        self.task_message = message or f"The project cannot execute this task ({code})."
         super().__init__(code)
 
 
@@ -171,6 +172,16 @@ def project_styled_assignments(
             ))
     else:
         compiled = compile_style(style, agents, lead_id, role_brief=role_charter)
+        if style == "build_review" and (
+            (project.get("predefinedWorkflows") or {}).get(style, {}).get("requireIndependentReview") is True
+        ):
+            if compiled.fallback_from:
+                raise ProjectDispatchError(
+                    "project_reviewer_required",
+                    permanent=True,
+                    message="Select another eligible Project Agent for independent review, then retry.",
+                )
+            snapshot["requireIndependentReview"] = True
         style = compiled.style
         turns = list(compiled.turns)
         if compiled.fallback_from:

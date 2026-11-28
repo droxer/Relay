@@ -121,7 +121,10 @@ export interface ProjectContextSuggestion {
 }
 
 export type ProjectPredefinedTemplate = "build_review" | "pipeline" | "lead_led";
-export type ProjectPredefinedWorkflows = Partial<Record<ProjectPredefinedTemplate, { agentIds: string[] }>>;
+export type ProjectPredefinedWorkflows = Partial<Record<"lead_led" | "pipeline", { agentIds: string[] }>> & {
+  build_review?: { agentIds: string[]; requireIndependentReview?: never }
+    | { agentIds: string[] | null; requireIndependentReview: true };
+};
 
 export interface ProjectRecord {
   /** Derived from the roster: the member carrying `projectManager`. */
@@ -219,7 +222,9 @@ export interface UpdateProjectInput {
   /** One roster edit against expectedVersion. */
   memberChange?: ProjectMemberChange;
   /** Limits a Predefined Workflow to these Project Agents; null restores every enabled Agent. */
-  predefinedWorkflowChange?: { workflowId: `preset:${ProjectPredefinedTemplate}`; agentIds: string[] | null };
+  predefinedWorkflowChange?:
+    | { workflowId: "preset:build_review"; agentIds: string[] | null; requireIndependentReview?: boolean }
+    | { workflowId: "preset:lead_led" | "preset:pipeline"; agentIds: string[] | null };
   enabled?: boolean;
   /** Closes the project's drafted setup in the same revision. */
   setupResolution?: "applied" | "dismissed";

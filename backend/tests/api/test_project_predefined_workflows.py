@@ -275,3 +275,68 @@ def test_project_preset_selection_patch_validates_prunes_and_scopes_runs(monkeyp
         })
         assert removed.status_code == 200, removed.text
         assert removed.json()["project"]["predefinedWorkflows"] == {}
+
+
+def test_project_build_review_required_reviewer_blocks_and_can_retry(monkeypatch):
+    with unified_world(monkeypatch) as (app, client, node, _, project, _):
+        project_id = project["id"]
+        lead, reviewer = project["members"]
+        registry = app.state.registry
+        workflow_id = "preset:build_review"
+        project_url = f"/api/v1/projects/{project_id}"
+        run_path = f"/api/v1/workflows/{workflow_id}/runs"
+        body = {"projectId": project_id, "taskGoal": "Verify empty input", "requestId": str(uuid4())}
+        change = {"workflowId": workflow_id, "agentIds": [lead["agentId"]], "requireIndependentReview": True}
+        saved = client.patch(project_url, json={
+            "expectedVersion": project["version"], "predefinedWorkflowChange": change,
+        })
+        assert saved.status_code == 200, saved.text
+        configured = saved.json()["project"]
+        assert configured["predefinedWorkflows"]["build_review"] == {
+            "agentIds": [lead["agentId"]], "requireIndependentReview": True,
+        }
+
+        refused = client.post(run_path, json=body)
+        assert (refused.status_code, refused.json()["detail"]) == (409, "project_reviewer_required")
+
+        fields = {"projectId": project_id, "assignedWorkflowId": workflow_id}
+        created = client.post("/api/v1/tasks", json={**fields, "title": "Needs a reviewer"})
+        assert created.status_code == 201, created.text
+        ready = mark_task_ready(client, created.json())
+        routine = client.post("/api/v1/tasks", json={
+            **fields, "title": "Daily review", "isRoutine": True,
+            "routineState": "active", "routineTriggers": DAILY_TRIGGERS,
+        })
+        assert routine.status_code == 201, routine.text
+        app.state.task_scheduler.automations.tick(datetime.now(UTC) + timedelta(days=2))
+        tick(app)
+        tasks = [app.state.task_store.get_task(ready["id"]), occurrence_of(app, routine.json()["id"])]
+        for task in tasks:
+            assert task["status"] == "blocked"
+            assert task["attention"]["code"] == "project_reviewer_required"
+            assert not task.get("linkedSessionIds")
+        assert take(registry, node) == []
+
+        # A policy-only selection follows the enabled roster.
+        reset = client.patch(project_url, json={
+            "expectedVersion": configured["version"],
+            "predefinedWorkflowChange": {"workflowId": workflow_id, "agentIds": None},
+        })
+        assert reset.status_code == 200, reset.text
+        assert reset.json()["project"]["predefinedWorkflows"]["build_review"] == {
+            "agentIds": None, "requireIndependentReview": True,
+        }
+        started = client.post(run_path, json=body)
+        assert started.status_code == 201, started.text
+        thread = started.json()
+        assert thread["collaborationRounds"][0]["projectSnapshot"]["requireIndependentReview"] is True
+        builder_command, = take(registry, node)
+        assert builder_command["logicalAgentId"] == lead["agentId"]
+        finish(registry, node, builder_command, {})
+        assert app.state.session_store.get_session(thread["id"])["status"] == "running"
+        review_command, = take(registry, node)
+        assert review_command["logicalAgentId"] == reviewer["agentId"]
+        assert review_command["state"]["team_phase"] == "review"
+        finish(registry, node, review_command, {})
+        assert app.state.session_store.get_session(thread["id"])["status"] == "completed"
+        assert take(registry, node) == []
