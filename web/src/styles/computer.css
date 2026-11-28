@@ -404,8 +404,8 @@
 @media (pointer: coarse) {
   .computer-card-actions button,
   .computer-card-section-actions button {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
   }
 }
 
