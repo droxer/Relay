@@ -28,6 +28,7 @@ export interface CreateSandboxInput {
   env: Array<{ key: string; value: string }>;
   workingDir: string;
   autoRemove: boolean;
+  network?: { mode: "enabled" | "disabled" };
 }
 
 export interface ExecutionSandbox {
@@ -78,6 +79,7 @@ export class BoxLiteExecutionManager implements ExecutionManager {
       env: input.env,
       workingDir: input.workingDir,
       autoRemove: input.autoRemove,
+      ...(input.network ? { network: input.network } : {}),
     }, input.boxName);
     return { name: input.boxName, raw: box };
   }

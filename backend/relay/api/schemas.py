@@ -178,6 +178,10 @@ class _TaskFields(RequestSchema):
     is_routine: LenientBool = Field(None, alias="isRoutine")
     routine_triggers: LenientList = Field(None, alias="routineTriggers")
     routine_state: TrimmedStr = Field(None, alias="routineState")
+    verification_check: Annotated[Any, WithJsonSchema({
+        "type": "object", "required": ["commit", "path"],
+        "properties": {"commit": {"type": "string"}, "path": {"type": "string"}},
+    })] = Field(None, alias="verificationCheck")
 
     def names_assignee(self) -> bool:
         return self.is_set("assignee_user_id") or self.is_set("assignee_user_id_legacy")

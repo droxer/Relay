@@ -457,6 +457,9 @@ records execution, not verification of the outcome. Accepting from this view
 names its `reviewRevision`; a changed Task, Thread, or Artifact record requires
 the person to refresh and review again. It does not assert that the Computer's
 current workspace still matches the recorded Artifacts.
+An opted-in Build → Review Project Task also shows the Daemon Node's required
+check result for an exact Git commit and owner-selected check definition. The
+owner accepts that candidate using the current review revision after it passes.
 
 **Image Attachment**:
 A private PNG, JPEG, or WebP upload referenced by a Thread's opening message

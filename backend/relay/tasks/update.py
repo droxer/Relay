@@ -33,7 +33,7 @@ from .assignment import (
 )
 from .deletion import task_has_active_linked_session
 from .workspace import recorded_task_workspace
-from .review import checked_review
+from ..execution.task_verification import checked_review, update_verification_check
 from .requests import (
     TaskRequestError,
     TaskRequestReader,
@@ -110,6 +110,8 @@ def update_task(
     ctx: Any, actor: Actor, current: dict[str, Any], request: TaskPatchRequest
 ) -> dict[str, Any]:
     body, move_project = request.body, request.move_project
+    if "verificationCheck" in body:
+        return update_verification_check(ctx, current, actor["userId"], body)
     if (body.get("status") == "done" and set(body) <= {"status", "reviewRevision"}
             and not current.get("isRoutine")):
         return mark_task_done(ctx, current, actor["userId"], body, request.reload)
@@ -491,6 +493,12 @@ def _write_update(
             prepare_resume(conn, request.automation_store, ctx.task_store, current, actor)
         if status:
             _validate_status_transition(ctx, current, status, unblock=unblock)
+        if current.get("verificationCheck") and (
+            acceptance_policy == "automatic" or payload.get("isRoutine")
+            or payload.get("projectId", current.get("projectId")) != current.get("projectId")
+            or payload.get("assignedWorkflowId", current.get("assignedWorkflowId")) != "preset:build_review"
+        ):
+            raise TaskRequestError(409, "task_verification_requires_project_build_review")
         if (
             acceptance_policy
             and acceptance_policy != current.get("acceptancePolicy", LEGACY_ACCEPTANCE_POLICY)

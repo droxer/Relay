@@ -194,6 +194,8 @@ class SessionAgentRunMixin(SessionControllerState):
         }
         if step_result.get("workResult"):
             completed_payload["workResult"] = step_result["workResult"]
+        if step_result.get("verificationResult"):
+            completed_payload["verificationResult"] = step_result["verificationResult"]
         if step_result.get("tokenUsage"):
             completed_payload["tokenUsage"] = step_result["tokenUsage"]
         if step_result.get("outputTruncated"):

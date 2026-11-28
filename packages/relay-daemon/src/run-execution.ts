@@ -41,6 +41,7 @@ import { liveRuns } from "./live-runs.js";
 import { permissionAdapterLaunch, stageGuestPermissionAdapter } from "./permission-adapters/index.js";
 import type { DaemonLogFields, DaemonLogger, DaemonExecutionEnvironment, WorkspaceExecution } from './index.js';
 import { commandLogFields, commandLeaseEventFields, runCancelledEvent } from './run-events.js';
+import { verificationCandidate, verifyTaskCandidate } from "./task-verification.js";
 const DEFAULT_OUTPUT_DRAIN_TIMEOUT_MS = 60_000;
 
 export async function executeCommand(
@@ -131,6 +132,7 @@ export async function executeCommand(
   // The lease pins the guest that mounts this workspace for the whole run, so
   // a concurrent run on another thread cannot recycle it mid-execution.
   const execution = await environment.acquireWorkspace(threadWorkspace.hostPath, signal);
+  const verificationCheck = command.verificationCheck;
   const managerToolAbort = new AbortController();
   let managerBridge: ReturnType<typeof createProjectManagerBridge> | undefined;
   let nativeMcpBridge: Awaited<ReturnType<typeof startNativeMcpBridge>> | undefined;
@@ -214,6 +216,7 @@ export async function executeCommand(
   }
 
   async function runInWorkspace(execution: WorkspaceExecution): Promise<DaemonNodeEvent> {
+    const candidate = verificationCheck ? await verificationCandidate(threadWorkspace.hostPath, signal) : null;
     await execution.ensureAgentReady(command.agent, signal);
     if (signal?.aborted) {
       return runCancelledEvent(command, signal.reason);
@@ -568,6 +571,10 @@ export async function executeCommand(
         if (!signal?.aborted) logger.warn("Codex image import failed", commandLogFields(sandboxId, command));
       }
     }
+    const verificationResult = verificationCheck && !signal?.aborted && !outputPostFailure && next.last_exit_code === 0
+      && roundResult?.status !== "blocked"
+      ? await verifyTaskCandidate(threadWorkspace.hostPath, candidate, verificationCheck, environment.verifyTask, signal)
+      : undefined;
     if (signal?.aborted) {
       logger.info("run cancelled", {
         ...commandLogFields(sandboxId, command),
@@ -616,6 +623,7 @@ export async function executeCommand(
       tokenUsage: next.token_usage,
       ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
       ...(roundResult ? { roundResult } : {}),
+      ...(verificationResult ? { verificationResult } : {}),
       ...(roundOutcome.kind === "rejected" ? { roundResultRejected: { reason: roundOutcome.reason } } : {}),
       ...(nextSteps.length > 0 && next.last_exit_code === 0 ? { nextSteps } : {}),
       ...(outputBatchesRejected > 0 || outputDeliveryDeferred || hasPendingOutput(fetchFn, command.id) ? { outputTruncated: true } : {}),

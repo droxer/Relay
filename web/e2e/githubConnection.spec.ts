@@ -20,6 +20,7 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
       if (path.endsWith("/auth/me")) body = { authenticated: true, user };
       if (path.includes("/account/github")) connectionRequests += 1;
       if (path.endsWith("/connections")) body = { connections: [] };
+      if (path.endsWith("/connection-providers")) body = { providers: [] };
       if (path.endsWith("/tasks/github/issues")) {
         const { page: number } = route.request().postDataJSON();
         body = { repository: { owner: "octo", name: "hello", fullName: "octo/hello" }, page: number,
@@ -55,11 +56,14 @@ for (const layout of ["desktop", "narrow", "mobile"] as const) {
     await selectAll.click();
     await expect(drawer.getByText("0 of 55 selected", { exact: true })).toBeVisible();
     expect(await drawer.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    await drawer.getByRole("button", { name: "Close", exact: true }).click();
-    await page.goto("/settings/account");
-    const connection = page.getByRole("region", { name: "Connections", exact: true });
-    await expect(connection.getByRole("link", { name: /^Manage connections/ })).toHaveAttribute("href", "/settings/connections");
-    await expect(connection.getByRole("button")).toHaveCount(0);
+    await drawer.getByRole("link", { name: "Manage connections", exact: true }).click();
+    await expect(page).toHaveURL(/\/settings\/connections$/);
+    const settings = page.getByRole("region", { name: "Settings", exact: true });
+    const connections = settings.getByRole("link", { name: "Connections", exact: true });
+    await expect(connections).toHaveAttribute("href", "/settings/connections");
+    await expect(connections).toHaveAttribute("aria-current", "page");
+    await expect(settings.getByRole("heading", { name: "Your connections", exact: true })).toBeVisible();
+    await expect(settings.getByRole("button")).toHaveCount(0);
     expect(connectionRequests).toBe(0);
   });
 }
@@ -99,7 +103,7 @@ test("GitHub import has clear loading, recovery, empty, and imported states", as
   await load.click();
   await expect(load).toHaveAttribute("aria-busy", "true");
   await expect(repository).toBeDisabled();
-  await expect(drawer.getByRole("button", { name: "Open", exact: true })).toBeDisabled();
+  await expect(drawer.getByRole("radio", { name: "Open", exact: true })).toBeDisabled();
   release();
   await expect(drawer.getByRole("alert")).toContainText("GitHub could not be reached");
   await expect(repository).toBeEnabled();

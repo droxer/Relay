@@ -16,6 +16,7 @@ from ...collaboration.policy import (
     ROUND_RESULT_REJECTIONS,
     is_question,
 )
+from ...core.task_verification import CHECK_STATE_KEY
 from ..records import (
     ARTIFACT_SNAPSHOT_STATE_KEY,
     FOLLOW_UP_FAILURE_STATE_KEY,
@@ -52,6 +53,7 @@ _TURN_TRANSIENT_STATE_KEYS = (
     ARTIFACT_SNAPSHOT_STATE_KEY,
     *_TERMINAL_CLAIM_STATE_KEYS,
     FOLLOW_UP_FAILURE_STATE_KEY,
+    CHECK_STATE_KEY,
 )
 _TERMINAL_SESSION_STATUSES = ("completed", "failed", "cancelled")
 

@@ -8,6 +8,7 @@ from typing import Any
 from loguru import logger
 
 from ..core.validation import task_priority, task_status
+from ..core.task_verification import CHECK_FIELD, check_definition
 from ..sessions.controller import SessionController
 from .flow import NEW_TASK_ACCEPTANCE_POLICY
 from .issue_triage import ISSUE_NEEDS_PROJECT, issue_needs_project
@@ -67,6 +68,7 @@ class _Plan:
     collaboration_style: str | None
     routine: dict[str, Any]
     creates_thread: bool
+    verification_check: dict[str, str] | None
 
 
 def create_task(ctx: Any, actor: Actor, request: TaskCreateRequest) -> dict[str, Any]:
@@ -82,6 +84,8 @@ def create_task(ctx: Any, actor: Actor, request: TaskCreateRequest) -> dict[str,
     if identity:
         validate_computer_assignment(ctx, identity, assignment.agent_id, assignment.team_id)
     plan = _plan_creation(ctx, request, assignment)
+    if plan.verification_check and actor["userId"] != request.owner:
+        raise TaskRequestError(403, "task_verification_owner_required")
     task = _create_record(ctx, request, assignment, plan, permission_mode=permission_mode)
     if plan.creates_thread:
         task = _open_task_thread(ctx, task, request)
@@ -162,7 +166,15 @@ def _plan_creation(
                 "assignedTeamId": assignment.team_id,
             },
         )
-    return _Plan(acceptance_policy, collaboration_style, routine, creates_thread)
+    check = check_definition(body.get(CHECK_FIELD))
+    if CHECK_FIELD in body:
+        if check is None:
+            raise TaskRequestError(400, "verificationCheck requires a full Git commit and repository-relative path.")
+        if (not project or routine.get("isRoutine") or creates_thread
+                or acceptance_policy == "automatic" or assignment.agent_id or assignment.team_id
+                or body.get("assignedWorkflowId") != "preset:build_review"):
+            raise TaskRequestError(409, "task_verification_requires_project_build_review")
+    return _Plan(acceptance_policy, collaboration_style, routine, creates_thread, check)
 
 
 def _create_record(
@@ -183,6 +195,7 @@ def _create_record(
             "dueDate": request.reader.date(body, "dueDate"),
             "status": "backlog",
             "acceptancePolicy": plan.acceptance_policy or NEW_TASK_ACCEPTANCE_POLICY,
+            **({CHECK_FIELD: plan.verification_check} if plan.verification_check else {}),
             **({"permissionMode": permission_mode} if permission_mode else {}),
             **(
                 {"collaborationStyle": plan.collaboration_style}

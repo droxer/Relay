@@ -8,12 +8,13 @@ from ..persistence.events import relay_event
 from ..sessions.controller import SessionController
 from ..tasks.execution import manually_completed
 from ..tasks.requests import TaskRequestError
-from ..tasks.review import checked_review
+from .task_verification import checked_review
 
 
 def mark_task_done(
     ctx: Any, task: dict[str, Any], actor_user_id: str, body: dict[str, Any],
     reload_task: Callable[[], dict[str, Any]],
+    *, session_id: str | None = None,
 ) -> dict[str, Any]:
     # A streamed daemon event takes the node lock before writing the database.
     # Take the same lock before opening the Task write scope when stopping a run.
@@ -22,7 +23,7 @@ def mark_task_done(
         with (ctx.registry.dispatch_scope([active["nodeId"]] if active else []),
               ctx.session_store.mutation_scope(active["sessionId"]) if active else nullcontext(),
               ctx.task_store.task_write_scope(task["id"]),
-              checked_review(ctx, task, body)):
+              checked_review(ctx, task, body, session_id=session_id)):
             current = reload_task()
             if current.get("isRoutine") or ("reviewRevision" in body and current["status"] != "review"):
                 raise TaskRequestError(409, "task_acceptance_requires_review")

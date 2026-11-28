@@ -13,6 +13,7 @@ mixin that persists it. Collaboration policy itself stays in
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, UTC
 from typing import Any
 from loguru import logger
@@ -24,8 +25,10 @@ from ...collaboration.policy import (
     ROUND_RESULT_STATE_KEY,
     report_reminder_transition,
     without_report_reminder,
+    is_question,
 )
 from ...core.ids import new_relay_id
+from ...core.task_verification import CHECK_REVISION_FIELD, CHECK_STATE_KEY, RESULT_FIELD, recorded_check_result
 from ...persistence.events import relay_event
 from ...sessions.agent_state import merge_agent_state
 from .run_cursor import advanced_run_cursor
@@ -331,7 +334,17 @@ class RunProgressionMixin(RegistryState):
             reports_round_result=reports_round_result,
             reported_round_result=self._round_result(turn.event) if reports_round_result else None,
         )
-        next_state = self._record_completed_turn(run_request, turn, decision, sandbox, controller)
+        check_result = None
+        check = (run_request.get("state") or {}).get(CHECK_STATE_KEY)
+        if check and decision.succeeded and (decision.round_result or {}).get("status") != "blocked":
+            check_result = {
+                **recorded_check_result(turn.event.get(RESULT_FIELD), check["check"]),
+                CHECK_REVISION_FIELD: check["revision"],
+            }
+        effective = _with_verification(decision, check_result, run_request["assignments"])
+        next_state = self._record_completed_turn(
+            run_request, turn, decision, sandbox, controller, effective, check_result
+        )
         if not decision.succeeded:
             outcome = f"{_agent_label(turn.assignment)} failed with exit code {turn.event['exitCode']}."
             self._fail_after_turn(
@@ -340,7 +353,7 @@ class RunProgressionMixin(RegistryState):
             )
             return
         self._advance_after_completed_turn(
-            run_request, terminal_claim_id, controller, turn.assignment, decision, next_state
+            run_request, terminal_claim_id, controller, turn.assignment, effective, next_state
         )
 
     def _record_completed_turn(
@@ -350,6 +363,8 @@ class RunProgressionMixin(RegistryState):
         decision: CompletedTurn,
         sandbox: dict[str, Any],
         controller: Any,
+        effective: CompletedTurn,
+        check_result: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """Record the turn's completion and fold its report into the round state."""
         event = turn.event
@@ -357,6 +372,7 @@ class RunProgressionMixin(RegistryState):
         self.clear_run_output(event["runId"])
         details = {
             **({"workResult": decision.work_result} if decision.work_result else {}),
+            **({RESULT_FIELD: check_result} if check_result else {}),
             **({"outputTruncated": True} if event.get("outputTruncated") else {}),
         }
         next_state = (
@@ -377,8 +393,8 @@ class RunProgressionMixin(RegistryState):
             self._record_generated_workspace_artifacts(
                 sandbox, run_request, event, turn.artifact_snapshot, turn.assignment
             )
-        if decision.round_result:
-            next_state = {**next_state, ROUND_RESULT_STATE_KEY: decision.round_result}
+        if effective.round_result:
+            next_state = {**next_state, ROUND_RESULT_STATE_KEY: effective.round_result}
         next_state = _with_next_steps(next_state, event, decision.succeeded)
         if decision.rejected_reason is not None:
             # The daemon found a verdict file and refused it; say why on the
@@ -390,7 +406,7 @@ class RunProgressionMixin(RegistryState):
             next_state = record_work_result(
                 next_state,
                 turn.assignment,
-                decision.work_result,
+                effective.work_result,
                 answering=is_answer_turn(
                     run_request.get("state") or {}, run_request.get("currentIndex", 0)
                 ),
@@ -462,6 +478,24 @@ class RunProgressionMixin(RegistryState):
         if not updated:
             return
         self._follow_up_run_request(updated)
+
+
+def _with_verification(
+    decision: CompletedTurn, result: dict[str, Any] | None, assignments: list[dict[str, Any]],
+) -> CompletedTurn:
+    if result is None or result["status"] == "passed" or is_question(decision.round_result):
+        return decision
+    if result["status"] == "failed":
+        target = assignments[0]
+        note = f"Required check failed for {result['candidateCommit']}. {result['output']}"[:1000]
+        work = {"status": "continue", "evidence": [note], "note": note, "findings": [
+            {"workItemId": target.get("workItemId") or target["assignmentId"], "note": note},
+        ]}
+    else:
+        note = f"Required check could not run. {result['output']}"[:1000]
+        work = {"status": "blocked", "evidence": [note], "note": note}
+    return replace(decision, uses_work_protocol=True, work_result=work,
+                   round_result={"status": "blocked", "note": note})
 
 
 def _with_next_steps(

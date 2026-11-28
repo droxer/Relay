@@ -10,13 +10,13 @@ import { canRunAutomationNow } from "../../lib/routine.ts";
  * action is derived from the record's own state here rather than assembled
  * per surface, which is what kept Retry and Cancel from ever coexisting.
  *
- * Mark-done is available for every unfinished task. Other status moves use
- * the band's status control.
+ * Tasks with required checks offer completion from Review. Other status
+ * moves use the band's status control.
  */
 export type RecordAction = "run" | "retry" | "resume" | "cancel" | "done" | "delete" | "triage";
 
 export function recordActions(
-  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId" | "dispatchOutcome" | "attention">,
+  task: Pick<RelayTaskListItem, "status" | "isRoutine" | "routineState" | "routinePauseReason" | "assignedAgentId" | "assignedTeamId" | "projectId" | "sourceRoutineId" | "dispatchOutcome" | "attention" | "verificationCheck">,
   /** Set when the task belongs to a project that is closed for work. */
   options?: { readOnly?: boolean; canCancel?: boolean; automationRunning?: boolean },
 ): readonly RecordAction[] {
@@ -25,7 +25,7 @@ export function recordActions(
   if (options?.readOnly) return [];
   const assigned = Boolean(task.assignedAgentId || task.assignedTeamId || task.projectId);
   const canCancel = options?.canCancel ?? task.status === "running";
-  if (canCancel) return task.isRoutine ? ["cancel"] : ["cancel", "done"];
+  if (canCancel) return task.isRoutine || task.verificationCheck ? ["cancel"] : ["cancel", "done"];
   // Run now works on a paused automation too; only a rate-limit pause refuses it.
   if (task.isRoutine) return canRunAutomationNow(task, options?.automationRunning) ? ["run"] : [];
   if (task.status === "done") return [];
@@ -37,7 +37,7 @@ export function recordActions(
   // A dispatch that was refused leaves the occurrence assigned and not
   // running — the state `784d23fa` made require a manual retry.
   else if (task.attention?.code !== "workflow_blocked" && assigned && !(task.dispatchOutcome?.state === "queued" && task.dispatchOutcome.code === "task_wip_limit") && (task.status === "blocked" || task.status === "assigned")) actions.push("retry");
-  actions.push("done");
+  if (!task.verificationCheck || task.status === "review") actions.push("done");
   return actions;
 }
 
