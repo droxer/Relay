@@ -215,7 +215,8 @@ test("a computer that is not plainly online says why and what to do", async ({ p
   await expect(card("Healthy computer").locator(".computer-card-connection")).toHaveCount(0);
 
   const offline = card("Offline computer").locator(".computer-card-connection");
-  await expect(offline).toContainText("Not connected");
+  await expect(card("Offline computer").locator(".adm-presence-pill")).toHaveText("Offline");
+  await expect(offline.locator(".computer-card-connection-title")).toHaveCount(0);
   await expect(offline).toContainText("Relay reconnects on its own");
   await expect(offline.locator("code")).toHaveText("relay status");
   // Absence is not failure: a dark computer speaks in the neutral voice.
