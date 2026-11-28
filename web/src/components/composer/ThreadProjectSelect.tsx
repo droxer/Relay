@@ -19,9 +19,12 @@ export function ThreadProjectSelect({ projectId, projects, locked, loading, onCh
   const label = projectId
     ? selected?.name ?? t(loading ? "composer.project_loading" : "composer.project_unavailable")
     : noProject;
+  const selectedValue = projectId ? selected?.id ?? null : "";
 
   return (
-    <Select value={projectId ?? ""} onValueChange={value => onChange(value || null)}>
+    <Select value={selectedValue} onValueChange={value => {
+      if (value !== null) onChange(value || null);
+    }}>
       <SelectTrigger size="sm" className="thread-project-select" aria-label={t("composer.choose_project")}
         title={label} disabled={locked || (!projectId && options.length === 0)}>
         <NavProjects size={ICON.sm} aria-hidden="true" />

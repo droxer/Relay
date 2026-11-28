@@ -38,6 +38,9 @@ export function useThreadNavigation({
   route,
   myThreads,
   tasks,
+  activeSession,
+  composingNew,
+  routedSessionId,
   routedProjectId,
   recordTaskId,
   threadComputers,
@@ -53,6 +56,7 @@ export function useThreadNavigation({
   const setComposingNew = useRelayStore((s) => s.setComposingNew);
   const setNewThreadNodeId = useComposerTargetStore((s) => s.setNewThreadNodeId);
   const pickRoom = useComposerTargetStore((s) => s.pickRoom);
+  const canChooseDraftProject = !activeSession && !routedSessionId && (composingNew || route === "main");
 
   function openThread(sessionId: string, replace = false, parentTaskId?: string) {
     const session = myThreads.find((candidate) => candidate.id === sessionId);
@@ -78,12 +82,12 @@ export function useThreadNavigation({
   }
 
   function changeDraftProject(projectId: string | null) {
-    if (!useRelayStore.getState().composingNew || projectId === routedProjectId) return;
+    if (!canChooseDraftProject || projectId === routedProjectId) return;
     const targets = useComposerTargetStore.getState();
     targets.setActiveTarget(null);
     targets.clearPendingTeam();
     pickRoom();
-    syncThreadUrl(null, true, projectId);
+    syncThreadUrl(null, composingNew, projectId);
   }
 
   function selectProject(projectId: string | null) {
@@ -93,5 +97,5 @@ export function useThreadNavigation({
     navigateToProject(projectId);
   }
 
-  return { openThread, startNewThread, changeDraftProject, selectProject };
+  return { openThread, startNewThread, canChooseDraftProject, changeDraftProject, selectProject };
 }
