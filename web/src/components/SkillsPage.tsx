@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createSkill,
@@ -15,7 +15,7 @@ import { useOlderSkillRevisions, useSkill, useSkills, SKILLS_QUERY_KEY } from ".
 import { useUserAgents } from "../hooks/useUserAgents";
 import { useTeams } from "../hooks/useTeams";
 import type { CurrentUser, SkillFileInput, SkillRepositoryImportResult, SkillsResponse, SkillVisibility } from "../types";
-import { ActionAdd, ICON } from "./icons";
+import { ActionAdd, DisclosureChevron, ICON } from "./icons";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ChoiceGroup } from "@/components/ui/choice-group";
@@ -28,7 +28,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { SearchInput } from "@/components/ui/search-input";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { compactDate } from "../lib/workspaceFormat";
-import { groupSkillsByFolder } from "../lib/skillGroups";
+import { groupSkills, searchSkillGroups } from "../lib/skillGroups";
 import { ShareSkillDrawer } from "./ShareSkillDrawer";
 import { SkillPreviewDrawer } from "./SkillPreviewDrawer";
 import { SkillImportProgress } from "./SkillImportProgress";
@@ -98,6 +98,23 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const phone = useMediaQuery(PHONE_QUERY);
   const selectedId = skillId ?? (phone ? null : skillsQuery.data?.skills[0]?.id ?? null);
   const [query, setQuery] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const skillGroups = useMemo(() => groupSkills(skillsQuery.data?.skills ?? []), [skillsQuery.data]);
+  const selectedGroupKey = skillGroups.find((group) => group.skills.some((item) => item.id === selectedId))?.key;
+  const searching = Boolean(query.trim());
+  const selectionKey = selectedGroupKey ? `${selectedGroupKey}:${selectedId}` : null;
+  useKeyChange(selectionKey, () => {
+    if (selectedGroupKey && !searching) setExpandedGroups((current) => new Set(current).add(selectedGroupKey));
+  }, { from: null });
+
+  function toggleGroup(key: string) {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }
+
   const detailQuery = useSkill(selectedId);
   const [mode, setMode] = useState<CreateMode | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -294,17 +311,8 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
   const sourceLabelId = `${drawerId}-source`;
   const visibilityLabelId = `${drawerId}-visibility`;
   const editorVisibilityLabelId = `${drawerId}-editor-visibility`;
-  /* Matched against everything the row and its band print — the display
-     name, the slug, and the folder path the band is named for — so a search
-     never hides a row whose visible text contains the term. */
-  const needle = query.trim().toLowerCase();
-  const visibleSkills = needle
-    ? skills.filter((item) =>
-        `${item.displayName} ${item.slug} ${item.description} ${item.sourceRef?.subpath ?? ""} ${item.namespace}`
-          .toLowerCase().includes(needle),
-      )
-    : skills;
-  const skillGroups = groupSkillsByFolder(visibleSkills);
+  const ungroupedLabel = t("skills.group_ungrouped");
+  const visibleGroups = searchSkillGroups(skillGroups, query, ungroupedLabel);
 
   /* The landing frame is the roster frame every other rail route uses: a
      <PageHeader> over the list inside the rail, not a full-width banner above
@@ -375,7 +383,7 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
               </Button>
             }
           />
-        ) : !visibleSkills.length ? (
+        ) : !visibleGroups.length ? (
           /* Same split the agent and team rosters make: a library with nothing
              in it offers the create action, a library filtered down to nothing
              does not — the fix there is to change the search, not to publish. */
@@ -391,27 +399,46 @@ export function SkillsPage({ currentUser, skillId, onSelectSkill }: {
             }
           />
         ) : (
-          /* The library rail is the same object as the thread, agent, and team
-             rails — a selectable roster beside a detail pane — so it wears
-             their row grammar: a .rail-row carrying the selection, the inset
-             on the inner button (that button is the focus target), and one
-             meta line under the name. Banded by the folder each bundle sits
-             in (lib/skillGroups), on the agent roster's band recipe: a
-             repository import keeps the shape its author gave it. */
           <div className="skills-roster-groups">
-            {skillGroups.map((group) => {
-              const label = group.label ?? t("skills.group_uploads");
+            {visibleGroups.map((group) => {
+              const label = group.label ?? ungroupedLabel;
+              const expanded = searching || expandedGroups.has(group.key);
+              const listId = `${drawerId}-group-${group.key}`;
+              const groupLabel = (
+                <>
+                  <span className="skills-roster-group-name" translate={group.label ? "no" : undefined} title={label}>{label}</span>
+                  {group.qualifier ? (
+                    <span className="skills-roster-group-repo" translate="no" title={group.qualifier}>{group.qualifier}</span>
+                  ) : null}
+                  <span className="skills-roster-group-count tnum">{group.skills.length}</span>
+                </>
+              );
               return (
                 <div key={group.key} className="skills-roster-group">
-                  <div className="skills-roster-group-label">
-                    <span className="skills-roster-group-name" translate={group.label ? "no" : undefined} title={label}>{label}</span>
-                    {group.repository ? (
-                      <span className="skills-roster-group-repo" translate="no">{group.repository}</span>
-                    ) : null}
-                    <span className="skills-roster-group-count tnum">{group.skills.length}</span>
-                  </div>
-                  <ul className="skills-roster-list" data-density="compact" aria-label={group.repository ? `${label} · ${group.repository}` : label}>
-                    {group.skills.map((item) => (
+                  <h3 className="skills-roster-group-heading" data-current={group.key === selectedGroupKey || undefined}>
+                    {searching ? (
+                      <span className="skills-roster-group-label">{groupLabel}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="skills-roster-group-label"
+                        aria-expanded={expanded}
+                        aria-controls={listId}
+                        onClick={() => toggleGroup(group.key)}
+                      >
+                        <DisclosureChevron className="skills-roster-group-chevron" size={ICON.xs} aria-hidden="true" />
+                        {groupLabel}
+                      </button>
+                    )}
+                  </h3>
+                  <ul
+                    id={listId}
+                    className="skills-roster-list"
+                    data-density="compact"
+                    aria-label={group.qualifier ? `${label} · ${group.qualifier}` : label}
+                    hidden={!expanded}
+                  >
+                    {expanded && group.skills.map((item) => (
                       <li
                         key={item.id}
                         className="skills-roster-row rail-row"

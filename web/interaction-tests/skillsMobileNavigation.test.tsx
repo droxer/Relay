@@ -44,13 +44,16 @@ it.each(["loading", "error"] as const)("returns to the mobile skill library whil
   const page = container.querySelector(".skills-page")!;
   expect(page.getAttribute("data-phone-pane")).toBe("list");
   expect(screen.queryByRole("button", { name: "skills.title" })).toBeNull();
-  await user.click(await screen.findByRole("button", { name: /Release notes/ }));
+  const group = await screen.findByRole("button", { name: /skills\.group_ungrouped/ });
+  await user.click(group);
+  await user.click(screen.getByRole("button", { name: /Release notes/ }));
   await screen.findByRole(state === "loading" ? "status" : "alert");
   expect(page.getAttribute("data-phone-pane")).toBe("detail");
 
   await user.click(screen.getByRole("button", { name: "skills.title" }));
 
   expect(page.getAttribute("data-phone-pane")).toBe("list");
+  expect(group.getAttribute("aria-expanded")).toBe("true");
   expect(screen.queryByRole("button", { name: "skills.title" })).toBeNull();
   client.clear();
 });
