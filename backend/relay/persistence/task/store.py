@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import (
@@ -8,6 +9,7 @@ from sqlalchemy import (
 )
 
 from ..engine import create_all_tables, shared_engine
+from ..listeners import ChangeListener
 from ..sql import metadata as shared_metadata
 from ..tables import tasks as tasks_tables
 from .writes import TaskWriteRows
@@ -54,8 +56,14 @@ class DatabaseTaskStore(
         # writing rows would grow the table forever. ``create_app`` turns this
         # off when the scheduler is disabled.
         self.emit_automation_events = True
+        self._thread_activity_changes = ChangeListener("Thread activity")
         if create_schema:
             create_all_tables(self.engine)
+
+    def set_thread_activity_listener(
+        self, listener: Callable[[str], None], *, database_channel: str | None = None
+    ) -> None:
+        self._thread_activity_changes.attach(listener, database_channel)
 
     def verify_schema(self) -> None:
         with self.engine.connect() as conn:

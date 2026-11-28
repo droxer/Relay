@@ -6,6 +6,8 @@ from collections.abc import Callable
 from typing import Any
 from typing import TYPE_CHECKING
 
+from ..listeners import ChangeListener
+
 
 class TaskStoreState:
     metadata: Any
@@ -16,6 +18,7 @@ class TaskStoreState:
     task_prerequisites: Any
     engine: Any
     emit_automation_events: Any
+    _thread_activity_changes: ChangeListener
 
     if TYPE_CHECKING:
         # Methods one mixin calls on another, declared so each type-checks alone.

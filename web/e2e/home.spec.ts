@@ -81,6 +81,10 @@ async function serve(page: Page, theme: Theme, onboarding: Record<string, string
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() !== "GET") wire.push({ method: request.method(), path, body: JSON.parse(request.postData() ?? "null") });
+    if (path === "/api/v1/threads/activity/changes") {
+      await route.fulfill({ status: 204 });
+      return;
+    }
     if (path.endsWith("/events")) {
       await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
       return;
@@ -172,7 +176,7 @@ test("idle Home revalidates each compact collection once per poll", async ({ pag
   const reads: { path: string; query: string; validator: string | null }[] = [];
   const taskValidator = 'W/"home-tasks"';
   const threadValidator = 'W/"thread-head"';
-  await page.route(/\/api\/v1\/(tasks|threads)(\?|\/|$)/, async route => {
+  await page.route(/\/api\/v1\/(tasks|threads)(\?|$)/, async route => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;

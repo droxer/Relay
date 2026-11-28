@@ -1451,6 +1451,15 @@ Errors are the `detail` codes `github_repository_required`,
 `github_rate_limited` (429);
 `github_unavailable`, `github_unreachable` (502); and `github_timeout` (504).
 
+### Live Thread activity
+
+`GET /api/v1/threads/activity/changes` opens an authenticated server-sent event
+stream for the caller's Activity list. A committed Task-to-Thread link or
+status change on a linked Task emits a `changed` event with an empty JSON
+object. Refetch `GET /api/v1/threads?view=summary&include=activity` when the event
+arrives or the stream reconnects. Keep periodic refresh as a fallback for
+missed hints.
+
 ### Thread execution and deferred deletion
 
 `GET /api/v1/threads/{id}/execution` returns the same `execution` object included

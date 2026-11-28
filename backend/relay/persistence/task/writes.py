@@ -30,7 +30,8 @@ from .flow import wip_count_query, user_wip_limit
 from .reducer import materialize_task_events
 from ...core.ids import new_database_id, now_iso
 from ..events import relay_task_event
-from ..engine import store_transaction
+from ..engine import after_store_commit, publish_database_notification, store_transaction
+from ..listeners import thread_activity_key
 from ..resource_lock import resource_transaction
 from ...tasks.execution import prepare_execution_events
 from .numbering import number_task_events
@@ -300,6 +301,15 @@ class TaskWriteRows(TaskStoreState):
             if self.emit_automation_events:
                 insert_outbox_rows(conn, task_outbox_rows(current, task))
             insert_notification_rows(conn, task_notification_rows(current, task, events))
+            linked = task.get("linkedSessionIds")
+            if (owner := task.get("ownerUserId")) and (
+                linked != current.get("linkedSessionIds")
+                or (linked and task.get("status") != current.get("status"))
+            ):
+                key = thread_activity_key(owner)
+                changes = self._thread_activity_changes
+                publish_database_notification(conn, self.engine, changes.database_channel, key)
+                after_store_commit(self.engine, partial(changes.fire, key))
         logger.debug(
             "Database task events appended",
             task_id=task_id,
