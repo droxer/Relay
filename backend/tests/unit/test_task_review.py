@@ -46,14 +46,17 @@ def test_empty_legacy_review_is_explicit_and_cannot_invent_evidence():
 
 def test_review_excludes_other_rounds_and_uses_latest_repair():
     task, session = records()
+    revision = build_review_brief(task, session)["revision"]
     session["agentRuns"].insert(0, {"id": "old", "assignmentId": "old-assignment", "agent": "claude", "status": "failed"})
     session["agentRuns"].insert(1, {**session["agentRuns"][-1], "id": "failed-attempt", "status": "failed"})
     session["artifacts"].append({"id": "old-file", "kind": "workspace_file", "agentRunId": "old"})
     session["collaborationRounds"].append({"roundId": "unrelated", "workScope": {"kind": "thread"}, "assignments": []})
+    session["activeRoundId"] = "unrelated"
     brief = build_review_brief(task, session)
     assert brief["roundId"] == "round"
     assert [run["runId"] for run in brief["reports"]] == ["run"]
     assert [item["id"] for item in brief["artifacts"]] == ["file-v1"]
+    assert brief["revision"] == revision
 
 
 def test_revision_changes_with_requirements_round_evidence_or_artifact_version():

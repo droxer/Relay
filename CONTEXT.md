@@ -458,9 +458,10 @@ A view of the newest linked Thread's recorded work for one Task: the requested
 outcome, available acceptance criteria, attributed Agent reports, and exact
 Artifact versions. Agent-reported evidence remains a claim; a CLI exit code
 records execution, not verification of the outcome. Accepting from this view
-names its `reviewRevision`; a changed Task, Thread, or Artifact record requires
-the person to refresh and review again. It does not assert that the Computer's
-current workspace still matches the recorded Artifacts.
+names its `reviewRevision`. Task changes, a new Task round, or updated evidence
+in the review require the person to refresh and review again. Conversation
+activity outside the reviewed work leaves the revision stable. Artifact links
+target the versions recorded for the review.
 An opted-in Build → Review Project Task also shows the Daemon Node's required
 check result for an exact Git commit and owner-selected check definition. The
 owner accepts that candidate using the current review revision after it passes.

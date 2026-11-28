@@ -51,9 +51,11 @@ def build_review_brief(task: dict[str, Any], session: dict[str, Any] | None) -> 
         latest[run.get("assignmentId") or run["id"]] = run
     reports = [_report(run) for run in latest.values()]
     run_ids = {run["id"] for run in runs}
-    artifacts = [artifact_index_item(source, item) for item in source.get("artifacts", [])
-                 if (item.get("agentRunId") in run_ids or not rounds)
-                 and not is_thread_record_artifact(source, item)]
+    artifacts = [
+        item for item in source.get("artifacts", [])
+        if (item.get("agentRunId") in run_ids or not rounds)
+        and not is_thread_record_artifact(source, item)
+    ]
     criteria = list(dict.fromkeys(
         text for item in (manifest or {}).get("workGraph", {}).get("items", [])
         for text in item.get("acceptanceCriteria", [])
@@ -83,17 +85,19 @@ def build_review_brief(task: dict[str, Any], session: dict[str, Any] | None) -> 
             ("verification", bool(result)),
         ) if not present],
     }
-    # Include execution ownership and source versions even when a new round
-    # produces an identical-looking result. No raw transcript enters the hash.
+    # Bind the decision to Task changes and the recorded work in the brief.
+    # Thread activity and the index metadata it updates are outside that work.
     revision_source = {
         "brief": brief, "executionOwner": task.get("executionOwner"),
         "taskVersion": task.get("eventCount", len(task.get("events", []))),
         "taskUpdatedAt": task.get("updatedAt"),
-        "sourceVersion": source.get("eventCount"),
-        "activeRoundId": source.get("activeRoundId"),
     }
     revision = hashlib.sha256(json.dumps(revision_source, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return {**brief, "revision": revision}
+    return {
+        **brief,
+        "revision": revision,
+        "artifacts": [artifact_index_item(source, item) for item in artifacts],
+    }
 
 
 def _report(run: dict[str, Any]) -> dict[str, Any]:
