@@ -591,7 +591,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       navigateToRoute("main");
     }
   }, [navigateToRoute, route, user.role]);
-  const { openThread, startNewThread, changeDraftProject, selectProject } = useThreadNavigation({
+  const { openThread, startNewThread, canChooseDraftProject, changeDraftProject, selectProject } = useThreadNavigation({
     route,
     projects,
     projectsReady: projectsStatus === "ready",
@@ -600,7 +600,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     tasksStatus,
     activeSession,
     composingNew,
-    routedSessionId,
+    routedSessionId: requestedSessionId ?? routedSessionId,
     routedProjectId,
     recordTaskId,
     threadComputers,
@@ -948,7 +948,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             }}
             projectLoading={projectContextPending}
             projectName={activeProject?.name}
-            draftProject={composingNew && !activeSession ? {
+            draftProject={canChooseDraftProject ? {
               projectId: routedProjectId,
               projects,
               locked: draftProjectLocked,

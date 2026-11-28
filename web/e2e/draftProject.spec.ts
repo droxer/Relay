@@ -104,6 +104,27 @@ for (const width of [320, 768, 1440]) {
   });
 }
 
+test("the default Chat composer can start a Project Conversation", async ({ page }) => {
+  const runs = await serve(page);
+  await page.goto("/threads");
+  const { project, message, send } = chat(page);
+  await message.fill("Discuss the launch");
+  await expect(project).toBeEnabled();
+  await project.click();
+  await page.getByRole("option", { name: launch.name, exact: true }).click();
+  await expect(page).toHaveURL(/\/projects\/launch\/new$/);
+  await expect(message).toHaveValue("Discuss the launch");
+  expect(runs).toEqual([]);
+
+  await send.click();
+  await expect(page).toHaveURL(/\/projects\/launch\/threads\/created-chat$/);
+  expect(runs).toHaveLength(1);
+  expect(runs[0]).toMatchObject({ projectId: "launch", taskGoal: "Discuss the launch" });
+  await expect(project).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/threads$/);
+});
+
 test("changes scope in place, keeps text and images, and sends a Project Chat", async ({ page }) => {
   const runs = await serve(page);
   let threadCreates = 0;
