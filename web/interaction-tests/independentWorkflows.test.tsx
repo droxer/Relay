@@ -137,6 +137,22 @@ it("saves against the Project version when the editor opened", async () => {
   } }));
 });
 
+it.each([true, false])("saves independent review as %s when toggled", async (requireIndependentReview) => {
+  const record: ProjectRecord = requireIndependentReview ? pair : {
+    ...pair,
+    predefinedWorkflows: { build_review: { agentIds: null, requireIndependentReview: true } },
+  };
+  mount(<ProjectWorkflows project={record} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
+  const row = (await screen.findByRole("heading", { name: "collab_style.build_review" })).closest("li")!;
+  fireEvent.click(within(row).getByRole("button", { name: "workflow.select_participants_named" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "workflow.preset_require_independent_review" }));
+  fireEvent.click(screen.getByRole("button", { name: "workflow.save" }));
+  await waitFor(() => expect(updateProject).toHaveBeenCalledWith({ projectId: "p", input: {
+    expectedVersion: 4,
+    predefinedWorkflowChange: { workflowId: "preset:build_review", agentIds: null, requireIndependentReview },
+  } }));
+});
+
 it("blocks a Predefined Workflow whose selection leaves no enabled Agent", async () => {
   const empty = { ...pair, predefinedWorkflows: { build_review: { agentIds: ["gone"] } } } as ProjectRecord;
   mount(<ProjectWorkflows project={empty} agents={both} userId="owner" readOnly={false} onOpenThread={vi.fn()} />);
