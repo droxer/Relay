@@ -2528,8 +2528,9 @@ Migrated Build → Review and Lead-led definitions have `kind: "predefined"`,
 `humanApproval`. Choices derive `stepAgentIds` from those saved members.
 The runtime compiles the saved roles and approval policy when the Task starts.
 An empty step array on such a definition does not mean that the process has
-no participants. The owner can rename, enable, disable, or delete the
-definition. Step or scope edits return 400 `workflow_predefined_immutable`.
+no participants. The owner can only rename the definition. Changes to other
+definition fields, including `enabled`, return 400 `workflow_predefined_immutable`.
+Deleting the definition returns 409 `workflow_predefined_immutable`.
 The public create contract accepts custom steps. It does not accept `kind`
 or `predefined` as client-authored fields.
 

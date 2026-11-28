@@ -170,7 +170,9 @@ ordered steps, each with an Agent, instructions, acceptance criteria, and an
 optional approval gate. The owner manages it where it was created. A Team-owned Workflow runs with its owning Team through a direct Workflow Run.
 A standalone Team's default and Team-owned custom definitions can be migrated to
 Computer-scoped Workflows. Saved standalone Predefined Workflows retain their
-roster, lead, and approval policy. Legacy definitions and frozen runs remain readable.
+roster, lead, and approval policy. A saved Predefined Workflow can only be renamed;
+its enabled state and definition are fixed, and it cannot be deleted.
+Legacy definitions and frozen runs remain readable.
 A Project-owned Workflow is available to Tasks and Automations in that Project
 without an assigned Team. Direct Workflow Runs may name an eligible Team. Using a Workflow never transfers its ownership.
 A Project is selected for execution; its enabled Agents and Computer constrain

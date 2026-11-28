@@ -4336,6 +4336,8 @@
     "step_count_other": "{{count}} steps",
     "create_title": "New workflow",
     "edit_title": "Edit workflow",
+    "rename": "Rename workflow",
+    "rename_conflict": "This workflow changed. Refresh it and try renaming again.",
     "editor_lede": "Define the process: an Agent, instructions, and acceptance criteria for each step. Add approval gates where a person should decide.",
     "team_name": "Workflow name",
     "steps": "Steps",

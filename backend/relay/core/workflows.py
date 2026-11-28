@@ -146,7 +146,7 @@ def project_workflow_definition(owner: str, payload: dict[str, Any], *, current:
         raise ValueError('workflow_fields_invalid')
     merged = {**(current or {}), **payload}
     if current and current.get('kind') == 'predefined':
-        if set(payload) - {'name', 'enabled'}:
+        if set(payload) - {'name'}:
             raise ValueError('workflow_predefined_immutable')
         name = _workflow_name(merged)
         return {key: value for key, value in merged.items() if key != 'version'} | {

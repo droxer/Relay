@@ -157,6 +157,8 @@ class DatabaseWorkflowStore:
         current = self.get_workflow(workflow_id)
         if not current:
             raise KeyError(workflow_id)
+        if current.get('kind') == 'predefined':
+            raise ValueError('workflow_predefined_immutable')
         with resource_transaction(self.engine, self._scope_key(current, current['ownerUserId'])):
             self.assert_not_default(workflow_id)
             with store_transaction(self.engine) as conn:

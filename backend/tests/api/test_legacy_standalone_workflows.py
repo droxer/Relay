@@ -37,6 +37,38 @@ def command_event_fields(command):
     return {**{key: command[key] for key in ('sessionId', 'runId', 'agent', 'leaseId')}, 'commandId': command['id']}
 
 
+@pytest.mark.parametrize('style', ['build_review', 'lead_led'])
+def test_predefined_workflow_only_allows_name_changes(monkeypatch, style):
+    with standalone_world(monkeypatch) as (app, client, _, _, lead, _):
+        team = create_team(client, lead, collaborationStyle=style)
+        migrate(app)
+        path = f"/api/v1/workflows/{team['id']}"
+        before = client.get(path).json()['workflow']
+        assert before['kind'] == 'predefined'
+        for patch in (
+            {'enabled': False}, {'enabled': True}, {'workflowSteps': []},
+            {'computerId': 'another-computer'}, {'name': 'Changed', 'enabled': False},
+        ):
+            rejected = client.patch(path, json=patch)
+            assert rejected.status_code == 400, rejected.text
+            assert client.get(path).json()['workflow'] == before
+
+        renamed = client.patch(path, json={'name': 'Renamed preset', 'expectedVersion': before['version']})
+        assert renamed.status_code == 200, renamed.text
+        saved = renamed.json()['workflow']
+        assert saved['name'] == 'Renamed preset'
+        assert saved['version'] == before['version'] + 1
+        assert saved['predefined'] == before['predefined']
+        assert saved['computerId'] == before['computerId']
+        assert saved['enabled'] == before['enabled']
+        assert client.patch(path, json={'name': 'Stale edit', 'expectedVersion': before['version']}).status_code == 409
+        assert client.patch(path, json={'name': '  '}).status_code == 400
+        rejected = client.delete(path)
+        assert rejected.status_code == 409, rejected.text
+        assert rejected.json()['detail'] == 'workflow_predefined_immutable'
+        assert client.get(path).json()['workflow'] == saved
+
+
 def finish_command(registry, node, command):
     base = command_event_fields(command)
     registry.handle_event(node['id'], {

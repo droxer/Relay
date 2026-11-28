@@ -95,8 +95,8 @@ export function getWorkflowName(workflowId: string, signal?: AbortSignal, cache?
   return privateConditionalJson(`/workflows/${encodeURIComponent(workflowId)}?view=name`, signal, cache);
 }
 export function saveWorkflow(input: WorkflowMutationInput, workflowId?: undefined): Promise<{ workflow: Workflow }>;
-export function saveWorkflow(input: Partial<WorkflowMutationInput>, workflowId: string): Promise<{ workflow: Workflow }>;
-export function saveWorkflow(input: Partial<WorkflowMutationInput>, workflowId?: string): Promise<{ workflow: Workflow }> {
+export function saveWorkflow(input: Partial<WorkflowMutationInput> & { expectedVersion?: number }, workflowId: string): Promise<{ workflow: Workflow }>;
+export function saveWorkflow(input: Partial<WorkflowMutationInput> & { expectedVersion?: number }, workflowId?: string): Promise<{ workflow: Workflow }> {
   return apiJson(workflowId ? `/workflows/${encodeURIComponent(workflowId)}` : "/workflows", {
     method: workflowId ? "PATCH" : "POST", body: input,
   });

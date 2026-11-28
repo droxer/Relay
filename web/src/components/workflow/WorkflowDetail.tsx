@@ -136,20 +136,20 @@ export function WorkflowDetail({
                 tone={workflow.enabled ? "good" : "neutral"}
                 label={t(workflow.enabled ? "teams.enabled" : "teams.disabled")}
               />
-              {!isPredefined ? (
-                <Button type="button" variant="default" size="dense" disabled={busy} onClick={onEdit}>
-                  <ActionEdit size={ICON.sm} aria-hidden="true" />
-                  {t("workflow.edit_steps")}
+              <Button type="button" variant="default" size="dense" disabled={busy} onClick={onEdit}>
+                <ActionEdit size={ICON.sm} aria-hidden="true" />
+                {t(isPredefined ? "workflow.rename" : "workflow.edit_steps")}
+              </Button>
+              {!isPredefined ? <>
+                <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onToggleEnabled}>
+                  <ActionToggle size={ICON.sm} aria-hidden="true" />
+                  {t(workflow.enabled ? "workflows.disable" : "workflows.enable")}
                 </Button>
-              ) : null}
-              <Button type="button" variant="outline" size="dense" disabled={busy} onClick={onToggleEnabled}>
-                <ActionToggle size={ICON.sm} aria-hidden="true" />
-                {t(workflow.enabled ? "workflows.disable" : "workflows.enable")}
-              </Button>
-              <Button type="button" variant="ghost" size="dense" disabled={busy} onClick={onDelete}>
-                <AdminDelete size={ICON.sm} aria-hidden="true" />
-                {t("workflow.delete")}
-              </Button>
+                <Button type="button" variant="ghost" size="dense" disabled={busy} onClick={onDelete}>
+                  <AdminDelete size={ICON.sm} aria-hidden="true" />
+                  {t("workflow.delete")}
+                </Button>
+              </> : null}
             </div>
           )}
         />
