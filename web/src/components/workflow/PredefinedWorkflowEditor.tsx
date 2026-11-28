@@ -48,11 +48,12 @@ function EditorForm({ project, template, agents, onClose }: Props & { template: 
   const { updateProjectMutation } = useRelayMutations();
   const members = project.members.filter(member => member.enabled);
   const customised = project.predefinedWorkflows?.[template]?.agentIds != null;
-  const [expectedVersion] = useState(project.version);
+  const [initial] = useState(() => ({
+    version: project.version,
+    requireIndependentReview: project.predefinedWorkflows?.build_review?.requireIndependentReview === true,
+  }));
   const [selected, setSelected] = useState(() => new Set(projectPresetParticipants(project, template)));
-  const [requireIndependentReview, setRequireIndependentReview] = useState(
-    project.predefinedWorkflows?.build_review?.requireIndependentReview === true,
-  );
+  const [requireIndependentReview, setRequireIndependentReview] = useState(initial.requireIndependentReview);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const locked = (agentId: string) => template === "lead_led" && agentId === project.leadAgentId;
@@ -64,9 +65,13 @@ function EditorForm({ project, template, agents, onClose }: Props & { template: 
     setFailure(null);
     try {
       await updateProjectMutation.mutateAsync({ projectId: project.id, input: {
-        expectedVersion,
+        expectedVersion: initial.version,
         predefinedWorkflowChange: template === "build_review"
-          ? { workflowId: "preset:build_review", agentIds, requireIndependentReview }
+          ? {
+            workflowId: "preset:build_review",
+            agentIds,
+            ...(requireIndependentReview !== initial.requireIndependentReview ? { requireIndependentReview } : {}),
+          }
           : { workflowId: "preset:lead_led", agentIds },
       } });
       onClose();
