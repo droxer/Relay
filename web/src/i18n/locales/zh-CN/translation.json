@@ -637,6 +637,10 @@
     "jump_to_bottom": "回到最新"
   },
   "composer": {
+    "choose_project": "选择项目",
+    "no_project": "无项目",
+    "project_loading": "正在加载项目…",
+    "project_unavailable": "项目不可用",
     "permission_mode": "工具权限",
     "permission_ask": "询问",
     "permission_yolo": "YOLO",

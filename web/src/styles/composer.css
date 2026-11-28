@@ -41,11 +41,21 @@
   max-width: 100%;
 }
 
+.thread-project-select {
+  max-width: min(208px, 100%);
+  min-width: 0;
+}
+
+.thread-project-content {
+  width: min(280px, var(--available-width, 280px));
+}
+
 .thread-runtime-select {
   max-width: min(208px, 30vw);
   min-width: 0;
 }
 
+.thread-project-select-name,
 .thread-runtime-select-name {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -74,6 +74,7 @@ import { PermissionPrompts } from "./composer/PermissionPrompts";
 import { openPermissionRequests } from "../lib/permissionRequests";
 import { Composer, type ComposerHandle } from "./composer/Composer";
 import type { ProjectRoomOption } from "./composer/AgentSelect";
+import type { DraftProjectSelection } from "./composer/ThreadProjectSelect";
 import { ThreadSpacePanel } from "./space/ThreadSpacePanel";
 import { buildSpaceItems, threadHasMultipleProducers } from "../lib/threadSpace";
 import { latestThreadArtifacts } from "../lib/threadArtifacts";
@@ -199,6 +200,7 @@ type ThreadsViewProps = {
    *  whether it addresses the project room or a team. */
   projectLoading?: boolean;
   projectName?: string;
+  draftProject?: DraftProjectSelection;
   /** The project's roster offered as one composer target. */
   projectRoom?: ProjectRoomOption | null;
   projectRoomSelected?: boolean;
@@ -314,6 +316,7 @@ export function ThreadsView({
   threadPaging,
   projectLoading = false,
   projectName,
+  draftProject,
   projectRoom,
   projectRoomSelected,
   onProjectRoomPicked,
@@ -887,6 +890,7 @@ export function ThreadsView({
           initializingThread={initializingThread}
           contextPending={threadsLoading || projectLoading || taskContextPending}
           projectName={projectName}
+          draftProject={draftProject}
           projectRoom={projectRoom}
           projectRoomSelected={projectRoomSelected}
           onProjectRoomPicked={onProjectRoomPicked}

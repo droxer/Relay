@@ -77,6 +77,15 @@ export function useThreadNavigation({
     syncThreadUrl(null, false, projectId);
   }
 
+  function changeDraftProject(projectId: string | null) {
+    if (!useRelayStore.getState().composingNew || projectId === routedProjectId) return;
+    const targets = useComposerTargetStore.getState();
+    targets.setActiveTarget(null);
+    targets.clearPendingTeam();
+    pickRoom();
+    syncThreadUrl(null, true, projectId);
+  }
+
   function selectProject(projectId: string | null) {
     pickRoom();
     setComposingNew(false);
@@ -84,5 +93,5 @@ export function useThreadNavigation({
     navigateToProject(projectId);
   }
 
-  return { openThread, startNewThread, selectProject };
+  return { openThread, startNewThread, changeDraftProject, selectProject };
 }

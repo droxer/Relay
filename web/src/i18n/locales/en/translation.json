@@ -651,6 +651,10 @@
     "jump_to_bottom": "Jump to latest"
   },
   "composer": {
+    "choose_project": "Choose project",
+    "no_project": "No project",
+    "project_loading": "Loading project…",
+    "project_unavailable": "Project unavailable",
     "permission_mode": "Tool permissions",
     "permission_ask": "Ask",
     "permission_yolo": "YOLO",
