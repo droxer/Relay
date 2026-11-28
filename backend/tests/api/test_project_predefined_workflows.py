@@ -340,3 +340,97 @@ def test_project_build_review_required_reviewer_blocks_and_can_retry(monkeypatch
         finish(registry, node, review_command, {})
         assert app.state.session_store.get_session(thread["id"])["status"] == "completed"
         assert take(registry, node) == []
+
+
+@pytest.mark.parametrize("kind,target_index", [("rerun", 0), ("handoff", 0), ("handoff", 1)])
+def test_project_build_review_recovery_keeps_independent_review(monkeypatch, kind, target_index):
+    with unified_world(monkeypatch) as (app, client, node, _, project, payload):
+        registry = app.state.registry
+        registry.update_status(node["id"], {"capabilities": [
+            *registry.get(node["id"])["capabilities"], "handoff-validation", "relay-thread-records",
+        ]})
+        configured = client.patch(f"/api/v1/projects/{project['id']}", json={
+            "expectedVersion": project["version"],
+            "predefinedWorkflowChange": {
+                "workflowId": "preset:build_review", "agentIds": None, "requireIndependentReview": True,
+            },
+        })
+        assert configured.status_code == 200, configured.text
+        created = client.post("/api/v1/tasks", json={
+            "title": "Needs independent review", "projectId": project["id"],
+            "assignedWorkflowId": "preset:build_review",
+        })
+        assert created.status_code == 201, created.text
+        task = created.json()
+        started = client.post(f"/api/v1/tasks/{task['id']}/runs", json={})
+        assert started.status_code == 202, started.text
+        sid = started.json()["session"]["id"]
+        [first] = take(registry, node)
+        finish(registry, node, first, {}, exitCode=1)
+        assert app.state.task_store.get_task(task["id"])["status"] == "blocked"
+
+        target_id = payload["memberAgentIds"][target_index]
+        recovery = client.post(f"/api/v1/threads/{sid}/recoveries", json={
+            "kind": kind, "targetAgentId": target_id, "idempotencyKey": "retry-required-review",
+        })
+        assert recovery.status_code == 202, recovery.text
+        assert recovery.json()["collaborationRounds"][-1]["projectSnapshot"]["requireIndependentReview"] is True
+        [builder] = take(registry, node)
+        assert builder["logicalAgentId"] == target_id
+        assert ("handoffValidation" in builder) == (kind == "handoff")
+        finish(registry, node, builder, {})
+        assert app.state.task_store.get_task(task["id"])["status"] == "running"
+        [review] = take(registry, node)
+        assert review["logicalAgentId"] == payload["memberAgentIds"][1 - target_index]
+        assert review["state"]["team_phase"] == "review"
+        assert "handoffValidation" not in review
+        finish(registry, node, review, {})
+        assert app.state.task_store.get_task(task["id"])["status"] in ("review", "done")
+        assert take(registry, node) == []
+
+
+def test_project_preset_stops_before_dispatching_removed_reviewer(monkeypatch):
+    with unified_world(monkeypatch) as (app, client, node, _, project, _):
+        response = client.post("/api/v1/workflows/preset:build_review/runs", json={
+            "projectId": project["id"], "taskGoal": "Deliver and verify", "requestId": str(uuid4()),
+        })
+        assert response.status_code == 201, response.text
+        registry = app.state.registry
+        [builder] = take(registry, node)
+        reviewer_id = next(m["agentId"] for m in project["members"] if m["agentId"] != builder["logicalAgentId"])
+        changed = client.patch(f"/api/v1/projects/{project['id']}", json={
+            "expectedVersion": project["version"],
+            "memberChange": {"op": "update", "agentId": reviewer_id, "fields": {"enabled": False}},
+        })
+        assert changed.status_code == 200, changed.text
+        finish(registry, node, builder, {})
+        assert take(registry, node) == []
+        session = app.state.session_store.get_session(builder["sessionId"])
+        assert session["status"] == "failed"
+        assert "project_agent_not_member" in session["outcome"]
+
+
+def test_handoff_receipt_records_the_source_thread_boundary(monkeypatch):
+    with unified_world(monkeypatch) as (app, client, node, _, project, payload):
+        registry = app.state.registry
+        registry.update_status(node["id"], {"capabilities": [
+            *registry.get(node["id"])["capabilities"], "handoff-validation", "relay-thread-records",
+        ]})
+        requester, receiver = payload["memberAgentIds"]
+        started = client.post("/api/v1/agent-runs", json={
+            "taskGoal": "Build", "projectId": project["id"], "assignments": [{"agentId": requester}],
+        })
+        assert started.status_code == 202, started.text
+        [first] = take(registry, node)
+        finish(registry, node, first, {})
+        before = app.state.session_store.get_session(first["sessionId"])
+        recovery = client.post(f"/api/v1/threads/{first['sessionId']}/recoveries", json={
+            "kind": "handoff", "targetAgentId": receiver,
+        })
+        assert recovery.status_code == 202, recovery.text
+        assert len(take(registry, node)) == 1
+        context = recovery.json()["collaborationRounds"][-1]["handoffContext"]
+        assert context["sourceRunId"] == first["runId"]
+        assert context["sourceEventCount"] == len(before["events"])
+        assert context["sourceEventId"] == before["events"][-1]["id"]
+        assert context["receipt"]["source"]["sessionEventId"] == context["sourceEventId"]
