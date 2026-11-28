@@ -20,7 +20,6 @@ import { projectRoomAgentIds } from "../lib/taskAssignment";
 import { retainThreadDispatchView } from "../lib/threadDispatchView";
 import { threadSendKey, useThreadSendStore } from "../lib/threadSendStore";
 import { restoreComposerDraft, threadDraftKey } from "./useComposer";
-import { messageDefinitelyRejected } from "../api-client/client";
 import { usePendingThreadMessage, type PendingDirectMessage, type ThreadMessageRetry } from "./usePendingThreadMessage";
 import { sessionComputer } from "../lib/workspaceScope";
 
@@ -301,18 +300,16 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         useRelayStore.getState().openSession(done.id);
         syncThreadUrl(done.id, true, done.projectId ?? activeProject?.id, undefined, threadComputerId(done));
       }
-      if (stopRequested) {
-        // Dispatch has accepted the run; cancelling earlier could only cancel
-        // the previous turn (or have no thread ID at all).
-        await cancelSessionRun(done.id, done.projectId);
+      if (stopRequested && done.messageRunRequestId) {
+        // The receipt can arrive after this run has already finished.
+        await cancelSessionRun(done.id, done.projectId, done.messageRunRequestId);
       }
       return true;
     } catch (error) {
       useThreadSendStore.getState().dropPendingMessage(sendKey, dispatchId);
       // A definite rejection leaves the text editable. With an ambiguous
       // outcome, retain the entire request for a same-ID retry.
-      if (messageDefinitelyRejected(error)) {
-        pending.clear(message.id);
+      if (pending.reject(message, error, isInitial)) {
         if (operationKey) messageOperationIdsRef.current.set(operationKey, message.id);
         if (view.isCurrent() && !composerRef.current?.getText().trim()) composerRef.current?.setText(message.text);
         else restoreComposerDraft(threadDraftKey({ username: selectedUser }, sessionId), message.text);
@@ -362,7 +359,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     await cancelSessionRun(activeRun?.sessionId ?? activeSession.id, activeSession.projectId);
   }
 
-  async function cancelSessionRun(sessionId: string, projectId?: string | null) {
+  async function cancelSessionRun(sessionId: string, projectId?: string | null, expectedRunRequestId?: string) {
     const view = retainThreadDispatchView();
     const selected = useRelayStore.getState();
     const onThread = !selected.composingNew && (selected.selectedSessionId ?? selected.activeSessionId) === sessionId;
@@ -375,6 +372,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
         sessionId,
         token: (cancelNodeId ? tokens[cancelNodeId] : undefined) ?? selectedToken,
         reason: t("cancel.reason"),
+        ...(expectedRunRequestId ? { expectedRunRequestId } : {}),
       });
       if (onThread && view.isCurrent()) {
         useRelayStore.getState().setSelectedSessionId(session.id);

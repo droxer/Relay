@@ -6,6 +6,7 @@ from typing import Any
 
 from loguru import logger
 
+from ..core.run_request_ids import message_receipt_event_id
 from ..persistence.events import relay_event
 from .agent_state import merge_agent_state
 from .controller_state import SessionControllerState
@@ -14,6 +15,7 @@ from .controller_state import SessionControllerState
 class SessionAgentRunMixin(SessionControllerState):
     def record_collaboration_round_started(
         self, session_id: str, manifest: dict[str, Any], *, hydrate: bool = True,
+        message_receipt: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Persist the immutable collaboration plan before daemon delivery."""
         round_id = manifest.get("roundId")
@@ -28,15 +30,11 @@ class SessionAgentRunMixin(SessionControllerState):
         ):
             # Retain the claim with the round even after daemon request pruning.
             manifest = {**manifest, "taskExecutionOwner": dict(self.task_execution_owner)}
-        return self._append(
-            session_id,
-            relay_event(
-                "collaboration.round.started",
-                session_id,
-                {"manifest": manifest},
-            ),
-            hydrate=hydrate,
-        )
+        event = relay_event("collaboration.round.started", session_id, {"manifest": manifest})
+        if message_receipt:
+            event["id"] = message_receipt_event_id(message_receipt["runRequestId"])
+            event["messageReceipt"] = message_receipt
+        return self._append(session_id, event, hydrate=hydrate)
 
     def record_agent_started(
         self, session_id: str, step: dict[str, Any], *, hydrate: bool = True,

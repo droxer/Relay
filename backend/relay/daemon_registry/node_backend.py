@@ -311,6 +311,7 @@ class ServerDaemonNodeBackend(
             self._validate_idempotency_fingerprint(
                 run_request, request.get("idempotencyFingerprint")
             )
+            self._prepared_message_receipt(request, run_request)
             if run_request.get("status") != "prepared":
                 return read_result(run_request["sessionId"])
             request = self._resume_prepared_request(request, run_request)
@@ -331,13 +332,14 @@ class ServerDaemonNodeBackend(
                 controller.reopen_expired_admission(session_id)
             if "connectionGrants" in request and self.connections:
                 self.connections.set_grants(actor_user_id or "", "thread", session_id, request["connectionGrants"])
-            dispatch_task_goal = self._record_run_intent(
-                controller,
-                session_id,
-                existing_session,
-                request,
-                actor_user_id,
-            )
+            with self.registry.store.mutation_scope(session_id):
+                dispatch_task_goal = self._record_run_intent(
+                    controller,
+                    session_id,
+                    existing_session,
+                    request,
+                    actor_user_id,
+                )
             self.registry.activate_run_request(
                 run_request["id"],
                 task_goal=dispatch_task_goal,
@@ -352,6 +354,7 @@ class ServerDaemonNodeBackend(
         reason: str,
         actor_user_id: str | None = None,
         *, actor_is_admin: bool = False,
+        expected_run_request_id: str | None = None,
     ) -> dict[str, Any] | None:
         """Cancel the session's active daemon run.
 
@@ -371,6 +374,8 @@ class ServerDaemonNodeBackend(
         request = self.registry.daemon_store.active_run_request_for_session_any_node(
             session_id
         )
+        if expected_run_request_id and (not request or request["id"] != expected_run_request_id):
+            return None
         if request and self.registry.cancel_run_request_before_delivery(request["id"], reason):
             # Nothing reached the daemon, so settle the thread and any linked
             # task immediately without waiting for a daemon exit.
@@ -386,8 +391,11 @@ class ServerDaemonNodeBackend(
             ).cancel_session(session_id, reason, actor_user_id=actor_user_id)
         active = self.registry.cancel_active_run(
             sandbox_id, session_id, reason, actor_user_id=actor_user_id,
+            expected_run_request_id=expected_run_request_id,
         )
         if not active:
+            if expected_run_request_id:
+                return None
             session = self.registry.store.get_session(session_id)
             if session.get("status") in ("completed", "failed", "cancelled"):
                 return session

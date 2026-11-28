@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any, Protocol, cast
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from loguru import logger
@@ -366,10 +367,36 @@ def cancel_session_run(
     session = get_session_header_for_actor(ctx.session_store, session_id, actor)
     assert_workflow_owner_session(request, ctx, session)
     reason = string_field(_request_body, "reason") or "Cancelled by user."
+    if "expectedRunRequestId" in _request_body:
+        try:
+            expected = str(UUID(string_field(_request_body, "expectedRunRequestId")))
+        except ValueError as error:
+            raise HTTPException(400, "expectedRunRequestId must be a run request ID.") from error
+        return _cancel_message_run(ctx, session_id, actor, reason, expected, _request_body.get("preserveQueue") is True)
     with ctx.registry.dispatch_lock:
         if _request_body.get("preserveQueue") is not True:
             change_queue(ctx.session_store, session_id, "pause")
         return _cancel_thread_execution(ctx, session_id, actor, reason)
+
+
+def _cancel_message_run(
+    ctx: AppContext, session_id: str, actor: Actor, reason: str, expected: str, preserve_queue: bool,
+) -> dict[str, Any]:
+    with ctx.registry.dispatch_lock:
+        candidate = ctx.daemon_store.active_run_request_for_session_any_node(session_id)
+        if not candidate or candidate["id"] != expected:
+            return ctx.session_store.get_session(session_id)
+        with ctx.registry.dispatch_scope([candidate["nodeId"]]), ctx.session_store.mutation_scope(session_id):
+            current = ctx.daemon_store.active_run_request_for_session_any_node(session_id)
+            if not current or current["id"] != expected or current["nodeId"] != candidate["nodeId"]:
+                return ctx.session_store.get_session(session_id)
+            cancelled = ctx.backend.cancel_run(
+                current["nodeId"], session_id, reason, actor_user_id=actor["userId"],
+                actor_is_admin=bool(actor.get("isAdmin")), expected_run_request_id=expected,
+            )
+            if cancelled is not None and not preserve_queue:
+                change_queue(ctx.session_store, session_id, "pause")
+            return ctx.session_store.get_session(session_id)
 
 
 def steer_thread_queue(

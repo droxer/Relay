@@ -126,10 +126,14 @@ class SessionReadRows(SessionStoreState):
         return statement.order_by(position.desc(), thread_id.desc())
 
     def queue_receipt(self, thread_id: str, message_id: str) -> dict[str, Any] | None:
+        return self.session_event(thread_id, f"queue.accepted:{message_id}", "session.queue")
+
+    def session_event(self, thread_id: str, event_id: str, event_type: str) -> dict[str, Any] | None:
         with store_transaction(self.engine) as conn:
             return conn.scalar(select(self.events.c.payload).where(
                 self.events.c.session_id == thread_id,
-                session_event_cursor_expression(self.events) == f"queue.accepted:{message_id}",
+                self.events.c.type == event_type,
+                session_event_cursor_expression(self.events) == event_id,
             ).limit(1))
 
     def queued_thread_ids(self, limit: int = 100, after: str | None = None) -> list[str]:

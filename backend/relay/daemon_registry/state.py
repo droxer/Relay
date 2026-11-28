@@ -106,7 +106,7 @@ class RegistryState:
         def _assignment_reports_round_result(assignments: list[dict[str, Any]], index: int) -> bool:
             ...
 
-        def _cancel_active_run_unlocked(self, sandbox_id: str, session_id: str, reason: str, *, actor_user_id: str | None=None) -> dict[str, Any] | None:
+        def _cancel_active_run_unlocked(self, sandbox_id: str, session_id: str, reason: str, *, actor_user_id: str | None=None, expected_run_request_id: str | None=None) -> dict[str, Any] | None:
             ...
 
         def _claim_and_advance_run_request(self, event: dict[str, Any]) -> bool:
@@ -231,7 +231,7 @@ class RegistryState:
         def activate_run_request(self, request_id: str, *, task_goal: str | None=None, active_runs: list[dict[str, Any]] | None=None) -> dict[str, Any]:
             ...
 
-        def cancel_active_run(self, sandbox_id: str, session_id: str, reason: str, *, actor_user_id: str | None=None) -> dict[str, Any] | None:
+        def cancel_active_run(self, sandbox_id: str, session_id: str, reason: str, *, actor_user_id: str | None=None, expected_run_request_id: str | None=None) -> dict[str, Any] | None:
             ...
 
         def cancel_run_request_before_delivery(self, request_id: str, reason: str) -> dict[str, Any] | None:

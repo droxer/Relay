@@ -485,10 +485,20 @@ Thread message dispatch can return HTTP 409 with a structured `detail.code`.
 poll is stale or its daemon is draining. `node_offline` indicates an unavailable Computer,
 and `capacity_exhausted` indicates that admission found no execution capacity.
 Reuse the original message ID and idempotency key when retrying the same send.
+Accepted keyed sends keep their receipt in the Thread event log, so a replay
+still acknowledges the original send after daemon run requests are pruned.
+The response includes `messageRunRequestId` for that original send, even if the
+Thread has since moved on to another run. Pass it as `expectedRunRequestId` to
+the cancellation endpoint to stop that request only. If it is no longer active,
+the endpoint returns the current Thread without pausing its Queue or stopping a
+different run. A send recorded before durable receipts were introduced can
+return `409 message_receipt_unavailable` if its original run request is gone.
 
 Queue `enqueue` and `import` actions retain `addressAgentIds` or
 `addressTeamId` until dispatch, including when a message is promoted with
 “Stop & send next”. A leading `@Agent` mention takes precedence over supplied Agent ids.
+Replaying an accepted enqueue with the same ID and input uses its original receipt
+even if the Agent roster has changed.
 Omitting both targets addresses the room, as for legacy queued messages.
 Targets are checked against current ownership, membership, and Placement at
 dispatch; an unavailable target pauses the queue rather than selecting another.

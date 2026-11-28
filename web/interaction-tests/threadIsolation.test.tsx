@@ -113,8 +113,10 @@ it("Stop still cancels A after navigation and its response cannot reopen A", asy
   act(() => { sending = result.current.sendMessage(); });
   await act(async () => { await result.current.cancelActiveRun(); });
   act(() => useRelayStore.getState().openSession("B"));
-  await act(async () => { accept(session); await sending; });
-  expect(cancel).toHaveBeenCalledWith(expect.objectContaining({ sessionId: session.id }));
+  await act(async () => { accept({ ...session, messageRunRequestId: "sent-run" }); await sending; });
+  expect(cancel).toHaveBeenCalledWith(expect.objectContaining({
+    sessionId: session.id, expectedRunRequestId: "sent-run",
+  }));
   expect(useRelayStore.getState().activeSessionId).toBe("B");
   expect(deps.syncThreadUrl).toHaveBeenCalledTimes(1);
 });
@@ -325,6 +327,31 @@ it("hides the retry slip during a normal in-flight send and clears it when a man
   });
   expect(result.current.messageRetry).toBeNull();
   expect(deps.composerRef.current?.setText).toHaveBeenCalledWith("do work");
+});
+
+it("keeps a possibly delivered message after a manual retry is rejected following reload", async () => {
+  sessionStorage.clear();
+  const first = setup(true);
+  useRelayStore.getState().openSession(first.session.id);
+  const initial = renderHook(() => useThreadDispatch(first.deps));
+  await act(async () => {
+    const sent = initial.result.current.sendMessage();
+    first.reject(new TypeError("Response lost"));
+    expect(await sent).toBe(false);
+  });
+  initial.unmount();
+
+  const second = setup(true);
+  useRelayStore.getState().openSession(second.session.id);
+  const reloaded = renderHook(() => useThreadDispatch(second.deps));
+  await act(async () => {
+    const sent = reloaded.result.current.messageRetry!.retry();
+    second.reject(new RelayApiError("Forbidden", 403, "forbidden"));
+    expect(await sent).toBe(false);
+  });
+  expect(reloaded.result.current.messageRetry?.text).toBe("do work");
+  expect(second.dispatch.mock.calls[0][0]).toEqual(first.dispatch.mock.calls[0][0]);
+  expect(second.deps.composerRef.current?.setText).not.toHaveBeenCalled();
 });
 
 it("clears the new-thread draft from storage synchronously even if the composer unmounts in the same batch", () => {

@@ -42,7 +42,8 @@ def test_queue_is_shared_and_owner_scoped(tmp_path, monkeypatch):
 
 def test_queue_dispatch_without_browser(tmp_path, monkeypatch):
     import asyncio
-    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.queue import change_queue
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.collaboration.service import CollaborationConductor
     from relay.persistence.events import relay_event
 
@@ -82,7 +83,8 @@ def test_queue_dispatch_without_browser(tmp_path, monkeypatch):
 def test_queue_failures_pause_and_keep_message(tmp_path, monkeypatch):
     import asyncio
     from relay.collaboration.errors import CollaborationError
-    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.queue import change_queue
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.collaboration.service import CollaborationConductor
     from relay.persistence.events import relay_event
 
@@ -132,7 +134,7 @@ def test_queue_receipts_survive_removal_and_import_pauses(tmp_path):
 def test_queue_dispatches_real_round_and_retains_mention_target(monkeypatch):
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread
-    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.persistence.events import relay_event
 
     with _world(monkeypatch) as (app, client, here, there):
@@ -161,7 +163,7 @@ def test_queued_follow_up_retries_when_another_round_wins_admission(monkeypatch)
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread
     from relay.collaboration.models import MessageIntent
-    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.collaboration.service import CollaborationConductor
     from relay.persistence.events import relay_event
 
@@ -317,7 +319,7 @@ def test_queue_rejects_non_owner_and_invalid_payloads(tmp_path, monkeypatch):
 def test_lost_dispatch_ack_replays_same_real_round(monkeypatch):
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread
-    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.persistence.events import relay_event
 
     with _world(monkeypatch) as (app, client, here, there):
@@ -351,7 +353,8 @@ def test_lost_dispatch_ack_replays_same_real_round(monkeypatch):
 def test_stop_between_claim_and_admission_cancels_the_new_run(monkeypatch):
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread
-    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.queue import change_queue
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.collaboration.service import CollaborationConductor
     from relay.persistence.events import relay_event
 
@@ -376,8 +379,9 @@ def test_stop_between_claim_and_admission_cancels_the_new_run(monkeypatch):
 
 def test_a_steered_message_is_sent_as_soon_as_the_stopped_run_settles(tmp_path, monkeypatch):
     import asyncio
-    from relay.collaboration import queue as thread_queue
-    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.thread_queue import dispatcher as thread_queue
+    from relay.collaboration.queue import change_queue
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.collaboration.service import CollaborationConductor
 
     monkeypatch.setenv("RELAY_TASK_SCHEDULER_ENABLED", "0")
@@ -416,7 +420,7 @@ def test_stop_and_send_dispatches_the_selected_message_after_exit(monkeypatch, r
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread
     from relay.api.threads import lifecycle
-    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
 
     # In these cases we advance the dispatcher explicitly. The separate
     # follower test covers advancing between scheduler ticks.
@@ -494,7 +498,7 @@ def test_stop_and_send_dispatches_the_selected_message_after_exit(monkeypatch, r
 def test_plain_stop_pauses_the_queue_and_keeps_the_messages(monkeypatch):
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread
-    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
 
     with _world(monkeypatch) as (app, client, here, _):
         solo = _agent(app, here, "Solo", "codex")
@@ -525,7 +529,8 @@ def test_plain_stop_pauses_the_queue_and_keeps_the_messages(monkeypatch):
 def test_steer_keeps_the_selected_agent_instead_of_the_whole_room(monkeypatch):
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread
-    from relay.collaboration.queue import ThreadQueueDispatcher, change_queue
+    from relay.collaboration.queue import change_queue
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.persistence.events import relay_event
 
     with _world(monkeypatch) as (app, client, here, there):
@@ -551,7 +556,7 @@ def test_steer_keeps_the_selected_agent_instead_of_the_whole_room(monkeypatch):
 def test_queue_preserves_selected_team_and_rejects_invalid_addressing(monkeypatch):
     import asyncio
     from test_thread_same_computer_targets import _world, _agent, _sync, _thread, _team
-    from relay.collaboration.queue import ThreadQueueDispatcher
+    from relay.collaboration.thread_queue.dispatcher import ThreadQueueDispatcher
     from relay.persistence.events import relay_event
 
     with _world(monkeypatch) as (app, client, here, there):

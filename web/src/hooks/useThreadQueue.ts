@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ComposerHandle } from "../components/composer/Composer";
 import { clearComposerDraft, restoreComposerDraft } from "./useComposer";
-import { apiJson, messageDefinitelyRejected } from "../api-client/client";
+import { apiJson } from "../api-client/client";
 import { cacheThreadQueue, EMPTY_THREAD_QUEUE, newestQueue, THREAD_QUEUE_QUERY_KEY, type QueuedMessage, type QueueAddress, type QueueState } from "../lib/threadQueue";
 import { isThreadStreamConnected, subscribeSessionStream } from "../lib/sessionStreamStatus";
 import { NODES_QUERY_KEY, SESSIONS_QUERY_KEY } from "./useRelayData";
@@ -96,7 +96,9 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     activeKey.current = queueKey;
     return () => { activeKey.current = undefined; };
   }, [queueKey]);
-  const change = useCallback(async (action: string, id?: string, text?: string, address?: QueueAddress) => {
+  const change = useCallback(async (
+    action: string, id?: string, text?: string, address?: QueueAddress, onError?: (error: unknown) => void,
+  ) => {
     // The account's mutation cache owns the lock, so navigating away and back
     // to this Thread cannot start a second write while its first is pending.
     if (!threadId || client.isMutating({ mutationKey: [...THREAD_QUEUE_QUERY_KEY, threadId, "change"], exact: true })) return false;
@@ -105,9 +107,7 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
       if (activeKey.current === queueKey) setError(null);
       return true;
     } catch (cause) {
-      if (action === "enqueue" && id && messageDefinitelyRejected(cause)) {
-        clearPendingThreadMessage(queueKey, "queue", id);
-      }
+      onError?.(cause);
       if (activeKey.current === queueKey) setError(queueErrorKey(cause));
       return false;
     }
@@ -138,7 +138,8 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     const { id, text, addressAgentIds, addressTeamId } = message;
     delivery.save(message, initial);
     try {
-      const accepted = await change("enqueue", id, text, { addressAgentIds, addressTeamId });
+      const accepted = await change("enqueue", id, text, { addressAgentIds, addressTeamId },
+        (error) => delivery.reject(message, error, initial));
       if (accepted) unsaved.current.delete(queueKey);
       return accepted;
     } finally {
@@ -154,7 +155,10 @@ export function useThreadQueue({ queueKey, threadId, running, awaitsPerson, comp
     const sameMessage = previous?.text === text && sameAddress;
     if (saved && !sameMessage) return false;
     const id = sameMessage ? previous.id : `q_${crypto.randomUUID()}`;
-    const message = { kind: "enqueue" as const, text, ...address, id };
+    const message: PendingQueueMessage = {
+      kind: "enqueue", text, ...address, id,
+      deliveryUnconfirmed: saved?.kind === "enqueue" ? saved.deliveryUnconfirmed : undefined,
+    };
     unsaved.current.set(queueKey, message);
     return sendEnqueue(message, !saved);
   }

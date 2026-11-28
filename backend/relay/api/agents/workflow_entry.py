@@ -11,6 +11,7 @@ from ...core.computer_identity import computer_id
 from ...core.workflow_selection import default_workflow_id, predefined_style
 from ...core.workflows import workflow_execution_snapshot
 from ...core.team_workflows import is_workflow_team
+from ...daemon_registry.dispatch.workflow_admission import workflow_request_id
 from ...sessions.controller import SessionController
 from ..bodies import string_field
 from ..deps import AppContextDep
@@ -58,7 +59,8 @@ async def custom_workflow_entry(
                                     _request_body={'requestId': request_id, 'taskGoal': goal}, workflow_id=workflow_id)
     # Reconcile the composer's optimistic turn once, including retried HTTP responses.
     message_id = string_field(body, 'userMessageId') or str(uuid5(NAMESPACE_URL, f'workflow-entry-message:{session["id"]}'))
-    return await run_in_threadpool(_record_opening_turn, ctx, session['id'], team['ownerUserId'], goal, message_id)
+    session = await run_in_threadpool(_record_opening_turn, ctx, session['id'], team['ownerUserId'], goal, message_id)
+    return {**session, "messageRunRequestId": workflow_request_id(session["workflowRuns"][0])}
 
 
 def _record_opening_turn(ctx: AppContextDep, sid: str, owner: str, goal: str, message_id: str) -> dict[str, Any]:

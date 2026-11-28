@@ -20,3 +20,7 @@ def idempotent_run_request_id(idempotency_key: str) -> str:
     property that matters — the same key always resolves to the same request.
     """
     return str(uuid5(IDEMPOTENT_RUN_REQUEST_NAMESPACE, idempotency_key))
+
+
+def message_receipt_event_id(run_request_id: str) -> str:
+    return f"message.accepted:{run_request_id}"

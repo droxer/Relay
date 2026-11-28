@@ -326,10 +326,12 @@ class RunAdmissionMixin(RegistryState):
     def cancel_active_run(
         self, sandbox_id: str, session_id: str, reason: str,
         *, actor_user_id: str | None = None,
+        expected_run_request_id: str | None = None,
     ) -> dict[str, Any] | None:
         with self.dispatch_lock:
             return self._cancel_active_run_unlocked(
                 sandbox_id, session_id, reason, actor_user_id=actor_user_id,
+                expected_run_request_id=expected_run_request_id,
             )
 
     def cancel_run_request_before_delivery(
@@ -383,12 +385,20 @@ class RunAdmissionMixin(RegistryState):
     def _cancel_active_run_unlocked(
         self, sandbox_id: str, session_id: str, reason: str,
         *, actor_user_id: str | None = None,
+        expected_run_request_id: str | None = None,
     ) -> dict[str, Any] | None:
+        target_command_id = None
+        if expected_run_request_id:
+            request = self.daemon_store.get_run_request(expected_run_request_id)
+            target_command_id = (request or {}).get("currentCommandId")
+            if not target_command_id:
+                return None
         active = next(
             (
                 run
                 for run in self.active_commands.values()
                 if run["sandboxId"] == sandbox_id and run["sessionId"] == session_id
+                and (target_command_id is None or run["commandId"] == target_command_id)
             ),
             None,
         )
@@ -398,6 +408,7 @@ class RunAdmissionMixin(RegistryState):
                     run
                     for run in self.daemon_store.list_active_runs(sandbox_id)
                     if run.get("sessionId") == session_id
+                    and (target_command_id is None or run["commandId"] == target_command_id)
                 ),
                 None,
             )
@@ -418,16 +429,18 @@ class RunAdmissionMixin(RegistryState):
                 "Run already ended; no stop sent",
                 sandbox_id=sandbox_id, session_id=session_id, run_id=active["runId"],
             )
-            return active
+            return None if expected_run_request_id else active
         cancel_id = new_database_id()
         request = self.daemon_store.run_request_for_command(active["commandId"])
+        if expected_run_request_id and (not request or request["id"] != expected_run_request_id):
+            return None
         if request:
             stopping = self.daemon_store.request_run_stop(
                 request["id"], active["commandId"], reason,
                 actor_user_id=actor_user_id,
             )
             if not stopping:
-                return active
+                return None if expected_run_request_id else active
             self._escalate_unacknowledged_stop(stopping, active)
             cancel_id = stopping["state"]["_relay_stop_command_id"]
             if self.daemon_store.get_command(cancel_id):

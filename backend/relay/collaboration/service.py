@@ -25,6 +25,7 @@ from .intake import (
 from .models import (
     CollaborationIdempotencyError,
     MessageIntent,
+    MessageReceiptUnavailableError,
     RecoveryIntent,
     RunIntent,
     project_id_for_task_handoff,
@@ -35,6 +36,7 @@ from .task_scope import TaskScopeMixin
 from ..security.actor import Actor
 from ..core.connections import ConnectionError
 from ..core.daemon_records import ComputerNotDispatchableError, ComputerRunCapacityError, ThreadRunActiveError
+from ..core.run_request_ids import idempotent_run_request_id
 from ..core.thread_attachments import IMAGE_ATTACHMENT_AGENTS
 from ..core.workflow_selection import require_selectable_workflow
 
@@ -62,6 +64,7 @@ class CollaborationConductor(
 
     async def submit(
         self, intent: MessageIntent | RecoveryIntent | RunIntent, actor: Actor, *, hydrate: bool = True,
+        message_fingerprint: str | None = None,
     ) -> dict[str, Any]:
         prepared = self._prepare(intent)
         fingerprint = _request_fingerprint(prepared)
@@ -74,6 +77,14 @@ class CollaborationConductor(
                     prepared.idempotency_key,
                 ),
             )
+        message_receipt = None
+        if prepared.idempotency_key and (
+            isinstance(intent, MessageIntent)
+            or isinstance(intent, RunIntent) and not intent.session_id and not intent.decision
+        ):
+            message_receipt = {"fingerprint": fingerprint}
+            if message_fingerprint is not None:
+                message_receipt["inputFingerprint"] = message_fingerprint
         try:
             if prepared.idempotency_key:
                 existing = await run_in_threadpool(
@@ -83,9 +94,13 @@ class CollaborationConductor(
                     actor_is_admin=False,
                     expected_fingerprint=fingerprint,
                     hydrate=hydrate,
+                    message_thread_id=prepared.session_id,
+                    message_fingerprint=message_fingerprint,
+                    read_message_receipt=message_receipt is not None,
+                    message_user_id=prepared.user_message_id,
                 )
                 if existing:
-                    return existing
+                    return self._with_message_ack(existing, prepared.idempotency_key if message_receipt else None)
             elif prepared.session_id:
                 existing = await run_in_threadpool(
                     self.ctx.backend.idempotent_session_run,
@@ -101,7 +116,8 @@ class CollaborationConductor(
                 require_selectable_workflow(f"preset:{prepared.style}")
             except ValueError as error:
                 raise CollaborationError(str(error)) from error
-            return await self._submit_prepared(prepared, actor, fingerprint, hydrate=hydrate)
+            dispatched = await self._submit_prepared(prepared, actor, fingerprint, hydrate=hydrate, message_receipt=message_receipt)
+            return self._with_message_ack(dispatched, prepared.idempotency_key if message_receipt else None)
         except TeamDispatchError as error:
             raise CollaborationError(error.code) from error
         except (AgentRoutingError, ComputerNotDispatchableError) as error:
@@ -116,10 +132,49 @@ class CollaborationConductor(
             raise CollaborationError("forbidden", str(error), status=403) from error
         except CollaborationIdempotencyError as error:
             raise CollaborationError("idempotency_conflict", str(error)) from error
+        except MessageReceiptUnavailableError as error:
+            raise CollaborationError("message_receipt_unavailable", str(error)) from error
         except CollaborationError:
             raise
         except ValueError as error:
             raise CollaborationError("collaboration_conflict", str(error)) from error
+
+    async def replay_message(
+        self, intent: MessageIntent, actor: Actor, *, hydrate: bool, has_mention: bool,
+    ) -> tuple[dict[str, Any] | None, str]:
+        prepared = _prepare_message(intent)
+        fingerprint = _request_fingerprint(prepared)
+        if not prepared.idempotency_key:
+            return None, fingerprint
+        key = _scoped_idempotency_key(actor["userId"], intent.thread_id, prepared.idempotency_key)
+        try:
+            session = await run_in_threadpool(
+                self.ctx.backend.idempotent_run, key, actor["userId"], hydrate=hydrate,
+                message_thread_id=intent.thread_id, message_fingerprint=fingerprint,
+                receipt_only=True,
+            )
+            if session is None and has_mention and not intent.address_team_id:
+                # Rolling upgrades still have run requests with the resolved
+                # address and semantic fingerprint, but no input receipt.
+                address = await run_in_threadpool(self.ctx.backend.legacy_message_address, key, intent.thread_id)
+                frozen = tuple((address or {}).get("agentIds", ()))
+                if frozen and (not intent.address_agent_ids or set(intent.address_agent_ids) == set(frozen)):
+                    resolved = _prepare_message(replace(intent, address_agent_ids=frozen))
+                    session = await run_in_threadpool(
+                        self.ctx.backend.idempotent_run, key, actor["userId"], hydrate=hydrate,
+                        expected_fingerprint=_request_fingerprint(resolved),
+                    )
+        except CollaborationIdempotencyError as error:
+            raise CollaborationError("idempotency_conflict", str(error)) from error
+        except PermissionError as error:
+            raise CollaborationError("forbidden", str(error), status=403) from error
+        except ValueError as error:
+            raise CollaborationError("collaboration_conflict", str(error)) from error
+        return (self._with_message_ack(session, key) if session else None), fingerprint
+
+    @staticmethod
+    def _with_message_ack(session: dict[str, Any], key: str | None) -> dict[str, Any]:
+        return {**session, "messageRunRequestId": idempotent_run_request_id(key)} if key else session
 
     @staticmethod
     def _prepare(
@@ -133,9 +188,12 @@ class CollaborationConductor(
 
     async def _submit_prepared(
         self, intent: _PreparedRound, actor: Actor, fingerprint: str, *, hydrate: bool,
+        message_receipt: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         dispatch = await run_in_threadpool(self._prepare_dispatch, intent, actor, fingerprint)
         request = dispatch.request if hydrate else {**dispatch.request, "_hydrateSession": False}
+        if message_receipt:
+            request = {**request, "messageReceipt": message_receipt}
         dispatched = await self.ctx.backend.run(dispatch.node_id, request)
         manifest = (dispatch.request.get("collaboration") or {}).get("manifest") or {}
         if dispatch.resolved is None or project_id_for_task_handoff(manifest, dispatch.request.get("taskId")):

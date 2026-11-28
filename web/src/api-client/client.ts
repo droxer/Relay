@@ -70,9 +70,13 @@ let messageDeliveryGeneration = 0;
 const unconfirmedRejections = new WeakSet<RelayApiError>();
 
 export function messageDefinitelyRejected(error: unknown): boolean {
-  return error instanceof RelayApiError && error.status >= 400 && error.status < 500
-    && error.status !== 408 && error.code !== "node_not_accepting_commands"
-    && !unconfirmedRejections.has(error);
+  return error instanceof RelayApiError && error.code !== "node_not_accepting_commands"
+    && !messageDeliveryUncertain(error);
+}
+
+export function messageDeliveryUncertain(error: unknown): boolean {
+  return !(error instanceof RelayApiError) || error.status < 400 || error.status >= 500
+    || error.status === 408 || error.code === "message_receipt_unavailable" || unconfirmedRejections.has(error);
 }
 
 /** Pending messages belong to the Account that started them. */

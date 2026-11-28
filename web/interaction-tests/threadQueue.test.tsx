@@ -414,3 +414,19 @@ it("hides the retry slip during an initial in-flight enqueue and clears it when 
   expect(hook.result.current.messageRetry).toBeNull();
   expect(hook.result.current.error).toBe("queue.errors.forbidden");
 });
+
+it("keeps an unconfirmed queued send after a later request is rejected", async () => {
+  const hook = open();
+  await waitFor(() => expect(hook.client.isFetching()).toBe(0));
+  const reply = vi.mocked(apiJson).getMockImplementation()!;
+  const enqueue = vi.fn()
+    .mockRejectedValueOnce(new TypeError("Response lost"))
+    .mockRejectedValueOnce(new RelayApiError("Forbidden", 403, "forbidden"));
+  vi.mocked(apiJson).mockImplementation((path, options) =>
+    options?.method === "POST" ? enqueue(options.body) : reply(path, options));
+
+  await act(async () => { expect(await hook.result.current.enqueue("Keep going")).toBe(false); });
+  await act(async () => { expect(await hook.result.current.messageRetry!.retry()).toBe(false); });
+  expect(hook.result.current.messageRetry?.text).toBe("Keep going");
+  expect(enqueue.mock.calls[1]).toEqual(enqueue.mock.calls[0]);
+});
