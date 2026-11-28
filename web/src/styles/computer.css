@@ -590,7 +590,7 @@ button.computer-run-open:hover {
   min-height: var(--touch-target);
   gap: var(--sp-1) var(--sp-4);
   padding: var(--sp-2) var(--sp-2) var(--sp-2) 0;
-  border-block-start: 1px solid var(--line-1);
+  border-block-start: var(--stroke-w) solid var(--line-1);
 }
 
 [data-runtime-controls] .computer-runtime-name {
@@ -626,7 +626,7 @@ button.computer-run-open:hover {
   color: var(--err);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   [data-runtime-controls] .computer-runtime-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
