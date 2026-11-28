@@ -46,7 +46,7 @@ describe("buildCommands", () => {
     const navigate = userCommands.filter((command) => command.group === "navigate");
     assert.deepEqual(
       navigate.map((command) => command.id),
-      ["go:home", "go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:workflows", "go:computers", "go:skills", "go:settings"],
+      ["go:home", "go:main", "go:projects", "go:backlog", "go:routine", "go:agents", "go:workflows", "go:skills", "go:computers", "go:settings"],
     );
     for (const command of navigate) {
       assert.match(command.hint ?? "", /^G [A-Z]$/, `${command.id} lost its go-to hint`);
@@ -91,6 +91,12 @@ describe("filterCommands", () => {
     assert.deepEqual(filterCommands(userCommands, "BACKLOG").map((c) => c.id), ["go:backlog"]);
     // "schedule" is an English keyword for the localized Routines label.
     assert.deepEqual(filterCommands(userCommands, "schedule").map((c) => c.id), ["go:routine"]);
+  });
+
+  it("finds all Workforce destinations together", () => {
+    assert.deepEqual(filterCommands(userCommands, "workforce").map((command) => command.id),
+      ["go:agents", "go:workflows", "go:skills"]);
+    assert.deepEqual(filterCommands(userCommands, "infra").map((command) => command.id), ["go:computers"]);
   });
 
   it("drops non-matches entirely", () => {

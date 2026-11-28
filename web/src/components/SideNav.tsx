@@ -49,10 +49,10 @@ const MORE_GROUPS: readonly { labelKey: string; routes: readonly MoreRoute[] }[]
   { labelKey: "nav.workforce", routes: [
     { route: "agents", Icon: NavAgents, labelKey: "nav.agents" },
     { route: "workflows", Icon: NavWorkflows, labelKey: "nav.workflows" },
+    { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
   ] },
   { labelKey: "nav.infra", routes: [
     { route: "computers", Icon: NavComputer, labelKey: "nav.computers" },
-    { route: "skills", Icon: NavSkills, labelKey: "nav.skills" },
   ] },
   { labelKey: "nav.manage", routes: [
     { route: "settings", Icon: NavPreferences, labelKey: "nav.settings" },
@@ -280,10 +280,22 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
             <NavWorkflows size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.workflows")}</span>
           </a>
+          <a
+            className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "skills" ? "active" : ""}`}
+            data-nav="skills"
+            href={hrefForRoute("skills")}
+            aria-label={t("nav.skills")}
+            aria-current={route === "skills" ? "page" : undefined}
+            onClick={(event) => handleRouteClick(event, "skills")}
+            onMouseEnter={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
+            onMouseLeave={hideNavTooltip}
+            onFocus={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
+            onBlur={hideNavTooltip}
+          >
+            <NavSkills size={ICON.lg} />
+            <span className="sidenav-label sr-only">{t("nav.skills")}</span>
+          </a>
         </div>
-        {/* Infra: what agents run on (computers) and what they carry
-            (skills). Both are the person's own, so neither is admin-gated;
-            on a phone they live in the More sheet. */}
         <div className="sidenav-group sidenav-group--separated" role="group" aria-label={t("nav.infra")}>
           <span className="sidenav-group-label sidenav-overflow-item sr-only" aria-hidden="true">{t("nav.infra")}</span>
           <a
@@ -300,21 +312,6 @@ export function SideNav({ sidenavExpanded, setSidenavExpanded, width, onResize, 
           >
             <NavComputer size={ICON.lg} />
             <span className="sidenav-label sr-only">{t("nav.computers")}</span>
-          </a>
-          <a
-            className={`sidenav-btn sidenav-secondary-item sidenav-overflow-item ${route === "skills" ? "active" : ""}`}
-            data-nav="skills"
-            href={hrefForRoute("skills")}
-            aria-label={t("nav.skills")}
-            aria-current={route === "skills" ? "page" : undefined}
-            onClick={(event) => handleRouteClick(event, "skills")}
-            onMouseEnter={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
-            onMouseLeave={hideNavTooltip}
-            onFocus={(e) => showNavTooltip(t("nav.skills"), e.currentTarget)}
-            onBlur={hideNavTooltip}
-          >
-            <NavSkills size={ICON.lg} />
-            <span className="sidenav-label sr-only">{t("nav.skills")}</span>
           </a>
         </div>
         {/* Mobile-only: the destinations that do not fit the bottom tab bar. */}
