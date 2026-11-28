@@ -8,6 +8,7 @@ from ..core.computer_identity import computer_id
 from ..core.team_workflows import workflow_fields
 from ..core.workflows import snapshot_team_id
 from ..projects.workflow import validate_project_workflow
+from ..computer.workflows import validate_standalone_workflow
 from ..persistence.team.store import TeamValidationError, validate_team_payload
 from .computer import resolve_team_computer
 
@@ -16,6 +17,11 @@ def validate_workflow_write(
     ctx: Any, owner_user_id: str, body: dict[str, Any],
     *, current: dict[str, Any] | None = None,
 ) -> None:
+    if body.get('workflowRecordVersion') == 1 and not body.get('projectId') and not body.get('ownerTeamId'):
+        if body.get('ownerUserId') != owner_user_id:
+            raise TeamValidationError('workflow_owner_required')
+        validate_standalone_workflow(ctx, body)
+        return
     if body.get('ownerTeamId') and not body.get('projectId'):
         team = ctx.team_store.get_team(body['ownerTeamId'])
         if not team or team.get('deletedAt') or team.get('ownerUserId') != owner_user_id:

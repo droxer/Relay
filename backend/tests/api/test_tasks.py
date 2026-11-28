@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from app_state_helpers import replace_app_context
 from relay.app import create_app
 from relay.core.computer_identity import computer_id
+from relay.persistence.listeners import thread_activity_key
 from relay.tasks.routine_occurrences import active_routine_occurrence
 
 from automation_helpers import DAILY_TRIGGERS, WEEKLY_TRIGGERS, fire_now
@@ -1327,8 +1328,31 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
         _login(client, "alice")
         mark_task_ready(client, created.json())
 
-        result = asyncio.run(app.state.task_scheduler.tick())
-        assert result.dispatched == 1
+        summary_path = "/api/v1/threads?view=summary&include=activity"
+        assert client.get(summary_path).json()["sessions"] == []
+        notifier = app.state.context.control_plane_notifier
+        wait = notifier.wait
+        dispatched = False
+
+        async def dispatch_while_list_is_open(key, version, *, timeout):
+            nonlocal dispatched
+            assert key == thread_activity_key(ALICE)
+            if not dispatched:
+                dispatched = True
+                assert (await app.state.task_scheduler.tick()).dispatched == 1
+                assert await wait(key, version, timeout=timeout)
+                return
+            await wait(key, version, timeout=timeout)
+
+        monkeypatch.setattr(notifier, "wait", dispatch_while_list_is_open)
+        monkeypatch.setattr("relay.api.threads.events._STREAM_MAX_SECONDS", 1)
+        with notifier.observe(thread_activity_key(BOB)) as bob_version:
+            activity = client.get("/api/v1/threads/activity/changes")
+            assert activity.status_code == 200
+            assert activity.headers["content-type"].startswith("text/event-stream")
+            assert activity.text.count("event: changed\ndata: {}\n\n") == 1
+            assert notifier.version(thread_activity_key(BOB)) == bob_version
+
         updated = client.get(f"/api/v1/tasks/{created.json()['id']}")
         assert updated.status_code == 200
         assert updated.json()["status"] == "assigned"
@@ -1344,6 +1368,18 @@ def test_scheduler_dispatches_assigned_backlog_task(monkeypatch) -> None:
         assert command["agent"] == "codex"
         assert command["sessionId"] == updated.json()["linkedSessionIds"][0]
         assert command["taskGoal"] == "Scheduled backlog"
+        [queued] = client.get(summary_path).json()["sessions"]
+        assert queued["id"] == command["sessionId"]
+        assert queued["taskActivity"]["origin"]["taskId"] == created.json()["id"]
+
+        key = thread_activity_key(ALICE)
+        with notifier.observe(key) as queued_version:
+            _mark_run_executing(client, command)
+            assert notifier.version(key) > queued_version
+        [running] = client.get(summary_path).json()["sessions"]
+        assert running["id"] == queued["id"]
+        assert running["execution"]["phase"] == "running"
+        assert running["taskActivity"]["origin"]["status"] == "running"
 
 
 def test_routine_start_dispatches_occurrence_not_definition(monkeypatch) -> None:

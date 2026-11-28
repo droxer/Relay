@@ -301,7 +301,7 @@ def test_offline_workflow_computer_records_its_wait_once(monkeypatch):
             'assignedWorkflowId': workflow['id'],
         }).json()
         mark_task_ready(client, task)
-        monkeypatch.setattr('relay.tasks.workflow.project_runtime_node', lambda *_: None)
+        monkeypatch.setattr('relay.tasks.workflow.dispatch.project_runtime_node', lambda *_: None)
         recorded = _count_outcomes(monkeypatch, app.state.task_store)
         for _ in range(3):
             tick(app)

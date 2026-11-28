@@ -14,7 +14,7 @@ from typing import Any
 from ..core.workflow_selection import selected_workflow_id, predefined_style
 from ..security.actor import Actor
 from .dispatch_outcome import DispatchResult
-from .workflow import dispatch_task_workflow
+from .workflow.dispatch import dispatch_task_workflow
 
 
 @dataclass(frozen=True)

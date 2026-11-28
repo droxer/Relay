@@ -465,8 +465,9 @@ export function ThreadsView({
   )?.workScope;
   // The thread decision closes the active round's Task. A wait can also name
   // this thread from a different Task, whose reply is routed by questionId.
-  const canMarkWaitingTaskDone = !followUpWait
-    || (activeWorkScope?.kind === "task" && activeWorkScope.taskId === waiting?.task?.id);
+  const waitingRequiresVerification = tasks.some((task) => task.id === waiting?.task?.id && task.verificationCheck);
+  const canMarkWaitingTaskDone = !waitingRequiresVerification && (!followUpWait
+    || (activeWorkScope?.kind === "task" && activeWorkScope.taskId === waiting?.task?.id));
   // What the person writes mid-run waits for the next round; a started
   // thread only — staging a new one has no run to wait on.
   const queueEnabled = transcriptVisible && threadDetailsReady && Boolean(activeSession) && !initializingThread && !projectReadOnly;

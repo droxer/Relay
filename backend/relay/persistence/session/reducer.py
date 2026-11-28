@@ -219,7 +219,7 @@ def _completed_run(run: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]
     }
     if "agentLog" in event:
         completed["agentLog"] = event["agentLog"]
-    for key in ("workResult", "tokenUsage", "runtimeSessionId"):
+    for key in ("workResult", "verificationResult", "tokenUsage", "runtimeSessionId"):
         if event.get(key):
             completed[key] = event[key]
     if event.get("outputTruncated"):

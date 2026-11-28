@@ -85,7 +85,15 @@ export function TaskReviewPanel({ taskId, onRequestChanges, onAccepted, onOpenTh
             {report.outputTruncated ? <p>{t("task_review.truncated")}</p> : null}
           </div>)}
           <h3>{t("task_review.validation")}</h3>
-          <p>{t("task_review.verification_missing")}</p>
+          <p>{t(brief.verification === "not_recorded"
+            ? "task_review.verification_missing" : `task_review.verification_${brief.verification}`)}</p>
+          {brief.verificationCheck ? <p className="task-review-caption">
+            <code>{brief.verificationCheck.path}</code>{" · "}<code>{brief.verificationCheck.commit}</code>
+          </p> : null}
+          {brief.verificationResult?.candidateCommit ? <p className="task-review-caption">
+            {t("task_review.verification_candidate")} <code>{brief.verificationResult.candidateCommit}</code>
+          </p> : null}
+          {brief.verificationResult?.output ? <p className="task-review-text">{brief.verificationResult.output}</p> : null}
           <h3>{t("task_review.outputs")}</h3>
           {brief.artifacts.length ? <ul>{brief.artifacts.map((artifact) => <li key={`${artifact.sessionId}:${artifact.id}`}>
             {artifact.snapshotSkipped ? <span>{artifact.title} · {t("task_review.snapshot_missing")}</span> : (

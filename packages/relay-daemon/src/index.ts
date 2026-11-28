@@ -35,7 +35,7 @@ import { DiagnosticsSchedule } from "./diagnostics-schedule.js";
 import { CommandTasks } from "./command-tasks.js";
 import { assertRunWorkspaceScope, durableWorkspaceLayout, requiredWorkspaceSubpath } from "./run-workspace.js";
 import { RELAY_CLIENT_VERSION } from "./client-version.js";
-import { createHash } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 import type { StreamRenderer } from "relay-core";
 import { formatDaemonLog } from "./daemon-log-format.js";
 import { err, out } from "./terminal-style.js";
@@ -121,6 +121,7 @@ import {
   relayApiUrl,
 } from "relay-core";
 import { DAEMON_ADVERTISED_CAPABILITIES } from "./capabilities.js";
+import { runVerificationGuest, type VerificationGuest } from "./task-verification.js";
 import { workspaceReply } from "./workspace-commands.js";
 import { ThreadWorkspaceManager } from "./thread-workspace.js";
 import { configuredProjectRoots, ProjectLinkRegistry } from "./project-links.js";
@@ -1679,6 +1680,7 @@ export interface WorkspaceExecution {
 
 export interface DaemonExecutionEnvironment {
   readonly sandboxMode: DaemonSandboxMode;
+  verifyTask?: VerificationGuest;
   /** Workspace-agnostic preflight, used by capability discovery. Probes
    * afresh each call so a runtime that stopped working is reported. */
   ensureAgentReady(agent: AgentName, signal?: AbortSignal): Promise<void>;
@@ -1799,6 +1801,11 @@ export function createBoxliteEnvironment(
   };
   return {
     sandboxMode: "boxlite",
+    verifyTask: async (directory, signal) => {
+      const manager = new BoxLiteExecutionManager();
+      const boxName = boxNameForSandbox(sandboxId, randomInt(1_000_000, 10_000_000));
+      return runVerificationGuest(manager, await runtimeOwner.get(), boxName, directory, signal);
+    },
     // Discovery probes afresh; runs keep the per-guest cache (workspaceExecution).
     ensureAgentReady: async (agent, signal) => {
       let lease: GuestLease;

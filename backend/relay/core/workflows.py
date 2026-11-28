@@ -1,14 +1,14 @@
-"""Workflow definitions owned by a Team or Project."""
+"""Workflow definitions with immutable Project, Team or standalone scope."""
 from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
 
 from .ids import new_database_id, now_iso
-from .team_workflows import STEP_FIELDS, workflow_fields
+from .team_workflows import STEP_FIELDS, workflow_fields, normalize_workflow_steps
 from .workflow_selection import PREDEFINED_WORKFLOWS, predefined_style
 
-FIELDS = frozenset({'name', 'projectId', 'ownerTeamId', 'workflowSteps', 'enabled'})
+FIELDS = frozenset({'name', 'projectId', 'ownerTeamId', 'computerId', 'workflowSteps', 'enabled'})
 
 STEP_PATCH_FIELDS = STEP_FIELDS - {'id'}
 OPTIONAL_STEP_FIELDS = frozenset({'kind', 'expectedOutputs'})
@@ -55,7 +55,7 @@ def workflow_preview(workflow: dict[str, Any]) -> dict[str, Any]:
     """The step flow and ownership needed to display or start a Workflow."""
     return {
         **{key: workflow[key] for key in (
-            'id', 'name', 'projectId', 'ownerTeamId', 'teamId', 'enabled', 'createdAt', 'updatedAt', 'version',
+            'id', 'name', 'projectId', 'ownerTeamId', 'computerId', 'teamId', 'enabled', 'createdAt', 'updatedAt', 'version',
         ) if key in workflow},
         'workflowSteps': [
             {key: step[key] for key in ('id', 'name', 'agentId', 'requiresApproval') if key in step}
@@ -78,7 +78,7 @@ def team_workflows(team: dict[str, Any]) -> list[dict[str, Any]]:
 def workflow_definition(
     team: dict[str, Any], payload: dict[str, Any], *, current: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if set(payload) - FIELDS:
+    if set(payload) - (FIELDS - {'computerId'}):
         raise ValueError('workflow_fields_invalid')
     merged = {**(current or {}), **payload}
     name = merged.get('name')
@@ -139,24 +139,33 @@ def validate_default_workflow(team: dict[str, Any], workflow_id: Any) -> str:
 
 
 def project_workflow_definition(owner: str, payload: dict[str, Any], *, current: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Validate a Project process without borrowing a Team's identity."""
+    """Validate a reusable process with exactly one immutable scope."""
     if set(payload) - FIELDS:
         raise ValueError('workflow_fields_invalid')
     merged = {**(current or {}), **payload}
     steps = merged.get('workflowSteps')
     if not isinstance(steps, list):
         raise ValueError('workflowSteps must contain 1 to 64 steps.')
-    members = list(dict.fromkeys(step.get('agentId') for step in steps if isinstance(step, dict) and isinstance(step.get('agentId'), str)))
+    members = list(dict.fromkeys(step['agentId'] for step in steps if isinstance(step, dict) and isinstance(step.get('agentId'), str)))
     project_id = merged.get('projectId')
     owner_team = merged.get('ownerTeamId')
-    if bool(project_id) == bool(owner_team):
+    computer = merged.get('computerId')
+    if sum(bool(scope) for scope in (project_id, owner_team, computer)) != 1:
         raise ValueError('workflow_owner_scope_required')
-    fields = workflow_fields({'projectId': project_id or owner_team, 'workflowSteps': steps,
-                              'memberAgentIds': members})
-    fields['projectId'] = project_id
+    fields: dict[str, Any]
+    if computer:
+        if not isinstance(computer, str) or not computer.strip() or len(computer) > 256:
+            raise ValueError('workflow_computer_required')
+        fields = {'projectId': None, 'computerId': computer.strip(),
+                  'workflowSteps': normalize_workflow_steps(steps, members)}
+    else:
+        fields = workflow_fields({'projectId': project_id or owner_team, 'workflowSteps': steps,
+                                  'memberAgentIds': members})
+        fields['projectId'] = project_id
     if owner_team:
         fields['ownerTeamId'] = owner_team
-    if current and (current.get('projectId') != project_id or current.get('ownerTeamId') != owner_team):
+    if current and (current.get('projectId') != project_id or current.get('ownerTeamId') != owner_team
+                    or current.get('computerId') != fields.get('computerId')):
         raise ValueError('team_workflow_project_immutable')
     name = merged.get('name')
     if not isinstance(name, str) or not name.strip() or len(name.strip()) > 200:

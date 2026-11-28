@@ -161,7 +161,11 @@ Thread may address a Team only when the Team lives on the Thread's Computer.
 _Avoid_: Cross-node team, shared-path team
 
 **Workflow**:
-A reusable process. A **Custom Workflow** belongs to exactly one Team or Project and defines
+A reusable process. A standalone **Custom Workflow** is owned by a User and
+bound to one Computer. Its independent Tasks run in their own Task Workspace
+without a Team or Project; step Agents must belong to that User and be placed
+on that Computer. Existing Team- and Project-owned definitions retain their scopes.
+A **Custom Workflow** defines
 ordered steps, each with an Agent, instructions, acceptance criteria, and an
 optional approval gate. The owner manages it where it was created. A Team-owned Workflow runs with its owning Team through a direct Workflow Run.
 Standalone Tasks and Automations assigned to an ordinary Team use a predefined process.
@@ -462,6 +466,9 @@ records execution, not verification of the outcome. Accepting from this view
 names its `reviewRevision`; a changed Task, Thread, or Artifact record requires
 the person to refresh and review again. It does not assert that the Computer's
 current workspace still matches the recorded Artifacts.
+An opted-in Build → Review Project Task also shows the Daemon Node's required
+check result for an exact Git commit and owner-selected check definition. The
+owner accepts that candidate using the current review revision after it passes.
 
 **Image Attachment**:
 A private PNG, JPEG, or WebP upload referenced by a Thread's opening message

@@ -13,7 +13,9 @@ from ...core.daemon_capabilities import (
     has_capability,
     DAEMON_CAPABILITY_AGENT_SKILLS,
     DAEMON_CAPABILITY_NATIVE_RUNTIME_STARTUP,
+    DAEMON_CAPABILITY_TASK_VERIFICATION,
 )
+from ...core.task_verification import CHECK_FIELD, CHECK_REVISION_FIELD
 from ...core.thread_attachments import IMAGE_ATTACHMENT_AGENTS
 from ..records import (
     CARRIED_RUN_REQUEST_STATE_KEYS,
@@ -59,6 +61,19 @@ def _run_start_command(
     ) else None
     # A discussion uses the same directory without claiming Task execution.
     task_id = run_request.get("taskId")
+    check = (task_snapshot or {}).get(CHECK_FIELD) if task_id else None
+    if check:
+        assignments = run_request["assignments"]
+        if (workspace_layout != "project" or len(assignments) != 2
+                or assignments[0].get("workKind") != "implementation"
+                or not assignments[1].get("synthesizer")):
+            raise _DeliveryRefused("task_verification_requires_builder_and_reviewer")
+        if sandbox.get("sandboxMode") != "boxlite" or not has_capability(sandbox, DAEMON_CAPABILITY_TASK_VERIFICATION):
+            raise _DeliveryRefused("task_verification_computer_unsupported")
+        instruction = ("Commit all intended deliverables locally before reporting done. "
+                       "Relay checks the committed Git candidate independently.")
+        if assignment["assignmentId"] == assignments[0]["assignmentId"]:
+            state = {**state, "task_goal": f"{state.get('task_goal') or run_request['taskGoal']}\n\n{instruction}"}
     workspace_task_id = task_id or (
         task_snapshot.get("id") if task_snapshot and workspace_layout == "task" else None
     )
@@ -71,6 +86,8 @@ def _run_start_command(
         "agent": assignment["executorKind"],
         "phase": state["team_phase"],
         "assignmentId": assignment["assignmentId"],
+        **({CHECK_FIELD: check, "_verificationCheckRevision": (task_snapshot or {})[CHECK_REVISION_FIELD]}
+           if check and assignment.get("synthesizer") else {}),
         "workspaceLayout": workspace_layout,
         "workspaceScope": {
             "computerId": computer_id(sandbox),

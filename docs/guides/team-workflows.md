@@ -1,6 +1,11 @@
 # Teams and Workflows
 
-A Workflow belongs to the Team or Project where it was created. Create a Team
+A standalone Workflow belongs to its User and is bound to one Computer. Its
+custom steps can run independent Tasks without a Team or Project through the
+API described below. The standalone Workflow management UI and legacy Team
+assignment conversion are not part of this backend foundation yet.
+
+Existing Workflows retain the Team or Project where they were created. Create a Team
 workflow from **Team → Workflows → New workflow**, without selecting a Project.
 Run it directly with its owning Team in a Project. Standalone Tasks and Automations
 assigned to an ordinary Team use a predefined process. Create a Project workflow
@@ -9,7 +14,7 @@ to Tasks and Automations in that Project. Usage and Team links do not transfer
 ownership. The backend enforces these scopes as well as the selectors.
 
 Team workflows retain explicit step Agents from the Team. Select a Project for
-execution (or use the Task/Automation's Project); its enabled roster and Computer
+execution; its enabled roster and Computer
 must support those steps. A Team definition remains reusable after each run.
 
 ## Project work
@@ -97,7 +102,16 @@ session; service actors cannot manage or start definitions.
 | `DELETE /teams/{teamId}/workflow-defaults/{projectId}` | Clear that Project's custom default. |
 
 Definition writes accept `name`, `workflowSteps`, optional `enabled`, and exactly
-one of `projectId` or `ownerTeamId`. Team creation routes supply the Team owner. Names are case-insensitively unique for new definitions/renames in a
+one of `projectId`, `ownerTeamId`, or `computerId`. A Computer-scoped definition
+belongs directly to its User and applies to independent Tasks on that Computer,
+without a Team or Project. List these definitions with `scope=standalone`, or
+add `view=choices` for their Task selector projection. Assign the definition
+with `assignedWorkflowId` and the Task's matching `computerId`, then start the
+Task through `/tasks/{id}/runs`; its Task Workspace and approval gates are
+preserved. The direct `/workflows/{id}/runs` endpoint remains Project-only.
+Migration 0135 adds the standalone scope without converting existing Team
+assignments or changing historical runs.
+Team creation routes supply the Team owner. Names are case-insensitively unique for new definitions/renames in a
 Project; migration preserves existing duplicates. Owner scope cannot change.
 Run requests accept a UUID `requestId`, `taskGoal`, optional `teamId`, and a
 `projectId` for Team-owned definitions. Team-owned runs require their owning Team.

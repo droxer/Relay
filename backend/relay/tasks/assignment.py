@@ -10,6 +10,7 @@ from typing import Any
 from ..automations.model import EVENT_KINDS
 from ..core.team_workflows import is_workflow_team
 from ..projects.workflow import validate_project_workflow
+from ..computer.workflows import validate_standalone_workflow
 from ..core.workflow_selection import predefined_style, require_selectable_workflow, selected_workflow_id
 from ..core.computer_identity import computer_id
 from ..projects.runtime import (
@@ -298,6 +299,15 @@ def validate_task_workflow(
             raise ValueError('workflow_not_found')
         if definition['ownerUserId'] != task.get('ownerUserId'):
             raise TaskRequestError(403, 'workflow_owner_required')
+        if definition.get('computerId'):
+            if task.get('projectId') or team_id or task.get('assignedAgentId'):
+                raise ValueError('workflow_assignment_conflict')
+            if task.get('computerId') and task['computerId'] != definition['computerId']:
+                raise ValueError('workflow_computer_mismatch')
+            binding = task.get('workspaceBinding') or {}
+            if binding.get('computerId') and binding['computerId'] != definition['computerId']:
+                raise ValueError('workflow_computer_mismatch')
+            return validate_standalone_workflow(ctx, definition)
         if definition.get('projectId') != task.get('projectId'):
             # A Project Task or Automation may name only a Workflow owned by
             # its own Project, so a team-owned or foreign definition never

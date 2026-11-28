@@ -16,6 +16,11 @@ def assert_workflow_task_owner(registry: RegistryState, request: dict[str, Any],
     if not registry.task_store:
         raise ValueError("workflow_task_store_required")
     task = registry.task_store.get_task_record(request["taskId"])
+    binding = task.get('workspaceBinding')
+    if binding and any(binding.get(key) != session.get(session_key) for key, session_key in (
+        ('computerId', 'computerId'), ('layout', 'workspaceLayout'), ('subpath', 'workspaceSubpath'),
+    )):
+        raise ValueError('workflow_scope_mismatch')
     if (task.get("deletedAt") or task.get("status") in ("done", "review", "cancelled")
         or task.get("executionOwner") != request_execution_owner(request)
         or task.get("ownerUserId") != session.get("ownerUserId")

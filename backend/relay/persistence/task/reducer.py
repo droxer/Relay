@@ -8,6 +8,7 @@ from typing import Any
 from ...automations.model import LEGACY_FIELDS, STATES, upgrade_legacy
 from ...core.permission_requests import DEFAULT_TASK_PERMISSION_MODE
 from ...tasks.flow import LEGACY_ACCEPTANCE_POLICY, apply_flow_status
+from ...core.task_verification import CHECK_FIELD, CHECK_REVISION_FIELD
 from ...tasks.prerequisites import PREREQUISITES_EVENT, apply_prerequisites_set
 from .numbering import NUMBERED_EVENT, apply_task_number
 
@@ -64,6 +65,9 @@ def materialize_task_events(events: list[dict[str, Any]]) -> dict[str, Any]:
         task["tags"] = list(created["tags"])
     if created.get("externalSource"):
         task["externalSource"] = dict(created["externalSource"])
+    if created.get(CHECK_FIELD):
+        task[CHECK_FIELD] = dict(created[CHECK_FIELD])
+        task[CHECK_REVISION_FIELD] = created["id"]
     _apply_task_routine_fields(task, created)
     apply_task_number(task, created)
     for event in events:
@@ -115,6 +119,9 @@ def _apply_task_updated(task: dict[str, Any], event: dict[str, Any]) -> None:
             task["tags"] = list(event["tags"])
         else:
             task.pop("tags", None)
+    if event.get(CHECK_FIELD):
+        task[CHECK_FIELD] = dict(event[CHECK_FIELD])
+        task[CHECK_REVISION_FIELD] = event["id"]
     _apply_task_routine_fields(task, event)
 
 

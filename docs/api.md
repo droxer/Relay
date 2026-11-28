@@ -1368,23 +1368,53 @@ ids and source Thread. Continuity records are excluded. Legacy Threads without
 manifests have no invented round attribution. A deleted latest Thread is shown
 as missing instead of silently falling back to older work.
 
-`verification: "not_recorded"` explicitly means the existing protocol does not
-provide independently recorded acceptance-check results. Evidence prose and
-successful CLI exit codes are never promoted to verified checks.
+`verification` is `not_recorded` for Tasks without a required check. Agent
+reports remain attributed claims. Tasks with a required check include
+`verificationCheck`, and `verification` is `pending`, `passed`, `failed`, or
+`error`. When a result applies to the active round and check definition,
+`verificationResult` includes the check, its `verificationCheckRevision`, the
+candidate commit, the outcome, and bounded output.
 
 Conditional acceptance sends only `{ "status": "done", "reviewRevision":
 "<revision displayed to the person>" }` to `PATCH /tasks/{id}`. The backend
 locks the Task and source Thread in the write transaction, reconstructs the
 review, and refuses a changed revision with `409 task_review_changed`. The
 accepted revision is retained on the `task.updated` event. Invalid revisions
-and combining conditional acceptance with other edits answer 400. Existing
-PATCH clients may still omit `reviewRevision` for compatibility; the task review
-controls always supply it. No database migration or new agent execution is
-required. This contract binds recorded work, not mutable live workspace files.
+and combining conditional acceptance with other edits answer 400. Clients can
+omit `reviewRevision` only for Tasks without a required check. The task review
+controls always supply it. The contract binds the recorded work and artifacts.
 Review output links add `?snapshot=1` to the Thread artifact read route. A
 missing snapshot answers `404 artifact_snapshot_unavailable`; this mode never
 falls back to current workspace bytes. Reads without it keep their existing
 live fallback for compatibility.
+
+#### Required checks for Build → Review
+
+On `POST /tasks`, a signed-in Project owner can opt in by setting
+`assignedWorkflowId` to `preset:build_review` and supplying `verificationCheck`.
+Set `commit` to the full ID of a commit with the owner's trusted check script.
+Set `path` to the script's repository-relative path. The Task requires human
+acceptance and an eligible builder and reviewer. The Project workspace root
+must have its own `.git` directory. The BoxLite Computer must advertise
+`task-verification`.
+
+The builder commits the intended delivery locally. The Daemon Node freezes
+`HEAD` before the reviewer runs. After review it checks the same commit in a
+disposable guest with the network disabled and no Project workspace mount.
+The guest runs the pinned script with Bash from the candidate checkout.
+The candidate is a standalone checkout of the committed tree, with a 32 MiB
+compressed object limit and no submodules. Exit `0` passes. Exit `1` requests
+repair under the existing budget. Other exits and setup failures park the Task
+for human input. The check has a two-minute execution limit. Keep the assertions
+in the pinned script and provision dependencies in the guest image.
+
+The owner can replace the definition with a PATCH containing only
+`verificationCheck` while execution is stopped and the Task is open. Replacing
+or restoring a definition requires another run. For these Tasks, both Task PATCH and Thread
+`mark_done` require a signed-in owner, a current `reviewRevision`, and a passing
+result. The Thread decision also requires that the displayed revision came from
+that Thread. Review applies to the checked commit. Uncommitted workspace files
+are outside that delivery.
 
 ### Importing GitHub issues
 
@@ -1450,6 +1480,15 @@ Errors are the `detail` codes `github_repository_required`,
 `github_issues_disabled` (404); `github_repository_moved` (409);
 `github_rate_limited` (429);
 `github_unavailable`, `github_unreachable` (502); and `github_timeout` (504).
+
+### Live Thread activity
+
+`GET /api/v1/threads/activity/changes` opens an authenticated server-sent event
+stream for the caller's Activity list. A committed Task-to-Thread link or
+status change on a linked Task emits a `changed` event with an empty JSON
+object. Refetch `GET /api/v1/threads?view=summary&include=activity` when the event
+arrives or the stream reconnects. Keep periodic refresh as a fallback for
+missed hints.
 
 ### Thread execution and deferred deletion
 
@@ -2428,17 +2467,34 @@ The W3 editor, run start, thread progress and decision slip use only the routes
 above. Integrated release verification, including themes/device sizes against a
 real backend and daemon, remains W4; this API does not claim release readiness.
 
-### Independent Project Workflows
+### Independent Workflows
 
-Custom definitions belong to their creating Team or Project (exactly one owner).
-Team-owned definitions are reusable for that Team’s Tasks and Automations across
-compatible execution Projects; Project definitions apply within their Project.
+Custom definitions have exactly one immutable scope: a Project, a legacy Team,
+or a standalone Computer. Standalone definitions belong to the signed-in User
+and accept `computerId` instead of `projectId` or `ownerTeamId`. Their steps name
+that User's Agents placed on the Computer. Project definitions apply within
+their Project; Team definitions retain their existing direct-run contract.
 The owner-session API is `GET/POST /api/v1/workflows`,
 `GET/PATCH/DELETE /api/v1/workflows/{id}`, and
 `POST /api/v1/workflows/{id}/runs`. List accepts optional `projectId`; run
 accepts `requestId`, `taskGoal`, and optional eligible `teamId`. Team-owned
 definitions additionally require their owning Team and an execution `projectId`.
 A new run freezes `workflowSnapshot`, retaining `teamSnapshot` as a wire alias.
+
+For independent Tasks, create a standalone definition with `name`, `computerId`,
+`workflowSteps` and optional `enabled`. List its definitions or choices with
+`GET /api/v1/workflows?scope=standalone` or `?scope=standalone&view=choices`;
+choices include `computerId` and `stepAgentIds`. The existing unscoped
+`view=choices` remains Project-only. `scope=standalone` cannot combine with
+`projectId`. Names are case-insensitively unique per User and Computer.
+Assign it through `assignedWorkflowId` on an independent Task with the same
+`computerId`, without `assignedAgentId` or `assignedTeamId`, then start using
+`POST /api/v1/tasks/{id}/runs`. The Task uses its durable Task Workspace and
+the existing Workflow approval/recovery routes. Standalone definitions do not
+use the Project-only `POST /workflows/{id}/runs` entry. Existing Team/default
+assignments are not rewritten by this additive schema migration.
+Migration 0136 also updates the dispatch queue index so Ready independent Tasks
+with only `assignedWorkflowId` are discovered by the scheduler.
 
 The Team profile reads `GET /api/v1/teams/{teamId}?view=preview` for Workflow
 previews and its members' Agent placements. The Team roster keeps the smaller

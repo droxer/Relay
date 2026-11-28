@@ -335,6 +335,9 @@ def _publish_store_changes(stores: Stores, notifier: KeyedEventNotifier) -> None
         lambda session_id: notifier.publish(session_event_key(session_id)),
         database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
     )
+    stores.tasks.set_thread_activity_listener(
+        notifier.publish, database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,
+    )
     stores.daemon.set_command_listener(
         lambda node_id: notifier.publish(daemon_command_key(node_id)),
         database_channel=CONTROL_PLANE_NOTIFICATION_CHANNEL,

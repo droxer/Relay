@@ -12,13 +12,15 @@ import type {
   TaskPriority,
   TaskPermissionMode,
   TaskStatus,
+  TaskVerificationCheck,
+  TaskVerificationResult,
 } from "relay-core";
 import type { ArtifactIndexItem, ProducedFile } from "./artifacts.ts";
 import type { RunInput } from "./sessions.ts";
 import type { WorkspaceFileEntry } from "./workspace.ts";
 
-export type RelayTask = CoreTask & { hasCompletedOccurrence?: boolean };
-export type RelayTaskListItem = CoreTaskListItem & Pick<RelayTask, "hasCompletedOccurrence">;
+export type RelayTask = CoreTask & { hasCompletedOccurrence?: boolean; verificationCheck?: TaskVerificationCheck };
+export type RelayTaskListItem = CoreTaskListItem & Pick<RelayTask, "hasCompletedOccurrence" | "verificationCheck">;
 
 export type TaskLiveStatus =
   | "ok"
@@ -199,7 +201,9 @@ export interface TaskReview {
   criteria: string[];
   reports: TaskReviewReport[];
   artifacts: (ArtifactIndexItem & { snapshotSkipped?: string | null })[];
-  verification: "not_recorded";
+  verification: "not_recorded" | "pending" | TaskVerificationResult["status"];
+  verificationCheck?: TaskVerificationCheck;
+  verificationResult?: TaskVerificationResult;
   missing: string[];
 }
 
