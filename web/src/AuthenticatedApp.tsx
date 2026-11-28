@@ -320,9 +320,9 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const threadFileCount = useMemo(() => latestThreadArtifacts(visibleArtifacts).length, [visibleArtifacts]);
 
   useEffect(() => {
-    if (!initializingThread) return;
+    if (!initializingThread || openingProjectId) return;
     setNewThreadNodeId((previous) => resolveNewThreadComputer(previous, threadComputers, assignableComputers));
-  }, [assignableComputers, initializingThread, setNewThreadNodeId, threadComputers]);
+  }, [assignableComputers, initializingThread, openingProjectId, setNewThreadNodeId, threadComputers]);
 
   const composerTeamIds = useMemo(() => composerTeams.map((team) => team.id), [composerTeams]);
   const projectLeadDiscussion = Boolean(activeSession && (
@@ -591,7 +591,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
       navigateToRoute("main");
     }
   }, [navigateToRoute, route, user.role]);
-  const { openThread, startNewThread, selectProject } = useThreadNavigation({
+  const { openThread, startNewThread, changeDraftProject, selectProject } = useThreadNavigation({
     route,
     projects,
     projectsReady: projectsStatus === "ready",
@@ -653,6 +653,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
   const {
     sendMessage,
     messageRetry,
+    draftProjectLocked,
     cancelActiveRun,
     sendDecision,
     retryAgentMessage,
@@ -665,7 +666,7 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
     effectiveSelectableLogicalAgents,
     composerLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedUser, draftComputerId: openingComputerId, requestedThreadId: requestedSessionId,
+    selectedUser, draftComputerId: openingComputerId, draftProjectId: routedProjectId, requestedThreadId: requestedSessionId,
     fallbackNode, selectedThreadNodeId, runtimeNodes, selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
@@ -947,6 +948,12 @@ export function AuthenticatedApp({ user, setUser, preferences }: AuthenticatedAp
             }}
             projectLoading={projectContextPending}
             projectName={activeProject?.name}
+            draftProject={composingNew && !activeSession ? {
+              projectId: routedProjectId,
+              projects,
+              locked: draftProjectLocked,
+              onChange: changeDraftProject,
+            } : undefined}
             projectRoom={projectRoom}
             projectRoomSelected={projectRoomTarget}
             onProjectRoomPicked={handleProjectRoomPicked}

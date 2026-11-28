@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { MentionPopup } from "./MentionPopup";
 import { CommandInput } from "@/components/ui/command";
 import { ThreadRuntimeReadout, ThreadRuntimeSelect } from "./ThreadRuntimeSelect";
+import { ThreadProjectSelect, type DraftProjectSelection } from "./ThreadProjectSelect";
 import { Textarea } from "@/components/ui/textarea";
 import { resolveThreadMessageAddress } from "../../lib/messageRouting";
 import type { QueueAddress } from "../../lib/threadQueue";
@@ -78,6 +79,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   initializingThread: boolean;
   /** A project room owns its Computer and roster, so neither is editable here. */
   projectName?: string;
+  draftProject?: DraftProjectSelection;
   /** The project's roster as one target: the round runs every member. */
   projectRoom?: ProjectRoomOption | null;
   projectRoomSelected?: boolean;
@@ -122,7 +124,7 @@ const ComposerView = forwardRef<ComposerHandle, {
 }>(function Composer({
   draftKey, logicalAgents, activeLogicalAgentId, onLogicalAgentPicked,
   teams, activeTeamId, onTeamPicked, activeAgentDisplayName, selectedUser,
-  initializingThread, contextPending = false, projectName, projectRoom = null,
+  initializingThread, contextPending = false, projectName, draftProject, projectRoom = null,
   projectRoomSelected = false, onProjectRoomPicked, readOnly = false,
   runtimeNodes, runtimeNodeId, selectedRuntimeNode, activeRuntimeNode, onRuntimeNodeChange,
   running, permissionMode, permissionModePending, onPermissionModeChange,
@@ -381,7 +383,7 @@ const ComposerView = forwardRef<ComposerHandle, {
   // than printing the same computer or project twice on one screen. Only the
   // picker, the one slot that can still be acted on, always shows.
   const headerStatesIt = !initializingThread ? "composer-context--header-fact" : undefined;
-  const computerSlot = contextPending ? (
+  const computerSlot = draftProject?.projectId ? null : contextPending ? (
     <span className="composer-context composer-context--header-fact" aria-hidden="true" />
   ) : projectName ? (
     // Same readout shape as the pinned computer, different words: a project
@@ -599,7 +601,10 @@ const ComposerView = forwardRef<ComposerHandle, {
           thread is being staged (it gates which agents exist at all), a
           settled readout afterwards — and that readout stands down wherever
           the thread header already states it. */}
-      <div className="composer-meta">{computerSlot}</div>
+      <div className="composer-meta">
+        {draftProject ? <ThreadProjectSelect {...draftProject} loading={contextPending} locked={draftProject.locked || sendPending} /> : null}
+        {computerSlot}
+      </div>
     </form>
   );
 });

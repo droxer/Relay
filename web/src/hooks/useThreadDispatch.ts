@@ -64,6 +64,7 @@ export interface ThreadDispatchDeps {
   /* --- where it runs ---------------------------------------------------- */
   selectedUser: string;
   draftComputerId?: string | null;
+  draftProjectId: string | null;
   requestedThreadId?: string | null;
   fallbackNode: Parameters<typeof threadCancelNodeId>[0]["fallbackNode"];
   selectedThreadNodeId: ThreadTargets["selectedThreadNodeId"];
@@ -104,7 +105,7 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
     effectiveSelectableLogicalAgents,
     composerLogicalAgents = effectiveSelectableLogicalAgents,
     threadMentionCandidates, composerTeams,
-    selectedUser, draftComputerId, requestedThreadId, fallbackNode, selectedThreadNodeId, runtimeNodes = [], selectedToken, tokens,
+    selectedUser, draftComputerId, draftProjectId, requestedThreadId, fallbackNode, selectedThreadNodeId, runtimeNodes = [], selectedToken, tokens,
     composerRef, transcript,
     messageOperationIdsRef, recoveryOperationIdsRef,
     submitThreadMessageMutation, runLogicalAgentsMutation, requestThreadRecoveryMutation,
@@ -117,11 +118,12 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   const activeThreadId = composingNew || activeSession?.archived ? undefined : activeSession?.id;
   const pending = usePendingThreadMessage(JSON.stringify([
     selectedUser,
-    activeThreadId ? ["thread", activeThreadId] : ["draft", activeProject?.id ?? null, draftComputerId ?? null],
+    activeThreadId ? ["thread", activeThreadId] : ["draft", draftProjectId, draftComputerId ?? null],
   ]), "direct");
   const saved = pending.message;
   const pendingSendKey = threadSendKey(selectedUser, activeThreadId, useRelayStore((state) => state.threadDraftId));
   const pendingBusy = useThreadSendStore((state) => !!state.operations[pendingSendKey]?.dispatching);
+  const draftProjectLocked = pendingBusy || saved?.kind === "create";
 
   const threadComputerId = (session: Pick<RelaySession, "projectId" | "computerId" | "daemonNodeId">) =>
     session.projectId ? null : sessionComputer(session, runtimeNodes);
@@ -330,14 +332,14 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
 
   const messageRetry: ThreadMessageRetry | null = saved && saved.kind !== "enqueue"
     && !(pendingBusy && pending.initial)
-    && selectedUser && !projectDispatchDisabled
+    && selectedUser && (!projectDispatchDisabled || saved.kind === "create")
     && (!requestedThreadId || requestedThreadId === activeSession?.id)
     ? {
       text: saved.kind === "append" ? saved.input.text : saved.input.taskGoal,
       busy: pendingBusy,
       attachmentIds: saved.input.attachmentIds,
       retry: async () => {
-        if (pending.read()?.id !== saved.id) return false;
+        if (projectDispatchDisabled || pending.read()?.id !== saved.id) return false;
         if (saved.kind === "append" && saved.sessionId !== activeThreadId) return false;
         return dispatchMessage(saved);
       },
@@ -558,5 +560,5 @@ export function useThreadDispatch(deps: ThreadDispatchDeps) {
   }
 
 
-  return { sendMessage, messageRetry, cancelActiveRun, sendDecision, retryAgentMessage, resumeAgentMessage, sendHandoff };
+  return { sendMessage, messageRetry, draftProjectLocked, cancelActiveRun, sendDecision, retryAgentMessage, resumeAgentMessage, sendHandoff };
 }

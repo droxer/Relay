@@ -33,6 +33,11 @@ them, including queued follow-ups. After a handover, the next message to the
 role reaches the new Lead in the same Thread, with its conversation history.
 The owner can still select or mention individual Agents.
 
+To start a Project Conversation, open **New chat** and choose a **Project**
+below the composer. **New discussion** in the Project's **Discussions** tab
+preselects that Project. You can change or clear the selection before sending
+and keep the text and images in your draft.
+
 In the Project's **Discussions** tab, the row menu lets the owner pin, unpin,
 or delete a discussion. **Select** lets them delete several discussions with
 one confirmation. If a deletion fails, that discussion stays selected for retry.
