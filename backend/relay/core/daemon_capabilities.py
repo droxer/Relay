@@ -123,6 +123,7 @@ DAEMON_CAPABILITY_LIVE_MESSAGES = "live-messages"
 # resumes its own runtime conversation and reads only what happened since.
 # Optional: without it the full transcript is replayed into a fresh one.
 DAEMON_CAPABILITY_AGENT_CONTINUE = "agent-continue"
+DAEMON_CAPABILITY_TASK_VERIFICATION = "task-verification"
 
 # The backend can still serve the combined listing through ordinary commands,
 # stop-and-send stands in for live messages, and a transcript replay stands in
@@ -133,6 +134,7 @@ DAEMON_RECOGNIZED_CAPABILITIES = DAEMON_NODE_CAPABILITIES | {
     DAEMON_CAPABILITY_LIVE_MESSAGES,
     DAEMON_CAPABILITY_AGENT_CONTINUE,
     DAEMON_CAPABILITY_REPORT_CLEANUP,
+    DAEMON_CAPABILITY_TASK_VERIFICATION,
 }
 
 

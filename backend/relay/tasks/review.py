@@ -4,34 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import Any
 
 from ..core.workspace_artifacts import artifact_index_item, is_thread_record_artifact
-from .requests import TaskRequestError
-
-
-@contextmanager
-def checked_review(ctx: Any, task: dict[str, Any], body: dict[str, Any]) -> Iterator[None]:
-    """An optional conditional acceptance, locked until the enclosing commit.
-
-    Legacy PATCH callers remain supported. Review clients send the revision
-    they displayed, never a freshly fetched revision at the moment of Accept.
-    """
-    if "reviewRevision" not in body:
-        yield
-        return
-    revision = body["reviewRevision"]
-    if (not isinstance(revision, str) or len(revision) != 64
-            or any(char not in "0123456789abcdef" for char in revision)
-            or body.get("status") != "done" or set(body) != {"status", "reviewRevision"}):
-        raise TaskRequestError(400, "reviewRevision requires a SHA-256 revision and status done only.")
-    with ctx.task_store.task_write_scope(task["id"]):
-        current = ctx.task_store.get_task(task["id"])
-        if task_review(ctx, current, lock=True)["revision"] != revision:
-            raise TaskRequestError(409, "task_review_changed")
-        yield
+from ..core.task_verification import CHECK_FIELD, CHECK_REVISION_FIELD, RESULT_FIELD
 
 
 def task_review(ctx: Any, task: dict[str, Any], *, lock: bool = False) -> dict[str, Any]:
@@ -82,6 +58,13 @@ def build_review_brief(task: dict[str, Any], session: dict[str, Any] | None) -> 
         text for item in (manifest or {}).get("workGraph", {}).get("items", [])
         for text in item.get("acceptanceCriteria", [])
     ))
+    check = task.get(CHECK_FIELD)
+    result = (runs[-1].get(RESULT_FIELD) if check and runs and manifest
+              and manifest.get("roundId") == source.get("activeRoundId") else None)
+    if result and (result.get("check") != check
+                   or result.get(CHECK_REVISION_FIELD) != task.get(CHECK_REVISION_FIELD)):
+        result = None
+    verification = result["status"] if result else "pending" if check else "not_recorded"
     brief = {
         "taskId": task["id"], "status": task["status"],
         "goal": task["title"], "description": task.get("description") or "",
@@ -89,12 +72,15 @@ def build_review_brief(task: dict[str, Any], session: dict[str, Any] | None) -> 
         "criteria": criteria, "reports": reports, "artifacts": artifacts,
         # Exit status proves the CLI exited, not that tests or acceptance
         # criteria passed. Existing work-result evidence is agent-authored.
-        "verification": "not_recorded",
-        "canAccept": task["status"] == "review" and not task.get("deletedAt") and not task.get("isRoutine"),
+        "verification": verification,
+        **({CHECK_FIELD: check} if check else {}),
+        **({RESULT_FIELD: result} if result else {}),
+        "canAccept": (task["status"] == "review" and not task.get("deletedAt")
+                      and not task.get("isRoutine") and (not check or verification == "passed")),
         "missing": [key for key, present in (
             ("thread", bool(session)), ("criteria", bool(criteria)),
             ("reports", bool(reports)), ("artifacts", bool(artifacts)),
-            ("verification", False),
+            ("verification", bool(result)),
         ) if not present],
     }
     # Include execution ownership and source versions even when a new round

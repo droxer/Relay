@@ -38,6 +38,7 @@ from ..scheduling import (
     node_accepts_run,
 )
 from ...core.workspace_scheduling import session_workspace_key, workspace_is_contended
+from ...core.task_verification import CHECK_FIELD, CHECK_STATE_KEY
 from .. import config
 from ..records import (
     ARTIFACT_SNAPSHOT_STATE_KEY,
@@ -636,6 +637,8 @@ class AssignmentDeliveryMixin(RegistryState):
         if artifact_snapshot is not None:
             state[ARTIFACT_SNAPSHOT_STATE_KEY] = artifact_snapshot
         state.update(command.get("_carriedState") or {})
+        if check := command.get(CHECK_FIELD):
+            state[CHECK_STATE_KEY] = {"check": check, "revision": command["_verificationCheckRevision"]}
         return {
             "status": "running",
             "nodeId": command["_nodeId"],

@@ -161,3 +161,49 @@ test("cancelled standalone task confirms, sends PATCH {status: 'done'}, and upda
   await expect(page.getByRole("button", { name: "Mark the work done", exact: true })).toHaveCount(0);
   await expect(page.locator("#task-record-panel").getByRole("button", { name: /^Status: Completed\./ })).toBeVisible();
 });
+
+test("Task Review displays the independently checked commit and accepts the displayed revision", async ({ page }) => {
+  const revision = "a".repeat(64);
+  const candidateCommit = "b".repeat(40);
+  const verificationCheck = { commit: "c".repeat(40), path: "tests/acceptance.sh" };
+  const task = {
+    id: "task_checked", number: 13, title: "Verified export", description: "",
+    priority: "normal", status: "review", workflowStage: "review", isRoutine: false,
+    projectId: project.id, ownerUserId: "u", assigneeUserId: "u", assignedWorkflowId: "preset:build_review",
+    acceptancePolicy: "human",
+    linkedSessionIds: ["sess_1"], createdAt: stamp, startedAt: stamp, updatedAt: stamp,
+    eventCount: 2, activityCount: 0, events: [], activity: [], verificationCheck,
+  };
+  const patches: unknown[] = [];
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const { pathname: path } = new URL(request.url());
+    let body: unknown = { sessions: [], agents: [], teams: [], nodes: [], projects: [project], tasks: [task], events: [], runs: [] };
+    if (path.endsWith("/auth/me")) {
+      body = { authenticated: true, user: { id: "u", userId: "u", username: "Owner", role: "user", theme: "light", language: "en" } };
+    } else if (path.endsWith(`/projects/${project.id}`)) {
+      body = { project };
+    } else if (path.endsWith(`/tasks/${task.id}/review`)) {
+      body = {
+        taskId: task.id, goal: task.title, description: "", sessionId: "sess_1", roundId: "round_1",
+        status: "review", canAccept: true, revision, criteria: [], reports: [], artifacts: [], missing: [],
+        verification: "passed", verificationCheck,
+        verificationResult: { status: "passed", check: verificationCheck, candidateCommit, output: "export is correct" },
+      };
+    } else if (path.endsWith(`/tasks/${task.id}`)) {
+      if (request.method() === "PATCH") patches.push(request.postDataJSON());
+      body = patches.length ? { ...task, status: "done", workflowStage: "done", updatedAt: updatedStamp } : task;
+    }
+    await route.fulfill({ status: 200, json: body });
+  });
+
+  await page.goto(`/projects/${project.id}?tab=tasks`);
+  await page.getByText(task.title, { exact: true }).click();
+  await page.getByRole("tab", { name: "Activity", exact: true }).click();
+  const review = page.locator(".task-review");
+  await expect(review.getByText("Required check passed.")).toBeVisible();
+  await expect(review.getByText(candidateCommit, { exact: true })).toBeVisible();
+  await expect(review.getByText("export is correct", { exact: true })).toBeVisible();
+  await review.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect.poll(() => patches).toEqual([{ status: "done", reviewRevision: revision }]);
+});

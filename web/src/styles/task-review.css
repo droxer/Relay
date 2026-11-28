@@ -39,8 +39,9 @@
 }
 
 .task-review ul { padding-inline-start: var(--sp-5); }
-.task-review-text { white-space: pre-wrap; }
+.task-review-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-review-goal { color: var(--ink-1); }
+.task-review-caption code { overflow-wrap: anywhere; }
 
 .task-review-attribution,
 .task-review-caption {

@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from loguru import logger
 
 from ...core.home_tasks import HOME_TASK_FIELDS
+from ...core.task_verification import CHECK_FIELD
 from ...security.home_snoozes import normalize_home_snoozes
 from ...tasks.review import task_review
 from ...security.actor import Actor
@@ -36,6 +37,7 @@ from ..actors import (
     get_task_header_for_actor,
     get_task_or_404,
     owner_user_id_for_create,
+    require_task_verification_owner,
     request_actor,
 )
 from ..bodies import JsonBodyDep, string_field
@@ -183,6 +185,8 @@ def create_task(
         raise HTTPException(400, "title is required.")
     body = _request_body.as_dict()
     owner = owner_user_id_for_create(actor, body)
+    if CHECK_FIELD in body:
+        require_task_verification_owner(request, ctx.auth_store, owner)
     assignee = assignee_user_id_for_task(actor, body, owner)
     project_id = _request_body.project_id or None
     project = project_for_owner(ctx, project_id, owner, require_enabled=True)
@@ -238,6 +242,8 @@ def update_task(
     # The services judge the PATCH by which fields it names, so they read the
     # body as sent; absent and null stay distinct.
     body = _request_body.as_dict()
+    if CHECK_FIELD in body or current.get(CHECK_FIELD) and body.get("status") == "done":
+        require_task_verification_owner(request, ctx.auth_store, current["ownerUserId"])
     move_project = project_move_target(ctx, current, _request_body)
     requested_assignee = (
         assignee_user_id_for_task(actor, body, current.get("assigneeUserId"))

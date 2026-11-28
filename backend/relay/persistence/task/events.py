@@ -79,6 +79,7 @@ def task_creation_events(task_id: str, payload: dict[str, Any]) -> list[dict[str
         "routineTrigger",
         "routineTriggerKind",
         "routineTriggerSummary",
+        "verificationCheck",
     ):
         if payload.get(field):
             created_payload[field] = payload[field]
@@ -203,6 +204,7 @@ def task_update_events(
         "expectedStatus",
         "expectedExecutionRevision",
         "reviewRevision",
+        "verificationCheck",
     ):
         if field in payload:
             updated[field] = payload[field]

@@ -12,6 +12,9 @@ from ...core.permission_requests import (
     TASK_PERMISSION_MODES,
 )
 from ...core.validation import valid_agent
+from ...core.task_verification import CHECK_FIELD
+from ...execution.task_completion import mark_task_done
+from ...tasks.requests import TaskRequestError
 from ...security.request_auth import require_user_session
 from ...sessions.controller import SessionController
 from ...sessions.task_scope import (
@@ -20,11 +23,14 @@ from ...sessions.task_scope import (
     thread_task_scope,
 )
 from ..actors import (
+    get_task_for_actor,
+    require_task_verification_owner,
     get_session_for_actor,
     request_actor_or_sandbox,
 )
 from ..bodies import JsonBodyDep, role_name, string_field
 from ..deps import AppContextDep
+from ..projects.access import ensure_task_project_writable
 
 router = APIRouter()
 
@@ -105,6 +111,20 @@ def decision(
                 else IN_FLIGHT_TASK_STATUSES
             ),
         )
+        if kind == "mark_done" and task_id:
+            task = ctx.task_store.get_task(task_id)
+            if task.get(CHECK_FIELD):
+                require_task_verification_owner(request, ctx.auth_store, task["ownerUserId"])
+                ensure_task_project_writable(ctx, task)
+                patch = {"status": "done", **({"reviewRevision": body["reviewRevision"]}
+                                              if "reviewRevision" in body else {})}
+                try:
+                    mark_task_done(ctx, task, actor["userId"], patch,
+                                   lambda: get_task_for_actor(ctx.task_store, task_id, actor),
+                                   session_id=session_id)
+                except TaskRequestError as error:
+                    raise HTTPException(error.status, error.detail) from error
+                return ctx.session_store.get_session(session_id)
     controller = SessionController(
         ctx.session_store,
         task_store=ctx.task_store,

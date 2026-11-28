@@ -309,10 +309,10 @@ export function TaskRecordPage({
           <TabsContent value="activity">
             {/* Review evidence lives on Activity (the default landing tab) so
                 switching to Definition or Files isn't buried beneath it. */}
-            {task.status === "review" && !task.isRoutine ? <TaskReviewPanel
+            {!task.isRoutine && (task.status === "review" || (task.verificationCheck && (task.status === "waiting_for_human" || task.status === "done"))) ? <TaskReviewPanel
               key={task.id}
               taskId={task.id}
-              readOnly={readOnly}
+              readOnly={readOnly || task.status !== "review"}
               onOpenThread={onOpenThread}
               onRequestChanges={() => { const threadId = task.linkedSessionIds.at(-1); if (threadId) onOpenThread(threadId); }}
             /> : null}

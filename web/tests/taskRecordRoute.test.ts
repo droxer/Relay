@@ -243,6 +243,13 @@ describe("record actions", () => {
     assert.deepEqual(recordActions({ ...assigned, isRoutine: true, status: "running" }), ["cancel"]);
   });
 
+  it("offers completion for a required check only in Review", () => {
+    const task = { ...assigned, isRoutine: false, verificationCheck: { commit: "a".repeat(40), path: "check.sh" } };
+    assert.deepEqual(recordActions({ ...task, status: "running" }), ["cancel"]);
+    assert.deepEqual(recordActions({ ...task, status: "waiting_for_human" }), []);
+    assert.deepEqual(recordActions({ ...task, status: "review" }), ["done"]);
+  });
+
   it("offers a refused dispatch a retry", () => {
     assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "blocked" }), ["retry", "done"]);
     assert.deepEqual(recordActions({ ...assigned, isRoutine: false, status: "assigned" }), ["retry", "done"]);

@@ -15,6 +15,7 @@ _THREAD_TASK_FIELDS = frozenset({
     "id", "number", "title", "priority", "status", "isRoutine", "sourceRoutineId",
     "ownerUserId", "assigneeUserId", "projectId", "computerId", "createdAt", "updatedAt",
     "eventCount", "activityCount", "blockerReason", "permissionMode",
+    "verificationCheck",
 })
 
 

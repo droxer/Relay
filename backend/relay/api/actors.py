@@ -146,6 +146,12 @@ def owner_user_id_for_create(actor: Actor, body: dict[str, Any]) -> str:
     return actor["userId"]
 
 
+def require_task_verification_owner(request: Request, auth_store: AuthStore, owner: str) -> None:
+    account = require_user_session(request, auth_store)
+    if (account.get("userId") or account.get("username") or account["id"]) != owner:
+        raise HTTPException(403, "task_verification_owner_required")
+
+
 def assignee_user_id_for_task(
     actor: Actor, body: dict[str, Any], fallback: str | None = None
 ) -> str:
