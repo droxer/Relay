@@ -322,7 +322,7 @@ export function WorkflowsPage({
                             <WorkflowAgentFace imageUrl={agentImage(memberId)} />
                             <span>{agentName(memberId)}</span>
                             {memberId === detail.predefined?.leadAgentId ? (
-                              <span className="workflow-library-meta">{t("collab.turn_lead")}</span>
+                              <span className="workflow-library-meta">{t("collab_style.turn_lead")}</span>
                             ) : null}
                           </li>
                         ))}
