@@ -1181,6 +1181,30 @@ test("a task record on a phone docks its actions and opens More as a bottom shee
   await context.close();
 });
 
+for (const expanded of [false, true]) {
+  test(`the desktop rail groups Skills with Workforce (${expanded ? "expanded" : "collapsed"})`, async ({ browser }, testInfo) => {
+    const page = await openPage(browser, "/home", false, { "relay-web.sidenavExpanded": String(expanded) });
+    const rail = page.locator(".sidenav-panel");
+    const workforce = rail.getByRole("group", { name: "Workforce", exact: true });
+    await expect(workforce.getByRole("link")).toHaveCount(3);
+    expect(await workforce.getByRole("link").evaluateAll(links => links.map(link => link.getAttribute("data-nav"))))
+      .toEqual(["agents", "workflows", "skills"]);
+    await expect(rail.getByRole("group", { name: "Resources", exact: true }).getByRole("link"))
+      .toHaveAttribute("href", "/computers");
+    const skills = workforce.getByRole("link", { name: "Skills", exact: true });
+    await expect(skills).toBeVisible();
+    await expect(skills).toHaveAttribute("href", "/skills");
+    await skills.click();
+    await expect(page).toHaveURL(/\/skills$/);
+    await expect(page.locator("#skills-panel")).toBeVisible();
+    await expect(skills).toHaveAttribute("aria-current", "page");
+    await page.screenshot({ path: testInfo.outputPath("workforce-skills.png") });
+    await page.reload();
+    await expect(workforce.getByRole("link", { name: "Skills", exact: true })).toHaveAttribute("aria-current", "page");
+    await page.context().close();
+  });
+}
+
 test("the phone tab bar's More sheet sorts pages into the rail's sections", async ({ browser }, testInfo) => {
   /* One flat card used to mix pages, tools, and settings in no rail order.
      The sheet now reads search first, then the desktop rail's sections under
@@ -1204,7 +1228,11 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
   await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)));
 
   await expect(sheet.locator(".more-sheet-heading")).toHaveText(["Workspace", "Workforce", "Resources", "Manage"]);
-  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Automations", "Agents", "Workflows", "Computers", "Skills", "Settings"]);
+  await expect(sheet.locator(".more-sheet-nav a")).toHaveText(["Automations", "Agents", "Workflows", "Skills", "Computers", "Settings"]);
+  await expect(sheet.getByRole("region", { name: "Workforce", exact: true }).getByRole("link"))
+    .toHaveText(["Agents", "Workflows", "Skills"]);
+  await expect(sheet.getByRole("region", { name: "Resources", exact: true }).getByRole("link"))
+    .toHaveText(["Computers"]);
   const controls = sheet.locator("button, a");
   await expect(controls.first()).toHaveText("Search");
   await expect(controls.last()).toHaveText("Sign out");
@@ -1213,6 +1241,13 @@ test("the phone tab bar's More sheet sorts pages into the rail's sections", asyn
     expect(box.x + box.width).toBeLessThanOrEqual(390);
   }
   await page.screenshot({ path: testInfo.outputPath("more-sheet.png") });
+  await sheet.getByRole("link", { name: "Skills", exact: true }).tap();
+  await expect(sheet).not.toBeVisible();
+  await expect(page).toHaveURL(/\/skills$/);
+  await expect(page.locator("#skills-panel")).toBeVisible();
+  await page.getByRole("button", { name: "More pages" }).tap();
+  await expect(sheet.getByRole("region", { name: "Workforce", exact: true })
+    .getByRole("link", { name: "Skills", exact: true })).toHaveAttribute("aria-current", "page");
   await page.context().close();
 });
 
