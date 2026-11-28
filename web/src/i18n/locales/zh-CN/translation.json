@@ -2595,7 +2595,7 @@
     "empty_filtered_title": "没有匹配的技能",
     "empty_filtered_body": "请尝试其他搜索词。",
     "library_label": "技能库",
-    "group_uploads": "上传的技能",
+    "group_ungrouped": "未分组",
     "granted_count": "已授予 {{count}} 个",
     "member_count": "{{count}} 名成员",
     "current_revision": "当前版本",

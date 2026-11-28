@@ -35,9 +35,6 @@
   background: var(--surface-list);
 }
 
-/* Banded by folder on the agent roster's recipe (.agents-roster-groups in
-   agents.css): the scroller owns the --sp-7 run-off, each band a sticky quiet
-   label over its own compact list. */
 .skills-roster-groups {
   flex: 1;
   min-height: 0;
@@ -46,25 +43,58 @@
 }
 
 .skills-roster-group + .skills-roster-group {
-  margin-top: var(--sp-4);
+  margin-top: var(--sp-2);
 }
 
-/* A folder path can run long (skills/engineering/review); the name truncates
-   so the count never leaves the line, and the repository — shown only when
-   two repositories share a folder name — truncates first. */
-.skills-roster-group-label {
+.skills-roster-group-heading {
   position: sticky;
   top: 0;
   z-index: 1;
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
-  min-width: 0;
-  padding: var(--sp-2) var(--sp-3);
+  margin: 0;
+  padding: 0 var(--sp-3);
   background: var(--surface-list);
-  font: var(--type-micro);
-  letter-spacing: var(--type-micro-track);
+}
+
+.skills-roster-group-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h-xs);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--ink-1);
+  font: var(--type-label-strong);
+  letter-spacing: var(--type-label-track);
+  text-align: start;
+}
+
+button.skills-roster-group-label {
+  cursor: pointer;
+}
+
+span.skills-roster-group-label {
+  padding-inline-start: calc(var(--sp-3) + var(--sp-5));
+}
+
+button.skills-roster-group-label:hover {
+  background: var(--row-hover);
+}
+
+.skills-roster-group-heading[data-current] .skills-roster-group-label {
+  background: var(--row-hover);
+}
+
+.skills-roster-group-chevron {
+  flex: none;
   color: var(--ink-3);
+}
+
+.skills-roster-group-label[aria-expanded="true"] .skills-roster-group-chevron {
+  transform: rotate(90deg);
 }
 
 .skills-roster-group-name,
@@ -81,20 +111,26 @@
 
 .skills-roster-group-repo {
   flex: 0 100 auto;
+}
+
+.skills-roster-group-repo,
+.skills-roster-group-count {
+  font: var(--type-meta);
   color: var(--ink-4);
 }
 
 .skills-roster-group-count {
   flex: none;
-  color: var(--ink-4);
+  margin-inline-start: auto;
 }
 
-.skills-roster-list {
+.skills-roster-list:not([hidden]) {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
   margin: 0;
-  padding: var(--sp-1) var(--sp-3) 0;
+  padding-block: var(--sp-1) 0;
+  padding-inline: calc(var(--sp-3) + var(--sp-7)) var(--sp-3);
   list-style: none;
 }
 
@@ -558,6 +594,12 @@
      splitting a phone-width sheet into two unusably narrow inputs. */
   .skill-field-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px), (pointer: coarse) {
+  button.skills-roster-group-label {
+    min-height: var(--touch-target);
   }
 }
 
