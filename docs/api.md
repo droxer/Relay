@@ -1379,10 +1379,12 @@ Conditional acceptance sends only `{ "status": "done", "reviewRevision":
 "<revision displayed to the person>" }` to `PATCH /tasks/{id}`. The backend
 locks the Task and source Thread in the write transaction, reconstructs the
 review, and refuses a changed revision with `409 task_review_changed`. The
-accepted revision is retained on the `task.updated` event. Invalid revisions
-and combining conditional acceptance with other edits answer 400. Clients can
-omit `reviewRevision` only for Tasks without a required check. The task review
-controls always supply it. The contract binds the recorded work and artifacts.
+revision tracks Task changes and the recorded work shown in the review. Thread
+activity outside that work leaves the revision stable. The accepted revision
+is retained on the `task.updated` event. Invalid revisions and combining
+conditional acceptance with other edits answer 400. Clients can omit
+`reviewRevision` only for Tasks without a required check. The task review
+controls always supply it.
 Review output links add `?snapshot=1` to the Thread artifact read route. A
 missing snapshot answers `404 artifact_snapshot_unavailable`; this mode never
 falls back to current workspace bytes. Reads without it keep their existing

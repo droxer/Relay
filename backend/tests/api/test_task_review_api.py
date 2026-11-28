@@ -41,6 +41,29 @@ def test_current_review_can_be_accepted(review_app):
     assert repeated.status_code == 409
 
 
+def test_refreshed_review_can_be_accepted_while_thread_conversation_advances(review_app):
+    app, client, task_id, thread_id = review_app
+    review_url = f"/api/v1/tasks/{task_id}/review"
+    store = app.state.session_store
+    original = client.get(review_url).json()
+    store.append_event(thread_id, relay_event("artifact.created", thread_id, {"artifact": {
+        "id": "30000000-0000-4000-8000-000000000001", "kind": "workspace_file",
+        "title": "export.csv", "path": "/workspace/export.csv", "createdAt": "2026-11-02T00:00:00Z",
+    }}))
+    patch_url = f"/api/v1/tasks/{task_id}"
+    stale = client.patch(patch_url, json={"status": "done", "reviewRevision": original["revision"]})
+    assert stale.status_code == 409, stale.text
+    assert stale.json()["detail"] == "task_review_changed"
+
+    refreshed = client.get(review_url).json()
+    assert [item["title"] for item in refreshed["artifacts"]] == ["export.csv"]
+    store.append_event(thread_id, relay_event("user.message", thread_id, {"text": "Thanks for the update."}))
+
+    accepted = client.patch(patch_url, json={"status": "done", "reviewRevision": refreshed["revision"]})
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["status"] == "done"
+
+
 @pytest.mark.parametrize("change", ["requirements", "artifact", "round"])
 def test_superseded_review_is_refused(review_app, change):
     app, client, task_id, thread_id = review_app
