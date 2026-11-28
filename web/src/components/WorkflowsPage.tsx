@@ -10,8 +10,7 @@ import { useUrlSearchState } from "../hooks/useUrlSearchState";
 import { computerId as stableComputerId, computerName as stableComputerName } from "../lib/createAgent";
 import { nodesAssignedToUser } from "../lib/computerNodes";
 import type { CurrentUser, DaemonNodeMonitorRecord, WorkflowPreview } from "../types";
-import { ActionAdd, ActionEdit, ActionToggle, AdminDelete, ICON, NavBack, NavWorkflows } from "./icons";
-import { MobileTopbarBack } from "./MobileTopbarSlot";
+import { ActionAdd, ICON, NavWorkflows } from "./icons";
 import { PageHeader } from "./PageHeader";
 import { RelayEmptyState } from "./RelayEmptyState";
 import { TonePill } from "./StatusPill";
@@ -21,10 +20,8 @@ import { Button } from "@/components/ui/button";
 import { useDialogs } from "@/components/ui/DialogProvider";
 import { SearchInput } from "@/components/ui/search-input";
 import { WorkflowEditorForPreview } from "./workflow/WorkflowEditor";
-import { WorkflowStepSummary } from "./workflow/WorkflowStepSummary";
+import { WorkflowDetail } from "./workflow/WorkflowDetail";
 import { workflowProcessMeta } from "./workflow/processMeta";
-import { WorkflowAgentFace } from "./workflow/WorkflowAgentFace";
-import { PredefinedWorkflowIcon } from "./workflow/PredefinedWorkflowIcon";
 
 export function WorkflowsPage({
   currentUser,
@@ -236,134 +233,23 @@ export function WorkflowsPage({
 
       <div className="teams-detail">
         {selectedWorkflow ? (
-          <>
-            <MobileTopbarBack
-              label={t("workflows.title")}
-              onBack={() => onSelectWorkflow(null)}
-              fallback={(
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="teams-mobile-back"
-                  onClick={() => onSelectWorkflow(null)}
-                >
-                  <NavBack size={ICON.sm} aria-hidden="true" />
-                  {t("workflows.title")}
-                </Button>
-              )}
-            />
-            <div className="workspace-page">
-              <PageHeader
-                title={selectedWorkflow.name}
-                subtitle={[
-                  computerLabelFor(selectedWorkflow.computerId),
-                  selectedWorkflow.kind === "predefined"
-                    ? t("workflow.predefined")
-                    : workflowProcessMeta(t, selectedWorkflow.workflowSteps),
-                ].filter(Boolean).join(" · ")}
-                titleAs="h2"
-                titleVariant="title"
-                actions={(
-                  <div className="workflow-team-actions">
-                    {!selectedWorkflow.enabled ? <TonePill tone="neutral" label={t("teams.disabled")} /> : null}
-                    {selectedWorkflow.kind !== "predefined" ? (
-                      <Button type="button" variant="outline" size="dense" disabled={busy} onClick={() => setEditing(selectedWorkflow)}>
-                        <ActionEdit size={ICON.sm} aria-hidden="true" />
-                        {t("workflow.edit_steps")}
-                      </Button>
-                    ) : null}
-                    <Button type="button" variant="ghost" size="dense" disabled={busy} onClick={() => void toggleMutation.mutateAsync(selectedWorkflow)}>
-                      <ActionToggle size={ICON.sm} aria-hidden="true" />
-                      {t(selectedWorkflow.enabled ? "workflows.disable" : "workflows.enable")}
-                    </Button>
-                    <Button type="button" variant="ghost" size="dense" disabled={busy} onClick={() => void handleDelete(selectedWorkflow)}>
-                      <AdminDelete size={ICON.sm} aria-hidden="true" />
-                      {t("workflow.delete")}
-                    </Button>
-                  </div>
-                )}
-              />
-
-              <div className="workspace-page-body">
-                {actionError ? <p role="alert" className="text-destructive">{actionError}</p> : null}
-
-                {selectedWorkflow.workflowSteps.length > 0 ? (
-                  <section className="project-general-section" aria-label={t("workflow.steps")}>
-                    <WorkflowStepSummary
-                      steps={selectedWorkflow.workflowSteps}
-                      label={t("workflow.steps_of", { name: selectedWorkflow.name })}
-                      agentName={agentName}
-                      agentImage={agentImage}
-                    />
-                  </section>
-                ) : null}
-
-                {record.isPending ? (
-                  <ListSkeleton label={t("workflow.loading")} />
-                ) : record.isError ? (
-                  <RelayEmptyState
-                    feature="workflows"
-                    title={t("workflow.load_failed")}
-                    body={record.error instanceof Error ? record.error.message : undefined}
-                    actions={<Button type="button" variant="outline" onClick={() => void record.refetch()}>{t("workspace.retry")}</Button>}
-                  />
-                ) : detail?.kind === "predefined" && detail.predefined ? (
-                  <section className="workflow-step-card" aria-label={t("workflow.predefined")}>
-                    <div className="workflow-team-row-name">
-                      <PredefinedWorkflowIcon style={detail.predefined.template} />
-                      <h3 className="workflow-library-name">{t(`collab_style.${detail.predefined.template}`)}</h3>
-                      {detail.predefined.humanApproval ? <span className="workflow-step-gate">{t("workflow.gate_badge")}</span> : null}
-                    </div>
-                    <p className="workflow-library-meta">{t(`collab_style.${detail.predefined.template}_hint`)}</p>
-                    <div className="workflow-preset-participants">
-                      <ul aria-label={t("workflow.preset_participants")}>
-                        {detail.predefined.memberAgentIds.map((memberId) => (
-                          <li key={memberId}>
-                            <WorkflowAgentFace imageUrl={agentImage(memberId)} />
-                            <span>{agentName(memberId)}</span>
-                            {memberId === detail.predefined?.leadAgentId ? (
-                              <span className="workflow-library-meta">{t("collab.turn_lead")}</span>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    {detail.predefined.acceptanceCriteria?.length ? (
-                      <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                        {detail.predefined.acceptanceCriteria.map((criterion, idx) => <li key={idx}>{criterion}</li>)}
-                      </ul>
-                    ) : null}
-                  </section>
-                ) : detail ? (
-                  <ol className="workflow-step-list" aria-label={t("workflow.steps")}>
-                    {detail.workflowSteps.map((step, index) => (
-                      <li key={step.id} className="workflow-step-card">
-                        <div className="workflow-project-row-head">
-                          <div className="workflow-library-main">
-                            <div className="workflow-team-row-name">
-                              <span className="workflow-flow-index tnum" aria-hidden="true">{index + 1}</span>
-                              <h3 className="workflow-library-name">{step.name}</h3>
-                              {step.requiresApproval ? <span className="workflow-step-gate">{t("workflow.gate_badge")}</span> : null}
-                            </div>
-                            <p className="workflow-library-meta flex items-center gap-2">
-                              <WorkflowAgentFace imageUrl={agentImage(step.agentId)} />
-                              <span>{agentName(step.agentId)}</span>
-                            </p>
-                          </div>
-                        </div>
-                        <p className="workflow-library-meta whitespace-pre-wrap">{step.instructions}</p>
-                        {step.acceptanceCriteria.length > 0 ? (
-                          <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                            {step.acceptanceCriteria.map((criterion, idx) => <li key={idx}>{criterion}</li>)}
-                          </ul>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ol>
-                ) : null}
-              </div>
-            </div>
-          </>
+          <WorkflowDetail
+            workflow={selectedWorkflow}
+            detail={detail}
+            isPending={record.isPending}
+            isError={record.isError}
+            errorMessage={record.error instanceof Error ? record.error.message : undefined}
+            onRetry={() => void record.refetch()}
+            computerLabel={computerLabelFor(selectedWorkflow.computerId)}
+            agentName={agentName}
+            agentImage={agentImage}
+            busy={busy}
+            actionError={actionError}
+            onBack={() => onSelectWorkflow(null)}
+            onEdit={() => setEditing(selectedWorkflow)}
+            onToggleEnabled={() => void toggleMutation.mutateAsync(selectedWorkflow)}
+            onDelete={() => void handleDelete(selectedWorkflow)}
+          />
         ) : (
           <RelayEmptyState
             feature="workflows"
