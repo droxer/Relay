@@ -131,7 +131,7 @@ test("standalone workflows can be created, edited, toggled, and persist after re
   await page.goto("/teams/delivery");
   await expect(page).toHaveURL(/\/workflows\/delivery$/);
   await expect(page.getByText("Build Computer").first()).toBeVisible();
-  await expect(page.getByText("Build and review", { exact: true })).toBeVisible();
+  await expect(page.getByText("Execute and review", { exact: true })).toBeVisible();
   await expect(page.getByText("Existing clients remain compatible", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit steps", exact: true })).toHaveCount(0);
 

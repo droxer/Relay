@@ -4,9 +4,9 @@ from __future__ import annotations
 from typing import Any
 
 PREDEFINED_WORKFLOWS = (
-    {'id': 'preset:build_review', 'kind': 'predefined', 'template': 'build_review', 'name': 'Build → Review',
+    {'id': 'preset:build_review', 'kind': 'predefined', 'template': 'build_review', 'name': 'Execute and review',
      'enabled': True},
-    {'id': 'preset:lead_led', 'kind': 'predefined', 'template': 'lead_led', 'name': 'Lead-led', 'enabled': True},
+    {'id': 'preset:lead_led', 'kind': 'predefined', 'template': 'lead_led', 'name': 'Lead delegation', 'enabled': True},
 )
 DEFAULT_WORKFLOW_ID = 'preset:build_review'
 RETIRED_WORKFLOW_ID = 'preset:pipeline'
