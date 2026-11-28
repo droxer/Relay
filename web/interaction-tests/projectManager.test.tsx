@@ -200,6 +200,28 @@ it.each(["navigate", "unmount"])("keeps the created Lead discussion without reop
   }
 });
 
+it("shows a pending Lead discussion only in the Project that started it", async () => {
+  const receipt = Promise.withResolvers<{ threadId: string; agentId: string }>();
+  api.open.mockReturnValueOnce(receipt.promise);
+  const client = new QueryClient();
+  const onOpenThread = vi.fn();
+  const open = () => renderHook(({ projectId }) => useProjectLeadDiscussion({ projectId, currentUser: owner, onOpenThread }), {
+    initialProps: { projectId: "p" }, wrapper: hookWrapper(client),
+  });
+  const original = open();
+  act(() => original.result.current.discuss());
+  await waitFor(() => expect(original.result.current.pending).toBe(true));
+  original.unmount();
+  const hook = open();
+  await waitFor(() => expect(hook.result.current.pending).toBe(true));
+  hook.rerender({ projectId: "other" });
+  expect(hook.result.current.pending).toBe(false);
+  hook.rerender({ projectId: "p" });
+  expect(hook.result.current.pending).toBe(true);
+  receipt.resolve({ threadId: "p-thread", agentId: "a" });
+  await waitFor(() => expect(hook.result.current.pending).toBe(false));
+});
+
 it('reports a failed open and stays on the dashboard',async()=>{
  api.open.mockRejectedValue(new Error('manager_unconfigured'));
  const onOpenThread=vi.fn();
